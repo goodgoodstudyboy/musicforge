@@ -11,6 +11,10 @@ from song_agent.state import RunState, StepStatus
 StepFn = Callable[[RunState, ProjectPaths], None]
 
 
+class ResumeMismatchError(ValueError):
+    """Raised when a run directory belongs to a different request."""
+
+
 @dataclass(frozen=True)
 class PipelineStep:
     name: str
@@ -25,7 +29,14 @@ class GraphRunner:
 
     def run(self, state: RunState, paths: ProjectPaths) -> RunState:
         if self.resume and paths.summary_path.exists():
-            state = read_run_state(paths)
+            resumed_state = read_run_state(paths)
+            if resumed_state.request != state.request:
+                raise ResumeMismatchError(
+                    "Cannot resume this run because the current request does not "
+                    "match the request recorded in run-summary.json. Use a new "
+                    "output directory or rerun with --force."
+                )
+            state = resumed_state
 
         for step in self.steps:
             if self.resume and step.output_path and step.output_path.exists():
