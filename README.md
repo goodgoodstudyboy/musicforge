@@ -13,7 +13,7 @@ closed music generator. The core idea is:
 
 ## MVP
 
-The first working version should generate an instrumental song demo:
+The first working version generates an instrumental song demo:
 
 ```text
 song brief
@@ -27,6 +27,26 @@ song brief
 
 Human vocals are intentionally deferred. Singing synthesis is a separate
 problem and needs a dedicated open backend.
+
+Current local MVP:
+
+```powershell
+python -m song_agent.cli examples\song_request.json --dry-run
+python -m song_agent.cli examples\song_request.json --out runs\demo
+```
+
+The full run writes:
+
+```text
+runs/demo/data/request.json
+runs/demo/data/song-plan.json
+runs/demo/data/run-summary.json
+runs/demo/logs/events.jsonl
+runs/demo/renders/song.mid
+```
+
+The default generation path is model-optional: it uses a deterministic composer
+so the JSON-to-MIDI loop can be tested without network access.
 
 ## Initial Direction
 
@@ -51,4 +71,3 @@ docs/
 examples/
   song_request.json
 ```
-
