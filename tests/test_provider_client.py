@@ -113,6 +113,49 @@ def test_openai_compatible_client_handles_non_2xx():
         OpenAICompatibleClient(opener=opener).test(config())
 
 
+def test_openai_compatible_client_redacts_secret_from_http_error_body():
+    secret = "sk-example-secret"
+
+    def opener(req, timeout):
+        raise urllib.error.HTTPError(
+            req.full_url,
+            400,
+            "bad request",
+            hdrs={},
+            fp=io.BytesIO(
+                json.dumps(
+                    {
+                        "error": "request echoed",
+                        "authorization": f"Bearer {secret}",
+                        "api_key": secret,
+                        "access_token": "token-value",
+                    }
+                ).encode("utf-8")
+            ),
+        )
+
+    with pytest.raises(ProviderRequestError) as exc_info:
+        OpenAICompatibleClient(opener=opener).test(config())
+
+    message = str(exc_info.value)
+    assert secret not in message
+    assert "token-value" not in message
+    assert "[redacted]" in message
+
+
+def test_openai_compatible_client_redacts_secret_from_os_error():
+    secret = "sk-example-secret"
+
+    def opener(req, timeout):
+        raise OSError(f"connection failed with Authorization: Bearer {secret}")
+
+    with pytest.raises(ProviderRequestError) as exc_info:
+        OpenAICompatibleClient(opener=opener).test(config())
+
+    assert secret not in str(exc_info.value)
+    assert "[redacted]" in str(exc_info.value)
+
+
 def test_openai_compatible_client_handles_invalid_json():
     def opener(req, timeout):
         return FakeResponse(b"not json")

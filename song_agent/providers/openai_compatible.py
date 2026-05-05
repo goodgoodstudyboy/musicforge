@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -91,11 +92,13 @@ class OpenAICompatibleClient:
                 status = getattr(response, "status", 200)
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
+            safe_body = _sanitize_provider_error(raw, config)
             raise ProviderRequestError(
-                f"Provider request failed with HTTP {exc.code}: {_shorten(raw)}"
+                f"Provider request failed with HTTP {exc.code}: {_shorten(safe_body)}"
             ) from exc
         except OSError as exc:
-            raise ProviderRequestError(f"Provider request failed: {exc}") from exc
+            safe_error = _sanitize_provider_error(str(exc), config)
+            raise ProviderRequestError(f"Provider request failed: {safe_error}") from exc
 
         if status < 200 or status >= 300:
             raise ProviderRequestError(f"Provider request failed with HTTP {status}.")
@@ -130,3 +133,28 @@ def _join_url(base_url: str, path: str) -> str:
 
 def _shorten(value: str, limit: int = 300) -> str:
     return value if len(value) <= limit else value[:limit] + "..."
+
+
+def _sanitize_provider_error(value: str, config: ProviderConfig | None = None) -> str:
+    redacted = value
+    if config is not None and config.api_key:
+        redacted = redacted.replace(config.api_key, "[redacted]")
+    patterns = [
+        r'(?i)("(?:api[_-]?key|access[_-]?token|authorization)"\s*:\s*")([^"]+)(")',
+        r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s\"'}]+",
+        r"(?i)(api[_-]?key\s*[:=]\s*)[^\s,\"'}]+",
+        r"(?i)(access[_-]?token\s*[:=]\s*)[^\s,\"'}]+",
+        r"(?i)(bearer\s+)[^\s\"'}]+",
+        r"sk-[A-Za-z0-9_\-]{8,}",
+    ]
+    for pattern in patterns:
+        redacted = re.sub(pattern, _redact_match, redacted)
+    return redacted
+
+
+def _redact_match(match: re.Match[str]) -> str:
+    if match.lastindex == 3:
+        return match.group(1) + "[redacted]" + match.group(3)
+    if match.lastindex:
+        return match.group(1) + "[redacted]"
+    return "[redacted]"
