@@ -18,6 +18,7 @@ from urllib.parse import parse_qs
 
 from song_agent import __version__
 from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
+from song_agent.batching import BatchDocument, BatchStore, now_iso
 from song_agent.cli import generate_request
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
@@ -667,6 +668,294 @@ class JobStore:
         return provider_config.to_snapshot("provider", _utc_now())
 
 
+class BatchRunner:
+    def __init__(self, batch_store: BatchStore, job_store: JobStore) -> None:
+        self.batch_store = batch_store
+        self.job_store = job_store
+        self.lock = threading.RLock()
+        self.stop_event = threading.Event()
+        self.threads: dict[str, threading.Thread] = {}
+        self.recover_existing_batches()
+
+    def recover_existing_batches(self) -> None:
+        for document in self.batch_store.list_batches(include_hidden=True):
+            if document.state.status not in {"queued", "running", "paused"}:
+                continue
+            synced = self._sync_running_items(document.state.batch_id)
+            if synced is None:
+                continue
+            if synced.state.queued_count == 0 and synced.state.running_count == 0:
+                self._finish_batch(synced)
+                continue
+            if synced.state.status in {"queued", "running"}:
+                synced.state.status = "paused"
+                synced.state.error = "Batch was interrupted by a previous server shutdown."
+                self.batch_store.save_batch(synced)
+                self.batch_store.append_event(
+                    synced.state.batch_id,
+                    "batch_recovered_paused",
+                    {"queued_count": synced.state.queued_count},
+                )
+
+    def launch_batch(self, batch_id: str) -> tuple[BatchDocument | None, HTTPStatus, str | None, int]:
+        try:
+            document = self.batch_store.get_batch(batch_id)
+        except FileNotFoundError:
+            return None, HTTPStatus.NOT_FOUND, "Batch not found.", 0
+        except ValueError as exc:
+            return None, HTTPStatus.BAD_REQUEST, str(exc), 0
+        if document.state.status == "running":
+            return document, HTTPStatus.CONFLICT, "Batch is already running.", 0
+        if not any(item.status == "queued" for item in document.items):
+            return document, HTTPStatus.CONFLICT, "Batch has no queued items to launch.", 0
+        provider_error = self._provider_readiness_error(document)
+        if provider_error is not None:
+            return document, HTTPStatus.BAD_REQUEST, provider_error, 0
+
+        document.state.status = "running"
+        document.state.error = None
+        self.batch_store.save_batch(document)
+        started = self._start_available_items(batch_id)
+        document = self.batch_store.get_batch(batch_id)
+        self._ensure_thread(batch_id)
+        self.batch_store.append_event(batch_id, "batch_launched", {"started_count": started})
+        return document, HTTPStatus.ACCEPTED, None, started
+
+    def pause_batch(self, batch_id: str) -> tuple[BatchDocument | None, HTTPStatus, str | None]:
+        try:
+            document = self.batch_store.get_batch(batch_id)
+        except FileNotFoundError:
+            return None, HTTPStatus.NOT_FOUND, "Batch not found."
+        if document.state.status not in {"running", "queued"}:
+            return document, HTTPStatus.CONFLICT, "Only a running batch can be paused."
+        document.state.status = "paused"
+        document.state.error = None
+        self.batch_store.save_batch(document)
+        self.batch_store.append_event(batch_id, "batch_paused", {})
+        return document, HTTPStatus.OK, None
+
+    def resume_batch(self, batch_id: str) -> tuple[BatchDocument | None, HTTPStatus, str | None]:
+        try:
+            document = self.batch_store.get_batch(batch_id)
+        except FileNotFoundError:
+            return None, HTTPStatus.NOT_FOUND, "Batch not found."
+        if document.state.status != "paused":
+            return document, HTTPStatus.CONFLICT, "Only a paused batch can be resumed."
+        provider_error = self._provider_readiness_error(document)
+        if provider_error is not None:
+            return document, HTTPStatus.BAD_REQUEST, provider_error
+        document.state.status = "running"
+        document.state.error = None
+        self.batch_store.save_batch(document)
+        self._start_available_items(batch_id)
+        self._ensure_thread(batch_id)
+        self.batch_store.append_event(batch_id, "batch_resumed", {})
+        return self.batch_store.get_batch(batch_id), HTTPStatus.ACCEPTED, None
+
+    def retry_failed(self, batch_id: str) -> tuple[BatchDocument | None, HTTPStatus, str | None, int]:
+        try:
+            document = self.batch_store.get_batch(batch_id)
+        except FileNotFoundError:
+            return None, HTTPStatus.NOT_FOUND, "Batch not found.", 0
+        if document.state.status == "running":
+            return document, HTTPStatus.CONFLICT, "Cannot retry failed items while the batch is running.", 0
+        reset_count = 0
+        for item in document.items:
+            if item.status in {"failed", "cancelled"}:
+                item.status = "queued"
+                item.error = None
+                item.job_id = None
+                item.output_dir = None
+                item.updated_at = now_iso()
+                reset_count += 1
+        if reset_count == 0:
+            return document, HTTPStatus.CONFLICT, "Batch has no failed items to retry.", 0
+        provider_error = self._provider_readiness_error(document)
+        if provider_error is not None:
+            return document, HTTPStatus.BAD_REQUEST, provider_error, 0
+        document.state.status = "running"
+        document.state.error = None
+        self.batch_store.save_batch(document)
+        started = self._start_available_items(batch_id)
+        document = self.batch_store.get_batch(batch_id)
+        self._ensure_thread(batch_id)
+        self.batch_store.append_event(
+            batch_id,
+            "batch_retry_failed",
+            {"reset_count": reset_count, "started_count": started},
+        )
+        return document, HTTPStatus.ACCEPTED, None, reset_count
+
+    def delete_batch(self, batch_id: str) -> tuple[bool, HTTPStatus, str | None]:
+        try:
+            document = self.batch_store.get_batch(batch_id)
+        except FileNotFoundError:
+            return False, HTTPStatus.NOT_FOUND, "Batch not found."
+        if document.state.status == "running" or any(item.status == "running" for item in document.items):
+            return False, HTTPStatus.CONFLICT, "Cannot delete a running batch. Pause it first."
+        self.batch_store.delete_batch(batch_id)
+        return True, HTTPStatus.OK, None
+
+    def shutdown(self) -> None:
+        self.stop_event.set()
+        with self.lock:
+            threads = list(self.threads.values())
+        for thread in threads:
+            if thread.is_alive():
+                thread.join(timeout=2)
+
+    def _run_batch(self, batch_id: str) -> None:
+        try:
+            while not self.stop_event.is_set():
+                document = self._sync_running_items(batch_id)
+                if document is None:
+                    return
+                if document.state.status == "paused":
+                    if document.state.running_count == 0:
+                        return
+                    time.sleep(0.1)
+                    continue
+                if document.state.status != "running":
+                    return
+                self._start_available_items(batch_id)
+                document = self._sync_running_items(batch_id)
+                if document is None:
+                    return
+                if document.state.status == "running" and document.state.queued_count == 0 and document.state.running_count == 0:
+                    self._finish_batch(document)
+                    return
+                time.sleep(0.1)
+        finally:
+            with self.lock:
+                self.threads.pop(batch_id, None)
+
+    def _ensure_thread(self, batch_id: str) -> None:
+        with self.lock:
+            existing = self.threads.get(batch_id)
+            if existing is not None and existing.is_alive():
+                return
+            thread = threading.Thread(
+                target=self._run_batch,
+                args=(batch_id,),
+                name=f"musicforge-batch-{batch_id}",
+                daemon=True,
+            )
+            self.threads[batch_id] = thread
+            thread.start()
+
+    def _start_available_items(self, batch_id: str) -> int:
+        with self.lock:
+            document = self.batch_store.get_batch(batch_id)
+            if document.state.status != "running":
+                return 0
+            running_count = sum(1 for item in document.items if item.status == "running")
+            available = max(0, document.state.max_concurrency - running_count)
+            if available == 0:
+                return 0
+            started = 0
+            for item in document.items:
+                if item.status != "queued" or started >= available:
+                    continue
+                try:
+                    job = self.job_store.create_job(item.request, start_immediately=True)
+                except Exception as exc:
+                    item.status = "failed"
+                    item.error = str(exc)
+                    item.updated_at = now_iso()
+                    document.state.error = str(exc)
+                    continue
+                item.status = "running"
+                item.job_id = job.job_id
+                item.output_dir = job.output_dir
+                item.error = None
+                item.attempt_count += 1
+                item.updated_at = now_iso()
+                started += 1
+                self.batch_store.append_event(
+                    batch_id,
+                    "batch_item_started",
+                    {
+                        "item_id": item.item_id,
+                        "job_id": job.job_id,
+                        "attempt_count": item.attempt_count,
+                    },
+                )
+            self.batch_store.save_batch(document)
+            return started
+
+    def _sync_running_items(self, batch_id: str) -> BatchDocument | None:
+        with self.lock:
+            try:
+                document = self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                return None
+            changed = False
+            for item in document.items:
+                if item.status != "running" or not item.job_id:
+                    continue
+                job = self.job_store.get_job(item.job_id)
+                if job is None:
+                    item.status = "failed"
+                    item.error = "Linked job is missing."
+                    item.updated_at = now_iso()
+                    changed = True
+                    continue
+                if job.output_dir:
+                    item.output_dir = job.output_dir
+                if job.status == "completed":
+                    item.status = "completed"
+                    item.error = None
+                    item.updated_at = now_iso()
+                    changed = True
+                    self.batch_store.append_event(
+                        batch_id,
+                        "batch_item_completed",
+                        {"item_id": item.item_id, "job_id": job.job_id},
+                    )
+                elif job.status == "cancelled":
+                    item.status = "cancelled"
+                    item.error = job.error or "Job was cancelled."
+                    item.updated_at = now_iso()
+                    changed = True
+                elif job.status in {"failed", "interrupted", "stalled"}:
+                    item.status = "failed"
+                    item.error = job.error or job.last_error or f"Job ended with status {job.status}."
+                    item.updated_at = now_iso()
+                    changed = True
+            if changed:
+                self.batch_store.save_batch(document)
+                document = self.batch_store.get_batch(batch_id)
+            return document
+
+    def _finish_batch(self, document: BatchDocument) -> None:
+        if document.state.failed_count or document.state.cancelled_count:
+            document.state.status = "completed_with_errors"
+            document.state.error = "One or more batch items failed."
+        else:
+            document.state.status = "completed"
+            document.state.error = None
+        self.batch_store.save_batch(document)
+        self.batch_store.append_event(
+            document.state.batch_id,
+            "batch_finished",
+            {"status": document.state.status},
+        )
+
+    @staticmethod
+    def _provider_readiness_error(document: BatchDocument) -> str | None:
+        if not any(
+            item.status == "queued" and item.request.get("generation_mode") == "provider"
+            for item in document.items
+        ):
+            return None
+        provider_config, _sources = load_provider_config()
+        try:
+            provider_config.validate_ready_for_provider()
+        except ProviderError as exc:
+            return str(exc)
+        return None
+
+
 class MusicForgeHandler(BaseHTTPRequestHandler):
     server_version = "MusicForgeHTTP/0.1"
 
@@ -682,6 +971,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def store(self) -> JobStore:
         return self.server.job_store  # type: ignore[attr-defined]
+
+    @property
+    def batch_store(self) -> BatchStore:
+        return self.server.batch_store  # type: ignore[attr-defined]
+
+    @property
+    def batch_runner(self) -> BatchRunner:
+        return self.server.batch_runner  # type: ignore[attr-defined]
 
     def _handle_request(self, method: str) -> None:
         try:
@@ -723,6 +1020,45 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     job = self.store.create_job(payload)
                     self._send_json(job.to_dict(), status=HTTPStatus.ACCEPTED)
                     return
+
+            if path == "/api/batches":
+                if method == "GET":
+                    query = parse_qs(parsed.query)
+                    include_hidden = query.get("include_hidden", ["0"])[0] in {"1", "true", "yes"}
+                    self._send_json(
+                        {
+                            "batches": [
+                                document.state.to_dict()
+                                for document in self.batch_store.list_batches(
+                                    include_hidden=include_hidden
+                                )
+                            ]
+                        }
+                    )
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if path == "/api/batches/import-csv":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._read_json_body()
+                document = self.batch_store.import_csv(
+                    name=str(payload.get("name") or "Untitled Batch"),
+                    csv_text=str(payload.get("csv_text") or ""),
+                    generation_mode=str(payload.get("generation_mode") or "local"),
+                    pipeline_mode=str(payload.get("pipeline_mode") or "multinode"),
+                    max_concurrency=payload.get("max_concurrency", 1),
+                )
+                self._send_json(document.to_dict(), status=HTTPStatus.CREATED)
+                return
+
+            batch_route = _match_batch_route(path)
+            if batch_route is not None:
+                batch_id, tail = batch_route
+                self._handle_batch_route(method, batch_id, tail)
+                return
 
             job_route = _match_job_route(path)
             if job_route is not None:
@@ -774,6 +1110,116 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         config, _sources = load_provider_config()
         self._send_json(test_provider_config(config))
+
+    def _handle_batch_route(self, method: str, batch_id: str, tail: str) -> None:
+        if tail == "":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                document = self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Batch not found.")
+                return
+            self._send_json(document.to_dict())
+            return
+
+        if tail == "/launch":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            document, status, error, started = self.batch_runner.launch_batch(batch_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json(
+                {"ok": True, "started_count": started, **document.to_dict()},
+                status=status,
+            )
+            return
+
+        if tail == "/pause":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            document, status, error = self.batch_runner.pause_batch(batch_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, **document.to_dict()}, status=status)
+            return
+
+        if tail == "/resume":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            document, status, error = self.batch_runner.resume_batch(batch_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, **document.to_dict()}, status=status)
+            return
+
+        if tail == "/retry-failed":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            document, status, error, reset_count = self.batch_runner.retry_failed(batch_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, "reset_count": reset_count, **document.to_dict()}, status=status)
+            return
+
+        if tail == "/export":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                self._send_json(self.batch_store.export_batch(batch_id))
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Batch not found.")
+            return
+
+        if tail in {"/hide", "/unhide"}:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                document = self.batch_store.hide_batch(batch_id, tail == "/hide")
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Batch not found.")
+                return
+            self._send_json({"ok": True, **document.to_dict()})
+            return
+
+        if tail == "/delete":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            deleted, status, error = self.batch_runner.delete_batch(batch_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, "deleted": deleted, "batch_id": batch_id})
+            return
+
+        if tail == "/open-folder":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                batch_dir = self.batch_store.batch_dir(batch_id)
+                if not batch_dir.exists():
+                    raise FileNotFoundError(batch_id)
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Batch not found.")
+                return
+            open_folder(batch_dir)
+            self._send_json({"ok": True, "path": str(batch_dir)})
+            return
+
+        self._send_error(HTTPStatus.NOT_FOUND, "Batch route not found.")
 
     def _handle_job_route(self, method: str, job_id: str, tail: str) -> None:
         job = self.store.get_job(job_id)
@@ -1021,10 +1467,13 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int]) -> None:
         super().__init__(server_address, MusicForgeHandler)
         self.job_store = JobStore()
+        self.batch_store = BatchStore()
+        self.batch_runner = BatchRunner(self.batch_store, self.job_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
 
     def server_close(self) -> None:
+        self.batch_runner.shutdown()
         self.watchdog_stop.set()
         if self.watchdog_thread.is_alive():
             self.watchdog_thread.join(timeout=2)
@@ -1195,6 +1644,19 @@ def _match_job_route(path: str) -> tuple[str, str] | None:
     if "/" in rest:
         job_id, tail = rest.split("/", 1)
         return unquote(job_id), "/" + tail
+    return unquote(rest), ""
+
+
+def _match_batch_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/batches/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest or rest == "import-csv":
+        return None
+    if "/" in rest:
+        batch_id, tail = rest.split("/", 1)
+        return unquote(batch_id), "/" + tail
     return unquote(rest), ""
 
 
