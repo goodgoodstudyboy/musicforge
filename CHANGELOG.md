@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.1.2 - 2026-05-05
+
+### Added
+- Runtime view builders for timeline, tracks, validator, and summary data from existing run artifacts.
+- Job APIs for `timeline`, `tracks`, and `validator` views.
+- Studio tabs for Timeline, Tracks, Validator, SongPlan JSON, Logs, and Artifacts.
+- Job management actions for hide, unhide, cancel, and delete.
+- Hidden job filtering with `GET /api/jobs?include_hidden=1`.
+- Startup recovery that marks leftover `queued`, `running`, `paused`, and `waiting_retry` jobs as `interrupted`.
+- Backward-compatible `job-state.json` loading for newly added job fields.
+- Tests for runtime views, job action boundaries, safe deletion, and startup recovery.
+
+### Changed
+- `JobState` now tracks deletion/interruption metadata and start/finish timestamps.
+- Runtime artifact endpoints return explicit JSON errors when required artifacts are not ready.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli examples\song_request.json --out runs\v012-cli-check --force`
+- `python -m song_agent.cli generate examples\song_request.json --out runs\v012-generate-check --force`
+- Local panel smoke through `python -m song_agent.cli serve --host 127.0.0.1 --port 8787`
+
 ## v0.1.1 - 2026-05-05
 
 ### Added

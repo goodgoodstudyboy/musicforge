@@ -63,6 +63,28 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
+The v0.1.2 panel adds single-job inspection and management:
+
+- Timeline, Tracks, Validator, SongPlan JSON, Logs, and Artifacts tabs.
+- `hide` / `unhide` for keeping old jobs out of the default list without
+  deleting files.
+- `cancel` for queued/running jobs and `delete` for non-running jobs, with run
+  directory path checks before deletion.
+- Startup recovery that marks leftover `queued` or `running` jobs as
+  `interrupted` instead of showing them as active forever.
+
+Runtime view APIs:
+
+```text
+GET /api/jobs/<job-id>/timeline
+GET /api/jobs/<job-id>/tracks
+GET /api/jobs/<job-id>/validator
+POST /api/jobs/<job-id>/hide
+POST /api/jobs/<job-id>/unhide
+POST /api/jobs/<job-id>/cancel
+POST /api/jobs/<job-id>/delete
+```
+
 ## Initial Direction
 
 - Agent core: Python
