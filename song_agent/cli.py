@@ -7,7 +7,15 @@ import sys
 from pathlib import Path
 
 from song_agent.agent.pipeline import SongAgent
+from song_agent.agent.provider_pipeline import generate_provider_song_plan
 from song_agent.projectio import ProjectPaths, default_run_dir, read_json, write_json
+from song_agent.provider import (
+    ProviderConfig,
+    ProviderError,
+    load_provider_config,
+    provider_configured,
+    test_provider_config,
+)
 from song_agent.quality import validate_song_plan
 from song_agent.renderers.midi import render_midi
 from song_agent.runtime import GraphRunner, PipelineStep, ResumeMismatchError
@@ -32,6 +40,16 @@ def build_generate_parser() -> argparse.ArgumentParser:
     )
     _add_generate_args(generate_parser)
     return generate_parser
+
+
+def build_doctor_parser() -> argparse.ArgumentParser:
+    doctor_parser = argparse.ArgumentParser(description="Check the local MusicForge setup.")
+    doctor_parser.add_argument(
+        "--provider-test",
+        action="store_true",
+        help="Run the configured provider connectivity check.",
+    )
+    return doctor_parser
 
 
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
@@ -85,6 +103,11 @@ def _main() -> None:
     if raw_args and raw_args[0] == "generate":
         parser = build_generate_parser()
         args = parser.parse_args(raw_args[1:])
+    elif raw_args and raw_args[0] == "doctor":
+        parser = build_doctor_parser()
+        args = parser.parse_args(raw_args[1:])
+        run_doctor(provider_test=args.provider_test)
+        return
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)
@@ -128,12 +151,51 @@ def generate_from_file(
     return plan_path, midi_path
 
 
+def run_doctor(*, provider_test: bool = False) -> None:
+    print("MusicForge doctor")
+    print(f"python: ok ({sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro})")
+    print(f"cwd writable: {_writable_status(Path.cwd())}")
+    print(f"runs writable: {_writable_status(Path('runs'))}")
+    try:
+        config, _sources = load_provider_config()
+        if provider_configured(config):
+            print(
+                "provider config: configured "
+                f"({config.wire_api}, model={config.model}, key={config.to_public_dict()['api_key_masked'] or '-'})"
+            )
+        elif config.model or config.base_url or config.api_key:
+            print("provider config: warning incomplete")
+        else:
+            print("provider config: missing")
+        if provider_test:
+            result = test_provider_config(config)
+            print(f"provider test: ok ({result['provider']['wire_api']})")
+    except ProviderError as exc:
+        print(f"provider config: warning {exc}")
+        if provider_test:
+            print(f"provider test: failed ({exc})")
+    print("local deterministic mode: ok")
+
+
+def _writable_status(path: Path) -> str:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".musicforge-write-check"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError:
+        return "failed"
+    return "ok"
+
+
 def generate_request(
     request: SongRequest,
     *,
     out_dir: Path | None = None,
     resume: bool = False,
     force: bool = False,
+    provider_config: ProviderConfig | None = None,
+    provider_snapshot: dict | None = None,
 ) -> tuple[Path, Path]:
     if resume and force:
         raise ValueError("--resume and --force cannot be used together.")
@@ -147,7 +209,15 @@ def generate_request(
     if resume:
         _ensure_resume_request_matches(paths, request)
 
-    runner = GraphRunner(_build_steps(paths, request), resume=resume)
+    runner = GraphRunner(
+        _build_steps(
+            paths,
+            request,
+            provider_config=provider_config,
+            provider_snapshot=provider_snapshot,
+        ),
+        resume=resume,
+    )
     try:
         runner.run(state, paths)
     except ResumeMismatchError as exc:
@@ -177,10 +247,17 @@ def _reset_known_run_artifacts(run_dir: Path) -> None:
             shutil.rmtree(child_path)
 
 
-def _build_steps(paths: ProjectPaths, request: SongRequest) -> list[PipelineStep]:
+def _build_steps(
+    paths: ProjectPaths,
+    request: SongRequest,
+    *,
+    provider_config: ProviderConfig | None = None,
+    provider_snapshot: dict | None = None,
+) -> list[PipelineStep]:
     request_path = paths.data / "request.json"
     plan_path = paths.data / "song-plan.json"
     midi_path = paths.renders / "song.mid"
+    provider_snapshot_path = paths.data / "provider-snapshot.json"
 
     def write_request(state: RunState, paths: ProjectPaths) -> None:
         write_json(request_path, request.to_dict())
@@ -190,12 +267,21 @@ def _build_steps(paths: ProjectPaths, request: SongRequest) -> list[PipelineStep
         )
 
     def compose(state: RunState, paths: ProjectPaths) -> None:
-        plan = SongAgent().generate(request)
+        if provider_config is None:
+            plan = SongAgent().generate(request)
+        else:
+            plan = generate_provider_song_plan(request, provider_config)
         write_json(plan_path, plan.to_dict())
         state.add_artifact(
             "song_plan",
             ArtifactRef("json", str(plan_path), "Structured song plan."),
         )
+        if provider_snapshot is not None:
+            write_json(provider_snapshot_path, provider_snapshot)
+            state.add_artifact(
+                "provider_snapshot",
+                ArtifactRef("json", str(provider_snapshot_path), "Masked provider snapshot."),
+            )
 
     def validate(state: RunState, paths: ProjectPaths) -> None:
         from song_agent.schemas.song import SongPlan

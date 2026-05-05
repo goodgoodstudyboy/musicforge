@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from typing import Any, Callable
+
+from song_agent.provider import (
+    ProviderConfig,
+    ProviderRequestError,
+    ProviderResponseError,
+)
+from song_agent.schemas.song import SongRequest
+
+
+UrlOpen = Callable[..., Any]
+
+
+@dataclass
+class OpenAICompatibleClient:
+    opener: UrlOpen = urllib.request.urlopen
+
+    def test(self, config: ProviderConfig) -> dict[str, Any]:
+        config.validate_ready_for_provider()
+        response = self._request(
+            config,
+            [
+                {"role": "system", "content": "Return a JSON object only."},
+                {"role": "user", "content": "{\"ok\": true}"},
+            ],
+            max_tokens=32,
+        )
+        return {"ok": True, "response_keys": sorted(response.keys())}
+
+    def generate_song_plan_json(
+        self,
+        request: SongRequest,
+        config: ProviderConfig,
+        prompt: str,
+    ) -> dict[str, Any]:
+        config.validate_ready_for_provider()
+        response = self._request(
+            config,
+            [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps(request.to_dict(), ensure_ascii=False)},
+            ],
+            max_tokens=config.max_output_tokens,
+        )
+        content = _extract_content(response)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ProviderResponseError("Provider response content was not valid JSON.") from exc
+        if not isinstance(data, dict):
+            raise ProviderResponseError("Provider response content must be a JSON object.")
+        return data
+
+    def _request(
+        self,
+        config: ProviderConfig,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+    ) -> dict[str, Any]:
+        url = _join_url(config.base_url, "chat/completions")
+        payload: dict[str, Any] = {
+            "model": config.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if config.reasoning_effort:
+            payload["reasoning_effort"] = config.reasoning_effort
+        if config.service_tier:
+            payload["service_tier"] = config.service_tier
+
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {config.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with self.opener(request, timeout=config.timeout_seconds) as response:
+                raw = response.read().decode("utf-8")
+                status = getattr(response, "status", 200)
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", "replace")
+            raise ProviderRequestError(
+                f"Provider request failed with HTTP {exc.code}: {_shorten(raw)}"
+            ) from exc
+        except OSError as exc:
+            raise ProviderRequestError(f"Provider request failed: {exc}") from exc
+
+        if status < 200 or status >= 300:
+            raise ProviderRequestError(f"Provider request failed with HTTP {status}.")
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ProviderResponseError("Provider response was not valid JSON.") from exc
+        if not isinstance(data, dict):
+            raise ProviderResponseError("Provider response must be a JSON object.")
+        return data
+
+
+def _extract_content(response: dict[str, Any]) -> str:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise ProviderResponseError("Provider response is missing choices.")
+    first = choices[0]
+    if not isinstance(first, dict):
+        raise ProviderResponseError("Provider response choice must be an object.")
+    message = first.get("message")
+    if not isinstance(message, dict):
+        raise ProviderResponseError("Provider response choice is missing message.")
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise ProviderResponseError("Provider response message content is empty.")
+    return content
+
+
+def _join_url(base_url: str, path: str) -> str:
+    return base_url.rstrip("/") + "/" + path.lstrip("/")
+
+
+def _shorten(value: str, limit: int = 300) -> str:
+    return value if len(value) <= limit else value[:limit] + "..."

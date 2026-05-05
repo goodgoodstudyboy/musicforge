@@ -18,6 +18,14 @@ from urllib.parse import parse_qs
 from song_agent import __version__
 from song_agent.cli import generate_request
 from song_agent.projectio import ProjectPaths, read_json, slugify, write_json
+from song_agent.provider import (
+    ProviderError,
+    load_provider_config,
+    provider_configured,
+    reset_provider_config,
+    save_provider_config_from_dict,
+    test_provider_config,
+)
 from song_agent.runtime_views import (
     build_timeline_view,
     build_tracks_view,
@@ -132,6 +140,14 @@ class JobStore:
 
     def create_job(self, payload: dict[str, Any], start_immediately: bool = True) -> JobState:
         request = SongRequest.from_dict(payload)
+        generation_mode = _generation_mode(payload)
+        provider_snapshot: dict[str, Any]
+        if generation_mode == "provider":
+            provider_config, _sources = load_provider_config()
+            provider_config.validate_ready_for_provider()
+            provider_snapshot = provider_config.to_snapshot("provider", _utc_now())
+        else:
+            provider_snapshot = {"mode": "local", "summary": "Local deterministic composer"}
         with self.lock:
             run_dir = self._reserve_run_dir(request.title)
             job_id = run_dir.name
@@ -146,7 +162,7 @@ class JobStore:
                 step="queued",
                 message="Queued for local deterministic generation.",
                 input_payload=request.to_dict(),
-                provider_snapshot={"mode": "local-deterministic"},
+                provider_snapshot=provider_snapshot,
             )
             self.jobs[job_id] = job
             self._write_job(job)
@@ -221,6 +237,15 @@ class JobStore:
             return
 
         request = SongRequest.from_dict(job.input_payload)
+        provider_config = None
+        provider_snapshot = job.provider_snapshot
+        if provider_snapshot.get("mode") == "provider":
+            provider_config, _sources = load_provider_config()
+            provider_config.validate_ready_for_provider()
+            write_json(
+                Path(job.output_dir) / "data" / "provider-snapshot.json",
+                provider_snapshot,
+            )
         if job.cancel_requested:
             self._update_job(
                 job,
@@ -252,6 +277,8 @@ class JobStore:
                 request,
                 out_dir=Path(job.output_dir),
                 force=False,
+                provider_config=provider_config,
+                provider_snapshot=provider_snapshot if provider_config is not None else None,
             )
             job = self.get_job(job_id)
             if job is None:
@@ -268,6 +295,18 @@ class JobStore:
             validator_report_path = Path(job.output_dir) / "data" / "validator-report.json"
             write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
             summary = _build_summary(plan_path, midi_path)
+            artifacts = {
+                "request": str(Path(job.output_dir) / "data" / "request.json"),
+                "song_plan": str(plan_path),
+                "run_summary": str(Path(job.output_dir) / "data" / "run-summary.json"),
+                "validator_report": str(validator_report_path),
+                "job_state": str(Path(job.output_dir) / "data" / "job-state.json"),
+                "events": str(Path(job.output_dir) / "logs" / "events.jsonl"),
+                "midi": str(midi_path),
+            }
+            provider_snapshot_path = Path(job.output_dir) / "data" / "provider-snapshot.json"
+            if provider_snapshot_path.exists():
+                artifacts["provider_snapshot"] = str(provider_snapshot_path)
             self._update_job(
                 job,
                 status="completed",
@@ -276,15 +315,7 @@ class JobStore:
                 summary=summary,
                 error=None,
                 finished_at=_utc_now(),
-                artifacts={
-                    "request": str(Path(job.output_dir) / "data" / "request.json"),
-                    "song_plan": str(plan_path),
-                    "run_summary": str(Path(job.output_dir) / "data" / "run-summary.json"),
-                    "validator_report": str(validator_report_path),
-                    "job_state": str(Path(job.output_dir) / "data" / "job-state.json"),
-                    "events": str(Path(job.output_dir) / "logs" / "events.jsonl"),
-                    "midi": str(midi_path),
-                },
+                artifacts=artifacts,
             )
         except Exception as exc:
             self._update_job(
@@ -360,6 +391,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/api/template":
                 self._send_json(api_template())
                 return
+            if path == "/api/provider":
+                self._handle_provider_route(method)
+                return
+            if path == "/api/provider/reset":
+                self._handle_provider_reset(method)
+                return
+            if path == "/api/provider/test":
+                self._handle_provider_test(method)
+                return
             if path == "/api/jobs":
                 if method == "GET":
                     query = parse_qs(parsed.query)
@@ -388,8 +428,47 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Route not found.")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except Exception as exc:
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
+
+    def _handle_provider_route(self, method: str) -> None:
+        if method == "GET":
+            config, sources = load_provider_config()
+            self._send_json(
+                {
+                    "configured": provider_configured(config),
+                    "config": config.to_public_dict(sources),
+                }
+            )
+            return
+        if method == "POST":
+            config = save_provider_config_from_dict(self._read_json_body())
+            self._send_json(
+                {
+                    "ok": True,
+                    "configured": provider_configured(config),
+                    "config": config.to_public_dict(),
+                }
+            )
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_provider_reset(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        reset_provider_config()
+        config, _sources = load_provider_config()
+        self._send_json({"ok": True, "configured": provider_configured(config)})
+
+    def _handle_provider_test(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        config, _sources = load_provider_config()
+        self._send_json(test_provider_config(config))
 
     def _handle_job_route(self, method: str, job_id: str, tail: str) -> None:
         job = self.store.get_job(job_id)
@@ -707,6 +786,13 @@ def _artifact_kind(path: Path) -> str:
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _generation_mode(payload: dict[str, Any]) -> str:
+    mode = str(payload.get("generation_mode", "local") or "local")
+    if mode not in {"local", "provider"}:
+        raise ValueError("generation_mode must be either local or provider.")
+    return mode
 
 
 def _utc_now() -> str:

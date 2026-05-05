@@ -102,6 +102,10 @@ def panel_html() -> str:
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
     .actions {
       display: flex;
       align-items: center;
@@ -284,55 +288,115 @@ def panel_html() -> str:
     </div>
   </header>
   <main>
-    <section>
-      <div class="panel-title">
-        <span>Song Request</span>
-        <select id="preset"></select>
-      </div>
-      <div class="panel-body">
-        <form id="song-form">
-          <label>Title
-            <input id="title" name="title" required>
-          </label>
-          <div class="grid2">
-            <label>Language
-              <input id="language" name="language" required>
+    <div class="stack">
+      <section>
+        <div class="panel-title">
+          <span>Provider Settings</span>
+          <span id="provider-status" class="status">not configured</span>
+        </div>
+        <div class="panel-body">
+          <form id="provider-form">
+            <label>Base URL
+              <input id="provider-base-url" name="base_url" placeholder="https://api.example.com/v1">
             </label>
-            <label>Vocal Mode
-              <select id="vocal_mode" name="vocal_mode">
-                <option value="guide_melody">guide_melody</option>
-                <option value="instrumental">instrumental</option>
-                <option value="lyrics_only">lyrics_only</option>
+            <div class="grid2">
+              <label>Wire API
+                <select id="provider-wire-api" name="wire_api">
+                  <option value="openai_chat_completions">openai_chat_completions</option>
+                  <option value="mock">mock</option>
+                </select>
+              </label>
+              <label>Model
+                <input id="provider-model" name="model">
+              </label>
+            </div>
+            <label>API Key
+              <input id="provider-api-key" name="api_key" type="password" autocomplete="off" placeholder="leave blank to save empty key">
+            </label>
+            <div class="grid2">
+              <label>Light Model
+                <input id="provider-light-model" name="light_model">
+              </label>
+              <label>Review Model
+                <input id="provider-review-model" name="review_model">
+              </label>
+            </div>
+            <div class="grid2">
+              <label>Timeout Seconds
+                <input id="provider-timeout-seconds" name="timeout_seconds" type="number" min="5" max="300">
+              </label>
+              <label>Max Retries
+                <input id="provider-max-retries" name="max_retries" type="number" min="0" max="5">
+              </label>
+            </div>
+            <label>Max Output Tokens
+              <input id="provider-max-output-tokens" name="max_output_tokens" type="number" min="256" max="16000">
+            </label>
+            <div class="actions">
+              <button type="submit">Save</button>
+              <button class="secondary" id="provider-reset" type="button">Reset</button>
+              <button class="secondary" id="provider-test" type="button">Test</button>
+              <span id="provider-message"></span>
+            </div>
+          </form>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Song Request</span>
+          <select id="preset"></select>
+        </div>
+        <div class="panel-body">
+          <form id="song-form">
+            <label>Title
+              <input id="title" name="title" required>
+            </label>
+            <div class="grid2">
+              <label>Language
+                <input id="language" name="language" required>
+              </label>
+              <label>Vocal Mode
+                <select id="vocal_mode" name="vocal_mode">
+                  <option value="guide_melody">guide_melody</option>
+                  <option value="instrumental">instrumental</option>
+                  <option value="lyrics_only">lyrics_only</option>
+                </select>
+              </label>
+            </div>
+            <label>Generation Mode
+              <select id="generation_mode" name="generation_mode">
+                <option value="local">local</option>
+                <option value="provider">provider</option>
               </select>
             </label>
-          </div>
-          <label>Style
-            <textarea id="style" name="style" required></textarea>
-          </label>
-          <label>Theme
-            <textarea id="theme" name="theme" required></textarea>
-          </label>
-          <div class="grid2">
-            <label>Duration Seconds
-              <input id="duration_seconds" name="duration_seconds" type="number" min="30" max="600" required>
+            <label>Style
+              <textarea id="style" name="style" required></textarea>
             </label>
-            <label>Tempo BPM
-              <input id="tempo_bpm" name="tempo_bpm" type="number" min="40" max="240">
+            <label>Theme
+              <textarea id="theme" name="theme" required></textarea>
             </label>
-          </div>
-          <label>Key
-            <input id="key" name="key">
-          </label>
-          <label>Lyrics
-            <textarea id="lyrics" name="lyrics"></textarea>
-          </label>
-          <div class="actions">
-            <button type="submit">Generate</button>
-            <button class="secondary" id="reset-form" type="button">Reset</button>
-          </div>
-        </form>
-      </div>
-    </section>
+            <div class="grid2">
+              <label>Duration Seconds
+                <input id="duration_seconds" name="duration_seconds" type="number" min="30" max="600" required>
+              </label>
+              <label>Tempo BPM
+                <input id="tempo_bpm" name="tempo_bpm" type="number" min="40" max="240">
+              </label>
+            </div>
+            <label>Key
+              <input id="key" name="key">
+            </label>
+            <label>Lyrics
+              <textarea id="lyrics" name="lyrics"></textarea>
+            </label>
+            <div class="actions">
+              <button type="submit">Generate</button>
+              <button class="secondary" id="reset-form" type="button">Reset</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
     <section>
       <div class="panel-title">
         <span>Jobs</span>
@@ -356,6 +420,7 @@ def panel_html() -> str:
     let selectedJobId = null;
     let activeTab = "summary";
     let includeHidden = false;
+    let providerConfig = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -375,6 +440,7 @@ def panel_html() -> str:
       $("runs").textContent = info.runs_dir;
       fillPresets();
       fillForm(template.defaults);
+      await loadProvider();
       await loadJobs();
       setInterval(loadJobs, 2000);
       $("poll").textContent = "polling 2s";
@@ -414,6 +480,7 @@ def panel_html() -> str:
         theme: $("theme").value.trim(),
         duration_seconds: Number($("duration_seconds").value),
         vocal_mode: $("vocal_mode").value,
+        generation_mode: $("generation_mode").value,
       };
       if ($("tempo_bpm").value) payload.tempo_bpm = Number($("tempo_bpm").value);
       if ($("key").value.trim()) payload.key = $("key").value.trim();
@@ -442,6 +509,74 @@ def panel_html() -> str:
       includeHidden = $("include-hidden").checked;
       await loadJobs();
     });
+    $("provider-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await api("/api/provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(providerPayload()),
+        });
+        applyProvider(data);
+        $("provider-message").textContent = "saved";
+        $("provider-api-key").value = "";
+      } catch (err) {
+        $("provider-message").textContent = err.message;
+      }
+    });
+    $("provider-reset").addEventListener("click", async () => {
+      if (!confirm("Reset provider settings?")) return;
+      try {
+        await api("/api/provider/reset", { method: "POST" });
+        await loadProvider();
+        $("provider-message").textContent = "reset";
+      } catch (err) {
+        $("provider-message").textContent = err.message;
+      }
+    });
+    $("provider-test").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/provider/test", { method: "POST" });
+        $("provider-message").textContent = data.message || "test ok";
+      } catch (err) {
+        $("provider-message").textContent = err.message;
+      }
+    });
+
+    async function loadProvider() {
+      const data = await api("/api/provider");
+      applyProvider(data);
+    }
+
+    function applyProvider(data) {
+      providerConfig = data.config;
+      $("provider-status").textContent = data.configured ? "configured" : "not configured";
+      $("provider-base-url").value = providerConfig.base_url || "";
+      $("provider-wire-api").value = providerConfig.wire_api || "openai_chat_completions";
+      $("provider-model").value = providerConfig.model || "";
+      $("provider-light-model").value = providerConfig.light_model || "";
+      $("provider-review-model").value = providerConfig.review_model || "";
+      $("provider-timeout-seconds").value = providerConfig.timeout_seconds || 60;
+      $("provider-max-retries").value = providerConfig.max_retries ?? 1;
+      $("provider-max-output-tokens").value = providerConfig.max_output_tokens || 4000;
+      $("provider-api-key").placeholder = providerConfig.api_key_set
+        ? `saved: ${providerConfig.api_key_masked}`
+        : "leave blank to save empty key";
+    }
+
+    function providerPayload() {
+      return {
+        base_url: $("provider-base-url").value.trim(),
+        wire_api: $("provider-wire-api").value,
+        api_key: $("provider-api-key").value,
+        model: $("provider-model").value.trim(),
+        light_model: $("provider-light-model").value.trim(),
+        review_model: $("provider-review-model").value.trim(),
+        timeout_seconds: Number($("provider-timeout-seconds").value || 60),
+        max_retries: Number($("provider-max-retries").value || 0),
+        max_output_tokens: Number($("provider-max-output-tokens").value || 4000),
+      };
+    }
 
     async function loadJobs() {
       try {
@@ -498,6 +633,7 @@ def panel_html() -> str:
           ${metric("Sections", summary.section_count || "-")}
           ${metric("Notes", summary.note_count || "-")}
         </div>
+        ${providerSnapshotHtml(job.provider_snapshot || {})}
         <div class="actions">
           ${actionButtons(job)}
           <span>${escapeHtml(job.output_dir)}</span>
@@ -637,6 +773,18 @@ def panel_html() -> str:
           ${metric("Meter", view.meter || "-")}
           ${metric("Bars", view.total_bars ?? "-")}
           ${metric("Seconds", view.estimated_seconds ?? "-")}
+        </div>
+      `;
+    }
+
+    function providerSnapshotHtml(snapshot) {
+      if (!snapshot || !snapshot.mode) return "";
+      return `
+        <div class="summary-grid">
+          ${metric("Generation Mode", snapshot.mode)}
+          ${metric("Provider Model", snapshot.model || "-")}
+          ${metric("Wire API", snapshot.wire_api || "-")}
+          ${metric("API Key", snapshot.api_key_masked || (snapshot.api_key_set ? "set" : "-"))}
         </div>
       `;
     }
