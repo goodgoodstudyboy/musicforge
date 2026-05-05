@@ -131,6 +131,12 @@ def panel_html() -> str:
       border-color: #c7cedb;
     }
     button.secondary:hover, .button-link.secondary:hover { background: #f2f4f7; }
+    button.danger {
+      background: #fff;
+      color: var(--danger);
+      border-color: #fecdca;
+    }
+    button.danger:hover { background: #fef3f2; }
     .status {
       display: inline-flex;
       align-items: center;
@@ -238,6 +244,25 @@ def panel_html() -> str:
       text-align: center;
     }
     .error { color: var(--danger); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      background: white;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      background: #f8fafc;
+    }
+    tr:last-child td { border-bottom: 0; }
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; }
       .jobs { grid-template-columns: 1fr; }
@@ -311,7 +336,13 @@ def panel_html() -> str:
     <section>
       <div class="panel-title">
         <span>Jobs</span>
-        <button class="secondary" id="refresh" type="button">Refresh</button>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-hidden" type="checkbox" style="width:auto;margin:0;">
+            Hidden
+          </label>
+          <button class="secondary" id="refresh" type="button">Refresh</button>
+        </div>
       </div>
       <div class="jobs">
         <div class="job-list" id="job-list"><div class="empty">No jobs yet.</div></div>
@@ -324,6 +355,7 @@ def panel_html() -> str:
     let jobs = [];
     let selectedJobId = null;
     let activeTab = "summary";
+    let includeHidden = false;
 
     const $ = (id) => document.getElementById(id);
 
@@ -406,11 +438,19 @@ def panel_html() -> str:
     });
     $("reset-form").addEventListener("click", () => fillForm(template.defaults));
     $("refresh").addEventListener("click", loadJobs);
+    $("include-hidden").addEventListener("change", async () => {
+      includeHidden = $("include-hidden").checked;
+      await loadJobs();
+    });
 
     async function loadJobs() {
       try {
-        const data = await api("/api/jobs");
+        const data = await api(includeHidden ? "/api/jobs?include_hidden=1" : "/api/jobs");
         jobs = data.jobs;
+        if (selectedJobId && !jobs.some((job) => job.job_id === selectedJobId)) {
+          selectedJobId = null;
+          $("detail").innerHTML = "<div class='empty'>Select or create a job.</div>";
+        }
         renderJobs();
         if (selectedJobId) await renderDetail(selectedJobId);
       } catch (err) {
@@ -430,7 +470,7 @@ def panel_html() -> str:
         item.className = "job-item" + (job.job_id === selectedJobId ? " active" : "");
         item.innerHTML = `
           <div class="job-title">${escapeHtml(job.title)}</div>
-          <div class="job-sub"><span class="status ${job.status}">${job.status}</span> ${escapeHtml(job.step)} · ${escapeHtml(job.job_id)}</div>
+          <div class="job-sub"><span class="status ${job.status}">${job.status}</span> ${job.hidden ? "hidden · " : ""}${escapeHtml(job.step)} · ${escapeHtml(job.job_id)}</div>
         `;
         item.addEventListener("click", async () => {
           selectedJobId = job.job_id;
@@ -446,7 +486,7 @@ def panel_html() -> str:
       const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
       const detail = $("detail");
       const summary = job.summary || {};
-      const tabs = ["summary", "logs", "json", "artifacts"];
+      const tabs = ["summary", "timeline", "tracks", "validator", "json", "logs", "artifacts"];
       detail.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
           <span>${escapeHtml(job.title)}</span>
@@ -459,13 +499,12 @@ def panel_html() -> str:
           ${metric("Notes", summary.note_count || "-")}
         </div>
         <div class="actions">
-          <a class="button-link" href="/api/jobs/${encodeURIComponent(job.job_id)}/midi">Download MIDI</a>
-          <button class="secondary" id="open-folder" type="button">Open Folder</button>
+          ${actionButtons(job)}
           <span>${escapeHtml(job.output_dir)}</span>
         </div>
         ${job.error ? `<p class="error">${escapeHtml(job.error)}</p>` : ""}
         <div class="tabs">
-          ${tabs.map(tab => `<button type="button" class="${activeTab === tab ? "active" : ""}" data-tab="${tab}">${tab}</button>`).join("")}
+          ${tabs.map(tab => `<button type="button" class="${activeTab === tab ? "active" : ""}" data-tab="${tab}">${tabLabel(tab)}</button>`).join("")}
         </div>
         <div id="tab-content"></div>
       `;
@@ -475,10 +514,7 @@ def panel_html() -> str:
           await renderDetail(job.job_id);
         });
       });
-      $("open-folder").addEventListener("click", async () => {
-        try { await api(`/api/jobs/${encodeURIComponent(job.job_id)}/open-folder`, { method: "POST" }); }
-        catch (err) { alert(err.message); }
-      });
+      wireJobActions(job);
       await renderTab(job);
     }
 
@@ -486,6 +522,12 @@ def panel_html() -> str:
       const target = $("tab-content");
       if (activeTab === "summary") {
         target.innerHTML = `<pre>${escapeHtml(JSON.stringify(job, null, 2))}</pre>`;
+      } else if (activeTab === "timeline") {
+        await renderTimeline(job, target);
+      } else if (activeTab === "tracks") {
+        await renderTracks(job, target);
+      } else if (activeTab === "validator") {
+        await renderValidator(job, target);
       } else if (activeTab === "logs") {
         const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/events`);
         target.innerHTML = `<pre>${escapeHtml(JSON.stringify(data.events, null, 2))}</pre>`;
@@ -502,8 +544,178 @@ def panel_html() -> str:
       }
     }
 
+    async function renderTimeline(job, target) {
+      try {
+        const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/timeline`);
+        const view = data.view;
+        const rows = view.sections.map((section) => `
+          <tr>
+            <td>${escapeHtml(section.name)}</td>
+            <td>${escapeHtml(section.start_bar)}-${escapeHtml(section.end_bar)} (${escapeHtml(section.bars)})</td>
+            <td>${escapeHtml(section.estimated_start_seconds)}s</td>
+            <td>${escapeHtml(section.estimated_end_seconds)}s</td>
+            <td>${escapeHtml(section.chords.join(" · "))}</td>
+          </tr>
+        `).join("");
+        target.innerHTML = `
+          ${runtimeHeader(view)}
+          ${warnings(view.warnings)}
+          <table>
+            <thead><tr><th>Section</th><th>Bars</th><th>Start</th><th>End</th><th>Chords</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='5'>No sections.</td></tr>"}</tbody>
+          </table>
+        `;
+      } catch (err) {
+        target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+      }
+    }
+
+    async function renderTracks(job, target) {
+      try {
+        const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/tracks`);
+        const view = data.view;
+        const rows = view.tracks.map((track) => `
+          <tr>
+            <td>${escapeHtml(track.name)}</td>
+            <td>${escapeHtml(track.instrument)}</td>
+            <td>${escapeHtml(track.note_count)}</td>
+            <td>${escapeHtml(pitchRange(track))}</td>
+            <td>${escapeHtml(track.end_beat_max ?? "-")}</td>
+            <td>${escapeHtml(track.average_velocity ?? "-")}</td>
+          </tr>
+        `).join("");
+        target.innerHTML = `
+          <div class="summary-grid">
+            ${metric("Tracks", view.track_count)}
+            ${metric("Notes", view.note_count)}
+            ${metric("Total Bars", view.total_bars)}
+            ${metric("Density", view.tracks.length ? (view.tracks[0].density_notes_per_bar ?? "-") : "-")}
+          </div>
+          <table>
+            <thead><tr><th>Track</th><th>Instrument</th><th>Notes</th><th>Pitch Range</th><th>End Beat</th><th>Avg Velocity</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='6'>No tracks.</td></tr>"}</tbody>
+          </table>
+        `;
+      } catch (err) {
+        target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+      }
+    }
+
+    async function renderValidator(job, target) {
+      try {
+        const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/validator`);
+        const view = data.view;
+        const rows = view.checks.map((check) => `
+          <tr><td>${escapeHtml(check.name)}</td><td>${escapeHtml(check.status)}</td></tr>
+        `).join("");
+        target.innerHTML = `
+          <div class="summary-grid">
+            ${metric("Status", view.status)}
+            ${metric("Passed", view.passed ? "yes" : "no")}
+            ${metric("Checks", view.check_count)}
+            ${metric("MIDI Size", view.midi.size)}
+          </div>
+          ${warnings(view.warnings)}
+          <table>
+            <thead><tr><th>Check</th><th>Status</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='2'>No checks.</td></tr>"}</tbody>
+          </table>
+        `;
+      } catch (err) {
+        target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+      }
+    }
+
     function metric(label, value) {
       return `<div class="metric"><span>${escapeHtml(label)}</span>${escapeHtml(String(value))}</div>`;
+    }
+
+    function runtimeHeader(view) {
+      return `
+        <div class="summary-grid">
+          ${metric("Tempo", view.tempo_bpm || "-")}
+          ${metric("Meter", view.meter || "-")}
+          ${metric("Bars", view.total_bars ?? "-")}
+          ${metric("Seconds", view.estimated_seconds ?? "-")}
+        </div>
+      `;
+    }
+
+    function warnings(items) {
+      if (!items || !items.length) return "";
+      return `<p class="error">${escapeHtml(items.join(" "))}</p>`;
+    }
+
+    function pitchRange(track) {
+      if (track.pitch_min == null || track.pitch_max == null) return "-";
+      return `${track.pitch_min}-${track.pitch_max}`;
+    }
+
+    function tabLabel(tab) {
+      const labels = {
+        summary: "Summary",
+        timeline: "Timeline",
+        tracks: "Tracks",
+        validator: "Validator",
+        json: "SongPlan JSON",
+        logs: "Logs",
+        artifacts: "Artifacts",
+      };
+      return labels[tab] || tab;
+    }
+
+    function actionButtons(job) {
+      const id = encodeURIComponent(job.job_id);
+      const canDownload = job.artifacts && job.artifacts.midi;
+      const buttons = [];
+      if (canDownload) buttons.push(`<a class="button-link" href="/api/jobs/${id}/midi">Download MIDI</a>`);
+      buttons.push(`<button class="secondary" id="open-folder" type="button">Open Folder</button>`);
+      if (job.status === "running" || job.status === "queued") {
+        buttons.push(`<button class="danger" id="cancel-job" type="button">Cancel</button>`);
+      }
+      if (job.hidden) {
+        buttons.push(`<button class="secondary" id="unhide-job" type="button">Unhide</button>`);
+      } else {
+        buttons.push(`<button class="secondary" id="hide-job" type="button">Hide</button>`);
+      }
+      if (job.status !== "running") {
+        buttons.push(`<button class="danger" id="delete-job" type="button">Delete</button>`);
+      }
+      return buttons.join("");
+    }
+
+    function wireJobActions(job) {
+      bindAction("open-folder", async () => {
+        await api(`/api/jobs/${encodeURIComponent(job.job_id)}/open-folder`, { method: "POST" });
+      });
+      bindAction("hide-job", async () => {
+        await api(`/api/jobs/${encodeURIComponent(job.job_id)}/hide`, { method: "POST" });
+        await loadJobs();
+      });
+      bindAction("unhide-job", async () => {
+        await api(`/api/jobs/${encodeURIComponent(job.job_id)}/unhide`, { method: "POST" });
+        await loadJobs();
+      });
+      bindAction("cancel-job", async () => {
+        if (job.status === "running" && !confirm("Cancel this running job?")) return;
+        await api(`/api/jobs/${encodeURIComponent(job.job_id)}/cancel`, { method: "POST" });
+        await loadJobs();
+      });
+      bindAction("delete-job", async () => {
+        if (!confirm("Delete this job and its run directory?")) return;
+        await api(`/api/jobs/${encodeURIComponent(job.job_id)}/delete`, { method: "POST" });
+        selectedJobId = null;
+        await loadJobs();
+      });
+    }
+
+    function bindAction(id, fn) {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener("click", async () => {
+        try { await fn(); }
+        catch (err) { alert(err.message); }
+      });
     }
 
     function escapeHtml(value) {
