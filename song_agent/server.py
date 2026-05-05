@@ -4,7 +4,6 @@ import json
 import mimetypes
 import os
 import threading
-import time
 import webbrowser
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -16,7 +15,7 @@ from urllib.parse import unquote, urlparse
 
 from song_agent import __version__
 from song_agent.cli import generate_request
-from song_agent.projectio import ProjectPaths, read_json, slugify, unique_run_dir, write_json
+from song_agent.projectio import ProjectPaths, read_json, slugify, write_json
 from song_agent.schemas.song import SongRequest
 from song_agent.webui import panel_html
 
@@ -83,22 +82,22 @@ class JobStore:
 
     def create_job(self, payload: dict[str, Any]) -> JobState:
         request = SongRequest.from_dict(payload)
-        run_dir = unique_run_dir(request.title, self.runs_dir)
-        job_id = run_dir.name
-        now = _utc_now()
-        job = JobState(
-            job_id=job_id,
-            title=request.title,
-            output_dir=str(run_dir),
-            status="queued",
-            created_at=now,
-            updated_at=now,
-            step="queued",
-            message="Queued for local deterministic generation.",
-            input_payload=request.to_dict(),
-            provider_snapshot={"mode": "local-deterministic"},
-        )
         with self.lock:
+            run_dir = self._reserve_run_dir(request.title)
+            job_id = run_dir.name
+            now = _utc_now()
+            job = JobState(
+                job_id=job_id,
+                title=request.title,
+                output_dir=str(run_dir),
+                status="queued",
+                created_at=now,
+                updated_at=now,
+                step="queued",
+                message="Queued for local deterministic generation.",
+                input_payload=request.to_dict(),
+                provider_snapshot={"mode": "local-deterministic"},
+            )
             self.jobs[job_id] = job
             self._write_job(job)
 
@@ -128,7 +127,7 @@ class JobStore:
             plan_path, midi_path = generate_request(
                 request,
                 out_dir=Path(job.output_dir),
-                force=True,
+                force=False,
             )
             validator_report_path = Path(job.output_dir) / "data" / "validator-report.json"
             write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
@@ -170,6 +169,19 @@ class JobStore:
     def _write_job(self, job: JobState) -> None:
         paths = ProjectPaths.create(Path(job.output_dir))
         write_json(paths.data / "job-state.json", job.to_dict())
+
+    def _reserve_run_dir(self, title: str) -> Path:
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
+        slug = slugify(title)
+        for index in range(1, 10_000):
+            name = slug if index == 1 else f"{slug}-{index}"
+            candidate = self.runs_dir / name
+            try:
+                candidate.mkdir(parents=True, exist_ok=False)
+            except FileExistsError:
+                continue
+            return candidate
+        raise RuntimeError(f"Could not allocate a unique run directory for {title!r}.")
 
 
 class MusicForgeHandler(BaseHTTPRequestHandler):
@@ -224,16 +236,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
 
     def _handle_job_route(self, method: str, job_id: str, tail: str) -> None:
-        if method != "GET":
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-            return
-
         job = self.store.get_job(job_id)
         if job is None:
             self._send_error(HTTPStatus.NOT_FOUND, "Job not found.")
             return
 
         run_dir = Path(job.output_dir)
+        if tail == "/open-folder":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            open_folder(run_dir)
+            self._send_json({"ok": True, "path": str(run_dir)})
+            return
+
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+
         if tail == "":
             self._send_json(job.to_dict())
             return
@@ -248,10 +268,6 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         if tail == "/midi":
             self._send_file(run_dir / "renders" / "song.mid", "audio/midi")
-            return
-        if tail == "/open-folder":
-            open_folder(run_dir)
-            self._send_json({"ok": True, "path": str(run_dir)})
             return
 
         self._send_error(HTTPStatus.NOT_FOUND, "Job route not found.")

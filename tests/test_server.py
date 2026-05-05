@@ -1,5 +1,6 @@
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -145,6 +146,41 @@ def test_server_recovers_completed_jobs_on_startup(tmp_path, monkeypatch):
     assert any(job["title"] == "Recovered Song" for job in data["jobs"])
 
 
+def test_concurrent_same_title_jobs_get_unique_ids(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    payload = {
+        "title": "Same Title",
+        "language": "en",
+        "style": "pop",
+        "theme": "parallel",
+    }
+    try:
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            results = list(
+                pool.map(
+                    lambda _: request_json(server, "POST", "/api/jobs", payload),
+                    range(12),
+                )
+            )
+
+        assert [status for status, _job in results] == [202] * 12
+        job_ids = [job["job_id"] for _status, job in results]
+        assert len(set(job_ids)) == len(job_ids)
+        finals = [wait_for_job(server, job_id) for job_id in job_ids]
+    finally:
+        stop_test_server(server)
+
+    assert all(job["status"] == "completed" for job in finals)
+    output_dirs = [job["output_dir"] for job in finals]
+    assert len(set(output_dirs)) == len(output_dirs)
+    for output_dir in output_dirs:
+        path = Path(output_dir)
+        assert (path / "data" / "job-state.json").exists()
+        assert (path / "data" / "song-plan.json").exists()
+        assert (path / "renders" / "song.mid").exists()
+
+
 def test_midi_endpoint_returns_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()
@@ -167,6 +203,30 @@ def test_midi_endpoint_returns_file(tmp_path, monkeypatch):
 
     assert status == 200
     assert body.startswith(b"MThd")
+
+
+def test_open_folder_requires_post(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _, job = request_json(
+            server,
+            "POST",
+            "/api/jobs",
+            {
+                "title": "Folder Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "folder",
+            },
+        )
+        final = wait_for_job(server, job["job_id"])
+        status, data = request_json(server, "GET", f"/api/jobs/{final['job_id']}/open-folder")
+    finally:
+        stop_test_server(server)
+
+    assert status == 405
+    assert "error" in data
 
 
 def test_invalid_request_returns_json_error(tmp_path, monkeypatch):

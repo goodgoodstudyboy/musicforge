@@ -476,7 +476,7 @@ def panel_html() -> str:
         });
       });
       $("open-folder").addEventListener("click", async () => {
-        try { await api(`/api/jobs/${encodeURIComponent(job.job_id)}/open-folder`); }
+        try { await api(`/api/jobs/${encodeURIComponent(job.job_id)}/open-folder`, { method: "POST" }); }
         catch (err) { alert(err.message); }
       });
       await renderTab(job);
