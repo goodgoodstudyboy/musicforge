@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.2.0 - 2026-05-05
+
+### Added
+- Local provider configuration storage under `.musicforge/provider.json`.
+- Masked provider public config and environment variable overrides.
+- Provider APIs for read, save, reset, and test.
+- Mock provider client for tests and local UI smoke.
+- OpenAI-compatible chat completions client using the Python standard library.
+- Provider-backed SongPlan pipeline with strict JSON, schema, and validator checks.
+- Studio provider settings form and `local` / `provider` generation mode selector.
+- Provider job snapshots written as masked `provider-snapshot.json`.
+- `python -m song_agent.cli doctor` and optional `--provider-test`.
+- Tests for provider config, provider API, clients, provider pipeline, job integration, and doctor CLI.
+
+### Changed
+- Local deterministic generation remains the default and does not require provider config.
+- Provider mode fails jobs cleanly when provider calls or model output validation fail.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli examples\song_request.json --out runs\v020-local-cli-check --force`
+- `python -m song_agent.cli generate examples\song_request.json --out runs\v020-local-generate-check --force`
+- Local panel smoke with mock provider: save, test, provider-mode job, timeline/tracks/validator, masked snapshot.
+
 ## v0.1.2 - 2026-05-05
 
 ### Added

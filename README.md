@@ -85,6 +85,40 @@ POST /api/jobs/<job-id>/cancel
 POST /api/jobs/<job-id>/delete
 ```
 
+## Provider Mode
+
+v0.2.0 adds optional provider-backed `SongPlan` generation while keeping local
+deterministic generation as the default.
+
+Provider settings are stored locally in `.musicforge/provider.json`, which is
+ignored by Git. API keys are never returned by the HTTP API, job state, or
+provider snapshot except as a masked value.
+
+Provider APIs:
+
+```text
+GET  /api/provider
+POST /api/provider
+POST /api/provider/reset
+POST /api/provider/test
+```
+
+Supported first-pass provider wires:
+
+- `mock`: local test provider with no network access.
+- `openai_chat_completions`: OpenAI-compatible `/chat/completions` wire format.
+
+The Studio form can save, reset, and test provider settings. Song jobs can run
+in `local` or `provider` mode. Provider mode validates model output through
+`SongPlan.from_dict()` and the same MIDI-safe validator before rendering.
+
+Local setup checks:
+
+```powershell
+python -m song_agent.cli doctor
+python -m song_agent.cli doctor --provider-test
+```
+
 ## Initial Direction
 
 - Agent core: Python
