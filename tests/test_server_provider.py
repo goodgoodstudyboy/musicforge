@@ -377,5 +377,48 @@ def test_provider_snapshot_masks_api_key(tmp_path, monkeypatch):
     assert "pla...-key" in serialized
 
 
+def test_retry_provider_job_writes_masked_snapshot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(
+            server,
+            "POST",
+            "/api/provider",
+            {"wire_api": "mock", "model": "mock-main", "api_key": "retry-secret-key"},
+        )
+        _status, job = request_json(
+            server,
+            "POST",
+            "/api/jobs",
+            {
+                "title": "Retry Provider Snapshot",
+                "language": "en",
+                "style": "pop",
+                "theme": "retry provider snapshot",
+                "generation_mode": "provider",
+            },
+        )
+        final = wait_for_job(server, job["job_id"])
+        assert final["status"] == "completed"
+        server.job_store._update_job(
+            server.job_store.get_job(final["job_id"]),
+            status="failed",
+            step="failed",
+            error="forced failure",
+        )
+        status, retry = request_json(server, "POST", f"/api/jobs/{final['job_id']}/retry")
+        retried = wait_for_job(server, final["job_id"])
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert retry["job"]["retry_count"] == 1
+    assert retried["status"] == "completed"
+    serialized = json.dumps(retried)
+    assert "retry-secret-key" not in serialized
+    assert "ret...-key" in serialized
+
+
 def _raise(exc):
     raise exc

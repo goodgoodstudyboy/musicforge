@@ -633,6 +633,12 @@ def panel_html() -> str:
           ${metric("Sections", summary.section_count || "-")}
           ${metric("Notes", summary.note_count || "-")}
         </div>
+        <div class="summary-grid">
+          ${metric("Attempt", job.attempt_count ?? 0)}
+          ${metric("Retry Count", job.retry_count ?? 0)}
+          ${metric("Heartbeat", job.heartbeat_at || "-")}
+          ${metric("Stalled", job.stalled ? "yes" : "no")}
+        </div>
         ${providerSnapshotHtml(job.provider_snapshot || {})}
         <div class="actions">
           ${actionButtons(job)}
@@ -821,6 +827,9 @@ def panel_html() -> str:
       if (job.status === "running" || job.status === "queued") {
         buttons.push(`<button class="danger" id="cancel-job" type="button">Cancel</button>`);
       }
+      if (job.status === "failed" || job.status === "stalled" || job.status === "interrupted") {
+        buttons.push(`<button class="secondary" id="retry-job" type="button">Retry</button>`);
+      }
       if (job.hidden) {
         buttons.push(`<button class="secondary" id="unhide-job" type="button">Unhide</button>`);
       } else {
@@ -847,6 +856,11 @@ def panel_html() -> str:
       bindAction("cancel-job", async () => {
         if (job.status === "running" && !confirm("Cancel this running job?")) return;
         await api(`/api/jobs/${encodeURIComponent(job.job_id)}/cancel`, { method: "POST" });
+        await loadJobs();
+      });
+      bindAction("retry-job", async () => {
+        if (!confirm("Retry this job?")) return;
+        await api(`/api/jobs/${encodeURIComponent(job.job_id)}/retry`, { method: "POST" });
         await loadJobs();
       });
       bindAction("delete-job", async () => {

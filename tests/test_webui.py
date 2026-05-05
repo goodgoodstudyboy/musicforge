@@ -47,11 +47,22 @@ def test_webui_contains_job_action_buttons_and_calls():
     assert "Unhide" in html
     assert "Delete" in html
     assert "Cancel" in html
+    assert "Retry" in html
     assert "/hide" in html
     assert "/unhide" in html
     assert "/delete" in html
     assert "/cancel" in html
+    assert "/retry" in html
     assert "/api/jobs?include_hidden=1" in html
+
+
+def test_webui_displays_heartbeat_and_attempts():
+    html = panel_html()
+
+    assert "Attempt" in html
+    assert "Retry Count" in html
+    assert "Heartbeat" in html
+    assert "Stalled" in html
 
 
 def test_webui_contains_provider_form_calls():
