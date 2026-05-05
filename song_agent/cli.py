@@ -4,12 +4,14 @@ import argparse
 import json
 import shutil
 import sys
+import os
 from pathlib import Path
 from collections.abc import Callable
 
 from song_agent.agent.multinode_pipeline import generate_multinode_song_plan
 from song_agent.agent.pipeline import SongAgent
 from song_agent.agent.provider_pipeline import generate_provider_song_plan
+from song_agent.auth import build_auth_config
 from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, default_run_dir, read_json, write_json
 from song_agent.provider import (
@@ -35,6 +37,11 @@ def build_serve_parser() -> argparse.ArgumentParser:
     serve_parser = argparse.ArgumentParser(description="Start the local web panel.")
     serve_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
     serve_parser.add_argument("--port", type=int, default=8787, help="Port to bind.")
+    serve_parser.add_argument(
+        "--access-token",
+        default=None,
+        help="Bearer token required for Studio/API access.",
+    )
     return serve_parser
 
 def build_generate_parser() -> argparse.ArgumentParser:
@@ -106,7 +113,8 @@ def _main() -> None:
         args = parser.parse_args(raw_args[1:])
         from song_agent.server import serve
 
-        serve(args.host, args.port)
+        auth_config = build_auth_config(args.host, args.access_token, os.environ)
+        serve(args.host, args.port, auth_config=auth_config)
         return
 
     if raw_args and raw_args[0] == "generate":
@@ -116,6 +124,14 @@ def _main() -> None:
         parser = build_doctor_parser()
         args = parser.parse_args(raw_args[1:])
         run_doctor(provider_test=args.provider_test)
+        return
+    elif raw_args and raw_args[0] == "release-check":
+        from song_agent.release_checks import print_release_check_report, run_release_checks
+
+        report = run_release_checks()
+        print_release_check_report(report)
+        if not report.ok:
+            raise SystemExit(1)
         return
     else:
         parser = build_parser()
