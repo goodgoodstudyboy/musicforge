@@ -88,3 +88,36 @@ def test_webui_contains_provider_form_calls():
     assert "api_key_masked" in html
     assert "/api/provider/test" in html
     assert "providerSnapshotHtml" in html
+
+
+def test_webui_contains_batch_tab_controls():
+    html = panel_html()
+
+    assert "Batch" in html
+    assert 'id="batch-form"' in html
+    assert 'id="batch-csv-file"' in html
+    assert 'id="batch-csv-text"' in html
+    assert 'id="batch-generation-mode"' in html
+    assert 'id="batch-pipeline-mode"' in html
+    assert 'id="batch-max-concurrency"' in html
+    assert "Import" in html
+    assert "Launch" in html
+    assert "Pause" in html
+    assert "Resume" in html
+    assert "Retry Failed" in html
+    assert "Export" in html
+
+
+def test_webui_calls_batch_apis():
+    html = panel_html()
+
+    assert "/api/batches/import-csv" in html
+    assert "/api/batches?include_hidden=1" in html
+    assert "/api/batches/${encodeURIComponent(batchId)}" in html
+    assert "/api/batches/${id}/launch" in html
+    assert "/api/batches/${id}/pause" in html
+    assert "/api/batches/${id}/resume" in html
+    assert "/api/batches/${id}/retry-failed" in html
+    assert "/api/batches/${id}/export" in html
+    assert "/api/batches/${id}/open-folder" in html
+    assert "/api/batches/${id}/delete" in html

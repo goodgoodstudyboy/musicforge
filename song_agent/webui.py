@@ -267,11 +267,32 @@ def panel_html() -> str:
       background: #f8fafc;
     }
     tr:last-child td { border-bottom: 0; }
+    .message {
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .batch-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .batch-list, .batch-detail {
+      overflow: auto;
+    }
+    .batch-detail {
+      margin-top: 14px;
+    }
+    td .actions {
+      margin-top: 0;
+    }
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; }
       .jobs { grid-template-columns: 1fr; }
       .job-list { border-right: 0; max-height: none; }
       .summary-grid { grid-template-columns: 1fr 1fr; }
+      .batch-layout { grid-template-columns: 1fr; }
       header { height: auto; align-items: flex-start; flex-direction: column; gap: 6px; padding: 12px 16px; }
       header .meta { flex-wrap: wrap; }
     }
@@ -419,6 +440,60 @@ def panel_html() -> str:
         <div class="detail" id="detail"><div class="empty">Select or create a job.</div></div>
       </div>
     </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
+        <span>Batch</span>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-hidden-batches" type="checkbox" style="width:auto;margin:0;">
+            Hidden
+          </label>
+          <button class="secondary" id="refresh-batches" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="batch-layout">
+          <form id="batch-form">
+            <label>Batch Name
+              <input id="batch-name" name="batch-name" value="MusicForge Batch">
+            </label>
+            <label>CSV File
+              <input id="batch-csv-file" name="batch-csv-file" type="file" accept=".csv,text/csv,text/plain">
+            </label>
+            <label>CSV Text
+              <textarea id="batch-csv-text" name="batch-csv-text" spellcheck="false">title,language,style,theme,duration_seconds,tempo_bpm,key,vocal_mode,lyrics,generation_mode,pipeline_mode
+Batch Demo One,English,synth pop,late city lights,90,100,C,guide_melody,,local,multinode
+Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,local,single</textarea>
+            </label>
+            <div class="grid2">
+              <label>Generation Mode
+                <select id="batch-generation-mode" name="batch-generation-mode">
+                  <option value="local">local</option>
+                  <option value="provider">provider</option>
+                </select>
+              </label>
+              <label>Pipeline Mode
+                <select id="batch-pipeline-mode" name="batch-pipeline-mode">
+                  <option value="multinode">multinode</option>
+                  <option value="single">single</option>
+                </select>
+              </label>
+            </div>
+            <label>Max Concurrency
+              <input id="batch-max-concurrency" name="batch-max-concurrency" type="number" min="1" max="4" value="1">
+            </label>
+            <div class="actions">
+              <button type="submit">Import</button>
+              <span id="batch-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div id="batch-list" class="batch-list"><div class="empty">No batches yet.</div></div>
+          </div>
+        </div>
+        <div id="batch-detail" class="batch-detail"><div class="empty">Select or import a batch.</div></div>
+      </div>
+    </section>
   </main>
   <script>
     let template = null;
@@ -427,6 +502,9 @@ def panel_html() -> str:
     let activeTab = "summary";
     let includeHidden = false;
     let providerConfig = null;
+    let batches = [];
+    let selectedBatchId = null;
+    let includeHiddenBatches = false;
 
     const $ = (id) => document.getElementById(id);
 
@@ -448,7 +526,11 @@ def panel_html() -> str:
       fillForm(template.defaults);
       await loadProvider();
       await loadJobs();
-      setInterval(loadJobs, 2000);
+      await loadBatches();
+      setInterval(() => {
+        loadJobs();
+        loadBatches();
+      }, 2000);
       $("poll").textContent = "polling 2s";
     }
 
@@ -515,6 +597,31 @@ def panel_html() -> str:
     $("include-hidden").addEventListener("change", async () => {
       includeHidden = $("include-hidden").checked;
       await loadJobs();
+    });
+    $("refresh-batches").addEventListener("click", loadBatches);
+    $("include-hidden-batches").addEventListener("change", async () => {
+      includeHiddenBatches = $("include-hidden-batches").checked;
+      await loadBatches();
+    });
+    $("batch-csv-file").addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      $("batch-csv-text").value = await file.text();
+    });
+    $("batch-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await api("/api/batches/import-csv", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(batchPayload()),
+        });
+        selectedBatchId = data.batch.batch_id;
+        $("batch-message").textContent = "imported";
+        await loadBatches();
+      } catch (err) {
+        $("batch-message").textContent = err.message;
+      }
     });
     $("provider-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -585,6 +692,16 @@ def panel_html() -> str:
       };
     }
 
+    function batchPayload() {
+      return {
+        name: $("batch-name").value.trim(),
+        csv_text: $("batch-csv-text").value,
+        generation_mode: $("batch-generation-mode").value,
+        pipeline_mode: $("batch-pipeline-mode").value,
+        max_concurrency: Number($("batch-max-concurrency").value || 1),
+      };
+    }
+
     async function loadJobs() {
       try {
         const data = await api(includeHidden ? "/api/jobs?include_hidden=1" : "/api/jobs");
@@ -621,6 +738,176 @@ def panel_html() -> str:
           await renderDetail(job.job_id);
         });
         list.appendChild(item);
+      });
+    }
+
+    async function loadBatches() {
+      try {
+        const data = await api(includeHiddenBatches ? "/api/batches?include_hidden=1" : "/api/batches");
+        batches = data.batches;
+        if (selectedBatchId && !batches.some((batch) => batch.batch_id === selectedBatchId)) {
+          selectedBatchId = null;
+          $("batch-detail").innerHTML = "<div class='empty'>Select or import a batch.</div>";
+        }
+        renderBatches();
+        if (selectedBatchId) await renderBatchDetail(selectedBatchId);
+      } catch (err) {
+        $("batch-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderBatches() {
+      const list = $("batch-list");
+      if (!batches.length) {
+        list.innerHTML = "<div class='empty'>No batches yet.</div>";
+        return;
+      }
+      const rows = batches.map((batch) => `
+        <tr class="${batch.batch_id === selectedBatchId ? "active" : ""}">
+          <td><button class="secondary batch-open" data-batch-id="${escapeHtml(batch.batch_id)}" type="button">Open</button></td>
+          <td>${escapeHtml(batch.name)}</td>
+          <td><span class="status ${batch.status}">${escapeHtml(batch.status)}</span></td>
+          <td>${escapeHtml(batch.total_count)}</td>
+          <td>${escapeHtml(batch.completed_count)}</td>
+          <td>${escapeHtml(batch.failed_count)}</td>
+          <td>${escapeHtml(batch.running_count)}</td>
+          <td>${escapeHtml(batch.updated_at || "-")}</td>
+        </tr>
+      `).join("");
+      list.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Name</th><th>Status</th><th>Total</th><th>Completed</th><th>Failed</th><th>Running</th><th>Updated</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      list.querySelectorAll(".batch-open").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedBatchId = button.dataset.batchId;
+          renderBatches();
+          await renderBatchDetail(selectedBatchId);
+        });
+      });
+    }
+
+    async function renderBatchDetail(batchId) {
+      const data = await api(`/api/batches/${encodeURIComponent(batchId)}`);
+      const batch = data.batch;
+      const items = data.items || [];
+      const target = $("batch-detail");
+      const rows = items.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.index)}</td>
+          <td>${escapeHtml(item.request.title || "-")}</td>
+          <td>${escapeHtml(item.request.generation_mode || batch.generation_mode)}</td>
+          <td>${escapeHtml(item.request.pipeline_mode || batch.pipeline_mode)}</td>
+          <td><span class="status ${item.status}">${escapeHtml(item.status)}</span></td>
+          <td>${escapeHtml(item.attempt_count)}</td>
+          <td>${item.job_id ? `<button class="secondary batch-job-link" data-job-id="${escapeHtml(item.job_id)}" type="button">${escapeHtml(item.job_id)}</button>` : "-"}</td>
+          <td>${escapeHtml(item.output_dir || "-")}</td>
+          <td>${escapeHtml(item.error || "-")}</td>
+          <td>${escapeHtml(item.updated_at || "-")}</td>
+        </tr>
+      `).join("");
+      target.innerHTML = `
+        <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
+          <span>${escapeHtml(batch.name)}</span>
+          <span class="status ${batch.status}">${escapeHtml(batch.status)}</span>
+        </div>
+        <div class="summary-grid">
+          ${metric("Total", batch.total_count)}
+          ${metric("Completed", batch.completed_count)}
+          ${metric("Failed", batch.failed_count)}
+          ${metric("Running", batch.running_count)}
+        </div>
+        <div class="summary-grid">
+          ${metric("Queued", batch.queued_count)}
+          ${metric("Concurrency", batch.max_concurrency)}
+          ${metric("Mode", batch.generation_mode)}
+          ${metric("Pipeline", batch.pipeline_mode)}
+        </div>
+        <div class="actions">
+          ${batchActionButtons(batch)}
+          <span>${escapeHtml(batch.batch_id)}</span>
+        </div>
+        ${batch.error ? `<p class="error">${escapeHtml(batch.error)}</p>` : ""}
+        <table>
+          <thead><tr><th>Index</th><th>Title</th><th>Mode</th><th>Pipeline</th><th>Status</th><th>Attempt</th><th>Job</th><th>Output</th><th>Error</th><th>Updated</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='10'>No batch items.</td></tr>"}</tbody>
+        </table>
+      `;
+      wireBatchActions(batch);
+      target.querySelectorAll(".batch-job-link").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedJobId = button.dataset.jobId;
+          activeTab = "summary";
+          await loadJobs();
+        });
+      });
+    }
+
+    function batchActionButtons(batch) {
+      const id = encodeURIComponent(batch.batch_id);
+      const buttons = [];
+      if (batch.status !== "running" && batch.queued_count > 0) {
+        buttons.push(`<button id="launch-batch" type="button">Launch</button>`);
+      }
+      if (batch.status === "running") {
+        buttons.push(`<button class="secondary" id="pause-batch" type="button">Pause</button>`);
+      }
+      if (batch.status === "paused") {
+        buttons.push(`<button id="resume-batch" type="button">Resume</button>`);
+      }
+      if ((batch.failed_count || batch.cancelled_count) && batch.status !== "running") {
+        buttons.push(`<button class="secondary" id="retry-failed-batch" type="button">Retry Failed</button>`);
+      }
+      buttons.push(`<a class="button-link secondary" href="/api/batches/${id}/export">Export</a>`);
+      buttons.push(`<button class="secondary" id="open-batch-folder" type="button">Open Folder</button>`);
+      if (batch.hidden) {
+        buttons.push(`<button class="secondary" id="unhide-batch" type="button">Unhide</button>`);
+      } else {
+        buttons.push(`<button class="secondary" id="hide-batch" type="button">Hide</button>`);
+      }
+      if (batch.status !== "running") {
+        buttons.push(`<button class="danger" id="delete-batch" type="button">Delete</button>`);
+      }
+      return buttons.join("");
+    }
+
+    function wireBatchActions(batch) {
+      const id = encodeURIComponent(batch.batch_id);
+      bindAction("launch-batch", async () => {
+        await api(`/api/batches/${id}/launch`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("pause-batch", async () => {
+        await api(`/api/batches/${id}/pause`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("resume-batch", async () => {
+        await api(`/api/batches/${id}/resume`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("retry-failed-batch", async () => {
+        if (!confirm("Retry failed batch items?")) return;
+        await api(`/api/batches/${id}/retry-failed`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("open-batch-folder", async () => {
+        await api(`/api/batches/${id}/open-folder`, { method: "POST" });
+      });
+      bindAction("hide-batch", async () => {
+        await api(`/api/batches/${id}/hide`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("unhide-batch", async () => {
+        await api(`/api/batches/${id}/unhide`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("delete-batch", async () => {
+        if (!confirm("Delete this batch metadata? Generated job runs stay in runs/.")) return;
+        await api(`/api/batches/${id}/delete`, { method: "POST" });
+        selectedBatchId = null;
+        await loadBatches();
       });
     }
 
