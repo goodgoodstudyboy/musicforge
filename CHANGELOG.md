@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.0 - 2026-05-05
+
+### Added
+- Local audio renderer configuration under `.musicforge/renderer.json` with environment variable overrides.
+- Renderer APIs for read, save, reset, and test.
+- FluidSynth MIDI-to-WAV command builder using list argv and `shell=False`.
+- Manual `POST /api/jobs/<job-id>/render-audio` to render `runs/<job-id>/renders/song.wav`.
+- `GET /api/jobs/<job-id>/audio` for WAV playback/download.
+- Audio artifact discovery and validator view audio metadata after successful render.
+- Studio Renderer Settings form, Render Audio action, WAV download link, and `<audio controls>` playback.
+- Fake-runner tests so automated validation does not require FluidSynth or a real SoundFont.
+
+### Verified
+- `python -m pytest -q`
+- Local renderer API smoke with missing SoundFont error.
+- Fake renderer smoke for `render-audio` and WAV endpoint.
+- Studio page smoke for Renderer Settings and audio controls.
+
 ## v0.4.0 - 2026-05-05
 
 ### Added

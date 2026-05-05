@@ -209,6 +209,51 @@ python -m song_agent.cli doctor
 python -m song_agent.cli doctor --provider-test
 ```
 
+## Audio Rendering
+
+v0.5.0 adds optional local WAV rendering for completed jobs:
+
+```text
+runs/<job-id>/renders/song.mid -> runs/<job-id>/renders/song.wav
+```
+
+The first renderer backend is FluidSynth with a local SoundFont. MIDI generation
+does not require renderer configuration, and audio render failures do not change
+a completed job into a failed job.
+
+Renderer settings are stored in `.musicforge/renderer.json`, which is ignored by
+Git. The Studio Renderer Settings form can save, reset, and test:
+
+- renderer type: `fluidsynth`
+- FluidSynth executable path
+- SoundFont path (`.sf2` or `.sf3`)
+- sample rate
+- gain
+
+Environment overrides:
+
+```text
+MUSICFORGE_RENDERER_TYPE
+MUSICFORGE_FLUIDSYNTH_PATH
+MUSICFORGE_SOUNDFONT_PATH
+MUSICFORGE_AUDIO_SAMPLE_RATE
+MUSICFORGE_AUDIO_GAIN
+```
+
+Renderer APIs:
+
+```text
+GET  /api/renderer
+POST /api/renderer
+POST /api/renderer/reset
+POST /api/renderer/test
+POST /api/jobs/<job-id>/render-audio
+GET  /api/jobs/<job-id>/audio
+```
+
+In Studio, open a completed job and click `Render Audio`. When `song.wav`
+exists, the job detail shows a browser audio player and a WAV download link.
+
 ## Initial Direction
 
 - Agent core: Python
