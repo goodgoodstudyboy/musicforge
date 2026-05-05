@@ -32,6 +32,10 @@ def test_multinode_pipeline_outputs_song_plan(tmp_path):
 
     assert plan.title == "Multinode Song"
     assert {track.name for track in plan.tracks} == {"melody", "chords", "bass", "drums"}
+    assert plan.quality is not None
+    assert plan.quality.scores is not None
+    assert plan.quality.scores.overall >= 70
+    assert "chorus" in plan.quality.hook_sections
 
 
 def test_multinode_pipeline_writes_all_nodes(tmp_path):
@@ -209,6 +213,7 @@ def test_critic_detects_missing_tracks():
 
     assert report.passed is False
     assert any(issue.code == "missing_tracks" for issue in report.issues)
+    assert "melody" in report.dimension_scores
 
 
 def test_critic_detects_invalid_note_range():

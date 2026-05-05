@@ -10,7 +10,15 @@ from song_agent.agent.pipeline import (
     _make_bass_notes,
     _make_chord_notes,
     _make_drum_notes,
+    _make_drum_notes_for_sections,
     _make_melody,
+    _make_melody_for_sections,
+)
+from song_agent.music_quality import (
+    analyze_song_quality,
+    attach_quality,
+    quality_issues_for_plan,
+    repair_quality_metadata,
 )
 from song_agent.agent.provider_pipeline import _client_for_config
 from song_agent.node_graph import NODE_DEPENDENCIES, affected_nodes_for_retry
@@ -35,7 +43,7 @@ from song_agent.schemas.agent_nodes import (
     StructurePlan,
     StructureSectionPlan,
 )
-from song_agent.schemas.song import NoteEvent, SongPlan, SongRequest, SongSection, TrackPlan
+from song_agent.schemas.song import MotifPlan, NoteEvent, SongPlan, SongRequest, SongSection, TrackPlan
 
 
 ControlFn = Callable[[str, str], None]
@@ -202,7 +210,7 @@ def _run_multinode_pipeline(
     arrangement = _schema_node_value(
         "arrangement_planner",
         ArrangementPlan,
-        lambda: build_arrangement_plan(palette, sections, melody),
+        lambda: build_arrangement_plan(palette, structure, sections, melody),
         affected_nodes=affected_nodes,
         retrying=retrying,
         node_store=node_store,
@@ -308,10 +316,10 @@ def build_structure_plan(brief: SongBrief) -> StructurePlan:
     return StructurePlan(
         meter="4/4",
         sections=[
-            StructureSectionPlan("intro", 1, 4, 2, "establish the groove"),
-            StructureSectionPlan("verse", 5, 8, 4, "state the main idea"),
-            StructureSectionPlan("chorus", 13, 8, 7, "raise energy and hook"),
-            StructureSectionPlan("outro", 21, 4, 3, "resolve the loop"),
+            StructureSectionPlan("intro", 1, 4, 2, "establish the groove", 2, 2, "establish", "open into verse", False),
+            StructureSectionPlan("verse", 5, 8, 4, "state the main idea", 4, 4, "narrative", "build toward hook", False),
+            StructureSectionPlan("chorus", 13, 8, 7, "raise energy and hook", 6, 7, "hook", "land the hook", True),
+            StructureSectionPlan("outro", 21, 4, 3, "resolve the loop", 2, 3, "resolve", "reduce density", False),
         ],
     )
 
@@ -372,10 +380,18 @@ def build_song_sections(
 
 def build_melody_plan(palette: SonicPalette, sections: list[SongSection]) -> MelodyPlan:
     phrases: list[MelodyPhrase] = []
-    all_notes = _make_melody(sum(section.bars for section in sections) * 4)
+    all_notes = _make_melody_for_sections(sections)
+    primary_motif = MotifPlan(
+        name="primary hook",
+        description="A two-bar rising and falling guide phrase reused across sections.",
+        rhythm_pattern=[1.5, 1.5, 1.5, 1.5],
+        pitch_intervals=[0, 3, 2, 2, -1, -2],
+        anchor_section="chorus",
+    )
     for section in sections:
         start = (section.start_bar - 1) * 4
         end = start + section.bars * 4
+        lower_name = section.name.lower()
         phrases.append(
             MelodyPhrase(
                 section_name=section.name,
@@ -384,13 +400,22 @@ def build_melody_plan(palette: SonicPalette, sections: list[SongSection]) -> Mel
                     for note in all_notes
                     if note.start_beat >= start and note.start_beat < end
                 ],
+                motif_name=primary_motif.name,
+                contour="rising" if "chorus" in lower_name else "arch" if "verse" in lower_name else "mixed",
+                phrase_role="hook" if "chorus" in lower_name else "support",
             )
         )
-    return MelodyPlan(lead_instrument=palette.lead_instrument, phrases=phrases)
+    return MelodyPlan(
+        lead_instrument=palette.lead_instrument,
+        phrases=phrases,
+        primary_motif=primary_motif,
+        hook_phrase_section="chorus",
+    )
 
 
 def build_arrangement_plan(
     palette: SonicPalette,
+    structure: StructurePlan,
     sections: list[SongSection],
     melody: MelodyPlan,
 ) -> ArrangementPlan:
@@ -398,6 +423,10 @@ def build_arrangement_plan(
     melody_notes = [
         note for phrase in melody.phrases for note in phrase.notes
     ]
+    section_behavior = {
+        section.name: _arrangement_behavior(section)
+        for section in structure.sections
+    }
     return ArrangementPlan(
         tracks=[
             ArrangementTrack(
@@ -405,27 +434,45 @@ def build_arrangement_plan(
                 instrument=melody.lead_instrument,
                 role="melody",
                 notes=melody_notes,
+                density=5,
+                section_behavior=section_behavior,
             ),
             ArrangementTrack(
                 name="chords",
                 instrument="electric piano",
                 role="chords",
                 notes=_make_chord_notes(sections),
+                density=5,
+                section_behavior=section_behavior,
             ),
             ArrangementTrack(
                 name="bass",
                 instrument=palette.bass_style or "electric bass",
                 role="bass",
                 notes=_make_bass_notes(sections),
+                density=5,
+                section_behavior=section_behavior,
             ),
             ArrangementTrack(
                 name="drums",
                 instrument="gm drums",
                 role="drums",
-                notes=_make_drum_notes(total_bars),
+                notes=_make_drum_notes_for_sections(sections),
+                density=6,
+                section_behavior=section_behavior,
             ),
         ]
     )
+
+
+def _arrangement_behavior(section: StructureSectionPlan) -> str:
+    if section.hook_candidate or "chorus" in section.name.lower():
+        return "full backbeat with lifted melody"
+    if "intro" in section.name.lower():
+        return "sparse groove"
+    if "outro" in section.name.lower():
+        return "reduce density and resolve"
+    return "steady support"
 
 
 def build_song_plan(
@@ -436,7 +483,7 @@ def build_song_plan(
     arrangement: ArrangementPlan,
 ) -> SongPlan:
     sections = build_song_sections(structure, harmony, lyric_plan)
-    return SongPlan(
+    plan = SongPlan(
         title=brief.title,
         key=harmony.key,
         tempo_bpm=brief.tempo_bpm,
@@ -451,6 +498,7 @@ def build_song_plan(
             for track in arrangement.tracks
         ],
     )
+    return attach_quality(plan)
 
 
 def critic_report_for_plan(plan: SongPlan) -> CriticReport:
@@ -496,10 +544,22 @@ def critic_report_for_plan(plan: SongPlan) -> CriticReport:
                 )
 
     score = max(0, 100 - len([issue for issue in issues if issue.severity == "error"]) * 20)
+    quality = analyze_song_quality(plan)
+    quality_issues = quality_issues_for_plan(plan)
+    issues.extend(
+        issue
+        for issue in quality_issues
+        if issue.code not in {existing.code for existing in issues}
+    )
+    score = quality.scores.overall if quality.scores else score
+    dimension_scores = quality.scores.to_dict() if quality.scores else {}
+    dimension_scores.pop("overall", None)
     return CriticReport(
         passed=not any(issue.severity == "error" for issue in issues),
         score=score,
         issues=issues,
+        dimension_scores=dimension_scores,
+        summary=quality.summary,
     )
 
 
@@ -561,7 +621,11 @@ def repair_song_plan(plan: SongPlan, critic: CriticReport) -> tuple[SongPlan, Re
         meter=repaired.meter,
         sections=repaired.sections,
         tracks=fixed_tracks,
+        quality=repaired.quality,
     )
+    repaired, quality_actions = repair_quality_metadata(repaired)
+    for action in quality_actions:
+        actions.append(RepairAction("quality", action, "Applied low-risk quality metadata repair."))
     return repaired, RepairPlan(applied=bool(actions), actions=actions)
 
 

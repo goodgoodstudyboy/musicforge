@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from song_agent.music_quality import attach_quality
 from song_agent.providers.base import LLMProvider
 from song_agent.schemas.song import NoteEvent, SongPlan, SongRequest, SongSection, TrackPlan
 
@@ -22,13 +23,12 @@ def deterministic_compose(request: SongRequest) -> SongPlan:
     key = request.key or "C major"
     sections = _make_sections(request)
     total_bars = sum(section.bars for section in sections)
-    total_beats = total_bars * 4
 
     tracks = [
         TrackPlan(
             name="melody",
             instrument="lead",
-            notes=_make_melody(total_beats),
+            notes=_make_melody_for_sections(sections),
         ),
         TrackPlan(
             name="chords",
@@ -43,10 +43,10 @@ def deterministic_compose(request: SongRequest) -> SongPlan:
         TrackPlan(
             name="drums",
             instrument="gm drums",
-            notes=_make_drum_notes(total_bars),
+            notes=_make_drum_notes_for_sections(sections),
         ),
     ]
-    return SongPlan(
+    plan = SongPlan(
         title=request.title,
         key=key,
         tempo_bpm=tempo_bpm,
@@ -54,6 +54,7 @@ def deterministic_compose(request: SongRequest) -> SongPlan:
         sections=sections,
         tracks=tracks,
     )
+    return attach_quality(plan)
 
 
 def _make_sections(request: SongRequest) -> list[SongSection]:
@@ -90,6 +91,29 @@ def _make_melody(total_beats: int) -> list[NoteEvent]:
                 velocity=92,
             )
         )
+    return notes
+
+
+def _make_melody_for_sections(sections: list[SongSection]) -> list[NoteEvent]:
+    motif = [64, 67, 69, 71, 72, 71, 69, 67]
+    notes: list[NoteEvent] = []
+    for section in sections:
+        section_start = (section.start_bar - 1) * 4
+        total_beats = section.bars * 4
+        lower_name = section.name.lower()
+        transpose = 5 if "chorus" in lower_name else -2 if "outro" in lower_name else 0
+        velocity = 104 if "chorus" in lower_name else 86 if "intro" in lower_name else 94
+        for beat in range(0, total_beats, 2):
+            pitch = motif[(beat // 2) % len(motif)] + transpose
+            duration = 1.5 if beat + 1.5 <= total_beats else total_beats - beat
+            notes.append(
+                NoteEvent(
+                    pitch=pitch,
+                    start_beat=float(section_start + beat),
+                    duration_beats=float(duration),
+                    velocity=velocity,
+                )
+            )
     return notes
 
 
@@ -163,6 +187,35 @@ def _make_drum_notes(total_bars: int) -> list[NoteEvent]:
                     velocity=88,
                 )
             )
+    return notes
+
+
+def _make_drum_notes_for_sections(sections: list[SongSection]) -> list[NoteEvent]:
+    notes: list[NoteEvent] = []
+    for section in sections:
+        section_start_bar = section.start_bar - 1
+        lower_name = section.name.lower()
+        for bar_offset in range(section.bars):
+            bar_start = (section_start_bar + bar_offset) * 4
+            if "intro" in lower_name:
+                hat_beats = (0, 2)
+                kicks = (0,)
+                snares = ()
+            elif "chorus" in lower_name:
+                hat_beats = (0, 1, 2, 3)
+                kicks = (0, 2)
+                snares = (1, 3)
+                notes.append(NoteEvent(49, float(bar_start), 0.25, 88))
+            else:
+                hat_beats = (0, 1, 2, 3)
+                kicks = (0, 2)
+                snares = (1, 3)
+            for beat in hat_beats:
+                notes.append(NoteEvent(42, float(bar_start + beat), 0.25, 58))
+            for beat in kicks:
+                notes.append(NoteEvent(36, float(bar_start + beat), 0.25, 96))
+            for beat in snares:
+                notes.append(NoteEvent(38, float(bar_start + beat), 0.25, 88))
     return notes
 
 

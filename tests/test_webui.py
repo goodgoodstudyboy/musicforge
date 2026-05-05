@@ -26,9 +26,11 @@ def test_webui_contains_runtime_tabs():
     assert "Timeline" in html
     assert "Nodes" in html
     assert "Tracks" in html
+    assert "Quality" in html
     assert "Validator" in html
     assert "SongPlan JSON" in html
     assert "Section</th><th>Bars</th><th>Start</th><th>End</th><th>Chords" in html
+    assert "Energy</th><th>Tension</th><th>Density" in html
     assert "Track</th><th>Instrument</th><th>Notes</th><th>Pitch Range" in html
     assert "Check</th><th>Status" in html
     assert "Node</th><th>Status</th><th>Provider" in html
@@ -40,6 +42,7 @@ def test_webui_calls_runtime_view_apis():
     assert "/timeline" in html
     assert "/nodes" in html
     assert "/tracks" in html
+    assert "/quality" in html
     assert "/validator" in html
 
 

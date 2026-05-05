@@ -46,6 +46,7 @@ from song_agent.runtime_views import (
     build_timeline_view,
     build_tracks_view,
     build_validator_view,
+    build_quality_view,
 )
 from song_agent.schemas.song import SongPlan, SongRequest
 from song_agent.webui import panel_html
@@ -1645,6 +1646,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if tail == "/validator":
             self._send_runtime_view(job, "validator")
             return
+        if tail == "/quality":
+            self._send_runtime_view(job, "quality")
+            return
         if tail == "/events":
             self._send_json({"events": _read_events(run_dir / "logs" / "events.jsonl")})
             return
@@ -1687,6 +1691,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 {
                     "job_id": job.job_id,
                     "view": build_validator_view(report),
+                }
+            )
+            return
+        if view_name == "quality":
+            plan = read_json(plan_path)
+            critic_report = _read_critic_report(run_dir)
+            self._send_json(
+                {
+                    "job_id": job.job_id,
+                    "view": build_quality_view(plan, critic_report),
                 }
             )
             return
@@ -2034,6 +2048,18 @@ def _read_events(path: Path) -> list[dict[str, Any]]:
         if line.strip():
             events.append(json.loads(line))
     return events
+
+
+def _read_critic_report(run_dir: Path) -> dict[str, Any] | None:
+    path = run_dir / "data" / "nodes" / "critic.json"
+    if not path.exists():
+        return None
+    try:
+        record = read_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    output = record.get("output")
+    return output if isinstance(output, dict) else None
 
 
 def _match_job_route(path: str) -> tuple[str, str] | None:

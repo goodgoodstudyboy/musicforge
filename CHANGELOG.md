@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.7.0 - 2026-05-06
+
+### Added
+- Compatible SongPlan quality metadata with motif, section intent, hook sections, warnings, and dimension scores.
+- `song_agent.music_quality` analyzer for structure, melody, harmony, arrangement, and lyric-fit scoring.
+- Quality-aware deterministic and multinode generation with lifted chorus melody, section energy/tension/density, and hook metadata.
+- Critic reports now include quality issues, dimension scores, and summaries; repair can apply low-risk quality metadata fixes.
+- Provider prompts and mock provider node outputs now describe energy, tension, density, role, transition, and hook candidates.
+- `GET /api/jobs/<job-id>/quality` and Studio Quality tab for overall score, dimension scores, motif, section intents, and issues.
+- Timeline view now includes section role, energy, tension, density, and hook markers.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- Local single CLI smoke with quality metadata.
+- Local multinode CLI smoke with quality metadata.
+
 ## v0.6.2 - 2026-05-06
 
 ### Added

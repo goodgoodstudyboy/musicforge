@@ -145,6 +145,147 @@ class SongSection:
         return asdict(self)
 
 
+def _optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _float_list(data: Any, name: str) -> list[float]:
+    return [float(item) for item in _require_list(data, name)]
+
+
+def _int_list(data: Any, name: str) -> list[int]:
+    return [int(item) for item in _require_list(data, name)]
+
+
+def _range_int(data: dict[str, Any], field_name: str, low: int, high: int, default: int | None = None) -> int:
+    if field_name not in data:
+        if default is None:
+            raise ValueError(f"Missing field: {field_name}")
+        value = default
+    else:
+        value = int(data[field_name])
+    if value < low or value > high:
+        raise ValueError(f"{field_name} must be between {low} and {high}.")
+    return value
+
+
+@dataclass(frozen=True)
+class MotifPlan:
+    name: str
+    description: str
+    rhythm_pattern: list[float] = field(default_factory=list)
+    pitch_intervals: list[int] = field(default_factory=list)
+    anchor_section: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MotifPlan":
+        data = _require_mapping(data, "motif")
+        required = ["name", "description"]
+        missing = [field_name for field_name in required if field_name not in data]
+        if missing:
+            raise ValueError(f"Missing motif fields: {', '.join(missing)}")
+        return cls(
+            name=str(data["name"]),
+            description=str(data["description"]),
+            rhythm_pattern=_float_list(data.get("rhythm_pattern", []), "motif.rhythm_pattern"),
+            pitch_intervals=_int_list(data.get("pitch_intervals", []), "motif.pitch_intervals"),
+            anchor_section=_optional_str(data.get("anchor_section")),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class SectionIntent:
+    section_name: str
+    role: str
+    energy: int
+    tension: int
+    density: int
+    transition: str = ""
+    hook: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SectionIntent":
+        data = _require_mapping(data, "section_intent")
+        if "section_name" not in data:
+            raise ValueError("Missing section intent fields: section_name")
+        return cls(
+            section_name=str(data["section_name"]),
+            role=str(data.get("role", "")),
+            energy=_range_int(data, "energy", 0, 10, default=0),
+            tension=_range_int(data, "tension", 0, 10, default=0),
+            density=_range_int(data, "density", 0, 10, default=0),
+            transition=str(data.get("transition", "")),
+            hook=bool(data.get("hook", False)),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class QualityScores:
+    overall: int
+    structure: int
+    melody: int
+    harmony: int
+    arrangement: int
+    lyric_fit: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "QualityScores":
+        data = _require_mapping(data, "quality_scores")
+        required = ["overall", "structure", "melody", "harmony", "arrangement"]
+        missing = [field_name for field_name in required if field_name not in data]
+        if missing:
+            raise ValueError(f"Missing quality score fields: {', '.join(missing)}")
+        return cls(
+            overall=_range_int(data, "overall", 0, 100),
+            structure=_range_int(data, "structure", 0, 100),
+            melody=_range_int(data, "melody", 0, 100),
+            harmony=_range_int(data, "harmony", 0, 100),
+            arrangement=_range_int(data, "arrangement", 0, 100),
+            lyric_fit=_range_int(data, "lyric_fit", 0, 100, default=0),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class SongQualityMeta:
+    summary: str = ""
+    primary_motif: MotifPlan | None = None
+    section_intents: list[SectionIntent] = field(default_factory=list)
+    hook_sections: list[str] = field(default_factory=list)
+    scores: QualityScores | None = None
+    warnings: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SongQualityMeta":
+        data = _require_mapping(data, "quality")
+        primary_motif = data.get("primary_motif")
+        scores = data.get("scores")
+        return cls(
+            summary=str(data.get("summary", "")),
+            primary_motif=None if primary_motif is None else MotifPlan.from_dict(primary_motif),
+            section_intents=[
+                SectionIntent.from_dict(intent)
+                for intent in _require_list(data.get("section_intents", []), "quality.section_intents")
+            ],
+            hook_sections=[str(section) for section in _require_list(data.get("hook_sections", []), "quality.hook_sections")],
+            scores=None if scores is None else QualityScores.from_dict(scores),
+            warnings=[str(warning) for warning in _require_list(data.get("warnings", []), "quality.warnings")],
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 @dataclass(frozen=True)
 class SongPlan:
     title: str
@@ -153,6 +294,7 @@ class SongPlan:
     meter: str
     sections: list[SongSection]
     tracks: list[TrackPlan]
+    quality: SongQualityMeta | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SongPlan":
@@ -170,6 +312,7 @@ class SongPlan:
             TrackPlan.from_dict(track)
             for track in _require_list(data["tracks"], "tracks")
         ]
+        quality_data = data.get("quality")
         return cls(
             title=str(data["title"]),
             key=str(data["key"]),
@@ -177,6 +320,7 @@ class SongPlan:
             meter=str(data["meter"]),
             sections=sections,
             tracks=tracks,
+            quality=None if quality_data is None else SongQualityMeta.from_dict(quality_data),
         )
 
     def to_dict(self) -> dict[str, Any]:

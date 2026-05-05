@@ -1097,7 +1097,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
       const detail = $("detail");
       const summary = job.summary || {};
-      const tabs = ["summary", "nodes", "timeline", "tracks", "validator", "json", "logs", "artifacts"];
+      const tabs = ["summary", "nodes", "timeline", "tracks", "quality", "validator", "json", "logs", "artifacts"];
       detail.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
           <span>${escapeHtml(job.title)}</span>
@@ -1153,6 +1153,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await renderNodes(job, target);
       } else if (activeTab === "tracks") {
         await renderTracks(job, target);
+      } else if (activeTab === "quality") {
+        await renderQuality(job, target);
       } else if (activeTab === "validator") {
         await renderValidator(job, target);
       } else if (activeTab === "logs") {
@@ -1182,14 +1184,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <td>${escapeHtml(section.estimated_start_seconds)}s</td>
             <td>${escapeHtml(section.estimated_end_seconds)}s</td>
             <td>${escapeHtml(section.chords.join(" · "))}</td>
+            <td>${escapeHtml(section.role || "-")}</td>
+            <td>${escapeHtml(section.energy ?? 0)}</td>
+            <td>${escapeHtml(section.tension ?? 0)}</td>
+            <td>${escapeHtml(section.density ?? 0)}</td>
+            <td>${section.hook ? "yes" : "-"}</td>
           </tr>
         `).join("");
         target.innerHTML = `
           ${runtimeHeader(view)}
           ${warnings(view.warnings)}
           <table>
-            <thead><tr><th>Section</th><th>Bars</th><th>Start</th><th>End</th><th>Chords</th></tr></thead>
-            <tbody>${rows || "<tr><td colspan='5'>No sections.</td></tr>"}</tbody>
+            <thead><tr><th>Section</th><th>Bars</th><th>Start</th><th>End</th><th>Chords</th><th>Role</th><th>Energy</th><th>Tension</th><th>Density</th><th>Hook</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='10'>No sections.</td></tr>"}</tbody>
           </table>
         `;
       } catch (err) {
@@ -1291,6 +1298,58 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     }
 
+    async function renderQuality(job, target) {
+      try {
+        const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/quality`);
+        const view = data.view;
+        const scores = view.scores || {};
+        const motif = view.primary_motif || {};
+        const intentRows = (view.section_intents || []).map((intent) => `
+          <tr>
+            <td>${escapeHtml(intent.section_name)}</td>
+            <td>${escapeHtml(intent.role || "-")}</td>
+            <td>${escapeHtml(intent.energy)}</td>
+            <td>${escapeHtml(intent.tension)}</td>
+            <td>${escapeHtml(intent.density)}</td>
+            <td>${intent.hook ? "yes" : "-"}</td>
+          </tr>
+        `).join("");
+        const issueRows = (view.issues || []).map((issue) => `
+          <tr>
+            <td>${escapeHtml(issue.severity)}</td>
+            <td>${escapeHtml(issue.code)}</td>
+            <td>${escapeHtml(issue.message)}</td>
+            <td>${escapeHtml(issue.target || "-")}</td>
+          </tr>
+        `).join("");
+        target.innerHTML = `
+          <div class="summary-grid">
+            ${metric("Overall", view.overall ?? scores.overall ?? "-")}
+            ${metric("Structure", scores.structure ?? "-")}
+            ${metric("Melody", scores.melody ?? "-")}
+            ${metric("Arrangement", scores.arrangement ?? "-")}
+          </div>
+          <div class="summary-grid">
+            ${metric("Harmony", scores.harmony ?? "-")}
+            ${metric("Lyric Fit", scores.lyric_fit ?? "-")}
+            ${metric("Hook", (view.hook_sections || []).join(", ") || "-")}
+            ${metric("Motif", motif.name || "-")}
+          </div>
+          <p>${escapeHtml(view.summary || "")}</p>
+          <table>
+            <thead><tr><th>Section</th><th>Role</th><th>Energy</th><th>Tension</th><th>Density</th><th>Hook</th></tr></thead>
+            <tbody>${intentRows || "<tr><td colspan='6'>No section intents.</td></tr>"}</tbody>
+          </table>
+          <table>
+            <thead><tr><th>Severity</th><th>Code</th><th>Message</th><th>Target</th></tr></thead>
+            <tbody>${issueRows || "<tr><td colspan='4'>No quality issues.</td></tr>"}</tbody>
+          </table>
+        `;
+      } catch (err) {
+        target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+      }
+    }
+
     async function renderValidator(job, target) {
       try {
         const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/validator`);
@@ -1360,6 +1419,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         nodes: "Nodes",
         timeline: "Timeline",
         tracks: "Tracks",
+        quality: "Quality",
         validator: "Validator",
         json: "SongPlan JSON",
         logs: "Logs",

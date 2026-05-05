@@ -169,12 +169,13 @@ def test_auth_protects_dangerous_job_routes(tmp_path, monkeypatch):
             ("POST", f"/api/jobs/{job_id}/render-audio"),
             ("GET", f"/api/jobs/{job_id}/midi"),
             ("GET", f"/api/jobs/{job_id}/artifacts"),
+            ("GET", f"/api/jobs/{job_id}/quality"),
         ]
         statuses = [request_json(server, method, path)[0] for method, path in routes]
     finally:
         stop_test_server(server)
 
-    assert statuses == [401, 401, 401, 401, 401, 401]
+    assert statuses == [401, 401, 401, 401, 401, 401, 401]
 
 
 def test_no_auth_mode_still_allows_jobs_api(tmp_path, monkeypatch):

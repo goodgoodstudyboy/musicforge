@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from song_agent.schemas.song import NoteEvent
+from song_agent.schemas.song import MotifPlan, NoteEvent
 
 
 def _require_mapping(data: Any, name: str) -> dict[str, Any]:
@@ -33,6 +33,24 @@ def _validated_note(data: dict[str, Any]) -> NoteEvent:
     if note.duration_beats <= 0:
         raise ValueError("note.duration_beats must be > 0.")
     return note
+
+
+def _range_int(
+    data: dict[str, Any],
+    field_name: str,
+    low: int,
+    high: int,
+    default: int | None = None,
+) -> int:
+    if field_name not in data:
+        if default is None:
+            raise ValueError(f"Missing field: {field_name}")
+        value = default
+    else:
+        value = int(data[field_name])
+    if value < low or value > high:
+        raise ValueError(f"{field_name} must be between {low} and {high}.")
+    return value
 
 
 @dataclass(frozen=True)
@@ -131,6 +149,11 @@ class StructureSectionPlan:
     bars: int
     energy: int
     purpose: str
+    tension: int = 0
+    density: int = 0
+    role: str = ""
+    transition: str = ""
+    hook_candidate: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StructureSectionPlan":
@@ -143,8 +166,13 @@ class StructureSectionPlan:
             name=str(data["name"]),
             start_bar=int(data["start_bar"]),
             bars=int(data["bars"]),
-            energy=int(data["energy"]),
+            energy=_range_int(data, "energy", 0, 10),
             purpose=str(data["purpose"]),
+            tension=_range_int(data, "tension", 0, 10, default=0),
+            density=_range_int(data, "density", 0, 10, default=0),
+            role=str(data.get("role", "")),
+            transition=str(data.get("transition", "")),
+            hook_candidate=bool(data.get("hook_candidate", False)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -271,6 +299,9 @@ class HarmonyPlan:
 class MelodyPhrase:
     section_name: str
     notes: list[NoteEvent]
+    motif_name: str | None = None
+    contour: str = ""
+    phrase_role: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MelodyPhrase":
@@ -282,6 +313,9 @@ class MelodyPhrase:
         return cls(
             section_name=str(data["section_name"]),
             notes=[_validated_note(note) for note in _require_list(data["notes"], "notes")],
+            motif_name=_optional_str(data.get("motif_name")),
+            contour=str(data.get("contour", "")),
+            phrase_role=str(data.get("phrase_role", "")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -292,6 +326,8 @@ class MelodyPhrase:
 class MelodyPlan:
     lead_instrument: str
     phrases: list[MelodyPhrase]
+    primary_motif: MotifPlan | None = None
+    hook_phrase_section: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MelodyPlan":
@@ -306,6 +342,10 @@ class MelodyPlan:
                 MelodyPhrase.from_dict(phrase)
                 for phrase in _require_list(data["phrases"], "phrases")
             ],
+            primary_motif=None
+            if data.get("primary_motif") is None
+            else MotifPlan.from_dict(data["primary_motif"]),
+            hook_phrase_section=_optional_str(data.get("hook_phrase_section")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -318,6 +358,8 @@ class ArrangementTrack:
     instrument: str
     role: str
     notes: list[NoteEvent]
+    density: int = 0
+    section_behavior: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ArrangementTrack":
@@ -331,6 +373,14 @@ class ArrangementTrack:
             instrument=str(data["instrument"]),
             role=str(data["role"]),
             notes=[_validated_note(note) for note in _require_list(data["notes"], "notes")],
+            density=_range_int(data, "density", 0, 10, default=0),
+            section_behavior={
+                str(key): str(value)
+                for key, value in _require_mapping(
+                    data.get("section_behavior", {}),
+                    "arrangement_track.section_behavior",
+                ).items()
+            },
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -390,6 +440,8 @@ class CriticReport:
     passed: bool
     score: int
     issues: list[CriticIssue]
+    dimension_scores: dict[str, int] = field(default_factory=dict)
+    summary: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CriticReport":
@@ -400,11 +452,19 @@ class CriticReport:
             raise ValueError(f"Missing critic report fields: {', '.join(missing)}")
         return cls(
             passed=bool(data["passed"]),
-            score=int(data["score"]),
+            score=_range_int(data, "score", 0, 100),
             issues=[
                 CriticIssue.from_dict(issue)
                 for issue in _require_list(data["issues"], "issues")
             ],
+            dimension_scores={
+                str(key): _clamp_int(int(value), 0, 100)
+                for key, value in _require_mapping(
+                    data.get("dimension_scores", {}),
+                    "critic_report.dimension_scores",
+                ).items()
+            },
+            summary=str(data.get("summary", "")),
         )
 
     def to_dict(self) -> dict[str, Any]:

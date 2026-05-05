@@ -2,6 +2,7 @@ from pathlib import Path
 
 from song_agent.projectio import write_json
 from song_agent.runtime_views import (
+    build_quality_view,
     build_runtime_views,
     build_timeline_view,
     build_tracks_view,
@@ -12,6 +13,7 @@ from song_agent.runtime_views import (
 def sample_plan() -> dict:
     return {
         "title": "Rainy Convenience Store",
+        "key": "C major",
         "tempo_bpm": 120,
         "meter": "4/4",
         "sections": [
@@ -45,6 +47,37 @@ def sample_plan() -> dict:
                 ],
             },
         ],
+        "quality": {
+            "summary": "Test quality",
+            "section_intents": [
+                {
+                    "section_name": "intro",
+                    "role": "establish",
+                    "energy": 2,
+                    "tension": 2,
+                    "density": 2,
+                    "hook": False,
+                },
+                {
+                    "section_name": "verse",
+                    "role": "narrative",
+                    "energy": 4,
+                    "tension": 4,
+                    "density": 4,
+                    "hook": False,
+                },
+            ],
+            "hook_sections": [],
+            "scores": {
+                "overall": 75,
+                "structure": 74,
+                "melody": 76,
+                "harmony": 75,
+                "arrangement": 75,
+                "lyric_fit": 0,
+            },
+            "warnings": [],
+        },
     }
 
 
@@ -66,6 +99,11 @@ def test_timeline_view_calculates_section_times():
         "estimated_start_seconds": 0.0,
         "estimated_end_seconds": 8.0,
         "chords": ["Cmaj7", "Am7", "Dm7", "G7"],
+        "energy": 2,
+        "tension": 2,
+        "density": 2,
+        "role": "establish",
+        "hook": False,
     }
     assert view["sections"][1]["estimated_start_seconds"] == 8.0
     assert view["sections"][1]["estimated_end_seconds"] == 16.0
@@ -121,6 +159,15 @@ def test_tracks_view_handles_empty_tracks():
     assert view["tracks"] == []
 
 
+def test_quality_view_returns_scores_and_issues():
+    view = build_quality_view(sample_plan())
+
+    assert view["overall"] == 75
+    assert view["scores"]["structure"] == 74
+    assert isinstance(view["issues"], list)
+    assert view["section_intents"][0]["energy"] == 2
+
+
 def test_validator_view_handles_missing_report():
     view = build_validator_view(None)
 
@@ -151,3 +198,4 @@ def test_build_runtime_views_reads_plan_and_validator(tmp_path: Path):
     assert views["timeline"]["total_bars"] == 8
     assert views["tracks"]["track_count"] == 2
     assert views["validator"]["check_count"] == 2
+    assert views["quality"]["overall"] == 75

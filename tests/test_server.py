@@ -180,6 +180,32 @@ def test_tracks_endpoint_returns_view(tmp_path, monkeypatch):
     assert data["view"]["note_count"] > 0
 
 
+def test_quality_endpoint_returns_view(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _, job = request_json(
+            server,
+            "POST",
+            "/api/jobs",
+            {
+                "title": "Quality Endpoint Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "quality",
+            },
+        )
+        final = wait_for_job(server, job["job_id"])
+        status, data = request_json(server, "GET", f"/api/jobs/{final['job_id']}/quality")
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert data["job_id"] == final["job_id"]
+    assert data["view"]["overall"] >= 70
+    assert data["view"]["section_intents"]
+
+
 def test_validator_endpoint_returns_view(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

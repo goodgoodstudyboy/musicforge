@@ -33,7 +33,38 @@ The JSON object must match this schema:
         }
       ]
     }
-  ]
+  ],
+  "quality": {
+    "summary": "string",
+    "primary_motif": {
+      "name": "primary hook",
+      "description": "short musical idea",
+      "rhythm_pattern": [1.0, 1.0, 0.5, 0.5],
+      "pitch_intervals": [0, 3, 2, -2],
+      "anchor_section": "chorus"
+    },
+    "section_intents": [
+      {
+        "section_name": "chorus",
+        "role": "hook",
+        "energy": 7,
+        "tension": 6,
+        "density": 7,
+        "transition": "land the hook",
+        "hook": true
+      }
+    ],
+    "hook_sections": ["chorus"],
+    "scores": {
+      "overall": 80,
+      "structure": 80,
+      "melody": 80,
+      "harmony": 80,
+      "arrangement": 80,
+      "lyric_fit": 70
+    },
+    "warnings": []
+  }
 }
 ```
 
@@ -49,3 +80,6 @@ Hard constraints:
 - `start_beat` must be 0 or greater.
 - `duration_beats` must be greater than 0.
 - No note may extend beyond the total song length.
+- `quality` is optional but preferred.
+- If `quality` is present, scores must be 0..100 and energy/tension/density must be 0..10.
+- Mark chorus or the strongest hook section in `hook_sections`.

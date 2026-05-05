@@ -100,12 +100,28 @@ Runtime view APIs:
 ```text
 GET /api/jobs/<job-id>/timeline
 GET /api/jobs/<job-id>/tracks
+GET /api/jobs/<job-id>/quality
 GET /api/jobs/<job-id>/validator
 POST /api/jobs/<job-id>/hide
 POST /api/jobs/<job-id>/unhide
 POST /api/jobs/<job-id>/cancel
 POST /api/jobs/<job-id>/delete
 ```
+
+## Music Quality Layer
+
+v0.7.0 adds compatible quality metadata to `song-plan.json`. Existing plans
+without this field still load and render, while new local and multinode runs add:
+
+- primary motif metadata
+- section role, energy, tension, density, transition, and hook markers
+- hook section list
+- structure, melody, harmony, arrangement, lyric-fit, and overall scores
+- quality warnings and critic issues
+
+Studio exposes this through the Quality tab. The Timeline tab also shows section
+energy, tension, density, role, and hook markers so a generated song can be
+checked as a musical structure, not only as MIDI data.
 
 ## Batch Production
 
