@@ -90,6 +90,33 @@ def test_webui_contains_provider_form_calls():
     assert "providerSnapshotHtml" in html
 
 
+def test_webui_contains_renderer_settings():
+    html = panel_html()
+
+    assert "Renderer Settings" in html
+    assert 'id="renderer-form"' in html
+    assert 'id="renderer-fluidsynth-path"' in html
+    assert 'id="renderer-soundfont-path"' in html
+    assert 'id="renderer-sample-rate"' in html
+    assert 'id="renderer-gain"' in html
+    assert "Test renderer" in html
+    assert "/api/renderer" in html
+    assert "/api/renderer/reset" in html
+    assert "/api/renderer/test" in html
+    assert "rendererPayload" in html
+
+
+def test_webui_contains_audio_render_controls():
+    html = panel_html()
+
+    assert "Render Audio" in html
+    assert "Download WAV" in html
+    assert "<audio" in html
+    assert "controls src=\"/api/jobs/${encodeURIComponent(job.job_id)}/audio\"" in html
+    assert "/render-audio" in html
+    assert "/audio" in html
+
+
 def test_webui_contains_batch_tab_controls():
     html = panel_html()
 

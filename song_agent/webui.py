@@ -284,6 +284,10 @@ def panel_html() -> str:
     .batch-detail {
       margin-top: 14px;
     }
+    .audio-player {
+      width: 100%;
+      margin: 8px 0 4px;
+    }
     td .actions {
       margin-top: 0;
     }
@@ -358,6 +362,41 @@ def panel_html() -> str:
               <button class="secondary" id="provider-reset" type="button">Reset</button>
               <button class="secondary" id="provider-test" type="button">Test</button>
               <span id="provider-message"></span>
+            </div>
+          </form>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Renderer Settings</span>
+          <span id="renderer-status" class="status">missing</span>
+        </div>
+        <div class="panel-body">
+          <form id="renderer-form">
+            <label>Renderer Type
+              <select id="renderer-type" name="renderer_type">
+                <option value="fluidsynth">fluidsynth</option>
+              </select>
+            </label>
+            <label>FluidSynth Path
+              <input id="renderer-fluidsynth-path" name="fluidsynth_path" placeholder="fluidsynth">
+            </label>
+            <label>SoundFont Path
+              <input id="renderer-soundfont-path" name="soundfont_path" placeholder="C:\path\to\soundfont.sf2">
+            </label>
+            <div class="grid2">
+              <label>Sample Rate
+                <input id="renderer-sample-rate" name="sample_rate" type="number" min="8000" max="192000">
+              </label>
+              <label>Gain
+                <input id="renderer-gain" name="gain" type="number" min="0" max="10" step="0.1">
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit">Save</button>
+              <button class="secondary" id="renderer-reset" type="button">Reset</button>
+              <button class="secondary" id="renderer-test" type="button">Test renderer</button>
+              <span id="renderer-message"></span>
             </div>
           </form>
         </div>
@@ -502,6 +541,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let activeTab = "summary";
     let includeHidden = false;
     let providerConfig = null;
+    let rendererConfig = null;
     let batches = [];
     let selectedBatchId = null;
     let includeHiddenBatches = false;
@@ -525,6 +565,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       fillPresets();
       fillForm(template.defaults);
       await loadProvider();
+      await loadRenderer();
       await loadJobs();
       await loadBatches();
       setInterval(() => {
@@ -656,6 +697,38 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         $("provider-message").textContent = err.message;
       }
     });
+    $("renderer-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await api("/api/renderer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rendererPayload()),
+        });
+        applyRenderer(data);
+        $("renderer-message").textContent = "saved";
+      } catch (err) {
+        $("renderer-message").textContent = err.message;
+      }
+    });
+    $("renderer-reset").addEventListener("click", async () => {
+      if (!confirm("Reset renderer settings?")) return;
+      try {
+        await api("/api/renderer/reset", { method: "POST" });
+        await loadRenderer();
+        $("renderer-message").textContent = "reset";
+      } catch (err) {
+        $("renderer-message").textContent = err.message;
+      }
+    });
+    $("renderer-test").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/renderer/test", { method: "POST" });
+        $("renderer-message").textContent = data.message || "test ok";
+      } catch (err) {
+        $("renderer-message").textContent = err.message;
+      }
+    });
 
     async function loadProvider() {
       const data = await api("/api/provider");
@@ -689,6 +762,33 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         timeout_seconds: Number($("provider-timeout-seconds").value || 60),
         max_retries: Number($("provider-max-retries").value || 0),
         max_output_tokens: Number($("provider-max-output-tokens").value || 4000),
+      };
+    }
+
+    async function loadRenderer() {
+      const data = await api("/api/renderer");
+      applyRenderer(data);
+    }
+
+    function applyRenderer(data) {
+      rendererConfig = data.config;
+      $("renderer-status").textContent = data.configured ? "configured" : "missing";
+      $("renderer-type").value = rendererConfig.renderer_type || "fluidsynth";
+      $("renderer-fluidsynth-path").value = rendererConfig.fluidsynth_path || "fluidsynth";
+      $("renderer-soundfont-path").value = rendererConfig.soundfont_path || "";
+      $("renderer-sample-rate").value = rendererConfig.sample_rate || 44100;
+      $("renderer-gain").value = rendererConfig.gain ?? 0.6;
+      const exists = rendererConfig.soundfont_exists ? "soundfont exists" : "soundfont missing";
+      $("renderer-message").textContent = rendererConfig.soundfont_path ? exists : "";
+    }
+
+    function rendererPayload() {
+      return {
+        renderer_type: $("renderer-type").value,
+        fluidsynth_path: $("renderer-fluidsynth-path").value.trim(),
+        soundfont_path: $("renderer-soundfont-path").value.trim(),
+        sample_rate: Number($("renderer-sample-rate").value || 44100),
+        gain: Number($("renderer-gain").value || 0.6),
       };
     }
 
@@ -944,6 +1044,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${actionButtons(job)}
           <span>${escapeHtml(job.output_dir)}</span>
         </div>
+        ${audioControls(job)}
         ${job.error ? `<p class="error">${escapeHtml(job.error)}</p>` : ""}
         <div class="tabs">
           ${tabs.map(tab => `<button type="button" class="${activeTab === tab ? "active" : ""}" data-tab="${tab}">${tabLabel(tab)}</button>`).join("")}
@@ -1119,9 +1220,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <div class="summary-grid">
             ${metric("Status", view.status)}
             ${metric("Passed", view.passed ? "yes" : "no")}
-            ${metric("Checks", view.check_count)}
-            ${metric("MIDI Size", view.midi.size)}
-          </div>
+          ${metric("Checks", view.check_count)}
+          ${metric("MIDI Size", view.midi.size)}
+          ${metric("Audio Size", view.audio ? view.audio.size_bytes : 0)}
+        </div>
           ${warnings(view.warnings)}
           <table>
             <thead><tr><th>Check</th><th>Status</th></tr></thead>
@@ -1189,6 +1291,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const canDownload = job.artifacts && job.artifacts.midi;
       const buttons = [];
       if (canDownload) buttons.push(`<a class="button-link" href="/api/jobs/${id}/midi">Download MIDI</a>`);
+      if (job.status === "completed" && canDownload) {
+        buttons.push(`<button class="secondary" id="render-audio" type="button">Render Audio</button>`);
+      }
+      if (job.artifacts && job.artifacts.audio) {
+        buttons.push(`<a class="button-link secondary" href="/api/jobs/${id}/audio">Download WAV</a>`);
+      }
       buttons.push(`<button class="secondary" id="open-folder" type="button">Open Folder</button>`);
       if (job.status === "running" || job.status === "queued") {
         buttons.push(`<button class="danger" id="cancel-job" type="button">Cancel</button>`);
@@ -1208,6 +1316,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     }
 
     function wireJobActions(job) {
+      bindAction("render-audio", async () => {
+        await api(`/api/jobs/${encodeURIComponent(job.job_id)}/render-audio`, { method: "POST" });
+        await loadJobs();
+      });
       bindAction("open-folder", async () => {
         await api(`/api/jobs/${encodeURIComponent(job.job_id)}/open-folder`, { method: "POST" });
       });
@@ -1235,6 +1347,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         selectedJobId = null;
         await loadJobs();
       });
+    }
+
+    function audioControls(job) {
+      if (!job.artifacts || !job.artifacts.audio) return "";
+      return `
+        <audio class="audio-player" controls src="/api/jobs/${encodeURIComponent(job.job_id)}/audio"></audio>
+      `;
     }
 
     function bindAction(id, fn) {
