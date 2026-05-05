@@ -16,8 +16,6 @@ def start_test_server():
 
 
 def stop_test_server(server):
-    if hasattr(server, "watchdog_stop"):
-        server.watchdog_stop.set()
     server.shutdown()
     server.server_close()
 
@@ -59,6 +57,16 @@ def test_info_endpoint(tmp_path, monkeypatch):
     assert status == 200
     assert data["app"] == "MusicForge"
     assert data["mode"] == "local-deterministic"
+
+
+def test_server_close_stops_watchdog_without_serve_forever(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = create_server("127.0.0.1", 0)
+    watchdog = server.watchdog_thread
+
+    server.server_close()
+
+    assert not watchdog.is_alive()
 
 
 def test_create_job_completes(tmp_path, monkeypatch):

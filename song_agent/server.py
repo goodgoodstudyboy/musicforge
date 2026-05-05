@@ -782,12 +782,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         self._send_json({"error": message}, status=status)
 
 
-def create_server(host: str = "127.0.0.1", port: int = 8787) -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer((host, port), MusicForgeHandler)
-    server.job_store = JobStore()  # type: ignore[attr-defined]
-    server.watchdog_stop = threading.Event()  # type: ignore[attr-defined]
-    server.watchdog_thread = _start_watchdog(server.job_store, server.watchdog_stop)  # type: ignore[attr-defined]
-    return server
+class MusicForgeHTTPServer(ThreadingHTTPServer):
+    def __init__(self, server_address: tuple[str, int]) -> None:
+        super().__init__(server_address, MusicForgeHandler)
+        self.job_store = JobStore()
+        self.watchdog_stop = threading.Event()
+        self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
+
+    def server_close(self) -> None:
+        self.watchdog_stop.set()
+        if self.watchdog_thread.is_alive():
+            self.watchdog_thread.join(timeout=2)
+        super().server_close()
+
+
+def create_server(host: str = "127.0.0.1", port: int = 8787) -> MusicForgeHTTPServer:
+    return MusicForgeHTTPServer((host, port))
 
 
 def serve(host: str = "127.0.0.1", port: int = 8787) -> None:
@@ -800,7 +810,6 @@ def serve(host: str = "127.0.0.1", port: int = 8787) -> None:
     except KeyboardInterrupt:
         print("\nStopping MusicForge Studio.")
     finally:
-        server.watchdog_stop.set()  # type: ignore[attr-defined]
         server.server_close()
 
 
