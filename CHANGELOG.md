@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.0 - 2026-05-05
+
+### Added
+- CSV batch import with row-level validation for required fields, duration, tempo, generation mode, pipeline mode, and concurrency.
+- Persistent batch metadata under `.musicforge/batches/<batch-id>/` with `batch.json`, `items.json`, `events.jsonl`, and generated `export.json`.
+- Batch APIs for list, detail, import, launch, pause, resume, retry failed items, export, hide, unhide, delete, and open folder.
+- Standard-library batch runner that launches existing job runs with a configurable max concurrency from 1 to 4.
+- Batch retry behavior that creates new jobs for failed or cancelled items while preserving completed items.
+- Studio Batch workspace for CSV file/text import, launch controls, pause/resume, retry failed, export, hide/unhide/delete, and job-detail linking.
+- Tests for batch parsing, persistence, safe deletion, server endpoints, concurrency limits, provider readiness, and Studio batch controls.
+
+### Verified
+- `python -m pytest -q`
+- Local batch API smoke for import, launch, completion, export, hide, and delete.
+
 ## v0.3.2 - 2026-05-05
 
 ### Fixed

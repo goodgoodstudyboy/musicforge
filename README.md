@@ -88,6 +88,44 @@ POST /api/jobs/<job-id>/cancel
 POST /api/jobs/<job-id>/delete
 ```
 
+## Batch Production
+
+v0.4.0 adds local batch production to Studio. Batch metadata is stored under
+`.musicforge/batches/<batch-id>/`, while every generated song still writes a
+normal job run under `runs/<job-id>/`.
+
+The Batch workspace can import CSV from a file or textarea, launch items with a
+max concurrency from 1 to 4, pause queued work, resume, retry failed items,
+export a JSON report, and open each linked job detail.
+
+CSV columns:
+
+```text
+title,language,style,theme,duration_seconds,tempo_bpm,key,vocal_mode,lyrics,generation_mode,pipeline_mode
+```
+
+Required columns are `title`, `language`, `style`, and `theme`. Defaults are
+`duration_seconds=180`, `vocal_mode=guide_melody`, `generation_mode=local`, and
+`pipeline_mode=multinode`. Row-level `generation_mode` and `pipeline_mode`
+values override the batch defaults.
+
+Batch APIs:
+
+```text
+GET  /api/batches
+GET  /api/batches/<batch-id>
+POST /api/batches/import-csv
+POST /api/batches/<batch-id>/launch
+POST /api/batches/<batch-id>/pause
+POST /api/batches/<batch-id>/resume
+POST /api/batches/<batch-id>/retry-failed
+GET  /api/batches/<batch-id>/export
+POST /api/batches/<batch-id>/hide
+POST /api/batches/<batch-id>/unhide
+POST /api/batches/<batch-id>/delete
+POST /api/batches/<batch-id>/open-folder
+```
+
 ## Multi-node Pipeline
 
 v0.3.0 adds a selectable multinode backend for inspecting each planning stage
