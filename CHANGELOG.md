@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.2.1 - 2026-05-05
+
+### Added
+- Job heartbeat fields and retry metadata in persisted job state.
+- Pipeline stage-boundary cancellation checks.
+- `POST /api/jobs/<job-id>/retry` for failed, stalled, and interrupted jobs.
+- Watchdog tick and background watchdog thread for stale running jobs.
+- Studio display for attempt count, retry count, heartbeat, and stalled state.
+- Studio Retry action for failed, stalled, and interrupted jobs.
+- Tests for cancel boundaries, retry behavior, provider snapshot masking, watchdog, and UI retry controls.
+
+### Fixed
+- Provider request errors now redact echoed keys, bearer tokens, and token-like fields before surfacing errors.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli examples\song_request.json --out runs\v021-local-cli-check --force`
+- `python -m song_agent.cli generate examples\song_request.json --out runs\v021-local-generate-check --force`
+- Local mock provider smoke with provider-mode job, retry path, and masked snapshot.
+
 ## v0.2.0 - 2026-05-05
 
 ### Added

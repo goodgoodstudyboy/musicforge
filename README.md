@@ -112,6 +112,17 @@ The Studio form can save, reset, and test provider settings. Song jobs can run
 in `local` or `provider` mode. Provider mode validates model output through
 `SongPlan.from_dict()` and the same MIDI-safe validator before rendering.
 
+## Job Controls
+
+v0.2.1 adds task control and running protection for the local Studio:
+
+- queued jobs can be cancelled before they start.
+- running jobs accept cancel requests and stop at pipeline stage boundaries.
+- failed, stalled, and interrupted jobs can be retried from the original input.
+- retry appends events, increments retry metadata, and keeps provider snapshots masked.
+- running jobs write `heartbeat_at`; stale running jobs are marked `stalled` by a watchdog.
+- Studio job details show attempt count, retry count, heartbeat, and stalled state.
+
 Local setup checks:
 
 ```powershell
