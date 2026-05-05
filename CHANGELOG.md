@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.6.0 - 2026-05-05
+
+### Added
+- Studio access-token configuration with `--access-token` and `MUSICFORGE_ACCESS_TOKEN`.
+- Startup protection that refuses non-loopback hosts without an access token.
+- Bearer-token API authentication for jobs, provider, renderer, batch, artifacts, audio, and file-system actions.
+- Public `/api/info` auth status that avoids returning sensitive config details.
+- Studio access-token prompt using `sessionStorage`, authenticated fetch, and 401 lock-back behavior.
+- `python -m song_agent.cli release-check` for local release safety checks.
+- Tests for auth config, CLI startup protection, server auth, Studio auth UI, and release-check helpers.
+
+### Verified
+- `python -m pytest -q`
+- localhost no-token Studio smoke.
+- non-localhost no-token startup rejection.
+- Bearer auth API smoke for missing, wrong, and correct tokens.
+- `python -m song_agent.cli release-check`
+
 ## v0.5.0 - 2026-05-05
 
 ### Added

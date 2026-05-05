@@ -66,6 +66,25 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
+v0.6.0 adds local access control for Studio. Loopback hosts can still run without
+a token:
+
+```powershell
+python -m song_agent.cli serve --host 127.0.0.1 --port 8787
+```
+
+Binding to a non-localhost host requires a token:
+
+```powershell
+python -m song_agent.cli serve --host 0.0.0.0 --port 8787 --access-token <token>
+```
+
+You can also use `MUSICFORGE_ACCESS_TOKEN`. When auth is enabled, Studio stores
+the token only in `sessionStorage` and sends it as `Authorization: Bearer ...`.
+`GET /api/info` remains public and reports whether auth is required; jobs,
+provider, renderer, batch, artifacts, audio, delete, open-folder, and render
+actions require Bearer auth.
+
 The v0.1.2 panel adds single-job inspection and management:
 
 - Timeline, Tracks, Validator, SongPlan JSON, Logs, and Artifacts tabs.
@@ -207,6 +226,7 @@ Local setup checks:
 ```powershell
 python -m song_agent.cli doctor
 python -m song_agent.cli doctor --provider-test
+python -m song_agent.cli release-check
 ```
 
 ## Audio Rendering
