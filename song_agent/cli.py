@@ -17,7 +17,30 @@ from song_agent.state import ArtifactRef, RunState
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate a local MIDI song demo.")
-    parser.add_argument("request", type=Path, help="Path to a song request JSON file.")
+    _add_generate_args(parser)
+    return parser
+
+def build_serve_parser() -> argparse.ArgumentParser:
+    serve_parser = argparse.ArgumentParser(description="Start the local web panel.")
+    serve_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
+    serve_parser.add_argument("--port", type=int, default=8787, help="Port to bind.")
+    return serve_parser
+
+def build_generate_parser() -> argparse.ArgumentParser:
+    generate_parser = argparse.ArgumentParser(
+        description="Generate a MIDI song demo from a request JSON file."
+    )
+    _add_generate_args(generate_parser)
+    return generate_parser
+
+
+def _add_generate_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "request",
+        type=Path,
+        nargs="?",
+        help="Path to a song request JSON file.",
+    )
     parser.add_argument(
         "--out",
         type=Path,
@@ -39,7 +62,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Replace an existing output directory instead of resuming it.",
     )
-    return parser
 
 
 def main() -> None:
@@ -51,35 +73,87 @@ def main() -> None:
 
 
 def _main() -> None:
-    parser = build_parser()
-    args = parser.parse_args()
-    if args.resume and args.force:
-        raise ValueError("--resume and --force cannot be used together.")
+    raw_args = sys.argv[1:]
+    if raw_args and raw_args[0] == "serve":
+        parser = build_serve_parser()
+        args = parser.parse_args(raw_args[1:])
+        from song_agent.server import serve
 
-    raw = json.loads(args.request.read_text(encoding="utf-8"))
-    request = SongRequest.from_dict(raw)
-
-    if args.dry_run:
-        print(json.dumps(request.to_dict(), ensure_ascii=False, indent=2))
+        serve(args.host, args.port)
         return
 
-    run_dir = args.out or default_run_dir(request.title)
-    if args.force and run_dir.exists():
+    if raw_args and raw_args[0] == "generate":
+        parser = build_generate_parser()
+        args = parser.parse_args(raw_args[1:])
+    else:
+        parser = build_parser()
+        args = parser.parse_args(raw_args)
+
+    request_path = args.request
+    if request_path is None:
+        parser.error("the following arguments are required: request")
+
+    generate_from_file(
+        request_path,
+        out_dir=args.out,
+        dry_run=args.dry_run,
+        resume=args.resume,
+        force=args.force,
+    )
+
+
+def generate_from_file(
+    request_path: Path,
+    *,
+    out_dir: Path | None = None,
+    dry_run: bool = False,
+    resume: bool = False,
+    force: bool = False,
+) -> tuple[Path, Path] | None:
+    raw = json.loads(request_path.read_text(encoding="utf-8"))
+    request = SongRequest.from_dict(raw)
+
+    if dry_run:
+        print(json.dumps(request.to_dict(), ensure_ascii=False, indent=2))
+        return None
+
+    plan_path, midi_path = generate_request(
+        request,
+        out_dir=out_dir,
+        resume=resume,
+        force=force,
+    )
+    print(f"Wrote song plan: {plan_path}")
+    print(f"Wrote MIDI: {midi_path}")
+    return plan_path, midi_path
+
+
+def generate_request(
+    request: SongRequest,
+    *,
+    out_dir: Path | None = None,
+    resume: bool = False,
+    force: bool = False,
+) -> tuple[Path, Path]:
+    if resume and force:
+        raise ValueError("--resume and --force cannot be used together.")
+
+    run_dir = out_dir or default_run_dir(request.title)
+    if force and run_dir.exists():
         _reset_known_run_artifacts(run_dir)
     paths = ProjectPaths.create(run_dir)
     state = RunState(run_id=run_dir.name, request=request.to_dict())
 
-    if args.resume:
+    if resume:
         _ensure_resume_request_matches(paths, request)
 
-    runner = GraphRunner(_build_steps(paths, request), resume=args.resume)
+    runner = GraphRunner(_build_steps(paths, request), resume=resume)
     try:
         runner.run(state, paths)
     except ResumeMismatchError as exc:
         raise ValueError(str(exc)) from exc
 
-    print(f"Wrote song plan: {paths.data / 'song-plan.json'}")
-    print(f"Wrote MIDI: {paths.renders / 'song.mid'}")
+    return paths.data / "song-plan.json", paths.renders / "song.mid"
 
 
 def _ensure_resume_request_matches(paths: ProjectPaths, request: SongRequest) -> None:

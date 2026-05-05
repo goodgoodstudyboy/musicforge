@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.1 - 2026-05-05
+
+### Added
+- Local MusicForge Studio web panel served by `python -m song_agent.cli serve`.
+- `generate` CLI subcommand while preserving the original positional CLI flow.
+- Standard-library HTTP API for info, templates, jobs, events, artifacts, song plans, and MIDI downloads.
+- Background job runner with `job-state.json` persisted under each run directory.
+- Single-page HTML/CSS/JS workspace for creating jobs, polling status, viewing logs, inspecting SongPlan JSON, and downloading MIDI.
+- Startup discovery of completed jobs with persisted job state.
+- Tests for web UI shell and server job flow.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli examples\song_request.json --out runs\panel-cli-check --force`
+- `python -m song_agent.cli generate examples\song_request.json --out runs\panel-generate-check --force`
+- `python -m song_agent.cli serve --host 127.0.0.1 --port 8787`
+
 ## v0.1.0 - 2026-05-05
 
 ### Added

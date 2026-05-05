@@ -42,6 +42,19 @@ def default_run_dir(request_title: str, runs_dir: Path = Path("runs")) -> Path:
     return runs_dir / slugify(request_title)
 
 
+def unique_run_dir(request_title: str, runs_dir: Path = Path("runs")) -> Path:
+    base_dir = default_run_dir(request_title, runs_dir)
+    if not base_dir.exists():
+        return base_dir
+
+    index = 2
+    while True:
+        candidate = base_dir.with_name(f"{base_dir.name}-{index}")
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return slug or "song-run"

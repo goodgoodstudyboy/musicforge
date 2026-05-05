@@ -33,6 +33,8 @@ Current local MVP:
 ```powershell
 python -m song_agent.cli examples\song_request.json --dry-run
 python -m song_agent.cli examples\song_request.json --out runs\demo
+python -m song_agent.cli generate examples\song_request.json --out runs\demo
+python -m song_agent.cli serve --host 127.0.0.1 --port 8787
 ```
 
 The full run writes:
@@ -47,6 +49,19 @@ runs/demo/renders/song.mid
 
 The default generation path is model-optional: it uses a deterministic composer
 so the JSON-to-MIDI loop can be tested without network access.
+
+## Local Studio
+
+The browser panel runs locally and uses the same deterministic pipeline as the
+CLI:
+
+```powershell
+python -m song_agent.cli serve --host 127.0.0.1 --port 8787
+```
+
+Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
+jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
+under `runs/<job-id>/`.
 
 ## Initial Direction
 

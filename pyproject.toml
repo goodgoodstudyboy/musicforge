@@ -1,6 +1,6 @@
 [project]
 name = "song-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "Open songwriting agent that uses LLM APIs and open renderers."
 requires-python = ">=3.11"
 dependencies = []
@@ -15,4 +15,3 @@ song-agent = "song_agent.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
