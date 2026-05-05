@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from collections.abc import Callable
 
 from song_agent.agent.pipeline import SongAgent
 from song_agent.agent.provider_pipeline import generate_provider_song_plan
@@ -196,6 +197,7 @@ def generate_request(
     force: bool = False,
     provider_config: ProviderConfig | None = None,
     provider_snapshot: dict | None = None,
+    control: Callable[[str, str], None] | None = None,
 ) -> tuple[Path, Path]:
     if resume and force:
         raise ValueError("--resume and --force cannot be used together.")
@@ -217,6 +219,7 @@ def generate_request(
             provider_snapshot=provider_snapshot,
         ),
         resume=resume,
+        control=control,
     )
     try:
         runner.run(state, paths)

@@ -9,6 +9,7 @@ from song_agent.state import RunState, StepStatus
 
 
 StepFn = Callable[[RunState, ProjectPaths], None]
+ControlFn = Callable[[str, str], None]
 
 
 class ResumeMismatchError(ValueError):
@@ -23,9 +24,16 @@ class PipelineStep:
 
 
 class GraphRunner:
-    def __init__(self, steps: list[PipelineStep], *, resume: bool = False) -> None:
+    def __init__(
+        self,
+        steps: list[PipelineStep],
+        *,
+        resume: bool = False,
+        control: ControlFn | None = None,
+    ) -> None:
         self.steps = steps
         self.resume = resume
+        self.control = control
 
     def run(self, state: RunState, paths: ProjectPaths) -> RunState:
         if self.resume and paths.summary_path.exists():
@@ -39,10 +47,14 @@ class GraphRunner:
             state = resumed_state
 
         for step in self.steps:
+            if self.control is not None:
+                self.control("before_step", step.name)
             if self.resume and step.output_path and step.output_path.exists():
                 state.mark_step(step.name, StepStatus.SKIPPED)
                 append_event(paths, {"step": step.name, "status": StepStatus.SKIPPED})
                 write_run_state(paths, state)
+                if self.control is not None:
+                    self.control("after_step", step.name)
                 continue
 
             state.mark_step(step.name, StepStatus.RUNNING)
@@ -67,5 +79,7 @@ class GraphRunner:
             state.mark_step(step.name, StepStatus.COMPLETED)
             append_event(paths, {"step": step.name, "status": StepStatus.COMPLETED})
             write_run_state(paths, state)
+            if self.control is not None:
+                self.control("after_step", step.name)
 
         return state
