@@ -117,6 +117,28 @@ def test_webui_contains_audio_render_controls():
     assert "/audio" in html
 
 
+def test_webui_contains_access_token_prompt():
+    html = panel_html()
+
+    assert "Access token" in html
+    assert 'id="auth-form"' in html
+    assert 'id="auth-token"' in html
+    assert "Unlock" in html
+    assert "sessionStorage" in html
+    assert "musicforge_access_token" in html
+    assert "localStorage" not in html
+
+
+def test_webui_fetch_injects_bearer_and_handles_401():
+    html = panel_html()
+
+    assert 'headers.set("Authorization", `Bearer ${accessToken}`)' in html
+    assert "res.status === 401" in html
+    assert 'sessionStorage.removeItem("musicforge_access_token")' in html
+    assert "showAuthLock" in html
+    assert "auth_required" in html
+
+
 def test_webui_contains_batch_tab_controls():
     html = panel_html()
 

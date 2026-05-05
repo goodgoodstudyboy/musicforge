@@ -154,6 +154,13 @@ def panel_html() -> str:
     .status.completed { background: #ecfdf3; color: var(--ok); }
     .status.failed { background: #fef3f2; color: var(--danger); }
     .status.running { background: #fffaeb; color: var(--warn); }
+    .auth-lock {
+      display: none;
+      max-width: 420px;
+      margin: 28px auto 0;
+    }
+    body.locked main { display: none; }
+    body.locked .auth-lock { display: block; }
     .jobs {
       display: grid;
       grid-template-columns: 320px minmax(0, 1fr);
@@ -312,6 +319,20 @@ def panel_html() -> str:
       <span id="poll">polling</span>
     </div>
   </header>
+  <section id="auth-lock" class="auth-lock">
+    <div class="panel-title">Access token</div>
+    <div class="panel-body">
+      <form id="auth-form">
+        <label>Access token
+          <input id="auth-token" type="password" autocomplete="off">
+        </label>
+        <div class="actions">
+          <button type="submit">Unlock</button>
+          <span id="auth-message" class="message"></span>
+        </div>
+      </form>
+    </div>
+  </section>
   <main>
     <div class="stack">
       <section>
@@ -542,6 +563,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let includeHidden = false;
     let providerConfig = null;
     let rendererConfig = null;
+    let authRequired = false;
+    let accessToken = sessionStorage.getItem("musicforge_access_token") || "";
     let batches = [];
     let selectedBatchId = null;
     let includeHiddenBatches = false;
@@ -549,15 +572,38 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     const $ = (id) => document.getElementById(id);
 
     async function api(path, options = {}) {
-      const res = await fetch(path, options);
+      if (authRequired && !accessToken && path !== "/api/info") {
+        showAuthLock("");
+        throw new Error("Unauthorized.");
+      }
+      const headers = new Headers(options.headers || {});
+      if (authRequired && accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`);
+      }
+      const res = await fetch(path, { ...options, headers });
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
+      if (res.status === 401) {
+        sessionStorage.removeItem("musicforge_access_token");
+        accessToken = "";
+        showAuthLock("Unauthorized.");
+        throw new Error(data.error || res.statusText);
+      }
       if (!res.ok) throw new Error(data.error || res.statusText);
       return data;
     }
 
     async function init() {
       const info = await api("/api/info");
+      authRequired = Boolean(info.auth_required);
+      if (authRequired && !accessToken) {
+        showAuthLock("");
+        $("version").textContent = "v" + info.version;
+        $("mode").textContent = info.mode;
+        $("runs").textContent = info.runs_dir;
+        return;
+      }
+      hideAuthLock();
       template = await api("/api/template");
       $("version").textContent = "v" + info.version;
       $("mode").textContent = info.mode;
@@ -573,6 +619,28 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadBatches();
       }, 2000);
       $("poll").textContent = "polling 2s";
+    }
+
+    $("auth-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      accessToken = $("auth-token").value.trim();
+      sessionStorage.setItem("musicforge_access_token", accessToken);
+      $("auth-token").value = "";
+      try {
+        await init();
+      } catch (err) {
+        showAuthLock(err.message);
+      }
+    });
+
+    function showAuthLock(message) {
+      document.body.classList.add("locked");
+      $("auth-message").textContent = message || "";
+    }
+
+    function hideAuthLock() {
+      document.body.classList.remove("locked");
+      $("auth-message").textContent = "";
     }
 
     function fillPresets() {
