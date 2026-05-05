@@ -29,6 +29,7 @@ def test_cli_generates_run_artifacts(tmp_path, monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Wrote song plan" in output
     assert (out_dir / "data" / "request.json").exists()
+    assert (out_dir / "data" / "run-options.json").exists()
     assert (out_dir / "data" / "song-plan.json").exists()
     assert (out_dir / "data" / "run-summary.json").exists()
     assert (out_dir / "logs" / "events.jsonl").exists()
@@ -121,6 +122,135 @@ def test_cli_force_replaces_existing_run(tmp_path, monkeypatch):
 
     plan = json.loads((out_dir / "data" / "song-plan.json").read_text(encoding="utf-8"))
     assert plan["title"] == "Second Song"
+
+
+def test_cli_generate_multinode_writes_node_artifacts(tmp_path, monkeypatch):
+    request_path = tmp_path / "request.json"
+    out_dir = tmp_path / "demo-run"
+    request_path.write_text(
+        json.dumps(
+            {
+                "title": "CLI Multinode Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "local multinode test",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "song-agent",
+            "generate",
+            str(request_path),
+            "--out",
+            str(out_dir),
+            "--pipeline-mode",
+            "multinode",
+        ],
+    )
+
+    main()
+
+    assert (out_dir / "data" / "nodes" / "brief_planner.json").exists()
+    assert (out_dir / "data" / "nodes" / "song_plan_builder.json").exists()
+    assert (out_dir / "renders" / "song.mid").stat().st_size > 100
+
+
+def test_cli_multinode_resume_rejects_legacy_single_run(tmp_path, monkeypatch, capsys):
+    request_path = tmp_path / "request.json"
+    out_dir = tmp_path / "demo-run"
+    request_path.write_text(
+        json.dumps(
+            {
+                "title": "Resume Multinode Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "resume multinode",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["song-agent", str(request_path), "--out", str(out_dir)],
+    )
+    main()
+    assert not (out_dir / "data" / "nodes").exists()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "song-agent",
+            "generate",
+            str(request_path),
+            "--out",
+            str(out_dir),
+            "--resume",
+            "--pipeline-mode",
+            "multinode",
+        ],
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 1
+    assert "run-options.json does not match" in capsys.readouterr().err
+    assert not (out_dir / "data" / "nodes").exists()
+
+
+def test_cli_multinode_resume_rejects_missing_run_options_for_legacy_run(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    request_path = tmp_path / "request.json"
+    out_dir = tmp_path / "legacy-run"
+    data_dir = out_dir / "data"
+    data_dir.mkdir(parents=True)
+    request = {
+        "title": "Legacy Resume Song",
+        "language": "en",
+        "style": "pop",
+        "theme": "legacy resume",
+        "duration_seconds": 180,
+        "vocal_mode": "guide_melody",
+        "tempo_bpm": None,
+        "key": None,
+        "lyrics": None,
+    }
+    request_path.write_text(
+        json.dumps(
+            {
+                "title": "Legacy Resume Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "legacy resume",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (data_dir / "request.json").write_text(json.dumps(request), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "song-agent",
+            "generate",
+            str(request_path),
+            "--out",
+            str(out_dir),
+            "--resume",
+            "--pipeline-mode",
+            "multinode",
+        ],
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 1
+    assert "run-options.json is missing" in capsys.readouterr().err
 
 
 def test_cli_reports_json_errors_without_traceback(tmp_path, monkeypatch, capsys):

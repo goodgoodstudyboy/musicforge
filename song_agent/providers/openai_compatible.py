@@ -58,6 +58,37 @@ class OpenAICompatibleClient:
             raise ProviderResponseError("Provider response content must be a JSON object.")
         return data
 
+    def generate_node_json(
+        self,
+        node_name: str,
+        node_input: dict[str, Any],
+        config: ProviderConfig,
+        prompt: str,
+    ) -> dict[str, Any]:
+        config.validate_ready_for_provider()
+        response = self._request(
+            config,
+            [
+                {"role": "system", "content": prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"node": node_name, "input": node_input},
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+            max_tokens=config.max_output_tokens,
+        )
+        content = _extract_content(response)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ProviderResponseError("Provider node response content was not valid JSON.") from exc
+        if not isinstance(data, dict):
+            raise ProviderResponseError("Provider node response content must be a JSON object.")
+        return data
+
     def _request(
         self,
         config: ProviderConfig,

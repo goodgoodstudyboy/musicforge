@@ -34,6 +34,7 @@ Current local MVP:
 python -m song_agent.cli examples\song_request.json --dry-run
 python -m song_agent.cli examples\song_request.json --out runs\demo
 python -m song_agent.cli generate examples\song_request.json --out runs\demo
+python -m song_agent.cli generate examples\song_request.json --out runs\demo-nodes --pipeline-mode multinode
 python -m song_agent.cli serve --host 127.0.0.1 --port 8787
 ```
 
@@ -41,6 +42,8 @@ The full run writes:
 
 ```text
 runs/demo/data/request.json
+runs/demo/data/run-options.json
+runs/demo/data/nodes/*.json
 runs/demo/data/song-plan.json
 runs/demo/data/run-summary.json
 runs/demo/logs/events.jsonl
@@ -84,6 +87,39 @@ POST /api/jobs/<job-id>/unhide
 POST /api/jobs/<job-id>/cancel
 POST /api/jobs/<job-id>/delete
 ```
+
+## Multi-node Pipeline
+
+v0.3.0 adds a selectable multinode backend for inspecting each planning stage
+before MIDI rendering. It keeps `single` as the default for backward
+compatibility, while `multinode` writes structured node records under
+`runs/<job-id>/data/nodes/`.
+
+First-pass node order:
+
+```text
+brief_planner
+style_planner
+structure_planner
+lyric_planner
+harmony_planner
+melody_planner
+arrangement_planner
+critic
+repair
+song_plan_builder
+```
+
+Node APIs:
+
+```text
+GET  /api/jobs/<job-id>/nodes
+GET  /api/jobs/<job-id>/nodes/<node-name>
+POST /api/jobs/<job-id>/nodes/<node-name>/retry
+```
+
+Node-level retry is an API placeholder in v0.3.0 and returns `501`; full
+downstream invalidation and replay is deferred to v0.3.1.
 
 ## Provider Mode
 
@@ -142,7 +178,7 @@ python -m song_agent.cli doctor --provider-test
 
 ```text
 song_agent/
-  agent/        Fixed songwriting workflow
+  agent/        Fixed and multinode songwriting workflows
   providers/    LLM provider adapters
   renderers/    MIDI/audio render backends
   schemas/      Song data contracts

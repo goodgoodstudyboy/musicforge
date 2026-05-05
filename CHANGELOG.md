@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.3.0 - 2026-05-05
+
+### Added
+- Multi-agent music planning node schemas for brief, style, structure, lyrics, harmony, melody, arrangement, critic, and repair records.
+- Safe `NodeStore` persistence under `runs/<job-id>/data/nodes/`.
+- Deterministic multinode pipeline that writes every node record and builds the final MIDI-safe `SongPlan`.
+- Provider-backed planning nodes for brief, style, structure, lyrics, and harmony with strict JSON/schema validation.
+- Critic and repair nodes for basic arrangement checks, missing bass/drums repair, and MIDI note clamping.
+- `pipeline_mode=single|multinode` for CLI and Studio jobs.
+- `run-options.json` to keep resume behavior tied to generation and pipeline modes.
+- Node inspection APIs: `GET /api/jobs/<job-id>/nodes` and `GET /api/jobs/<job-id>/nodes/<node-name>`.
+- Studio Nodes tab with node summaries and full JSON preview.
+- Provider node prompt files under `song_agent/prompts/nodes/`.
+
+### Changed
+- Job state now records both `generation_mode` and `pipeline_mode`.
+- Multinode resume checks node builder output instead of only `song-plan.json`.
+- Resume now rejects generation or pipeline mode mismatches instead of reusing incompatible artifacts.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli examples\song_request.json --out runs\v030-single-local-check --force`
+- `python -m song_agent.cli generate examples\song_request.json --out runs\v030-multinode-local-check --force --pipeline-mode multinode`
+- Local Studio API smoke with mock provider, `generation_mode=provider`, `pipeline_mode=multinode`, node API reads, and masked provider snapshot.
+
 ## v0.2.1 - 2026-05-05
 
 ### Added

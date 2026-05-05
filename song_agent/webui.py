@@ -369,6 +369,12 @@ def panel_html() -> str:
                 <option value="provider">provider</option>
               </select>
             </label>
+            <label>Pipeline Mode
+              <select id="pipeline_mode" name="pipeline_mode">
+                <option value="single">single</option>
+                <option value="multinode">multinode</option>
+              </select>
+            </label>
             <label>Style
               <textarea id="style" name="style" required></textarea>
             </label>
@@ -481,6 +487,7 @@ def panel_html() -> str:
         duration_seconds: Number($("duration_seconds").value),
         vocal_mode: $("vocal_mode").value,
         generation_mode: $("generation_mode").value,
+        pipeline_mode: $("pipeline_mode").value,
       };
       if ($("tempo_bpm").value) payload.tempo_bpm = Number($("tempo_bpm").value);
       if ($("key").value.trim()) payload.key = $("key").value.trim();
@@ -621,7 +628,7 @@ def panel_html() -> str:
       const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
       const detail = $("detail");
       const summary = job.summary || {};
-      const tabs = ["summary", "timeline", "tracks", "validator", "json", "logs", "artifacts"];
+      const tabs = ["summary", "nodes", "timeline", "tracks", "validator", "json", "logs", "artifacts"];
       detail.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
           <span>${escapeHtml(job.title)}</span>
@@ -638,6 +645,12 @@ def panel_html() -> str:
           ${metric("Retry Count", job.retry_count ?? 0)}
           ${metric("Heartbeat", job.heartbeat_at || "-")}
           ${metric("Stalled", job.stalled ? "yes" : "no")}
+        </div>
+        <div class="summary-grid">
+          ${metric("Generation Mode", job.generation_mode || (job.provider_snapshot || {}).mode || "-")}
+          ${metric("Pipeline Mode", job.pipeline_mode || "single")}
+          ${metric("Step", job.step || "-")}
+          ${metric("Updated", job.updated_at || "-")}
         </div>
         ${providerSnapshotHtml(job.provider_snapshot || {})}
         <div class="actions">
@@ -666,6 +679,8 @@ def panel_html() -> str:
         target.innerHTML = `<pre>${escapeHtml(JSON.stringify(job, null, 2))}</pre>`;
       } else if (activeTab === "timeline") {
         await renderTimeline(job, target);
+      } else if (activeTab === "nodes") {
+        await renderNodes(job, target);
       } else if (activeTab === "tracks") {
         await renderTracks(job, target);
       } else if (activeTab === "validator") {
@@ -707,6 +722,45 @@ def panel_html() -> str:
             <tbody>${rows || "<tr><td colspan='5'>No sections.</td></tr>"}</tbody>
           </table>
         `;
+      } catch (err) {
+        target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+      }
+    }
+
+    async function renderNodes(job, target) {
+      try {
+        const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/nodes`);
+        const rows = data.nodes.map((node) => `
+          <tr data-node="${escapeHtml(node.node)}">
+            <td><button class="secondary node-json" data-node="${escapeHtml(node.node)}" type="button">View JSON</button></td>
+            <td>${escapeHtml(node.node)}</td>
+            <td>${escapeHtml(node.status)}</td>
+            <td>${escapeHtml(node.provider_mode || "-")}</td>
+            <td>${escapeHtml(node.started_at || "-")}</td>
+            <td>${escapeHtml(node.finished_at || "-")}</td>
+            <td>${escapeHtml(JSON.stringify(node.output_summary || {}))}</td>
+            <td>${escapeHtml(node.error || "-")}</td>
+          </tr>
+        `).join("");
+        target.innerHTML = `
+          <table>
+            <thead><tr><th></th><th>Node</th><th>Status</th><th>Provider</th><th>Started</th><th>Finished</th><th>Summary</th><th>Error</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='8'>No node records.</td></tr>"}</tbody>
+          </table>
+          <pre id="node-json-preview"></pre>
+        `;
+        target.querySelectorAll(".node-json").forEach((button) => {
+          button.addEventListener("click", async () => {
+            const nodeName = button.dataset.node;
+            const preview = target.querySelector("#node-json-preview");
+            try {
+              const detail = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/nodes/${encodeURIComponent(nodeName)}`);
+              preview.textContent = JSON.stringify(detail.node, null, 2);
+            } catch (err) {
+              preview.textContent = err.message;
+            }
+          });
+        });
       } catch (err) {
         target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
       }
@@ -808,6 +862,7 @@ def panel_html() -> str:
     function tabLabel(tab) {
       const labels = {
         summary: "Summary",
+        nodes: "Nodes",
         timeline: "Timeline",
         tracks: "Tracks",
         validator: "Validator",

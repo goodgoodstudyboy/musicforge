@@ -10,6 +10,7 @@ def test_webui_contains_music_fields():
     assert 'id="provider-api-key"' in html
     assert 'id="provider-model"' in html
     assert 'id="generation_mode"' in html
+    assert 'id="pipeline_mode"' in html
     assert 'id="title"' in html
     assert 'id="style"' in html
     assert 'id="theme"' in html
@@ -23,20 +24,30 @@ def test_webui_contains_runtime_tabs():
     html = panel_html()
 
     assert "Timeline" in html
+    assert "Nodes" in html
     assert "Tracks" in html
     assert "Validator" in html
     assert "SongPlan JSON" in html
     assert "Section</th><th>Bars</th><th>Start</th><th>End</th><th>Chords" in html
     assert "Track</th><th>Instrument</th><th>Notes</th><th>Pitch Range" in html
     assert "Check</th><th>Status" in html
+    assert "Node</th><th>Status</th><th>Provider" in html
 
 
 def test_webui_calls_runtime_view_apis():
     html = panel_html()
 
     assert "/timeline" in html
+    assert "/nodes" in html
     assert "/tracks" in html
     assert "/validator" in html
+
+
+def test_webui_calls_nodes_api():
+    html = panel_html()
+
+    assert "renderNodes" in html
+    assert "/nodes/${encodeURIComponent(nodeName)}" in html
 
 
 def test_webui_contains_job_action_buttons_and_calls():

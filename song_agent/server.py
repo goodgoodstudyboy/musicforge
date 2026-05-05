@@ -18,6 +18,7 @@ from urllib.parse import parse_qs
 
 from song_agent import __version__
 from song_agent.cli import generate_request
+from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
 from song_agent.provider import (
     ProviderError,
@@ -75,6 +76,8 @@ class JobState:
     last_error: str | None = None
     stalled: bool = False
     stall_timeout_seconds: int = 300
+    generation_mode: str = "local"
+    pipeline_mode: str = "single"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -119,6 +122,8 @@ class JobState:
             last_error=None if data.get("last_error") is None else str(data.get("last_error")),
             stalled=bool(data.get("stalled", False)),
             stall_timeout_seconds=int(data.get("stall_timeout_seconds", 300) or 300),
+            generation_mode=str(data.get("generation_mode", "local") or "local"),
+            pipeline_mode=str(data.get("pipeline_mode", "single") or "single"),
         )
 
 
@@ -166,6 +171,7 @@ class JobStore:
     def create_job(self, payload: dict[str, Any], start_immediately: bool = True) -> JobState:
         request = SongRequest.from_dict(payload)
         generation_mode = _generation_mode(payload)
+        pipeline_mode = _pipeline_mode(payload)
         provider_snapshot: dict[str, Any]
         if generation_mode == "provider":
             provider_config, _sources = load_provider_config()
@@ -189,6 +195,8 @@ class JobStore:
                 input_payload=request.to_dict(),
                 provider_snapshot=provider_snapshot,
                 heartbeat_at=now,
+                generation_mode=generation_mode,
+                pipeline_mode=pipeline_mode,
             )
             self.jobs[job_id] = job
             self._write_job(job)
@@ -338,6 +346,7 @@ class JobStore:
         if provider_snapshot.get("mode") == "provider":
             provider_config, _sources = load_provider_config()
             provider_config.validate_ready_for_provider()
+            ProjectPaths.create(Path(job.output_dir))
             write_json(
                 Path(job.output_dir) / "data" / "provider-snapshot.json",
                 provider_snapshot,
@@ -383,6 +392,7 @@ class JobStore:
                 provider_config=provider_config,
                 provider_snapshot=provider_snapshot if provider_config is not None else None,
                 control=self._control_callback(job_id),
+                pipeline_mode=job.pipeline_mode,
             )
             job = self.get_job(job_id)
             if job is None:
@@ -667,6 +677,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             self._send_json({"ok": True, "deleted": deleted, "job_id": job_id})
             return
+        if tail.startswith("/nodes/") and tail.endswith("/retry"):
+            self._send_node_route(method, job, tail)
+            return
 
         if method != "GET":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -703,6 +716,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if tail == "/midi":
             self._send_file(run_dir / "renders" / "song.mid", "audio/midi")
             return
+        if tail == "/nodes":
+            self._send_nodes_list(job)
+            return
+        if tail.startswith("/nodes/"):
+            self._send_node_route(method, job, tail)
+            return
 
         self._send_error(HTTPStatus.NOT_FOUND, "Job route not found.")
 
@@ -736,6 +755,45 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Runtime view not found.")
             return
         self._send_json({"job_id": job.job_id, "view": view})
+
+    def _send_nodes_list(self, job: JobState) -> None:
+        records = NodeStore(Path(job.output_dir)).list_nodes()
+        self._send_json(
+            {
+                "job_id": job.job_id,
+                "nodes": [record.to_summary_dict() for record in records],
+            }
+        )
+
+    def _send_node_route(self, method: str, job: JobState, tail: str) -> None:
+        parts = tail.strip("/").split("/")
+        if len(parts) == 2:
+            _nodes, node_name = parts
+            try:
+                record = NodeStore(Path(job.output_dir)).read_node(unquote(node_name))
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Node record not found.")
+                return
+            self._send_json({"job_id": job.job_id, "node": record.to_dict()})
+            return
+        if len(parts) == 3 and parts[2] == "retry":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                NodeStore(Path(job.output_dir)).node_path(unquote(parts[1]))
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_error(
+                HTTPStatus.NOT_IMPLEMENTED,
+                "Node-level retry is planned for v0.3.1.",
+            )
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Node route not found.")
 
     def _read_json_body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0"))
@@ -957,6 +1015,13 @@ def _generation_mode(payload: dict[str, Any]) -> str:
     mode = str(payload.get("generation_mode", "local") or "local")
     if mode not in {"local", "provider"}:
         raise ValueError("generation_mode must be either local or provider.")
+    return mode
+
+
+def _pipeline_mode(payload: dict[str, Any]) -> str:
+    mode = str(payload.get("pipeline_mode", "single") or "single")
+    if mode not in {"single", "multinode"}:
+        raise ValueError("pipeline_mode must be either single or multinode.")
     return mode
 
 

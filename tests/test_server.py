@@ -291,6 +291,8 @@ def test_startup_recovers_completed_job(tmp_path, monkeypatch):
     assert job["retry_count"] == 0
     assert job["stalled"] is False
     assert job["stall_timeout_seconds"] == 300
+    assert job["generation_mode"] == "local"
+    assert job["pipeline_mode"] == "single"
 
 
 def test_job_state_includes_heartbeat_and_retry_defaults(tmp_path, monkeypatch):

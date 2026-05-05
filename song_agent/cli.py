@@ -7,8 +7,10 @@ import sys
 from pathlib import Path
 from collections.abc import Callable
 
+from song_agent.agent.multinode_pipeline import generate_multinode_song_plan
 from song_agent.agent.pipeline import SongAgent
 from song_agent.agent.provider_pipeline import generate_provider_song_plan
+from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, default_run_dir, read_json, write_json
 from song_agent.provider import (
     ProviderConfig,
@@ -81,6 +83,12 @@ def _add_generate_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Replace an existing output directory instead of resuming it.",
     )
+    parser.add_argument(
+        "--pipeline-mode",
+        choices=["single", "multinode"],
+        default="single",
+        help="Pipeline to run: single or multinode.",
+    )
 
 
 def main() -> None:
@@ -123,6 +131,7 @@ def _main() -> None:
         dry_run=args.dry_run,
         resume=args.resume,
         force=args.force,
+        pipeline_mode=args.pipeline_mode,
     )
 
 
@@ -133,6 +142,7 @@ def generate_from_file(
     dry_run: bool = False,
     resume: bool = False,
     force: bool = False,
+    pipeline_mode: str = "single",
 ) -> tuple[Path, Path] | None:
     raw = json.loads(request_path.read_text(encoding="utf-8"))
     request = SongRequest.from_dict(raw)
@@ -146,6 +156,7 @@ def generate_from_file(
         out_dir=out_dir,
         resume=resume,
         force=force,
+        pipeline_mode=pipeline_mode,
     )
     print(f"Wrote song plan: {plan_path}")
     print(f"Wrote MIDI: {midi_path}")
@@ -198,18 +209,23 @@ def generate_request(
     provider_config: ProviderConfig | None = None,
     provider_snapshot: dict | None = None,
     control: Callable[[str, str], None] | None = None,
+    pipeline_mode: str = "single",
 ) -> tuple[Path, Path]:
     if resume and force:
         raise ValueError("--resume and --force cannot be used together.")
+    if pipeline_mode not in {"single", "multinode"}:
+        raise ValueError("pipeline_mode must be either single or multinode.")
 
     run_dir = out_dir or default_run_dir(request.title)
     if force and run_dir.exists():
         _reset_known_run_artifacts(run_dir)
     paths = ProjectPaths.create(run_dir)
     state = RunState(run_id=run_dir.name, request=request.to_dict())
+    run_options = _run_options(provider_config, pipeline_mode)
 
     if resume:
         _ensure_resume_request_matches(paths, request)
+        _ensure_resume_options_match(paths, run_options)
 
     runner = GraphRunner(
         _build_steps(
@@ -217,6 +233,9 @@ def generate_request(
             request,
             provider_config=provider_config,
             provider_snapshot=provider_snapshot,
+            pipeline_mode=pipeline_mode,
+            control=control,
+            run_options=run_options,
         ),
         resume=resume,
         control=control,
@@ -243,6 +262,26 @@ def _ensure_resume_request_matches(paths: ProjectPaths, request: SongRequest) ->
         )
 
 
+def _ensure_resume_options_match(paths: ProjectPaths, run_options: dict[str, str]) -> None:
+    options_path = paths.data / "run-options.json"
+    if not options_path.exists():
+        if run_options == {"generation_mode": "local", "pipeline_mode": "single"}:
+            return
+        raise ValueError(
+            "Cannot resume this run because data/run-options.json is missing "
+            "and the requested generation or pipeline mode is not the legacy "
+            "local/single mode. Use a new output directory or rerun with --force."
+        )
+
+    existing_options = read_json(options_path)
+    if existing_options != run_options:
+        raise ValueError(
+            "Cannot resume this run because data/run-options.json does not match "
+            "the requested generation or pipeline mode. Use a new output directory "
+            "or rerun with --force."
+        )
+
+
 def _reset_known_run_artifacts(run_dir: Path) -> None:
     for child_name in ("data", "renders", "logs"):
         child_path = run_dir / child_name
@@ -256,21 +295,43 @@ def _build_steps(
     *,
     provider_config: ProviderConfig | None = None,
     provider_snapshot: dict | None = None,
+    pipeline_mode: str = "single",
+    control: Callable[[str, str], None] | None = None,
+    run_options: dict[str, str] | None = None,
 ) -> list[PipelineStep]:
     request_path = paths.data / "request.json"
+    options_path = paths.data / "run-options.json"
     plan_path = paths.data / "song-plan.json"
     midi_path = paths.renders / "song.mid"
     provider_snapshot_path = paths.data / "provider-snapshot.json"
+    compose_output_path = (
+        paths.data / "nodes" / "song_plan_builder.json"
+        if pipeline_mode == "multinode"
+        else plan_path
+    )
 
     def write_request(state: RunState, paths: ProjectPaths) -> None:
         write_json(request_path, request.to_dict())
+        write_json(options_path, run_options or _run_options(provider_config, pipeline_mode))
         state.add_artifact(
             "request",
             ArtifactRef("json", str(request_path), "Normalized song request."),
         )
+        state.add_artifact(
+            "run_options",
+            ArtifactRef("json", str(options_path), "Generation and pipeline mode options."),
+        )
 
     def compose(state: RunState, paths: ProjectPaths) -> None:
-        if provider_config is None:
+        if pipeline_mode == "multinode":
+            plan = generate_multinode_song_plan(
+                request,
+                provider_config=provider_config,
+                provider_snapshot=provider_snapshot,
+                node_store=NodeStore(paths.root),
+                control=control,
+            )
+        elif provider_config is None:
             plan = SongAgent().generate(request)
         else:
             plan = generate_provider_song_plan(request, provider_config)
@@ -301,10 +362,31 @@ def _build_steps(
 
     return [
         PipelineStep("normalize_request", request_path, write_request),
-        PipelineStep("deterministic_compose", plan_path, compose),
+        PipelineStep(_compose_step_name(provider_config, pipeline_mode), compose_output_path, compose),
         PipelineStep("validate_song_plan", None, validate),
         PipelineStep("render_midi", midi_path, render),
     ]
+
+
+def _compose_step_name(
+    provider_config: ProviderConfig | None,
+    pipeline_mode: str,
+) -> str:
+    if pipeline_mode == "multinode":
+        return "multinode_compose"
+    if provider_config is not None:
+        return "provider_compose"
+    return "deterministic_compose"
+
+
+def _run_options(
+    provider_config: ProviderConfig | None,
+    pipeline_mode: str,
+) -> dict[str, str]:
+    return {
+        "generation_mode": "provider" if provider_config is not None else "local",
+        "pipeline_mode": pipeline_mode,
+    }
 
 
 if __name__ == "__main__":
