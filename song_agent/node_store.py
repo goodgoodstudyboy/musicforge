@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,11 @@ class NodeRecord:
     output_summary: dict[str, Any] = field(default_factory=dict)
     output: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    invalidated_at: str | None = None
+    invalidated_by: str | None = None
+    retry_count: int = 0
+    last_error: str | None = None
+    depends_on: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "NodeRecord":
@@ -39,6 +45,15 @@ class NodeRecord:
             output_summary=_dict_or_empty(data.get("output_summary")),
             output=_dict_or_empty(data.get("output")),
             error=None if data.get("error") is None else str(data.get("error")),
+            invalidated_at=None
+            if data.get("invalidated_at") is None
+            else str(data.get("invalidated_at")),
+            invalidated_by=None
+            if data.get("invalidated_by") is None
+            else str(data.get("invalidated_by")),
+            retry_count=int(data.get("retry_count", 0) or 0),
+            last_error=None if data.get("last_error") is None else str(data.get("last_error")),
+            depends_on=[str(item) for item in _list_or_empty(data.get("depends_on"))],
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -55,6 +70,12 @@ class NodeRecord:
             "input_summary": self.input_summary,
             "output_summary": self.output_summary,
             "error": self.error,
+            "invalidated_at": self.invalidated_at,
+            "invalidated_by": self.invalidated_by,
+            "retry_count": self.retry_count,
+            "last_error": self.last_error,
+            "depends_on": self.depends_on,
+            "can_retry": self.status in {"completed", "failed", "skipped", "repaired"},
         }
 
 
@@ -64,7 +85,7 @@ class NodeStore:
         self.nodes_dir = run_dir / "data" / "nodes"
 
     def node_path(self, node_name: str) -> Path:
-        safe_name = _validate_node_name(node_name)
+        safe_name = validate_node_name(node_name)
         path = (self.nodes_dir / f"{safe_name}.json").resolve()
         base = self.nodes_dir.resolve()
         if path.parent != base:
@@ -72,7 +93,7 @@ class NodeStore:
         return path
 
     def write_node(self, record: NodeRecord) -> Path:
-        _validate_node_name(record.node)
+        validate_node_name(record.node)
         return write_json(self.node_path(record.node), record.to_dict())
 
     def read_node(self, node_name: str) -> NodeRecord:
@@ -89,8 +110,46 @@ class NodeStore:
             records.append(NodeRecord.from_dict(read_json(path)))
         return sorted(records, key=lambda record: _node_order(record.node))
 
+    def invalidate_nodes(
+        self,
+        node_names: list[str],
+        invalidated_by: str,
+    ) -> list[NodeRecord]:
+        validate_node_name(invalidated_by)
+        invalidated: list[NodeRecord] = []
+        now = _utc_now()
+        for node_name in node_names:
+            validate_node_name(node_name)
+            try:
+                record = self.read_node(node_name)
+            except FileNotFoundError:
+                continue
+            record.status = "invalidated"
+            record.invalidated_at = now
+            record.invalidated_by = invalidated_by
+            record.last_error = record.error
+            record.error = None
+            self.write_node(record)
+            invalidated.append(record)
+        return invalidated
 
-def _validate_node_name(node_name: str) -> str:
+    def read_required_output(self, node_name: str) -> dict[str, Any]:
+        record = self.read_node(node_name)
+        if record.status not in {"completed", "skipped", "repaired"}:
+            raise ValueError(f"Node {node_name} is not completed.")
+        if not record.output:
+            raise ValueError(f"Node {node_name} has no output.")
+        return record.output
+
+    def has_completed_node(self, node_name: str) -> bool:
+        try:
+            record = self.read_node(node_name)
+        except FileNotFoundError:
+            return False
+        return record.status in {"completed", "skipped", "repaired"}
+
+
+def validate_node_name(node_name: str) -> str:
     if not NODE_NAME_RE.fullmatch(node_name):
         raise ValueError("Node name may only contain lowercase letters, numbers, '_' and '-'.")
     if ".." in node_name or "/" in node_name or "\\" in node_name:
@@ -107,6 +166,14 @@ def _node_order(node_name: str) -> tuple[int, str]:
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 PIPELINE_NODE_ORDER = [

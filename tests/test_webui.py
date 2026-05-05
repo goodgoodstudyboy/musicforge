@@ -48,6 +48,9 @@ def test_webui_calls_nodes_api():
 
     assert "renderNodes" in html
     assert "/nodes/${encodeURIComponent(nodeName)}" in html
+    assert "Retry node" in html
+    assert "/dependencies" in html
+    assert "node-retry" in html
 
 
 def test_webui_contains_job_action_buttons_and_calls():

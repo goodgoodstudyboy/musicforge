@@ -17,7 +17,9 @@ from urllib.parse import unquote, urlparse
 from urllib.parse import parse_qs
 
 from song_agent import __version__
+from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.cli import generate_request
+from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
 from song_agent.provider import (
@@ -28,12 +30,13 @@ from song_agent.provider import (
     save_provider_config_from_dict,
     test_provider_config,
 )
+from song_agent.renderers.midi import render_midi
 from song_agent.runtime_views import (
     build_timeline_view,
     build_tracks_view,
     build_validator_view,
 )
-from song_agent.schemas.song import SongRequest
+from song_agent.schemas.song import SongPlan, SongRequest
 from song_agent.webui import panel_html
 
 
@@ -293,6 +296,60 @@ class JobStore:
         self.start_job(job_id)
         return job, HTTPStatus.OK, None
 
+    def retry_job_node(
+        self,
+        job_id: str,
+        node_name: str,
+    ) -> tuple[JobState | None, HTTPStatus, str | None, dict[str, Any]]:
+        job = self.get_job(job_id)
+        if job is None:
+            return None, HTTPStatus.NOT_FOUND, "Job not found.", {}
+        try:
+            affected_nodes = affected_nodes_for_retry(node_name)
+        except ValueError as exc:
+            if str(exc).startswith("Unknown node:"):
+                return job, HTTPStatus.NOT_FOUND, "Node record not found.", {}
+            return job, HTTPStatus.BAD_REQUEST, str(exc), {}
+        if job.pipeline_mode != "multinode":
+            return job, HTTPStatus.CONFLICT, "Node retry requires a multinode job.", {}
+        if job.status == "running":
+            return job, HTTPStatus.CONFLICT, "Cannot retry a node while the job is running.", {}
+        if job.status not in {"completed", "failed", "stalled", "interrupted"}:
+            return job, HTTPStatus.CONFLICT, f"Cannot retry a node for a {job.status} job.", {}
+
+        node_store = NodeStore(Path(job.output_dir))
+        try:
+            node_store.read_node(node_name)
+        except FileNotFoundError:
+            return job, HTTPStatus.NOT_FOUND, "Node record not found.", {}
+        except ValueError as exc:
+            return job, HTTPStatus.BAD_REQUEST, str(exc), {}
+
+        try:
+            provider_snapshot = self._provider_snapshot_for_retry(job)
+        except ProviderError as exc:
+            return job, HTTPStatus.BAD_REQUEST, str(exc), {}
+
+        retry = {"node": node_name, "affected_nodes": affected_nodes}
+        self._update_job(
+            job,
+            status="running",
+            step=f"retry:{node_name}",
+            message=f"Retrying node {node_name}.",
+            error=None,
+            retry_requested=True,
+            retry_count=job.retry_count + 1,
+            cancel_requested=False,
+            stalled=False,
+            interrupted=False,
+            finished_at=None,
+            provider_snapshot=provider_snapshot,
+            heartbeat_at=_utc_now(),
+        )
+        self._run_node_retry(job.job_id, node_name, affected_nodes, provider_snapshot)
+        job = self.get_job(job_id)
+        return job, HTTPStatus.OK, None, retry
+
     def run_watchdog_tick(self, now: datetime | None = None) -> int:
         now = now or datetime.now(timezone.utc)
         marked = 0
@@ -422,6 +479,9 @@ class JobStore:
             provider_snapshot_path = Path(job.output_dir) / "data" / "provider-snapshot.json"
             if provider_snapshot_path.exists():
                 artifacts["provider_snapshot"] = str(provider_snapshot_path)
+            nodes_dir = Path(job.output_dir) / "data" / "nodes"
+            if nodes_dir.exists():
+                artifacts["nodes"] = str(nodes_dir)
             self._update_job(
                 job,
                 status="completed",
@@ -449,6 +509,93 @@ class JobStore:
                 status="failed",
                 step="failed",
                 message="Song generation failed.",
+                error=str(exc),
+                last_error=str(exc),
+                finished_at=_utc_now(),
+            )
+
+    def _run_node_retry(
+        self,
+        job_id: str,
+        node_name: str,
+        affected_nodes: list[str],
+        provider_snapshot: dict[str, Any],
+    ) -> None:
+        job = self.get_job(job_id)
+        if job is None:
+            return
+        request = SongRequest.from_dict(job.input_payload)
+        run_dir = Path(job.output_dir)
+        paths = ProjectPaths.create(run_dir)
+        node_store = NodeStore(run_dir)
+        provider_config = None
+        if provider_snapshot.get("mode") == "provider":
+            provider_config, _sources = load_provider_config()
+            provider_config.validate_ready_for_provider()
+            write_json(paths.data / "provider-snapshot.json", provider_snapshot)
+        try:
+            append_event(
+                paths,
+                {"event": "node_retry_requested", "node": node_name, "affected_nodes": affected_nodes},
+            )
+            invalidated = node_store.invalidate_nodes(affected_nodes, invalidated_by=node_name)
+            for record in invalidated:
+                append_event(
+                    paths,
+                    {"event": "node_invalidated", "node": record.node, "invalidated_by": node_name},
+                )
+            if job.cancel_requested:
+                raise JobCancelled()
+            self._heartbeat(job)
+            plan = rerun_multinode_from_node(
+                request,
+                node_name,
+                provider_config=provider_config,
+                provider_snapshot=provider_snapshot if provider_config is not None else None,
+                node_store=node_store,
+                control=self._control_callback(job_id),
+            )
+            plan.validate()
+            plan_path = paths.data / "song-plan.json"
+            midi_path = paths.renders / "song.mid"
+            validator_report_path = paths.data / "validator-report.json"
+            write_json(plan_path, plan.to_dict())
+            render_midi(plan, midi_path)
+            write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
+            summary = _build_summary(plan_path, midi_path)
+            artifacts = _job_artifacts(run_dir, plan_path, midi_path, validator_report_path)
+            self._update_job(
+                job,
+                status="completed",
+                step="completed",
+                message=f"Node {node_name} retry completed.",
+                summary=summary,
+                error=None,
+                last_error=None,
+                finished_at=_utc_now(),
+                artifacts=artifacts,
+            )
+            append_event(
+                paths,
+                {"event": "node_retry_completed", "node": node_name, "affected_nodes": affected_nodes},
+            )
+        except JobCancelled:
+            latest = self.get_job(job_id)
+            if latest is not None:
+                self._update_job(
+                    latest,
+                    status="cancelled",
+                    step="cancelled",
+                    message="Node retry was cancelled at a stage boundary.",
+                    finished_at=_utc_now(),
+                )
+        except Exception as exc:
+            latest = self.get_job(job_id) or job
+            self._update_job(
+                latest,
+                status="failed",
+                step="failed",
+                message=f"Node {node_name} retry failed.",
                 error=str(exc),
                 last_error=str(exc),
                 finished_at=_utc_now(),
@@ -678,7 +825,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "deleted": deleted, "job_id": job_id})
             return
         if tail.startswith("/nodes/") and tail.endswith("/retry"):
-            self._send_node_route(method, job, tail)
+            self._send_node_retry(method, job, tail)
             return
 
         if method != "GET":
@@ -765,6 +912,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             }
         )
 
+    def _send_node_retry(self, method: str, job: JobState, tail: str) -> None:
+        parts = tail.strip("/").split("/")
+        if len(parts) != 3 or parts[0] != "nodes" or parts[2] != "retry":
+            self._send_error(HTTPStatus.NOT_FOUND, "Node route not found.")
+            return
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        node_name = unquote(parts[1])
+        job, status, error, retry = self.store.retry_job_node(job.job_id, node_name)
+        if error is not None:
+            self._send_error(status, error)
+            return
+        self._send_json({"ok": True, "job": job.to_dict() if job is not None else None, "retry": retry})
+
     def _send_node_route(self, method: str, job: JobState, tail: str) -> None:
         parts = tail.strip("/").split("/")
         if len(parts) == 2:
@@ -779,18 +941,25 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             self._send_json({"job_id": job.job_id, "node": record.to_dict()})
             return
-        if len(parts) == 3 and parts[2] == "retry":
-            if method != "POST":
-                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
+        if len(parts) == 3 and parts[2] == "dependencies":
             try:
-                NodeStore(Path(job.output_dir)).node_path(unquote(parts[1]))
+                node_name = unquote(parts[1])
+                upstream = upstream_nodes(node_name)
+                downstream = downstream_nodes(node_name)
             except ValueError as exc:
+                if str(exc).startswith("Unknown node:"):
+                    self._send_error(HTTPStatus.NOT_FOUND, "Node record not found.")
+                    return
                 self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
-            self._send_error(
-                HTTPStatus.NOT_IMPLEMENTED,
-                "Node-level retry is planned for v0.3.1.",
+            self._send_json(
+                {
+                    "job_id": job.job_id,
+                    "node": node_name,
+                    "upstream": upstream,
+                    "downstream": downstream,
+                    "affected_nodes": [node_name, *downstream],
+                }
             )
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Node route not found.")
@@ -974,6 +1143,30 @@ def _build_validator_report(plan_path: Path, midi_path: Path) -> dict[str, Any]:
         "midi_size": midi_path.stat().st_size if midi_path.exists() else 0,
         "checked_at": _utc_now(),
     }
+
+
+def _job_artifacts(
+    run_dir: Path,
+    plan_path: Path,
+    midi_path: Path,
+    validator_report_path: Path,
+) -> dict[str, str]:
+    artifacts = {
+        "request": str(run_dir / "data" / "request.json"),
+        "song_plan": str(plan_path),
+        "run_summary": str(run_dir / "data" / "run-summary.json"),
+        "validator_report": str(validator_report_path),
+        "job_state": str(run_dir / "data" / "job-state.json"),
+        "events": str(run_dir / "logs" / "events.jsonl"),
+        "midi": str(midi_path),
+    }
+    provider_snapshot_path = run_dir / "data" / "provider-snapshot.json"
+    if provider_snapshot_path.exists():
+        artifacts["provider_snapshot"] = str(provider_snapshot_path)
+    nodes_dir = run_dir / "data" / "nodes"
+    if nodes_dir.exists():
+        artifacts["nodes"] = str(nodes_dir)
+    return artifacts
 
 
 def _read_events(path: Path) -> list[dict[str, Any]]:

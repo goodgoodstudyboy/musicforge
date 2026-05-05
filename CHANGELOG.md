@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.3.1 - 2026-05-05
+
+### Added
+- Explicit multinode dependency graph with upstream, downstream, and affected-node helpers.
+- Node invalidation metadata: `invalidated_at`, `invalidated_by`, `retry_count`, `last_error`, and `depends_on`.
+- NodeStore helpers for invalidating nodes, reading required cached outputs, and checking completed node records.
+- `rerun_multinode_from_node()` to reuse upstream node outputs and rerun the selected node plus downstream nodes.
+- Real `POST /api/jobs/<job-id>/nodes/<node-name>/retry` behavior for multinode jobs.
+- `GET /api/jobs/<job-id>/nodes/<node-name>/dependencies` for retry confirmation and inspection.
+- Studio Retry node controls in the Nodes tab with affected downstream confirmation.
+
+### Changed
+- Node retry rewrites final `song-plan.json`, `song.mid`, `validator-report.json`, job summary, and job state.
+- Node summaries now include retry/invalidation/dependency metadata and `can_retry`.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli examples\song_request.json --out runs\v031-single-check --force`
+- `python -m song_agent.cli generate examples\song_request.json --out runs\v031-multinode-check --force --pipeline-mode multinode`
+- Studio API smoke for local multinode node retry and mock-provider multinode node retry.
+
 ## v0.3.0 - 2026-05-05
 
 ### Added

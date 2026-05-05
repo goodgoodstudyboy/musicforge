@@ -13,6 +13,7 @@ from song_agent.agent.pipeline import (
     _make_melody,
 )
 from song_agent.agent.provider_pipeline import _client_for_config
+from song_agent.node_graph import NODE_DEPENDENCIES, affected_nodes_for_retry
 from song_agent.node_store import NodeRecord, NodeStore, PIPELINE_NODE_ORDER
 from song_agent.provider import ProviderConfig, ProviderOutputError
 from song_agent.quality import REQUIRED_TRACKS, validate_song_plan
@@ -57,12 +58,62 @@ def generate_multinode_song_plan(
     control: ControlFn | None = None,
     client: Any | None = None,
 ) -> SongPlan:
-    client = client or (_client_for_config(provider_config) if provider_config is not None else None)
+    return _run_multinode_pipeline(
+        request,
+        provider_config=provider_config,
+        provider_snapshot=provider_snapshot,
+        node_store=node_store,
+        control=control,
+        client=client,
+        rerun_from_node=None,
+    )
 
-    brief = _run_schema_node(
+
+def rerun_multinode_from_node(
+    request: SongRequest,
+    node_name: str,
+    *,
+    provider_config: ProviderConfig | None = None,
+    provider_snapshot: dict[str, Any] | None = None,
+    node_store: NodeStore,
+    control: ControlFn | None = None,
+    client: Any | None = None,
+) -> SongPlan:
+    return _run_multinode_pipeline(
+        request,
+        provider_config=provider_config,
+        provider_snapshot=provider_snapshot,
+        node_store=node_store,
+        control=control,
+        client=client,
+        rerun_from_node=node_name,
+    )
+
+
+def _run_multinode_pipeline(
+    request: SongRequest,
+    *,
+    provider_config: ProviderConfig | None,
+    provider_snapshot: dict[str, Any] | None,
+    node_store: NodeStore,
+    control: ControlFn | None,
+    client: Any | None,
+    rerun_from_node: str | None,
+) -> SongPlan:
+    client = client or (_client_for_config(provider_config) if provider_config is not None else None)
+    affected_nodes = (
+        set(PIPELINE_NODE_ORDER)
+        if rerun_from_node is None
+        else set(affected_nodes_for_retry(rerun_from_node))
+    )
+    retrying = rerun_from_node is not None
+
+    brief = _schema_node_value(
         "brief_planner",
         SongBrief,
         lambda: build_song_brief(request),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         request=request,
         input_summary={"request_title": request.title},
@@ -72,10 +123,12 @@ def generate_multinode_song_plan(
         client=client,
         control=control,
     )
-    palette = _run_schema_node(
+    palette = _schema_node_value(
         "style_planner",
         SonicPalette,
         lambda: build_sonic_palette(brief),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         request=request,
         input_summary={"style": brief.style},
@@ -85,10 +138,12 @@ def generate_multinode_song_plan(
         client=client,
         control=control,
     )
-    structure = _run_schema_node(
+    structure = _schema_node_value(
         "structure_planner",
         StructurePlan,
         lambda: build_structure_plan(brief),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         request=request,
         input_summary={"duration_seconds": brief.duration_seconds},
@@ -98,10 +153,12 @@ def generate_multinode_song_plan(
         client=client,
         control=control,
     )
-    lyric_plan = _run_schema_node(
+    lyric_plan = _schema_node_value(
         "lyric_planner",
         LyricPlan,
         lambda: build_lyric_plan(request, brief, structure),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         request=request,
         input_summary={"language": brief.language, "vocal_mode": brief.vocal_mode},
@@ -111,10 +168,12 @@ def generate_multinode_song_plan(
         client=client,
         control=control,
     )
-    harmony = _run_schema_node(
+    harmony = _schema_node_value(
         "harmony_planner",
         HarmonyPlan,
         lambda: build_harmony_plan(brief, structure),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         request=request,
         input_summary={"key": brief.key, "sections": len(structure.sections)},
@@ -125,10 +184,12 @@ def generate_multinode_song_plan(
         control=control,
     )
     sections = build_song_sections(structure, harmony, lyric_plan)
-    melody = _run_schema_node(
+    melody = _schema_node_value(
         "melody_planner",
         MelodyPlan,
         lambda: build_melody_plan(palette, sections),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         request=request,
         input_summary={"sections": len(sections)},
@@ -138,10 +199,12 @@ def generate_multinode_song_plan(
         client=None,
         control=control,
     )
-    arrangement = _run_schema_node(
+    arrangement = _schema_node_value(
         "arrangement_planner",
         ArrangementPlan,
         lambda: build_arrangement_plan(palette, sections, melody),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         request=request,
         input_summary={"phrases": len(melody.phrases)},
@@ -152,9 +215,12 @@ def generate_multinode_song_plan(
         control=control,
     )
     draft_plan = build_song_plan(brief, structure, harmony, lyric_plan, arrangement)
-    critic = _run_node(
+    critic = _node_value(
         "critic",
+        CriticReport,
         lambda: critic_report_for_plan(draft_plan),
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         input_summary={"track_count": len(draft_plan.tracks)},
         output_summary=lambda report: {
@@ -165,10 +231,13 @@ def generate_multinode_song_plan(
         provider_snapshot={"mode": "local", "summary": "Deterministic critic"},
         control=control,
     )
-    repaired_plan, repair_plan = repair_song_plan(draft_plan, critic)
-    _run_node(
+    repaired_plan, draft_repair_plan = repair_song_plan(draft_plan, critic)
+    repair_plan = _node_value(
         "repair",
-        lambda: repair_plan,
+        RepairPlan,
+        lambda: draft_repair_plan,
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         input_summary={"critic_passed": critic.passed, "issue_count": len(critic.issues)},
         output_summary=lambda plan: {
@@ -177,11 +246,16 @@ def generate_multinode_song_plan(
         },
         provider_snapshot={"mode": "local", "summary": "Deterministic repair"},
         control=control,
-        success_status="repaired" if repair_plan.applied else "skipped",
+        success_status="repaired" if draft_repair_plan.applied else "skipped",
     )
-    final_plan = _run_node(
+    if repair_plan.applied:
+        repaired_plan, _repair_for_builder = repair_song_plan(draft_plan, critic)
+    final_plan = _node_value(
         "song_plan_builder",
+        SongPlan,
         lambda: repaired_plan,
+        affected_nodes=affected_nodes,
+        retrying=retrying,
         node_store=node_store,
         input_summary={"repair_applied": repair_plan.applied},
         output_summary=lambda plan: _song_plan_summary(plan),
@@ -509,6 +583,7 @@ def _run_schema_node(
     provider_input: dict[str, Any],
     client: Any | None,
     control: ControlFn | None,
+    retrying: bool = False,
 ) -> Any:
     def produce() -> Any:
         if provider_config is None or node_name not in PROVIDER_BACKED_NODES:
@@ -541,6 +616,70 @@ def _run_schema_node(
             provider_snapshot,
         ),
         control=control,
+        retrying=retrying,
+    )
+
+
+def _schema_node_value(
+    node_name: str,
+    schema: Any,
+    deterministic: Callable[[], Any],
+    *,
+    affected_nodes: set[str],
+    retrying: bool,
+    node_store: NodeStore,
+    request: SongRequest,
+    input_summary: dict[str, Any],
+    provider_config: ProviderConfig | None,
+    provider_snapshot: dict[str, Any] | None,
+    provider_input: dict[str, Any],
+    client: Any | None,
+    control: ControlFn | None,
+) -> Any:
+    if retrying and node_name not in affected_nodes:
+        return schema.from_dict(node_store.read_required_output(node_name))
+    return _run_schema_node(
+        node_name,
+        schema,
+        deterministic,
+        node_store=node_store,
+        request=request,
+        input_summary=input_summary,
+        provider_config=provider_config,
+        provider_snapshot=provider_snapshot,
+        provider_input=provider_input,
+        client=client,
+        control=control,
+        retrying=retrying,
+    )
+
+
+def _node_value(
+    node_name: str,
+    schema: Any,
+    produce: Callable[[], Any],
+    *,
+    affected_nodes: set[str],
+    retrying: bool,
+    node_store: NodeStore,
+    input_summary: dict[str, Any],
+    output_summary: Callable[[Any], dict[str, Any]],
+    provider_snapshot: dict[str, Any],
+    control: ControlFn | None,
+    success_status: str = "completed",
+) -> Any:
+    if retrying and node_name not in affected_nodes:
+        return schema.from_dict(node_store.read_required_output(node_name))
+    return _run_node(
+        node_name,
+        produce,
+        node_store=node_store,
+        input_summary=input_summary,
+        output_summary=output_summary,
+        provider_snapshot=provider_snapshot,
+        control=control,
+        success_status=success_status,
+        retrying=retrying,
     )
 
 
@@ -554,18 +693,27 @@ def _run_node(
     provider_snapshot: dict[str, Any],
     control: ControlFn | None,
     success_status: str = "completed",
+    retrying: bool = False,
 ) -> Any:
     if control is not None:
         control("before_node", node_name)
     started_at = _utc_now()
+    attempt_count, retry_count, last_error = _next_node_counts(
+        node_store,
+        node_name,
+        retrying=retrying,
+    )
     node_store.write_node(
         NodeRecord(
             node=node_name,
             status="running",
             started_at=started_at,
-            attempt_count=1,
+            attempt_count=attempt_count,
             provider_snapshot=provider_snapshot,
             input_summary=input_summary,
+            retry_count=retry_count,
+            last_error=last_error,
+            depends_on=NODE_DEPENDENCIES.get(node_name, []),
         )
     )
     try:
@@ -576,11 +724,14 @@ def _run_node(
             status=success_status,
             started_at=started_at,
             finished_at=_utc_now(),
-            attempt_count=1,
+            attempt_count=attempt_count,
             provider_snapshot=provider_snapshot,
             input_summary=input_summary,
             output_summary=output_summary(output),
             output=output_data,
+            retry_count=retry_count,
+            last_error=last_error,
+            depends_on=NODE_DEPENDENCIES.get(node_name, []),
         )
         node_store.write_node(record)
     except Exception as exc:
@@ -590,16 +741,35 @@ def _run_node(
                 status="failed",
                 started_at=started_at,
                 finished_at=_utc_now(),
-                attempt_count=1,
+                attempt_count=attempt_count,
                 provider_snapshot=provider_snapshot,
                 input_summary=input_summary,
                 error=str(exc),
+                retry_count=retry_count,
+                last_error=last_error,
+                depends_on=NODE_DEPENDENCIES.get(node_name, []),
             )
         )
         raise
     if control is not None:
         control("after_node", node_name)
     return output
+
+
+def _next_node_counts(
+    node_store: NodeStore,
+    node_name: str,
+    *,
+    retrying: bool,
+) -> tuple[int, int, str | None]:
+    try:
+        previous = node_store.read_node(node_name)
+    except FileNotFoundError:
+        return 1, 0, None
+    attempt_count = previous.attempt_count + 1
+    retry_count = previous.retry_count + 1 if retrying else previous.retry_count
+    last_error = previous.error or previous.last_error
+    return attempt_count, retry_count, last_error
 
 
 def _node_provider_snapshot(
@@ -697,4 +867,5 @@ __all__ = [
     "generate_multinode_song_plan",
     "load_node_prompt",
     "repair_song_plan",
+    "rerun_multinode_from_node",
 ]

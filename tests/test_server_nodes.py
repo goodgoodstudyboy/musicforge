@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -34,11 +35,12 @@ def request_json(server, method, path, payload=None):
 
 
 def wait_for_job(server, job_id):
-    for _ in range(80):
+    for _ in range(120):
         status, job = request_json(server, "GET", f"/api/jobs/{job_id}")
         assert status == 200
         if job["status"] in {"completed", "failed", "cancelled", "interrupted"}:
             return job
+        time.sleep(0.05)
     raise AssertionError("job did not finish")
 
 
@@ -114,22 +116,41 @@ def test_node_detail_rejects_path_traversal(tmp_path, monkeypatch):
     assert "Node name" in data["error"]
 
 
-def test_node_retry_placeholder_returns_501(tmp_path, monkeypatch):
+def test_node_retry_updates_song_plan_and_midi(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()
     try:
         _status, job = request_json(server, "POST", "/api/jobs", payload())
         final = wait_for_job(server, job["job_id"])
+        midi_path = Path(final["output_dir"]) / "renders" / "song.mid"
+        before_mtime = midi_path.stat().st_mtime_ns
+        before_brief = request_json(
+            server,
+            "GET",
+            f"/api/jobs/{final['job_id']}/nodes/brief_planner",
+        )[1]["node"]["started_at"]
         status, data = request_json(
             server,
             "POST",
             f"/api/jobs/{final['job_id']}/nodes/brief_planner/retry",
         )
+        after = request_json(server, "GET", f"/api/jobs/{final['job_id']}")[1]
+        node = request_json(
+            server,
+            "GET",
+            f"/api/jobs/{final['job_id']}/nodes/brief_planner",
+        )[1]["node"]
     finally:
         stop_test_server(server)
 
-    assert status == 501
-    assert "v0.3.1" in data["error"]
+    assert status == 200
+    assert data["retry"]["node"] == "brief_planner"
+    assert "song_plan_builder" in data["retry"]["affected_nodes"]
+    assert after["status"] == "completed"
+    assert after["retry_count"] == 1
+    assert node["started_at"] != before_brief
+    assert node["retry_count"] == 1
+    assert midi_path.stat().st_mtime_ns >= before_mtime
 
 
 def test_node_retry_rejects_invalid_node_name(tmp_path, monkeypatch):
@@ -148,6 +169,89 @@ def test_node_retry_rejects_invalid_node_name(tmp_path, monkeypatch):
 
     assert status == 400
     assert "Node name" in data["error"]
+
+
+def test_node_retry_rejects_single_pipeline_job(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, job = request_json(
+            server,
+            "POST",
+            "/api/jobs",
+            {
+                "title": "Single Retry Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "single retry",
+            },
+        )
+        final = wait_for_job(server, job["job_id"])
+        status, data = request_json(
+            server,
+            "POST",
+            f"/api/jobs/{final['job_id']}/nodes/brief_planner/retry",
+        )
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Node retry requires a multinode job."
+
+
+def test_node_retry_rejects_running_job(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(payload(), start_immediately=False)
+        server.job_store._update_job(job, status="running", step="generate")
+        status, data = request_json(
+            server,
+            "POST",
+            f"/api/jobs/{job.job_id}/nodes/brief_planner/retry",
+        )
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Cannot retry a node while the job is running."
+
+
+def test_node_retry_unknown_node_returns_404(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, job = request_json(server, "POST", "/api/jobs", payload())
+        final = wait_for_job(server, job["job_id"])
+        status, data = request_json(
+            server,
+            "POST",
+            f"/api/jobs/{final['job_id']}/nodes/missing_node/retry",
+        )
+    finally:
+        stop_test_server(server)
+
+    assert status == 404
+    assert data["error"] == "Node record not found."
+
+
+def test_node_dependencies_endpoint_returns_graph(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, job = request_json(server, "POST", "/api/jobs", payload())
+        final = wait_for_job(server, job["job_id"])
+        status, data = request_json(
+            server,
+            "GET",
+            f"/api/jobs/{final['job_id']}/nodes/lyric_planner/dependencies",
+        )
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert data["upstream"] == ["brief_planner", "structure_planner"]
+    assert data["affected_nodes"] == ["lyric_planner", "critic", "repair", "song_plan_builder"]
 
 
 def test_provider_mock_multinode_job_writes_provider_nodes(tmp_path, monkeypatch):

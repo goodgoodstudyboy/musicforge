@@ -115,11 +115,14 @@ Node APIs:
 ```text
 GET  /api/jobs/<job-id>/nodes
 GET  /api/jobs/<job-id>/nodes/<node-name>
+GET  /api/jobs/<job-id>/nodes/<node-name>/dependencies
 POST /api/jobs/<job-id>/nodes/<node-name>/retry
 ```
 
-Node-level retry is an API placeholder in v0.3.0 and returns `501`; full
-downstream invalidation and replay is deferred to v0.3.1.
+v0.3.1 adds node-level retry for multinode jobs. Retrying a node invalidates
+that node plus downstream nodes, reuses completed upstream node outputs, then
+rewrites the final SongPlan, MIDI, validator report, summary, and job state.
+Studio exposes this through the Nodes tab with a downstream-node confirmation.
 
 ## Provider Mode
 

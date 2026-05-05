@@ -732,7 +732,10 @@ def panel_html() -> str:
         const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/nodes`);
         const rows = data.nodes.map((node) => `
           <tr data-node="${escapeHtml(node.node)}">
-            <td><button class="secondary node-json" data-node="${escapeHtml(node.node)}" type="button">View JSON</button></td>
+            <td>
+              <button class="secondary node-json" data-node="${escapeHtml(node.node)}" type="button">View JSON</button>
+              ${nodeRetryButton(job, node)}
+            </td>
             <td>${escapeHtml(node.node)}</td>
             <td>${escapeHtml(node.status)}</td>
             <td>${escapeHtml(node.provider_mode || "-")}</td>
@@ -761,9 +764,30 @@ def panel_html() -> str:
             }
           });
         });
+        target.querySelectorAll(".node-retry").forEach((button) => {
+          button.addEventListener("click", async () => {
+            const nodeName = button.dataset.node;
+            try {
+              const deps = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/nodes/${encodeURIComponent(nodeName)}/dependencies`);
+              const downstream = deps.downstream.length ? deps.downstream.join(", ") : "no downstream nodes";
+              if (!confirm(`Retry ${nodeName} and rebuild downstream nodes: ${downstream}?`)) return;
+              await api(`/api/jobs/${encodeURIComponent(job.job_id)}/nodes/${encodeURIComponent(nodeName)}/retry`, { method: "POST" });
+              await loadJobs();
+            } catch (err) {
+              alert(err.message);
+            }
+          });
+        });
       } catch (err) {
         target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
       }
+    }
+
+    function nodeRetryButton(job, node) {
+      if (job.pipeline_mode !== "multinode") return "";
+      if (job.status === "running" || job.status === "queued") return "";
+      if (!node.can_retry) return "";
+      return `<button class="secondary node-retry" data-node="${escapeHtml(node.node)}" type="button">Retry node</button>`;
     }
 
     async function renderTracks(job, target) {

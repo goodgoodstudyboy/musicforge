@@ -5,6 +5,7 @@ from song_agent.agent.multinode_pipeline import (
     critic_report_for_plan,
     generate_multinode_song_plan,
     repair_song_plan,
+    rerun_multinode_from_node,
 )
 from song_agent.node_store import NodeStore
 from song_agent.provider import ProviderConfig, ProviderOutputError
@@ -141,6 +142,43 @@ def test_provider_node_snapshot_is_masked(tmp_path):
     serialized = str(store.read_node("brief_planner").to_dict())
     assert "sk-secret-value" not in serialized
     assert "sk-...alue" in serialized
+
+
+def test_rerun_multinode_from_lyric_node_reuses_upstream_nodes(tmp_path):
+    store = NodeStore(tmp_path)
+    generate_multinode_song_plan(request(), node_store=store)
+    before_brief = store.read_node("brief_planner").started_at
+    before_lyric = store.read_node("lyric_planner").started_at
+    before_critic = store.read_node("critic").started_at
+
+    plan = rerun_multinode_from_node(request(), "lyric_planner", node_store=store)
+
+    assert plan.title == "Multinode Song"
+    assert store.read_node("brief_planner").started_at == before_brief
+    assert store.read_node("lyric_planner").started_at != before_lyric
+    assert store.read_node("critic").started_at != before_critic
+    assert store.read_node("lyric_planner").retry_count == 1
+    assert store.read_node("brief_planner").retry_count == 0
+
+
+def test_rerun_multinode_from_brief_rebuilds_all_nodes(tmp_path):
+    store = NodeStore(tmp_path)
+    generate_multinode_song_plan(request(), node_store=store)
+    before = {record.node: record.started_at for record in store.list_nodes()}
+
+    rerun_multinode_from_node(request(), "brief_planner", node_store=store)
+
+    after = {record.node: record.started_at for record in store.list_nodes()}
+    assert all(after[node] != before[node] for node in PIPELINE_NODE_ORDER)
+    assert all(store.read_node(node).retry_count == 1 for node in PIPELINE_NODE_ORDER)
+
+
+def test_rerun_multinode_from_unknown_node_fails(tmp_path):
+    store = NodeStore(tmp_path)
+    generate_multinode_song_plan(request(), node_store=store)
+
+    with pytest.raises(ValueError, match="Unknown node"):
+        rerun_multinode_from_node(request(), "missing_node", node_store=store)
 
 
 def test_critic_detects_missing_tracks():
