@@ -143,7 +143,7 @@ class JobState:
 
 class JobStore:
     def __init__(self, runs_dir: Path = RUNS_DIR) -> None:
-        self.runs_dir = runs_dir
+        self.runs_dir = Path(runs_dir).resolve()
         self.lock = threading.RLock()
         self.jobs: dict[str, JobState] = {}
         self.load_existing_jobs()
@@ -720,10 +720,19 @@ class BatchRunner:
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.threads: dict[str, threading.Thread] = {}
+        self.audio_threads: dict[str, threading.Thread] = {}
         self.recover_existing_batches()
 
     def recover_existing_batches(self) -> None:
         for document in self.batch_store.list_batches(include_hidden=True):
+            recovered_audio = self._recover_interrupted_audio(document)
+            if recovered_audio:
+                self.batch_store.save_batch(document)
+                self.batch_store.append_event(
+                    document.state.batch_id,
+                    "batch_audio_recovered_failed",
+                    {"failed_count": recovered_audio},
+                )
             if document.state.status not in {"queued", "running", "paused"}:
                 continue
             synced = self._sync_running_items(document.state.batch_id)
@@ -741,6 +750,17 @@ class BatchRunner:
                     "batch_recovered_paused",
                     {"queued_count": synced.state.queued_count},
                 )
+
+    @staticmethod
+    def _recover_interrupted_audio(document: BatchDocument) -> int:
+        recovered = 0
+        for item in document.items:
+            if item.audio_status in {"queued", "running"}:
+                item.audio_status = "failed"
+                item.audio_error = "Audio render was interrupted by a previous server shutdown."
+                item.updated_at = now_iso()
+                recovered += 1
+        return recovered
 
     def launch_batch(self, batch_id: str) -> tuple[BatchDocument | None, HTTPStatus, str | None, int]:
         try:
@@ -811,6 +831,9 @@ class BatchRunner:
                 item.error = None
                 item.job_id = None
                 item.output_dir = None
+                item.audio_status = "not_started"
+                item.audio_path = None
+                item.audio_error = None
                 item.updated_at = now_iso()
                 reset_count += 1
         if reset_count == 0:
@@ -831,6 +854,62 @@ class BatchRunner:
         )
         return document, HTTPStatus.ACCEPTED, None, reset_count
 
+    def render_audio(
+        self,
+        batch_id: str,
+        *,
+        failed_only: bool = False,
+    ) -> tuple[BatchDocument | None, HTTPStatus, str | None, int]:
+        try:
+            document = self.batch_store.get_batch(batch_id)
+        except FileNotFoundError:
+            return None, HTTPStatus.NOT_FOUND, "Batch not found.", 0
+        except ValueError as exc:
+            return None, HTTPStatus.BAD_REQUEST, str(exc), 0
+        if document.state.status == "running" or any(item.status == "running" for item in document.items):
+            return document, HTTPStatus.CONFLICT, "Cannot render batch audio while batch generation is running.", 0
+        if any(item.audio_status in {"queued", "running"} for item in document.items):
+            return document, HTTPStatus.CONFLICT, "Batch audio render is already running.", 0
+        renderer_error = self._renderer_readiness_error()
+        if renderer_error is not None:
+            return document, HTTPStatus.BAD_REQUEST, renderer_error, 0
+
+        queued_count = 0
+        for item in document.items:
+            if failed_only and item.audio_status != "failed":
+                continue
+            if item.status != "completed":
+                if not failed_only and item.audio_status == "not_started":
+                    item.audio_status = "skipped"
+                    item.audio_error = "Batch item is not completed."
+                    item.updated_at = now_iso()
+                continue
+            if not failed_only and item.audio_status == "completed" and item.audio_path:
+                continue
+            item.audio_status = "queued"
+            item.audio_path = None
+            item.audio_error = None
+            item.updated_at = now_iso()
+            queued_count += 1
+
+        if queued_count == 0:
+            message = (
+                "Batch has no failed audio renders to retry."
+                if failed_only
+                else "Batch has no completed items that need audio render."
+            )
+            return document, HTTPStatus.CONFLICT, message, 0
+
+        self.batch_store.save_batch(document)
+        self.batch_store.append_event(
+            batch_id,
+            "batch_audio_render_requested",
+            {"queued_count": queued_count, "failed_only": failed_only},
+        )
+        self._start_available_audio_items(batch_id)
+        self._ensure_audio_thread(batch_id)
+        return self.batch_store.get_batch(batch_id), HTTPStatus.ACCEPTED, None, queued_count
+
     def delete_batch(self, batch_id: str) -> tuple[bool, HTTPStatus, str | None]:
         try:
             document = self.batch_store.get_batch(batch_id)
@@ -844,7 +923,7 @@ class BatchRunner:
     def shutdown(self) -> None:
         self.stop_event.set()
         with self.lock:
-            threads = list(self.threads.values())
+            threads = [*self.threads.values(), *self.audio_threads.values()]
         for thread in threads:
             if thread.is_alive():
                 thread.join(timeout=2)
@@ -874,6 +953,25 @@ class BatchRunner:
             with self.lock:
                 self.threads.pop(batch_id, None)
 
+    def _run_batch_audio(self, batch_id: str) -> None:
+        try:
+            while not self.stop_event.is_set():
+                self._start_available_audio_items(batch_id)
+                document = self._sync_audio_items(batch_id)
+                if document is None:
+                    return
+                if not any(item.audio_status in {"queued", "running"} for item in document.items):
+                    self.batch_store.append_event(
+                        batch_id,
+                        "batch_audio_render_finished",
+                        self._audio_counts(document),
+                    )
+                    return
+                time.sleep(0.1)
+        finally:
+            with self.lock:
+                self.audio_threads.pop(batch_id, None)
+
     def _ensure_thread(self, batch_id: str) -> None:
         with self.lock:
             existing = self.threads.get(batch_id)
@@ -886,6 +984,20 @@ class BatchRunner:
                 daemon=True,
             )
             self.threads[batch_id] = thread
+            thread.start()
+
+    def _ensure_audio_thread(self, batch_id: str) -> None:
+        with self.lock:
+            existing = self.audio_threads.get(batch_id)
+            if existing is not None and existing.is_alive():
+                return
+            thread = threading.Thread(
+                target=self._run_batch_audio,
+                args=(batch_id,),
+                name=f"musicforge-batch-audio-{batch_id}",
+                daemon=True,
+            )
+            self.audio_threads[batch_id] = thread
             thread.start()
 
     def _start_available_items(self, batch_id: str) -> int:
@@ -972,6 +1084,82 @@ class BatchRunner:
                 document = self.batch_store.get_batch(batch_id)
             return document
 
+    def _start_available_audio_items(self, batch_id: str) -> int:
+        with self.lock:
+            try:
+                document = self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                return 0
+            running_count = sum(1 for item in document.items if item.audio_status == "running")
+            available = max(0, document.state.max_concurrency - running_count)
+            if available == 0:
+                return 0
+            started = 0
+            threads_to_start: list[threading.Thread] = []
+            for item in document.items:
+                if item.audio_status != "queued" or started >= available:
+                    continue
+                if item.status != "completed" or not item.job_id:
+                    item.audio_status = "failed"
+                    item.audio_error = "Batch item does not have a completed job."
+                    item.updated_at = now_iso()
+                    continue
+                item.audio_status = "running"
+                item.audio_error = None
+                item.updated_at = now_iso()
+                started += 1
+                threads_to_start.append(
+                    threading.Thread(
+                        target=self._render_audio_item,
+                        args=(batch_id, item.item_id, item.job_id),
+                        name=f"musicforge-batch-audio-item-{batch_id}-{item.item_id}",
+                        daemon=True,
+                    )
+                )
+                self.batch_store.append_event(
+                    batch_id,
+                    "batch_audio_item_started",
+                    {"item_id": item.item_id, "job_id": item.job_id},
+                )
+            self.batch_store.save_batch(document)
+            for thread in threads_to_start:
+                thread.start()
+            return started
+
+    def _render_audio_item(self, batch_id: str, item_id: str, job_id: str) -> None:
+        audio, status, error = self.job_store.render_job_audio(job_id)
+        with self.lock:
+            try:
+                document = self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                return
+            for item in document.items:
+                if item.item_id != item_id:
+                    continue
+                if error is None and status == HTTPStatus.OK:
+                    item.audio_status = "completed"
+                    item.audio_path = audio.get("audio")
+                    item.audio_error = None
+                    event_type = "batch_audio_item_completed"
+                    payload = {"item_id": item.item_id, "job_id": job_id, "audio": item.audio_path}
+                else:
+                    item.audio_status = "failed"
+                    item.audio_path = None
+                    item.audio_error = error or f"Audio render failed with status {status.value}."
+                    event_type = "batch_audio_item_failed"
+                    payload = {"item_id": item.item_id, "job_id": job_id, "error": item.audio_error}
+                item.updated_at = now_iso()
+                self.batch_store.save_batch(document)
+                self.batch_store.append_event(batch_id, event_type, payload)
+                return
+
+    def _sync_audio_items(self, batch_id: str) -> BatchDocument | None:
+        with self.lock:
+            try:
+                return self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                return None
+
     def _finish_batch(self, document: BatchDocument) -> None:
         if document.state.failed_count or document.state.cancelled_count:
             document.state.status = "completed_with_errors"
@@ -999,6 +1187,29 @@ class BatchRunner:
         except ProviderError as exc:
             return str(exc)
         return None
+
+    @staticmethod
+    def _renderer_readiness_error() -> str | None:
+        config, _sources = load_renderer_config()
+        try:
+            config.validate_ready_for_render()
+        except RendererError as exc:
+            return str(exc)
+        return None
+
+    @staticmethod
+    def _audio_counts(document: BatchDocument) -> dict[str, int]:
+        counts = {
+            "not_started": 0,
+            "queued": 0,
+            "running": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
+        for item in document.items:
+            counts[item.audio_status] = counts.get(item.audio_status, 0) + 1
+        return counts
 
 
 class MusicForgeHandler(BaseHTTPRequestHandler):
@@ -1274,6 +1485,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(status, error)
                 return
             self._send_json({"ok": True, "reset_count": reset_count, **document.to_dict()}, status=status)
+            return
+
+        if tail in {"/render-audio", "/render-failed-audio"}:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            document, status, error, queued_count = self.batch_runner.render_audio(
+                batch_id,
+                failed_only=tail == "/render-failed-audio",
+            )
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, "queued_count": queued_count, **document.to_dict()}, status=status)
             return
 
         if tail == "/export":

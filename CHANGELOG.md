@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.6.2 - 2026-05-06
+
+### Added
+- Batch audio render APIs for `POST /api/batches/<batch-id>/render-audio` and `POST /api/batches/<batch-id>/render-failed-audio`.
+- Batch item audio metadata: `audio_status`, `audio_path`, and `audio_error`.
+- Batch export now includes WAV render status and path information.
+- Studio Batch actions for Render Audio and Render Failed Audio, plus per-item audio status and WAV path columns.
+
+### Fixed
+- JSON artifacts are written with same-directory atomic replacement to avoid Studio polling or background runners reading partially written files.
+
+### Verified
+- `python -m pytest -q`
+- Batch audio smoke for missing renderer, missing MIDI, partial success, retry failed audio, and export metadata.
+
 ## v0.6.1 - 2026-05-05
 
 ### Fixed

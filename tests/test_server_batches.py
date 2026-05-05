@@ -3,6 +3,7 @@ import threading
 import time
 from http.client import HTTPConnection
 from pathlib import Path
+from types import SimpleNamespace
 
 from song_agent.server import create_server
 
@@ -65,6 +66,35 @@ def wait_for_batch(server, batch_id, terminal=True):
             return batch
         time.sleep(0.05)
     raise AssertionError("batch did not finish")
+
+
+def wait_for_batch_audio(server, batch_id):
+    for _ in range(120):
+        status, batch = request_json(server, "GET", f"/api/batches/{batch_id}")
+        assert status == 200, batch
+        statuses = {item.get("audio_status", "not_started") for item in batch["items"]}
+        if not statuses.intersection({"queued", "running"}):
+            return batch
+        time.sleep(0.05)
+    raise AssertionError("batch audio render did not finish")
+
+
+def fake_render_audio(midi_path, wav_path, config):
+    assert midi_path.exists()
+    wav_path.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
+    return wav_path
+
+
+def fake_completed_process(cmd, **kwargs):
+    return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+
+def configure_renderer(tmp_path, server):
+    soundfont = tmp_path / "font.sf2"
+    soundfont.write_bytes(b"font")
+    status, data = request_json(server, "POST", "/api/renderer", {"soundfont_path": str(soundfont)})
+    assert status == 200
+    assert data["configured"] is True
 
 
 def test_import_batch_lists_and_reads_detail(tmp_path, monkeypatch):
@@ -266,6 +296,127 @@ def test_provider_batch_requires_config_before_launch(tmp_path, monkeypatch):
     assert "provider" in data["error"].lower()
     assert detail["batch"]["status"] == "draft"
     assert all(item["job_id"] is None for item in detail["items"])
+
+
+def test_render_batch_audio_requires_renderer_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        created = import_batch(server)
+        batch_id = created["batch"]["batch_id"]
+        request_json(server, "POST", f"/api/batches/{batch_id}/launch")
+        final = wait_for_batch(server, batch_id)
+        status, data = request_json(server, "POST", f"/api/batches/{batch_id}/render-audio")
+    finally:
+        stop_test_server(server)
+
+    assert final["batch"]["status"] == "completed"
+    assert status == 400
+    assert "soundfont_path" in data["error"]
+
+
+def test_render_batch_audio_completes_items_and_export(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("song_agent.server.render_audio", fake_render_audio)
+    server = start_test_server()
+    try:
+        configure_renderer(tmp_path, server)
+        created = import_batch(server)
+        batch_id = created["batch"]["batch_id"]
+        request_json(server, "POST", f"/api/batches/{batch_id}/launch")
+        wait_for_batch(server, batch_id)
+        status_render, render_data = request_json(server, "POST", f"/api/batches/{batch_id}/render-audio")
+        final = wait_for_batch_audio(server, batch_id)
+        status_export, export = request_json(server, "GET", f"/api/batches/{batch_id}/export")
+    finally:
+        stop_test_server(server)
+
+    assert status_render == 202
+    assert render_data["queued_count"] == 2
+    assert all(item["audio_status"] == "completed" for item in final["items"])
+    assert all(item["audio_path"].endswith(str(Path("renders") / "song.wav")) for item in final["items"])
+    assert status_export == 200
+    assert export["items"][0]["audio_status"] == "completed"
+    assert export["items"][0]["audio"].endswith(str(Path("renders") / "song.wav"))
+
+
+def test_render_batch_audio_marks_missing_midi_failed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("song_agent.server.render_audio", fake_render_audio)
+    server = start_test_server()
+    try:
+        configure_renderer(tmp_path, server)
+        created = import_batch(server)
+        batch_id = created["batch"]["batch_id"]
+        document = server.batch_store.get_batch(batch_id)
+        job = server.job_store.create_job(document.items[0].request, start_immediately=False)
+        document.items[0].status = "completed"
+        document.items[0].job_id = job.job_id
+        document.items[0].output_dir = job.output_dir
+        server.batch_store.save_batch(document)
+        status_render, render_data = request_json(server, "POST", f"/api/batches/{batch_id}/render-audio")
+        final = wait_for_batch_audio(server, batch_id)
+    finally:
+        stop_test_server(server)
+
+    assert status_render == 202
+    assert render_data["queued_count"] == 1
+    assert final["items"][0]["audio_status"] == "failed"
+    assert final["items"][0]["audio_error"] == "song.mid is not available for this job yet."
+
+
+def test_render_batch_audio_partial_success_and_retry_failed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    attempts = {"count": 0}
+
+    def flaky_render(midi_path, wav_path, config):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            from song_agent.renderers.audio import RendererExecutionError
+
+            raise RendererExecutionError("render failed")
+        return fake_render_audio(midi_path, wav_path, config)
+
+    monkeypatch.setattr("song_agent.server.render_audio", flaky_render)
+    server = start_test_server()
+    try:
+        configure_renderer(tmp_path, server)
+        created = import_batch(server)
+        batch_id = created["batch"]["batch_id"]
+        request_json(server, "POST", f"/api/batches/{batch_id}/launch")
+        wait_for_batch(server, batch_id)
+        status_render, render_data = request_json(server, "POST", f"/api/batches/{batch_id}/render-audio")
+        partial = wait_for_batch_audio(server, batch_id)
+        status_retry, retry = request_json(server, "POST", f"/api/batches/{batch_id}/render-failed-audio")
+        final = wait_for_batch_audio(server, batch_id)
+    finally:
+        stop_test_server(server)
+
+    assert status_render == 202
+    assert render_data["queued_count"] == 2
+    assert sorted(item["audio_status"] for item in partial["items"]) == ["completed", "failed"]
+    assert any(item["audio_error"] == "render failed" for item in partial["items"])
+    assert status_retry == 202
+    assert retry["queued_count"] == 1
+    assert all(item["audio_status"] == "completed" for item in final["items"])
+
+
+def test_render_failed_batch_audio_requires_failed_items(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("song_agent.server.render_audio", fake_render_audio)
+    server = start_test_server()
+    try:
+        configure_renderer(tmp_path, server)
+        created = import_batch(server)
+        batch_id = created["batch"]["batch_id"]
+        request_json(server, "POST", f"/api/batches/{batch_id}/launch")
+        wait_for_batch(server, batch_id)
+        status, data = request_json(server, "POST", f"/api/batches/{batch_id}/render-failed-audio")
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Batch has no failed audio renders to retry."
 
 
 def test_startup_recovers_running_batch_as_paused(tmp_path, monkeypatch):

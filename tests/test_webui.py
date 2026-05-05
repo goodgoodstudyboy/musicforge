@@ -154,6 +154,8 @@ def test_webui_contains_batch_tab_controls():
     assert "Pause" in html
     assert "Resume" in html
     assert "Retry Failed" in html
+    assert "Render Audio" in html
+    assert "Render Failed Audio" in html
     assert "Export" in html
 
 
@@ -167,6 +169,8 @@ def test_webui_calls_batch_apis():
     assert "/api/batches/${id}/pause" in html
     assert "/api/batches/${id}/resume" in html
     assert "/api/batches/${id}/retry-failed" in html
+    assert "/api/batches/${id}/render-audio" in html
+    assert "/api/batches/${id}/render-failed-audio" in html
     assert "/api/batches/${id}/export" in html
     assert "/api/batches/${id}/open-folder" in html
     assert "/api/batches/${id}/delete" in html

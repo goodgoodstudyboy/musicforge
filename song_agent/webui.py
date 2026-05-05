@@ -969,10 +969,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <td>${escapeHtml(item.request.generation_mode || batch.generation_mode)}</td>
           <td>${escapeHtml(item.request.pipeline_mode || batch.pipeline_mode)}</td>
           <td><span class="status ${item.status}">${escapeHtml(item.status)}</span></td>
+          <td><span class="status ${item.audio_status || "not_started"}">${escapeHtml(item.audio_status || "not_started")}</span></td>
           <td>${escapeHtml(item.attempt_count)}</td>
           <td>${item.job_id ? `<button class="secondary batch-job-link" data-job-id="${escapeHtml(item.job_id)}" type="button">${escapeHtml(item.job_id)}</button>` : "-"}</td>
           <td>${escapeHtml(item.output_dir || "-")}</td>
-          <td>${escapeHtml(item.error || "-")}</td>
+          <td>${escapeHtml(item.audio_path || "-")}</td>
+          <td>${escapeHtml(item.error || item.audio_error || "-")}</td>
           <td>${escapeHtml(item.updated_at || "-")}</td>
         </tr>
       `).join("");
@@ -999,8 +1001,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         ${batch.error ? `<p class="error">${escapeHtml(batch.error)}</p>` : ""}
         <table>
-          <thead><tr><th>Index</th><th>Title</th><th>Mode</th><th>Pipeline</th><th>Status</th><th>Attempt</th><th>Job</th><th>Output</th><th>Error</th><th>Updated</th></tr></thead>
-          <tbody>${rows || "<tr><td colspan='10'>No batch items.</td></tr>"}</tbody>
+          <thead><tr><th>Index</th><th>Title</th><th>Mode</th><th>Pipeline</th><th>Status</th><th>Audio</th><th>Attempt</th><th>Job</th><th>Output</th><th>WAV</th><th>Error</th><th>Updated</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='12'>No batch items.</td></tr>"}</tbody>
         </table>
       `;
       wireBatchActions(batch);
@@ -1027,6 +1029,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
       if ((batch.failed_count || batch.cancelled_count) && batch.status !== "running") {
         buttons.push(`<button class="secondary" id="retry-failed-batch" type="button">Retry Failed</button>`);
+      }
+      if (batch.status !== "running") {
+        buttons.push(`<button class="secondary" id="render-batch-audio" type="button">Render Audio</button>`);
+        buttons.push(`<button class="secondary" id="render-failed-batch-audio" type="button">Render Failed Audio</button>`);
       }
       buttons.push(`<a class="button-link secondary" href="/api/batches/${id}/export">Export</a>`);
       buttons.push(`<button class="secondary" id="open-batch-folder" type="button">Open Folder</button>`);
@@ -1058,6 +1064,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("retry-failed-batch", async () => {
         if (!confirm("Retry failed batch items?")) return;
         await api(`/api/batches/${id}/retry-failed`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("render-batch-audio", async () => {
+        await api(`/api/batches/${id}/render-audio`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("render-failed-batch-audio", async () => {
+        await api(`/api/batches/${id}/render-failed-audio`, { method: "POST" });
         await loadBatches();
       });
       bindAction("open-batch-folder", async () => {

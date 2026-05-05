@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import shutil
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from io import StringIO
@@ -31,6 +32,14 @@ ITEM_STATUSES = {
     "completed",
     "failed",
     "cancelled",
+    "skipped",
+}
+AUDIO_STATUSES = {
+    "not_started",
+    "queued",
+    "running",
+    "completed",
+    "failed",
     "skipped",
 }
 
@@ -191,6 +200,9 @@ class BatchItem:
     output_dir: str | None = None
     error: str | None = None
     attempt_count: int = 0
+    audio_status: str = "not_started"
+    audio_path: str | None = None
+    audio_error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -204,6 +216,9 @@ class BatchItem:
             "output_dir": self.output_dir,
             "error": self.error,
             "attempt_count": self.attempt_count,
+            "audio_status": self.audio_status,
+            "audio_path": self.audio_path,
+            "audio_error": self.audio_error,
         }
 
     @classmethod
@@ -220,6 +235,9 @@ class BatchItem:
             output_dir=data.get("output_dir"),
             error=data.get("error"),
             attempt_count=int(data.get("attempt_count", 0)),
+            audio_status=str(data.get("audio_status") or "not_started"),
+            audio_path=data.get("audio_path"),
+            audio_error=data.get("audio_error"),
         )
 
 
@@ -253,7 +271,8 @@ def recalculate_counts(document: BatchDocument, *, touch: bool = False) -> None:
 
 class BatchStore:
     def __init__(self, root: Path | str = BATCH_ROOT):
-        self.root = Path(root)
+        self.root = Path(root).resolve()
+        self.lock = threading.RLock()
 
     def import_csv(
         self,
@@ -301,30 +320,34 @@ class BatchStore:
         return sorted(documents, key=lambda doc: doc.state.created_at, reverse=True)
 
     def get_batch(self, batch_id: str) -> BatchDocument:
-        batch_dir = self.batch_dir(batch_id)
-        batch_json = batch_dir / "batch.json"
-        items_json = batch_dir / "items.json"
-        if not batch_json.exists() or not items_json.exists():
-            raise FileNotFoundError(batch_id)
-        state = BatchState.from_dict(read_json(batch_json))
-        items_data = read_json(items_json)
-        raw_items = items_data.get("items", items_data) if isinstance(items_data, dict) else items_data
-        items = [BatchItem.from_dict(item) for item in raw_items]
-        document = BatchDocument(state=state, items=items)
-        recalculate_counts(document)
-        return document
+        with self.lock:
+            batch_dir = self.batch_dir(batch_id)
+            batch_json = batch_dir / "batch.json"
+            items_json = batch_dir / "items.json"
+            if not batch_json.exists() or not items_json.exists():
+                raise FileNotFoundError(batch_id)
+            state = BatchState.from_dict(read_json(batch_json))
+            items_data = read_json(items_json)
+            raw_items = items_data.get("items", items_data) if isinstance(items_data, dict) else items_data
+            items = [BatchItem.from_dict(item) for item in raw_items]
+            document = BatchDocument(state=state, items=items)
+            recalculate_counts(document)
+            return document
 
     def save_batch(self, document: BatchDocument) -> None:
-        if document.state.status not in BATCH_STATUSES:
-            raise ValueError(f"Unsupported batch status: {document.state.status}.")
-        for item in document.items:
-            if item.status not in ITEM_STATUSES:
-                raise ValueError(f"Unsupported batch item status: {item.status}.")
-        recalculate_counts(document, touch=True)
-        batch_dir = self.batch_dir(document.state.batch_id)
-        batch_dir.mkdir(parents=True, exist_ok=True)
-        write_json(batch_dir / "batch.json", document.state.to_dict())
-        write_json(batch_dir / "items.json", {"items": [item.to_dict() for item in document.items]})
+        with self.lock:
+            if document.state.status not in BATCH_STATUSES:
+                raise ValueError(f"Unsupported batch status: {document.state.status}.")
+            for item in document.items:
+                if item.status not in ITEM_STATUSES:
+                    raise ValueError(f"Unsupported batch item status: {item.status}.")
+                if item.audio_status not in AUDIO_STATUSES:
+                    raise ValueError(f"Unsupported batch item audio_status: {item.audio_status}.")
+            recalculate_counts(document, touch=True)
+            batch_dir = self.batch_dir(document.state.batch_id)
+            batch_dir.mkdir(parents=True, exist_ok=True)
+            write_json(batch_dir / "batch.json", document.state.to_dict())
+            write_json(batch_dir / "items.json", {"items": [item.to_dict() for item in document.items]})
 
     def update_item(self, batch_id: str, item: BatchItem) -> BatchDocument:
         document = self.get_batch(batch_id)
@@ -413,6 +436,9 @@ class BatchStore:
             "output_dir": item.output_dir,
             "song_plan": song_plan,
             "midi": midi,
+            "audio_status": item.audio_status,
+            "audio": item.audio_path,
+            "audio_error": item.audio_error,
             "error": item.error,
         }
 

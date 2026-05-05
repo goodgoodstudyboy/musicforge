@@ -81,6 +81,8 @@ def test_export_batch_writes_report(tmp_path: Path) -> None:
     batch.items[0].status = "completed"
     batch.items[0].job_id = "job-1"
     batch.items[0].output_dir = "runs/job-1"
+    batch.items[0].audio_status = "completed"
+    batch.items[0].audio_path = str(Path("runs/job-1") / "renders" / "song.wav")
     store.save_batch(batch)
 
     export = store.export_batch(batch.state.batch_id)
@@ -88,6 +90,8 @@ def test_export_batch_writes_report(tmp_path: Path) -> None:
     assert export["batch"]["batch_id"] == batch.state.batch_id
     assert export["items"][0]["song_plan"] == str(Path("runs/job-1") / "data" / "song-plan.json")
     assert export["items"][0]["midi"] == str(Path("runs/job-1") / "renders" / "song.mid")
+    assert export["items"][0]["audio_status"] == "completed"
+    assert export["items"][0]["audio"] == str(Path("runs/job-1") / "renders" / "song.wav")
     export_path = tmp_path / "batches" / batch.state.batch_id / "export.json"
     assert json.loads(export_path.read_text(encoding="utf-8"))["items"][0]["job_id"] == "job-1"
 
