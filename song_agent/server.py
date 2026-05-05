@@ -18,6 +18,7 @@ from urllib.parse import parse_qs
 
 from song_agent import __version__
 from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
+from song_agent.auth import AuthConfig, validate_bearer_header
 from song_agent.batching import BatchDocument, BatchStore, now_iso
 from song_agent.cli import generate_request
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
@@ -1024,15 +1025,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def batch_runner(self) -> BatchRunner:
         return self.server.batch_runner  # type: ignore[attr-defined]
 
+    @property
+    def auth_config(self) -> AuthConfig:
+        return self.server.auth_config  # type: ignore[attr-defined]
+
     def _handle_request(self, method: str) -> None:
         try:
             parsed = urlparse(self.path)
             path = parsed.path
+            if self._auth_required(path) and not self._is_authorized():
+                self._send_unauthorized()
+                return
             if method == "GET" and path == "/":
                 self._send_html(panel_html())
                 return
             if method == "GET" and path == "/api/info":
-                self._send_json(api_info())
+                self._send_json(api_info(self.auth_config))
                 return
             if method == "GET" and path == "/api/template":
                 self._send_json(api_template())
@@ -1571,10 +1579,37 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def _send_error(self, status: HTTPStatus, message: str) -> None:
         self._send_json({"error": message}, status=status)
 
+    def _send_unauthorized(self) -> None:
+        body = b'{\n  "error": "Unauthorized."\n}'
+        self.send_response(HTTPStatus.UNAUTHORIZED.value)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("WWW-Authenticate", "Bearer")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _auth_required(self, path: str) -> bool:
+        if not self.auth_config.enabled:
+            return False
+        if path == "/" or path == "/api/info":
+            return False
+        return True
+
+    def _is_authorized(self) -> bool:
+        token = self.auth_config.token
+        if not token:
+            return False
+        return validate_bearer_header(self.headers.get("Authorization"), token)
+
 
 class MusicForgeHTTPServer(ThreadingHTTPServer):
-    def __init__(self, server_address: tuple[str, int]) -> None:
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        auth_config: AuthConfig | None = None,
+    ) -> None:
         super().__init__(server_address, MusicForgeHandler)
+        self.auth_config = auth_config or AuthConfig(enabled=False)
         self.job_store = JobStore()
         self.batch_store = BatchStore()
         self.batch_runner = BatchRunner(self.batch_store, self.job_store)
@@ -1589,14 +1624,26 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         super().server_close()
 
 
-def create_server(host: str = "127.0.0.1", port: int = 8787) -> MusicForgeHTTPServer:
-    return MusicForgeHTTPServer((host, port))
+def create_server(
+    host: str = "127.0.0.1",
+    port: int = 8787,
+    auth_config: AuthConfig | None = None,
+) -> MusicForgeHTTPServer:
+    return MusicForgeHTTPServer((host, port), auth_config=auth_config)
 
 
-def serve(host: str = "127.0.0.1", port: int = 8787) -> None:
-    server = create_server(host, port)
+def serve(
+    host: str = "127.0.0.1",
+    port: int = 8787,
+    auth_config: AuthConfig | None = None,
+) -> None:
+    server = create_server(host, port, auth_config=auth_config)
     url = f"http://{host}:{port}"
     print(f"MusicForge Studio running at {url}")
+    if server.auth_config.enabled:
+        print("Access control: enabled")
+    else:
+        print("Access control: disabled for localhost")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
@@ -1606,13 +1653,14 @@ def serve(host: str = "127.0.0.1", port: int = 8787) -> None:
         server.server_close()
 
 
-def api_info() -> dict[str, Any]:
+def api_info(auth_config: AuthConfig | None = None) -> dict[str, Any]:
     return {
         "app": "MusicForge",
         "version": __version__,
         "cwd": str(Path.cwd()),
         "runs_dir": str(RUNS_DIR),
         "mode": "local-deterministic",
+        "auth_required": bool(auth_config and auth_config.enabled),
         "provider": {"enabled": False, "summary": "Local deterministic composer"},
     }
 
