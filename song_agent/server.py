@@ -1040,7 +1040,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_html(panel_html())
                 return
             if method == "GET" and path == "/api/info":
-                self._send_json(api_info(self.auth_config))
+                self._send_json(
+                    api_info(
+                        self.auth_config,
+                        authorized=(not self.auth_config.enabled) or self._is_authorized(),
+                    )
+                )
                 return
             if method == "GET" and path == "/api/template":
                 self._send_json(api_template())
@@ -1653,14 +1658,24 @@ def serve(
         server.server_close()
 
 
-def api_info(auth_config: AuthConfig | None = None) -> dict[str, Any]:
-    return {
+def api_info(
+    auth_config: AuthConfig | None = None,
+    *,
+    authorized: bool = True,
+) -> dict[str, Any]:
+    auth_required = bool(auth_config and auth_config.enabled)
+    public_info: dict[str, Any] = {
         "app": "MusicForge",
         "version": __version__,
+        "auth_required": auth_required,
+    }
+    if auth_required and not authorized:
+        return public_info
+    return {
+        **public_info,
         "cwd": str(Path.cwd()),
         "runs_dir": str(RUNS_DIR),
         "mode": "local-deterministic",
-        "auth_required": bool(auth_config and auth_config.enabled),
         "provider": {"enabled": False, "summary": "Local deterministic composer"},
     }
 

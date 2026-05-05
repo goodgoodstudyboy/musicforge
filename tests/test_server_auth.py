@@ -57,7 +57,26 @@ def test_info_is_public_but_marks_auth_required(tmp_path, monkeypatch):
     assert status == 200
     assert auth_header is None
     assert data["auth_required"] is True
+    assert set(data) == {"app", "version", "auth_required"}
+    assert "cwd" not in data
+    assert "runs_dir" not in data
     assert TOKEN not in json.dumps(data)
+
+
+def test_info_with_bearer_returns_full_local_info(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = auth_server()
+    try:
+        status, data, auth_header = request_json(server, "GET", "/api/info", token=TOKEN)
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert auth_header is None
+    assert data["auth_required"] is True
+    assert data["cwd"] == str(tmp_path)
+    assert data["runs_dir"] == "runs"
+    assert data["mode"] == "local-deterministic"
 
 
 def test_root_html_is_public_in_auth_mode(tmp_path, monkeypatch):

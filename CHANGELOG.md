@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.1 - 2026-05-05
+
+### Fixed
+- Public unauthenticated `/api/info` no longer returns local filesystem paths when Studio auth is enabled.
+- Authorized `/api/info` requests still return full local Studio metadata for the unlocked session.
+
+### Verified
+- `python -m pytest -q`
+- Auth-mode `/api/info` smoke for unauthenticated and Bearer-authenticated requests.
+- `python -m song_agent.cli release-check`
+
 ## v0.6.0 - 2026-05-05
 
 ### Added
