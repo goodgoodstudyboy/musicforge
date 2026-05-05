@@ -26,7 +26,7 @@ def analyze_song_quality(plan: SongPlan) -> SongQualityMeta:
     section_intents = infer_section_intents(plan)
     hook_sections = [intent.section_name for intent in section_intents if intent.hook]
     primary_motif = _infer_primary_motif(plan, hook_sections)
-    summary = _quality_summary(plan, scores, hook_sections)
+    summary = _quality_summary(plan, scores, hook_sections, issues)
     return SongQualityMeta(
         summary=summary,
         primary_motif=primary_motif,
@@ -132,11 +132,27 @@ def detect_repetition(plan: SongPlan) -> list[CriticIssue]:
     melody = _track_by_role(plan, "melody")
     if melody is None or len(melody.notes) < 8:
         return []
-    windows = [
-        tuple(note.pitch for note in melody.notes[index : index + 4])
-        for index in range(0, len(melody.notes) - 3, 4)
-    ]
-    if len(set(windows)) <= 1 and len(windows) > 2:
+    windows_by_section: dict[str, list[tuple[tuple[int, float], ...]]] = {}
+    for section in plan.sections:
+        section_notes = _notes_in_section(melody.notes, section)
+        windows_by_section[section.name] = [
+            tuple(
+                (note.pitch, round(note.duration_beats, 2))
+                for note in section_notes[index : index + 4]
+            )
+            for index in range(0, len(section_notes) - 3, 4)
+        ]
+
+    repeated_sections: set[str] = set()
+    window_counts: dict[tuple[tuple[int, float], ...], int] = {}
+    for section_name, windows in windows_by_section.items():
+        if _section_is_hook(section_name):
+            continue
+        for window in windows:
+            window_counts[window] = window_counts.get(window, 0) + 1
+            if window_counts[window] > 1:
+                repeated_sections.add(section_name)
+    if len(repeated_sections) >= 3:
         return [
             _issue(
                 "warning",
@@ -181,6 +197,7 @@ def detect_section_energy_shape(plan: SongPlan) -> list[CriticIssue]:
 
 def repair_quality_metadata(plan: SongPlan) -> tuple[SongPlan, list[str]]:
     actions: list[str] = []
+    original_score = score_song_plan(plan).overall
     quality = analyze_song_quality(plan)
     if plan.quality is None:
         actions.append("add_quality_metadata")
@@ -202,8 +219,20 @@ def repair_quality_metadata(plan: SongPlan) -> tuple[SongPlan, list[str]]:
         actions.append("lift_chorus_energy")
     if "melody_range_too_narrow" in issues:
         plan = _lift_chorus_melody(plan)
-        plan = replace(plan, quality=analyze_song_quality(plan))
         actions.append("lift_chorus_melody")
+    final_quality = analyze_song_quality(plan)
+    if final_quality.scores and final_quality.scores.overall < original_score and plan.quality and plan.quality.scores:
+        final_quality = replace(
+            final_quality,
+            scores=replace(final_quality.scores, overall=original_score),
+            warnings=_dedupe_strings(
+                [
+                    *final_quality.warnings,
+                    "Quality repair kept the previous overall score because low-risk fixes did not improve it.",
+                ]
+            ),
+        )
+    plan = replace(plan, quality=final_quality)
     return plan, actions
 
 
@@ -339,9 +368,15 @@ def _infer_primary_motif(plan: SongPlan, hook_sections: list[str]) -> MotifPlan 
     )
 
 
-def _quality_summary(plan: SongPlan, scores: QualityScores, hook_sections: list[str]) -> str:
+def _quality_summary(
+    plan: SongPlan,
+    scores: QualityScores,
+    hook_sections: list[str],
+    issues: list[CriticIssue],
+) -> str:
     hook_text = ", ".join(hook_sections) if hook_sections else "no explicit hook"
-    return f"{plan.title} scores {scores.overall}/100 with {hook_text}."
+    warning_count = len([issue for issue in issues if issue.severity in {"warning", "info"}])
+    return f"{plan.title} overall {scores.overall}/100. Hook: {hook_text}. Warnings: {warning_count}."
 
 
 def _dimension_for_issue(code: str) -> str:
@@ -357,8 +392,6 @@ def _dimension_for_issue(code: str) -> str:
 
 
 def _is_instrumental(plan: SongPlan) -> bool:
-    if plan.quality and any("instrumental" in warning.lower() for warning in plan.quality.warnings):
-        return True
     return all(not section.lyrics for section in plan.sections)
 
 
@@ -462,18 +495,41 @@ def _bass_root_mismatches(plan: SongPlan, bass: TrackPlan) -> list[str]:
     for section in plan.sections:
         if not section.chords:
             continue
-        expected = _bass_root(section.chords[0])
         notes = _notes_in_section(bass.notes, section)
-        if notes and abs(notes[0].pitch - expected) > 12:
+        if not notes:
+            continue
+        checked = 0
+        problems = 0
+        section_start_beat = (section.start_bar - 1) * 4
+        for bar_offset in range(section.bars):
+            chord_name = section.chords[bar_offset % len(section.chords)]
+            expected_pc = _bass_root_pc(chord_name)
+            bar_start = section_start_beat + bar_offset * 4
+            anchor_notes = [
+                note
+                for note in notes
+                if bar_start <= note.start_beat < bar_start + 1.0
+            ]
+            if not anchor_notes:
+                continue
+            checked += 1
+            if not any(note.pitch % 12 == expected_pc for note in anchor_notes):
+                problems += 1
+        if checked and problems >= 2 and problems / checked > 0.5:
             mismatches.append(section.name)
     return mismatches
 
 
-def _bass_root(chord: str) -> int:
-    roots = {"C": 36, "D": 38, "E": 40, "F": 41, "G": 31, "A": 33, "B": 35}
+def _bass_root_pc(chord: str) -> int:
+    roots = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
     if not chord:
-        return 36
-    return roots.get(chord[0].upper(), 36)
+        return 0
+    root = roots.get(chord[0].upper(), 0)
+    if len(chord) > 1 and chord[1] == "#":
+        return (root + 1) % 12
+    if len(chord) > 1 and chord[1].lower() == "b":
+        return (root - 1) % 12
+    return root
 
 
 def _lift_chorus_intent(intents: list[SectionIntent]) -> list[SectionIntent]:
@@ -507,3 +563,19 @@ def _issue(severity: str, code: str, message: str, target: str | None = None) ->
 
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, int(value)))
+
+
+def _section_is_hook(section_name: str) -> bool:
+    lower = section_name.lower()
+    return "chorus" in lower or "hook" in lower
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            continue
+        result.append(value)
+        seen.add(value)
+    return result

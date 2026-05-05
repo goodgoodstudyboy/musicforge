@@ -128,6 +128,7 @@ def build_validator_view(
     report: dict[str, Any] | None,
     plan: Any | None = None,
 ) -> dict[str, Any]:
+    quality_warnings = _quality_warnings(plan) if plan is not None else []
     if report is None:
         return {
             "status": "missing",
@@ -136,15 +137,12 @@ def build_validator_view(
             "checks": [],
             "midi": {"exists": False, "size": 0},
             "audio": {"exists": False, "path": "", "size_bytes": 0},
-            "warnings": ["validator-report.json was not found."],
+            "warnings": ["validator-report.json was not found.", *quality_warnings],
         }
 
     status = str(report.get("status", "unknown"))
     checks = [_normalize_check(check, status) for check in _as_list(report.get("checks", []))]
     warnings = [str(warning) for warning in _as_list(report.get("warnings", []))]
-    quality_warnings = []
-    if plan is not None:
-        quality_warnings = _as_list(_quality_view_from_plan(plan).get("warnings", []))
     return {
         "status": status,
         "passed": status == "passed",
@@ -247,42 +245,71 @@ def _audio_view(value: Any) -> dict[str, Any]:
 def _quality_view_from_plan(plan: Any) -> dict[str, Any]:
     plan_data = _as_dict(plan)
     song_plan = SongPlan.from_dict(plan_data)
-    quality = song_plan.quality or analyze_song_quality(song_plan)
-    scores = quality.scores or analyze_song_quality(song_plan).scores
+    analyzed = analyze_song_quality(song_plan)
+    quality = song_plan.quality or analyzed
+    scores = quality.scores or analyzed.scores
+    primary_motif = quality.primary_motif or analyzed.primary_motif
+    hook_sections = quality.hook_sections or analyzed.hook_sections
+    section_intents = quality.section_intents or analyzed.section_intents
+    warnings = _dedupe([*quality.warnings, *analyzed.warnings])
     issues = [issue.to_dict() for issue in quality_issues_for_plan(song_plan)]
     return {
-        "summary": quality.summary,
+        "summary": quality.summary or analyzed.summary,
         "scores": scores.to_dict() if scores else {},
         "overall": scores.overall if scores else 0,
-        "primary_motif": quality.primary_motif.to_dict() if quality.primary_motif else None,
-        "hook_sections": quality.hook_sections,
-        "section_intents": [intent.to_dict() for intent in quality.section_intents],
+        "primary_motif": primary_motif.to_dict() if primary_motif else None,
+        "hook_sections": hook_sections,
+        "section_intents": [intent.to_dict() for intent in section_intents],
         "issues": issues,
-        "warnings": quality.warnings,
+        "warnings": warnings,
     }
 
 
 def _quality_score(plan_data: dict[str, Any]) -> int | None:
     quality = plan_data.get("quality")
-    if not isinstance(quality, dict):
+    if isinstance(quality, dict):
+        scores = quality.get("scores")
+        if isinstance(scores, dict) and scores.get("overall") is not None:
+            return int(scores["overall"])
+    try:
+        analyzed = analyze_song_quality(SongPlan.from_dict(plan_data))
+    except ValueError:
         return None
-    scores = quality.get("scores")
-    if not isinstance(scores, dict) or scores.get("overall") is None:
-        return None
-    return int(scores["overall"])
+    return analyzed.scores.overall if analyzed.scores else None
 
 
 def _section_intents_by_name(plan_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     quality = plan_data.get("quality")
-    if not isinstance(quality, dict):
-        return {}
-    intents = _as_list(quality.get("section_intents", []))
     result: dict[str, dict[str, Any]] = {}
+    if not isinstance(quality, dict):
+        quality = {}
+    intents = _as_list(quality.get("section_intents", []))
     for intent in intents:
         intent_data = _as_dict(intent)
         result[str(intent_data.get("section_name", ""))] = intent_data
+    try:
+        inferred = analyze_song_quality(SongPlan.from_dict(plan_data)).section_intents
+    except ValueError:
+        return result
+    for intent in inferred:
+        result.setdefault(intent.section_name, intent.to_dict())
     return result
 
 
 def _as_dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _quality_warnings(plan: Any) -> list[str]:
+    return [str(warning) for warning in _as_list(_quality_view_from_plan(plan).get("warnings", []))]
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result

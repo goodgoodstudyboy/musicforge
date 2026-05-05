@@ -4,6 +4,7 @@ from song_agent.projectio import write_json
 from song_agent.runtime_views import (
     build_quality_view,
     build_runtime_views,
+    build_summary_view,
     build_timeline_view,
     build_tracks_view,
     build_validator_view,
@@ -109,6 +110,32 @@ def test_timeline_view_calculates_section_times():
     assert view["sections"][1]["estimated_end_seconds"] == 16.0
 
 
+def test_timeline_view_infers_quality_for_legacy_plan():
+    plan = sample_plan()
+    plan["sections"].append(
+        {
+            "name": "chorus",
+            "start_bar": 9,
+            "bars": 4,
+            "chords": ["Cmaj7", "Am7", "Dm7", "G7"],
+        }
+    )
+    plan.pop("quality")
+
+    view = build_timeline_view(plan)
+    summary = build_summary_view(plan)
+    quality = build_quality_view(plan)
+
+    by_name = {section["name"]: section for section in view["sections"]}
+    quality_by_name = {intent["section_name"]: intent for intent in quality["section_intents"]}
+    assert summary["quality_score"] == quality["overall"]
+    assert by_name["intro"]["energy"] == 2
+    assert by_name["verse"]["energy"] == 4
+    assert by_name["chorus"]["energy"] == 7
+    assert by_name["chorus"]["hook"] is True
+    assert by_name["chorus"]["tension"] == quality_by_name["chorus"]["tension"]
+
+
 def test_timeline_view_handles_empty_sections():
     plan = sample_plan()
     plan["sections"] = []
@@ -176,6 +203,34 @@ def test_validator_view_handles_missing_report():
     assert view["check_count"] == 0
     assert view["midi"] == {"exists": False, "size": 0}
     assert view["warnings"] == ["validator-report.json was not found."]
+
+
+def test_validator_view_merges_quality_warnings_when_report_missing():
+    plan = sample_plan()
+    plan["quality"]["warnings"] = ["quality warning"]
+
+    view = build_validator_view(None, plan)
+
+    assert view["warnings"][0] == "validator-report.json was not found."
+    assert "quality warning" in view["warnings"]
+
+
+def test_validator_view_merges_quality_warnings_with_report():
+    plan = sample_plan()
+    plan["quality"]["warnings"] = ["quality warning"]
+
+    view = build_validator_view(
+        {
+            "status": "passed",
+            "checks": [],
+            "warnings": ["validator warning"],
+            "midi_exists": True,
+            "midi_size": 123,
+        },
+        plan,
+    )
+
+    assert view["warnings"][:2] == ["validator warning", "quality warning"]
 
 
 def test_build_runtime_views_reads_plan_and_validator(tmp_path: Path):

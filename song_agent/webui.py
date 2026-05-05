@@ -1322,6 +1322,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <td>${escapeHtml(issue.target || "-")}</td>
           </tr>
         `).join("");
+        const warningRows = (view.warnings || []).map((warning) => `
+          <tr><td>${escapeHtml(warning)}</td></tr>
+        `).join("");
+        const critic = view.critic || {};
         target.innerHTML = `
           <div class="summary-grid">
             ${metric("Overall", view.overall ?? scores.overall ?? "-")}
@@ -1335,10 +1339,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${metric("Hook", (view.hook_sections || []).join(", ") || "-")}
             ${metric("Motif", motif.name || "-")}
           </div>
+          <div class="summary-grid">
+            ${metric("Critic", critic.score ?? "-")}
+            ${metric("Critic Passed", critic.passed == null ? "-" : (critic.passed ? "yes" : "no"))}
+            ${metric("Warnings", (view.warnings || []).length)}
+            ${metric("Issues", (view.issues || []).length)}
+          </div>
           <p>${escapeHtml(view.summary || "")}</p>
           <table>
             <thead><tr><th>Section</th><th>Role</th><th>Energy</th><th>Tension</th><th>Density</th><th>Hook</th></tr></thead>
             <tbody>${intentRows || "<tr><td colspan='6'>No section intents.</td></tr>"}</tbody>
+          </table>
+          <table>
+            <thead><tr><th>Warning</th></tr></thead>
+            <tbody>${warningRows || "<tr><td>No quality warnings.</td></tr>"}</tbody>
           </table>
           <table>
             <thead><tr><th>Severity</th><th>Code</th><th>Message</th><th>Target</th></tr></thead>
@@ -1346,6 +1360,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </table>
         `;
       } catch (err) {
+        if (String(err.message || "").includes("song-plan.json is not available")) {
+          target.innerHTML = `<div class="empty">Quality view will be available after the song plan is generated.</div>`;
+          return;
+        }
         target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
       }
     }

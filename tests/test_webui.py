@@ -34,6 +34,9 @@ def test_webui_contains_runtime_tabs():
     assert "Track</th><th>Instrument</th><th>Notes</th><th>Pitch Range" in html
     assert "Check</th><th>Status" in html
     assert "Node</th><th>Status</th><th>Provider" in html
+    assert "Quality view will be available after the song plan is generated." in html
+    assert "Warning</th>" in html
+    assert "Critic Passed" in html
 
 
 def test_webui_calls_runtime_view_apis():

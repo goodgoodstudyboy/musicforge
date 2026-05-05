@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.7.1 - 2026-05-06
+
+### Fixed
+- Runtime Timeline and Quality views now infer quality metadata for legacy `song-plan.json` files without rewriting artifacts.
+- `GET /api/jobs/<job-id>/quality` now returns a clear 409 while `song-plan.json` is not available.
+- Validator views merge quality warnings with validator warnings, including when `validator-report.json` is missing.
+- Quality analyzer false positives were tightened for instrumental detection, bass-root octave/passing-note cases, and hook repetition.
+- Provider-backed SongPlan output now gets local quality inference when a provider omits the optional `quality` field.
+- Studio Quality tab now shows a friendly pending message plus warning and critic summary blocks.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+- Local quality API smoke for pending jobs and legacy SongPlan inference.
+
 ## v0.7.0 - 2026-05-06
 
 ### Added

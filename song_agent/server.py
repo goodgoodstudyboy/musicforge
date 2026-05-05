@@ -1678,7 +1678,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         run_dir = Path(job.output_dir)
         plan_path = run_dir / "data" / "song-plan.json"
         validator_path = run_dir / "data" / "validator-report.json"
-        if view_name in {"timeline", "tracks"} and not plan_path.exists():
+        if view_name in {"timeline", "tracks", "quality"} and not plan_path.exists():
             self._send_error(
                 HTTPStatus.CONFLICT,
                 "song-plan.json is not available for this job yet.",
@@ -1687,10 +1687,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
         if view_name == "validator":
             report = read_json(validator_path) if validator_path.exists() else None
+            plan = read_json(plan_path) if plan_path.exists() else None
             self._send_json(
                 {
                     "job_id": job.job_id,
-                    "view": build_validator_view(report),
+                    "view": build_validator_view(report, plan),
                 }
             )
             return

@@ -58,6 +58,8 @@ def test_mock_provider_returns_valid_song_plan():
 
     plan = SongPlan.from_dict(data)
     validate_song_plan(plan)
+    assert plan.quality is not None
+    assert plan.quality.scores is not None
 
 
 def test_mock_provider_can_return_invalid_schema():

@@ -123,6 +123,10 @@ Studio exposes this through the Quality tab. The Timeline tab also shows section
 energy, tension, density, role, and hook markers so a generated song can be
 checked as a musical structure, not only as MIDI data.
 
+v0.7.1 keeps this layer backward compatible: old `song-plan.json` files without
+`quality` are inferred in Runtime, Timeline, Validator, and Quality views without
+rewriting the artifact.
+
 ## Batch Production
 
 v0.4.0 adds local batch production to Studio. Batch metadata is stored under

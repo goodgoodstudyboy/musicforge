@@ -10,6 +10,7 @@ from song_agent.provider import (
 )
 from song_agent.providers.mock import MockProviderClient
 from song_agent.providers.openai_compatible import OpenAICompatibleClient
+from song_agent.music_quality import attach_quality
 from song_agent.quality import validate_song_plan
 from song_agent.schemas.song import SongPlan, SongRequest
 
@@ -33,7 +34,7 @@ def generate_provider_song_plan(
             raise ProviderOutputError("Provider output must be a JSON object.")
         plan = SongPlan.from_dict(data)
         validate_song_plan(plan)
-        return plan
+        return attach_quality(plan) if plan.quality is None else plan
     except ProviderOutputError:
         raise
     except ValueError as exc:

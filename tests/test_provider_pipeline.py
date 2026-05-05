@@ -25,6 +25,26 @@ def test_provider_pipeline_uses_mock_and_returns_valid_song_plan():
 
     assert plan.title == "Provider Pipeline Song"
     assert {track.name for track in plan.tracks} == {"melody", "chords", "bass", "drums"}
+    assert plan.quality is not None
+    assert plan.quality.scores is not None
+
+
+def test_provider_pipeline_infers_quality_when_provider_omits_it():
+    class LegacyClient:
+        def generate_song_plan_json(self, request, config, prompt=None):
+            data = MockProviderClient().generate_song_plan_json(request, config)
+            data.pop("quality", None)
+            return data
+
+    plan = generate_provider_song_plan(
+        request(),
+        ProviderConfig(wire_api="mock", model="mock-main"),
+        client=LegacyClient(),
+    )
+
+    assert plan.quality is not None
+    assert plan.quality.scores is not None
+    assert plan.quality.section_intents
 
 
 def test_provider_pipeline_rejects_invalid_schema():

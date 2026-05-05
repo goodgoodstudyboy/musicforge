@@ -1,3 +1,4 @@
+from dataclasses import replace
 import pytest
 
 from song_agent.agent.multinode_pipeline import (
@@ -216,6 +217,18 @@ def test_critic_detects_missing_tracks():
     assert "melody" in report.dimension_scores
 
 
+def test_critic_dimension_scores_match_quality_view(tmp_path):
+    plan = generate_multinode_song_plan(request(), node_store=NodeStore(tmp_path))
+
+    report = critic_report_for_plan(plan)
+
+    assert plan.quality is not None
+    assert plan.quality.scores is not None
+    scores = plan.quality.scores.to_dict()
+    scores.pop("overall")
+    assert report.dimension_scores == scores
+
+
 def test_critic_detects_invalid_note_range():
     plan = valid_plan()
     bad_track = TrackPlan("melody", "lead", [NoteEvent(128, 0, 1)])
@@ -259,6 +272,25 @@ def test_repaired_plan_validates():
     repaired, _repair = repair_song_plan(bad, critic_report_for_plan(bad))
 
     validate_song_plan(repaired)
+
+
+def test_repair_recomputes_quality_after_low_risk_fix(tmp_path):
+    plan = generate_multinode_song_plan(request(), node_store=NodeStore(tmp_path))
+    tracks = [
+        replace(track, notes=[replace(note, pitch=64) for note in track.notes])
+        if track.name == "melody"
+        else track
+        for track in plan.tracks
+    ]
+    bad = SongPlan(plan.title, plan.key, plan.tempo_bpm, plan.meter, plan.sections, tracks)
+    before = critic_report_for_plan(bad).score
+
+    repaired, repair = repair_song_plan(bad, critic_report_for_plan(bad))
+
+    assert repaired.quality is not None
+    assert repaired.quality.scores is not None
+    assert repaired.quality.scores.overall >= before
+    assert any(action.action == "lift_chorus_melody" for action in repair.actions)
 
 
 def valid_plan() -> SongPlan:

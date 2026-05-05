@@ -206,6 +206,27 @@ def test_quality_endpoint_returns_view(tmp_path, monkeypatch):
     assert data["view"]["section_intents"]
 
 
+def test_quality_endpoint_waiting_for_song_plan_returns_409(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Queued Quality",
+                "language": "en",
+                "style": "pop",
+                "theme": "queued",
+            },
+            start_immediately=False,
+        )
+        status, data = request_json(server, "GET", f"/api/jobs/{job.job_id}/quality")
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "song-plan.json is not available for this job yet."
+
+
 def test_validator_endpoint_returns_view(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()
@@ -231,6 +252,35 @@ def test_validator_endpoint_returns_view(tmp_path, monkeypatch):
     assert data["view"]["status"] == "passed"
     assert data["view"]["passed"] is True
     assert data["view"]["midi"]["exists"] is True
+
+
+def test_validator_endpoint_includes_quality_warnings(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _, job = request_json(
+            server,
+            "POST",
+            "/api/jobs",
+            {
+                "title": "Validator Quality Warning",
+                "language": "en",
+                "style": "pop",
+                "theme": "validator quality",
+            },
+        )
+        final = wait_for_job(server, job["job_id"])
+        plan_path = Path(final["output_dir"]) / "data" / "song-plan.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["quality"]["warnings"] = ["quality warning from plan"]
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+        status, data = request_json(server, "GET", f"/api/jobs/{final['job_id']}/validator")
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert "quality warning from plan" in data["view"]["warnings"]
 
 
 def test_runtime_view_endpoint_waiting_for_artifact_returns_409(tmp_path, monkeypatch):
