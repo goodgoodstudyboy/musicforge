@@ -125,6 +125,7 @@ def build_validator_view(
             "check_count": 0,
             "checks": [],
             "midi": {"exists": False, "size": 0},
+            "audio": {"exists": False, "path": "", "size_bytes": 0},
             "warnings": ["validator-report.json was not found."],
         }
 
@@ -140,6 +141,7 @@ def build_validator_view(
             "exists": bool(report.get("midi_exists", False)),
             "size": int(report.get("midi_size", 0) or 0),
         },
+        "audio": _audio_view(report.get("audio")),
         "warnings": warnings,
     }
 
@@ -205,3 +207,12 @@ def _normalize_check(check: Any, fallback_status: str) -> dict[str, str]:
             "status": str(check.get("status", fallback_status)),
         }
     return {"name": str(check), "status": fallback_status}
+
+
+def _audio_view(value: Any) -> dict[str, Any]:
+    audio = value if isinstance(value, dict) else {}
+    return {
+        "exists": bool(audio.get("exists", False)),
+        "path": str(audio.get("path", "") or ""),
+        "size_bytes": int(audio.get("size_bytes", 0) or 0),
+    }

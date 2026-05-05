@@ -32,6 +32,15 @@ from song_agent.provider import (
     test_provider_config,
 )
 from song_agent.renderers.midi import render_midi
+from song_agent.renderers.audio import (
+    RendererError,
+    load_renderer_config,
+    render_audio,
+    renderer_configured,
+    reset_renderer_config,
+    save_renderer_config_from_dict,
+    test_renderer_config,
+)
 from song_agent.runtime_views import (
     build_timeline_view,
     build_tracks_view,
@@ -397,6 +406,41 @@ class JobStore:
                 shutil.rmtree(run_dir)
             self.jobs.pop(job_id, None)
             return True, HTTPStatus.OK, None
+
+    def render_job_audio(self, job_id: str) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+        job = self.get_job(job_id)
+        if job is None:
+            return {}, HTTPStatus.NOT_FOUND, "Job not found."
+        run_dir = Path(job.output_dir)
+        midi_path = run_dir / "renders" / "song.mid"
+        if not midi_path.exists():
+            return {}, HTTPStatus.CONFLICT, "song.mid is not available for this job yet."
+        try:
+            config, _sources = load_renderer_config()
+            wav_path = render_audio(midi_path, run_dir / "renders" / "song.wav", config)
+        except RendererError as exc:
+            error_path = run_dir / "logs" / "audio-render-error.json"
+            write_json(
+                error_path,
+                {
+                    "error": str(exc),
+                    "checked_at": _utc_now(),
+                },
+            )
+            return {}, HTTPStatus.BAD_REQUEST, str(exc)
+
+        validator_report_path = run_dir / "data" / "validator-report.json"
+        if validator_report_path.exists():
+            report = read_json(validator_report_path)
+            report["audio"] = _audio_report(wav_path)
+            write_json(validator_report_path, report)
+        artifacts = dict(job.artifacts)
+        artifacts["audio"] = str(wav_path)
+        self._update_job(job, artifacts=artifacts)
+        return {
+            "audio": str(wav_path),
+            "artifact": _artifact_dict(wav_path),
+        }, HTTPStatus.OK, None
 
     def _run_job(self, job_id: str) -> None:
         job = self.get_job(job_id)
@@ -1002,6 +1046,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if path == "/api/provider/test":
                 self._handle_provider_test(method)
                 return
+            if path == "/api/renderer":
+                self._handle_renderer_route(method)
+                return
+            if path == "/api/renderer/reset":
+                self._handle_renderer_reset(method)
+                return
+            if path == "/api/renderer/test":
+                self._handle_renderer_test(method)
+                return
             if path == "/api/jobs":
                 if method == "GET":
                     query = parse_qs(parsed.query)
@@ -1071,6 +1124,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except ProviderError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except Exception as exc:
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
 
@@ -1110,6 +1165,43 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         config, _sources = load_provider_config()
         self._send_json(test_provider_config(config))
+
+    def _handle_renderer_route(self, method: str) -> None:
+        if method == "GET":
+            config, sources = load_renderer_config()
+            self._send_json(
+                {
+                    "configured": renderer_configured(config),
+                    "config": config.to_public_dict(sources),
+                }
+            )
+            return
+        if method == "POST":
+            config = save_renderer_config_from_dict(self._read_json_body())
+            self._send_json(
+                {
+                    "ok": True,
+                    "configured": renderer_configured(config),
+                    "config": config.to_public_dict(),
+                }
+            )
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_renderer_reset(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        reset_renderer_config()
+        config, _sources = load_renderer_config()
+        self._send_json({"ok": True, "configured": renderer_configured(config)})
+
+    def _handle_renderer_test(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        config, _sources = load_renderer_config()
+        self._send_json(test_renderer_config(config))
 
     def _handle_batch_route(self, method: str, batch_id: str, tail: str) -> None:
         if tail == "":
@@ -1275,6 +1367,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             self._send_json({"ok": True, "deleted": deleted, "job_id": job_id})
             return
+        if tail == "/render-audio":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            audio, status, error = self.store.render_job_audio(job_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, "job_id": job_id, **audio}, status=status)
+            return
         if tail.startswith("/nodes/") and tail.endswith("/retry"):
             self._send_node_retry(method, job, tail)
             return
@@ -1313,6 +1415,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         if tail == "/midi":
             self._send_file(run_dir / "renders" / "song.mid", "audio/midi")
+            return
+        if tail == "/audio":
+            audio_path = run_dir / "renders" / "song.wav"
+            if not audio_path.exists():
+                self._send_error(HTTPStatus.NOT_FOUND, "Audio render is not available for this job.")
+                return
+            self._send_file(audio_path, "audio/wav")
             return
         if tail == "/nodes":
             self._send_nodes_list(job)
@@ -1551,12 +1660,7 @@ def discover_artifacts(run_dir: Path) -> list[dict[str, Any]]:
     for path in sorted(run_dir.rglob("*")):
         if path.is_file():
             artifacts.append(
-                {
-                    "name": path.name,
-                    "path": str(path),
-                    "kind": _artifact_kind(path),
-                    "size": path.stat().st_size,
-                }
+                _artifact_dict(path)
             )
     return artifacts
 
@@ -1599,6 +1703,14 @@ def _build_validator_report(plan_path: Path, midi_path: Path) -> dict[str, Any]:
         "midi_exists": midi_path.exists(),
         "midi_size": midi_path.stat().st_size if midi_path.exists() else 0,
         "checked_at": _utc_now(),
+    }
+
+
+def _audio_report(audio_path: Path) -> dict[str, Any]:
+    return {
+        "exists": audio_path.exists(),
+        "path": str(audio_path),
+        "size_bytes": audio_path.stat().st_size if audio_path.exists() else 0,
     }
 
 
@@ -1667,7 +1779,19 @@ def _artifact_kind(path: Path) -> str:
         return "events"
     if path.suffix == ".mid":
         return "midi"
+    if path.suffix == ".wav":
+        return "audio"
     return "file"
+
+
+def _artifact_dict(path: Path) -> dict[str, Any]:
+    return {
+        "name": path.name,
+        "path": str(path),
+        "kind": _artifact_kind(path),
+        "size": path.stat().st_size,
+        "size_bytes": path.stat().st_size,
+    }
 
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:
