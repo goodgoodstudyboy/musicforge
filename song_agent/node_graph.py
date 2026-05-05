@@ -10,7 +10,12 @@ NODE_DEPENDENCIES: dict[str, list[str]] = {
     "lyric_planner": ["brief_planner", "structure_planner"],
     "harmony_planner": ["brief_planner", "structure_planner"],
     "melody_planner": ["style_planner", "structure_planner"],
-    "arrangement_planner": ["style_planner", "structure_planner", "melody_planner"],
+    "arrangement_planner": [
+        "style_planner",
+        "structure_planner",
+        "harmony_planner",
+        "melody_planner",
+    ],
     "critic": ["arrangement_planner", "harmony_planner", "lyric_planner"],
     "repair": ["critic"],
     "song_plan_builder": ["repair"],

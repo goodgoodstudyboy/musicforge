@@ -123,6 +123,8 @@ v0.3.1 adds node-level retry for multinode jobs. Retrying a node invalidates
 that node plus downstream nodes, reuses completed upstream node outputs, then
 rewrites the final SongPlan, MIDI, validator report, summary, and job state.
 Studio exposes this through the Nodes tab with a downstream-node confirmation.
+As of v0.3.2, node retry runs in the background and the API returns `202
+Accepted`; Studio polls job state until the retry completes.
 
 ## Provider Mode
 

@@ -346,9 +346,14 @@ class JobStore:
             provider_snapshot=provider_snapshot,
             heartbeat_at=_utc_now(),
         )
-        self._run_node_retry(job.job_id, node_name, affected_nodes, provider_snapshot)
-        job = self.get_job(job_id)
-        return job, HTTPStatus.OK, None, retry
+        thread = threading.Thread(
+            target=self._run_node_retry,
+            args=(job.job_id, node_name, affected_nodes, provider_snapshot),
+            name=f"musicforge-node-retry-{job.job_id}-{node_name}",
+            daemon=True,
+        )
+        thread.start()
+        return job, HTTPStatus.ACCEPTED, None, retry
 
     def run_watchdog_tick(self, now: datetime | None = None) -> int:
         now = now or datetime.now(timezone.utc)
@@ -925,7 +930,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if error is not None:
             self._send_error(status, error)
             return
-        self._send_json({"ok": True, "job": job.to_dict() if job is not None else None, "retry": retry})
+        self._send_json(
+            {"ok": True, "job": job.to_dict() if job is not None else None, "retry": retry},
+            status=status,
+        )
 
     def _send_node_route(self, method: str, job: JobState, tail: str) -> None:
         parts = tail.strip("/").split("/")

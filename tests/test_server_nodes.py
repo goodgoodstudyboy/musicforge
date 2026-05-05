@@ -44,6 +44,16 @@ def wait_for_job(server, job_id):
     raise AssertionError("job did not finish")
 
 
+def wait_for_job_status(server, job_id, statuses):
+    for _ in range(120):
+        status, job = request_json(server, "GET", f"/api/jobs/{job_id}")
+        assert status == 200
+        if job["status"] in statuses:
+            return job
+        time.sleep(0.05)
+    raise AssertionError(f"job did not reach {statuses}")
+
+
 def test_nodes_endpoint_lists_records(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()
@@ -134,7 +144,7 @@ def test_node_retry_updates_song_plan_and_midi(tmp_path, monkeypatch):
             "POST",
             f"/api/jobs/{final['job_id']}/nodes/brief_planner/retry",
         )
-        after = request_json(server, "GET", f"/api/jobs/{final['job_id']}")[1]
+        after = wait_for_job_status(server, final["job_id"], {"completed", "failed", "cancelled"})
         node = request_json(
             server,
             "GET",
@@ -143,7 +153,7 @@ def test_node_retry_updates_song_plan_and_midi(tmp_path, monkeypatch):
     finally:
         stop_test_server(server)
 
-    assert status == 200
+    assert status == 202
     assert data["retry"]["node"] == "brief_planner"
     assert "song_plan_builder" in data["retry"]["affected_nodes"]
     assert after["status"] == "completed"
@@ -151,6 +161,50 @@ def test_node_retry_updates_song_plan_and_midi(tmp_path, monkeypatch):
     assert node["started_at"] != before_brief
     assert node["retry_count"] == 1
     assert midi_path.stat().st_mtime_ns >= before_mtime
+
+
+def test_node_retry_harmony_affects_arrangement_and_tail(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, job = request_json(server, "POST", "/api/jobs", payload())
+        final = wait_for_job(server, job["job_id"])
+        before = {}
+        for node in ["melody_planner", "harmony_planner", "arrangement_planner", "critic"]:
+            before[node] = request_json(
+                server,
+                "GET",
+                f"/api/jobs/{final['job_id']}/nodes/{node}",
+            )[1]["node"]["started_at"]
+        status, data = request_json(
+            server,
+            "POST",
+            f"/api/jobs/{final['job_id']}/nodes/harmony_planner/retry",
+        )
+        after_job = wait_for_job_status(server, final["job_id"], {"completed", "failed", "cancelled"})
+        after = {}
+        for node in ["melody_planner", "harmony_planner", "arrangement_planner", "critic"]:
+            after[node] = request_json(
+                server,
+                "GET",
+                f"/api/jobs/{final['job_id']}/nodes/{node}",
+            )[1]["node"]
+    finally:
+        stop_test_server(server)
+
+    assert status == 202
+    assert data["retry"]["affected_nodes"] == [
+        "harmony_planner",
+        "arrangement_planner",
+        "critic",
+        "repair",
+        "song_plan_builder",
+    ]
+    assert after_job["status"] == "completed"
+    assert after["melody_planner"]["started_at"] == before["melody_planner"]
+    assert after["harmony_planner"]["started_at"] != before["harmony_planner"]
+    assert after["arrangement_planner"]["started_at"] != before["arrangement_planner"]
+    assert after["critic"]["started_at"] != before["critic"]
 
 
 def test_node_retry_rejects_invalid_node_name(tmp_path, monkeypatch):

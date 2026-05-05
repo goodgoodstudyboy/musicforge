@@ -173,6 +173,26 @@ def test_rerun_multinode_from_brief_rebuilds_all_nodes(tmp_path):
     assert all(store.read_node(node).retry_count == 1 for node in PIPELINE_NODE_ORDER)
 
 
+def test_rerun_multinode_from_harmony_rebuilds_arrangement_and_tail(tmp_path):
+    store = NodeStore(tmp_path)
+    generate_multinode_song_plan(request(), node_store=store)
+    before = {record.node: record.started_at for record in store.list_nodes()}
+
+    rerun_multinode_from_node(request(), "harmony_planner", node_store=store)
+
+    assert store.read_node("style_planner").started_at == before["style_planner"]
+    assert store.read_node("melody_planner").started_at == before["melody_planner"]
+    for node in [
+        "harmony_planner",
+        "arrangement_planner",
+        "critic",
+        "repair",
+        "song_plan_builder",
+    ]:
+        assert store.read_node(node).started_at != before[node]
+        assert store.read_node(node).retry_count == 1
+
+
 def test_rerun_multinode_from_unknown_node_fails(tmp_path):
     store = NodeStore(tmp_path)
     generate_multinode_song_plan(request(), node_store=store)

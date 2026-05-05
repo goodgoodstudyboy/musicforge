@@ -26,6 +26,17 @@ def test_upstream_nodes_for_lyric_planner():
     assert upstream_nodes("lyric_planner") == ["brief_planner", "structure_planner"]
 
 
+def test_harmony_retry_rebuilds_arrangement_and_tail():
+    assert "harmony_planner" in upstream_nodes("arrangement_planner")
+    assert affected_nodes_for_retry("harmony_planner") == [
+        "harmony_planner",
+        "arrangement_planner",
+        "critic",
+        "repair",
+        "song_plan_builder",
+    ]
+
+
 def test_unknown_node_rejected():
     with pytest.raises(ValueError, match="Unknown node"):
         downstream_nodes("missing_node")

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.2 - 2026-05-05
+
+### Fixed
+- `harmony_planner` retry now invalidates and reruns `arrangement_planner`, keeping section chords and chord/bass tracks consistent.
+- Node retry API now starts retry work in a background thread and returns `202 Accepted`, so Studio is not blocked by slow provider calls.
+
+### Verified
+- `python -m pytest -q`
+- Local multinode harmony retry smoke.
+- Node retry API returns `202` and job status is polled to completion.
+
 ## v0.3.1 - 2026-05-05
 
 ### Added
