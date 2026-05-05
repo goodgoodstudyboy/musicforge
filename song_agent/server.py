@@ -5,6 +5,7 @@ import mimetypes
 import os
 import shutil
 import threading
+import time
 import webbrowser
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -17,7 +18,7 @@ from urllib.parse import parse_qs
 
 from song_agent import __version__
 from song_agent.cli import generate_request
-from song_agent.projectio import ProjectPaths, read_json, slugify, write_json
+from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
 from song_agent.provider import (
     ProviderError,
     load_provider_config,
@@ -36,6 +37,10 @@ from song_agent.webui import panel_html
 
 
 RUNS_DIR = Path("runs")
+
+
+class JobCancelled(Exception):
+    """Raised when a job stops at a stage boundary after cancellation."""
 
 
 @dataclass
@@ -62,6 +67,14 @@ class JobState:
     last_seen_at: str | None = None
     started_at: str | None = None
     finished_at: str | None = None
+    heartbeat_at: str | None = None
+    retry_requested: bool = False
+    retry_count: int = 0
+    max_retries: int = 0
+    next_retry_at: str | None = None
+    last_error: str | None = None
+    stalled: bool = False
+    stall_timeout_seconds: int = 300
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -94,6 +107,18 @@ class JobState:
             else str(data.get("last_seen_at")),
             started_at=None if data.get("started_at") is None else str(data.get("started_at")),
             finished_at=None if data.get("finished_at") is None else str(data.get("finished_at")),
+            heartbeat_at=None
+            if data.get("heartbeat_at") is None
+            else str(data.get("heartbeat_at")),
+            retry_requested=bool(data.get("retry_requested", False)),
+            retry_count=int(data.get("retry_count", 0) or 0),
+            max_retries=int(data.get("max_retries", 0) or 0),
+            next_retry_at=None
+            if data.get("next_retry_at") is None
+            else str(data.get("next_retry_at")),
+            last_error=None if data.get("last_error") is None else str(data.get("last_error")),
+            stalled=bool(data.get("stalled", False)),
+            stall_timeout_seconds=int(data.get("stall_timeout_seconds", 300) or 300),
         )
 
 
@@ -163,6 +188,7 @@ class JobStore:
                 message="Queued for local deterministic generation.",
                 input_payload=request.to_dict(),
                 provider_snapshot=provider_snapshot,
+                heartbeat_at=now,
             )
             self.jobs[job_id] = job
             self._write_job(job)
@@ -173,7 +199,15 @@ class JobStore:
 
     def start_job(self, job_id: str) -> bool:
         job = self.get_job(job_id)
-        if job is None or job.status != "queued" or job.cancel_requested:
+        if job is None or job.status != "queued":
+            return False
+        if job.cancel_requested:
+            self._update_job(
+                job,
+                status="cancelled",
+                step="cancelled",
+                message="Job was cancelled before generation started.",
+            )
             return False
         thread = threading.Thread(
             target=self._run_job,
@@ -214,6 +248,68 @@ class JobStore:
         if job.status == "cancelled":
             return job, HTTPStatus.OK, None
         return job, HTTPStatus.CONFLICT, f"Cannot cancel a {job.status} job."
+
+    def retry_job(self, job_id: str) -> tuple[JobState | None, HTTPStatus, str | None]:
+        job = self.get_job(job_id)
+        if job is None:
+            return None, HTTPStatus.NOT_FOUND, "Job not found."
+        if job.status not in {"failed", "stalled", "interrupted"}:
+            return job, HTTPStatus.CONFLICT, f"Cannot retry a {job.status} job."
+
+        try:
+            provider_snapshot = self._provider_snapshot_for_retry(job)
+        except ProviderError as exc:
+            return job, HTTPStatus.BAD_REQUEST, str(exc)
+
+        previous_error = job.error or job.last_error
+        self._update_job(
+            job,
+            status="queued",
+            step="queued",
+            message="Retry queued.",
+            error=None,
+            last_error=previous_error,
+            retry_requested=True,
+            retry_count=job.retry_count + 1,
+            cancel_requested=False,
+            stalled=False,
+            interrupted=False,
+            finished_at=None,
+            provider_snapshot=provider_snapshot,
+            heartbeat_at=_utc_now(),
+        )
+        append_event(
+            ProjectPaths.create(Path(job.output_dir)),
+            {"event": "retry_requested", "retry_count": job.retry_count},
+        )
+        self.start_job(job_id)
+        return job, HTTPStatus.OK, None
+
+    def run_watchdog_tick(self, now: datetime | None = None) -> int:
+        now = now or datetime.now(timezone.utc)
+        marked = 0
+        with self.lock:
+            jobs = list(self.jobs.values())
+        for job in jobs:
+            if job.status != "running":
+                continue
+            heartbeat = _parse_iso_datetime(job.heartbeat_at or job.updated_at)
+            if heartbeat is None:
+                continue
+            elapsed = (now - heartbeat).total_seconds()
+            if elapsed > job.stall_timeout_seconds:
+                self._update_job(
+                    job,
+                    status="stalled",
+                    step="stalled",
+                    message="Job stalled because no heartbeat was observed.",
+                    error="No heartbeat within stall timeout.",
+                    last_error="No heartbeat within stall timeout.",
+                    stalled=True,
+                    finished_at=_utc_now(),
+                )
+                marked += 1
+        return marked
 
     def delete_job(self, job_id: str) -> tuple[bool, HTTPStatus, str | None]:
         with self.lock:
@@ -261,8 +357,14 @@ class JobStore:
             message="Generating song plan and MIDI.",
             attempt_count=job.attempt_count + 1,
             started_at=job.started_at or _utc_now(),
+            heartbeat_at=_utc_now(),
+            stalled=False,
         )
         try:
+            append_event(
+                ProjectPaths.create(Path(job.output_dir)),
+                {"event": "attempt_started", "attempt_count": job.attempt_count},
+            )
             job = self.get_job(job_id)
             if job is None or job.cancel_requested:
                 if job is not None:
@@ -273,12 +375,14 @@ class JobStore:
                         message="Job was cancelled before generation started.",
                     )
                 return
+            self._heartbeat(job)
             plan_path, midi_path = generate_request(
                 request,
                 out_dir=Path(job.output_dir),
                 force=False,
                 provider_config=provider_config,
                 provider_snapshot=provider_snapshot if provider_config is not None else None,
+                control=self._control_callback(job_id),
             )
             job = self.get_job(job_id)
             if job is None:
@@ -292,6 +396,7 @@ class JobStore:
                     finished_at=_utc_now(),
                 )
                 return
+            self._heartbeat(job)
             validator_report_path = Path(job.output_dir) / "data" / "validator-report.json"
             write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
             summary = _build_summary(plan_path, midi_path)
@@ -314,9 +419,20 @@ class JobStore:
                 message="Song generation completed.",
                 summary=summary,
                 error=None,
+                last_error=None,
                 finished_at=_utc_now(),
                 artifacts=artifacts,
             )
+        except JobCancelled:
+            job = self.get_job(job_id)
+            if job is not None:
+                self._update_job(
+                    job,
+                    status="cancelled",
+                    step="cancelled",
+                    message="Job was cancelled at a stage boundary.",
+                    finished_at=_utc_now(),
+                )
         except Exception as exc:
             self._update_job(
                 job,
@@ -324,6 +440,7 @@ class JobStore:
                 step="failed",
                 message="Song generation failed.",
                 error=str(exc),
+                last_error=str(exc),
                 finished_at=_utc_now(),
             )
 
@@ -334,6 +451,25 @@ class JobStore:
             job.updated_at = _utc_now()
             self.jobs[job.job_id] = job
             self._write_job(job)
+
+    def _heartbeat(self, job: JobState) -> None:
+        self._update_job(job, heartbeat_at=_utc_now(), last_seen_at=_utc_now())
+
+    def _control_callback(self, job_id: str):
+        def control(phase: str, step_name: str) -> None:
+            job = self.get_job(job_id)
+            if job is None:
+                raise JobCancelled()
+            self._update_job(
+                job,
+                heartbeat_at=_utc_now(),
+                last_seen_at=_utc_now(),
+                step=step_name,
+            )
+            if job.cancel_requested:
+                raise JobCancelled()
+
+        return control
 
     def _write_job(self, job: JobState) -> None:
         paths = ProjectPaths.create(Path(job.output_dir))
@@ -360,6 +496,13 @@ class JobStore:
         if base not in target.parents:
             raise ValueError("Refusing to delete outside runs directory.")
         return target
+
+    def _provider_snapshot_for_retry(self, job: JobState) -> dict[str, Any]:
+        if job.provider_snapshot.get("mode") != "provider":
+            return job.provider_snapshot
+        provider_config, _sources = load_provider_config()
+        provider_config.validate_ready_for_provider()
+        return provider_config.to_snapshot("provider", _utc_now())
 
 
 class MusicForgeHandler(BaseHTTPRequestHandler):
@@ -504,6 +647,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             self._send_json({"ok": True, "job": job.to_dict() if job is not None else None})
             return
+        if tail == "/retry":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            job, status, error = self.store.retry_job(job_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, "job": job.to_dict() if job is not None else None})
+            return
         if tail == "/delete":
             if method != "POST":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -632,6 +785,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 def create_server(host: str = "127.0.0.1", port: int = 8787) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer((host, port), MusicForgeHandler)
     server.job_store = JobStore()  # type: ignore[attr-defined]
+    server.watchdog_stop = threading.Event()  # type: ignore[attr-defined]
+    server.watchdog_thread = _start_watchdog(server.job_store, server.watchdog_stop)  # type: ignore[attr-defined]
     return server
 
 
@@ -645,6 +800,7 @@ def serve(host: str = "127.0.0.1", port: int = 8787) -> None:
     except KeyboardInterrupt:
         print("\nStopping MusicForge Studio.")
     finally:
+        server.watchdog_stop.set()  # type: ignore[attr-defined]
         server.server_close()
 
 
@@ -793,6 +949,28 @@ def _generation_mode(payload: dict[str, Any]) -> str:
     if mode not in {"local", "provider"}:
         raise ValueError("generation_mode must be either local or provider.")
     return mode
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _start_watchdog(store: JobStore, stop_event: threading.Event) -> threading.Thread:
+    def run() -> None:
+        while not stop_event.wait(5):
+            store.run_watchdog_tick()
+
+    thread = threading.Thread(target=run, name="musicforge-watchdog", daemon=True)
+    thread.start()
+    return thread
 
 
 def _utc_now() -> str:

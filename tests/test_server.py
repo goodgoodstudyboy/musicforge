@@ -1,6 +1,7 @@
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -15,6 +16,8 @@ def start_test_server():
 
 
 def stop_test_server(server):
+    if hasattr(server, "watchdog_stop"):
+        server.watchdog_stop.set()
     server.shutdown()
     server.server_close()
 
@@ -276,6 +279,41 @@ def test_startup_recovers_completed_job(tmp_path, monkeypatch):
     [job] = data["jobs"]
     assert job["job_id"] == "completed-job"
     assert job["status"] == "completed"
+    assert job["heartbeat_at"] is None
+    assert job["retry_count"] == 0
+    assert job["stalled"] is False
+    assert job["stall_timeout_seconds"] == 300
+
+
+def test_job_state_includes_heartbeat_and_retry_defaults(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _, job = request_json(
+            server,
+            "POST",
+            "/api/jobs",
+            {
+                "title": "Heartbeat Defaults Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "heartbeat",
+            },
+        )
+        final = wait_for_job(server, job["job_id"])
+    finally:
+        stop_test_server(server)
+
+    assert final["status"] == "completed"
+    assert final["attempt_count"] == 1
+    assert final["heartbeat_at"] is not None
+    assert final["retry_requested"] is False
+    assert final["retry_count"] == 0
+    assert final["max_retries"] == 0
+    assert final["next_retry_at"] is None
+    assert final["last_error"] is None
+    assert final["stalled"] is False
+    assert final["stall_timeout_seconds"] == 300
 
 
 def test_startup_marks_running_job_interrupted(tmp_path, monkeypatch):
@@ -613,6 +651,53 @@ def test_cancel_queued_job_marks_cancelled(tmp_path, monkeypatch):
     assert data["job"]["cancel_requested"] is True
 
 
+def test_cancel_running_job_sets_cancel_requested(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Running Cancel Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "cancel running",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(job, status="running", step="generate")
+        status, data = request_json(server, "POST", f"/api/jobs/{job.job_id}/cancel")
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert data["job"]["status"] == "running"
+    assert data["job"]["cancel_requested"] is True
+
+
+def test_cancelled_queued_job_does_not_start(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Cancelled Before Start",
+                "language": "en",
+                "style": "pop",
+                "theme": "cancel before start",
+            },
+            start_immediately=False,
+        )
+        request_json(server, "POST", f"/api/jobs/{job.job_id}/cancel")
+        started = server.job_store.start_job(job.job_id)
+        detail = server.job_store.get_job(job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert started is False
+    assert detail.status == "cancelled"
+    assert not (Path(detail.output_dir) / "data" / "song-plan.json").exists()
+
+
 def test_cancel_completed_job_returns_409(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()
@@ -647,6 +732,245 @@ def test_cancel_unknown_job_returns_404(tmp_path, monkeypatch):
 
     assert status == 404
     assert data["error"] == "Job not found."
+
+
+def test_retry_failed_job_requeues_and_completes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Retry Failed Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "retry",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(job, status="failed", step="failed", error="first failure")
+        status, data = request_json(server, "POST", f"/api/jobs/{job.job_id}/retry")
+        final = wait_for_job(server, job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert data["job"]["retry_count"] == 1
+    assert final["status"] == "completed"
+    assert final["retry_count"] == 1
+    assert final["last_error"] is None
+
+
+def test_retry_failed_job_increments_retry_count(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Retry Count Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "retry count",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(job, status="failed", step="failed", error="first failure")
+        request_json(server, "POST", f"/api/jobs/{job.job_id}/retry")
+        final = wait_for_job(server, job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert final["attempt_count"] == 1
+    assert final["retry_count"] == 1
+
+
+def test_retry_failed_job_preserves_input_payload(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Retry Input Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "original input",
+            },
+            start_immediately=False,
+        )
+        original_payload = dict(job.input_payload)
+        server.job_store._update_job(job, status="failed", step="failed", error="first failure")
+        request_json(server, "POST", f"/api/jobs/{job.job_id}/retry")
+        final = wait_for_job(server, job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert final["input_payload"] == original_payload
+
+
+def test_retry_running_job_returns_409(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Retry Running Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "retry running",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(job, status="running", step="generate")
+        status, data = request_json(server, "POST", f"/api/jobs/{job.job_id}/retry")
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Cannot retry a running job."
+
+
+def test_retry_completed_job_returns_409(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _, job = request_json(
+            server,
+            "POST",
+            "/api/jobs",
+            {
+                "title": "Retry Completed Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "retry completed",
+            },
+        )
+        final = wait_for_job(server, job["job_id"])
+        status, data = request_json(server, "POST", f"/api/jobs/{final['job_id']}/retry")
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Cannot retry a completed job."
+
+
+def test_watchdog_marks_stale_running_job_stalled(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    now = datetime.now(timezone.utc)
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Stale Running Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "stalled",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(
+            job,
+            status="running",
+            step="generate",
+            heartbeat_at=(now - timedelta(seconds=301)).isoformat(),
+        )
+        marked = server.job_store.run_watchdog_tick(now=now)
+        detail = server.job_store.get_job(job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert marked == 1
+    assert detail.status == "stalled"
+    assert detail.stalled is True
+    assert detail.error == "No heartbeat within stall timeout."
+
+
+def test_watchdog_ignores_recent_heartbeat(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    now = datetime.now(timezone.utc)
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Recent Heartbeat Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "recent heartbeat",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(
+            job,
+            status="running",
+            step="generate",
+            heartbeat_at=(now - timedelta(seconds=30)).isoformat(),
+        )
+        marked = server.job_store.run_watchdog_tick(now=now)
+        detail = server.job_store.get_job(job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert marked == 0
+    assert detail.status == "running"
+    assert detail.stalled is False
+
+
+def test_watchdog_ignores_completed_job(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    now = datetime.now(timezone.utc)
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Completed Watchdog Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "completed watchdog",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(
+            job,
+            status="completed",
+            step="completed",
+            heartbeat_at=(now - timedelta(seconds=900)).isoformat(),
+        )
+        marked = server.job_store.run_watchdog_tick(now=now)
+        detail = server.job_store.get_job(job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert marked == 0
+    assert detail.status == "completed"
+
+
+def test_stalled_job_can_retry(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    now = datetime.now(timezone.utc)
+    try:
+        job = server.job_store.create_job(
+            {
+                "title": "Retry Stalled Song",
+                "language": "en",
+                "style": "pop",
+                "theme": "retry stalled",
+            },
+            start_immediately=False,
+        )
+        server.job_store._update_job(
+            job,
+            status="running",
+            step="generate",
+            heartbeat_at=(now - timedelta(seconds=301)).isoformat(),
+        )
+        server.job_store.run_watchdog_tick(now=now)
+        status, data = request_json(server, "POST", f"/api/jobs/{job.job_id}/retry")
+        final = wait_for_job(server, job.job_id)
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert data["job"]["retry_count"] == 1
+    assert final["status"] == "completed"
 
 
 def test_invalid_request_returns_json_error(tmp_path, monkeypatch):
