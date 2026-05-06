@@ -92,6 +92,9 @@ def test_add_version_from_job_sets_index_flags_and_quality(tmp_path: Path) -> No
     assert updated.versions[0].note == "Good hook"
     assert updated.versions[0].has_midi is True
     assert updated.versions[0].quality_score is not None
+    assert updated.versions[0].variant_type == "original"
+    assert updated.versions[0].parent_version_id is None
+    assert updated.versions[0].quality_gate_status == "not_evaluated"
 
 
 def test_add_version_rejects_duplicate_job(tmp_path: Path) -> None:
@@ -123,6 +126,52 @@ def test_selected_and_final_versions(tmp_path: Path) -> None:
     final = store.set_final_version(document.state.project_id, "v001")
     assert final.state.final_version_id == "v001"
     assert final.state.status == "finalized"
+
+
+def test_add_variation_version_records_lineage(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    document = store.create_project("Lineage Song")
+    parent_run = make_run(tmp_path, "parent")
+    child_run = make_run(tmp_path, "child")
+    store.add_version_from_job(
+        document.state.project_id,
+        FakeJob(job_id="parent", title="Parent", output_dir=str(parent_run)),
+    )
+
+    updated = store.add_version_from_job(
+        document.state.project_id,
+        FakeJob(job_id="child", title="Child", output_dir=str(child_run)),
+        name="Warmer version",
+        parent_version_id="v001",
+        variant_type="style_variation",
+        change_summary="style -> warm synth pop",
+    )
+
+    child = updated.versions[1]
+    assert child.version_id == "v002"
+    assert child.parent_version_id == "v001"
+    assert child.variant_type == "style_variation"
+    assert child.change_summary == "style -> warm synth pop"
+
+
+def test_add_variation_rejects_unknown_parent_or_type(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    document = store.create_project("Bad Lineage")
+    run_dir = make_run(tmp_path, "child")
+
+    with pytest.raises(FileNotFoundError):
+        store.add_version_from_job(
+            document.state.project_id,
+            FakeJob(job_id="child", title="Child", output_dir=str(run_dir)),
+            parent_version_id="v999",
+        )
+
+    with pytest.raises(ValueError, match="variant_type"):
+        store.add_version_from_job(
+            document.state.project_id,
+            FakeJob(job_id="child-2", title="Child", output_dir=str(run_dir)),
+            variant_type="random",
+        )
 
 
 def test_export_project_writes_manifest_without_deleting_runs(tmp_path: Path) -> None:
@@ -172,6 +221,10 @@ def test_old_project_json_defaults_and_missing_job_sync(tmp_path: Path) -> None:
 
     assert loaded.state.status == "active"
     assert loaded.state.version_count == 1
+    assert loaded.versions[0].parent_version_id is None
+    assert loaded.versions[0].variant_type == "original"
+    assert loaded.versions[0].quality_gate_status == "not_evaluated"
+    assert loaded.versions[0].final_export_path is None
     assert synced.versions[0].status == "missing_job"
     assert synced.versions[0].missing_job is True
 
@@ -191,12 +244,21 @@ def test_diff_versions_reports_changed_request_and_artifacts(tmp_path: Path) -> 
     )
     (right_run / "renders" / "song.wav").write_bytes(b"RIFF")
     store.add_version_from_job(document.state.project_id, left)
-    store.add_version_from_job(document.state.project_id, right)
+    store.add_version_from_job(
+        document.state.project_id,
+        right,
+        parent_version_id="v001",
+        variant_type="tempo_key_variation",
+        change_summary="tempo -> 96",
+    )
 
     diff = store.diff_versions(document.state.project_id, "v001", "v002")
 
     assert diff["changed"]["request"]["tempo_bpm"] == {"left": None, "right": 96}
     assert diff["changed"]["artifacts"]["audio"] == {"left": False, "right": True}
+    assert diff["right"]["parent_version_id"] == "v001"
+    assert diff["right"]["variant_type"] == "tempo_key_variation"
+    assert diff["changed"]["lineage"]["change_summary"] == {"left": "", "right": "tempo -> 96"}
 
 
 def test_project_version_rejects_invalid_version_id() -> None:

@@ -14,6 +14,23 @@ from song_agent.schemas.song import SongPlan
 
 PROJECT_ROOT = Path(".musicforge") / "projects"
 PROJECT_STATUSES = {"active", "archived", "finalized"}
+VARIANT_TYPES = {
+    "original",
+    "style_variation",
+    "tempo_key_variation",
+    "lyrics_variation",
+    "arrangement_variation",
+    "quality_repair",
+    "manual",
+}
+QUALITY_GATE_STATUSES = {
+    "not_evaluated",
+    "passed",
+    "warning",
+    "failed",
+    "missing_plan",
+    "error",
+}
 VERSION_STATUSES = {
     "queued",
     "running",
@@ -122,6 +139,13 @@ class ProjectVersion:
     note: str = ""
     pinned: bool = False
     missing_job: bool = False
+    parent_version_id: str | None = None
+    variant_type: str = "original"
+    change_summary: str = ""
+    quality_gate_status: str = "not_evaluated"
+    quality_gate_score: int | None = None
+    quality_gate_warnings: list[str] = field(default_factory=list)
+    final_export_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -146,6 +170,13 @@ class ProjectVersion:
             "note": self.note,
             "pinned": self.pinned,
             "missing_job": self.missing_job,
+            "parent_version_id": self.parent_version_id,
+            "variant_type": self.variant_type,
+            "change_summary": self.change_summary,
+            "quality_gate_status": self.quality_gate_status,
+            "quality_gate_score": self.quality_gate_score,
+            "quality_gate_warnings": self.quality_gate_warnings,
+            "final_export_path": self.final_export_path,
         }
 
     @classmethod
@@ -155,6 +186,12 @@ class ProjectVersion:
         status = str(data.get("status") or "queued")
         if status not in VERSION_STATUSES:
             status = "missing_job" if bool(data.get("missing_job", False)) else "queued"
+        variant_type = str(data.get("variant_type") or "original")
+        if variant_type not in VARIANT_TYPES:
+            variant_type = "manual"
+        quality_gate_status = str(data.get("quality_gate_status") or "not_evaluated")
+        if quality_gate_status not in QUALITY_GATE_STATUSES:
+            quality_gate_status = "not_evaluated"
         return cls(
             version_id=version_id,
             project_id=_validate_project_id(str(data.get("project_id") or "")),
@@ -177,6 +214,13 @@ class ProjectVersion:
             note=str(data.get("note") or ""),
             pinned=bool(data.get("pinned", False)),
             missing_job=bool(data.get("missing_job", status == "missing_job")),
+            parent_version_id=_optional_version_id(data.get("parent_version_id")),
+            variant_type=variant_type,
+            change_summary=str(data.get("change_summary") or ""),
+            quality_gate_status=quality_gate_status,
+            quality_gate_score=_optional_int(data.get("quality_gate_score")),
+            quality_gate_warnings=[str(warning) for warning in data.get("quality_gate_warnings", [])],
+            final_export_path=_optional_str(data.get("final_export_path")),
         )
 
 
@@ -273,10 +317,16 @@ class ProjectStore:
         job: JobLike,
         name: str = "",
         note: str = "",
+        parent_version_id: str | None = None,
+        variant_type: str = "original",
+        change_summary: str = "",
     ) -> ProjectDocument:
         document = self.get_project(project_id)
         if any(version.job_id == job.job_id for version in document.versions):
             raise ValueError("Job is already attached to this project.")
+        if parent_version_id is not None:
+            _find_version(document, parent_version_id)
+        variant_type = _validate_variant_type(variant_type)
         index = max((version.index for version in document.versions), default=0) + 1
         version_id = f"v{index:03d}"
         version = ProjectVersion(
@@ -294,6 +344,9 @@ class ProjectStore:
             pipeline_mode=job.pipeline_mode,
             summary=dict(job.summary),
             note=str(note or ""),
+            parent_version_id=parent_version_id,
+            variant_type=variant_type,
+            change_summary=str(change_summary or ""),
         )
         self.refresh_version_from_job(version, job)
         document.versions.append(version)
@@ -301,7 +354,12 @@ class ProjectStore:
         self.append_event(
             document.state.project_id,
             "version_added",
-            {"version_id": version.version_id, "job_id": job.job_id},
+            {
+                "version_id": version.version_id,
+                "job_id": job.job_id,
+                "parent_version_id": parent_version_id,
+                "variant_type": variant_type,
+            },
         )
         return self.get_project(project_id)
 
@@ -411,6 +469,7 @@ class ProjectStore:
             "changed": {
                 "request": _diff_dict(left.request, right.request),
                 "summary": _diff_dict(left.summary, right.summary),
+                "lineage": _diff_dict(_lineage_info(left), _lineage_info(right)),
                 "quality": _diff_dict({"overall": left.quality_score}, {"overall": right.quality_score}),
                 "artifacts": _diff_dict(_artifact_flags(left), _artifact_flags(right)),
             },
@@ -553,6 +612,16 @@ def _version_ref(version: ProjectVersion) -> dict[str, Any]:
         "job_id": version.job_id,
         "name": version.name,
         "status": version.status,
+        "parent_version_id": version.parent_version_id,
+        "variant_type": version.variant_type,
+    }
+
+
+def _lineage_info(version: ProjectVersion) -> dict[str, Any]:
+    return {
+        "parent_version_id": version.parent_version_id,
+        "variant_type": version.variant_type,
+        "change_summary": version.change_summary,
     }
 
 
@@ -586,6 +655,19 @@ def _validate_version_id(version_id: str) -> str:
     if len(version_id) < 4 or not version_id.startswith("v") or not version_id[1:].isdigit():
         raise ValueError("Invalid version_id.")
     return version_id
+
+
+def _optional_version_id(value: Any) -> str | None:
+    if value is None or str(value).strip() == "":
+        return None
+    return _validate_version_id(str(value))
+
+
+def _validate_variant_type(value: str) -> str:
+    value = _clean(value) or "original"
+    if value not in VARIANT_TYPES:
+        raise ValueError(f"variant_type must be one of: {', '.join(sorted(VARIANT_TYPES))}.")
+    return value
 
 
 def _version_index(version_id: str) -> int:
