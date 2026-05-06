@@ -6,10 +6,12 @@ from song_agent.agent.pipeline import deterministic_compose
 from song_agent.schemas.song import SongRequest
 from song_agent.stems import (
     build_stem_manifest,
+    clear_stem_artifacts,
     find_stem,
     read_stem_manifest,
     render_stem_midis,
     stem_midi_path,
+    stem_manifest_stale,
 )
 from tests.test_midi_renderer import parse_midi
 
@@ -48,6 +50,8 @@ def test_render_stem_midis_writes_manifest_and_type1_files(tmp_path):
     assert persisted is not None
     assert persisted.to_dict() == manifest.to_dict()
     assert all(stem.midi_exists for stem in manifest.stems)
+    assert len(manifest.source_hash) == 64
+    assert stem_manifest_stale(manifest, plan) is False
     assert {stem.stem_id for stem in manifest.stems} == {"melody", "chords", "bass", "drums"}
 
     for stem in manifest.stems:
@@ -81,3 +85,23 @@ def test_stem_path_rejects_path_traversal(tmp_path):
 
     with pytest.raises(FileNotFoundError):
         stem_midi_path(tmp_path, manifest, "../melody")
+
+
+def test_stem_manifest_detects_changed_song_plan(tmp_path):
+    plan = deterministic_compose(request())
+    manifest = render_stem_midis(plan, tmp_path, "job-1", now="2026-05-06T00:00:00Z")
+    changed = replace(plan, tempo_bpm=plan.tempo_bpm + 1)
+
+    assert stem_manifest_stale(manifest, changed) is True
+
+
+def test_clear_stem_artifacts_removes_only_stems_dir(tmp_path):
+    plan = deterministic_compose(request())
+    render_stem_midis(plan, tmp_path, "job-1", now="2026-05-06T00:00:00Z")
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "song-plan.json").write_text("{}", encoding="utf-8")
+
+    clear_stem_artifacts(tmp_path)
+
+    assert not (tmp_path / "stems").exists()
+    assert (tmp_path / "data" / "song-plan.json").exists()

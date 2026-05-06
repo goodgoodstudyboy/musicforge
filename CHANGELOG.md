@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.8.1 - 2026-05-06
+
+### Fixed
+- Stem manifests now include a SongPlan source hash and stale manifests are invalidated when `data/song-plan.json` changes.
+- Job reruns and node retry now clear existing stem MIDI/WAV artifacts so regenerated songs cannot expose previous-version stems.
+- Stem MIDI/WAV download routes now reject stale manifests before serving files.
+- Partial stem-audio renders now report `partial_completed` instead of top-level `not_started`.
+
+### Verified
+- `python -m pytest tests\test_stems.py tests\test_server_stems.py tests\test_server_nodes.py tests\test_batch_stems.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v0.8.0 - 2026-05-06
 
 ### Added

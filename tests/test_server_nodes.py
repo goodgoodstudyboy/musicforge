@@ -132,6 +132,11 @@ def test_node_retry_updates_song_plan_and_midi(tmp_path, monkeypatch):
     try:
         _status, job = request_json(server, "POST", "/api/jobs", payload())
         final = wait_for_job(server, job["job_id"])
+        stem_status, stem_data = request_json(server, "POST", f"/api/jobs/{final['job_id']}/render-stems")
+        assert stem_status == 200
+        assert stem_data["manifest"]["stems"][0]["midi_exists"] is True
+        stem_manifest_path = Path(final["output_dir"]) / "stems" / "manifest.json"
+        assert stem_manifest_path.exists()
         midi_path = Path(final["output_dir"]) / "renders" / "song.mid"
         before_mtime = midi_path.stat().st_mtime_ns
         before_brief = request_json(
@@ -161,6 +166,9 @@ def test_node_retry_updates_song_plan_and_midi(tmp_path, monkeypatch):
     assert node["started_at"] != before_brief
     assert node["retry_count"] == 1
     assert midi_path.stat().st_mtime_ns >= before_mtime
+    assert not stem_manifest_path.exists()
+    assert "stems" not in after["artifacts"]
+    assert "stem_audio" not in after["artifacts"]
 
 
 def test_node_retry_harmony_affects_arrangement_and_tail(tmp_path, monkeypatch):

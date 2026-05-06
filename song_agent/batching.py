@@ -47,6 +47,7 @@ STEM_STATUSES = {
     "queued",
     "running",
     "completed",
+    "partial_completed",
     "partial_failed",
     "failed",
     "skipped",

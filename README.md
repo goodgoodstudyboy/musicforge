@@ -310,6 +310,10 @@ renderer is configured, each stem MIDI can also be rendered to a WAV stem.
 Studio exposes this through the Stems tab with per-track download links, audio
 players, and simple Solo/Mute controls.
 
+Stem manifests are bound to the current `data/song-plan.json` by a source hash.
+If a job retry, node retry, or direct SongPlan rewrite changes the source plan,
+old stem artifacts are invalidated before they can be reused or downloaded.
+
 Stem APIs:
 
 ```text

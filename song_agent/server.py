@@ -51,10 +51,12 @@ from song_agent.runtime_views import (
 from song_agent.schemas.song import SongPlan, SongRequest
 from song_agent.stems import (
     StemManifest,
+    clear_stem_artifacts,
     load_or_preview_stem_manifest,
     read_stem_manifest,
     render_stem_audio,
     render_stem_midis,
+    stem_manifest_stale,
     stem_audio_path,
     stem_midi_path,
 )
@@ -483,6 +485,9 @@ class JobStore:
             return {}, HTTPStatus.CONFLICT, "song-plan.json is not available for this job yet."
         try:
             plan = SongPlan.from_dict(read_json(plan_path))
+            existing_manifest = read_stem_manifest(run_dir)
+            if existing_manifest is not None and stem_manifest_stale(existing_manifest, plan):
+                clear_stem_artifacts(run_dir)
             manifest = render_stem_midis(plan, run_dir, job.job_id, now=_utc_now(), force=force)
         except ValueError as exc:
             return {}, HTTPStatus.CONFLICT, str(exc)
@@ -510,11 +515,17 @@ class JobStore:
             if manifest is None:
                 plan = SongPlan.from_dict(read_json(plan_path))
                 manifest = render_stem_midis(plan, run_dir, job.job_id, now=_utc_now())
+            else:
+                plan = SongPlan.from_dict(read_json(plan_path))
+                if stem_manifest_stale(manifest, plan):
+                    clear_stem_artifacts(run_dir)
+                    return {}, HTTPStatus.CONFLICT, "Stem manifest is stale. Render stems again."
             config, _sources = load_renderer_config()
             config.validate_ready_for_render()
             manifest = render_stem_audio(
                 run_dir,
                 config,
+                plan=plan,
                 stem_ids=stem_ids,
                 force=force,
                 now=_utc_now(),
@@ -591,6 +602,7 @@ class JobStore:
                 control=self._control_callback(job_id),
                 pipeline_mode=job.pipeline_mode,
             )
+            clear_stem_artifacts(Path(job.output_dir))
             job = self.get_job(job_id)
             if job is None:
                 return
@@ -701,6 +713,7 @@ class JobStore:
             validator_report_path = paths.data / "validator-report.json"
             write_json(plan_path, plan.to_dict())
             render_midi(plan, midi_path)
+            clear_stem_artifacts(run_dir)
             write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
             summary = _build_summary(plan_path, midi_path)
             artifacts = _job_artifacts(run_dir, plan_path, midi_path, validator_report_path)
@@ -1514,6 +1527,7 @@ class BatchRunner:
             "queued": 0,
             "running": 0,
             "completed": 0,
+            "partial_completed": 0,
             "partial_failed": 0,
             "failed": 0,
             "skipped": 0,
@@ -2163,6 +2177,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if manifest is None:
             self._send_error(HTTPStatus.NOT_FOUND, "Stem manifest not found.")
             return
+        plan_path = run_dir / "data" / "song-plan.json"
+        if not plan_path.exists():
+            self._send_error(HTTPStatus.CONFLICT, "song-plan.json is not available for this job yet.")
+            return
+        try:
+            plan = SongPlan.from_dict(read_json(plan_path))
+            if stem_manifest_stale(manifest, plan):
+                clear_stem_artifacts(run_dir)
+                self._send_error(HTTPStatus.CONFLICT, "Stem manifest is stale. Render stems again.")
+                return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
         try:
             if parts[2] == "midi":
                 self._send_file(stem_midi_path(run_dir, manifest, stem_id), "audio/midi")
@@ -2465,6 +2492,8 @@ def _stem_audio_manifest_status(manifest: StemManifest) -> str:
         return "partial_failed"
     if "failed" in statuses:
         return "failed"
+    if "completed" in statuses:
+        return "partial_completed"
     return "not_started"
 
 

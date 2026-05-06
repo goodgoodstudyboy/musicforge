@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -64,6 +67,7 @@ class StemManifest:
     version: int
     job_id: str
     source_song_plan: str
+    source_hash: str
     created_at: str
     updated_at: str
     stems: list[StemRecord]
@@ -74,6 +78,7 @@ class StemManifest:
             version=int(data.get("version", MANIFEST_VERSION) or MANIFEST_VERSION),
             job_id=str(data.get("job_id") or ""),
             source_song_plan=str(data.get("source_song_plan") or "data/song-plan.json"),
+            source_hash=str(data.get("source_hash") or ""),
             created_at=str(data.get("created_at") or ""),
             updated_at=str(data.get("updated_at") or ""),
             stems=[StemRecord.from_dict(item) for item in data.get("stems", [])],
@@ -84,6 +89,7 @@ class StemManifest:
             "version": self.version,
             "job_id": self.job_id,
             "source_song_plan": self.source_song_plan,
+            "source_hash": self.source_hash,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "stems": [stem.to_dict() for stem in self.stems],
@@ -124,6 +130,7 @@ def build_stem_manifest(plan: SongPlan, run_dir: Path, job_id: str, *, now: str)
         version=MANIFEST_VERSION,
         job_id=job_id,
         source_song_plan="data/song-plan.json",
+        source_hash=song_plan_hash(plan),
         created_at=now,
         updated_at=now,
         stems=stems,
@@ -156,6 +163,7 @@ def render_stem_midis(plan: SongPlan, run_dir: Path, job_id: str, *, now: str, f
             version=manifest.version,
             job_id=manifest.job_id,
             source_song_plan=manifest.source_song_plan,
+            source_hash=manifest.source_hash,
             created_at=manifest.created_at,
             updated_at=now,
             stems=rendered_stems,
@@ -178,6 +186,9 @@ def write_stem_manifest(run_dir: Path, manifest: StemManifest) -> StemManifest:
 def load_or_preview_stem_manifest(plan: SongPlan, run_dir: Path, job_id: str, *, now: str) -> StemManifest:
     manifest = read_stem_manifest(run_dir)
     if manifest is not None:
+        if stem_manifest_stale(manifest, plan):
+            clear_stem_artifacts(run_dir)
+            return build_stem_manifest(plan, run_dir, job_id, now=now)
         return refresh_stem_manifest(run_dir, manifest, now=now)
     return build_stem_manifest(plan, run_dir, job_id, now=now)
 
@@ -208,6 +219,7 @@ def refresh_stem_manifest(run_dir: Path, manifest: StemManifest, *, now: str) ->
         version=manifest.version,
         job_id=manifest.job_id,
         source_song_plan=manifest.source_song_plan,
+        source_hash=manifest.source_hash,
         created_at=manifest.created_at,
         updated_at=now,
         stems=stems,
@@ -218,6 +230,7 @@ def render_stem_audio(
     run_dir: Path,
     config: RendererConfig,
     *,
+    plan: SongPlan | None = None,
     stem_ids: list[str] | None = None,
     force: bool = False,
     now: str,
@@ -225,6 +238,8 @@ def render_stem_audio(
     manifest = read_stem_manifest(run_dir)
     if manifest is None:
         raise ValueError("Stem manifest is not available.")
+    if plan is not None and stem_manifest_stale(manifest, plan):
+        raise ValueError("Stem manifest is stale. Render stems again.")
     selected = set(stem_ids or [])
     if any(slugify(stem_id) != stem_id for stem_id in selected):
         raise FileNotFoundError("Stem not found.")
@@ -269,6 +284,7 @@ def render_stem_audio(
             version=manifest.version,
             job_id=manifest.job_id,
             source_song_plan=manifest.source_song_plan,
+            source_hash=manifest.source_hash,
             created_at=manifest.created_at,
             updated_at=now,
             stems=stems,
@@ -278,6 +294,30 @@ def render_stem_audio(
 
 def manifest_path(run_dir: Path) -> Path:
     return run_dir / "stems" / "manifest.json"
+
+
+def clear_stem_artifacts(run_dir: Path) -> None:
+    stems_dir = run_dir / "stems"
+    if not stems_dir.exists():
+        return
+    base = run_dir.resolve()
+    target = stems_dir.resolve()
+    try:
+        target.relative_to(base)
+    except ValueError as exc:
+        raise ValueError("Refusing to delete stems outside the run directory.") from exc
+    if target == base:
+        raise ValueError("Refusing to delete run directory.")
+    shutil.rmtree(target)
+
+
+def stem_manifest_stale(manifest: StemManifest, plan: SongPlan) -> bool:
+    return manifest.source_hash != song_plan_hash(plan)
+
+
+def song_plan_hash(plan: SongPlan) -> str:
+    payload = json.dumps(plan.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def stem_midi_path(run_dir: Path, manifest: StemManifest, stem_id: str) -> Path:

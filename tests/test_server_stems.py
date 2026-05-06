@@ -130,12 +130,77 @@ def test_render_stem_audio_writes_wavs_without_marking_job_failed(tmp_path, monk
 
     melody = next(stem for stem in data["manifest"]["stems"] if stem["stem_id"] == "melody")
     assert status == 200
+    assert data["status"] == "partial_completed"
     assert melody["audio_status"] == "completed"
     assert audio_status == 200
     assert audio_type == "audio/wav"
     assert audio_body.startswith(b"RIFF")
     assert job_status == 200
     assert latest["status"] == "completed"
+
+
+def test_stems_preview_invalidates_stale_manifest_when_song_plan_changes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = create_completed_job(server)
+        request_json(server, "POST", f"/api/jobs/{job['job_id']}/render-stems")
+        run_dir = Path(job["output_dir"])
+        assert (run_dir / "stems" / "manifest.json").exists()
+        plan_path = run_dir / "data" / "song-plan.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["tempo_bpm"] = int(plan["tempo_bpm"]) + 1
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+        status, data, _ = request_json(server, "GET", f"/api/jobs/{job['job_id']}/stems")
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert data["status"] == "not_started"
+    assert not (run_dir / "stems" / "manifest.json").exists()
+
+
+def test_stem_file_download_rejects_stale_manifest_when_song_plan_changes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        job = create_completed_job(server)
+        request_json(server, "POST", f"/api/jobs/{job['job_id']}/render-stems")
+        run_dir = Path(job["output_dir"])
+        plan_path = run_dir / "data" / "song-plan.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["tempo_bpm"] = int(plan["tempo_bpm"]) + 1
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+        status, data, _ = request_json(server, "GET", f"/api/jobs/{job['job_id']}/stems/melody/midi")
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Stem manifest is stale. Render stems again."
+    assert not (run_dir / "stems").exists()
+
+
+def test_stem_audio_rejects_stale_manifest_until_rerendered(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("song_agent.stems.render_audio", fake_render_audio)
+    server = start_test_server()
+    try:
+        configure_renderer(tmp_path, server)
+        job = create_completed_job(server)
+        request_json(server, "POST", f"/api/jobs/{job['job_id']}/render-stems")
+        plan_path = Path(job["output_dir"]) / "data" / "song-plan.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["tempo_bpm"] = int(plan["tempo_bpm"]) + 1
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+        status, data, _ = request_json(server, "POST", f"/api/jobs/{job['job_id']}/render-stem-audio")
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Stem manifest is stale. Render stems again."
 
 
 def test_render_stem_audio_requires_renderer_config(tmp_path, monkeypatch):
