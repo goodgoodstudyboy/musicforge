@@ -1,5 +1,5 @@
 from song_agent.agent.pipeline import SongAgent
-from song_agent.renderers.midi import render_midi
+from song_agent.renderers.midi import render_midi, render_midi_stem
 from song_agent.schemas.song import SongRequest
 
 
@@ -55,6 +55,29 @@ def test_render_midi_writes_expected_midi_semantics(tmp_path):
     assert any(channel == 9 for channel, _pitch in music_tracks[3]["note_on"])
     for track in music_tracks:
         assert sorted(track["note_on"]) == sorted(track["note_off"])
+
+
+def test_render_midi_stem_writes_meta_and_one_music_track(tmp_path):
+    request = SongRequest.from_dict(
+        {
+            "title": "Test Song",
+            "language": "en",
+            "style": "pop",
+            "theme": "test",
+            "tempo_bpm": 120,
+        }
+    )
+    plan = SongAgent().generate(request)
+    output_path = tmp_path / "melody.mid"
+
+    render_midi_stem(plan, 0, output_path)
+
+    parsed = parse_midi(output_path.read_bytes())
+    assert parsed["format"] == 1
+    assert parsed["track_count"] == 2
+    assert 500000 in parsed["tracks"][0]["tempos"]
+    assert parsed["tracks"][1]["program_changes"] == [(0, 81)]
+    assert sorted(parsed["tracks"][1]["note_on"]) == sorted(parsed["tracks"][1]["note_off"])
 
 
 def parse_midi(data: bytes) -> dict:

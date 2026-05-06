@@ -45,6 +45,25 @@ def render_midi(plan: SongPlan, output_path: Path) -> Path:
     return output_path
 
 
+def render_midi_stem(plan: SongPlan, track_index: int, output_path: Path) -> Path:
+    """Render one SongPlan track to a type-1 Standard MIDI stem file."""
+    if track_index < 0 or track_index >= len(plan.tracks):
+        raise ValueError("track_index is out of range.")
+    track = plan.tracks[track_index]
+    if not track.notes:
+        raise ValueError("Cannot render an empty MIDI stem.")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    role = _track_role(track.name)
+    channel = CHANNELS_BY_ROLE.get(role, 0)
+    program = PROGRAMS_BY_ROLE.get(role)
+    tracks = [
+        _meta_track(plan),
+        _music_track(track.notes, channel=channel, program=program),
+    ]
+    output_path.write_bytes(_header_chunk(len(tracks)) + b"".join(tracks))
+    return output_path
+
+
 def _header_chunk(track_count: int) -> bytes:
     return b"MThd" + struct.pack(">IHHH", 6, 1, track_count, TICKS_PER_BEAT)
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.0 - 2026-05-06
+
+### Added
+- Stem manifest and per-track MIDI export under `runs/<job-id>/stems/`.
+- Job APIs for listing stems, rendering MIDI stems, rendering stem WAV files, and downloading individual stem MIDI/WAV artifacts.
+- Studio Stems tab with Render Stems, Render Stem Audio, per-track downloads, audio controls, and simple Solo/Mute actions.
+- Batch stem rendering APIs for MIDI stems, stem audio, failed stem retry, and failed stem-audio retry.
+- Batch item stem metadata and export fields for manifest path, stem count, completed stem audio count, and stem errors.
+- Path-safe stem file access that resolves downloads from the manifest instead of trusting request paths.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+- Local single and multinode CLI smoke.
+- Job and batch stem API tests with fake WAV renderer.
+
 ## v0.7.1 - 2026-05-06
 
 ### Fixed

@@ -83,6 +83,10 @@ def test_export_batch_writes_report(tmp_path: Path) -> None:
     batch.items[0].output_dir = "runs/job-1"
     batch.items[0].audio_status = "completed"
     batch.items[0].audio_path = str(Path("runs/job-1") / "renders" / "song.wav")
+    batch.items[0].stem_status = "completed"
+    batch.items[0].stem_manifest_path = str(Path("runs/job-1") / "stems" / "manifest.json")
+    batch.items[0].stem_count = 4
+    batch.items[0].stem_audio_completed_count = 4
     store.save_batch(batch)
 
     export = store.export_batch(batch.state.batch_id)
@@ -92,8 +96,31 @@ def test_export_batch_writes_report(tmp_path: Path) -> None:
     assert export["items"][0]["midi"] == str(Path("runs/job-1") / "renders" / "song.mid")
     assert export["items"][0]["audio_status"] == "completed"
     assert export["items"][0]["audio"] == str(Path("runs/job-1") / "renders" / "song.wav")
+    assert export["items"][0]["stem_status"] == "completed"
+    assert export["items"][0]["stem_manifest"] == str(Path("runs/job-1") / "stems" / "manifest.json")
+    assert export["items"][0]["stem_count"] == 4
+    assert export["items"][0]["stem_audio_completed_count"] == 4
     export_path = tmp_path / "batches" / batch.state.batch_id / "export.json"
     assert json.loads(export_path.read_text(encoding="utf-8"))["items"][0]["job_id"] == "job-1"
+
+
+def test_batch_item_loads_stem_defaults_for_old_json(tmp_path: Path) -> None:
+    store = BatchStore(tmp_path / "batches")
+    batch = store.import_csv(name="Compat Batch", csv_text=CSV_TEXT)
+    batch_dir = tmp_path / "batches" / batch.state.batch_id
+    items = json.loads((batch_dir / "items.json").read_text(encoding="utf-8"))
+    for item in items["items"]:
+        item.pop("stem_status", None)
+        item.pop("stem_manifest_path", None)
+        item.pop("stem_count", None)
+        item.pop("stem_audio_completed_count", None)
+        item.pop("stem_error", None)
+    (batch_dir / "items.json").write_text(json.dumps(items), encoding="utf-8")
+
+    loaded = store.get_batch(batch.state.batch_id)
+
+    assert loaded.items[0].stem_status == "not_started"
+    assert loaded.items[0].stem_count == 0
 
 
 def test_delete_batch_refuses_paths_outside_root(tmp_path: Path) -> None:

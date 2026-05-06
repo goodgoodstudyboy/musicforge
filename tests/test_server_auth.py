@@ -141,12 +141,14 @@ def test_auth_protects_job_create_provider_renderer_and_batch(tmp_path, monkeypa
             ("GET", "/api/renderer", None),
             ("GET", "/api/batches", None),
             ("POST", "/api/batches/import-csv", {"name": "x", "csv_text": ""}),
+            ("POST", "/api/batches/demo/render-stems", None),
+            ("POST", "/api/batches/demo/render-stem-audio", None),
         ]
         statuses = [request_json(server, method, path, payload=payload)[0] for method, path, payload in protected]
     finally:
         stop_test_server(server)
 
-    assert statuses == [401, 401, 401, 401, 401]
+    assert statuses == [401] * len(protected)
 
 
 def test_auth_protects_dangerous_job_routes(tmp_path, monkeypatch):
@@ -167,7 +169,11 @@ def test_auth_protects_dangerous_job_routes(tmp_path, monkeypatch):
             ("POST", f"/api/jobs/{job_id}/delete"),
             ("POST", f"/api/jobs/{job_id}/open-folder"),
             ("POST", f"/api/jobs/{job_id}/render-audio"),
+            ("POST", f"/api/jobs/{job_id}/render-stems"),
+            ("POST", f"/api/jobs/{job_id}/render-stem-audio"),
             ("GET", f"/api/jobs/{job_id}/midi"),
+            ("GET", f"/api/jobs/{job_id}/stems"),
+            ("GET", f"/api/jobs/{job_id}/stems/melody/midi"),
             ("GET", f"/api/jobs/{job_id}/artifacts"),
             ("GET", f"/api/jobs/{job_id}/quality"),
         ]
@@ -175,7 +181,7 @@ def test_auth_protects_dangerous_job_routes(tmp_path, monkeypatch):
     finally:
         stop_test_server(server)
 
-    assert statuses == [401, 401, 401, 401, 401, 401, 401]
+    assert statuses == [401] * len(routes)
 
 
 def test_no_auth_mode_still_allows_jobs_api(tmp_path, monkeypatch):

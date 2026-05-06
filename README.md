@@ -294,6 +294,40 @@ GET  /api/jobs/<job-id>/audio
 In Studio, open a completed job and click `Render Audio`. When `song.wav`
 exists, the job detail shows a browser audio player and a WAV download link.
 
+## Stem Export
+
+v0.8.0 adds per-track stem export for the tracks already present in
+`song-plan.json`:
+
+```text
+runs/<job-id>/stems/manifest.json
+runs/<job-id>/stems/midi/<stem-id>.mid
+runs/<job-id>/stems/audio/<stem-id>.wav
+```
+
+The first pass renders one MIDI stem per SongPlan track. If a local FluidSynth
+renderer is configured, each stem MIDI can also be rendered to a WAV stem.
+Studio exposes this through the Stems tab with per-track download links, audio
+players, and simple Solo/Mute controls.
+
+Stem APIs:
+
+```text
+GET  /api/jobs/<job-id>/stems
+POST /api/jobs/<job-id>/render-stems
+POST /api/jobs/<job-id>/render-stem-audio
+GET  /api/jobs/<job-id>/stems/<stem-id>/midi
+GET  /api/jobs/<job-id>/stems/<stem-id>/audio
+POST /api/batches/<batch-id>/render-stems
+POST /api/batches/<batch-id>/render-stem-audio
+POST /api/batches/<batch-id>/render-failed-stems
+POST /api/batches/<batch-id>/render-failed-stem-audio
+```
+
+Stem downloads are resolved through `manifest.json`; request path segments are
+not used as arbitrary file paths. Batch export includes stem status, manifest
+path, stem count, completed stem-audio count, and stem error fields.
+
 ## Initial Direction
 
 - Agent core: Python

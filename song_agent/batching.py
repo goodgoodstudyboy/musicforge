@@ -42,6 +42,15 @@ AUDIO_STATUSES = {
     "failed",
     "skipped",
 }
+STEM_STATUSES = {
+    "not_started",
+    "queued",
+    "running",
+    "completed",
+    "partial_failed",
+    "failed",
+    "skipped",
+}
 
 REQUIRED_CSV_COLUMNS = ("title", "language", "style", "theme")
 CSV_COLUMNS = (
@@ -203,6 +212,11 @@ class BatchItem:
     audio_status: str = "not_started"
     audio_path: str | None = None
     audio_error: str | None = None
+    stem_status: str = "not_started"
+    stem_manifest_path: str | None = None
+    stem_count: int = 0
+    stem_audio_completed_count: int = 0
+    stem_error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -219,6 +233,11 @@ class BatchItem:
             "audio_status": self.audio_status,
             "audio_path": self.audio_path,
             "audio_error": self.audio_error,
+            "stem_status": self.stem_status,
+            "stem_manifest_path": self.stem_manifest_path,
+            "stem_count": self.stem_count,
+            "stem_audio_completed_count": self.stem_audio_completed_count,
+            "stem_error": self.stem_error,
         }
 
     @classmethod
@@ -238,6 +257,11 @@ class BatchItem:
             audio_status=str(data.get("audio_status") or "not_started"),
             audio_path=data.get("audio_path"),
             audio_error=data.get("audio_error"),
+            stem_status=str(data.get("stem_status") or "not_started"),
+            stem_manifest_path=data.get("stem_manifest_path"),
+            stem_count=int(data.get("stem_count", 0) or 0),
+            stem_audio_completed_count=int(data.get("stem_audio_completed_count", 0) or 0),
+            stem_error=data.get("stem_error"),
         )
 
 
@@ -343,6 +367,8 @@ class BatchStore:
                     raise ValueError(f"Unsupported batch item status: {item.status}.")
                 if item.audio_status not in AUDIO_STATUSES:
                     raise ValueError(f"Unsupported batch item audio_status: {item.audio_status}.")
+                if item.stem_status not in STEM_STATUSES:
+                    raise ValueError(f"Unsupported batch item stem_status: {item.stem_status}.")
             recalculate_counts(document, touch=True)
             batch_dir = self.batch_dir(document.state.batch_id)
             batch_dir.mkdir(parents=True, exist_ok=True)
@@ -439,6 +465,11 @@ class BatchStore:
             "audio_status": item.audio_status,
             "audio": item.audio_path,
             "audio_error": item.audio_error,
+            "stem_status": item.stem_status,
+            "stem_manifest": item.stem_manifest_path,
+            "stem_count": item.stem_count,
+            "stem_audio_completed_count": item.stem_audio_completed_count,
+            "stem_error": item.stem_error,
             "error": item.error,
         }
 

@@ -49,6 +49,15 @@ from song_agent.runtime_views import (
     build_quality_view,
 )
 from song_agent.schemas.song import SongPlan, SongRequest
+from song_agent.stems import (
+    StemManifest,
+    load_or_preview_stem_manifest,
+    read_stem_manifest,
+    render_stem_audio,
+    render_stem_midis,
+    stem_audio_path,
+    stem_midi_path,
+)
 from song_agent.webui import panel_html
 
 
@@ -444,6 +453,85 @@ class JobStore:
             "artifact": _artifact_dict(wav_path),
         }, HTTPStatus.OK, None
 
+    def get_job_stems(self, job_id: str) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+        job = self.get_job(job_id)
+        if job is None:
+            return {}, HTTPStatus.NOT_FOUND, "Job not found."
+        run_dir = Path(job.output_dir)
+        plan_path = run_dir / "data" / "song-plan.json"
+        if not plan_path.exists():
+            return {}, HTTPStatus.CONFLICT, "song-plan.json is not available for this job yet."
+        try:
+            plan = SongPlan.from_dict(read_json(plan_path))
+            manifest = load_or_preview_stem_manifest(plan, run_dir, job.job_id, now=_utc_now())
+        except ValueError as exc:
+            return {}, HTTPStatus.CONFLICT, str(exc)
+        return _manifest_response(job.job_id, manifest), HTTPStatus.OK, None
+
+    def render_job_stems(
+        self,
+        job_id: str,
+        *,
+        force: bool = False,
+    ) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+        job = self.get_job(job_id)
+        if job is None:
+            return {}, HTTPStatus.NOT_FOUND, "Job not found."
+        run_dir = Path(job.output_dir)
+        plan_path = run_dir / "data" / "song-plan.json"
+        if not plan_path.exists():
+            return {}, HTTPStatus.CONFLICT, "song-plan.json is not available for this job yet."
+        try:
+            plan = SongPlan.from_dict(read_json(plan_path))
+            manifest = render_stem_midis(plan, run_dir, job.job_id, now=_utc_now(), force=force)
+        except ValueError as exc:
+            return {}, HTTPStatus.CONFLICT, str(exc)
+        artifacts = dict(job.artifacts)
+        artifacts["stems"] = str(run_dir / "stems" / "manifest.json")
+        self._update_job(job, artifacts=artifacts)
+        return _manifest_response(job.job_id, manifest, status=_stem_midi_manifest_status(manifest)), HTTPStatus.OK, None
+
+    def render_job_stem_audio(
+        self,
+        job_id: str,
+        *,
+        stem_ids: list[str] | None = None,
+        force: bool = False,
+    ) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+        job = self.get_job(job_id)
+        if job is None:
+            return {}, HTTPStatus.NOT_FOUND, "Job not found."
+        run_dir = Path(job.output_dir)
+        plan_path = run_dir / "data" / "song-plan.json"
+        if not plan_path.exists():
+            return {}, HTTPStatus.CONFLICT, "song-plan.json is not available for this job yet."
+        try:
+            manifest = read_stem_manifest(run_dir)
+            if manifest is None:
+                plan = SongPlan.from_dict(read_json(plan_path))
+                manifest = render_stem_midis(plan, run_dir, job.job_id, now=_utc_now())
+            config, _sources = load_renderer_config()
+            config.validate_ready_for_render()
+            manifest = render_stem_audio(
+                run_dir,
+                config,
+                stem_ids=stem_ids,
+                force=force,
+                now=_utc_now(),
+            )
+        except FileNotFoundError as exc:
+            return {}, HTTPStatus.NOT_FOUND, str(exc) or "Stem not found."
+        except RendererError as exc:
+            return {}, HTTPStatus.BAD_REQUEST, str(exc)
+        except ValueError as exc:
+            return {}, HTTPStatus.CONFLICT, str(exc)
+        artifacts = dict(job.artifacts)
+        artifacts["stems"] = str(run_dir / "stems" / "manifest.json")
+        if any(stem.audio_exists for stem in manifest.stems):
+            artifacts["stem_audio"] = str(run_dir / "stems" / "audio")
+        self._update_job(job, artifacts=artifacts)
+        return _manifest_response(job.job_id, manifest, status=_stem_audio_manifest_status(manifest)), HTTPStatus.OK, None
+
     def _run_job(self, job_id: str) -> None:
         job = self.get_job(job_id)
         if job is None:
@@ -722,6 +810,7 @@ class BatchRunner:
         self.stop_event = threading.Event()
         self.threads: dict[str, threading.Thread] = {}
         self.audio_threads: dict[str, threading.Thread] = {}
+        self.stem_threads: dict[str, threading.Thread] = {}
         self.recover_existing_batches()
 
     def recover_existing_batches(self) -> None:
@@ -759,6 +848,11 @@ class BatchRunner:
             if item.audio_status in {"queued", "running"}:
                 item.audio_status = "failed"
                 item.audio_error = "Audio render was interrupted by a previous server shutdown."
+                item.updated_at = now_iso()
+                recovered += 1
+            if item.stem_status in {"queued", "running"}:
+                item.stem_status = "failed"
+                item.stem_error = "Stem render was interrupted by a previous server shutdown."
                 item.updated_at = now_iso()
                 recovered += 1
         return recovered
@@ -835,6 +929,11 @@ class BatchRunner:
                 item.audio_status = "not_started"
                 item.audio_path = None
                 item.audio_error = None
+                item.stem_status = "not_started"
+                item.stem_manifest_path = None
+                item.stem_count = 0
+                item.stem_audio_completed_count = 0
+                item.stem_error = None
                 item.updated_at = now_iso()
                 reset_count += 1
         if reset_count == 0:
@@ -911,6 +1010,82 @@ class BatchRunner:
         self._ensure_audio_thread(batch_id)
         return self.batch_store.get_batch(batch_id), HTTPStatus.ACCEPTED, None, queued_count
 
+    def render_stems(
+        self,
+        batch_id: str,
+        *,
+        audio: bool = False,
+        failed_only: bool = False,
+    ) -> tuple[BatchDocument | None, HTTPStatus, str | None, int]:
+        try:
+            document = self.batch_store.get_batch(batch_id)
+        except FileNotFoundError:
+            return None, HTTPStatus.NOT_FOUND, "Batch not found.", 0
+        except ValueError as exc:
+            return None, HTTPStatus.BAD_REQUEST, str(exc), 0
+        if document.state.status == "running" or any(item.status == "running" for item in document.items):
+            return document, HTTPStatus.CONFLICT, "Cannot render batch stems while batch generation is running.", 0
+        if any(item.stem_status in {"queued", "running"} for item in document.items):
+            return document, HTTPStatus.CONFLICT, "Batch stem render is already running.", 0
+        if audio:
+            renderer_error = self._renderer_readiness_error()
+            if renderer_error is not None:
+                return document, HTTPStatus.BAD_REQUEST, renderer_error, 0
+
+        queued_count = 0
+        for item in document.items:
+            if failed_only and item.stem_status not in {"failed", "partial_failed"}:
+                continue
+            if item.status != "completed":
+                if not failed_only and item.stem_status == "not_started":
+                    item.stem_status = "skipped"
+                    item.stem_error = "Batch item is not completed."
+                    item.updated_at = now_iso()
+                continue
+            if (
+                not audio
+                and not failed_only
+                and item.stem_status == "completed"
+                and item.stem_manifest_path
+            ):
+                continue
+            if (
+                audio
+                and item.stem_status == "completed"
+                and item.stem_count
+                and item.stem_audio_completed_count >= item.stem_count
+            ):
+                continue
+            if audio and not item.stem_manifest_path and item.stem_status not in {"failed", "partial_failed"}:
+                continue
+            if not audio:
+                item.stem_manifest_path = None
+                item.stem_count = 0
+                item.stem_audio_completed_count = 0
+            item.stem_status = "queued"
+            item.stem_error = None
+            item.updated_at = now_iso()
+            queued_count += 1
+
+        if queued_count == 0:
+            if failed_only:
+                message = "Batch has no failed stem renders to retry."
+            elif audio:
+                message = "Batch has no completed items that need stem audio render."
+            else:
+                message = "Batch has no completed items that need stem render."
+            return document, HTTPStatus.CONFLICT, message, 0
+
+        self.batch_store.save_batch(document)
+        self.batch_store.append_event(
+            batch_id,
+            "batch_stem_render_requested",
+            {"queued_count": queued_count, "audio": audio, "failed_only": failed_only},
+        )
+        self._start_available_stem_items(batch_id, audio=audio)
+        self._ensure_stem_thread(batch_id, audio=audio)
+        return self.batch_store.get_batch(batch_id), HTTPStatus.ACCEPTED, None, queued_count
+
     def delete_batch(self, batch_id: str) -> tuple[bool, HTTPStatus, str | None]:
         try:
             document = self.batch_store.get_batch(batch_id)
@@ -924,7 +1099,7 @@ class BatchRunner:
     def shutdown(self) -> None:
         self.stop_event.set()
         with self.lock:
-            threads = [*self.threads.values(), *self.audio_threads.values()]
+            threads = [*self.threads.values(), *self.audio_threads.values(), *self.stem_threads.values()]
         for thread in threads:
             if thread.is_alive():
                 thread.join(timeout=2)
@@ -973,6 +1148,25 @@ class BatchRunner:
             with self.lock:
                 self.audio_threads.pop(batch_id, None)
 
+    def _run_batch_stems(self, batch_id: str, audio: bool) -> None:
+        try:
+            while not self.stop_event.is_set():
+                self._start_available_stem_items(batch_id, audio=audio)
+                document = self._sync_stem_items(batch_id)
+                if document is None:
+                    return
+                if not any(item.stem_status in {"queued", "running"} for item in document.items):
+                    self.batch_store.append_event(
+                        batch_id,
+                        "batch_stem_render_finished",
+                        self._stem_counts(document),
+                    )
+                    return
+                time.sleep(0.1)
+        finally:
+            with self.lock:
+                self.stem_threads.pop(batch_id, None)
+
     def _ensure_thread(self, batch_id: str) -> None:
         with self.lock:
             existing = self.threads.get(batch_id)
@@ -999,6 +1193,20 @@ class BatchRunner:
                 daemon=True,
             )
             self.audio_threads[batch_id] = thread
+            thread.start()
+
+    def _ensure_stem_thread(self, batch_id: str, *, audio: bool) -> None:
+        with self.lock:
+            existing = self.stem_threads.get(batch_id)
+            if existing is not None and existing.is_alive():
+                return
+            thread = threading.Thread(
+                target=self._run_batch_stems,
+                args=(batch_id, audio),
+                name=f"musicforge-batch-stems-{batch_id}",
+                daemon=True,
+            )
+            self.stem_threads[batch_id] = thread
             thread.start()
 
     def _start_available_items(self, batch_id: str) -> int:
@@ -1154,7 +1362,94 @@ class BatchRunner:
                 self.batch_store.append_event(batch_id, event_type, payload)
                 return
 
+    def _start_available_stem_items(self, batch_id: str, *, audio: bool) -> int:
+        with self.lock:
+            try:
+                document = self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                return 0
+            running_count = sum(1 for item in document.items if item.stem_status == "running")
+            available = max(0, document.state.max_concurrency - running_count)
+            if available == 0:
+                return 0
+            started = 0
+            threads_to_start: list[threading.Thread] = []
+            for item in document.items:
+                if item.stem_status != "queued" or started >= available:
+                    continue
+                if item.status != "completed" or not item.job_id:
+                    item.stem_status = "failed"
+                    item.stem_error = "Batch item does not have a completed job."
+                    item.updated_at = now_iso()
+                    continue
+                item.stem_status = "running"
+                item.stem_error = None
+                item.updated_at = now_iso()
+                started += 1
+                threads_to_start.append(
+                    threading.Thread(
+                        target=self._render_stem_item,
+                        args=(batch_id, item.item_id, item.job_id, audio),
+                        name=f"musicforge-batch-stem-item-{batch_id}-{item.item_id}",
+                        daemon=True,
+                    )
+                )
+                self.batch_store.append_event(
+                    batch_id,
+                    "batch_stem_item_started",
+                    {"item_id": item.item_id, "job_id": item.job_id, "audio": audio},
+                )
+            self.batch_store.save_batch(document)
+            for thread in threads_to_start:
+                thread.start()
+            return started
+
+    def _render_stem_item(self, batch_id: str, item_id: str, job_id: str, audio: bool) -> None:
+        if audio:
+            data, status, error = self.job_store.render_job_stem_audio(job_id)
+        else:
+            data, status, error = self.job_store.render_job_stems(job_id)
+        with self.lock:
+            try:
+                document = self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                return
+            for item in document.items:
+                if item.item_id != item_id:
+                    continue
+                job = self.job_store.get_job(job_id)
+                if error is None and status == HTTPStatus.OK:
+                    manifest = data.get("manifest", {})
+                    stems = manifest.get("stems", [])
+                    item.stem_manifest_path = str(Path(job.output_dir) / "stems" / "manifest.json") if job else item.stem_manifest_path
+                    item.stem_count = len(stems)
+                    item.stem_audio_completed_count = sum(1 for stem in stems if stem.get("audio_status") == "completed")
+                    item.stem_status = data.get("status", "completed")
+                    item.stem_error = (
+                        "One or more stems failed."
+                        if item.stem_status in {"partial_failed", "failed"}
+                        else None
+                    )
+                    event_type = "batch_stem_item_completed"
+                    payload = {"item_id": item.item_id, "job_id": job_id, "status": item.stem_status}
+                else:
+                    item.stem_status = "failed"
+                    item.stem_error = error or f"Stem render failed with status {status.value}."
+                    event_type = "batch_stem_item_failed"
+                    payload = {"item_id": item.item_id, "job_id": job_id, "error": item.stem_error}
+                item.updated_at = now_iso()
+                self.batch_store.save_batch(document)
+                self.batch_store.append_event(batch_id, event_type, payload)
+                return
+
     def _sync_audio_items(self, batch_id: str) -> BatchDocument | None:
+        with self.lock:
+            try:
+                return self.batch_store.get_batch(batch_id)
+            except FileNotFoundError:
+                return None
+
+    def _sync_stem_items(self, batch_id: str) -> BatchDocument | None:
         with self.lock:
             try:
                 return self.batch_store.get_batch(batch_id)
@@ -1210,6 +1505,21 @@ class BatchRunner:
         }
         for item in document.items:
             counts[item.audio_status] = counts.get(item.audio_status, 0) + 1
+        return counts
+
+    @staticmethod
+    def _stem_counts(document: BatchDocument) -> dict[str, int]:
+        counts = {
+            "not_started": 0,
+            "queued": 0,
+            "running": 0,
+            "completed": 0,
+            "partial_failed": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
+        for item in document.items:
+            counts[item.stem_status] = counts.get(item.stem_status, 0) + 1
         return counts
 
 
@@ -1502,6 +1812,26 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "queued_count": queued_count, **document.to_dict()}, status=status)
             return
 
+        if tail in {
+            "/render-stems",
+            "/render-stem-audio",
+            "/render-failed-stems",
+            "/render-failed-stem-audio",
+        }:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            document, status, error, queued_count = self.batch_runner.render_stems(
+                batch_id,
+                audio=tail in {"/render-stem-audio", "/render-failed-stem-audio"},
+                failed_only=tail in {"/render-failed-stems", "/render-failed-stem-audio"},
+            )
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, "queued_count": queued_count, **document.to_dict()}, status=status)
+            return
+
         if tail == "/export":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -1616,6 +1946,38 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             self._send_json({"ok": True, "job_id": job_id, **audio}, status=status)
             return
+        if tail == "/render-stems":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            data, status, error = self.store.render_job_stems(job_id, force=bool(payload.get("force", False)))
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, **data}, status=status)
+            return
+        if tail == "/render-stem-audio":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            stem_ids = payload.get("stem_ids")
+            if stem_ids is not None:
+                if not isinstance(stem_ids, list):
+                    self._send_error(HTTPStatus.BAD_REQUEST, "stem_ids must be a list.")
+                    return
+                stem_ids = [str(stem_id) for stem_id in stem_ids]
+            data, status, error = self.store.render_job_stem_audio(
+                job_id,
+                stem_ids=stem_ids,
+                force=bool(payload.get("force", False)),
+            )
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json({"ok": True, **data}, status=status)
+            return
         if tail.startswith("/nodes/") and tail.endswith("/retry"):
             self._send_node_retry(method, job, tail)
             return
@@ -1664,6 +2026,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(HTTPStatus.NOT_FOUND, "Audio render is not available for this job.")
                 return
             self._send_file(audio_path, "audio/wav")
+            return
+        if tail == "/stems":
+            data, status, error = self.store.get_job_stems(job_id)
+            if error is not None:
+                self._send_error(status, error)
+                return
+            self._send_json(data, status=status)
+            return
+        if tail.startswith("/stems/"):
+            self._send_stem_file(job, tail)
             return
         if tail == "/nodes":
             self._send_nodes_list(job)
@@ -1780,11 +2152,44 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Node route not found.")
 
+    def _send_stem_file(self, job: JobState, tail: str) -> None:
+        parts = tail.strip("/").split("/")
+        if len(parts) != 3 or parts[0] != "stems" or parts[2] not in {"midi", "audio"}:
+            self._send_error(HTTPStatus.NOT_FOUND, "Stem route not found.")
+            return
+        stem_id = unquote(parts[1])
+        run_dir = Path(job.output_dir)
+        manifest = read_stem_manifest(run_dir)
+        if manifest is None:
+            self._send_error(HTTPStatus.NOT_FOUND, "Stem manifest not found.")
+            return
+        try:
+            if parts[2] == "midi":
+                self._send_file(stem_midi_path(run_dir, manifest, stem_id), "audio/midi")
+            else:
+                self._send_file(stem_audio_path(run_dir, manifest, stem_id), "audio/wav")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Stem not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _read_json_body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length).decode("utf-8")
         if not body:
             raise ValueError("Request body must be JSON.")
+        data = json.loads(body)
+        if not isinstance(data, dict):
+            raise ValueError("Request body must be a JSON object.")
+        return data
+
+    def _optional_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length == 0:
+            return {}
+        body = self.rfile.read(length).decode("utf-8")
+        if not body:
+            return {}
         data = json.loads(body)
         if not isinstance(data, dict):
             raise ValueError("Request body must be a JSON object.")
@@ -2015,6 +2420,52 @@ def _audio_report(audio_path: Path) -> dict[str, Any]:
         "path": str(audio_path),
         "size_bytes": audio_path.stat().st_size if audio_path.exists() else 0,
     }
+
+
+def _manifest_response(
+    job_id: str,
+    manifest: StemManifest,
+    *,
+    status: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "job_id": job_id,
+        "status": status or _stem_manifest_status(manifest),
+        "manifest": manifest.to_dict(),
+    }
+
+
+def _stem_midi_manifest_status(manifest: StemManifest) -> str:
+    if not manifest.stems:
+        return "not_started"
+    if all(stem.midi_exists or stem.audio_status == "skipped" for stem in manifest.stems):
+        return "completed"
+    if any(stem.midi_exists for stem in manifest.stems):
+        return "partial_failed"
+    return "failed"
+
+
+def _stem_manifest_status(manifest: StemManifest) -> str:
+    if not manifest.stems:
+        return "not_started"
+    if any(stem.audio_exists for stem in manifest.stems):
+        return _stem_audio_manifest_status(manifest)
+    if any(stem.midi_exists for stem in manifest.stems):
+        return _stem_midi_manifest_status(manifest)
+    return "not_started"
+
+
+def _stem_audio_manifest_status(manifest: StemManifest) -> str:
+    if not manifest.stems:
+        return "not_started"
+    statuses = {stem.audio_status for stem in manifest.stems}
+    if statuses <= {"completed", "skipped"}:
+        return "completed"
+    if "failed" in statuses and ("completed" in statuses or "skipped" in statuses):
+        return "partial_failed"
+    if "failed" in statuses:
+        return "failed"
+    return "not_started"
 
 
 def _job_artifacts(

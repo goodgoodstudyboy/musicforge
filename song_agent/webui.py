@@ -970,11 +970,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <td>${escapeHtml(item.request.pipeline_mode || batch.pipeline_mode)}</td>
           <td><span class="status ${item.status}">${escapeHtml(item.status)}</span></td>
           <td><span class="status ${item.audio_status || "not_started"}">${escapeHtml(item.audio_status || "not_started")}</span></td>
+          <td><span class="status ${item.stem_status || "not_started"}">${escapeHtml(item.stem_status || "not_started")}</span></td>
+          <td>${escapeHtml(item.stem_audio_completed_count || 0)}/${escapeHtml(item.stem_count || 0)}</td>
           <td>${escapeHtml(item.attempt_count)}</td>
           <td>${item.job_id ? `<button class="secondary batch-job-link" data-job-id="${escapeHtml(item.job_id)}" type="button">${escapeHtml(item.job_id)}</button>` : "-"}</td>
           <td>${escapeHtml(item.output_dir || "-")}</td>
           <td>${escapeHtml(item.audio_path || "-")}</td>
-          <td>${escapeHtml(item.error || item.audio_error || "-")}</td>
+          <td>${escapeHtml(item.error || item.audio_error || item.stem_error || "-")}</td>
           <td>${escapeHtml(item.updated_at || "-")}</td>
         </tr>
       `).join("");
@@ -1001,8 +1003,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         ${batch.error ? `<p class="error">${escapeHtml(batch.error)}</p>` : ""}
         <table>
-          <thead><tr><th>Index</th><th>Title</th><th>Mode</th><th>Pipeline</th><th>Status</th><th>Audio</th><th>Attempt</th><th>Job</th><th>Output</th><th>WAV</th><th>Error</th><th>Updated</th></tr></thead>
-          <tbody>${rows || "<tr><td colspan='12'>No batch items.</td></tr>"}</tbody>
+          <thead><tr><th>Index</th><th>Title</th><th>Mode</th><th>Pipeline</th><th>Status</th><th>Audio</th><th>Stem</th><th>Stem Audio</th><th>Attempt</th><th>Job</th><th>Output</th><th>WAV</th><th>Error</th><th>Updated</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='14'>No batch items.</td></tr>"}</tbody>
         </table>
       `;
       wireBatchActions(batch);
@@ -1033,6 +1035,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (batch.status !== "running") {
         buttons.push(`<button class="secondary" id="render-batch-audio" type="button">Render Audio</button>`);
         buttons.push(`<button class="secondary" id="render-failed-batch-audio" type="button">Render Failed Audio</button>`);
+        buttons.push(`<button class="secondary" id="render-batch-stems" type="button">Render Stems</button>`);
+        buttons.push(`<button class="secondary" id="render-batch-stem-audio" type="button">Render Stem Audio</button>`);
+        buttons.push(`<button class="secondary" id="render-failed-batch-stems" type="button">Render Failed Stems</button>`);
+        buttons.push(`<button class="secondary" id="render-failed-batch-stem-audio" type="button">Render Failed Stem Audio</button>`);
       }
       buttons.push(`<a class="button-link secondary" href="/api/batches/${id}/export">Export</a>`);
       buttons.push(`<button class="secondary" id="open-batch-folder" type="button">Open Folder</button>`);
@@ -1074,6 +1080,22 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/batches/${id}/render-failed-audio`, { method: "POST" });
         await loadBatches();
       });
+      bindAction("render-batch-stems", async () => {
+        await api(`/api/batches/${id}/render-stems`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("render-batch-stem-audio", async () => {
+        await api(`/api/batches/${id}/render-stem-audio`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("render-failed-batch-stems", async () => {
+        await api(`/api/batches/${id}/render-failed-stems`, { method: "POST" });
+        await loadBatches();
+      });
+      bindAction("render-failed-batch-stem-audio", async () => {
+        await api(`/api/batches/${id}/render-failed-stem-audio`, { method: "POST" });
+        await loadBatches();
+      });
       bindAction("open-batch-folder", async () => {
         await api(`/api/batches/${id}/open-folder`, { method: "POST" });
       });
@@ -1097,7 +1119,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
       const detail = $("detail");
       const summary = job.summary || {};
-      const tabs = ["summary", "nodes", "timeline", "tracks", "quality", "validator", "json", "logs", "artifacts"];
+      const tabs = ["summary", "nodes", "timeline", "tracks", "stems", "quality", "validator", "json", "logs", "artifacts"];
       detail.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
           <span>${escapeHtml(job.title)}</span>
@@ -1153,6 +1175,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await renderNodes(job, target);
       } else if (activeTab === "tracks") {
         await renderTracks(job, target);
+      } else if (activeTab === "stems") {
+        await renderStems(job, target);
       } else if (activeTab === "quality") {
         await renderQuality(job, target);
       } else if (activeTab === "validator") {
@@ -1368,6 +1392,79 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     }
 
+    async function renderStems(job, target) {
+      try {
+        const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/stems`);
+        const manifest = data.manifest || {};
+        const stems = manifest.stems || [];
+        const rows = stems.map((stem) => `
+          <tr data-stem-id="${escapeHtml(stem.stem_id)}">
+            <td>${escapeHtml(stem.stem_id)}</td>
+            <td>${escapeHtml(stem.role || "-")}</td>
+            <td>${escapeHtml(stem.instrument || "-")}</td>
+            <td>${escapeHtml(stem.note_count ?? 0)}</td>
+            <td>${escapeHtml(stem.duration_beats ?? 0)}</td>
+            <td>${stem.midi_exists ? `<a href="/api/jobs/${encodeURIComponent(job.job_id)}/stems/${encodeURIComponent(stem.stem_id)}/midi">Download MIDI</a>` : "-"}</td>
+            <td><span class="status ${stem.audio_status || "not_started"}">${escapeHtml(stem.audio_status || "not_started")}</span></td>
+            <td>${escapeHtml(stem.audio_error || "-")}</td>
+            <td>
+              <div class="actions">
+                <button class="secondary render-stem-audio" data-stem-id="${escapeHtml(stem.stem_id)}" type="button">Render Audio</button>
+                ${stem.audio_exists ? `<a class="button-link secondary" href="/api/jobs/${encodeURIComponent(job.job_id)}/stems/${encodeURIComponent(stem.stem_id)}/audio">Download WAV</a>` : ""}
+                <button class="secondary stem-solo" data-stem-id="${escapeHtml(stem.stem_id)}" type="button">Solo</button>
+                <button class="secondary stem-mute" data-stem-id="${escapeHtml(stem.stem_id)}" type="button">Mute</button>
+              </div>
+              ${stem.audio_exists ? `<audio class="audio-player stem-audio" data-stem-id="${escapeHtml(stem.stem_id)}" controls src="/api/jobs/${encodeURIComponent(job.job_id)}/stems/${encodeURIComponent(stem.stem_id)}/audio"></audio>` : ""}
+            </td>
+          </tr>
+        `).join("");
+        target.innerHTML = `
+          <div class="actions">
+            <button id="render-stems" type="button">Render Stems</button>
+            <button class="secondary" id="render-stem-audio" type="button">Render Stem Audio</button>
+            <button class="secondary" id="refresh-stems" type="button">Refresh</button>
+          </div>
+          ${stems.length && data.status === "not_started" ? `<div class="empty">Stems have not been rendered yet.</div>` : ""}
+          <table>
+            <thead><tr><th>Stem</th><th>Role</th><th>Instrument</th><th>Notes</th><th>Duration</th><th>MIDI</th><th>WAV</th><th>Error</th><th>Actions</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='9'>Stems have not been rendered yet.</td></tr>"}</tbody>
+          </table>
+        `;
+        bindAction("render-stems", async () => {
+          await api(`/api/jobs/${encodeURIComponent(job.job_id)}/render-stems`, { method: "POST" });
+          await renderStems(job, target);
+        });
+        bindAction("render-stem-audio", async () => {
+          await api(`/api/jobs/${encodeURIComponent(job.job_id)}/render-stem-audio`, { method: "POST" });
+          await renderStems(job, target);
+        });
+        bindAction("refresh-stems", async () => {
+          await renderStems(job, target);
+        });
+        target.querySelectorAll(".render-stem-audio").forEach((button) => {
+          button.addEventListener("click", async () => {
+            await api(`/api/jobs/${encodeURIComponent(job.job_id)}/render-stem-audio`, {
+              method: "POST",
+              body: JSON.stringify({ stem_ids: [button.dataset.stemId] }),
+            });
+            await renderStems(job, target);
+          });
+        });
+        target.querySelectorAll(".stem-solo").forEach((button) => {
+          button.addEventListener("click", () => soloStem(target, button.dataset.stemId));
+        });
+        target.querySelectorAll(".stem-mute").forEach((button) => {
+          button.addEventListener("click", () => muteStem(target, button.dataset.stemId));
+        });
+      } catch (err) {
+        if (String(err.message || "").includes("song-plan.json is not available")) {
+          target.innerHTML = `<div class="empty">SongPlan is not available yet.</div>`;
+          return;
+        }
+        target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+      }
+    }
+
     async function renderValidator(job, target) {
       try {
         const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/validator`);
@@ -1437,6 +1534,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         nodes: "Nodes",
         timeline: "Timeline",
         tracks: "Tracks",
+        stems: "Stems",
         quality: "Quality",
         validator: "Validator",
         json: "SongPlan JSON",
@@ -1514,6 +1612,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       return `
         <audio class="audio-player" controls src="/api/jobs/${encodeURIComponent(job.job_id)}/audio"></audio>
       `;
+    }
+
+    function soloStem(target, stemId) {
+      target.querySelectorAll(".stem-audio").forEach((audio) => {
+        if (audio.dataset.stemId === stemId) {
+          audio.muted = false;
+          audio.play().catch(() => {});
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      });
+    }
+
+    function muteStem(target, stemId) {
+      target.querySelectorAll(".stem-audio").forEach((audio) => {
+        if (audio.dataset.stemId === stemId) {
+          audio.pause();
+          audio.muted = true;
+        }
+      });
     }
 
     function bindAction(id, fn) {

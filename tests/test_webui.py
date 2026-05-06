@@ -26,6 +26,7 @@ def test_webui_contains_runtime_tabs():
     assert "Timeline" in html
     assert "Nodes" in html
     assert "Tracks" in html
+    assert "Stems" in html
     assert "Quality" in html
     assert "Validator" in html
     assert "SongPlan JSON" in html
@@ -34,6 +35,7 @@ def test_webui_contains_runtime_tabs():
     assert "Track</th><th>Instrument</th><th>Notes</th><th>Pitch Range" in html
     assert "Check</th><th>Status" in html
     assert "Node</th><th>Status</th><th>Provider" in html
+    assert "Stem</th><th>Role</th><th>Instrument</th><th>Notes" in html
     assert "Quality view will be available after the song plan is generated." in html
     assert "Warning</th>" in html
     assert "Critic Passed" in html
@@ -45,6 +47,7 @@ def test_webui_calls_runtime_view_apis():
     assert "/timeline" in html
     assert "/nodes" in html
     assert "/tracks" in html
+    assert "/stems" in html
     assert "/quality" in html
     assert "/validator" in html
 
@@ -123,6 +126,23 @@ def test_webui_contains_audio_render_controls():
     assert "/audio" in html
 
 
+def test_webui_contains_stem_controls():
+    html = panel_html()
+
+    assert "Render Stems" in html
+    assert "Render Stem Audio" in html
+    assert "Download MIDI" in html
+    assert "Download WAV" in html
+    assert "Solo" in html
+    assert "Mute" in html
+    assert "Stems have not been rendered yet." in html
+    assert "SongPlan is not available yet." in html
+    assert "/render-stems" in html
+    assert "/render-stem-audio" in html
+    assert "soloStem" in html
+    assert "muteStem" in html
+
+
 def test_webui_contains_access_token_prompt():
     html = panel_html()
 
@@ -162,6 +182,10 @@ def test_webui_contains_batch_tab_controls():
     assert "Retry Failed" in html
     assert "Render Audio" in html
     assert "Render Failed Audio" in html
+    assert "Render Stems" in html
+    assert "Render Stem Audio" in html
+    assert "Render Failed Stems" in html
+    assert "Render Failed Stem Audio" in html
     assert "Export" in html
 
 
@@ -177,6 +201,10 @@ def test_webui_calls_batch_apis():
     assert "/api/batches/${id}/retry-failed" in html
     assert "/api/batches/${id}/render-audio" in html
     assert "/api/batches/${id}/render-failed-audio" in html
+    assert "/api/batches/${id}/render-stems" in html
+    assert "/api/batches/${id}/render-stem-audio" in html
+    assert "/api/batches/${id}/render-failed-stems" in html
+    assert "/api/batches/${id}/render-failed-stem-audio" in html
     assert "/api/batches/${id}/export" in html
     assert "/api/batches/${id}/open-folder" in html
     assert "/api/batches/${id}/delete" in html
