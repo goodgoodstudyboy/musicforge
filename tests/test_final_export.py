@@ -16,7 +16,7 @@ from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.projectio import read_json, write_json
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
-from song_agent.stems import render_stem_midis
+from song_agent.stems import read_stem_manifest, render_stem_midis
 
 
 class Project:
@@ -184,3 +184,32 @@ def test_final_export_rejects_missing_required_files_before_replacing_existing_b
         )
 
     assert read_json(existing)["old"] is True
+
+
+def test_final_export_skips_polluted_stem_manifest_paths(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    write_json(run_dir / "data" / "provider-snapshot.json", {"api_key_masked": "sk-...cret"})
+    manifest = read_stem_manifest(run_dir)
+    assert manifest is not None
+    data = manifest.to_dict()
+    data["stems"][0]["midi_path"] = "data/provider-snapshot.json"
+    data["stems"][0]["audio_path"] = "data/provider-snapshot.json"
+    write_json(run_dir / "stems" / "manifest.json", data)
+
+    exported = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+    )
+
+    stem_manifest = next(file for file in exported["files"] if file["kind"] == "stem_manifest")
+    assert stem_manifest["exists"] is False
+    assert stem_manifest["skipped"] == "unsafe_path"
+    assert any(file["kind"] == "stem_midi" and file["skipped"] == "unsafe_path" for file in exported["files"])
+    assert not (project_dir / "final-export" / "stems" / "manifest.json").exists()
+    assert not (project_dir / "final-export" / "data" / "provider-snapshot.json").exists()

@@ -8,7 +8,7 @@ from typing import Any
 from song_agent.project_quality import QualityGateResult
 from song_agent.projectio import read_json, write_json
 from song_agent.schemas.song import SongPlan
-from song_agent.stems import read_stem_manifest, stem_manifest_stale
+from song_agent.stems import read_stem_manifest, stem_audio_path, stem_manifest_stale, stem_midi_path
 
 
 class FinalExportError(ValueError):
@@ -160,14 +160,31 @@ def _copy_stems(
     if stem_manifest_stale(manifest, plan):
         files.append({"kind": "stem_manifest", "path": "stems/manifest.json", "exists": False, "required": False, "skipped": "stale"})
         return
+    unsafe_records = _unsafe_stem_path_records(run_dir, manifest, options)
+    if unsafe_records:
+        files.append({"kind": "stem_manifest", "path": "stems/manifest.json", "exists": False, "required": False, "skipped": "unsafe_path"})
+        files.extend(unsafe_records)
+        return
 
     _copy_optional(run_dir, export_dir, run_dir / "stems" / "manifest.json", "stems/manifest.json", "stem_manifest", files)
     for stem in manifest.stems:
-        midi_source = run_dir / stem.midi_path
-        _copy_optional(run_dir, export_dir, midi_source, stem.midi_path, "stem_midi", files)
+        try:
+            midi_source = stem_midi_path(run_dir, manifest, stem.stem_id)
+            midi_target = _relative_to_run_dir(run_dir, midi_source)
+        except (FileNotFoundError, ValueError) as exc:
+            files.append(_skipped_stem_record("stem_midi", stem.midi_path, exc))
+            if options.include_stem_audio:
+                files.append(_skipped_stem_record("stem_audio", stem.audio_path, exc))
+            continue
+        _copy_optional(run_dir, export_dir, midi_source, midi_target, "stem_midi", files)
         if options.include_stem_audio:
-            audio_source = run_dir / stem.audio_path
-            _copy_optional(run_dir, export_dir, audio_source, stem.audio_path, "stem_audio", files)
+            try:
+                audio_source = stem_audio_path(run_dir, manifest, stem.stem_id)
+                audio_target = _relative_to_run_dir(run_dir, audio_source)
+            except (FileNotFoundError, ValueError) as exc:
+                files.append(_skipped_stem_record("stem_audio", stem.audio_path, exc))
+                continue
+            _copy_optional(run_dir, export_dir, audio_source, audio_target, "stem_audio", files)
         else:
             files.append({"kind": "stem_audio", "path": stem.audio_path, "exists": False, "required": False, "skipped": "disabled"})
 
@@ -224,6 +241,39 @@ def _load_song_plan(plan_path: Path) -> SongPlan | None:
         return SongPlan.from_dict(read_json(plan_path))
     except (OSError, TypeError, ValueError):
         return None
+
+
+def _relative_to_run_dir(run_dir: Path, source: Path) -> str:
+    try:
+        return source.resolve().relative_to(run_dir.resolve()).as_posix()
+    except ValueError as exc:
+        raise ValueError("Refusing to copy a source outside the job run directory.") from exc
+
+
+def _unsafe_stem_path_records(run_dir: Path, manifest: Any, options: FinalExportOptions) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for stem in manifest.stems:
+        try:
+            stem_midi_path(run_dir, manifest, stem.stem_id)
+        except (FileNotFoundError, ValueError) as exc:
+            records.append(_skipped_stem_record("stem_midi", stem.midi_path, exc))
+        if options.include_stem_audio:
+            try:
+                stem_audio_path(run_dir, manifest, stem.stem_id)
+            except (FileNotFoundError, ValueError) as exc:
+                records.append(_skipped_stem_record("stem_audio", stem.audio_path, exc))
+    return records
+
+
+def _skipped_stem_record(kind: str, path: str, exc: Exception) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "path": path,
+        "exists": False,
+        "required": False,
+        "skipped": "unsafe_path",
+        "error": str(exc),
+    }
 
 
 def _ensure_within(base: Path, target: Path) -> None:

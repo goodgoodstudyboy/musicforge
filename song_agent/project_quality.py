@@ -8,7 +8,7 @@ from typing import Any
 from song_agent.music_quality import analyze_song_quality
 from song_agent.projectio import read_json, write_json
 from song_agent.schemas.song import SongPlan
-from song_agent.stems import read_stem_manifest, stem_manifest_stale
+from song_agent.stems import read_stem_manifest, stem_manifest_stale, stem_midi_path
 
 
 GATE_STATUSES = {"passed", "warning", "failed", "missing_plan", "error"}
@@ -140,8 +140,20 @@ def evaluate_quality_gate(run_dir: Path, config: QualityGateConfig, *, now: str)
 
     if config.require_stems:
         manifest = read_stem_manifest(run_dir)
-        stems_ok = manifest is not None and not stem_manifest_stale(manifest, plan)
-        checks.append(_check("stems", stems_ok, "stem manifest exists and matches song-plan.json."))
+        if manifest is None:
+            checks.append(_check("stems", False, "stem manifest exists and matches song-plan.json."))
+        elif stem_manifest_stale(manifest, plan):
+            checks.append(_check("stems", False, "stem manifest exists and matches song-plan.json."))
+        else:
+            stem_checks = _stem_midi_checks(run_dir, manifest)
+            checks.append(
+                _check(
+                    "stems",
+                    all(check["passed"] for check in stem_checks),
+                    "stem MIDI files exist and stay inside the job stems directory.",
+                    stems=stem_checks,
+                )
+            )
 
     failed_required = any(not check["passed"] for check in checks if check["required"])
     if failed_required:
@@ -170,6 +182,42 @@ def _check(name: str, passed: bool, message: str, *, required: bool = True, **ex
         "message": message,
         **extra,
     }
+
+
+def _stem_midi_checks(run_dir: Path, manifest: Any) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    for stem in manifest.stems:
+        if stem.note_count <= 0:
+            checks.append(
+                {
+                    "stem_id": stem.stem_id,
+                    "passed": True,
+                    "path": stem.midi_path,
+                    "message": "Track has no notes; stem MIDI is not required.",
+                }
+            )
+            continue
+        try:
+            path = stem_midi_path(run_dir, manifest, stem.stem_id)
+            exists = path.exists()
+            checks.append(
+                {
+                    "stem_id": stem.stem_id,
+                    "passed": exists,
+                    "path": stem.midi_path,
+                    "message": "stem MIDI exists." if exists else "stem MIDI is missing.",
+                }
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            checks.append(
+                {
+                    "stem_id": stem.stem_id,
+                    "passed": False,
+                    "path": stem.midi_path,
+                    "message": str(exc),
+                }
+            )
+    return checks
 
 
 def _score(value: Any, field_name: str) -> int:

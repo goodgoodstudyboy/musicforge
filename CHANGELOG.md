@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.1 - 2026-05-06
+
+### Fixed
+- Final Export now rejects polluted stem manifest paths outside `runs/<job-id>/stems/` and skips the stem bundle instead of copying non-stem files.
+- Quality Gate `require_stems=True` now validates that each note-bearing stem MIDI file exists and that manifest paths remain inside the job stems directory.
+
+### Verified
+- `python -m pytest tests\test_final_export.py tests\test_project_quality.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+
 ## v1.0.0 - 2026-05-06
 
 ### Added
