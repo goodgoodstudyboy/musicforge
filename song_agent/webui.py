@@ -279,16 +279,16 @@ def panel_html() -> str:
       color: var(--muted);
       font-size: 13px;
     }
-    .batch-layout {
+    .batch-layout, .project-layout {
       display: grid;
       grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
       gap: 14px;
       align-items: start;
     }
-    .batch-list, .batch-detail {
+    .batch-list, .batch-detail, .project-list, .project-detail {
       overflow: auto;
     }
-    .batch-detail {
+    .batch-detail, .project-detail {
       margin-top: 14px;
     }
     .audio-player {
@@ -304,6 +304,7 @@ def panel_html() -> str:
       .job-list { border-right: 0; max-height: none; }
       .summary-grid { grid-template-columns: 1fr 1fr; }
       .batch-layout { grid-template-columns: 1fr; }
+      .project-layout { grid-template-columns: 1fr; }
       header { height: auto; align-items: flex-start; flex-direction: column; gap: 6px; padding: 12px 16px; }
       header .meta { flex-wrap: wrap; }
     }
@@ -422,10 +423,10 @@ def panel_html() -> str:
           </form>
         </div>
       </section>
-      <section>
-        <div class="panel-title">
-          <span>Song Request</span>
-          <select id="preset"></select>
+    <section>
+      <div class="panel-title">
+        <span>Song Request</span>
+        <select id="preset"></select>
         </div>
         <div class="panel-body">
           <form id="song-form">
@@ -483,6 +484,36 @@ def panel_html() -> str:
           </form>
         </div>
       </section>
+      <section>
+        <div class="panel-title">
+          <span>Projects</span>
+          <div class="actions" style="margin-top:0;">
+            <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+              <input id="include-hidden-projects" type="checkbox" style="width:auto;margin:0;">
+              Hidden
+            </label>
+            <button class="secondary" id="refresh-projects" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <form id="project-form">
+            <label>Project Name
+              <input id="project-name" name="project-name" placeholder="New song project">
+            </label>
+            <label>Description
+              <textarea id="project-description" name="project-description"></textarea>
+            </label>
+            <label>Tags
+              <input id="project-tags" name="project-tags" placeholder="demo, pop">
+            </label>
+            <div class="actions">
+              <button type="submit">New Project</button>
+              <span id="project-message" class="message"></span>
+            </div>
+          </form>
+          <div id="project-list" class="project-list"><div class="empty">No projects yet.</div></div>
+        </div>
+      </section>
     </div>
     <section>
       <div class="panel-title">
@@ -498,6 +529,14 @@ def panel_html() -> str:
       <div class="jobs">
         <div class="job-list" id="job-list"><div class="empty">No jobs yet.</div></div>
         <div class="detail" id="detail"><div class="empty">Select or create a job.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
+        <span>Project Detail</span>
+      </div>
+      <div class="panel-body">
+        <div id="project-detail" class="project-detail"><div class="empty">Select or create a project.</div></div>
       </div>
     </section>
     <section style="grid-column: 1 / -1;">
@@ -568,6 +607,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let batches = [];
     let selectedBatchId = null;
     let includeHiddenBatches = false;
+    let projects = [];
+    let selectedProjectId = null;
+    let includeHiddenProjects = false;
+    let activeProjectTab = "versions";
 
     const $ = (id) => document.getElementById(id);
 
@@ -613,9 +656,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadProvider();
       await loadRenderer();
       await loadJobs();
+      await loadProjects();
       await loadBatches();
       setInterval(() => {
         loadJobs();
+        loadProjects();
         loadBatches();
       }, 2000);
       $("poll").textContent = "polling 2s";
@@ -706,6 +751,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     $("include-hidden").addEventListener("change", async () => {
       includeHidden = $("include-hidden").checked;
       await loadJobs();
+    });
+    $("refresh-projects").addEventListener("click", loadProjects);
+    $("include-hidden-projects").addEventListener("change", async () => {
+      includeHiddenProjects = $("include-hidden-projects").checked;
+      await loadProjects();
+    });
+    $("project-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await api("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectPayload()),
+        });
+        selectedProjectId = data.project.project_id;
+        activeProjectTab = "versions";
+        $("project-message").textContent = "created";
+        await loadProjects();
+      } catch (err) {
+        $("project-message").textContent = err.message;
+      }
     });
     $("refresh-batches").addEventListener("click", loadBatches);
     $("include-hidden-batches").addEventListener("change", async () => {
@@ -870,6 +936,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       };
     }
 
+    function projectPayload() {
+      return {
+        name: $("project-name").value.trim() || $("title").value.trim() || "Untitled Project",
+        description: $("project-description").value.trim(),
+        tags: $("project-tags").value
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      };
+    }
+
     async function loadJobs() {
       try {
         const data = await api(includeHidden ? "/api/jobs?include_hidden=1" : "/api/jobs");
@@ -907,6 +984,265 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
         list.appendChild(item);
       });
+    }
+
+    async function loadProjects() {
+      try {
+        const data = await api(includeHiddenProjects ? "/api/projects?include_hidden=1" : "/api/projects");
+        projects = data.projects;
+        if (selectedProjectId && !projects.some((project) => project.project_id === selectedProjectId)) {
+          selectedProjectId = null;
+          $("project-detail").innerHTML = "<div class='empty'>Select or create a project.</div>";
+        }
+        renderProjects();
+        if (selectedProjectId) await renderProjectDetail(selectedProjectId);
+      } catch (err) {
+        $("project-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderProjects() {
+      const list = $("project-list");
+      if (!projects.length) {
+        list.innerHTML = "<div class='empty'>No projects yet.</div>";
+        return;
+      }
+      const rows = projects.map((project) => `
+        <tr class="${project.project_id === selectedProjectId ? "active" : ""}">
+          <td><button class="secondary project-open" data-project-id="${escapeHtml(project.project_id)}" type="button">Open</button></td>
+          <td>${escapeHtml(project.name)}</td>
+          <td><span class="status ${project.status}">${escapeHtml(project.status)}</span></td>
+          <td>${escapeHtml(project.version_count || 0)}</td>
+          <td>${escapeHtml(project.selected_version_id || "-")}</td>
+          <td>${escapeHtml(project.final_version_id || "-")}</td>
+          <td>${escapeHtml(project.best_quality_score ?? "-")}</td>
+        </tr>
+      `).join("");
+      list.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Name</th><th>Status</th><th>Versions</th><th>Selected</th><th>Final</th><th>Best Quality</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      list.querySelectorAll(".project-open").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedProjectId = button.dataset.projectId;
+          activeProjectTab = "versions";
+          renderProjects();
+          await renderProjectDetail(selectedProjectId);
+        });
+      });
+    }
+
+    async function renderProjectDetail(projectId) {
+      const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
+      const project = data.project;
+      const versions = data.versions || [];
+      const tabs = ["versions", "compare", "export", "events"];
+      const target = $("project-detail");
+      target.innerHTML = `
+        <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
+          <span>${escapeHtml(project.name)}</span>
+          <span class="status ${project.status}">${escapeHtml(project.status)}</span>
+        </div>
+        <div class="summary-grid">
+          ${metric("Versions", project.version_count || 0)}
+          ${metric("Selected", project.selected_version_id || "-")}
+          ${metric("Final", project.final_version_id || "-")}
+          ${metric("Best Quality", project.best_quality_score ?? "-")}
+        </div>
+        <div class="actions">
+          ${projectActionButtons(project)}
+          <span>${escapeHtml(project.project_id)}</span>
+        </div>
+        <div class="grid2">
+          <label>New Version Name
+            <input id="project-version-name" value="Version ${(versions.length || 0) + 1}">
+          </label>
+          <label>Add Existing Job ID
+            <input id="project-existing-job-id" placeholder="job-id">
+          </label>
+        </div>
+        <label>Version Note
+          <input id="project-version-note" placeholder="short note">
+        </label>
+        <div class="actions">
+          <button id="project-new-version" type="button">New Version</button>
+          <button class="secondary" id="project-add-job" type="button">Add Existing Job</button>
+        </div>
+        <div class="tabs">
+          ${tabs.map(tab => `<button type="button" class="${activeProjectTab === tab ? "active" : ""}" data-project-tab="${tab}">${projectTabLabel(tab)}</button>`).join("")}
+        </div>
+        <div id="project-tab-content"></div>
+      `;
+      target.querySelectorAll("[data-project-tab]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          activeProjectTab = button.dataset.projectTab;
+          await renderProjectDetail(project.project_id);
+        });
+      });
+      wireProjectActions(project, versions);
+      await renderProjectTab(project, versions);
+    }
+
+    function projectActionButtons(project) {
+      const buttons = [];
+      buttons.push(`<a class="button-link secondary" href="/api/projects/${encodeURIComponent(project.project_id)}/export">Export</a>`);
+      if (project.hidden) {
+        buttons.push(`<button class="secondary" id="unhide-project" type="button">Unhide</button>`);
+      } else {
+        buttons.push(`<button class="secondary" id="hide-project" type="button">Hide</button>`);
+      }
+      buttons.push(`<button class="danger" id="delete-project" type="button">Delete Project</button>`);
+      return buttons.join("");
+    }
+
+    function wireProjectActions(project, versions) {
+      const id = encodeURIComponent(project.project_id);
+      bindAction("project-new-version", async () => {
+        await api(`/api/projects/${id}/versions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            request: formPayload(),
+            name: $("project-version-name").value.trim(),
+            note: $("project-version-note").value.trim(),
+            generation_mode: $("generation_mode").value,
+            pipeline_mode: $("pipeline_mode").value,
+          }),
+        });
+        await loadJobs();
+        await loadProjects();
+      });
+      bindAction("project-add-job", async () => {
+        await api(`/api/projects/${id}/versions/from-job`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: $("project-existing-job-id").value.trim(),
+            name: $("project-version-name").value.trim(),
+            note: $("project-version-note").value.trim(),
+          }),
+        });
+        await loadProjects();
+      });
+      bindAction("hide-project", async () => {
+        await api(`/api/projects/${id}/hide`, { method: "POST" });
+        await loadProjects();
+      });
+      bindAction("unhide-project", async () => {
+        await api(`/api/projects/${id}/unhide`, { method: "POST" });
+        await loadProjects();
+      });
+      bindAction("delete-project", async () => {
+        if (!confirm("Delete this project metadata? Job runs stay in runs/.")) return;
+        await api(`/api/projects/${id}/delete`, { method: "POST" });
+        selectedProjectId = null;
+        await loadProjects();
+      });
+      $("project-tab-content").addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!target.dataset) return;
+        if (target.dataset.projectJobId) {
+          selectedJobId = target.dataset.projectJobId;
+          activeTab = "summary";
+          await loadJobs();
+          return;
+        }
+        if (target.dataset.projectSelectVersion) {
+          await api(`/api/projects/${id}/selected`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ version_id: target.dataset.projectSelectVersion }),
+          });
+          await loadProjects();
+          return;
+        }
+        if (target.dataset.projectFinalVersion) {
+          await api(`/api/projects/${id}/final`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ version_id: target.dataset.projectFinalVersion }),
+          });
+          await loadProjects();
+        }
+      });
+    }
+
+    async function renderProjectTab(project, versions) {
+      const target = $("project-tab-content");
+      if (activeProjectTab === "versions") {
+        target.innerHTML = projectVersionsTable(project, versions);
+      } else if (activeProjectTab === "compare") {
+        target.innerHTML = projectCompareControls(versions);
+        bindAction("project-compare", async () => {
+          const left = $("project-diff-left").value;
+          const right = $("project-diff-right").value;
+          const diff = await api(`/api/projects/${encodeURIComponent(project.project_id)}/diff?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`);
+          $("project-diff-result").innerHTML = `<pre>${escapeHtml(JSON.stringify(diff, null, 2))}</pre>`;
+        });
+      } else if (activeProjectTab === "export") {
+        try {
+          const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/export`);
+          target.innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+        } catch (err) {
+          target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+        }
+      } else if (activeProjectTab === "events") {
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/events`);
+        target.innerHTML = `<pre>${escapeHtml(JSON.stringify(data.events, null, 2))}</pre>`;
+      }
+    }
+
+    function projectVersionsTable(project, versions) {
+      const rows = versions.map((version) => `
+        <tr>
+          <td>${escapeHtml(version.version_id)}${project.selected_version_id === version.version_id ? " selected" : ""}${project.final_version_id === version.version_id ? " final" : ""}</td>
+          <td>${escapeHtml(version.name || "-")}</td>
+          <td><button class="secondary" data-project-job-id="${escapeHtml(version.job_id)}" type="button">${escapeHtml(version.job_id)}</button></td>
+          <td><span class="status ${version.status}">${escapeHtml(version.status)}</span></td>
+          <td>${escapeHtml(version.quality_score ?? "-")}</td>
+          <td>${escapeHtml(version.request.tempo_bpm || "-")}</td>
+          <td>${escapeHtml(version.request.key || "-")}</td>
+          <td>${version.has_midi ? "yes" : "-"}</td>
+          <td>${version.has_audio ? "yes" : "-"}</td>
+          <td>${version.has_stems ? "yes" : "-"}</td>
+          <td>${version.has_stem_audio ? "yes" : "-"}</td>
+          <td>${escapeHtml(version.note || "-")}</td>
+          <td>
+            <div class="actions">
+              <button class="secondary" data-project-select-version="${escapeHtml(version.version_id)}" type="button">Set Selected</button>
+              <button class="secondary" data-project-final-version="${escapeHtml(version.version_id)}" type="button">Set Final</button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+      return `
+        <table>
+          <thead><tr><th>Version</th><th>Name</th><th>Job</th><th>Status</th><th>Quality</th><th>Tempo</th><th>Key</th><th>MIDI</th><th>WAV</th><th>Stems</th><th>Stem WAV</th><th>Note</th><th>Actions</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='13'>No versions yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function projectCompareControls(versions) {
+      const options = versions.map((version) => `<option value="${escapeHtml(version.version_id)}">${escapeHtml(version.version_id)} · ${escapeHtml(version.name || version.job_id)}</option>`).join("");
+      return `
+        <div class="grid2">
+          <label>Left
+            <select id="project-diff-left">${options}</select>
+          </label>
+          <label>Right
+            <select id="project-diff-right">${options}</select>
+          </label>
+        </div>
+        <div class="actions"><button id="project-compare" type="button">Compare</button></div>
+        <div id="project-diff-result"><div class="empty">Choose two versions to compare.</div></div>
+      `;
+    }
+
+    function projectTabLabel(tab) {
+      return { versions: "Versions", compare: "Compare", export: "Export JSON", events: "Events" }[tab] || tab;
     }
 
     async function loadBatches() {

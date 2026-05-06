@@ -189,6 +189,45 @@ def test_webui_contains_batch_tab_controls():
     assert "Export" in html
 
 
+def test_webui_contains_project_workspace_controls():
+    html = panel_html()
+
+    assert "Projects" in html
+    assert "Project Detail" in html
+    assert 'id="project-form"' in html
+    assert 'id="project-name"' in html
+    assert 'id="project-description"' in html
+    assert 'id="project-tags"' in html
+    assert 'id="project-list"' in html
+    assert 'id="project-detail"' in html
+    assert "New Project" in html
+    assert "New Version" in html
+    assert "Add Existing Job" in html
+    assert "Set Selected" in html
+    assert "Set Final" in html
+    assert "Compare" in html
+    assert "Export JSON" in html
+    assert "Delete Project" in html
+
+
+def test_webui_calls_project_apis():
+    html = panel_html()
+
+    assert "/api/projects" in html
+    assert "/api/projects?include_hidden=1" in html
+    assert "/api/projects/${encodeURIComponent(projectId)}" in html
+    assert "/api/projects/${id}/versions" in html
+    assert "/api/projects/${id}/versions/from-job" in html
+    assert "/api/projects/${id}/selected" in html
+    assert "/api/projects/${id}/final" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/diff" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/export" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/events" in html
+    assert "/api/projects/${id}/hide" in html
+    assert "/api/projects/${id}/unhide" in html
+    assert "/api/projects/${id}/delete" in html
+
+
 def test_webui_calls_batch_apis():
     html = panel_html()
 
