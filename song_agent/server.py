@@ -24,6 +24,7 @@ from song_agent.cli import generate_request
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
+from song_agent.projects import ProjectStore
 from song_agent.provider import (
     ProviderError,
     load_provider_config,
@@ -1562,6 +1563,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.batch_runner  # type: ignore[attr-defined]
 
     @property
+    def project_store(self) -> ProjectStore:
+        return self.server.project_store  # type: ignore[attr-defined]
+
+    @property
     def auth_config(self) -> AuthConfig:
         return self.server.auth_config  # type: ignore[attr-defined]
 
@@ -1654,6 +1659,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     max_concurrency=payload.get("max_concurrency", 1),
                 )
                 self._send_json(document.to_dict(), status=HTTPStatus.CREATED)
+                return
+
+            if path == "/api/projects":
+                self._handle_projects_root(method, parsed.query)
+                return
+
+            project_route = _match_project_route(path)
+            if project_route is not None:
+                project_id, tail = project_route
+                self._handle_project_route(method, project_id, tail, parsed.query)
                 return
 
             batch_route = _match_batch_route(path)
@@ -1751,6 +1766,211 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         config, _sources = load_renderer_config()
         self._send_json(test_renderer_config(config))
+
+    def _handle_projects_root(self, method: str, query_string: str) -> None:
+        if method == "GET":
+            query = parse_qs(query_string)
+            include_hidden = query.get("include_hidden", ["0"])[0] in {"1", "true", "yes"}
+            self._send_json(
+                {
+                    "projects": [
+                        self.project_store.sync_project(document.state.project_id, self.store.get_job).state.to_dict()
+                        for document in self.project_store.list_projects(include_hidden=include_hidden)
+                    ]
+                }
+            )
+            return
+        if method == "POST":
+            payload = self._read_json_body()
+            document = self.project_store.create_project(
+                name=str(payload.get("name") or payload.get("title") or "Untitled Project"),
+                description=str(payload.get("description") or ""),
+                tags=_string_list(payload.get("tags")),
+            )
+            job = None
+            if isinstance(payload.get("request"), dict):
+                request_payload = {
+                    **payload["request"],
+                    "generation_mode": payload.get("generation_mode", payload["request"].get("generation_mode", "local")),
+                    "pipeline_mode": payload.get("pipeline_mode", payload["request"].get("pipeline_mode", "single")),
+                }
+                job = self.store.create_job(request_payload)
+                document = self.project_store.add_version_from_job(
+                    document.state.project_id,
+                    job,
+                    name=str(payload.get("version_name") or "Version 1"),
+                    note=str(payload.get("version_note") or ""),
+                )
+            self._send_json(
+                {
+                    **document.to_dict(),
+                    "job": job.to_dict() if job is not None else None,
+                },
+                status=HTTPStatus.CREATED,
+            )
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_project_route(self, method: str, project_id: str, tail: str, query_string: str) -> None:
+        if tail == "":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                document = self.project_store.sync_project(project_id, self.store.get_job)
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+                return
+            self._send_json(document.to_dict())
+            return
+
+        if tail == "/versions":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._read_json_body()
+            request_data = payload.get("request")
+            if not isinstance(request_data, dict):
+                self._send_error(HTTPStatus.BAD_REQUEST, "request must be an object.")
+                return
+            try:
+                self.project_store.get_project(project_id)
+                request_payload = {
+                    **request_data,
+                    "generation_mode": payload.get("generation_mode", request_data.get("generation_mode", "local")),
+                    "pipeline_mode": payload.get("pipeline_mode", request_data.get("pipeline_mode", "single")),
+                }
+                job = self.store.create_job(request_payload)
+                document = self.project_store.add_version_from_job(
+                    project_id,
+                    job,
+                    name=str(payload.get("name") or ""),
+                    note=str(payload.get("note") or ""),
+                )
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+                return
+            except ValueError as exc:
+                self._send_error(HTTPStatus.CONFLICT, str(exc))
+                return
+            version = next(version for version in document.versions if version.job_id == job.job_id)
+            self._send_json(
+                {"ok": True, **document.to_dict(), "version": version.to_dict(), "job": job.to_dict()},
+                status=HTTPStatus.ACCEPTED,
+            )
+            return
+
+        if tail == "/versions/from-job":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._read_json_body()
+            job_id = str(payload.get("job_id") or "")
+            job = self.store.get_job(job_id)
+            if job is None:
+                self._send_error(HTTPStatus.NOT_FOUND, "Job not found.")
+                return
+            try:
+                document = self.project_store.add_version_from_job(
+                    project_id,
+                    job,
+                    name=str(payload.get("name") or ""),
+                    note=str(payload.get("note") or ""),
+                )
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+                return
+            except ValueError as exc:
+                self._send_error(HTTPStatus.CONFLICT, str(exc))
+                return
+            version = next(version for version in document.versions if version.job_id == job.job_id)
+            self._send_json({"ok": True, **document.to_dict(), "version": version.to_dict()})
+            return
+
+        if tail in {"/selected", "/final"}:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._read_json_body()
+            version_id = str(payload.get("version_id") or "")
+            try:
+                self.project_store.sync_project(project_id, self.store.get_job)
+                if tail == "/selected":
+                    document = self.project_store.set_selected_version(project_id, version_id)
+                else:
+                    document = self.project_store.set_final_version(project_id, version_id)
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+                return
+            except ValueError as exc:
+                self._send_error(HTTPStatus.CONFLICT, str(exc))
+                return
+            self._send_json({"ok": True, **document.to_dict()})
+            return
+
+        if tail == "/diff":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            query = parse_qs(query_string)
+            left = str(query.get("left", [""])[0])
+            right = str(query.get("right", [""])[0])
+            try:
+                self.project_store.sync_project(project_id, self.store.get_job)
+                self._send_json(self.project_store.diff_versions(project_id, left, right))
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+
+        if tail == "/export":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                self.project_store.sync_project(project_id, self.store.get_job)
+                self._send_json(self.project_store.export_project(project_id))
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+
+        if tail == "/events":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                self.project_store.get_project(project_id)
+                self._send_json({"events": self.project_store.read_events(project_id)})
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+
+        if tail in {"/hide", "/unhide"}:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                document = self.project_store.hide_project(project_id, tail == "/hide")
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+                return
+            self._send_json({"ok": True, **document.to_dict()})
+            return
+
+        if tail == "/delete":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                self.project_store.delete_project(project_id)
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+                return
+            self._send_json({"ok": True, "deleted": True, "project_id": project_id})
+            return
+
+        self._send_error(HTTPStatus.NOT_FOUND, "Project route not found.")
 
     def _handle_batch_route(self, method: str, batch_id: str, tail: str) -> None:
         if tail == "":
@@ -2289,6 +2509,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.auth_config = auth_config or AuthConfig(enabled=False)
         self.job_store = JobStore()
         self.batch_store = BatchStore()
+        self.project_store = ProjectStore()
         self.batch_runner = BatchRunner(self.batch_store, self.job_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
@@ -2567,6 +2788,19 @@ def _match_batch_route(path: str) -> tuple[str, str] | None:
     return unquote(rest), ""
 
 
+def _match_project_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/projects/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest:
+        return None
+    if "/" in rest:
+        project_id, tail = rest.split("/", 1)
+        return unquote(project_id), "/" + tail
+    return unquote(rest), ""
+
+
 def _artifact_kind(path: Path) -> str:
     if path.suffix == ".json":
         return "json"
@@ -2591,6 +2825,14 @@ def _artifact_dict(path: Path) -> dict[str, Any]:
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("tags must be a list.")
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
 def _generation_mode(payload: dict[str, Any]) -> str:

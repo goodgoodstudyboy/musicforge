@@ -143,6 +143,16 @@ def test_auth_protects_job_create_provider_renderer_and_batch(tmp_path, monkeypa
             ("POST", "/api/batches/import-csv", {"name": "x", "csv_text": ""}),
             ("POST", "/api/batches/demo/render-stems", None),
             ("POST", "/api/batches/demo/render-stem-audio", None),
+            ("GET", "/api/projects", None),
+            ("POST", "/api/projects", {"name": "Auth Project"}),
+            ("GET", "/api/projects/auth-project", None),
+            ("POST", "/api/projects/auth-project/versions", {"request": {}}),
+            ("POST", "/api/projects/auth-project/versions/from-job", {"job_id": "missing"}),
+            ("POST", "/api/projects/auth-project/selected", {"version_id": "v001"}),
+            ("POST", "/api/projects/auth-project/final", {"version_id": "v001"}),
+            ("GET", "/api/projects/auth-project/diff?left=v001&right=v002", None),
+            ("GET", "/api/projects/auth-project/export", None),
+            ("POST", "/api/projects/auth-project/delete", None),
         ]
         statuses = [request_json(server, method, path, payload=payload)[0] for method, path, payload in protected]
     finally:
