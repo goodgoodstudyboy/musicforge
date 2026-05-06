@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.2 - 2026-05-06
+
+### Fixed
+- Quality Gate `require_stems=True` now rejects stem manifests that do not cover all note-bearing SongPlan tracks, including empty manifests with matching source hashes.
+
+### Verified
+- `python -m pytest tests\test_project_quality.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+
 ## v1.0.1 - 2026-05-06
 
 ### Fixed

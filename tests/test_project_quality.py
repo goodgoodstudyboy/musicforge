@@ -153,6 +153,34 @@ def test_quality_gate_require_stems_rejects_manifest_paths_outside_stems_dir(tmp
     assert any("outside the job stems directory" in stem["message"] for stem in stems_check["stems"])
 
 
+def test_quality_gate_require_stems_rejects_empty_manifest_for_note_tracks(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    write_plan(run_dir, score=90)
+    plan = deterministic_compose(request())
+    quality = SongQualityMeta(
+        summary="test quality",
+        scores=QualityScores(overall=90, structure=90, melody=90, harmony=90, arrangement=90, lyric_fit=90),
+    )
+    plan = replace(plan, quality=quality)
+    write_json(run_dir / "data" / "song-plan.json", plan.to_dict())
+    render_stem_midis(plan, run_dir, "job-1", now="2026-05-06T00:00:00Z")
+    manifest = read_stem_manifest(run_dir)
+    assert manifest is not None
+    data = manifest.to_dict()
+    data["stems"] = []
+    write_json(run_dir / "stems" / "manifest.json", data)
+
+    result = evaluate_quality_gate(run_dir, QualityGateConfig(require_stems=True), now="2026-05-06T00:00:00Z")
+
+    assert result.status == "failed"
+    stems_check = next(check for check in result.checks if check["name"] == "stems")
+    assert stems_check["passed"] is False
+    coverage = next(stem for stem in stems_check["stems"] if stem["stem_id"] == "__manifest_coverage__")
+    assert coverage["passed"] is False
+    assert coverage["manifest_note_stems"] == []
+    assert len(coverage["expected_note_tracks"]) > 0
+
+
 def test_quality_gate_config_round_trips(tmp_path: Path) -> None:
     config = save_quality_gate_config(tmp_path, QualityGateConfig(min_overall=80, require_audio=True))
     loaded = load_quality_gate_config(tmp_path)

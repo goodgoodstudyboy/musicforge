@@ -145,7 +145,7 @@ def evaluate_quality_gate(run_dir: Path, config: QualityGateConfig, *, now: str)
         elif stem_manifest_stale(manifest, plan):
             checks.append(_check("stems", False, "stem manifest exists and matches song-plan.json."))
         else:
-            stem_checks = _stem_midi_checks(run_dir, manifest)
+            stem_checks = _stem_midi_checks(run_dir, manifest, plan)
             checks.append(
                 _check(
                     "stems",
@@ -184,8 +184,31 @@ def _check(name: str, passed: bool, message: str, *, required: bool = True, **ex
     }
 
 
-def _stem_midi_checks(run_dir: Path, manifest: Any) -> list[dict[str, Any]]:
-    checks: list[dict[str, Any]] = []
+def _stem_midi_checks(run_dir: Path, manifest: Any, plan: SongPlan) -> list[dict[str, Any]]:
+    expected_note_tracks = [
+        {"track_name": track.name, "note_count": len(track.notes)}
+        for track in plan.tracks
+        if track.notes
+    ]
+    manifest_note_stems = [
+        {"track_name": stem.track_name, "note_count": stem.note_count}
+        for stem in manifest.stems
+        if stem.note_count > 0
+    ]
+    coverage_passed = sorted(expected_note_tracks, key=_stem_track_key) == sorted(manifest_note_stems, key=_stem_track_key)
+    checks: list[dict[str, Any]] = [
+        {
+            "stem_id": "__manifest_coverage__",
+            "passed": coverage_passed,
+            "path": "stems/manifest.json",
+            "message": (
+                f"stem manifest has {len(manifest_note_stems)} note-bearing stems "
+                f"for {len(expected_note_tracks)} note-bearing SongPlan tracks."
+            ),
+            "expected_note_tracks": expected_note_tracks,
+            "manifest_note_stems": manifest_note_stems,
+        }
+    ]
     for stem in manifest.stems:
         if stem.note_count <= 0:
             checks.append(
@@ -218,6 +241,10 @@ def _stem_midi_checks(run_dir: Path, manifest: Any) -> list[dict[str, Any]]:
                 }
             )
     return checks
+
+
+def _stem_track_key(item: dict[str, Any]) -> tuple[str, int]:
+    return (str(item["track_name"]), int(item["note_count"]))
 
 
 def _score(value: Any, field_name: str) -> int:
