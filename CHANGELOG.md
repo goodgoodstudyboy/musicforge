@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.0 - 2026-05-06
+
+### Added
+- Project version lineage with `parent_version_id`, `variant_type`, and `change_summary`.
+- Project variation API for creating child versions from any existing version with a controlled request patch.
+- Project Quality Gate configuration, per-version evaluation, evaluate-all, and final-version blocking with force override events.
+- Final Export Bundle under `.musicforge/projects/<project-id>/final-export/` with manifest, README, Project export, SongPlan, MIDI, optional WAV, quality report, and non-stale stems.
+- Studio Project controls for Variation, Quality Gate, Final Export, lineage columns, gate status, and per-version actions.
+- Release-check final export smoke coverage.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+- `python -m song_agent.cli doctor`
+- Local single and multinode CLI smoke.
+- Studio v1 page smoke; only `favicon.ico` 404 was observed.
+
 ## v0.9.1 - 2026-05-06
 
 ### Fixed

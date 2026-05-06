@@ -3,10 +3,17 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from song_agent import __version__
+from song_agent.agent.pipeline import deterministic_compose
+from song_agent.final_export import FinalExportOptions, build_final_export_bundle
+from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
+from song_agent.projectio import write_json
+from song_agent.renderers.midi import render_midi
+from song_agent.schemas.song import SongRequest
 
 
 SECRET_PATTERNS = [
@@ -92,6 +99,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     )
     report.add("version consistency", *_version_consistency(root))
     report.add("secret scan", *_secret_scan(root))
+    report.add("final export smoke", *_final_export_smoke(root))
     return report
 
 
@@ -174,6 +182,64 @@ def _secret_scan(root: Path) -> tuple[bool, str]:
     if matches:
         return False, "\n".join(matches[:20])
     return True, "no disallowed secret patterns found"
+
+
+def _final_export_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-release-") as temp_dir:
+            base = Path(temp_dir)
+            run_dir = base / "runs" / "release-smoke"
+            project_dir = base / ".musicforge" / "projects" / "release-smoke"
+            request = SongRequest(
+                title="Release Smoke",
+                language="en",
+                style="synth pop",
+                theme="release check",
+                tempo_bpm=96,
+            )
+            plan = deterministic_compose(request)
+            plan_path = run_dir / "data" / "song-plan.json"
+            midi_path = run_dir / "renders" / "song.mid"
+            write_json(plan_path, plan.to_dict())
+            write_json(run_dir / "data" / "run-summary.json", {"title": plan.title})
+            write_json(run_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(plan, midi_path)
+            gate = evaluate_quality_gate(run_dir, QualityGateConfig(), now="2026-05-06T00:00:00+00:00")
+            manifest = build_final_export_bundle(
+                project=_SmokeProject(),
+                version=_SmokeVersion(run_dir),
+                project_dir=project_dir,
+                run_dir=run_dir,
+                gate=gate,
+                options=FinalExportOptions(),
+                now="2026-05-06T00:00:00+00:00",
+                project_export={"project": {"project_id": "release-smoke"}},
+            )
+            required = [
+                project_dir / "final-export" / "manifest.json",
+                project_dir / "final-export" / "song-plan.json",
+                project_dir / "final-export" / "song.mid",
+                project_dir / "final-export" / "quality-report.json",
+            ]
+            ok = gate.status in {"passed", "warning"} and all(path.exists() for path in required)
+            return ok, f"version={manifest.get('version_id')}, gate={gate.status}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+class _SmokeProject:
+    project_id = "release-smoke"
+    name = "Release Smoke"
+
+
+class _SmokeVersion:
+    version_id = "v001"
+    name = "Release Smoke"
+    job_id = "release-smoke"
+    note = ""
+
+    def __init__(self, run_dir: Path) -> None:
+        self.output_dir = str(run_dir)
 
 
 def _skip_file(path: Path) -> bool:

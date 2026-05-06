@@ -177,7 +177,12 @@ POST /api/batches/<batch-id>/open-folder
 ## Project Workspace
 
 v0.9.0 adds Project workspace metadata for organizing multiple generated jobs
-as versions of the same song. Project metadata lives under
+as versions of the same song. v1.0.0 extends this into a controlled creation
+and delivery workflow: versions can branch from selected/final/any parent
+version, quality gates can block low-scoring final candidates, and final export
+bundles collect the approved artifacts for handoff.
+
+Project metadata lives under
 `.musicforge/projects/<project-id>/` and does not copy or delete run artifacts:
 
 ```text
@@ -185,6 +190,8 @@ as versions of the same song. Project metadata lives under
 .musicforge/projects/<project-id>/versions.json
 .musicforge/projects/<project-id>/events.jsonl
 .musicforge/projects/<project-id>/export.json
+.musicforge/projects/<project-id>/quality-gate.json
+.musicforge/projects/<project-id>/final-export/
 ```
 
 A Project can hold several versions, each referencing one existing job/run.
@@ -192,6 +199,46 @@ Studio can create a Project, create a new version job from the current song
 form, attach an existing job, mark selected/final versions, compare two
 versions, and export a Project manifest. Deleting a Project removes only Project
 metadata; job runs still use the normal Job delete flow.
+
+Project versions now record lineage and release metadata:
+
+- `parent_version_id`
+- `variant_type`
+- `change_summary`
+- `quality_gate_status`
+- `quality_gate_score`
+- `final_export_path`
+
+Variation creation reuses the parent version request and applies an explicit
+patch for allowed request fields such as style, theme, tempo, key, duration, and
+lyrics. The new child job can run in local or provider mode and single or
+multinode pipeline mode.
+
+Quality Gate is stored per Project. Defaults require the generated `SongPlan`
+to meet baseline quality scores, but do not require WAV or stems because local
+audio rendering depends on user renderer setup. Setting final evaluates the gate
+and rejects failed versions unless `force=true` is used; force overrides are
+recorded in Project events.
+
+Final Export writes a directory bundle under the Project:
+
+```text
+.musicforge/projects/<project-id>/final-export/
+  manifest.json
+  README.txt
+  project-export.json
+  song-plan.json
+  run-summary.json
+  validator-report.json
+  quality-report.json
+  song.mid
+  song.wav
+  stems/
+```
+
+The bundle copies only files from the selected version's run directory. Stale
+stem manifests are detected by source hash and skipped instead of copying old
+track material.
 
 Project APIs:
 
@@ -201,8 +248,15 @@ POST /api/projects
 GET  /api/projects/<project-id>
 POST /api/projects/<project-id>/versions
 POST /api/projects/<project-id>/versions/from-job
+POST /api/projects/<project-id>/versions/<version-id>/variation
+POST /api/projects/<project-id>/versions/<version-id>/evaluate
 POST /api/projects/<project-id>/selected
 POST /api/projects/<project-id>/final
+GET  /api/projects/<project-id>/quality-gate
+POST /api/projects/<project-id>/quality-gate
+POST /api/projects/<project-id>/quality-gate/evaluate-all
+GET  /api/projects/<project-id>/final-export
+POST /api/projects/<project-id>/final-export
 GET  /api/projects/<project-id>/diff?left=v001&right=v002
 GET  /api/projects/<project-id>/export
 GET  /api/projects/<project-id>/events

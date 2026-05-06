@@ -2,6 +2,7 @@ from pathlib import Path
 
 from song_agent.release_checks import (
     ReleaseCheckReport,
+    _final_export_smoke,
     _redact_line,
     _remote_has_token,
     _status_is_clean,
@@ -39,6 +40,13 @@ def test_version_consistency_checks_pyproject_and_changelog(tmp_path: Path, monk
 
     assert ok is True
     assert "package=0.5.0" in detail
+
+
+def test_final_export_smoke_builds_bundle(tmp_path: Path) -> None:
+    ok, detail = _final_export_smoke(tmp_path)
+
+    assert ok is True
+    assert "version=v001" in detail
 
 
 def test_print_release_check_report(capsys) -> None:
