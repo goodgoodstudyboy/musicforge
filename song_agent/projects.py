@@ -22,6 +22,11 @@ VARIANT_TYPES = {
     "arrangement_variation",
     "quality_repair",
     "manual",
+    "section_edit",
+    "track_edit",
+    "lyrics_edit",
+    "melody_edit",
+    "arrangement_edit",
 }
 QUALITY_GATE_STATUSES = {
     "not_evaluated",
@@ -514,6 +519,9 @@ class ProjectStore:
                 "request": _diff_dict(left.request, right.request),
                 "summary": _diff_dict(left.summary, right.summary),
                 "lineage": _diff_dict(_lineage_info(left), _lineage_info(right)),
+                "edit": _diff_optional(_edit_info(left), _edit_info(right)),
+                "sections": _diff_dict(_section_info(left), _section_info(right)),
+                "tracks": _diff_dict(_track_info(left), _track_info(right)),
                 "quality": _diff_dict({"overall": left.quality_score}, {"overall": right.quality_score}),
                 "artifacts": _diff_dict(_artifact_flags(left), _artifact_flags(right)),
             },
@@ -678,6 +686,68 @@ def _artifact_flags(version: ProjectVersion) -> dict[str, bool]:
     }
 
 
+def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
+    path = Path(version.output_dir) / "data" / "edit-metadata.json"
+    if not path.exists():
+        return None
+    try:
+        metadata = read_json(path)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return {
+        "edit_type": metadata.get("edit_type"),
+        "target": metadata.get("target") or {},
+        "instruction": metadata.get("instruction") or "",
+        "preserve": metadata.get("preserve") or [],
+        "strength": metadata.get("strength"),
+        "summary": metadata.get("summary") or {},
+        "warnings": metadata.get("warnings") or [],
+    }
+
+
+def _section_info(version: ProjectVersion) -> dict[str, dict[str, Any]]:
+    plan = _version_song_plan(version)
+    if plan is None:
+        return {}
+    return {
+        section.name: {
+            "chords": list(section.chords),
+            "lyrics": section.lyrics,
+        }
+        for section in plan.sections
+    }
+
+
+def _track_info(version: ProjectVersion) -> dict[str, dict[str, Any]]:
+    plan = _version_song_plan(version)
+    if plan is None:
+        return {}
+    return {
+        track.name: {
+            "instrument": track.instrument,
+            "note_count": len(track.notes),
+            "average_velocity": _average_velocity(track),
+        }
+        for track in plan.tracks
+    }
+
+
+def _version_song_plan(version: ProjectVersion) -> SongPlan | None:
+    path = Path(version.output_dir) / "data" / "song-plan.json"
+    if not path.exists():
+        return None
+    try:
+        return SongPlan.from_dict(read_json(path))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _average_velocity(track: Any) -> float:
+    if not track.notes:
+        return 0.0
+    return round(sum(note.velocity for note in track.notes) / len(track.notes), 2)
+
+
 def _diff_dict(left: dict[str, Any], right: dict[str, Any]) -> dict[str, dict[str, Any]]:
     keys = sorted(set(left) | set(right))
     return {
@@ -685,6 +755,12 @@ def _diff_dict(left: dict[str, Any], right: dict[str, Any]) -> dict[str, dict[st
         for key in keys
         if left.get(key) != right.get(key)
     }
+
+
+def _diff_optional(left: Any, right: Any) -> dict[str, Any]:
+    if left == right:
+        return {}
+    return {"left": left, "right": right}
 
 
 def _validate_project_id(project_id: str) -> str:

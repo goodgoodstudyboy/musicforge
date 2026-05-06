@@ -21,6 +21,15 @@ from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.auth import AuthConfig, validate_bearer_header
 from song_agent.batching import BatchDocument, BatchStore, now_iso
 from song_agent.cli import generate_request
+from song_agent.edits import (
+    EditIntent,
+    apply_edit_intent,
+    build_edit_metadata,
+    build_edit_targets,
+    edit_change_summary,
+    edit_variant_type,
+    validate_edit_intent,
+)
 from song_agent.final_export import (
     FinalExportError,
     FinalExportOptions,
@@ -118,6 +127,8 @@ class JobState:
     stall_timeout_seconds: int = 300
     generation_mode: str = "local"
     pipeline_mode: str = "single"
+    job_type: str = "song"
+    edit_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -164,6 +175,8 @@ class JobState:
             stall_timeout_seconds=int(data.get("stall_timeout_seconds", 300) or 300),
             generation_mode=str(data.get("generation_mode", "local") or "local"),
             pipeline_mode=str(data.get("pipeline_mode", "single") or "single"),
+            job_type=str(data.get("job_type", "song") or "song"),
+            edit_metadata=_dict_or_empty(data.get("edit_metadata")),
         )
 
 
@@ -245,6 +258,62 @@ class JobStore:
             self.start_job(job_id)
         return job
 
+    def create_edit_job(
+        self,
+        *,
+        project_id: str,
+        parent_version_id: str,
+        parent_job: JobState,
+        parent_plan: SongPlan,
+        intent: EditIntent,
+        name: str = "",
+        start_immediately: bool = True,
+    ) -> JobState:
+        validate_edit_intent(parent_plan, intent)
+        if intent.provider_mode == "provider":
+            raise NotImplementedError("Provider-backed edit is not implemented in v1.1.0.")
+        with self.lock:
+            title = _clean_title(name) or f"{parent_plan.title} {intent.edit_type}"
+            run_dir = self._reserve_run_dir(title)
+            job_id = run_dir.name
+            now = _utc_now()
+            metadata = build_edit_metadata(
+                project_id=project_id,
+                parent_version_id=parent_version_id,
+                parent_job_id=parent_job.job_id,
+                intent=intent,
+                created_at=now,
+            )
+            job = JobState(
+                job_id=job_id,
+                title=title,
+                output_dir=str(run_dir),
+                status="queued",
+                created_at=now,
+                updated_at=now,
+                step="queued",
+                message="Queued for local deterministic edit.",
+                input_payload={
+                    **parent_job.input_payload,
+                    "edit_type": intent.edit_type,
+                    "parent_job_id": parent_job.job_id,
+                    "parent_version_id": parent_version_id,
+                    "project_id": project_id,
+                },
+                provider_snapshot={"mode": "local", "summary": "Local deterministic edit engine"},
+                heartbeat_at=now,
+                generation_mode=intent.provider_mode,
+                pipeline_mode=parent_job.pipeline_mode,
+                job_type="edit",
+                edit_metadata=metadata,
+            )
+            self.jobs[job_id] = job
+            self._write_job(job)
+            write_json(ProjectPaths.create(run_dir).data / "edit-metadata.json", metadata)
+        if start_immediately:
+            self.start_job(job_id)
+        return job
+
     def start_job(self, job_id: str) -> bool:
         job = self.get_job(job_id)
         if job is None or job.status != "queued":
@@ -258,9 +327,9 @@ class JobStore:
             )
             return False
         thread = threading.Thread(
-            target=self._run_job,
+            target=self._run_edit_job if job.job_type == "edit" else self._run_job,
             args=(job_id,),
-            name=f"musicforge-job-{job_id}",
+            name=f"musicforge-{job.job_type}-job-{job_id}",
             daemon=True,
         )
         thread.start()
@@ -675,6 +744,105 @@ class JobStore:
                 status="failed",
                 step="failed",
                 message="Song generation failed.",
+                error=str(exc),
+                last_error=str(exc),
+                finished_at=_utc_now(),
+            )
+
+    def _run_edit_job(self, job_id: str) -> None:
+        job = self.get_job(job_id)
+        if job is None:
+            return
+        run_dir = Path(job.output_dir)
+        paths = ProjectPaths.create(run_dir)
+        if job.cancel_requested:
+            self._update_job(
+                job,
+                status="cancelled",
+                step="cancelled",
+                message="Edit job was cancelled before generation started.",
+            )
+            return
+        self._update_job(
+            job,
+            status="running",
+            step="edit",
+            message="Applying local edit intent.",
+            attempt_count=job.attempt_count + 1,
+            started_at=job.started_at or _utc_now(),
+            heartbeat_at=_utc_now(),
+            stalled=False,
+        )
+        try:
+            metadata = dict(job.edit_metadata)
+            intent = EditIntent.from_dict(metadata)
+            parent_job_id = str(metadata.get("parent_job_id") or "")
+            parent_job = self.get_job(parent_job_id)
+            if parent_job is None:
+                raise FileNotFoundError("Parent version job is missing.")
+            parent_plan_path = Path(parent_job.output_dir) / "data" / "song-plan.json"
+            if not parent_plan_path.exists():
+                raise FileNotFoundError("Parent song-plan.json is missing.")
+            parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
+            append_event(paths, {"event": "edit_started", "edit_type": intent.edit_type, "target": intent.target.to_dict()})
+            self._heartbeat(job)
+            result = apply_edit_intent(parent_plan, intent)
+            if job.cancel_requested:
+                raise JobCancelled()
+            plan_path = paths.data / "song-plan.json"
+            midi_path = paths.renders / "song.mid"
+            validator_report_path = paths.data / "validator-report.json"
+            request_path = paths.data / "request.json"
+            write_json(request_path, job.input_payload)
+            edit_metadata = build_edit_metadata(
+                project_id=str(metadata.get("project_id") or ""),
+                parent_version_id=str(metadata.get("parent_version_id") or ""),
+                parent_job_id=parent_job.job_id,
+                intent=intent,
+                created_at=str(metadata.get("created_at") or job.created_at),
+                summary=result.summary,
+                warnings=result.warnings,
+            )
+            write_json(paths.data / "edit-metadata.json", edit_metadata)
+            write_json(plan_path, result.plan.to_dict())
+            render_midi(result.plan, midi_path)
+            clear_stem_artifacts(run_dir)
+            write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
+            summary = _build_summary(plan_path, midi_path)
+            summary["edit"] = result.summary
+            write_json(paths.data / "run-summary.json", summary)
+            artifacts = _job_artifacts(run_dir, plan_path, midi_path, validator_report_path)
+            artifacts["edit_metadata"] = str(paths.data / "edit-metadata.json")
+            self._update_job(
+                job,
+                status="completed",
+                step="completed",
+                message="Edit job completed.",
+                summary=summary,
+                error=None,
+                last_error=None,
+                finished_at=_utc_now(),
+                artifacts=artifacts,
+                edit_metadata=edit_metadata,
+            )
+            append_event(paths, {"event": "edit_completed", "summary": result.summary})
+        except JobCancelled:
+            latest = self.get_job(job_id)
+            if latest is not None:
+                self._update_job(
+                    latest,
+                    status="cancelled",
+                    step="cancelled",
+                    message="Edit job was cancelled at a stage boundary.",
+                    finished_at=_utc_now(),
+                )
+        except Exception as exc:
+            latest = self.get_job(job_id) or job
+            self._update_job(
+                latest,
+                status="failed",
+                step="failed",
+                message="Edit job failed.",
                 error=str(exc),
                 last_error=str(exc),
                 finished_at=_utc_now(),
@@ -1870,6 +2038,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_variation(method, project_id, parent_version_id)
             return
 
+        edit_match = _match_project_edit_tail(tail)
+        if edit_match is not None:
+            version_id, edit_tail = edit_match
+            if edit_tail == "edit":
+                self._handle_project_edit(method, project_id, version_id)
+            else:
+                self._handle_project_edit_targets(method, project_id, version_id)
+            return
+
         if tail == "":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2292,6 +2469,122 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             status=HTTPStatus.ACCEPTED,
         )
 
+    def _handle_project_edit(self, method: str, project_id: str, version_id: str) -> None:
+        if method == "GET":
+            try:
+                document = self.project_store.sync_project(project_id, self.store.get_job)
+                version = next(version for version in document.versions if version.version_id == version_id)
+            except StopIteration:
+                self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+                return
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+                return
+            metadata = _read_edit_metadata_for_run(Path(version.output_dir))
+            if metadata is None:
+                self._send_error(HTTPStatus.NOT_FOUND, "Edit metadata not found.")
+                return
+            self._send_json({"version_id": version.version_id, "edit": metadata})
+            return
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+            parent = next(version for version in document.versions if version.version_id == version_id)
+        except StopIteration:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        parent_job = self.store.get_job(parent.job_id)
+        if parent_job is None:
+            self._send_error(HTTPStatus.CONFLICT, "Parent version job is missing.")
+            return
+        if parent.status != "completed" or parent_job.status != "completed":
+            self._send_error(HTTPStatus.CONFLICT, "Parent version must be completed before editing.")
+            return
+        parent_plan_path = Path(parent.output_dir) / "data" / "song-plan.json"
+        if not parent_plan_path.exists():
+            self._send_error(HTTPStatus.CONFLICT, "Parent song-plan.json is missing.")
+            return
+        try:
+            parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
+            intent = EditIntent.from_dict(payload)
+            validate_edit_intent(parent_plan, intent)
+            job = self.store.create_edit_job(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_job=parent_job,
+                parent_plan=parent_plan,
+                intent=intent,
+                name=str(payload.get("name") or ""),
+                start_immediately=bool(payload.get("start_immediately", True)),
+            )
+            variant_type = edit_variant_type(intent.edit_type)
+            document = self.project_store.add_version_from_job(
+                project_id,
+                job,
+                name=str(payload.get("name") or "") or f"Edit {len(document.versions) + 1}",
+                note=str(payload.get("note") or ""),
+                parent_version_id=parent.version_id,
+                variant_type=variant_type,
+                change_summary=str(payload.get("change_summary") or edit_change_summary(intent)),
+            )
+        except NotImplementedError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        version = next(version for version in document.versions if version.job_id == job.job_id)
+        self.project_store.append_event(
+            project_id,
+            "version_edit_created",
+            {
+                "parent_version_id": parent.version_id,
+                "version_id": version.version_id,
+                "job_id": job.job_id,
+                "edit_type": intent.edit_type,
+            },
+        )
+        self._send_json(
+            {
+                "ok": True,
+                **document.to_dict(),
+                "version": version.to_dict(),
+                "job": job.to_dict(),
+                "edit": job.edit_metadata,
+            },
+            status=HTTPStatus.ACCEPTED,
+        )
+
+    def _handle_project_edit_targets(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+            version = next(version for version in document.versions if version.version_id == version_id)
+        except StopIteration:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        plan_path = Path(version.output_dir) / "data" / "song-plan.json"
+        if not plan_path.exists():
+            self._send_error(HTTPStatus.CONFLICT, "song-plan.json is not available for this version.")
+            return
+        try:
+            plan = SongPlan.from_dict(read_json(plan_path))
+        except ValueError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._send_json(build_edit_targets(plan))
+
     def _handle_batch_route(self, method: str, batch_id: str, tail: str) -> None:
         if tail == "":
             if method != "GET":
@@ -2564,6 +2857,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         if tail == "/quality":
             self._send_runtime_view(job, "quality")
+            return
+        if tail == "/edit":
+            metadata = _read_edit_metadata_for_run(run_dir)
+            if metadata is None:
+                self._send_error(HTTPStatus.NOT_FOUND, "Edit metadata not found.")
+                return
+            self._send_json({"job_id": job.job_id, "edit": metadata})
             return
         if tail == "/events":
             self._send_json({"events": _read_events(run_dir / "logs" / "events.jsonl")})
@@ -3056,6 +3356,9 @@ def _job_artifacts(
     provider_snapshot_path = run_dir / "data" / "provider-snapshot.json"
     if provider_snapshot_path.exists():
         artifacts["provider_snapshot"] = str(provider_snapshot_path)
+    edit_metadata_path = run_dir / "data" / "edit-metadata.json"
+    if edit_metadata_path.exists():
+        artifacts["edit_metadata"] = str(edit_metadata_path)
     nodes_dir = run_dir / "data" / "nodes"
     if nodes_dir.exists():
         artifacts["nodes"] = str(nodes_dir)
@@ -3082,6 +3385,17 @@ def _read_critic_report(run_dir: Path) -> dict[str, Any] | None:
         return None
     output = record.get("output")
     return output if isinstance(output, dict) else None
+
+
+def _read_edit_metadata_for_run(run_dir: Path) -> dict[str, Any] | None:
+    path = run_dir / "data" / "edit-metadata.json"
+    if not path.exists():
+        return None
+    try:
+        metadata = read_json(path)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return metadata
 
 
 def _match_job_route(path: str) -> tuple[str, str] | None:
@@ -3125,6 +3439,13 @@ def _match_project_variation_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "variation":
         return unquote(parts[1])
+    return None
+
+
+def _match_project_edit_tail(tail: str) -> tuple[str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] in {"edit", "edit-targets"}:
+        return unquote(parts[1]), parts[2]
     return None
 
 
@@ -3204,6 +3525,10 @@ def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         raise ValueError("tags must be a list.")
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _clean_title(value: Any) -> str:
+    return str(value or "").strip()
 
 
 def _generation_mode(payload: dict[str, Any]) -> str:

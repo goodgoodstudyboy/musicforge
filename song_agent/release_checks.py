@@ -4,11 +4,13 @@ import re
 import subprocess
 import sys
 import tempfile
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from song_agent import __version__
 from song_agent.agent.pipeline import deterministic_compose
+from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle
 from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.projectio import write_json
@@ -100,6 +102,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("version consistency", *_version_consistency(root))
     report.add("secret scan", *_secret_scan(root))
     report.add("final export smoke", *_final_export_smoke(root))
+    report.add("edit smoke", *_edit_smoke(root))
     return report
 
 
@@ -227,6 +230,56 @@ def _final_export_smoke(root: Path) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def _edit_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-edit-") as temp_dir:
+            base = Path(temp_dir)
+            parent_dir = base / "runs" / "edit-parent"
+            child_dir = base / "runs" / "edit-child"
+            request = SongRequest(
+                title="Edit Smoke",
+                language="en",
+                style="synth pop",
+                theme="release edit check",
+                tempo_bpm=96,
+            )
+            parent_plan = deterministic_compose(request)
+            parent_plan_path = parent_dir / "data" / "song-plan.json"
+            write_json(parent_plan_path, parent_plan.to_dict())
+            parent_hash = _file_sha256(parent_plan_path)
+            intent = EditIntent.from_dict(
+                {
+                    "edit_type": "section_energy",
+                    "target": {"section_name": "chorus"},
+                    "strength": 7,
+                    "preserve": ["tempo", "key", "structure"],
+                }
+            )
+            result = apply_edit_intent(parent_plan, intent)
+            child_plan_path = child_dir / "data" / "song-plan.json"
+            child_midi_path = child_dir / "renders" / "song.mid"
+            metadata_path = child_dir / "data" / "edit-metadata.json"
+            write_json(child_plan_path, result.plan.to_dict())
+            render_midi(result.plan, child_midi_path)
+            write_json(
+                metadata_path,
+                build_edit_metadata(
+                    project_id="release-edit",
+                    parent_version_id="v001",
+                    parent_job_id="edit-parent",
+                    intent=intent,
+                    created_at="2026-05-06T00:00:00+00:00",
+                    summary=result.summary,
+                    warnings=result.warnings,
+                ),
+            )
+            parent_unchanged = _file_sha256(parent_plan_path) == parent_hash
+            ok = parent_unchanged and child_midi_path.exists() and metadata_path.exists()
+            return ok, f"parent_unchanged={parent_unchanged}, midi={child_midi_path.exists()}"
+    except Exception as exc:
+        return False, str(exc)
+
+
 class _SmokeProject:
     project_id = "release-smoke"
     name = "Release Smoke"
@@ -244,6 +297,10 @@ class _SmokeVersion:
 
 def _skip_file(path: Path) -> bool:
     return any(part in {".git", "__pycache__", ".pytest_cache"} for part in path.parts)
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _is_allowed_fixture_hit(relative: str, line: str) -> bool:

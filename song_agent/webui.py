@@ -616,6 +616,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let includeHiddenProjects = false;
     let activeProjectTab = "versions";
     let projectVariationParentId = null;
+    let projectEditParentId = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -1043,7 +1044,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "variation", "quality-gate", "final-export", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "edit", "quality-gate", "final-export", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -1169,6 +1170,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await renderProjectDetail(project.project_id);
           return;
         }
+        if (target.dataset.projectEditVersion) {
+          projectEditParentId = target.dataset.projectEditVersion;
+          activeProjectTab = "edit";
+          await renderProjectDetail(project.project_id);
+          return;
+        }
         if (target.dataset.projectEvaluateVersion) {
           await api(`/api/projects/${id}/versions/${encodeURIComponent(target.dataset.projectEvaluateVersion)}/evaluate`, { method: "POST" });
           await loadProjects();
@@ -1213,6 +1220,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await loadJobs();
           await loadProjects();
         });
+      } else if (activeProjectTab === "edit") {
+        await renderProjectEdit(project, versions, target);
       } else if (activeProjectTab === "quality-gate") {
         await renderProjectQualityGate(project, versions, target);
       } else if (activeProjectTab === "final-export") {
@@ -1262,6 +1271,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               <button class="secondary" data-project-select-version="${escapeHtml(version.version_id)}" type="button">Set Selected</button>
               <button class="secondary" data-project-final-version="${escapeHtml(version.version_id)}" type="button">Set Final</button>
               <button class="secondary" data-project-variation-version="${escapeHtml(version.version_id)}" type="button">Create Variation</button>
+              <button class="secondary" data-project-edit-version="${escapeHtml(version.version_id)}" type="button">Edit Version</button>
               <button class="secondary" data-project-evaluate-version="${escapeHtml(version.version_id)}" type="button">Evaluate Gate</button>
               <button class="secondary" data-project-export-version="${escapeHtml(version.version_id)}" type="button">Export Final</button>
             </div>
@@ -1375,6 +1385,138 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if ($("project-variation-generation-mode").value) payload.generation_mode = $("project-variation-generation-mode").value;
       if ($("project-variation-pipeline-mode").value) payload.pipeline_mode = $("project-variation-pipeline-mode").value;
       return payload;
+    }
+
+    async function renderProjectEdit(project, versions, target) {
+      const parentId = projectEditParentId || project.selected_version_id || project.final_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
+      let targets = { sections: [], tracks: [], supported_edit_types: [] };
+      let preview = "";
+      if (parentId) {
+        try {
+          targets = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parentId)}/edit-targets`);
+          preview = JSON.stringify(targets, null, 2);
+        } catch (err) {
+          preview = err.message;
+        }
+      }
+      target.innerHTML = projectEditControls(project, versions, parentId, targets, preview);
+      const parentSelect = $("project-edit-parent");
+      if (parentSelect) {
+        parentSelect.addEventListener("change", async () => {
+          projectEditParentId = parentSelect.value;
+          await renderProjectEdit(project, versions, target);
+        });
+      }
+      bindAction("project-create-edit", async () => {
+        const parent = $("project-edit-parent").value;
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parent)}/edit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectEditPayload()),
+        });
+        projectEditParentId = null;
+        activeProjectTab = "versions";
+        await loadJobs();
+        await loadProjects();
+      });
+    }
+
+    function projectEditControls(project, versions, parentId, targets, preview) {
+      const sectionOptions = (targets.sections || []).map((section) => `<option value="${escapeHtml(section.name)}">${escapeHtml(section.name)} · ${escapeHtml(section.bars)} bars</option>`).join("");
+      const trackOptions = (targets.tracks || []).map((track) => `<option value="${escapeHtml(track.name)}">${escapeHtml(track.name)} · ${escapeHtml(track.instrument)} · ${escapeHtml(track.note_count)} notes</option>`).join("");
+      const editTypeOptions = (targets.supported_edit_types || ["section_energy", "section_harmony", "track_density", "lyrics_rewrite", "melody_variation", "arrangement_variation"]).map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+      return `
+        <div class="grid2">
+          <label>Parent Version
+            <select id="project-edit-parent">${projectVersionOptions(versions, parentId)}</select>
+          </label>
+          <label>Edit Type
+            <select id="project-edit-type">${editTypeOptions}</select>
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Section
+            <select id="project-edit-section"><option value="">none</option>${sectionOptions}</select>
+          </label>
+          <label>Track
+            <select id="project-edit-track"><option value="">none</option>${trackOptions}</select>
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Field
+            <select id="project-edit-field">
+              <option value="">none</option>
+              <option value="lyrics">lyrics</option>
+              <option value="chords">chords</option>
+              <option value="notes">notes</option>
+              <option value="instrument">instrument</option>
+            </select>
+          </label>
+          <label>Strength
+            <input id="project-edit-strength" type="number" min="1" max="10" value="6">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Name
+            <input id="project-edit-name" value="Edit ${(versions.length || 0) + 1}">
+          </label>
+          <label>Change Summary
+            <input id="project-edit-summary" placeholder="short edit summary">
+          </label>
+        </div>
+        <label>Instruction
+          <textarea id="project-edit-instruction" placeholder="Make the chorus more energetic while keeping tempo and key."></textarea>
+        </label>
+        <div class="grid2">
+          <label>Payload Lyrics
+            <textarea id="project-edit-lyrics" placeholder="lyrics_rewrite text"></textarea>
+          </label>
+          <label>Payload Chords
+            <input id="project-edit-chords" placeholder="Cmaj7, Am7, Fmaj7, G7">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Payload Instrument
+            <input id="project-edit-instrument" placeholder="alternate instrument">
+          </label>
+          <label>Provider Mode
+            <select id="project-edit-provider-mode">
+              <option value="local">local</option>
+              <option value="provider">provider</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          ${["tempo", "key", "structure", "lyrics", "harmony", "melody", "arrangement"].map((item) => `<label><input class="project-edit-preserve" type="checkbox" value="${item}" ${["tempo", "key", "structure"].includes(item) ? "checked" : ""}> ${item}</label>`).join("")}
+        </div>
+        <div class="actions">
+          <button id="project-create-edit" type="button" ${parentId ? "" : "disabled"}>Create Edit Version</button>
+          <span id="project-edit-message" class="message"></span>
+        </div>
+        <pre>${escapeHtml(preview || "{}")}</pre>
+      `;
+    }
+
+    function projectEditPayload() {
+      const target = {};
+      if ($("project-edit-section").value) target.section_name = $("project-edit-section").value;
+      if ($("project-edit-track").value) target.track_name = $("project-edit-track").value;
+      if ($("project-edit-field").value) target.field = $("project-edit-field").value;
+      const payload = {};
+      if ($("project-edit-lyrics").value.trim()) payload.lyrics = $("project-edit-lyrics").value;
+      if ($("project-edit-chords").value.trim()) payload.chords = $("project-edit-chords").value.split(",").map((item) => item.trim()).filter(Boolean);
+      if ($("project-edit-instrument").value.trim()) payload.instrument = $("project-edit-instrument").value.trim();
+      return {
+        edit_type: $("project-edit-type").value,
+        target,
+        instruction: $("project-edit-instruction").value.trim(),
+        preserve: Array.from(document.querySelectorAll(".project-edit-preserve:checked")).map((item) => item.value),
+        strength: Number($("project-edit-strength").value || 5),
+        provider_mode: $("project-edit-provider-mode").value,
+        payload,
+        name: $("project-edit-name").value.trim(),
+        change_summary: $("project-edit-summary").value.trim(),
+      };
     }
 
     async function renderProjectQualityGate(project, versions, target) {
@@ -1578,6 +1720,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       return {
         versions: "Versions",
         variation: "Variation",
+        edit: "Edit",
         "quality-gate": "Quality Gate",
         "final-export": "Final Export",
         compare: "Compare",
@@ -1804,7 +1947,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
       const detail = $("detail");
       const summary = job.summary || {};
-      const tabs = ["summary", "nodes", "timeline", "tracks", "stems", "quality", "validator", "json", "logs", "artifacts"];
+      const tabs = ["summary", "edit", "nodes", "timeline", "tracks", "stems", "quality", "validator", "json", "logs", "artifacts"];
       detail.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
           <span>${escapeHtml(job.title)}</span>
@@ -1854,6 +1997,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const target = $("tab-content");
       if (activeTab === "summary") {
         target.innerHTML = `<pre>${escapeHtml(JSON.stringify(job, null, 2))}</pre>`;
+      } else if (activeTab === "edit") {
+        await renderEdit(job, target);
       } else if (activeTab === "timeline") {
         await renderTimeline(job, target);
       } else if (activeTab === "nodes") {
@@ -1910,6 +2055,32 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         `;
       } catch (err) {
         target.innerHTML = `<pre>${escapeHtml(err.message)}</pre>`;
+      }
+    }
+
+    async function renderEdit(job, target) {
+      try {
+        const data = await api(`/api/jobs/${encodeURIComponent(job.job_id)}/edit`);
+        const edit = data.edit || {};
+        const targetData = edit.target || {};
+        target.innerHTML = `
+          <div class="summary-grid">
+            ${metric("Edit Type", edit.edit_type || "-")}
+            ${metric("Parent Version", edit.parent_version_id || "-")}
+            ${metric("Parent Job", edit.parent_job_id || "-")}
+            ${metric("Strength", edit.strength ?? "-")}
+          </div>
+          <div class="summary-grid">
+            ${metric("Section", targetData.section_name || "-")}
+            ${metric("Track", targetData.track_name || "-")}
+            ${metric("Field", targetData.field || "-")}
+            ${metric("Provider Mode", edit.provider_mode || "-")}
+          </div>
+          <p>${escapeHtml(edit.instruction || "")}</p>
+          <pre>${escapeHtml(JSON.stringify(edit, null, 2))}</pre>
+        `;
+      } catch (err) {
+        target.innerHTML = `<div class="empty">No edit metadata for this job.</div>`;
       }
     }
 
@@ -2216,6 +2387,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     function tabLabel(tab) {
       const labels = {
         summary: "Summary",
+        edit: "Edit",
         nodes: "Nodes",
         timeline: "Timeline",
         tracks: "Tracks",

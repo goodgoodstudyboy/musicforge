@@ -224,7 +224,9 @@ def _chord_pitches(chord_name: str) -> list[int]:
         "Cmaj7": [60, 64, 67, 71],
         "Am7": [57, 60, 64, 67],
         "Dm7": [62, 65, 69, 72],
+        "Fmaj7": [53, 57, 60, 64],
         "G7": [55, 59, 62, 65],
+        "E7": [52, 56, 59, 62],
     }
     return chord_map.get(chord_name, [60, 64, 67])
 
@@ -234,6 +236,8 @@ def _bass_pitch(chord_name: str) -> int:
         "Cmaj7": 36,
         "Am7": 33,
         "Dm7": 38,
+        "Fmaj7": 29,
         "G7": 31,
+        "E7": 28,
     }
     return root_map.get(chord_name, 36)

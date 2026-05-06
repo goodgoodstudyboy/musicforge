@@ -149,6 +149,9 @@ def test_auth_protects_job_create_provider_renderer_and_batch(tmp_path, monkeypa
             ("POST", "/api/projects/auth-project/versions", {"request": {}}),
             ("POST", "/api/projects/auth-project/versions/from-job", {"job_id": "missing"}),
             ("POST", "/api/projects/auth-project/versions/v001/variation", {"request_patch": {}}),
+            ("POST", "/api/projects/auth-project/versions/v001/edit", {"edit_type": "section_energy"}),
+            ("GET", "/api/projects/auth-project/versions/v001/edit", None),
+            ("GET", "/api/projects/auth-project/versions/v001/edit-targets", None),
             ("GET", "/api/projects/auth-project/quality-gate", None),
             ("POST", "/api/projects/auth-project/quality-gate", {}),
             ("POST", "/api/projects/auth-project/versions/v001/evaluate", None),
@@ -193,6 +196,7 @@ def test_auth_protects_dangerous_job_routes(tmp_path, monkeypatch):
             ("GET", f"/api/jobs/{job_id}/stems/melody/midi"),
             ("GET", f"/api/jobs/{job_id}/artifacts"),
             ("GET", f"/api/jobs/{job_id}/quality"),
+            ("GET", f"/api/jobs/{job_id}/edit"),
         ]
         statuses = [request_json(server, method, path)[0] for method, path in routes]
     finally:

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from song_agent.release_checks import (
     ReleaseCheckReport,
+    _edit_smoke,
     _final_export_smoke,
     _redact_line,
     _remote_has_token,
@@ -47,6 +48,13 @@ def test_final_export_smoke_builds_bundle(tmp_path: Path) -> None:
 
     assert ok is True
     assert "version=v001" in detail
+
+
+def test_edit_smoke_preserves_parent_and_renders_child(tmp_path: Path) -> None:
+    ok, detail = _edit_smoke(tmp_path)
+
+    assert ok is True
+    assert "parent_unchanged=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

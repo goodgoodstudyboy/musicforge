@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.1.0 - 2026-05-06
+
+### Added
+- Local non-destructive Project edit workflow with `EditIntent`, target validation, deterministic section/track/lyrics/melody edits, and edit-derived child versions.
+- Edit jobs that write `data/edit-metadata.json`, regenerate SongPlan/MIDI/validator/summary artifacts, and preserve parent run artifacts.
+- Project edit APIs, edit target preview, job edit metadata API, Project diff edit/section/track summaries, and Studio Edit controls.
+- Release-check edit smoke coverage for parent protection and child MIDI generation.
+
+### Verified
+- `python -m pytest tests\test_edits.py tests\test_server_edits.py tests\test_server_projects.py tests\test_server_auth.py tests\test_webui.py tests\test_release_check.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+
 ## v1.0.2 - 2026-05-06
 
 ### Fixed

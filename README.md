@@ -214,6 +214,22 @@ patch for allowed request fields such as style, theme, tempo, key, duration, and
 lyrics. The new child job can run in local or provider mode and single or
 multinode pipeline mode.
 
+v1.1.0 adds non-destructive local edit versions. Pick a completed Project
+version, choose an edit type and target, and MusicForge creates a new child
+version instead of modifying the parent run. The first local edit engine supports
+section energy, section harmony, track density, lyrics rewrite, melody
+variation, and light arrangement edits. Each edit job writes:
+
+```text
+runs/<job-id>/data/edit-metadata.json
+runs/<job-id>/data/song-plan.json
+runs/<job-id>/renders/song.mid
+```
+
+Edit metadata records the parent version/job, target, instruction, preserve
+constraints, strength, summary, and warnings. Stems and audio are not inherited;
+render them again for the edited version when needed.
+
 Quality Gate is stored per Project. Defaults require the generated `SongPlan`
 to meet baseline quality scores, but do not require WAV or stems because local
 audio rendering depends on user renderer setup. Setting final evaluates the gate
@@ -249,6 +265,9 @@ GET  /api/projects/<project-id>
 POST /api/projects/<project-id>/versions
 POST /api/projects/<project-id>/versions/from-job
 POST /api/projects/<project-id>/versions/<version-id>/variation
+POST /api/projects/<project-id>/versions/<version-id>/edit
+GET  /api/projects/<project-id>/versions/<version-id>/edit
+GET  /api/projects/<project-id>/versions/<version-id>/edit-targets
 POST /api/projects/<project-id>/versions/<version-id>/evaluate
 POST /api/projects/<project-id>/selected
 POST /api/projects/<project-id>/final
@@ -263,6 +282,7 @@ GET  /api/projects/<project-id>/events
 POST /api/projects/<project-id>/hide
 POST /api/projects/<project-id>/unhide
 POST /api/projects/<project-id>/delete
+GET  /api/jobs/<job-id>/edit
 ```
 
 ## Multi-node Pipeline
