@@ -153,6 +153,8 @@ def test_auth_protects_job_create_provider_renderer_and_batch(tmp_path, monkeypa
             ("POST", "/api/projects/auth-project/quality-gate", {}),
             ("POST", "/api/projects/auth-project/versions/v001/evaluate", None),
             ("POST", "/api/projects/auth-project/quality-gate/evaluate-all", None),
+            ("GET", "/api/projects/auth-project/final-export", None),
+            ("POST", "/api/projects/auth-project/final-export", {}),
             ("POST", "/api/projects/auth-project/selected", {"version_id": "v001"}),
             ("POST", "/api/projects/auth-project/final", {"version_id": "v001"}),
             ("GET", "/api/projects/auth-project/diff?left=v001&right=v002", None),

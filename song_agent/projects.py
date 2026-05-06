@@ -395,6 +395,27 @@ class ProjectStore:
         )
         return self.get_project(project_id)
 
+    def update_version_final_export(
+        self,
+        project_id: str,
+        version_id: str,
+        export_path: Path | str,
+    ) -> ProjectDocument:
+        document = self.get_project(project_id)
+        version = _find_version(document, version_id)
+        version.final_export_path = str(export_path)
+        version.updated_at = now_iso()
+        self.save_project(document)
+        self.append_event(
+            project_id,
+            "final_export_created",
+            {
+                "version_id": version.version_id,
+                "path": version.final_export_path,
+            },
+        )
+        return self.get_project(project_id)
+
     def sync_project(self, project_id: str, job_lookup: Any) -> ProjectDocument:
         document = self.get_project(project_id)
         changed = False

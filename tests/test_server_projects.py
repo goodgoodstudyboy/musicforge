@@ -462,3 +462,155 @@ def test_project_evaluate_all_marks_missing_plan(tmp_path, monkeypatch):
     assert status == 200
     assert data["results"][0]["quality_gate"]["status"] == "missing_plan"
     assert data["versions"][0]["quality_gate_status"] == "missing_plan"
+
+
+def test_project_final_export_creates_bundle_and_can_read_manifest(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Final Export Project"})
+        project_id = created["project"]["project_id"]
+        first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Final Export Version"), "name": "Final Export Version"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        final_status, _final = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final",
+            {"version_id": "v001"},
+        )
+        export_status, exported = request_json(server, "POST", f"/api/projects/{project_id}/final-export")
+        read_status, read_back = request_json(server, "GET", f"/api/projects/{project_id}/final-export")
+        events_status, events = request_json(server, "GET", f"/api/projects/{project_id}/events")
+    finally:
+        stop_test_server(server)
+
+    export_dir = tmp_path / ".musicforge" / "projects" / project_id / "final-export"
+    assert first_status == 202
+    assert final_status == 200
+    assert export_status == 200
+    assert exported["final_export"]["version_id"] == "v001"
+    assert exported["version"]["final_export_path"] == str(export_dir)
+    assert (export_dir / "song-plan.json").exists()
+    assert (export_dir / "song.mid").read_bytes().startswith(b"MThd")
+    assert (export_dir / "project-export.json").exists()
+    assert read_status == 200
+    assert read_back["final_export"]["job_id"] == exported["final_export"]["job_id"]
+    assert events_status == 200
+    assert any(event["type"] == "final_export_created" for event in events["events"])
+
+
+def test_project_final_export_requires_final_or_explicit_version(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "No Final Export Project"})
+        project_id = created["project"]["project_id"]
+        first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Explicit Export Version"), "name": "Explicit"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        missing_status, missing = request_json(server, "POST", f"/api/projects/{project_id}/final-export")
+        explicit_status, explicit = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final-export",
+            {"version_id": "v001"},
+        )
+    finally:
+        stop_test_server(server)
+
+    assert first_status == 202
+    assert missing_status == 409
+    assert missing["error"] == "Project has no final version."
+    assert explicit_status == 200
+    assert explicit["final_export"]["version_id"] == "v001"
+
+
+def test_project_final_export_gate_rejects_and_force_exports(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Strict Export Project"})
+        project_id = created["project"]["project_id"]
+        _first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Strict Export Version"), "name": "Strict"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/quality-gate",
+            {"min_overall": 100, "min_structure": 100, "min_melody": 100, "min_harmony": 100, "min_arrangement": 100},
+        )
+        blocked_status, blocked = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final-export",
+            {"version_id": "v001"},
+        )
+        forced_status, forced = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final-export",
+            {"version_id": "v001", "force": True},
+        )
+        events_status, events = request_json(server, "GET", f"/api/projects/{project_id}/events")
+    finally:
+        stop_test_server(server)
+
+    assert blocked_status == 409
+    assert blocked["error"] == "Quality gate failed."
+    assert blocked["quality_gate"]["status"] == "failed"
+    assert forced_status == 200
+    assert forced["final_export"]["quality_gate"]["status"] == "failed"
+    assert events_status == 200
+    event_types = [event["type"] for event in events["events"]]
+    assert "final_export_gate_failed" in event_types
+    assert "final_export_created" in event_types
+
+
+def test_project_final_export_skips_stale_stems(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Stale Stem Export Project"})
+        project_id = created["project"]["project_id"]
+        _first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Stale Stem Export Version"), "name": "Stale"},
+        )
+        job = wait_for_job(server, first["job"]["job_id"])
+        request_json(server, "POST", f"/api/jobs/{job['job_id']}/render-stems")
+        run_dir = Path(job["output_dir"])
+        plan_path = run_dir / "data" / "song-plan.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["tempo_bpm"] = int(plan["tempo_bpm"]) + 1
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        status, exported = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final-export",
+            {"version_id": "v001"},
+        )
+    finally:
+        stop_test_server(server)
+
+    export_dir = tmp_path / ".musicforge" / "projects" / project_id / "final-export"
+    stem_record = next(file for file in exported["final_export"]["files"] if file["kind"] == "stem_manifest")
+    assert status == 200
+    assert stem_record["exists"] is False
+    assert stem_record["skipped"] == "stale"
+    assert not (export_dir / "stems" / "manifest.json").exists()

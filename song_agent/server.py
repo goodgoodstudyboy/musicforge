@@ -21,6 +21,13 @@ from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.auth import AuthConfig, validate_bearer_header
 from song_agent.batching import BatchDocument, BatchStore, now_iso
 from song_agent.cli import generate_request
+from song_agent.final_export import (
+    FinalExportError,
+    FinalExportOptions,
+    build_final_export_bundle,
+    final_export_dir,
+    read_final_export_manifest,
+)
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
@@ -1982,6 +1989,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_evaluate_all(method, project_id)
             return
 
+        if tail == "/final-export":
+            self._handle_project_final_export(method, project_id)
+            return
+
         if tail == "/diff":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2098,6 +2109,96 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             results.append({"version_id": version.version_id, "quality_gate": result.to_dict()})
         document = self.project_store.get_project(project_id)
         self._send_json({"ok": True, "results": results, **document.to_dict()})
+
+    def _handle_project_final_export(self, method: str, project_id: str) -> None:
+        if method == "GET":
+            try:
+                project_dir = self.project_store.project_dir(project_id)
+                self.project_store.get_project(project_id)
+                manifest = read_final_export_manifest(project_dir)
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Final export not found.")
+                return
+            self._send_json({"final_export": manifest})
+            return
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+
+        payload = self._optional_json_body()
+        options = FinalExportOptions.from_dict(payload)
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+
+        version_id = options.version_id or document.state.final_version_id
+        if not version_id:
+            self._send_error(HTTPStatus.CONFLICT, "Project has no final version.")
+            return
+        version = next((item for item in document.versions if item.version_id == version_id), None)
+        if version is None:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        if version.status != "completed":
+            self._send_error(HTTPStatus.CONFLICT, "Only completed versions can be exported.")
+            return
+        if self.store.get_job(version.job_id) is None:
+            self._send_error(HTTPStatus.CONFLICT, "Version job is missing.")
+            return
+
+        gate_result = self._evaluate_project_version(project_id, version)
+        document = self.project_store.update_version_quality_gate(project_id, version.version_id, gate_result)
+        version = next(item for item in document.versions if item.version_id == version_id)
+        if gate_result.status not in {"passed", "warning"} and not options.force:
+            self.project_store.append_event(
+                project_id,
+                "final_export_gate_failed",
+                {"version_id": version.version_id, "status": gate_result.status, "score": gate_result.score},
+            )
+            self._send_json(
+                {
+                    "error": "Quality gate failed.",
+                    "quality_gate": gate_result.to_dict(),
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+
+        project_dir = self.project_store.project_dir(project_id)
+        project_export = self.project_store.export_project(project_id)
+        document = self.project_store.get_project(project_id)
+        version = next(item for item in document.versions if item.version_id == version_id)
+        try:
+            manifest = build_final_export_bundle(
+                project=document.state,
+                version=version,
+                project_dir=project_dir,
+                run_dir=Path(version.output_dir),
+                gate=gate_result,
+                options=options,
+                now=_utc_now(),
+                project_export=project_export,
+            )
+        except FinalExportError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        document = self.project_store.update_version_final_export(
+            project_id,
+            version.version_id,
+            final_export_dir(project_dir),
+        )
+        version = next(item for item in document.versions if item.version_id == version_id)
+        self._send_json(
+            {
+                "ok": True,
+                "version": version.to_dict(),
+                "quality_gate": gate_result.to_dict(),
+                "final_export": manifest,
+                **document.to_dict(),
+            }
+        )
 
     def _set_final_version_with_gate(self, project_id: str, version_id: str, *, force: bool) -> tuple[Any, Any]:
         document = self.project_store.get_project(project_id)
