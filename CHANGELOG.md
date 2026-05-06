@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.9.0 - 2026-05-06
+
+### Added
+- Project workspace metadata under `.musicforge/projects/<project-id>/` with project state, versions, events, and export manifests.
+- Project APIs for create/list/detail, version creation, existing-job import, selected/final version markers, diff, export, hide/unhide, and metadata-only delete.
+- Studio Projects workspace with project list, version table, new version creation, existing job import, selected/final controls, compare, export JSON, and events.
+- Batch CSV optional `project`, `version_name`, and `version_note` columns with automatic completed-job archival into Projects.
+- Batch export fields for project/version links.
+
+### Verified
+- `python -m pytest -q`
+- Project API/auth tests and Batch Project archival tests.
+
 ## v0.8.1 - 2026-05-06
 
 ### Fixed

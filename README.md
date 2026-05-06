@@ -148,6 +148,15 @@ Required columns are `title`, `language`, `style`, and `theme`. Defaults are
 `pipeline_mode=multinode`. Row-level `generation_mode` and `pipeline_mode`
 values override the batch defaults.
 
+Optional Project archival columns:
+
+```text
+project,version_name,version_note
+```
+
+When `project` is present, a completed batch item is automatically attached as a
+Project version. Existing CSV files without those columns keep the old behavior.
+
 Batch APIs:
 
 ```text
@@ -163,6 +172,43 @@ POST /api/batches/<batch-id>/hide
 POST /api/batches/<batch-id>/unhide
 POST /api/batches/<batch-id>/delete
 POST /api/batches/<batch-id>/open-folder
+```
+
+## Project Workspace
+
+v0.9.0 adds Project workspace metadata for organizing multiple generated jobs
+as versions of the same song. Project metadata lives under
+`.musicforge/projects/<project-id>/` and does not copy or delete run artifacts:
+
+```text
+.musicforge/projects/<project-id>/project.json
+.musicforge/projects/<project-id>/versions.json
+.musicforge/projects/<project-id>/events.jsonl
+.musicforge/projects/<project-id>/export.json
+```
+
+A Project can hold several versions, each referencing one existing job/run.
+Studio can create a Project, create a new version job from the current song
+form, attach an existing job, mark selected/final versions, compare two
+versions, and export a Project manifest. Deleting a Project removes only Project
+metadata; job runs still use the normal Job delete flow.
+
+Project APIs:
+
+```text
+GET  /api/projects
+POST /api/projects
+GET  /api/projects/<project-id>
+POST /api/projects/<project-id>/versions
+POST /api/projects/<project-id>/versions/from-job
+POST /api/projects/<project-id>/selected
+POST /api/projects/<project-id>/final
+GET  /api/projects/<project-id>/diff?left=v001&right=v002
+GET  /api/projects/<project-id>/export
+GET  /api/projects/<project-id>/events
+POST /api/projects/<project-id>/hide
+POST /api/projects/<project-id>/unhide
+POST /api/projects/<project-id>/delete
 ```
 
 ## Multi-node Pipeline
