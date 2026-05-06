@@ -113,6 +113,8 @@ def test_cli_force_replaces_existing_run(tmp_path, monkeypatch):
         ["song-agent", str(first_request), "--out", str(out_dir)],
     )
     main()
+    (out_dir / "stems").mkdir(parents=True)
+    (out_dir / "stems" / "manifest.json").write_text('{"stale": true}', encoding="utf-8")
 
     monkeypatch.setattr(
         "sys.argv",
@@ -122,6 +124,7 @@ def test_cli_force_replaces_existing_run(tmp_path, monkeypatch):
 
     plan = json.loads((out_dir / "data" / "song-plan.json").read_text(encoding="utf-8"))
     assert plan["title"] == "Second Song"
+    assert not (out_dir / "stems").exists()
 
 
 def test_cli_generate_multinode_writes_node_artifacts(tmp_path, monkeypatch):

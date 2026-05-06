@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.1 - 2026-05-06
+
+### Fixed
+- CLI `--force` now removes stale `stems/` artifacts along with `data/`, `renders/`, and `logs/`.
+
+### Verified
+- `python -m pytest tests\test_cli.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+
 ## v0.9.0 - 2026-05-06
 
 ### Added

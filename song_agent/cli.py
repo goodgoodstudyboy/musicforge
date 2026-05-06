@@ -299,7 +299,7 @@ def _ensure_resume_options_match(paths: ProjectPaths, run_options: dict[str, str
 
 
 def _reset_known_run_artifacts(run_dir: Path) -> None:
-    for child_name in ("data", "renders", "logs"):
+    for child_name in ("data", "renders", "logs", "stems"):
         child_path = run_dir / child_name
         if child_path.exists():
             shutil.rmtree(child_path)
