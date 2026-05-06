@@ -349,3 +349,116 @@ def test_create_variation_rejects_invalid_parent_job_and_patch(tmp_path, monkeyp
     assert "unsupported fields" in bad_patch["error"]
     assert missing_job_status == 409
     assert missing_job["error"] == "Parent version job is missing."
+
+
+def test_project_quality_gate_config_evaluate_and_final_response(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Gate Project"})
+        project_id = created["project"]["project_id"]
+        first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Gate Version"), "name": "Gate Version"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        config_status, config = request_json(server, "GET", f"/api/projects/{project_id}/quality-gate")
+        save_status, saved = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/quality-gate",
+            {"min_overall": 70, "min_structure": 60, "min_melody": 60, "min_harmony": 60, "min_arrangement": 60},
+        )
+        eval_status, evaluated = request_json(server, "POST", f"/api/projects/{project_id}/versions/v001/evaluate")
+        final_status, final = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final",
+            {"version_id": "v001"},
+        )
+    finally:
+        stop_test_server(server)
+
+    assert first_status == 202
+    assert config_status == 200
+    assert config["config"]["min_overall"] == 75
+    assert save_status == 200
+    assert saved["config"]["min_overall"] == 70
+    assert eval_status == 200
+    assert evaluated["quality_gate"]["status"] == "passed"
+    assert evaluated["version"]["quality_gate_status"] == "passed"
+    assert final_status == 200
+    assert final["quality_gate"]["status"] == "passed"
+    assert final["project"]["final_version_id"] == "v001"
+
+
+def test_project_final_quality_gate_rejects_and_force_records_event(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Strict Gate Project"})
+        project_id = created["project"]["project_id"]
+        first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Strict Gate Version"), "name": "Strict Gate Version"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/quality-gate",
+            {"min_overall": 100, "min_structure": 100, "min_melody": 100, "min_harmony": 100, "min_arrangement": 100},
+        )
+        blocked_status, blocked = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final",
+            {"version_id": "v001"},
+        )
+        forced_status, forced = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/final",
+            {"version_id": "v001", "force": True},
+        )
+        events_status, events = request_json(server, "GET", f"/api/projects/{project_id}/events")
+    finally:
+        stop_test_server(server)
+
+    assert first_status == 202
+    assert blocked_status == 409
+    assert blocked["error"] == "Quality gate failed."
+    assert blocked["quality_gate"]["status"] == "failed"
+    assert forced_status == 200
+    assert forced["quality_gate"]["status"] == "failed"
+    assert forced["project"]["final_version_id"] == "v001"
+    assert events_status == 200
+    event_types = [event["type"] for event in events["events"]]
+    assert "final_version_gate_failed" in event_types
+    assert "final_version_force_set" in event_types
+
+
+def test_project_evaluate_all_marks_missing_plan(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Missing Plan Gate Project"})
+        project_id = created["project"]["project_id"]
+        job = server.job_store.create_job(request_payload("No Plan"), start_immediately=False)
+        request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/from-job",
+            {"job_id": job.job_id},
+        )
+        status, data = request_json(server, "POST", f"/api/projects/{project_id}/quality-gate/evaluate-all")
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert data["results"][0]["quality_gate"]["status"] == "missing_plan"
+    assert data["versions"][0]["quality_gate_status"] == "missing_plan"

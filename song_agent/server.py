@@ -25,6 +25,12 @@ from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, up
 from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
 from song_agent.projects import ProjectStore
+from song_agent.project_quality import (
+    QualityGateConfig,
+    evaluate_quality_gate,
+    load_quality_gate_config,
+    save_quality_gate_config,
+)
 from song_agent.provider import (
     ProviderError,
     load_provider_config,
@@ -1905,6 +1911,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             )
             return
 
+        evaluate_match = _match_project_evaluate_tail(tail)
+        if evaluate_match is not None:
+            self._handle_project_evaluate(method, project_id, evaluate_match)
+            return
+
         if tail == "/versions/from-job":
             if method != "POST":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -1943,14 +1954,32 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if tail == "/selected":
                     document = self.project_store.set_selected_version(project_id, version_id)
                 else:
-                    document = self.project_store.set_final_version(project_id, version_id)
+                    document, gate_result = self._set_final_version_with_gate(
+                        project_id,
+                        version_id,
+                        force=bool(payload.get("force", False)),
+                    )
             except FileNotFoundError:
                 self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+                return
+            except PermissionError as exc:
+                self._send_json(exc.args[0], status=HTTPStatus.CONFLICT)
                 return
             except ValueError as exc:
                 self._send_error(HTTPStatus.CONFLICT, str(exc))
                 return
-            self._send_json({"ok": True, **document.to_dict()})
+            response = {"ok": True, **document.to_dict()}
+            if tail == "/final":
+                response["quality_gate"] = gate_result.to_dict()
+            self._send_json(response)
+            return
+
+        if tail == "/quality-gate":
+            self._handle_project_quality_gate(method, project_id)
+            return
+
+        if tail == "/quality-gate/evaluate-all":
+            self._handle_project_evaluate_all(method, project_id)
             return
 
         if tail == "/diff":
@@ -2016,6 +2045,93 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
 
         self._send_error(HTTPStatus.NOT_FOUND, "Project route not found.")
+
+    def _handle_project_quality_gate(self, method: str, project_id: str) -> None:
+        try:
+            project_dir = self.project_store.project_dir(project_id)
+            self.project_store.get_project(project_id)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        if method == "GET":
+            self._send_json({"config": load_quality_gate_config(project_dir).to_dict()})
+            return
+        if method == "POST":
+            config = QualityGateConfig.from_dict(self._read_json_body())
+            save_quality_gate_config(project_dir, config)
+            self.project_store.append_event(project_id, "quality_gate_config_saved", {"config": config.to_dict()})
+            self._send_json({"ok": True, "config": config.to_dict()})
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_project_evaluate(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+            version = next(version for version in document.versions if version.version_id == version_id)
+        except StopIteration:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        result = self._evaluate_project_version(project_id, version)
+        document = self.project_store.update_version_quality_gate(project_id, version.version_id, result)
+        version = next(item for item in document.versions if item.version_id == version_id)
+        self._send_json({"ok": True, "version": version.to_dict(), "quality_gate": result.to_dict(), **document.to_dict()})
+
+    def _handle_project_evaluate_all(self, method: str, project_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        results = []
+        for version in document.versions:
+            result = self._evaluate_project_version(project_id, version)
+            self.project_store.update_version_quality_gate(project_id, version.version_id, result)
+            results.append({"version_id": version.version_id, "quality_gate": result.to_dict()})
+        document = self.project_store.get_project(project_id)
+        self._send_json({"ok": True, "results": results, **document.to_dict()})
+
+    def _set_final_version_with_gate(self, project_id: str, version_id: str, *, force: bool) -> tuple[Any, Any]:
+        document = self.project_store.get_project(project_id)
+        version = next((version for version in document.versions if version.version_id == version_id), None)
+        if version is None:
+            raise FileNotFoundError(version_id)
+        if version.status != "completed":
+            raise ValueError("Only completed versions can be marked final.")
+        result = self._evaluate_project_version(project_id, version)
+        self.project_store.update_version_quality_gate(project_id, version.version_id, result)
+        if result.status not in {"passed", "warning"} and not force:
+            self.project_store.append_event(
+                project_id,
+                "final_version_gate_failed",
+                {"version_id": version.version_id, "status": result.status, "score": result.score},
+            )
+            raise PermissionError(
+                {
+                    "error": "Quality gate failed.",
+                    "quality_gate": result.to_dict(),
+                }
+            )
+        document = self.project_store.set_final_version(project_id, version.version_id)
+        if force and result.status not in {"passed", "warning"}:
+            self.project_store.append_event(
+                project_id,
+                "final_version_force_set",
+                {"version_id": version.version_id, "status": result.status, "score": result.score},
+            )
+        return document, result
+
+    def _evaluate_project_version(self, project_id: str, version: Any) -> Any:
+        config = load_quality_gate_config(self.project_store.project_dir(project_id))
+        return evaluate_quality_gate(Path(version.output_dir), config, now=_utc_now())
 
     def _handle_project_variation(self, method: str, project_id: str, parent_version_id: str) -> None:
         if method != "POST":
@@ -2907,6 +3023,13 @@ def _match_project_route(path: str) -> tuple[str, str] | None:
 def _match_project_variation_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "variation":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_evaluate_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "evaluate":
         return unquote(parts[1])
     return None
 
