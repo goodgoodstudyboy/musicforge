@@ -1308,6 +1308,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <td><span class="status ${item.audio_status || "not_started"}">${escapeHtml(item.audio_status || "not_started")}</span></td>
           <td><span class="status ${item.stem_status || "not_started"}">${escapeHtml(item.stem_status || "not_started")}</span></td>
           <td>${escapeHtml(item.stem_audio_completed_count || 0)}/${escapeHtml(item.stem_count || 0)}</td>
+          <td>${item.project_id ? `<button class="secondary batch-project-link" data-project-id="${escapeHtml(item.project_id)}" type="button">${escapeHtml(item.project_id)} ${escapeHtml(item.version_id || "")}</button>` : escapeHtml(item.project || "-")}</td>
           <td>${escapeHtml(item.attempt_count)}</td>
           <td>${item.job_id ? `<button class="secondary batch-job-link" data-job-id="${escapeHtml(item.job_id)}" type="button">${escapeHtml(item.job_id)}</button>` : "-"}</td>
           <td>${escapeHtml(item.output_dir || "-")}</td>
@@ -1339,8 +1340,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         ${batch.error ? `<p class="error">${escapeHtml(batch.error)}</p>` : ""}
         <table>
-          <thead><tr><th>Index</th><th>Title</th><th>Mode</th><th>Pipeline</th><th>Status</th><th>Audio</th><th>Stem</th><th>Stem Audio</th><th>Attempt</th><th>Job</th><th>Output</th><th>WAV</th><th>Error</th><th>Updated</th></tr></thead>
-          <tbody>${rows || "<tr><td colspan='14'>No batch items.</td></tr>"}</tbody>
+          <thead><tr><th>Index</th><th>Title</th><th>Mode</th><th>Pipeline</th><th>Status</th><th>Audio</th><th>Stem</th><th>Stem Audio</th><th>Project</th><th>Attempt</th><th>Job</th><th>Output</th><th>WAV</th><th>Error</th><th>Updated</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='15'>No batch items.</td></tr>"}</tbody>
         </table>
       `;
       wireBatchActions(batch);
@@ -1349,6 +1350,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           selectedJobId = button.dataset.jobId;
           activeTab = "summary";
           await loadJobs();
+        });
+      });
+      target.querySelectorAll(".batch-project-link").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedProjectId = button.dataset.projectId;
+          activeProjectTab = "versions";
+          await loadProjects();
         });
       });
     }

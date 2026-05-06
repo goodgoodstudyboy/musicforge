@@ -66,6 +66,9 @@ CSV_COLUMNS = (
     "lyrics",
     "generation_mode",
     "pipeline_mode",
+    "project",
+    "version_name",
+    "version_note",
 )
 GENERATION_MODES = {"local", "provider"}
 PIPELINE_MODES = {"single", "multinode"}
@@ -218,6 +221,11 @@ class BatchItem:
     stem_count: int = 0
     stem_audio_completed_count: int = 0
     stem_error: str | None = None
+    project: str | None = None
+    version_name: str | None = None
+    version_note: str | None = None
+    project_id: str | None = None
+    version_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -239,6 +247,11 @@ class BatchItem:
             "stem_count": self.stem_count,
             "stem_audio_completed_count": self.stem_audio_completed_count,
             "stem_error": self.stem_error,
+            "project": self.project,
+            "version_name": self.version_name,
+            "version_note": self.version_note,
+            "project_id": self.project_id,
+            "version_id": self.version_id,
         }
 
     @classmethod
@@ -263,6 +276,11 @@ class BatchItem:
             stem_count=int(data.get("stem_count", 0) or 0),
             stem_audio_completed_count=int(data.get("stem_audio_completed_count", 0) or 0),
             stem_error=data.get("stem_error"),
+            project=data.get("project"),
+            version_name=data.get("version_name"),
+            version_note=data.get("version_note"),
+            project_id=data.get("project_id"),
+            version_id=data.get("version_id"),
         )
 
 
@@ -471,6 +489,11 @@ class BatchStore:
             "stem_count": item.stem_count,
             "stem_audio_completed_count": item.stem_audio_completed_count,
             "stem_error": item.stem_error,
+            "project": item.project,
+            "version_name": item.version_name,
+            "version_note": item.version_note,
+            "project_id": item.project_id,
+            "version_id": item.version_id,
             "error": item.error,
         }
 
@@ -532,6 +555,9 @@ def parse_batch_csv(
                 item_id=f"item-{index}",
                 index=index,
                 request=request,
+                project=_clean(normalized.get("project")) or None,
+                version_name=_clean(normalized.get("version_name")) or None,
+                version_note=_clean(normalized.get("version_note")) or None,
             )
         )
 

@@ -155,6 +155,34 @@ def test_launch_batch_completes_items_and_exports_report(tmp_path, monkeypatch):
     assert export["items"][0]["midi"].endswith(str(Path("renders") / "song.mid"))
 
 
+def test_launch_batch_archives_items_to_projects_when_csv_has_project(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    csv_text = """title,language,style,theme,duration_seconds,tempo_bpm,key,vocal_mode,lyrics,generation_mode,pipeline_mode,project,version_name,version_note
+Project Batch One,English,pop,night walk,60,96,C,guide_melody,one,local,multinode,Shared Project,First batch version,from csv
+Project Batch Two,English,rock,open road,60,120,D,guide_melody,two,local,single,Shared Project,Second batch version,from csv
+"""
+    try:
+        created = import_batch(server, csv_text=csv_text, max_concurrency=2)
+        batch_id = created["batch"]["batch_id"]
+        request_json(server, "POST", f"/api/batches/{batch_id}/launch")
+        final = wait_for_batch(server, batch_id)
+        status_project, project = request_json(server, "GET", "/api/projects/shared-project")
+        status_export, export = request_json(server, "GET", f"/api/batches/{batch_id}/export")
+    finally:
+        stop_test_server(server)
+
+    assert final["batch"]["status"] == "completed"
+    assert status_project == 200
+    assert project["project"]["version_count"] == 2
+    assert [version["name"] for version in project["versions"]] == ["First batch version", "Second batch version"]
+    assert all(item["project_id"] == "shared-project" for item in final["items"])
+    assert [item["version_id"] for item in final["items"]] == ["v001", "v002"]
+    assert status_export == 200
+    assert export["items"][0]["project_id"] == "shared-project"
+    assert export["items"][0]["version_id"] == "v001"
+
+
 def test_launch_batch_respects_max_concurrency(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

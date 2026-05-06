@@ -817,9 +817,10 @@ class JobStore:
 
 
 class BatchRunner:
-    def __init__(self, batch_store: BatchStore, job_store: JobStore) -> None:
+    def __init__(self, batch_store: BatchStore, job_store: JobStore, project_store: ProjectStore | None = None) -> None:
         self.batch_store = batch_store
         self.job_store = job_store
+        self.project_store = project_store
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.threads: dict[str, threading.Thread] = {}
@@ -1286,11 +1287,17 @@ class BatchRunner:
                     item.status = "completed"
                     item.error = None
                     item.updated_at = now_iso()
+                    self._archive_item_to_project(document, item, job)
                     changed = True
                     self.batch_store.append_event(
                         batch_id,
                         "batch_item_completed",
-                        {"item_id": item.item_id, "job_id": job.job_id},
+                        {
+                            "item_id": item.item_id,
+                            "job_id": job.job_id,
+                            "project_id": item.project_id,
+                            "version_id": item.version_id,
+                        },
                     )
                 elif job.status == "cancelled":
                     item.status = "cancelled"
@@ -1306,6 +1313,38 @@ class BatchRunner:
                 self.batch_store.save_batch(document)
                 document = self.batch_store.get_batch(batch_id)
             return document
+
+    def _archive_item_to_project(self, document: BatchDocument, item: Any, job: JobState) -> None:
+        if self.project_store is None or not item.project:
+            return
+        if item.project_id and item.version_id:
+            return
+        project = self.project_store.find_or_create_project(item.project)
+        item.project_id = project.state.project_id
+        try:
+            updated = self.project_store.add_version_from_job(
+                project.state.project_id,
+                job,
+                name=item.version_name or "",
+                note=item.version_note or "",
+            )
+        except ValueError as exc:
+            if "already attached" not in str(exc):
+                raise
+            updated = self.project_store.get_project(project.state.project_id)
+        version = next((version for version in updated.versions if version.job_id == job.job_id), None)
+        if version is not None:
+            item.version_id = version.version_id
+        self.batch_store.append_event(
+            document.state.batch_id,
+            "batch_item_archived_to_project",
+            {
+                "item_id": item.item_id,
+                "job_id": job.job_id,
+                "project_id": item.project_id,
+                "version_id": item.version_id,
+            },
+        )
 
     def _start_available_audio_items(self, batch_id: str) -> int:
         with self.lock:
@@ -2510,7 +2549,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.job_store = JobStore()
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
-        self.batch_runner = BatchRunner(self.batch_store, self.job_store)
+        self.batch_runner = BatchRunner(self.batch_store, self.job_store, self.project_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
 

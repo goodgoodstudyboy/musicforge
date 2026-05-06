@@ -6,9 +6,9 @@ import pytest
 from song_agent.batching import BatchStore, parse_batch_csv
 
 
-CSV_TEXT = """title,language,style,theme,duration_seconds,tempo_bpm,key,vocal_mode,lyrics,generation_mode,pipeline_mode
-Batch Song,English,synth pop,city lights,120,118,C,guide_melody,hello,local,multinode
-Second Song,English,folk,home,,,,,,provider,single
+CSV_TEXT = """title,language,style,theme,duration_seconds,tempo_bpm,key,vocal_mode,lyrics,generation_mode,pipeline_mode,project,version_name,version_note
+Batch Song,English,synth pop,city lights,120,118,C,guide_melody,hello,local,multinode,Album Project,First Version,keeper
+Second Song,English,folk,home,,,,,,provider,single,,,
 """
 
 
@@ -22,10 +22,14 @@ def test_parse_batch_csv_builds_requests_with_defaults() -> None:
     assert items[0].request["tempo_bpm"] == 118
     assert items[0].request["generation_mode"] == "local"
     assert items[0].request["pipeline_mode"] == "multinode"
+    assert items[0].project == "Album Project"
+    assert items[0].version_name == "First Version"
+    assert items[0].version_note == "keeper"
     assert items[1].request["duration_seconds"] == 180
     assert "tempo_bpm" not in items[1].request
     assert items[1].request["generation_mode"] == "provider"
     assert items[1].request["pipeline_mode"] == "single"
+    assert items[1].project is None
 
 
 def test_parse_batch_csv_rejects_empty_csv() -> None:
@@ -87,6 +91,8 @@ def test_export_batch_writes_report(tmp_path: Path) -> None:
     batch.items[0].stem_manifest_path = str(Path("runs/job-1") / "stems" / "manifest.json")
     batch.items[0].stem_count = 4
     batch.items[0].stem_audio_completed_count = 4
+    batch.items[0].project_id = "album-project"
+    batch.items[0].version_id = "v001"
     store.save_batch(batch)
 
     export = store.export_batch(batch.state.batch_id)
@@ -100,6 +106,8 @@ def test_export_batch_writes_report(tmp_path: Path) -> None:
     assert export["items"][0]["stem_manifest"] == str(Path("runs/job-1") / "stems" / "manifest.json")
     assert export["items"][0]["stem_count"] == 4
     assert export["items"][0]["stem_audio_completed_count"] == 4
+    assert export["items"][0]["project_id"] == "album-project"
+    assert export["items"][0]["version_id"] == "v001"
     export_path = tmp_path / "batches" / batch.state.batch_id / "export.json"
     assert json.loads(export_path.read_text(encoding="utf-8"))["items"][0]["job_id"] == "job-1"
 
@@ -115,12 +123,15 @@ def test_batch_item_loads_stem_defaults_for_old_json(tmp_path: Path) -> None:
         item.pop("stem_count", None)
         item.pop("stem_audio_completed_count", None)
         item.pop("stem_error", None)
+        item.pop("project_id", None)
+        item.pop("version_id", None)
     (batch_dir / "items.json").write_text(json.dumps(items), encoding="utf-8")
 
     loaded = store.get_batch(batch.state.batch_id)
 
     assert loaded.items[0].stem_status == "not_started"
     assert loaded.items[0].stem_count == 0
+    assert loaded.items[0].project_id is None
 
 
 def test_delete_batch_refuses_paths_outside_root(tmp_path: Path) -> None:
