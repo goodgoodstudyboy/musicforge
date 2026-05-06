@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.1 - 2026-05-06
+
+### Fixed
+- Section harmony edits now reject unsupported explicit payload chord names such as `Hmaj7` before writing `SongPlan.sections[].chords`.
+- Instruction-parsed harmony chords are filtered through the supported local MIDI chord set, with empty results falling back to the safe default progression.
+
+### Verified
+- `python -m pytest tests\test_edits.py tests\test_server_edits.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli release-check`
+
 ## v1.1.0 - 2026-05-06
 
 ### Added

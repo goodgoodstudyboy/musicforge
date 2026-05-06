@@ -30,6 +30,8 @@ EDIT_VARIANT_TYPES = {
 }
 SUPPORTED_EDIT_TYPES = sorted(EDIT_TYPES)
 SCHEMA_VERSION = 1
+SUPPORTED_HARMONY_CHORDS = ("Am7", "Cmaj7", "Dm7", "E7", "Fmaj7", "G7")
+_SUPPORTED_HARMONY_CHORDS_BY_LOWER = {chord.lower(): chord for chord in SUPPORTED_HARMONY_CHORDS}
 
 
 @dataclass(frozen=True)
@@ -156,6 +158,9 @@ def apply_edit_intent(parent_plan: SongPlan, intent: EditIntent) -> EditedSongPl
 
 def validate_edit_intent(parent_plan: SongPlan, intent: EditIntent) -> None:
     _validate_intent_target(parent_plan, intent)
+    if intent.edit_type == "section_harmony":
+        chord_source = intent.payload["chords"] if "chords" in intent.payload else intent.instruction
+        _parse_chords(chord_source)
 
 
 def edit_variant_type(edit_type: str) -> str:
@@ -224,6 +229,7 @@ def build_edit_targets(plan: SongPlan) -> dict[str, Any]:
         "supported_edit_types": SUPPORTED_EDIT_TYPES,
         "supported_preserve": sorted(PRESERVE_FIELDS),
         "supported_fields": sorted(TARGET_FIELDS),
+        "supported_chords": list(SUPPORTED_HARMONY_CHORDS),
     }
 
 
@@ -282,7 +288,8 @@ def _apply_section_energy(plan: SongPlan, intent: EditIntent) -> EditedSongPlanR
 
 def _apply_section_harmony(plan: SongPlan, intent: EditIntent) -> EditedSongPlanResult:
     section = _find_section(plan, intent.target.section_name or "")
-    chords = _parse_chords(intent.payload.get("chords") or intent.instruction)
+    chord_source = intent.payload["chords"] if "chords" in intent.payload else intent.instruction
+    chords = _parse_chords(chord_source)
     if not chords:
         chords = ["Am7", "Fmaj7", "Dm7", "E7"] if "minor" in plan.key.lower() else ["Cmaj7", "Am7", "Fmaj7", "G7"]
     sections = [
@@ -531,10 +538,31 @@ def _make_bass_notes_for_section(section: SongSection, chords: list[str]) -> lis
 
 def _parse_chords(value: Any) -> list[str]:
     if isinstance(value, list):
-        return [str(chord).strip() for chord in value if str(chord).strip()][:8]
+        raw_chords = [str(chord).strip() for chord in value if str(chord).strip()]
+        chords = []
+        invalid = []
+        for raw_chord in raw_chords:
+            chord = _canonical_chord(raw_chord)
+            if chord is None:
+                invalid.append(raw_chord)
+            else:
+                chords.append(chord)
+        if invalid:
+            supported = ", ".join(SUPPORTED_HARMONY_CHORDS)
+            raise ValueError(f"Unsupported chord names: {', '.join(invalid)}. Supported chords: {supported}.")
+        return chords[:8]
     text = str(value or "")
-    candidates = re.findall(r"\b[A-G](?:#|b)?(?:maj7|m7|dim|aug|sus4|sus2|m|7)?\b", text)
-    return candidates[:8]
+    candidates = re.findall(r"\b[A-G](?:#|b)?(?:maj7|m7|dim|aug|sus4|sus2|m|7)?\b", text, flags=re.IGNORECASE)
+    chords = []
+    for candidate in candidates:
+        chord = _canonical_chord(candidate)
+        if chord is not None:
+            chords.append(chord)
+    return chords[:8]
+
+
+def _canonical_chord(value: Any) -> str | None:
+    return _SUPPORTED_HARMONY_CHORDS_BY_LOWER.get(str(value).strip().lower())
 
 
 def _placeholder_lyrics(section_name: str, instruction: str) -> str:

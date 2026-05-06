@@ -143,6 +143,16 @@ def test_project_edit_targets_and_validation_errors(tmp_path, monkeypatch):
             f"/api/projects/{project_id}/versions/v001/edit",
             {"edit_type": "section_energy", "target": {"section_name": "chorus"}, "provider_mode": "provider"},
         )
+        bad_chord_status, bad_chord = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit",
+            {
+                "edit_type": "section_harmony",
+                "target": {"section_name": "chorus", "field": "chords"},
+                "payload": {"chords": ["Hmaj7", "Cmaj7"]},
+            },
+        )
         job_edit_status, job_edit = request_json(server, "GET", f"/api/jobs/{parent_job['job_id']}/edit")
     finally:
         stop_test_server(server)
@@ -155,6 +165,8 @@ def test_project_edit_targets_and_validation_errors(tmp_path, monkeypatch):
     assert "Section not found" in missing_section["error"]
     assert provider_status == 400
     assert "Provider-backed edit" in provider["error"]
+    assert bad_chord_status == 400
+    assert "Unsupported chord names: Hmaj7" in bad_chord["error"]
     assert job_edit_status == 404
     assert job_edit["error"] == "Edit metadata not found."
 

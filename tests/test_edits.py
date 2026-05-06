@@ -84,7 +84,7 @@ def test_section_harmony_replaces_chords_and_rebuilds_chord_bass_notes() -> None
         {
             "edit_type": "section_harmony",
             "target": {"section_name": "chorus", "field": "chords"},
-            "payload": {"chords": ["G7", "Cmaj7"]},
+            "payload": {"chords": ["g7", "Cmaj7"]},
         }
     )
 
@@ -99,6 +99,20 @@ def test_section_harmony_replaces_chords_and_rebuilds_chord_bass_notes() -> None
     assert any(note.pitch == 55 for note in chord_track.notes if 48 <= note.start_beat < 80)
     assert any(note.pitch == 31 for note in bass_track.notes if 48 <= note.start_beat < 80)
     result.plan.validate()
+
+
+def test_section_harmony_rejects_unsupported_payload_chords() -> None:
+    parent = plan()
+    intent = EditIntent.from_dict(
+        {
+            "edit_type": "section_harmony",
+            "target": {"section_name": "chorus", "field": "chords"},
+            "payload": {"chords": ["Hmaj7", "Cmaj7"]},
+        }
+    )
+
+    with pytest.raises(ValueError, match="Unsupported chord names: Hmaj7"):
+        apply_edit_intent(parent, intent)
 
 
 def test_section_harmony_uses_safe_default_chords_when_instruction_has_none() -> None:
@@ -119,6 +133,22 @@ def test_section_harmony_uses_safe_default_chords_when_instruction_has_none() ->
     assert chorus.chords == ["Cmaj7", "Am7", "Fmaj7", "G7"]
     assert any(note.pitch == 53 for note in chord_track.notes if 48 <= note.start_beat < 80)
     assert any(note.pitch == 29 for note in bass_track.notes if 48 <= note.start_beat < 80)
+
+
+def test_section_harmony_filters_instruction_chords_through_supported_set() -> None:
+    parent = plan()
+    intent = EditIntent.from_dict(
+        {
+            "edit_type": "section_harmony",
+            "target": {"section_name": "chorus"},
+            "instruction": "try Bm7 into Fmaj7 and e7",
+        }
+    )
+
+    result = apply_edit_intent(parent, intent)
+    chorus = next(section for section in result.plan.sections if section.name == "chorus")
+
+    assert chorus.chords == ["Fmaj7", "E7"]
 
 
 def test_track_density_changes_only_target_track() -> None:
@@ -197,3 +227,5 @@ def test_build_edit_targets_lists_sections_tracks_and_supported_types() -> None:
     assert {section["name"] for section in targets["sections"]} >= {"verse", "chorus"}
     assert {track["name"] for track in targets["tracks"]} >= {"melody", "drums"}
     assert "section_energy" in targets["supported_edit_types"]
+    assert "Hmaj7" not in targets["supported_chords"]
+    assert {"Cmaj7", "G7"}.issubset(set(targets["supported_chords"]))
