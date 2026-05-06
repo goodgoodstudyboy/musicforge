@@ -93,6 +93,10 @@ def panel_html() -> str:
       background: white;
       font: inherit;
     }
+    input[type="checkbox"] {
+      width: auto;
+      margin: 0 6px 0 0;
+    }
     textarea {
       min-height: 86px;
       resize: vertical;
@@ -611,6 +615,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let selectedProjectId = null;
     let includeHiddenProjects = false;
     let activeProjectTab = "versions";
+    let projectVariationParentId = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -1038,7 +1043,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "quality-gate", "final-export", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -1158,6 +1163,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await loadProjects();
           return;
         }
+        if (target.dataset.projectVariationVersion) {
+          projectVariationParentId = target.dataset.projectVariationVersion;
+          activeProjectTab = "variation";
+          await renderProjectDetail(project.project_id);
+          return;
+        }
+        if (target.dataset.projectEvaluateVersion) {
+          await api(`/api/projects/${id}/versions/${encodeURIComponent(target.dataset.projectEvaluateVersion)}/evaluate`, { method: "POST" });
+          await loadProjects();
+          return;
+        }
+        if (target.dataset.projectExportVersion) {
+          await api(`/api/projects/${id}/final-export`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ version_id: target.dataset.projectExportVersion }),
+          });
+          activeProjectTab = "final-export";
+          await loadProjects();
+          return;
+        }
         if (target.dataset.projectFinalVersion) {
           await api(`/api/projects/${id}/final`, {
             method: "POST",
@@ -1173,6 +1199,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const target = $("project-tab-content");
       if (activeProjectTab === "versions") {
         target.innerHTML = projectVersionsTable(project, versions);
+      } else if (activeProjectTab === "variation") {
+        target.innerHTML = projectVariationControls(project, versions);
+        bindAction("project-create-variation", async () => {
+          const parentId = $("project-variation-parent").value;
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parentId)}/variation`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(projectVariationPayload()),
+          });
+          projectVariationParentId = null;
+          activeProjectTab = "versions";
+          await loadJobs();
+          await loadProjects();
+        });
+      } else if (activeProjectTab === "quality-gate") {
+        await renderProjectQualityGate(project, versions, target);
+      } else if (activeProjectTab === "final-export") {
+        await renderProjectFinalExport(project, versions, target);
       } else if (activeProjectTab === "compare") {
         target.innerHTML = projectCompareControls(versions);
         bindAction("project-compare", async () => {
@@ -1202,6 +1246,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <td><button class="secondary" data-project-job-id="${escapeHtml(version.job_id)}" type="button">${escapeHtml(version.job_id)}</button></td>
           <td><span class="status ${version.status}">${escapeHtml(version.status)}</span></td>
           <td>${escapeHtml(version.quality_score ?? "-")}</td>
+          <td>${escapeHtml(version.parent_version_id || "-")}</td>
+          <td>${escapeHtml(version.variant_type || "original")}</td>
+          <td><span class="status ${version.quality_gate_status || "not_evaluated"}">${escapeHtml(version.quality_gate_status || "not_evaluated")}</span> ${escapeHtml(version.quality_gate_score ?? "")}</td>
+          <td>${version.final_export_path ? "yes" : "-"}</td>
           <td>${escapeHtml(version.request.tempo_bpm || "-")}</td>
           <td>${escapeHtml(version.request.key || "-")}</td>
           <td>${version.has_midi ? "yes" : "-"}</td>
@@ -1213,14 +1261,293 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <div class="actions">
               <button class="secondary" data-project-select-version="${escapeHtml(version.version_id)}" type="button">Set Selected</button>
               <button class="secondary" data-project-final-version="${escapeHtml(version.version_id)}" type="button">Set Final</button>
+              <button class="secondary" data-project-variation-version="${escapeHtml(version.version_id)}" type="button">Create Variation</button>
+              <button class="secondary" data-project-evaluate-version="${escapeHtml(version.version_id)}" type="button">Evaluate Gate</button>
+              <button class="secondary" data-project-export-version="${escapeHtml(version.version_id)}" type="button">Export Final</button>
             </div>
           </td>
         </tr>
       `).join("");
       return `
         <table>
-          <thead><tr><th>Version</th><th>Name</th><th>Job</th><th>Status</th><th>Quality</th><th>Tempo</th><th>Key</th><th>MIDI</th><th>WAV</th><th>Stems</th><th>Stem WAV</th><th>Note</th><th>Actions</th></tr></thead>
-          <tbody>${rows || "<tr><td colspan='13'>No versions yet.</td></tr>"}</tbody>
+          <thead><tr><th>Version</th><th>Name</th><th>Job</th><th>Status</th><th>Quality</th><th>Parent</th><th>Variant Type</th><th>Gate</th><th>Final Export</th><th>Tempo</th><th>Key</th><th>MIDI</th><th>WAV</th><th>Stems</th><th>Stem WAV</th><th>Note</th><th>Actions</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='17'>No versions yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function projectVariationControls(project, versions) {
+      const parentId = projectVariationParentId || project.selected_version_id || project.final_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
+      const parent = versions.find((version) => version.version_id === parentId) || versions[0] || null;
+      const options = projectVersionOptions(versions, parentId);
+      return `
+        <div class="grid2">
+          <label>Parent Version
+            <select id="project-variation-parent">${options}</select>
+          </label>
+          <label>Variant Type
+            <select id="project-variation-type">
+              <option value="style_variation">style_variation</option>
+              <option value="tempo_key_variation">tempo_key_variation</option>
+              <option value="lyrics_variation">lyrics_variation</option>
+              <option value="arrangement_variation">arrangement_variation</option>
+              <option value="quality_repair">quality_repair</option>
+              <option value="manual">manual</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Name
+            <input id="project-variation-name" value="Variation ${(versions.length || 0) + 1}">
+          </label>
+          <label>Change Summary
+            <input id="project-variation-summary" placeholder="short change summary">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Generation Mode
+            <select id="project-variation-generation-mode">
+              <option value="">inherit</option>
+              <option value="local">local</option>
+              <option value="provider">provider</option>
+            </select>
+          </label>
+          <label>Pipeline Mode
+            <select id="project-variation-pipeline-mode">
+              <option value="">inherit</option>
+              <option value="single">single</option>
+              <option value="multinode">multinode</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Style Patch
+            <textarea id="project-variation-style"></textarea>
+          </label>
+          <label>Theme Patch
+            <textarea id="project-variation-theme"></textarea>
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Tempo BPM
+            <input id="project-variation-tempo" type="number" min="40" max="240">
+          </label>
+          <label>Key
+            <input id="project-variation-key">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Duration Seconds
+            <input id="project-variation-duration" type="number" min="30" max="600">
+          </label>
+          <label>Lyrics Patch
+            <textarea id="project-variation-lyrics"></textarea>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="project-create-variation" type="button" ${parent ? "" : "disabled"}>Create Variation</button>
+          <span id="project-variation-message" class="message"></span>
+        </div>
+        <pre>${escapeHtml(JSON.stringify(parent ? parent.request : {}, null, 2))}</pre>
+      `;
+    }
+
+    function projectVariationPayload() {
+      const requestPatch = {};
+      const textFields = [
+        ["style", "project-variation-style"],
+        ["theme", "project-variation-theme"],
+        ["key", "project-variation-key"],
+        ["lyrics", "project-variation-lyrics"],
+      ];
+      textFields.forEach(([field, id]) => {
+        const value = $(id).value;
+        if (value.trim()) requestPatch[field] = field === "lyrics" ? value : value.trim();
+      });
+      if ($("project-variation-tempo").value) requestPatch.tempo_bpm = Number($("project-variation-tempo").value);
+      if ($("project-variation-duration").value) requestPatch.duration_seconds = Number($("project-variation-duration").value);
+      const payload = {
+        variant_type: $("project-variation-type").value,
+        name: $("project-variation-name").value.trim(),
+        change_summary: $("project-variation-summary").value.trim(),
+        request_patch: requestPatch,
+      };
+      if ($("project-variation-generation-mode").value) payload.generation_mode = $("project-variation-generation-mode").value;
+      if ($("project-variation-pipeline-mode").value) payload.pipeline_mode = $("project-variation-pipeline-mode").value;
+      return payload;
+    }
+
+    async function renderProjectQualityGate(project, versions, target) {
+      const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/quality-gate`);
+      const config = data.config;
+      const rows = versions.map((version) => `
+        <tr>
+          <td>${escapeHtml(version.version_id)}</td>
+          <td>${escapeHtml(version.name || "-")}</td>
+          <td><span class="status ${version.quality_gate_status || "not_evaluated"}">${escapeHtml(version.quality_gate_status || "not_evaluated")}</span></td>
+          <td>${escapeHtml(version.quality_gate_score ?? "-")}</td>
+          <td>${escapeHtml((version.quality_gate_warnings || []).length)}</td>
+          <td><button class="secondary" data-project-evaluate-version="${escapeHtml(version.version_id)}" type="button">Evaluate Gate</button></td>
+        </tr>
+      `).join("");
+      target.innerHTML = `
+        <div class="grid2">
+          <label>Min Overall
+            <input id="project-gate-min-overall" type="number" min="0" max="100" value="${escapeHtml(config.min_overall)}">
+          </label>
+          <label>Min Structure
+            <input id="project-gate-min-structure" type="number" min="0" max="100" value="${escapeHtml(config.min_structure)}">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Min Melody
+            <input id="project-gate-min-melody" type="number" min="0" max="100" value="${escapeHtml(config.min_melody)}">
+          </label>
+          <label>Min Harmony
+            <input id="project-gate-min-harmony" type="number" min="0" max="100" value="${escapeHtml(config.min_harmony)}">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Min Arrangement
+            <input id="project-gate-min-arrangement" type="number" min="0" max="100" value="${escapeHtml(config.min_arrangement)}">
+          </label>
+          <label>Max Warnings
+            <input id="project-gate-max-warnings" type="number" min="0" max="99" value="${escapeHtml(config.max_warnings)}">
+          </label>
+        </div>
+        <div class="actions">
+          <label><input id="project-gate-allow-warnings" type="checkbox" ${config.allow_warnings ? "checked" : ""}> Allow Warnings</label>
+          <label><input id="project-gate-require-audio" type="checkbox" ${config.require_audio ? "checked" : ""}> Require Audio</label>
+          <label><input id="project-gate-require-stems" type="checkbox" ${config.require_stems ? "checked" : ""}> Require Stems</label>
+        </div>
+        <div class="actions">
+          <button id="project-save-gate" type="button">Save Quality Gate</button>
+          <button class="secondary" id="project-evaluate-all" type="button">Evaluate All</button>
+          <span id="project-gate-message" class="message"></span>
+        </div>
+        <table>
+          <thead><tr><th>Version</th><th>Name</th><th>Gate</th><th>Score</th><th>Warnings</th><th>Actions</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='6'>No versions yet.</td></tr>"}</tbody>
+        </table>
+      `;
+      bindAction("project-save-gate", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/quality-gate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectQualityGatePayload()),
+        });
+        $("project-gate-message").textContent = "saved";
+      });
+      bindAction("project-evaluate-all", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/quality-gate/evaluate-all`, { method: "POST" });
+        await loadProjects();
+      });
+    }
+
+    function projectQualityGatePayload() {
+      return {
+        min_overall: Number($("project-gate-min-overall").value || 0),
+        min_structure: Number($("project-gate-min-structure").value || 0),
+        min_melody: Number($("project-gate-min-melody").value || 0),
+        min_harmony: Number($("project-gate-min-harmony").value || 0),
+        min_arrangement: Number($("project-gate-min-arrangement").value || 0),
+        max_warnings: Number($("project-gate-max-warnings").value || 0),
+        allow_warnings: $("project-gate-allow-warnings").checked,
+        require_audio: $("project-gate-require-audio").checked,
+        require_stems: $("project-gate-require-stems").checked,
+      };
+    }
+
+    async function renderProjectFinalExport(project, versions, target) {
+      let manifest = null;
+      let message = "No final export yet.";
+      try {
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/final-export`);
+        manifest = data.final_export;
+      } catch (err) {
+        message = err.message;
+      }
+      const selectedId = project.final_version_id || project.selected_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
+      const selected = versions.find((version) => version.version_id === selectedId) || versions[0] || {};
+      target.innerHTML = `
+        <div class="summary-grid">
+          ${metric("Final", project.final_version_id || "-")}
+          ${metric("Gate", selected.quality_gate_status || "not_evaluated")}
+          ${metric("MIDI", selected.has_midi ? "yes" : "-")}
+          ${metric("WAV", selected.has_audio ? "yes" : "-")}
+        </div>
+        <div class="summary-grid">
+          ${metric("Stems", selected.has_stems ? "yes" : "-")}
+          ${metric("Stem WAV", selected.has_stem_audio ? "yes" : "-")}
+          ${metric("Quality", selected.quality_score ?? "-")}
+          ${metric("Final Export", selected.final_export_path || "-")}
+        </div>
+        <div class="grid2">
+          <label>Version
+            <select id="project-final-export-version">${projectVersionOptions(versions, selectedId)}</select>
+          </label>
+          <label>Force Gate Override
+            <select id="project-final-export-force">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <label><input id="project-final-export-audio" type="checkbox" checked> Include Audio</label>
+          <label><input id="project-final-export-stems" type="checkbox" checked> Include Stems</label>
+          <label><input id="project-final-export-stem-audio" type="checkbox" checked> Include Stem Audio</label>
+        </div>
+        <div class="actions">
+          <button id="project-generate-final-export" type="button" ${versions.length ? "" : "disabled"}>Generate Final Export</button>
+          <button class="secondary" id="project-refresh-final-export" type="button">Refresh</button>
+          <a class="button-link secondary" href="/api/projects/${encodeURIComponent(project.project_id)}/export">Export JSON</a>
+          <span id="project-final-export-message" class="message"></span>
+        </div>
+        ${manifest ? finalExportManifestHtml(manifest) : `<div class="empty">${escapeHtml(message)}</div>`}
+      `;
+      bindAction("project-generate-final-export", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/final-export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectFinalExportPayload()),
+        });
+        await loadProjects();
+      });
+      bindAction("project-refresh-final-export", async () => {
+        await renderProjectFinalExport(project, versions, target);
+      });
+    }
+
+    function projectFinalExportPayload() {
+      return {
+        version_id: $("project-final-export-version").value,
+        include_audio: $("project-final-export-audio").checked,
+        include_stems: $("project-final-export-stems").checked,
+        include_stem_audio: $("project-final-export-stem-audio").checked,
+        force: $("project-final-export-force").value === "true",
+      };
+    }
+
+    function finalExportManifestHtml(manifest) {
+      const rows = (manifest.files || []).map((file) => `
+        <tr>
+          <td>${escapeHtml(file.kind)}</td>
+          <td>${escapeHtml(file.path)}</td>
+          <td>${file.exists ? "yes" : "-"}</td>
+          <td>${escapeHtml(file.skipped || file.size_bytes || "-")}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="summary-grid">
+          ${metric("Export Version", manifest.version_id || "-")}
+          ${metric("Job", manifest.job_id || "-")}
+          ${metric("Gate", (manifest.quality_gate || {}).status || "-")}
+          ${metric("Generated", manifest.generated_at || "-")}
+        </div>
+        <table>
+          <thead><tr><th>Kind</th><th>Path</th><th>Exists</th><th>Info</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='4'>No files.</td></tr>"}</tbody>
         </table>
       `;
     }
@@ -1241,8 +1568,22 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function projectVersionOptions(versions, selectedId) {
+      return versions.map((version) => `
+        <option value="${escapeHtml(version.version_id)}" ${version.version_id === selectedId ? "selected" : ""}>${escapeHtml(version.version_id)} · ${escapeHtml(version.name || version.job_id)}</option>
+      `).join("");
+    }
+
     function projectTabLabel(tab) {
-      return { versions: "Versions", compare: "Compare", export: "Export JSON", events: "Events" }[tab] || tab;
+      return {
+        versions: "Versions",
+        variation: "Variation",
+        "quality-gate": "Quality Gate",
+        "final-export": "Final Export",
+        compare: "Compare",
+        export: "Export JSON",
+        events: "Events",
+      }[tab] || tab;
     }
 
     async function loadBatches() {

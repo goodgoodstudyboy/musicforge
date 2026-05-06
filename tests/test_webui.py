@@ -205,6 +205,11 @@ def test_webui_contains_project_workspace_controls():
     assert "Add Existing Job" in html
     assert "Set Selected" in html
     assert "Set Final" in html
+    assert "Create Variation" in html
+    assert "Evaluate Gate" in html
+    assert "Quality Gate" in html
+    assert "Final Export" in html
+    assert "Generate Final Export" in html
     assert "Compare" in html
     assert "Export JSON" in html
     assert "Delete Project" in html
@@ -218,6 +223,11 @@ def test_webui_calls_project_apis():
     assert "/api/projects/${encodeURIComponent(projectId)}" in html
     assert "/api/projects/${id}/versions" in html
     assert "/api/projects/${id}/versions/from-job" in html
+    assert "/versions/${encodeURIComponent(parentId)}/variation" in html
+    assert "/versions/${encodeURIComponent(target.dataset.projectEvaluateVersion)}/evaluate" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/quality-gate" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/quality-gate/evaluate-all" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/final-export" in html
     assert "/api/projects/${id}/selected" in html
     assert "/api/projects/${id}/final" in html
     assert "/api/projects/${encodeURIComponent(project.project_id)}/diff" in html
