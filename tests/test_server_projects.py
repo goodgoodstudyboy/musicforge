@@ -170,6 +170,7 @@ def test_create_project_version_selected_final_diff_and_export(tmp_path, monkeyp
             {"version_id": "v001"},
         )
         diff_status, diff = request_json(server, "GET", f"/api/projects/{project_id}/diff?left=v001&right=v002")
+        compare_status, compare = request_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right=v002")
         export_status, export = request_json(server, "GET", f"/api/projects/{project_id}/export")
     finally:
         stop_test_server(server)
@@ -185,6 +186,10 @@ def test_create_project_version_selected_final_diff_and_export(tmp_path, monkeyp
     assert final["project"]["final_version_id"] == "v001"
     assert diff_status == 200
     assert diff["changed"]["request"]["tempo_bpm"] == {"left": None, "right": 96}
+    assert compare_status == 200
+    assert compare["summary"]["recommendation"] in {"left", "right", "tie", "unknown"}
+    assert compare["left"]["midi_available"] is True
+    assert compare["right"]["quality"]["overall"] is not None
     assert export_status == 200
     assert export["project"]["project_id"] == project_id
     assert (tmp_path / ".musicforge" / "projects" / project_id / "export.json").exists()
@@ -484,6 +489,8 @@ def test_project_final_export_creates_bundle_and_can_read_manifest(tmp_path, mon
             {"version_id": "v001"},
         )
         export_status, exported = request_json(server, "POST", f"/api/projects/{project_id}/final-export")
+        zip_status, zipped = request_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+        zip_download_status, zip_body = request_json(server, "GET", f"/api/projects/{project_id}/final-export.zip")
         read_status, read_back = request_json(server, "GET", f"/api/projects/{project_id}/final-export")
         events_status, events = request_json(server, "GET", f"/api/projects/{project_id}/events")
     finally:
@@ -495,13 +502,66 @@ def test_project_final_export_creates_bundle_and_can_read_manifest(tmp_path, mon
     assert export_status == 200
     assert exported["final_export"]["version_id"] == "v001"
     assert exported["version"]["final_export_path"] == str(export_dir)
+    assert zip_status == 200
+    assert zipped["zip"]["entry_count"] >= 4
+    assert zipped["zip"]["sha256"]
+    assert zip_download_status == 200
+    assert zip_body.startswith(b"PK")
     assert (export_dir / "song-plan.json").exists()
     assert (export_dir / "song.mid").read_bytes().startswith(b"MThd")
     assert (export_dir / "project-export.json").exists()
     assert read_status == 200
     assert read_back["final_export"]["job_id"] == exported["final_export"]["job_id"]
+    assert read_back["final_export"]["zip"]["entry_count"] == zipped["zip"]["entry_count"]
     assert events_status == 200
     assert any(event["type"] == "final_export_created" for event in events["events"])
+    assert any(event["type"] == "final_export_zip_created" for event in events["events"])
+
+
+def test_project_list_search_and_filters(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, alpha = request_json(server, "POST", "/api/projects", {"name": "Alpha Song", "description": "bright hook"})
+        _status, beta = request_json(server, "POST", "/api/projects", {"name": "Beta Song", "description": "dark verse"})
+        alpha_id = alpha["project"]["project_id"]
+        beta_id = beta["project"]["project_id"]
+        first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{alpha_id}/versions",
+            {"request": request_payload("Alpha Version"), "name": "Bright version"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        request_json(server, "POST", f"/api/projects/{alpha_id}/final", {"version_id": "v001"})
+        request_json(server, "POST", f"/api/projects/{beta_id}/hide")
+        search_status, search = request_json(server, "GET", "/api/projects?q=bright")
+        final_status, final = request_json(server, "GET", "/api/projects?status=final")
+        hidden_status, hidden = request_json(server, "GET", "/api/projects?hidden=true")
+    finally:
+        stop_test_server(server)
+
+    assert first_status == 202
+    assert search_status == 200
+    assert [project["project_id"] for project in search["projects"]] == [alpha_id]
+    assert final_status == 200
+    assert [project["project_id"] for project in final["projects"]] == [alpha_id]
+    assert hidden_status == 200
+    assert [project["project_id"] for project in hidden["projects"]] == [beta_id]
+
+
+def test_project_final_export_zip_requires_existing_bundle(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Zip Missing Project"})
+        project_id = created["project"]["project_id"]
+        status, data = request_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+    finally:
+        stop_test_server(server)
+
+    assert status == 409
+    assert data["error"] == "Final export has not been generated."
 
 
 def test_project_final_export_requires_final_or_explicit_version(tmp_path, monkeypatch):

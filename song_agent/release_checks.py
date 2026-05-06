@@ -11,9 +11,12 @@ from pathlib import Path
 from song_agent import __version__
 from song_agent.agent.pipeline import deterministic_compose
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
-from song_agent.final_export import FinalExportOptions, build_final_export_bundle
+from song_agent.edit_presets import EditPresetStore, merge_preset_intent
+from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
+from song_agent.project_compare import compare_project_versions
 from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.projectio import write_json
+from song_agent.projects import ProjectStore
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
 
@@ -87,13 +90,13 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
         remotes.returncode == 0 and not _remote_has_token(remotes.stdout),
         _redact_remote(remotes.stdout.strip()),
     )
-    tracked = _run(["git", "ls-files", ".musicforge/provider.json", ".musicforge/renderer.json"], root)
+    tracked = _run(["git", "ls-files", ".musicforge/provider.json", ".musicforge/renderer.json", ".musicforge/edit-presets.json"], root)
     report.add(
         ".musicforge configs untracked",
         tracked.returncode == 0 and not tracked.stdout.strip(),
         tracked.stdout.strip(),
     )
-    ignored = _run(["git", "check-ignore", "-v", ".musicforge/provider.json", ".musicforge/renderer.json"], root)
+    ignored = _run(["git", "check-ignore", "-v", ".musicforge/provider.json", ".musicforge/renderer.json", ".musicforge/edit-presets.json"], root)
     report.add(
         ".musicforge configs ignored",
         ignored.returncode == 0,
@@ -103,6 +106,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("secret scan", *_secret_scan(root))
     report.add("final export smoke", *_final_export_smoke(root))
     report.add("edit smoke", *_edit_smoke(root))
+    report.add("v1.2 workflow smoke", *_v12_workflow_smoke(root))
     return report
 
 
@@ -280,6 +284,84 @@ def _edit_smoke(root: Path) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def _v12_workflow_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v12-") as temp_dir:
+            base = Path(temp_dir)
+            store = ProjectStore(base / ".musicforge" / "projects")
+            presets = EditPresetStore(base / ".musicforge" / "edit-presets.json")
+            document = store.create_project("Release v1.2 Smoke")
+            request = SongRequest(
+                title="Release v1.2 Smoke",
+                language="en",
+                style="synth pop",
+                theme="release check",
+                tempo_bpm=96,
+            )
+            parent_dir = base / "runs" / "v12-parent"
+            parent_plan = deterministic_compose(request)
+            write_json(parent_dir / "data" / "song-plan.json", parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_dir / "renders" / "song.mid")
+            parent_job = _SmokeJob("v12-parent", parent_dir, request.to_dict())
+            document = store.add_version_from_job(document.state.project_id, parent_job, name="Parent")
+
+            preset = presets.get_preset("brighter-chorus-harmony")
+            intent_payload = merge_preset_intent(preset, {"name": "Preset Child"}, parent_plan)
+            intent = EditIntent.from_dict(intent_payload)
+            result = apply_edit_intent(parent_plan, intent)
+            child_dir = base / "runs" / "v12-child"
+            write_json(child_dir / "data" / "song-plan.json", result.plan.to_dict())
+            render_midi(result.plan, child_dir / "renders" / "song.mid")
+            write_json(
+                child_dir / "data" / "edit-metadata.json",
+                build_edit_metadata(
+                    project_id=document.state.project_id,
+                    parent_version_id="v001",
+                    parent_job_id="v12-parent",
+                    intent=intent,
+                    created_at="2026-05-06T00:00:00+00:00",
+                    summary=result.summary,
+                    warnings=result.warnings,
+                )
+                | {"preset": preset.public_ref()},
+            )
+            child_job = _SmokeJob("v12-child", child_dir, request.to_dict())
+            document = store.add_version_from_job(
+                document.state.project_id,
+                child_job,
+                name="Preset Child",
+                parent_version_id="v001",
+                variant_type="section_edit",
+                change_summary="preset harmony",
+            )
+            compare = compare_project_versions(document, "v001", "v002")
+            gate = evaluate_quality_gate(child_dir, QualityGateConfig(), now="2026-05-06T00:00:00+00:00")
+            project_dir = store.project_dir(document.state.project_id)
+            manifest = build_final_export_bundle(
+                project=document.state,
+                version=document.versions[-1],
+                project_dir=project_dir,
+                run_dir=child_dir,
+                gate=gate,
+                options=FinalExportOptions(version_id="v002"),
+                now="2026-05-06T00:00:00+00:00",
+                project_export=store.export_project(document.state.project_id),
+            )
+            zip_info = build_final_export_zip(project_dir, now="2026-05-06T00:00:00+00:00")
+            safe_entries = all(not entry.startswith(("/", "\\")) and ".." not in entry.split("/") for entry in zip_info["entries"])
+            ok = (
+                compare["right"]["edit"]["preset_id"] == "brighter-chorus-harmony"
+                and manifest["version_id"] == "v002"
+                and zip_info["entry_count"] >= 4
+                and safe_entries
+            )
+            return ok, f"preset={preset.preset_id}, compare={compare['summary']['recommendation']}, zip_entries={zip_info['entry_count']}"
+    except Exception as exc:
+        return False, str(exc)
+
+
 class _SmokeProject:
     project_id = "release-smoke"
     name = "Release Smoke"
@@ -293,6 +375,22 @@ class _SmokeVersion:
 
     def __init__(self, run_dir: Path) -> None:
         self.output_dir = str(run_dir)
+
+
+class _SmokeJob:
+    def __init__(self, job_id: str, run_dir: Path, request: dict[str, object]) -> None:
+        now = "2026-05-06T00:00:00+00:00"
+        self.job_id = job_id
+        self.title = str(request.get("title") or job_id)
+        self.output_dir = str(run_dir)
+        self.status = "completed"
+        self.created_at = now
+        self.updated_at = now
+        self.input_payload = dict(request)
+        self.generation_mode = "local"
+        self.pipeline_mode = "single"
+        self.summary = {"title": self.title}
+        self.artifacts = {"midi": str(run_dir / "renders" / "song.mid")}
 
 
 def _skip_file(path: Path) -> bool:

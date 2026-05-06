@@ -9,6 +9,7 @@ from song_agent.agent.pipeline import deterministic_compose
 from song_agent.final_export import (
     FinalExportError,
     FinalExportOptions,
+    build_final_export_zip,
     build_final_export_bundle,
     read_final_export_manifest,
 )
@@ -17,6 +18,7 @@ from song_agent.projectio import read_json, write_json
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
 from song_agent.stems import read_stem_manifest, render_stem_midis
+import zipfile
 
 
 class Project:
@@ -213,3 +215,38 @@ def test_final_export_skips_polluted_stem_manifest_paths(tmp_path: Path) -> None
     assert any(file["kind"] == "stem_midi" and file["skipped"] == "unsafe_path" for file in exported["files"])
     assert not (project_dir / "final-export" / "stems" / "manifest.json").exists()
     assert not (project_dir / "final-export" / "data" / "provider-snapshot.json").exists()
+
+
+def test_final_export_zip_contains_only_safe_relative_entries(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+        project_export={"project": {"project_id": "export-project"}},
+    )
+
+    zip_info = build_final_export_zip(project_dir, now="2026-05-06T00:00:00Z")
+
+    zip_path = project_dir / "final-export.zip"
+    assert zip_info["entry_count"] > 0
+    assert zip_info["sha256"]
+    with zipfile.ZipFile(zip_path) as archive:
+        names = archive.namelist()
+    assert "manifest.json" in names
+    assert "README.txt" in names
+    assert "song.mid" in names
+    assert all(not name.startswith(("/", "\\")) for name in names)
+    assert all(".." not in name.split("/") for name in names)
+    assert ".musicforge/provider.json" not in names
+    assert read_final_export_manifest(project_dir)["zip"]["entry_count"] == zip_info["entry_count"]
+
+
+def test_final_export_zip_requires_existing_export_dir(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="Final export"):
+        build_final_export_zip(tmp_path / ".musicforge" / "projects" / "missing", now="2026-05-06T00:00:00Z")

@@ -515,6 +515,39 @@ def panel_html() -> str:
               <span id="project-message" class="message"></span>
             </div>
           </form>
+          <div class="grid2">
+            <label>Search Projects
+              <input id="project-search" placeholder="name, description, version">
+            </label>
+            <label>Status Filter
+              <select id="project-status-filter">
+                <option value="">all</option>
+                <option value="active">active</option>
+                <option value="finalized">finalized</option>
+                <option value="selected">selected</option>
+                <option value="final">final</option>
+                <option value="gate_failed">gate_failed</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Variant Filter
+              <select id="project-variant-filter">
+                <option value="">all</option>
+                <option value="original">original</option>
+                <option value="manual">manual</option>
+                <option value="section_edit">section_edit</option>
+                <option value="track_edit">track_edit</option>
+                <option value="lyrics_edit">lyrics_edit</option>
+                <option value="melody_edit">melody_edit</option>
+                <option value="arrangement_edit">arrangement_edit</option>
+                <option value="style_variation">style_variation</option>
+              </select>
+            </label>
+            <label>Filters
+              <button class="secondary" id="clear-project-filters" type="button" style="width:100%;margin-top:4px;">Clear Filters</button>
+            </label>
+          </div>
           <div id="project-list" class="project-list"><div class="empty">No projects yet.</div></div>
         </div>
       </section>
@@ -617,6 +650,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let activeProjectTab = "versions";
     let projectVariationParentId = null;
     let projectEditParentId = null;
+    let editPresets = [];
 
     const $ = (id) => document.getElementById(id);
 
@@ -661,6 +695,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       fillForm(template.defaults);
       await loadProvider();
       await loadRenderer();
+      await loadEditPresets();
       await loadJobs();
       await loadProjects();
       await loadBatches();
@@ -761,6 +796,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     $("refresh-projects").addEventListener("click", loadProjects);
     $("include-hidden-projects").addEventListener("change", async () => {
       includeHiddenProjects = $("include-hidden-projects").checked;
+      await loadProjects();
+    });
+    ["project-search", "project-status-filter", "project-variant-filter"].forEach((id) => {
+      $(id).addEventListener("change", loadProjects);
+    });
+    $("project-search").addEventListener("input", debounce(loadProjects, 250));
+    $("clear-project-filters").addEventListener("click", async () => {
+      $("project-search").value = "";
+      $("project-status-filter").value = "";
+      $("project-variant-filter").value = "";
+      $("include-hidden-projects").checked = false;
+      includeHiddenProjects = false;
       await loadProjects();
     });
     $("project-form").addEventListener("submit", async (event) => {
@@ -910,6 +957,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       applyRenderer(data);
     }
 
+    async function loadEditPresets() {
+      const data = await api("/api/edit-presets");
+      editPresets = data.presets || [];
+    }
+
     function applyRenderer(data) {
       rendererConfig = data.config;
       $("renderer-status").textContent = data.configured ? "configured" : "missing";
@@ -994,7 +1046,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
 
     async function loadProjects() {
       try {
-        const data = await api(includeHiddenProjects ? "/api/projects?include_hidden=1" : "/api/projects");
+        const params = new URLSearchParams();
+        if (includeHiddenProjects) params.set("include_hidden", "1");
+        if ($("project-search").value.trim()) params.set("q", $("project-search").value.trim());
+        if ($("project-status-filter").value) params.set("status", $("project-status-filter").value);
+        if ($("project-variant-filter").value) params.set("variant_type", $("project-variant-filter").value);
+        const data = await api(`/api/projects${params.toString() ? "?" + params.toString() : ""}`);
         projects = data.projects;
         if (selectedProjectId && !projects.some((project) => project.project_id === selectedProjectId)) {
           selectedProjectId = null;
@@ -1231,8 +1288,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         bindAction("project-compare", async () => {
           const left = $("project-diff-left").value;
           const right = $("project-diff-right").value;
-          const diff = await api(`/api/projects/${encodeURIComponent(project.project_id)}/diff?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`);
-          $("project-diff-result").innerHTML = `<pre>${escapeHtml(JSON.stringify(diff, null, 2))}</pre>`;
+          const compare = await api(`/api/projects/${encodeURIComponent(project.project_id)}/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`);
+          $("project-diff-result").innerHTML = projectCompareResultHtml(compare);
         });
       } else if (activeProjectTab === "export") {
         try {
@@ -1419,13 +1476,40 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadJobs();
         await loadProjects();
       });
+      bindAction("project-apply-preset", async () => {
+        applyEditPresetToForm();
+      });
+      bindAction("project-save-edit-preset", async () => {
+        const presetId = slugifyClient($("project-edit-preset-id").value || $("project-edit-name").value || "custom-edit");
+        await api("/api/edit-presets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectEditPresetPayload(presetId)),
+        });
+        await loadEditPresets();
+        await renderProjectEdit(project, versions, target);
+      });
     }
 
     function projectEditControls(project, versions, parentId, targets, preview) {
       const sectionOptions = (targets.sections || []).map((section) => `<option value="${escapeHtml(section.name)}">${escapeHtml(section.name)} · ${escapeHtml(section.bars)} bars</option>`).join("");
       const trackOptions = (targets.tracks || []).map((track) => `<option value="${escapeHtml(track.name)}">${escapeHtml(track.name)} · ${escapeHtml(track.instrument)} · ${escapeHtml(track.note_count)} notes</option>`).join("");
       const editTypeOptions = (targets.supported_edit_types || ["section_energy", "section_harmony", "track_density", "lyrics_rewrite", "melody_variation", "arrangement_variation"]).map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+      const presetOptions = editPresets.map((preset) => `<option value="${escapeHtml(preset.preset_id)}">${escapeHtml(preset.name)}${preset.built_in ? " · built-in" : ""}</option>`).join("");
       return `
+        <div class="grid2">
+          <label>Edit Preset
+            <select id="project-edit-preset"><option value="">none</option>${presetOptions}</select>
+          </label>
+          <label>Preset ID
+            <input id="project-edit-preset-id" placeholder="custom-edit-preset">
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="project-apply-preset" type="button">Apply Preset</button>
+          <button class="secondary" id="project-save-edit-preset" type="button">Save Current As Preset</button>
+          <span id="project-preset-message" class="message"></span>
+        </div>
         <div class="grid2">
           <label>Parent Version
             <select id="project-edit-parent">${projectVersionOptions(versions, parentId)}</select>
@@ -1506,7 +1590,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if ($("project-edit-lyrics").value.trim()) payload.lyrics = $("project-edit-lyrics").value;
       if ($("project-edit-chords").value.trim()) payload.chords = $("project-edit-chords").value.split(",").map((item) => item.trim()).filter(Boolean);
       if ($("project-edit-instrument").value.trim()) payload.instrument = $("project-edit-instrument").value.trim();
-      return {
+      const presetId = $("project-edit-preset") ? $("project-edit-preset").value : "";
+      const data = {
         edit_type: $("project-edit-type").value,
         target,
         instruction: $("project-edit-instruction").value.trim(),
@@ -1517,6 +1602,55 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         name: $("project-edit-name").value.trim(),
         change_summary: $("project-edit-summary").value.trim(),
       };
+      if (presetId) data.preset_id = presetId;
+      return data;
+    }
+
+    function applyEditPresetToForm() {
+      const preset = editPresets.find((item) => item.preset_id === $("project-edit-preset").value);
+      if (!preset) return;
+      $("project-edit-type").value = preset.edit_type;
+      $("project-edit-strength").value = Math.max(1, Math.min(10, Math.round(Number(preset.strength || 0.5) * 10)));
+      $("project-edit-instruction").value = preset.description || "";
+      if (preset.target_defaults) {
+        if (preset.target_defaults.field) $("project-edit-field").value = preset.target_defaults.field;
+        const sectionName = resolveOptionByRole("project-edit-section", preset.target_defaults.section_role, preset.target_defaults.section_index);
+        if (preset.target_defaults.section_name || sectionName) $("project-edit-section").value = preset.target_defaults.section_name || sectionName;
+        const trackName = resolveOptionByRole("project-edit-track", preset.target_defaults.track_role, 0);
+        if (preset.target_defaults.track_name || trackName) $("project-edit-track").value = preset.target_defaults.track_name || trackName;
+      }
+      if (preset.payload) {
+        $("project-edit-lyrics").value = preset.payload.lyrics || "";
+        $("project-edit-chords").value = Array.isArray(preset.payload.chords) ? preset.payload.chords.join(", ") : "";
+        $("project-edit-instrument").value = preset.payload.instrument || "";
+      }
+      document.querySelectorAll(".project-edit-preserve").forEach((checkbox) => {
+        checkbox.checked = (preset.preserve || []).includes(checkbox.value);
+      });
+      $("project-preset-message").textContent = preset.name;
+    }
+
+    function projectEditPresetPayload(presetId) {
+      const payload = projectEditPayload();
+      return {
+        preset_id: presetId,
+        name: $("project-edit-name").value.trim() || presetId,
+        description: $("project-edit-instruction").value.trim(),
+        edit_type: payload.edit_type,
+        strength: Math.max(0, Math.min(1, Number(payload.strength || 5) / 10)),
+        target_defaults: payload.target,
+        payload: payload.payload,
+        preserve: payload.preserve,
+        tags: ["studio"],
+      };
+    }
+
+    function resolveOptionByRole(selectId, role, index) {
+      if (!role) return "";
+      const options = Array.from($(selectId).options).filter((option) => option.value && option.value.toLowerCase().includes(String(role).toLowerCase()));
+      if (!options.length) return "";
+      const targetIndex = Number(index || 0);
+      return (options[targetIndex < 0 ? options.length - 1 : Math.min(targetIndex, options.length - 1)] || options[0]).value;
     }
 
     async function renderProjectQualityGate(project, versions, target) {
@@ -1642,8 +1776,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         <div class="actions">
           <button id="project-generate-final-export" type="button" ${versions.length ? "" : "disabled"}>Generate Final Export</button>
+          <button class="secondary" id="project-build-final-export-zip" type="button" ${manifest ? "" : "disabled"}>Build ZIP</button>
           <button class="secondary" id="project-refresh-final-export" type="button">Refresh</button>
           <a class="button-link secondary" href="/api/projects/${encodeURIComponent(project.project_id)}/export">Export JSON</a>
+          ${manifest && manifest.zip ? `<a class="button-link secondary" href="/api/projects/${encodeURIComponent(project.project_id)}/final-export.zip">Download ZIP</a>` : ""}
           <span id="project-final-export-message" class="message"></span>
         </div>
         ${manifest ? finalExportManifestHtml(manifest) : `<div class="empty">${escapeHtml(message)}</div>`}
@@ -1657,6 +1793,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadProjects();
       });
       bindAction("project-refresh-final-export", async () => {
+        await renderProjectFinalExport(project, versions, target);
+      });
+      bindAction("project-build-final-export-zip", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/final-export/zip`, { method: "POST" });
         await renderProjectFinalExport(project, versions, target);
       });
     }
@@ -1687,6 +1827,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Gate", (manifest.quality_gate || {}).status || "-")}
           ${metric("Generated", manifest.generated_at || "-")}
         </div>
+        ${manifest.zip ? `<div class="summary-grid">
+          ${metric("ZIP", manifest.zip.filename || "final-export.zip")}
+          ${metric("ZIP Size", manifest.zip.size_bytes || 0)}
+          ${metric("ZIP Entries", manifest.zip.entry_count || 0)}
+          ${metric("ZIP SHA", (manifest.zip.sha256 || "").slice(0, 12))}
+        </div>` : ""}
         <table>
           <thead><tr><th>Kind</th><th>Path</th><th>Exists</th><th>Info</th></tr></thead>
           <tbody>${rows || "<tr><td colspan='4'>No files.</td></tr>"}</tbody>
@@ -1707,6 +1853,65 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         <div class="actions"><button id="project-compare" type="button">Compare</button></div>
         <div id="project-diff-result"><div class="empty">Choose two versions to compare.</div></div>
+      `;
+    }
+
+    function projectCompareResultHtml(compare) {
+      const sectionRows = (compare.sections || []).map((row) => `
+        <tr>
+          <td>${escapeHtml(row.section)}</td>
+          <td>${escapeHtml(row.changed ? "changed" : "-")}</td>
+          <td>${escapeHtml(JSON.stringify(row.left || {}))}</td>
+          <td>${escapeHtml(JSON.stringify(row.right || {}))}</td>
+        </tr>
+      `).join("");
+      const trackRows = (compare.tracks || []).map((row) => `
+        <tr>
+          <td>${escapeHtml(row.track)}</td>
+          <td>${escapeHtml(row.changed ? "changed" : "-")}</td>
+          <td>${escapeHtml(JSON.stringify(row.left || {}))}</td>
+          <td>${escapeHtml(JSON.stringify(row.right || {}))}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="summary-grid">
+          ${metric("Recommendation", compare.summary.recommendation || "-")}
+          ${metric("Quality Delta", compare.summary.quality_delta ?? "-")}
+          ${metric("Section Changes", compare.summary.section_changes || 0)}
+          ${metric("Track Changes", compare.summary.track_changes || 0)}
+        </div>
+        <div class="grid2">
+          ${projectCompareSideHtml("Left", compare.left, (compare.artifacts || {}).left)}
+          ${projectCompareSideHtml("Right", compare.right, (compare.artifacts || {}).right)}
+        </div>
+        <table>
+          <thead><tr><th>Section</th><th>Changed</th><th>Left</th><th>Right</th></tr></thead>
+          <tbody>${sectionRows || "<tr><td colspan='4'>No section data.</td></tr>"}</tbody>
+        </table>
+        <table>
+          <thead><tr><th>Track</th><th>Changed</th><th>Left</th><th>Right</th></tr></thead>
+          <tbody>${trackRows || "<tr><td colspan='4'>No track data.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function projectCompareSideHtml(label, version, artifacts) {
+      if (!version) return `<div class="empty">${escapeHtml(label)}</div>`;
+      return `
+        <div>
+          <div class="panel-title" style="padding:0 0 8px;border-bottom:0;">${escapeHtml(label)} ${escapeHtml(version.version_id)}</div>
+          <div class="summary-grid">
+            ${metric("Quality", (version.quality || {}).overall ?? "-")}
+            ${metric("Gate", (version.gate || {}).status || "-")}
+            ${metric("Variant", version.variant_type || "-")}
+            ${metric("Preset", ((version.edit || {}).preset || {}).name || "-")}
+          </div>
+          <div class="actions">
+            ${artifacts && artifacts.midi ? `<a class="button-link secondary" href="${escapeHtml(artifacts.midi)}">MIDI</a>` : ""}
+            ${artifacts && artifacts.audio ? `<a class="button-link secondary" href="${escapeHtml(artifacts.audio)}">WAV</a>` : ""}
+          </div>
+          ${artifacts && artifacts.audio ? `<audio class="audio-player" controls src="${escapeHtml(artifacts.audio)}"></audio>` : ""}
+        </div>
       `;
     }
 
@@ -2508,6 +2713,23 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
+    }
+
+    function slugifyClient(value) {
+      return String(value || "custom-edit")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 64) || "custom-edit";
+    }
+
+    function debounce(fn, delay) {
+      let timer = null;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+      };
     }
 
     init().catch((err) => {

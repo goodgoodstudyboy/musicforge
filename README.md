@@ -180,7 +180,9 @@ v0.9.0 adds Project workspace metadata for organizing multiple generated jobs
 as versions of the same song. v1.0.0 extends this into a controlled creation
 and delivery workflow: versions can branch from selected/final/any parent
 version, quality gates can block low-scoring final candidates, and final export
-bundles collect the approved artifacts for handoff.
+bundles collect the approved artifacts for handoff. v1.2.0 rounds out the
+workspace with reusable edit presets, A/B version comparison, safe Final Export
+ZIP delivery, and Project list search/filter controls.
 
 Project metadata lives under
 `.musicforge/projects/<project-id>/` and does not copy or delete run artifacts:
@@ -192,6 +194,8 @@ Project metadata lives under
 .musicforge/projects/<project-id>/export.json
 .musicforge/projects/<project-id>/quality-gate.json
 .musicforge/projects/<project-id>/final-export/
+.musicforge/projects/<project-id>/final-export.zip
+.musicforge/edit-presets.json
 ```
 
 A Project can hold several versions, each referencing one existing job/run.
@@ -230,6 +234,14 @@ Edit metadata records the parent version/job, target, instruction, preserve
 constraints, strength, summary, and warnings. Stems and audio are not inherited;
 render them again for the edited version when needed.
 
+Edit presets can be applied from Studio's Project Edit tab. Built-in presets
+cover common edits such as lifting the final chorus, simplifying verse bass,
+brightening chorus harmony, and rewriting a chorus hook. User presets are stored
+locally in `.musicforge/edit-presets.json`, which is ignored by Git. Presets
+store only generic edit intent defaults, not project IDs, version IDs, job IDs,
+tokens, or local file paths. Section harmony presets are validated against the
+supported local MIDI chord set before they can be saved or applied.
+
 Quality Gate is stored per Project. Defaults require the generated `SongPlan`
 to meet baseline quality scores, but do not require WAV or stems because local
 audio rendering depends on user renderer setup. Setting final evaluates the gate
@@ -256,10 +268,21 @@ The bundle copies only files from the selected version's run directory. Stale
 stem manifests are detected by source hash and skipped instead of copying old
 track material.
 
+Final Export ZIP builds `.musicforge/projects/<project-id>/final-export.zip`
+from the existing `final-export/` directory. ZIP entries are relative paths
+only; symlinks, `..`, absolute paths, and files outside the final-export
+directory are rejected or skipped. The manifest records ZIP size, sha256, and
+entry count for handoff checks.
+
+The Compare tab uses the Project Compare API to show A/B quality, gate status,
+edit preset metadata, changed sections, changed tracks, MIDI links, and WAV
+players when audio exists. The recommendation field is deterministic guidance
+only; it never changes selected or final versions.
+
 Project APIs:
 
 ```text
-GET  /api/projects
+GET  /api/projects?q=<text>&status=<status>&variant_type=<type>&hidden=false&include_hidden=false
 POST /api/projects
 GET  /api/projects/<project-id>
 POST /api/projects/<project-id>/versions
@@ -276,13 +299,22 @@ POST /api/projects/<project-id>/quality-gate
 POST /api/projects/<project-id>/quality-gate/evaluate-all
 GET  /api/projects/<project-id>/final-export
 POST /api/projects/<project-id>/final-export
+POST /api/projects/<project-id>/final-export/zip
+GET  /api/projects/<project-id>/final-export.zip
 GET  /api/projects/<project-id>/diff?left=v001&right=v002
+GET  /api/projects/<project-id>/compare?left=v001&right=v002
 GET  /api/projects/<project-id>/export
 GET  /api/projects/<project-id>/events
 POST /api/projects/<project-id>/hide
 POST /api/projects/<project-id>/unhide
 POST /api/projects/<project-id>/delete
 GET  /api/jobs/<job-id>/edit
+GET  /api/edit-presets
+POST /api/edit-presets
+GET  /api/edit-presets/<preset-id>
+POST /api/edit-presets/<preset-id>
+POST /api/edit-presets/<preset-id>/delete
+POST /api/edit-presets/reset
 ```
 
 ## Multi-node Pipeline

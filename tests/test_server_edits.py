@@ -171,6 +171,84 @@ def test_project_edit_targets_and_validation_errors(tmp_path, monkeypatch):
     assert job_edit["error"] == "Edit metadata not found."
 
 
+def test_edit_preset_api_and_project_edit_with_preset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        list_status, listed = request_json(server, "GET", "/api/edit-presets")
+        create_status, created = request_json(
+            server,
+            "POST",
+            "/api/edit-presets",
+            {
+                "preset_id": "custom-hook-lift",
+                "name": "Custom Hook Lift",
+                "description": "Lift hook energy",
+                "edit_type": "section_energy",
+                "strength": 0.8,
+                "target_defaults": {"section_role": "chorus", "section_index": -1},
+                "preserve": ["tempo", "key", "structure"],
+            },
+        )
+        read_status, read_back = request_json(server, "GET", "/api/edit-presets/custom-hook-lift")
+        project_id, _parent_job = create_project_version(server)
+        edit_status, edit_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit",
+            {
+                "preset_id": "custom-hook-lift",
+                "intent": {"strength": 7},
+                "name": "Preset child",
+            },
+        )
+        edit_job = wait_for_job(server, edit_data["job"]["job_id"])
+        metadata_status, metadata = request_json(server, "GET", f"/api/projects/{project_id}/versions/v002/edit")
+        delete_status, deleted = request_json(server, "POST", "/api/edit-presets/custom-hook-lift/delete")
+        builtin_delete_status, builtin_delete = request_json(server, "POST", "/api/edit-presets/lift-final-chorus/delete")
+    finally:
+        stop_test_server(server)
+
+    assert list_status == 200
+    assert listed["built_in_count"] >= 7
+    assert create_status == 201
+    assert created["preset"]["preset_id"] == "custom-hook-lift"
+    assert read_status == 200
+    assert read_back["preset"]["name"] == "Custom Hook Lift"
+    assert edit_status == 202
+    assert edit_data["edit"]["preset"]["preset_id"] == "custom-hook-lift"
+    assert edit_job["status"] == "completed"
+    assert metadata_status == 200
+    assert metadata["edit"]["preset"]["name"] == "Custom Hook Lift"
+    assert metadata["edit"]["strength"] == 7
+    assert delete_status == 200
+    assert deleted["user_count"] == 0
+    assert builtin_delete_status == 409
+    assert "Built-in presets cannot be deleted" in builtin_delete["error"]
+
+
+def test_edit_preset_api_rejects_invalid_harmony_chord(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        status, data = request_json(
+            server,
+            "POST",
+            "/api/edit-presets",
+            {
+                "preset_id": "bad-harmony",
+                "name": "Bad Harmony",
+                "edit_type": "section_harmony",
+                "payload": {"chords": ["Hmaj7", "Cmaj7"]},
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    assert status == 400
+    assert "Unsupported chord names: Hmaj7" in data["error"]
+
+
 def test_project_edit_requires_completed_parent_and_existing_plan(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

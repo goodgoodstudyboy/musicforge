@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import os
 import shutil
+import threading
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -113,6 +117,50 @@ def read_final_export_manifest(project_dir: Path) -> dict[str, Any]:
 
 def final_export_dir(project_dir: Path) -> Path:
     return project_dir / "final-export"
+
+
+def final_export_zip_path(project_dir: Path) -> Path:
+    return project_dir / "final-export.zip"
+
+
+def build_final_export_zip(project_dir: Path, *, now: str) -> dict[str, Any]:
+    project_dir = project_dir.resolve()
+    export_dir = final_export_dir(project_dir).resolve()
+    _ensure_within(project_dir, export_dir)
+    if not export_dir.exists() or not export_dir.is_dir():
+        raise FileNotFoundError("Final export has not been generated.")
+    zip_path = final_export_zip_path(project_dir)
+    _ensure_within(project_dir, zip_path)
+    tmp_path = zip_path.with_name(f".{zip_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    entries: list[str] = []
+    try:
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for file in sorted(export_dir.rglob("*")):
+                if not file.is_file() or file.is_symlink():
+                    continue
+                resolved = file.resolve()
+                _ensure_within(export_dir, resolved)
+                entry = _safe_zip_entry(resolved.relative_to(export_dir).as_posix())
+                archive.write(resolved, entry)
+                entries.append(entry)
+        tmp_path.replace(zip_path)
+    except Exception:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
+    zip_info = {
+        "created_at": now,
+        "filename": zip_path.name,
+        "path": str(zip_path),
+        "size_bytes": zip_path.stat().st_size,
+        "sha256": _sha256(zip_path),
+        "entry_count": len(entries),
+        "entries": entries,
+    }
+    manifest = read_final_export_manifest(project_dir)
+    manifest["zip"] = zip_info
+    write_json(export_dir / "manifest.json", manifest)
+    return zip_info
 
 
 def _copy_optional(
@@ -283,6 +331,29 @@ def _ensure_within(base: Path, target: Path) -> None:
         target.relative_to(base)
     except ValueError as exc:
         raise ValueError("Refusing to operate outside the expected directory.") from exc
+
+
+def _safe_zip_entry(entry: str) -> str:
+    normalized = entry.replace("\\", "/")
+    parts = [part for part in normalized.split("/") if part]
+    if (
+        not normalized
+        or normalized.startswith("/")
+        or normalized.startswith("\\")
+        or ".." in parts
+        or any(part == "." for part in parts)
+        or (parts and ":" in parts[0])
+    ):
+        raise FinalExportError(f"Unsafe ZIP entry: {entry}.")
+    return "/".join(parts)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _optional_str(value: Any) -> str | None:

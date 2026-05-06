@@ -30,16 +30,20 @@ from song_agent.edits import (
     edit_variant_type,
     validate_edit_intent,
 )
+from song_agent.edit_presets import EditPresetStore, merge_preset_intent
 from song_agent.final_export import (
     FinalExportError,
     FinalExportOptions,
     build_final_export_bundle,
+    build_final_export_zip,
     final_export_dir,
+    final_export_zip_path,
     read_final_export_manifest,
 )
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
 from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
+from song_agent.project_compare import compare_project_versions
 from song_agent.projects import ProjectStore
 from song_agent.project_quality import (
     QualityGateConfig,
@@ -266,6 +270,7 @@ class JobStore:
         parent_job: JobState,
         parent_plan: SongPlan,
         intent: EditIntent,
+        preset: dict[str, Any] | None = None,
         name: str = "",
         start_immediately: bool = True,
     ) -> JobState:
@@ -284,6 +289,7 @@ class JobStore:
                 intent=intent,
                 created_at=now,
             )
+            metadata["preset"] = preset
             job = JobState(
                 job_id=job_id,
                 title=title,
@@ -307,6 +313,8 @@ class JobStore:
                 job_type="edit",
                 edit_metadata=metadata,
             )
+            if preset:
+                job.input_payload["preset_id"] = preset.get("preset_id")
             self.jobs[job_id] = job
             self._write_job(job)
             write_json(ProjectPaths.create(run_dir).data / "edit-metadata.json", metadata)
@@ -803,6 +811,7 @@ class JobStore:
                 summary=result.summary,
                 warnings=result.warnings,
             )
+            edit_metadata["preset"] = metadata.get("preset")
             write_json(paths.data / "edit-metadata.json", edit_metadata)
             write_json(plan_path, result.plan.to_dict())
             render_midi(result.plan, midi_path)
@@ -1787,6 +1796,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.project_store  # type: ignore[attr-defined]
 
     @property
+    def edit_preset_store(self) -> EditPresetStore:
+        return self.server.edit_preset_store  # type: ignore[attr-defined]
+
+    @property
     def auth_config(self) -> AuthConfig:
         return self.server.auth_config  # type: ignore[attr-defined]
 
@@ -1883,6 +1896,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/projects":
                 self._handle_projects_root(method, parsed.query)
+                return
+
+            if path == "/api/edit-presets":
+                self._handle_edit_presets_root(method)
+                return
+
+            if path == "/api/edit-presets/reset":
+                self._handle_edit_presets_reset(method)
+                return
+
+            edit_preset_route = _match_edit_preset_route(path)
+            if edit_preset_route is not None:
+                preset_id, tail = edit_preset_route
+                self._handle_edit_preset_route(method, preset_id, tail)
                 return
 
             project_route = _match_project_route(path)
@@ -1987,16 +2014,96 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         config, _sources = load_renderer_config()
         self._send_json(test_renderer_config(config))
 
+    def _handle_edit_presets_root(self, method: str) -> None:
+        if method == "GET":
+            self._send_json(self.edit_preset_store.to_response())
+            return
+        if method == "POST":
+            try:
+                preset = self.edit_preset_store.save_preset(self._read_json_body())
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json({"ok": True, "preset": preset.to_dict(), **self.edit_preset_store.to_response()}, status=HTTPStatus.CREATED)
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_edit_preset_route(self, method: str, preset_id: str, tail: str) -> None:
+        if tail == "":
+            if method == "GET":
+                try:
+                    preset = self.edit_preset_store.get_preset(preset_id)
+                except (FileNotFoundError, ValueError):
+                    self._send_error(HTTPStatus.NOT_FOUND, "Edit preset not found.")
+                    return
+                self._send_json({"preset": preset.to_dict()})
+                return
+            if method == "POST":
+                try:
+                    preset = self.edit_preset_store.save_preset(self._read_json_body(), preset_id=preset_id)
+                except ValueError as exc:
+                    self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                    return
+                self._send_json({"ok": True, "preset": preset.to_dict(), **self.edit_preset_store.to_response()})
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        if tail == "/delete":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                self.edit_preset_store.delete_preset(preset_id)
+            except PermissionError as exc:
+                self._send_error(HTTPStatus.CONFLICT, str(exc))
+                return
+            except (FileNotFoundError, ValueError):
+                self._send_error(HTTPStatus.NOT_FOUND, "Edit preset not found.")
+                return
+            self._send_json({"ok": True, **self.edit_preset_store.to_response()})
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Edit preset route not found.")
+
+    def _handle_edit_presets_reset(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        self.edit_preset_store.reset()
+        self._send_json({"ok": True, **self.edit_preset_store.to_response()})
+
     def _handle_projects_root(self, method: str, query_string: str) -> None:
         if method == "GET":
             query = parse_qs(query_string)
             include_hidden = query.get("include_hidden", ["0"])[0] in {"1", "true", "yes"}
+            hidden_filter = _query_value(query, "hidden")
+            q = _query_value(query, "q")
+            status_filter = _query_value(query, "status")
+            variant_type = _query_value(query, "variant_type")
+            documents = [
+                self.project_store.sync_project(document.state.project_id, self.store.get_job)
+                for document in self.project_store.list_projects(include_hidden=include_hidden or hidden_filter == "true")
+            ]
+            projects = [
+                document.state.to_dict()
+                for document in documents
+                if _project_matches_filters(
+                    document,
+                    q=q,
+                    status=status_filter,
+                    variant_type=variant_type,
+                    hidden=hidden_filter,
+                )
+            ]
             self._send_json(
                 {
-                    "projects": [
-                        self.project_store.sync_project(document.state.project_id, self.store.get_job).state.to_dict()
-                        for document in self.project_store.list_projects(include_hidden=include_hidden)
-                    ]
+                    "projects": projects,
+                    "filters": {
+                        "q": q,
+                        "status": status_filter,
+                        "variant_type": variant_type,
+                        "hidden": hidden_filter,
+                        "include_hidden": include_hidden,
+                    },
                 }
             )
             return
@@ -2170,6 +2277,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_final_export(method, project_id)
             return
 
+        if tail == "/final-export/zip":
+            self._handle_project_final_export_zip(method, project_id)
+            return
+
+        if tail == "/final-export.zip":
+            self._handle_project_final_export_zip_download(method, project_id)
+            return
+
         if tail == "/diff":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2180,6 +2295,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             try:
                 self.project_store.sync_project(project_id, self.store.get_job)
                 self._send_json(self.project_store.diff_versions(project_id, left, right))
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+
+        if tail == "/compare":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            query = parse_qs(query_string)
+            left = str(query.get("left", [""])[0])
+            right = str(query.get("right", [""])[0])
+            try:
+                document = self.project_store.sync_project(project_id, self.store.get_job)
+                self._send_json(compare_project_versions(document, left, right))
             except FileNotFoundError:
                 self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
             except ValueError as exc:
@@ -2377,6 +2508,36 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             }
         )
 
+    def _handle_project_final_export_zip(self, method: str, project_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            project_dir = self.project_store.project_dir(project_id)
+            self.project_store.get_project(project_id)
+            zip_info = build_final_export_zip(project_dir, now=_utc_now())
+            self.project_store.append_event(project_id, "final_export_zip_created", zip_info)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.CONFLICT, "Final export has not been generated.")
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "project_id": project_id, "zip": zip_info})
+
+    def _handle_project_final_export_zip_download(self, method: str, project_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            project_dir = self.project_store.project_dir(project_id)
+            self.project_store.get_project(project_id)
+            zip_path = final_export_zip_path(project_dir)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        self._send_file(zip_path, "application/zip", filename=f"musicforge-{project_id}-final-export.zip")
+
     def _set_final_version_with_gate(self, project_id: str, version_id: str, *, force: bool) -> tuple[Any, Any]:
         document = self.project_store.get_project(project_id)
         version = next((version for version in document.versions if version.version_id == version_id), None)
@@ -2510,9 +2671,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if not parent_plan_path.exists():
             self._send_error(HTTPStatus.CONFLICT, "Parent song-plan.json is missing.")
             return
+        preset_ref = None
         try:
             parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
-            intent = EditIntent.from_dict(payload)
+            preset_id = str(payload.get("preset_id") or "").strip()
+            intent_payload = payload
+            if preset_id:
+                preset = self.edit_preset_store.get_preset(preset_id)
+                intent_payload = merge_preset_intent(preset, payload, parent_plan)
+                preset_ref = preset.public_ref()
+            intent = EditIntent.from_dict(intent_payload)
             validate_edit_intent(parent_plan, intent)
             job = self.store.create_edit_job(
                 project_id=project_id,
@@ -2520,6 +2688,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 parent_job=parent_job,
                 parent_plan=parent_plan,
                 intent=intent,
+                preset=preset_ref,
                 name=str(payload.get("name") or ""),
                 start_immediately=bool(payload.get("start_immediately", True)),
             )
@@ -2533,6 +2702,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 variant_type=variant_type,
                 change_summary=str(payload.get("change_summary") or edit_change_summary(intent)),
             )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Edit preset not found.")
+            return
         except NotImplementedError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
@@ -3078,7 +3250,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_file(self, path: Path, content_type: str | None = None) -> None:
+    def _send_file(self, path: Path, content_type: str | None = None, *, filename: str | None = None) -> None:
         if not path.exists() or not path.is_file():
             self._send_error(HTTPStatus.NOT_FOUND, "File not found.")
             return
@@ -3089,7 +3261,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream",
         )
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+        self.send_header("Content-Disposition", f'attachment; filename="{filename or path.name}"')
         self.end_headers()
         self.wfile.write(body)
 
@@ -3130,6 +3302,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.job_store = JobStore()
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
+        self.edit_preset_store = EditPresetStore()
         self.batch_runner = BatchRunner(self.batch_store, self.job_store, self.project_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
@@ -3435,6 +3608,19 @@ def _match_project_route(path: str) -> tuple[str, str] | None:
     return unquote(rest), ""
 
 
+def _match_edit_preset_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/edit-presets/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest or rest == "reset":
+        return None
+    if "/" in rest:
+        preset_id, tail = rest.split("/", 1)
+        return unquote(preset_id), "/" + tail
+    return unquote(rest), ""
+
+
 def _match_project_variation_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "variation":
@@ -3491,6 +3677,49 @@ def _variation_request_payload(
     _generation_mode(payload)
     _pipeline_mode(payload)
     return payload
+
+
+def _query_value(query: dict[str, list[str]], name: str) -> str:
+    return str(query.get(name, [""])[0] or "").strip()
+
+
+def _project_matches_filters(
+    document: Any,
+    *,
+    q: str,
+    status: str,
+    variant_type: str,
+    hidden: str,
+) -> bool:
+    if hidden == "true" and not document.state.hidden:
+        return False
+    if hidden == "false" and document.state.hidden:
+        return False
+    if status:
+        if status == "selected" and not document.state.selected_version_id:
+            return False
+        elif status == "final" and not document.state.final_version_id:
+            return False
+        elif status == "gate_failed" and not any(version.quality_gate_status == "failed" for version in document.versions):
+            return False
+        elif status not in {"selected", "final", "gate_failed"} and document.state.status != status:
+            return False
+    if variant_type and not any(version.variant_type == variant_type for version in document.versions):
+        return False
+    if q:
+        needle = q.lower()
+        haystack = " ".join(
+            [
+                document.state.name,
+                document.state.description,
+                " ".join(document.state.tags),
+                *[version.name for version in document.versions],
+                *[version.note for version in document.versions],
+            ]
+        ).lower()
+        if needle not in haystack:
+            return False
+    return True
 
 
 def _artifact_kind(path: Path) -> str:

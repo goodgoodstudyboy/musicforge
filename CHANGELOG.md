@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.2.0 - 2026-05-06
+
+### Added
+- Edit preset library with built-in presets, local user presets under `.musicforge/edit-presets.json`, Studio preset apply/save controls, and Project edit preset metadata.
+- Project version Compare API and Studio A/B review view with quality, gate, edit metadata, section, track, MIDI, and WAV availability.
+- Safe Final Export ZIP generation and download, including ZIP sha256, size, and entry count recorded in the final export manifest.
+- Project search and filters for name/description/version text, status, hidden projects, and variant type.
+- Release-check coverage for the v1.2 workflow: preset edit, compare, final export, and ZIP entry safety.
+
+### Verified
+- `python -m pytest tests\test_edit_presets.py tests\test_project_compare.py tests\test_final_export.py tests\test_server_edits.py tests\test_server_projects.py tests\test_server_auth.py tests\test_webui.py tests\test_release_check.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.1.1 - 2026-05-06
 
 ### Fixed
