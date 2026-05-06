@@ -254,3 +254,98 @@ def test_project_marks_version_missing_when_job_deleted(tmp_path, monkeypatch):
     assert detail_status == 200
     assert detail["versions"][0]["status"] == "missing_job"
     assert detail["versions"][0]["missing_job"] is True
+
+
+def test_create_variation_from_parent_version(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Variation Project"})
+        project_id = created["project"]["project_id"]
+        first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Variation Parent"), "name": "Parent"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        variation_status, variation = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/variation",
+            {
+                "variant_type": "style_variation",
+                "name": "Warmer synth version",
+                "note": "Keep lyrics, warmer arrangement",
+                "change_summary": "style -> warm synth pop; tempo -> 96",
+                "request_patch": {
+                    "style": "warm synth pop, softer drums",
+                    "tempo_bpm": 96,
+                },
+                "pipeline_mode": "multinode",
+            },
+        )
+        variation_job = wait_for_job(server, variation["job"]["job_id"])
+        detail_status, detail = request_json(server, "GET", f"/api/projects/{project_id}")
+        events_status, events = request_json(server, "GET", f"/api/projects/{project_id}/events")
+    finally:
+        stop_test_server(server)
+
+    assert first_status == 202
+    assert variation_status == 202
+    assert variation["version"]["version_id"] == "v002"
+    assert variation["version"]["parent_version_id"] == "v001"
+    assert variation["version"]["variant_type"] == "style_variation"
+    assert variation["version"]["change_summary"] == "style -> warm synth pop; tempo -> 96"
+    assert variation["job"]["input_payload"]["title"] == "Variation Parent"
+    assert variation["job"]["input_payload"]["style"] == "warm synth pop, softer drums"
+    assert variation["job"]["input_payload"]["tempo_bpm"] == 96
+    assert variation["job"]["pipeline_mode"] == "multinode"
+    assert variation_job["status"] == "completed"
+    assert detail_status == 200
+    assert detail["project"]["version_count"] == 2
+    assert events_status == 200
+    assert any(event["type"] == "variation_created" for event in events["events"])
+
+
+def test_create_variation_rejects_invalid_parent_job_and_patch(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Bad Variation Project"})
+        project_id = created["project"]["project_id"]
+        job = server.job_store.create_job(request_payload("Missing Parent Job"), start_immediately=False)
+        request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/from-job",
+            {"job_id": job.job_id},
+        )
+        missing_parent_status, missing_parent = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v999/variation",
+            {"request_patch": {"style": "x"}},
+        )
+        bad_patch_status, bad_patch = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/variation",
+            {"request_patch": {"bad": "x"}},
+        )
+        server.job_store.jobs.pop(job.job_id)
+        missing_job_status, missing_job = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/variation",
+            {"request_patch": {"style": "x"}},
+        )
+    finally:
+        stop_test_server(server)
+
+    assert missing_parent_status == 404
+    assert missing_parent["error"] == "Version not found."
+    assert bad_patch_status == 400
+    assert "unsupported fields" in bad_patch["error"]
+    assert missing_job_status == 409
+    assert missing_job["error"] == "Parent version job is missing."

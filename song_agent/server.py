@@ -1851,6 +1851,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
 
     def _handle_project_route(self, method: str, project_id: str, tail: str, query_string: str) -> None:
+        variation_match = _match_project_variation_tail(tail)
+        if variation_match is not None:
+            parent_version_id = variation_match
+            self._handle_project_variation(method, project_id, parent_version_id)
+            return
+
         if tail == "":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2010,6 +2016,64 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
 
         self._send_error(HTTPStatus.NOT_FOUND, "Project route not found.")
+
+    def _handle_project_variation(self, method: str, project_id: str, parent_version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+            parent = next(version for version in document.versions if version.version_id == parent_version_id)
+        except StopIteration:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        parent_job = self.store.get_job(parent.job_id)
+        if parent_job is None:
+            self._send_error(HTTPStatus.CONFLICT, "Parent version job is missing.")
+            return
+        request_patch = payload.get("request_patch") or {}
+        if not isinstance(request_patch, dict):
+            self._send_error(HTTPStatus.BAD_REQUEST, "request_patch must be an object.")
+            return
+        try:
+            request_payload = _variation_request_payload(
+                parent.request,
+                request_patch,
+                generation_mode=payload.get("generation_mode"),
+                pipeline_mode=payload.get("pipeline_mode"),
+            )
+            job = self.store.create_job(request_payload)
+            document = self.project_store.add_version_from_job(
+                project_id,
+                job,
+                name=str(payload.get("name") or ""),
+                note=str(payload.get("note") or ""),
+                parent_version_id=parent.version_id,
+                variant_type=str(payload.get("variant_type") or "manual"),
+                change_summary=str(payload.get("change_summary") or ""),
+            )
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        version = next(version for version in document.versions if version.job_id == job.job_id)
+        self.project_store.append_event(
+            project_id,
+            "variation_created",
+            {
+                "parent_version_id": parent.version_id,
+                "version_id": version.version_id,
+                "job_id": job.job_id,
+                "variant_type": version.variant_type,
+            },
+        )
+        self._send_json(
+            {"ok": True, **document.to_dict(), "version": version.to_dict(), "job": job.to_dict()},
+            status=HTTPStatus.ACCEPTED,
+        )
 
     def _handle_batch_route(self, method: str, batch_id: str, tail: str) -> None:
         if tail == "":
@@ -2838,6 +2902,50 @@ def _match_project_route(path: str) -> tuple[str, str] | None:
         project_id, tail = rest.split("/", 1)
         return unquote(project_id), "/" + tail
     return unquote(rest), ""
+
+
+def _match_project_variation_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "variation":
+        return unquote(parts[1])
+    return None
+
+
+VARIATION_REQUEST_FIELDS = {
+    "title",
+    "language",
+    "style",
+    "theme",
+    "duration_seconds",
+    "vocal_mode",
+    "tempo_bpm",
+    "key",
+    "lyrics",
+    "generation_mode",
+    "pipeline_mode",
+}
+
+
+def _variation_request_payload(
+    parent_request: dict[str, Any],
+    request_patch: dict[str, Any],
+    *,
+    generation_mode: Any = None,
+    pipeline_mode: Any = None,
+) -> dict[str, Any]:
+    unknown = sorted(set(request_patch) - VARIATION_REQUEST_FIELDS)
+    if unknown:
+        raise ValueError(f"request_patch contains unsupported fields: {', '.join(unknown)}.")
+    payload = {key: value for key, value in parent_request.items() if key in VARIATION_REQUEST_FIELDS}
+    payload.update(request_patch)
+    if generation_mode is not None:
+        payload["generation_mode"] = generation_mode
+    if pipeline_mode is not None:
+        payload["pipeline_mode"] = pipeline_mode
+    SongRequest.from_dict(payload)
+    _generation_mode(payload)
+    _pipeline_mode(payload)
+    return payload
 
 
 def _artifact_kind(path: Path) -> str:

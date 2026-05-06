@@ -148,6 +148,7 @@ def test_auth_protects_job_create_provider_renderer_and_batch(tmp_path, monkeypa
             ("GET", "/api/projects/auth-project", None),
             ("POST", "/api/projects/auth-project/versions", {"request": {}}),
             ("POST", "/api/projects/auth-project/versions/from-job", {"job_id": "missing"}),
+            ("POST", "/api/projects/auth-project/versions/v001/variation", {"request_patch": {}}),
             ("POST", "/api/projects/auth-project/selected", {"version_id": "v001"}),
             ("POST", "/api/projects/auth-project/final", {"version_id": "v001"}),
             ("GET", "/api/projects/auth-project/diff?left=v001&right=v002", None),
