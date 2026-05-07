@@ -1649,7 +1649,6 @@ class BatchRunner:
                     item.status = "completed"
                     item.error = None
                     item.updated_at = now_iso()
-                    self._archive_item_to_project(document, item, job)
                     changed = True
                     self.batch_store.append_event(
                         batch_id,
@@ -1671,10 +1670,41 @@ class BatchRunner:
                     item.error = job.error or job.last_error or f"Job ended with status {job.status}."
                     item.updated_at = now_iso()
                     changed = True
+            if self._archive_completed_project_items(document):
+                changed = True
             if changed:
                 self.batch_store.save_batch(document)
                 document = self.batch_store.get_batch(batch_id)
             return document
+
+    def _archive_completed_project_items(self, document: BatchDocument) -> bool:
+        changed = False
+        for item in sorted(document.items, key=lambda batch_item: batch_item.index):
+            if item.status != "completed" or not item.project:
+                continue
+            if item.project_id and item.version_id:
+                continue
+            if self._has_unarchived_prior_project_item(document, item):
+                continue
+            if not item.job_id:
+                continue
+            job = self.job_store.get_job(item.job_id)
+            if job is None or job.status != "completed":
+                continue
+            self._archive_item_to_project(document, item, job)
+            changed = True
+        return changed
+
+    @staticmethod
+    def _has_unarchived_prior_project_item(document: BatchDocument, item: Any) -> bool:
+        for prior in document.items:
+            if prior.index >= item.index or prior.project != item.project:
+                continue
+            if prior.status in {"queued", "running"}:
+                return True
+            if prior.status == "completed" and not prior.version_id:
+                return True
+        return False
 
     def _archive_item_to_project(self, document: BatchDocument, item: Any, job: JobState) -> None:
         if self.project_store is None or not item.project:
