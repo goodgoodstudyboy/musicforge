@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.6.1 - 2026-05-07
+
+### Fixed
+- Project export now redacts sensitive keys from asset reference `source` and `content_summary` metadata even if local artifact JSON was polluted.
+- Final Export now applies the same secondary asset reference redaction before writing manifest summaries and `assets/<asset-id>.json`.
+
+### Verified
+- `python -m pytest tests\test_projects.py tests\test_final_export.py -q`
+- `python -m pytest tests\test_assets.py tests\test_server_assets.py tests\test_projects.py tests\test_final_export.py tests\test_server_auth.py -q`
+- `python -m song_agent.cli release-check`
+
 ## v1.6.0 - 2026-05-07
 
 ### Added

@@ -20,6 +20,22 @@ class FinalExportError(ValueError):
     pass
 
 
+BLOCKED_ASSET_METADATA_KEYS = {
+    "absolute_path",
+    "access_token",
+    "api_key",
+    "authorization",
+    "credential",
+    "file",
+    "local_path",
+    "password",
+    "path",
+    "raw_provider_response",
+    "secret",
+    "token",
+}
+
+
 @dataclass
 class FinalExportOptions:
     version_id: str | None = None
@@ -340,8 +356,8 @@ def _asset_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
         "strength": ref.get("strength") if isinstance(ref.get("strength"), (int, float)) else None,
         "used_by_versions": [str(item) for item in ref.get("used_by_versions", []) if str(item).strip()] if isinstance(ref.get("used_by_versions"), list) else [],
         "used_by_candidate_groups": [str(item) for item in ref.get("used_by_candidate_groups", []) if str(item).strip()] if isinstance(ref.get("used_by_candidate_groups"), list) else [],
-        "content_summary": ref.get("content_summary") if isinstance(ref.get("content_summary"), dict) else {},
-        "source": ref.get("source") if isinstance(ref.get("source"), dict) else {},
+        "content_summary": _sanitize_asset_metadata(ref.get("content_summary")) if isinstance(ref.get("content_summary"), dict) else {},
+        "source": _sanitize_asset_metadata(ref.get("source")) if isinstance(ref.get("source"), dict) else {},
     }
     return _drop_empty(summary)
 
@@ -358,6 +374,19 @@ def _safe_asset_id(asset_id: str) -> str:
     if not re.match(r"^asset-[0-9]{3,6}$", asset_id):
         raise FinalExportError("Invalid asset id in asset refs.")
     return asset_id
+
+
+def _sanitize_asset_metadata(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            if str(key).lower() in BLOCKED_ASSET_METADATA_KEYS:
+                continue
+            cleaned[str(key)] = _sanitize_asset_metadata(item)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_asset_metadata(item) for item in value]
+    return value
 
 
 def _write_readme(export_dir: Path, project: Any, version: Any, gate: QualityGateResult, manifest: dict[str, Any]) -> None:

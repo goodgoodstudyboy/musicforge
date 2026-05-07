@@ -250,6 +250,72 @@ def test_export_project_includes_asset_refs_from_versions_and_candidates(tmp_pat
     assert str(tmp_path) not in json.dumps(export["asset_refs"])
 
 
+def test_export_project_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    document = store.create_project("Polluted Asset Export")
+    run_dir = make_run(tmp_path, "polluted-asset-job")
+    store.add_version_from_job(document.state.project_id, FakeJob(job_id="polluted-asset-job", title="Asset", output_dir=str(run_dir)))
+    write_json(
+        run_dir / "data" / "asset-refs.json",
+        {
+            "schema_version": 1,
+            "asset_refs": [
+                {
+                    "asset_id": "asset-001",
+                    "asset_type": "motif",
+                    "name": "Polluted Motif",
+                    "role": "motif_reference",
+                    "content_summary": {
+                        "note_count": 8,
+                        "path": str(tmp_path / "secret.mid"),
+                        "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
+                    },
+                    "source": {
+                        "project_id": "source",
+                        "local_path": str(tmp_path),
+                        "raw_provider_response": {"token": "bad"},
+                        "nested": {"secret": "bad", "version_id": "v001"},
+                    },
+                }
+            ],
+        },
+    )
+    group_dir = tmp_path / "projects" / document.state.project_id / "candidate-groups" / "cg-001"
+    write_json(
+        group_dir / "group.json",
+        {
+            "group_id": "cg-001",
+            "source": {
+                "asset_refs": [
+                    {
+                        "asset_id": "asset-002",
+                        "asset_type": "chord_progression",
+                        "name": "Polluted Chords",
+                        "role": "chord_reference",
+                        "source": {"path": str(tmp_path), "job_id": "job-1"},
+                        "content_summary": {"api_key": "bad", "chord_count": 4},
+                    }
+                ]
+            },
+        },
+    )
+
+    export = store.export_project(document.state.project_id)
+    serialized = json.dumps(export["asset_refs"], ensure_ascii=False)
+
+    assert "note_count" in serialized
+    assert "chord_count" in serialized
+    assert "version_id" in serialized
+    assert "job-1" in serialized
+    assert str(tmp_path) not in serialized
+    assert "sk-polluted-secret" not in serialized
+    assert "api_key" not in serialized
+    assert "local_path" not in serialized
+    assert "raw_provider_response" not in serialized
+    assert "secret" not in serialized
+    assert '"path"' not in serialized
+
+
 def test_old_project_json_defaults_and_missing_job_sync(tmp_path: Path) -> None:
     project_dir = tmp_path / "projects" / "legacy"
     project_dir.mkdir(parents=True)

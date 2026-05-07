@@ -47,6 +47,20 @@ VERSION_STATUSES = {
     "stalled",
     "missing_job",
 }
+BLOCKED_ASSET_METADATA_KEYS = {
+    "absolute_path",
+    "access_token",
+    "api_key",
+    "authorization",
+    "credential",
+    "file",
+    "local_path",
+    "password",
+    "path",
+    "raw_provider_response",
+    "secret",
+    "token",
+}
 
 
 class JobLike(Protocol):
@@ -819,6 +833,8 @@ def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) ->
         asset_id = str(ref.get("asset_id") or "").strip()
         if not asset_id:
             return
+        content_summary = _sanitize_asset_metadata(ref.get("content_summary")) if isinstance(ref.get("content_summary"), dict) else {}
+        source = _sanitize_asset_metadata(ref.get("source")) if isinstance(ref.get("source"), dict) else {}
         record = refs.setdefault(
             asset_id,
             {
@@ -828,8 +844,8 @@ def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) ->
                 "roles": [],
                 "used_by_versions": [],
                 "used_by_candidate_groups": [],
-                "content_summary": ref.get("content_summary") if isinstance(ref.get("content_summary"), dict) else {},
-                "source": ref.get("source") if isinstance(ref.get("source"), dict) else {},
+                "content_summary": content_summary,
+                "source": source,
             },
         )
         if ref.get("asset_type") and not record.get("asset_type"):
@@ -839,6 +855,10 @@ def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) ->
         role = str(ref.get("role") or "").strip()
         if role and role not in record["roles"]:
             record["roles"].append(role)
+        if content_summary and not record.get("content_summary"):
+            record["content_summary"] = content_summary
+        if source and not record.get("source"):
+            record["source"] = source
         if version_id and version_id not in record["used_by_versions"]:
             record["used_by_versions"].append(version_id)
         if candidate_group_id and candidate_group_id not in record["used_by_candidate_groups"]:
@@ -871,3 +891,16 @@ def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) ->
                     add_ref(ref, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
 
     return sorted(refs.values(), key=lambda item: item["asset_id"])
+
+
+def _sanitize_asset_metadata(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            if str(key).lower() in BLOCKED_ASSET_METADATA_KEYS:
+                continue
+            cleaned[str(key)] = _sanitize_asset_metadata(item)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_asset_metadata(item) for item in value]
+    return value

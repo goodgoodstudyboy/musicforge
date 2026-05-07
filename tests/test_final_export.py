@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -147,6 +148,59 @@ def test_final_export_includes_sanitized_asset_refs(tmp_path: Path) -> None:
     serialized = str(manifest) + asset_path.read_text(encoding="utf-8")
     assert str(tmp_path) not in serialized
     assert "provider.json" not in serialized
+
+
+def test_final_export_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    write_json(
+        run_dir / "data" / "asset-refs.json",
+        {
+            "schema_version": 1,
+            "asset_refs": [
+                {
+                    "asset_id": "asset-001",
+                    "asset_type": "motif",
+                    "name": "Polluted Motif",
+                    "role": "motif_reference",
+                    "content_summary": {
+                        "note_count": 8,
+                        "path": str(tmp_path / "private.mid"),
+                        "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
+                    },
+                    "source": {
+                        "project_id": "source",
+                        "local_path": str(tmp_path),
+                        "raw_provider_response": {"token": "bad"},
+                        "nested": {"secret": "bad", "version_id": "v001"},
+                    },
+                }
+            ],
+        },
+    )
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+    )
+
+    asset_path = project_dir / "final-export" / "assets" / "asset-001.json"
+    serialized = json.dumps(manifest["asset_refs"], ensure_ascii=False) + asset_path.read_text(encoding="utf-8")
+    assert "note_count" in serialized
+    assert "safe" in serialized
+    assert "version_id" in serialized
+    assert str(tmp_path) not in serialized
+    assert "sk-polluted-secret" not in serialized
+    assert "api_key" not in serialized
+    assert "local_path" not in serialized
+    assert "raw_provider_response" not in serialized
+    assert "secret" not in serialized
+    assert '"path"' not in serialized
 
 
 def test_final_export_can_disable_asset_refs(tmp_path: Path) -> None:
