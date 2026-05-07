@@ -87,6 +87,14 @@ from song_agent.provider_usage import (
 )
 from song_agent.prompt_ab import PromptABStore
 from song_agent.projects import ProjectStore
+from song_agent.references import (
+    ReferenceStore,
+    reference_file_url,
+    reference_prompt_summaries,
+    reference_public_dict,
+    reference_refs_snapshot,
+    write_reference_refs_snapshot,
+)
 from song_agent.project_quality import (
     QualityGateConfig,
     evaluate_quality_gate,
@@ -227,9 +235,10 @@ class JobState:
 
 
 class JobStore:
-    def __init__(self, runs_dir: Path = RUNS_DIR, asset_store: AssetStore | None = None) -> None:
+    def __init__(self, runs_dir: Path = RUNS_DIR, asset_store: AssetStore | None = None, reference_store: ReferenceStore | None = None) -> None:
         self.runs_dir = Path(runs_dir).resolve()
         self.asset_store = asset_store or AssetStore()
+        self.reference_store = reference_store or ReferenceStore()
         self.lock = threading.RLock()
         self.jobs: dict[str, JobState] = {}
         self.load_existing_jobs()
@@ -271,6 +280,7 @@ class JobStore:
     def create_job(self, payload: dict[str, Any], start_immediately: bool = True) -> JobState:
         request = SongRequest.from_dict(payload)
         asset_refs = payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else []
+        reference_refs = payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else []
         generation_mode = _generation_mode(payload)
         pipeline_mode = _pipeline_mode(payload)
         provider_snapshot: dict[str, Any]
@@ -293,7 +303,11 @@ class JobStore:
                 updated_at=now,
                 step="queued",
                 message="Queued for local deterministic generation.",
-                input_payload={**request.to_dict(), "asset_refs": asset_refs} if asset_refs else request.to_dict(),
+                input_payload={
+                    **request.to_dict(),
+                    **({"asset_refs": asset_refs} if asset_refs else {}),
+                    **({"reference_refs": reference_refs} if reference_refs else {}),
+                },
                 provider_snapshot=provider_snapshot,
                 heartbeat_at=now,
                 generation_mode=generation_mode,
@@ -326,6 +340,7 @@ class JobStore:
         candidate_id: str | None = None,
         candidate: dict[str, Any] | None = None,
         asset_refs: list[dict[str, Any]] | None = None,
+        reference_refs: list[dict[str, Any]] | None = None,
     ) -> JobState:
         validate_edit_intent(parent_plan, intent)
         if intent.provider_mode == "provider" and provider_patch is None:
@@ -357,6 +372,8 @@ class JobStore:
                     metadata["candidate"] = _candidate_source_summary(candidate)
             if asset_refs:
                 metadata["asset_refs"] = list(asset_refs)
+            if reference_refs:
+                metadata["reference_refs"] = list(reference_refs)
             job = JobState(
                 job_id=job_id,
                 title=title,
@@ -373,6 +390,7 @@ class JobStore:
                     "parent_version_id": parent_version_id,
                     "project_id": project_id,
                     **({"asset_refs": list(asset_refs)} if asset_refs else {}),
+                    **({"reference_refs": list(reference_refs)} if reference_refs else {}),
                 },
                 provider_snapshot=provider_snapshot or {"mode": "local", "summary": "Local deterministic edit engine"},
                 heartbeat_at=now,
@@ -766,6 +784,7 @@ class JobStore:
                 return
             self._heartbeat(job)
             asset_snapshot = self._prepare_asset_refs_for_job(job)
+            reference_snapshot = self._prepare_reference_refs_for_job(job)
             plan_path, midi_path = generate_request(
                 request,
                 out_dir=Path(job.output_dir),
@@ -782,6 +801,9 @@ class JobStore:
                 render_midi(plan, midi_path)
                 write_asset_refs_snapshot(Path(job.output_dir), asset_snapshot)
                 self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "job_generation", "job_id": job.job_id})
+            if reference_snapshot["reference_refs"]:
+                write_reference_refs_snapshot(Path(job.output_dir), reference_snapshot)
+                self.reference_store.mark_used(reference_snapshot["reference_refs"], {"usage_type": "job_generation", "job_id": job.job_id})
             clear_stem_artifacts(Path(job.output_dir))
             job = self.get_job(job_id)
             if job is None:
@@ -816,6 +838,8 @@ class JobStore:
                 artifacts["nodes"] = str(nodes_dir)
             if (Path(job.output_dir) / "data" / "asset-refs.json").exists():
                 artifacts["asset_refs"] = str(Path(job.output_dir) / "data" / "asset-refs.json")
+            if (Path(job.output_dir) / "data" / "reference-refs.json").exists():
+                artifacts["reference_refs"] = str(Path(job.output_dir) / "data" / "reference-refs.json")
             self._update_job(
                 job,
                 status="completed",
@@ -886,6 +910,7 @@ class JobStore:
             append_event(paths, {"event": "edit_started", "edit_type": intent.edit_type, "target": intent.target.to_dict()})
             self._heartbeat(job)
             asset_snapshot = self._prepare_asset_refs_for_job(job)
+            reference_snapshot = self._prepare_reference_refs_for_job(job)
             provider_patch_data = metadata.get("provider_patch")
             if provider_patch_data:
                 patch = ProviderEditPatch.from_dict(provider_patch_data)
@@ -926,10 +951,15 @@ class JobStore:
                     edit_metadata["candidate"] = _candidate_source_summary(metadata.get("candidate"))
             if asset_snapshot["asset_refs"]:
                 edit_metadata["asset_refs"] = list(asset_snapshot["asset_refs"])
+            if reference_snapshot["reference_refs"]:
+                edit_metadata["reference_refs"] = list(reference_snapshot["reference_refs"])
             write_json(paths.data / "edit-metadata.json", edit_metadata)
             if asset_snapshot["asset_refs"]:
                 write_asset_refs_snapshot(run_dir, asset_snapshot)
                 self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "edit", "job_id": job.job_id, "project_id": metadata.get("project_id"), "version_id": metadata.get("parent_version_id")})
+            if reference_snapshot["reference_refs"]:
+                write_reference_refs_snapshot(run_dir, reference_snapshot)
+                self.reference_store.mark_used(reference_snapshot["reference_refs"], {"usage_type": "edit", "job_id": job.job_id, "project_id": metadata.get("project_id"), "version_id": metadata.get("parent_version_id")})
             if metadata.get("provider_usage"):
                 usage = dict(metadata["provider_usage"])
                 usage["completed_at"] = _utc_now()
@@ -946,6 +976,8 @@ class JobStore:
             artifacts["edit_metadata"] = str(paths.data / "edit-metadata.json")
             if (paths.data / "asset-refs.json").exists():
                 artifacts["asset_refs"] = str(paths.data / "asset-refs.json")
+            if (paths.data / "reference-refs.json").exists():
+                artifacts["reference_refs"] = str(paths.data / "reference-refs.json")
             if (paths.data / "provider-usage.json").exists():
                 artifacts["provider_usage"] = str(paths.data / "provider-usage.json")
             self._update_job(
@@ -988,6 +1020,13 @@ class JobStore:
         if snapshot["asset_refs"]:
             ProjectPaths.create(Path(job.output_dir))
             write_asset_refs_snapshot(Path(job.output_dir), snapshot)
+        return snapshot
+
+    def _prepare_reference_refs_for_job(self, job: JobState) -> dict[str, Any]:
+        snapshot = reference_refs_snapshot(self.reference_store, job.input_payload.get("reference_refs"), captured_at=_utc_now())
+        if snapshot["reference_refs"]:
+            ProjectPaths.create(Path(job.output_dir))
+            write_reference_refs_snapshot(Path(job.output_dir), snapshot)
         return snapshot
 
     def _run_node_retry(
@@ -1941,6 +1980,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.asset_store  # type: ignore[attr-defined]
 
     @property
+    def reference_store(self) -> ReferenceStore:
+        return self.server.reference_store  # type: ignore[attr-defined]
+
+    @property
     def auth_config(self) -> AuthConfig:
         return self.server.auth_config  # type: ignore[attr-defined]
 
@@ -2059,6 +2102,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_asset_extract_from_candidate(method)
                 return
 
+            if path == "/api/references":
+                self._handle_references_root(method, parsed.query)
+                return
+
+            if path == "/api/references/import":
+                self._handle_reference_import(method)
+                return
+
             if path == "/api/edit-presets":
                 self._handle_edit_presets_root(method)
                 return
@@ -2091,6 +2142,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if asset_route is not None:
                 asset_id, tail = asset_route
                 self._handle_asset_route(method, asset_id, tail)
+                return
+
+            reference_route = _match_reference_route(path)
+            if reference_route is not None:
+                reference_id, tail = reference_route
+                self._handle_reference_route(method, reference_id, tail)
                 return
 
             project_route = _match_project_route(path)
@@ -2556,6 +2613,108 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             assets.append(self.asset_store.create_asset(asset_payload, now=_utc_now()))
         return assets
 
+    def _handle_references_root(self, method: str, query_string: str) -> None:
+        if method == "GET":
+            query = parse_qs(query_string)
+            filters = {key: _query_value(query, key) for key in ("q", "type", "tag", "favorite", "project_id")}
+            include_hidden = _query_value(query, "include_hidden") in {"1", "true", "yes"}
+            limit_value = _query_value(query, "limit")
+            limit = int(limit_value) if limit_value else 100
+            references = self.reference_store.list_references(include_hidden=include_hidden, filters=filters)[: max(1, min(limit, 500))]
+            self._send_json(
+                {
+                    "references": [reference_public_dict(reference) for reference in references],
+                    "count": len(references),
+                    "filters": {**filters, "include_hidden": include_hidden},
+                }
+            )
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_reference_import(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            reference, duplicate = self.reference_store.import_reference(self._read_json_body(), now=_utc_now())
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json(
+            {"ok": True, "duplicate": duplicate, "reference": reference_public_dict(reference)},
+            status=HTTPStatus.OK if duplicate else HTTPStatus.CREATED,
+        )
+
+    def _handle_reference_route(self, method: str, reference_id: str, tail: str) -> None:
+        try:
+            if tail == "":
+                if method == "GET":
+                    self._send_json({"reference": reference_public_dict(self.reference_store.read_reference(reference_id))})
+                    return
+                if method == "POST":
+                    reference = self.reference_store.update_reference(reference_id, self._read_json_body())
+                    self._send_json({"ok": True, "reference": reference_public_dict(reference)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail in {"/hide", "/unhide"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                reference = self.reference_store.hide_reference(reference_id, hidden=tail == "/hide")
+                self._send_json({"ok": True, "reference": reference_public_dict(reference)})
+                return
+            if tail in {"/favorite", "/unfavorite"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                reference = self.reference_store.favorite_reference(reference_id, favorite=tail == "/favorite")
+                self._send_json({"ok": True, "reference": reference_public_dict(reference)})
+                return
+            if tail == "/delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.reference_store.delete_reference(reference_id)
+                self._send_json({"ok": True, "deleted": True, "reference_id": reference_id})
+                return
+            if tail == "/file":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                reference = self.reference_store.read_reference(reference_id)
+                self._send_file(self.reference_store.file_path(reference_id), reference.media_type, filename=reference.original_filename)
+                return
+            if tail in {"/link-project", "/unlink-project"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._read_json_body()
+                project_id = str(payload.get("project_id") or "")
+                self.project_store.get_project(project_id)
+                reference = (
+                    self.reference_store.link_project(reference_id, project_id)
+                    if tail == "/link-project"
+                    else self.reference_store.unlink_project(reference_id, project_id)
+                )
+                self._send_json({"ok": True, "reference": reference_public_dict(reference)})
+                return
+            if tail == "/create-asset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                asset = self.reference_store.create_asset_from_reference(reference_id, self._read_json_body(), self.asset_store)
+                self._send_json({"ok": True, "asset": asset}, status=HTTPStatus.CREATED)
+                return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Reference not found.")
+            return
+        except ValueError as exc:
+            status = HTTPStatus.CONFLICT if "Hidden references" in str(exc) or "cannot be converted" in str(exc) else HTTPStatus.BAD_REQUEST
+            self._send_error(status, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Reference route not found.")
+
     def _handle_provider_usage_root(self, method: str) -> None:
         if method != "GET":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2692,6 +2851,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 }
                 if isinstance(payload.get("asset_refs"), list):
                     request_payload["asset_refs"] = payload["asset_refs"]
+                if isinstance(payload.get("reference_refs"), list):
+                    request_payload["reference_refs"] = payload["reference_refs"]
                 job = self.store.create_job(request_payload)
                 document = self.project_store.add_version_from_job(
                     project_id,
@@ -2777,6 +2938,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
         if tail == "/quality-gate":
             self._handle_project_quality_gate(method, project_id)
+            return
+
+        if tail == "/references":
+            self._handle_project_references(method, project_id)
+            return
+
+        if tail in {"/references/link", "/references/unlink"}:
+            self._handle_project_reference_link(method, project_id, unlink=tail.endswith("/unlink"))
             return
 
         if tail == "/quality-gate/evaluate-all":
@@ -2903,6 +3072,40 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "config": config.to_dict()})
             return
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_project_references(self, method: str, project_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            references = self.reference_store.list_references(filters={"project_id": project_id})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        self._send_json({"project_id": project_id, "references": [reference_public_dict(reference) for reference in references]})
+
+    def _handle_project_reference_link(self, method: str, project_id: str, *, unlink: bool) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        reference_id = str(payload.get("reference_id") or "")
+        try:
+            self.project_store.get_project(project_id)
+            reference = (
+                self.reference_store.unlink_project(reference_id, project_id)
+                if unlink
+                else self.reference_store.link_project(reference_id, project_id)
+            )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project or reference not found.")
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self.project_store.append_event(project_id, "reference_unlinked" if unlink else "reference_linked", {"reference_id": reference.reference_id})
+        self._send_json({"ok": True, "reference": reference_public_dict(reference)})
 
     def _handle_project_evaluate(self, method: str, project_id: str, version_id: str) -> None:
         if method != "POST":
@@ -3124,6 +3327,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             )
             if isinstance(payload.get("asset_refs"), list):
                 request_payload["asset_refs"] = payload["asset_refs"]
+            if isinstance(payload.get("reference_refs"), list):
+                request_payload["reference_refs"] = payload["reference_refs"]
             job = self.store.create_job(request_payload)
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -3215,6 +3420,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 name=str(payload.get("name") or ""),
                 start_immediately=bool(payload.get("start_immediately", True)),
                 asset_refs=payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else None,
+                reference_refs=payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else None,
             )
             variant_type = edit_variant_type(intent.edit_type)
             document = self.project_store.add_version_from_job(
@@ -3300,12 +3506,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             config, _sources = load_provider_config()
             asset_snapshot = asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_utc_now())
             asset_prompt_refs = asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
+            reference_snapshot = reference_refs_snapshot(self.reference_store, payload.get("reference_refs"), captured_at=_utc_now())
+            reference_prompt_refs = reference_prompt_summaries(self.reference_store, payload.get("reference_refs"))
             patch, provider_snapshot = generate_provider_edit_patch(
                 parent_plan=parent_plan,
                 instruction=instruction,
                 template=template,
                 config=config,
                 asset_references=asset_prompt_refs,
+                reference_references=reference_prompt_refs,
             )
             provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
             preview = create_provider_edit_preview(
@@ -3321,10 +3530,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 provider_usage=provider_usage,
                 provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
                 asset_refs=asset_snapshot["asset_refs"],
+                reference_refs=reference_snapshot["reference_refs"],
             )
             if asset_snapshot["asset_refs"]:
                 self.asset_store.mark_used(
                     asset_snapshot["asset_refs"],
+                    {
+                        "usage_type": "provider_edit_preview",
+                        "project_id": project_id,
+                        "version_id": parent.version_id,
+                        "preview_id": preview.preview_id,
+                    },
+                )
+            if reference_snapshot["reference_refs"]:
+                self.reference_store.mark_used(
+                    reference_snapshot["reference_refs"],
                     {
                         "usage_type": "provider_edit_preview",
                         "project_id": project_id,
@@ -3417,6 +3637,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 template_id=preview.template_id,
                 preview_id=preview_id,
                 asset_refs=preview.source.get("asset_refs") if isinstance(preview.source.get("asset_refs"), list) else None,
+                reference_refs=preview.source.get("reference_refs") if isinstance(preview.source.get("reference_refs"), list) else None,
             )
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -3493,6 +3714,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         config, _sources = load_provider_config()
         asset_snapshot = asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_utc_now())
         asset_prompt_refs = asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
+        reference_snapshot = reference_refs_snapshot(self.reference_store, payload.get("reference_refs"), captured_at=_utc_now())
+        reference_prompt_refs = reference_prompt_summaries(self.reference_store, payload.get("reference_refs"))
         patches, provider_snapshot = generate_provider_edit_candidates(
             parent_plan=parent_plan,
             instruction=instruction,
@@ -3500,6 +3723,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             config=config,
             candidate_count=candidate_count,
             asset_references=asset_prompt_refs,
+            reference_references=reference_prompt_refs,
         )
         provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
         project_dir = self.project_store.project_dir(project_id)
@@ -3516,6 +3740,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 "parent_job_id": parent_job.job_id,
                 "song_plan_sha256": song_plan_hash(parent_plan),
                 "asset_refs": list(asset_snapshot["asset_refs"]),
+                "reference_refs": list(reference_snapshot["reference_refs"]),
             },
             provider_usage=provider_usage,
             provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
@@ -3575,6 +3800,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             group = group_store.read_group(group.group_id)
         if asset_snapshot["asset_refs"] and mark_asset_usage:
             self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "candidate_generation", "project_id": project_id, "version_id": parent.version_id, "candidate_group_id": group.group_id})
+        if reference_snapshot["reference_refs"] and mark_asset_usage:
+            self.reference_store.mark_used(reference_snapshot["reference_refs"], {"usage_type": "candidate_generation", "project_id": project_id, "version_id": parent.version_id, "candidate_group_id": group.group_id})
         self.project_store.append_event(
             project_id,
             "provider_edit_candidate_group_created",
@@ -3917,6 +4144,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if isinstance(refs, list) and refs:
                     self.asset_store.mark_used(
                         refs,
+                        {
+                            "usage_type": "prompt_ab_candidate_generation",
+                            "project_id": project_id,
+                            "version_id": version_id,
+                            "candidate_group_id": group.group_id,
+                            "prompt_ab_id": experiment.ab_id,
+                        },
+                    )
+                reference_refs = group.source.get("reference_refs") if isinstance(group.source, dict) else None
+                if isinstance(reference_refs, list) and reference_refs:
+                    self.reference_store.mark_used(
+                        reference_refs,
                         {
                             "usage_type": "prompt_ab_candidate_generation",
                             "project_id": project_id,
@@ -4622,7 +4861,8 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         super().__init__(server_address, MusicForgeHandler)
         self.auth_config = auth_config or AuthConfig(enabled=False)
         self.asset_store = AssetStore()
-        self.job_store = JobStore(asset_store=self.asset_store)
+        self.reference_store = ReferenceStore()
+        self.job_store = JobStore(asset_store=self.asset_store, reference_store=self.reference_store)
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
         self.edit_preset_store = EditPresetStore()
@@ -5052,6 +5292,19 @@ def _match_asset_route(path: str) -> tuple[str, str] | None:
     if "/" in rest:
         asset_id, tail = rest.split("/", 1)
         return unquote(asset_id), "/" + tail
+    return unquote(rest), ""
+
+
+def _match_reference_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/references/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest or rest == "import":
+        return None
+    if "/" in rest:
+        reference_id, tail = rest.split("/", 1)
+        return unquote(reference_id), "/" + tail
     return unquote(rest), ""
 
 

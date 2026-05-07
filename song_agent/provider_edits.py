@@ -230,10 +230,12 @@ def generate_provider_edit_patch(
     template: PromptTemplate,
     config: ProviderConfig,
     asset_references: list[dict[str, Any]] | None = None,
+    reference_references: list[dict[str, Any]] | None = None,
     client: Any | None = None,
 ) -> tuple[ProviderEditPatch, dict[str, Any]]:
     config.validate_ready_for_provider()
     asset_references = list(asset_references or [])
+    reference_references = list(reference_references or [])
     prompt = render_prompt_template(
         template,
         {
@@ -242,6 +244,7 @@ def generate_provider_edit_patch(
             "supported_chords": list(SUPPORTED_HARMONY_CHORDS),
             "supported_operations": sorted(ALLOWED_OPS),
             "asset_references": asset_references,
+            "reference_references": reference_references,
         },
     )
     client = client or _client_for_config(config)
@@ -267,6 +270,7 @@ def generate_provider_edit_patch(
         "usage": usage,
         "request_id": request_id,
         "asset_reference_count": len(asset_references),
+        "reference_reference_count": len(reference_references),
     }
     return patch, snapshot
 
@@ -279,11 +283,13 @@ def generate_provider_edit_candidates(
     config: ProviderConfig,
     candidate_count: int,
     asset_references: list[dict[str, Any]] | None = None,
+    reference_references: list[dict[str, Any]] | None = None,
     client: Any | None = None,
 ) -> tuple[list[ProviderEditPatch], dict[str, Any]]:
     count = _candidate_count(candidate_count)
     config.validate_ready_for_provider()
     asset_references = list(asset_references or [])
+    reference_references = list(reference_references or [])
     prompt = render_prompt_template(
         template,
         {
@@ -293,6 +299,7 @@ def generate_provider_edit_candidates(
             "supported_chords": list(SUPPORTED_HARMONY_CHORDS),
             "supported_operations": sorted(ALLOWED_OPS),
             "asset_references": asset_references,
+            "reference_references": reference_references,
         },
     )
     client = client or _client_for_config(config)
@@ -331,6 +338,7 @@ def generate_provider_edit_candidates(
         "request_id": request_id,
         "candidate_count": len(patches),
         "asset_reference_count": len(asset_references),
+        "reference_reference_count": len(reference_references),
     }
     return patches, snapshot
 
@@ -349,6 +357,7 @@ def create_provider_edit_preview(
     provider_usage: dict[str, Any] | None = None,
     provider_request_id: str | None = None,
     asset_refs: list[dict[str, Any]] | None = None,
+    reference_refs: list[dict[str, Any]] | None = None,
 ) -> ProviderEditPreview:
     now = now or now_iso()
     preview_root = project_dir / "edit-previews"
@@ -387,6 +396,7 @@ def create_provider_edit_preview(
             "parent_job_id": parent_job_id,
             "song_plan_sha256": song_plan_hash(parent_plan),
             "asset_refs": list(asset_refs or []),
+            "reference_refs": list(reference_refs or []),
         },
         quality=quality,
         validator=validator,
