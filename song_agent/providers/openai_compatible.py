@@ -13,6 +13,7 @@ from song_agent.provider import (
     ProviderResponseError,
 )
 from song_agent.schemas.song import SongRequest
+from song_agent.schemas.song import SongPlan
 
 
 UrlOpen = Callable[..., Any]
@@ -87,6 +88,40 @@ class OpenAICompatibleClient:
             raise ProviderResponseError("Provider node response content was not valid JSON.") from exc
         if not isinstance(data, dict):
             raise ProviderResponseError("Provider node response content must be a JSON object.")
+        return data
+
+    def generate_edit_patch_json(
+        self,
+        parent_plan: SongPlan,
+        instruction: str,
+        config: ProviderConfig,
+        prompt: str,
+    ) -> dict[str, Any]:
+        config.validate_ready_for_provider()
+        response = self._request(
+            config,
+            [
+                {"role": "system", "content": prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "instruction": instruction,
+                            "song_plan": parent_plan.to_dict(),
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+            max_tokens=min(config.max_output_tokens, 4000),
+        )
+        content = _extract_content(response)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ProviderResponseError("Provider edit response content was not valid JSON.") from exc
+        if not isinstance(data, dict):
+            raise ProviderResponseError("Provider edit response content must be a JSON object.")
         return data
 
     def _request(

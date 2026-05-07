@@ -242,6 +242,32 @@ store only generic edit intent defaults, not project IDs, version IDs, job IDs,
 tokens, or local file paths. Section harmony presets are validated against the
 supported local MIDI chord set before they can be saved or applied.
 
+v1.3.0 adds provider-backed edit previews. In Studio, choose Provider mode in
+the Project Edit tab, write a natural-language instruction, then Generate
+Preview. The provider returns a constrained edit patch only; MusicForge applies
+that patch locally, validates the resulting SongPlan, and stores preview files
+under:
+
+```text
+.musicforge/projects/<project-id>/edit-previews/<preview-id>/
+  preview.json
+  patch.json
+  candidate-song-plan.json
+  validator-report.json
+  quality.json
+```
+
+Apply Preview creates the official child Project version. Preview alone does
+not modify the parent version, selected version, final version, or version
+list. Provider usage records are written to `runs/<job-id>/data/provider-usage.json`
+after apply; they contain model, operation, template, status, and token fields,
+but no API key or raw credential.
+
+Prompt templates are managed from Studio's Prompt Templates panel and stored in
+`.musicforge/prompt-templates.json`, which is ignored by Git. Built-in provider
+edit templates can be overridden locally and reset. Templates are validated for
+size and local absolute path leakage before saving.
+
 Quality Gate is stored per Project. Defaults require the generated `SongPlan`
 to meet baseline quality scores, but do not require WAV or stems because local
 audio rendering depends on user renderer setup. Setting final evaluates the gate
@@ -291,6 +317,9 @@ POST /api/projects/<project-id>/versions/<version-id>/variation
 POST /api/projects/<project-id>/versions/<version-id>/edit
 GET  /api/projects/<project-id>/versions/<version-id>/edit
 GET  /api/projects/<project-id>/versions/<version-id>/edit-targets
+POST /api/projects/<project-id>/versions/<version-id>/edit-preview
+POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/apply
+POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/delete
 POST /api/projects/<project-id>/versions/<version-id>/evaluate
 POST /api/projects/<project-id>/selected
 POST /api/projects/<project-id>/final
@@ -303,6 +332,7 @@ POST /api/projects/<project-id>/final-export/zip
 GET  /api/projects/<project-id>/final-export.zip
 GET  /api/projects/<project-id>/diff?left=v001&right=v002
 GET  /api/projects/<project-id>/compare?left=v001&right=v002
+GET  /api/projects/<project-id>/provider-usage
 GET  /api/projects/<project-id>/export
 GET  /api/projects/<project-id>/events
 POST /api/projects/<project-id>/hide
@@ -315,6 +345,12 @@ GET  /api/edit-presets/<preset-id>
 POST /api/edit-presets/<preset-id>
 POST /api/edit-presets/<preset-id>/delete
 POST /api/edit-presets/reset
+GET  /api/prompt-templates
+GET  /api/prompt-templates/<template-id>
+POST /api/prompt-templates/<template-id>
+POST /api/prompt-templates/<template-id>/reset
+POST /api/prompt-templates/reset
+GET  /api/jobs/<job-id>/provider-usage
 ```
 
 ## Multi-node Pipeline

@@ -5,7 +5,7 @@ from typing import Any
 
 from song_agent.agent.pipeline import deterministic_compose
 from song_agent.provider import ProviderRequestError
-from song_agent.schemas.song import SongRequest
+from song_agent.schemas.song import SongPlan, SongRequest
 
 
 @dataclass
@@ -23,6 +23,57 @@ class MockProviderClient:
         if self.mode == "invalid_schema":
             return {"title": request.title}
         return deterministic_compose(request).to_dict()
+
+    def generate_edit_patch_json(
+        self,
+        parent_plan: SongPlan,
+        instruction: str,
+        config: Any,
+        prompt: str = "",
+    ) -> dict[str, Any]:
+        if self.mode == "request_error":
+            raise ProviderRequestError("Mock provider request failed.")
+        if self.mode == "invalid_schema":
+            return {"schema_version": 1, "operations": [{"op": "write_file", "path": "C:/secret"}]}
+        section_name = _target_section(parent_plan, instruction)
+        lower = instruction.lower()
+        if "chord" in lower or "harmony" in lower:
+            operation = {
+                "op": "set_section_chords",
+                "section_name": section_name,
+                "chords": ["Cmaj7", "Am7", "Fmaj7", "G7"],
+                "preserve": ["tempo", "key", "structure"],
+            }
+        elif _wants_lyric_rewrite(lower):
+            operation = {
+                "op": "rewrite_section_lyrics",
+                "section_name": section_name,
+                "lyrics": "A clearer hook line shaped by the provider edit",
+                "preserve": ["tempo", "key", "structure", "harmony", "melody"],
+            }
+        elif "drum" in lower or "bass" in lower or "track" in lower:
+            track_name = "drums" if "drum" in lower else "bass" if "bass" in lower else parent_plan.tracks[0].name
+            operation = {
+                "op": "set_track_density",
+                "section_name": section_name,
+                "track_name": track_name,
+                "strength": 8 if _wants_lift(lower) else 3,
+                "preserve": ["tempo", "key", "structure"],
+            }
+        else:
+            operation = {
+                "op": "set_section_energy",
+                "section_name": section_name,
+                "energy": 0.85 if _wants_lift(lower) else 0.3,
+                "preserve": ["tempo", "key", "structure"],
+            }
+        return {
+            "schema_version": 1,
+            "summary": "Mock provider edit patch",
+            "operations": [operation],
+            "warnings": [],
+            "confidence": 0.82,
+        }
 
     def generate_node_json(
         self,
@@ -153,3 +204,29 @@ class MockProviderClient:
 
 def _style_tags(style: str) -> list[str]:
     return [tag.strip().lower() for tag in style.split(",") if tag.strip()]
+
+
+def _target_section(parent_plan: SongPlan, instruction: str) -> str:
+    lower = instruction.lower()
+    sections = [section.name for section in parent_plan.sections]
+    if "final" in lower or "最后" in lower:
+        for section in reversed(sections):
+            if "chorus" in section.lower():
+                return section
+    for section in sections:
+        if section.lower() in lower:
+            return section
+    for section in sections:
+        if "chorus" in section.lower():
+            return section
+    return sections[0]
+
+
+def _wants_lift(lower_instruction: str) -> bool:
+    return any(word in lower_instruction for word in ("more", "lift", "strong", "energetic", "燃", "增强", "更"))
+
+
+def _wants_lyric_rewrite(lower_instruction: str) -> bool:
+    if "keep lyrics" in lower_instruction or "不要改歌词" in lower_instruction:
+        return False
+    return any(word in lower_instruction for word in ("rewrite", "change lyrics", "hook text", "文案", "改歌词", "重写歌词"))

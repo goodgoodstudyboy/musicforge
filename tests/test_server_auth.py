@@ -171,6 +171,11 @@ def test_auth_protects_job_create_provider_renderer_and_batch(tmp_path, monkeypa
             ("GET", "/api/edit-presets/lift-final-chorus", None),
             ("POST", "/api/edit-presets/lift-final-chorus/delete", None),
             ("POST", "/api/edit-presets/reset", None),
+            ("GET", "/api/prompt-templates", None),
+            ("GET", "/api/prompt-templates/provider-edit-intent", None),
+            ("POST", "/api/prompt-templates/provider-edit-intent", {"system_prompt": "Return JSON.", "user_prompt": "{{context_json}}"}),
+            ("POST", "/api/prompt-templates/provider-edit-intent/reset", None),
+            ("POST", "/api/prompt-templates/reset", None),
         ]
         statuses = [request_json(server, method, path, payload=payload)[0] for method, path, payload in protected]
     finally:

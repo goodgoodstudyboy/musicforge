@@ -27,6 +27,7 @@ VARIANT_TYPES = {
     "lyrics_edit",
     "melody_edit",
     "arrangement_edit",
+    "provider_edit",
 }
 QUALITY_GATE_STATUSES = {
     "not_evaluated",

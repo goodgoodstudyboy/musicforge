@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.3.0 - 2026-05-07
+
+### Added
+- Prompt Template Store with built-in provider edit templates, local overrides under `.musicforge/prompt-templates.json`, and Studio controls.
+- Provider edit patch schema for constrained natural-language edits, including operation, chord, target, size, and secret/path validation.
+- Provider-backed Project edit preview/apply APIs that keep previews out of official Project versions until applied.
+- Studio Provider Edit workflow with Generate Preview and Apply Preview controls.
+- Provider edit usage/audit records and project-level usage summaries without storing API keys.
+- Release-check coverage for v1.2.1 hardening and v1.3 provider edit smoke.
+
+### Fixed
+- Final Export rebuilds now invalidate stale `final-export.zip` files and do not carry old ZIP manifest metadata forward.
+- Edit preset payload validation now checks deeper nested data, size limits, secret-like fields, and merged intent validity.
+- Project Compare handles missing left/right inputs, corrupt edit metadata, old versions, and missing artifacts without server errors.
+- Studio Compare uses responsive panels and horizontal table scrolling for long text and narrow screens.
+
+### Verified
+- `python -m pytest tests\test_prompt_templates.py tests\test_provider_edits.py tests\test_provider_client.py tests\test_server_edits.py tests\test_server_projects.py tests\test_server_auth.py tests\test_webui.py tests\test_release_check.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.2.0 - 2026-05-06
 
 ### Added

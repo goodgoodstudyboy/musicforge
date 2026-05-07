@@ -42,8 +42,20 @@ from song_agent.final_export import (
 )
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
+from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.projectio import ProjectPaths, append_event, read_json, slugify, write_json
 from song_agent.project_compare import compare_project_versions
+from song_agent.provider_edits import (
+    ProviderEditPatch,
+    apply_provider_edit_patch,
+    create_provider_edit_preview,
+    delete_provider_edit_preview,
+    generate_provider_edit_patch,
+    mark_provider_edit_preview_applied,
+    preview_candidate_plan,
+    preview_patch,
+    read_provider_edit_preview,
+)
 from song_agent.projects import ProjectStore
 from song_agent.project_quality import (
     QualityGateConfig,
@@ -273,9 +285,14 @@ class JobStore:
         preset: dict[str, Any] | None = None,
         name: str = "",
         start_immediately: bool = True,
+        provider_patch: dict[str, Any] | None = None,
+        provider_usage: dict[str, Any] | None = None,
+        provider_snapshot: dict[str, Any] | None = None,
+        template_id: str | None = None,
+        preview_id: str | None = None,
     ) -> JobState:
         validate_edit_intent(parent_plan, intent)
-        if intent.provider_mode == "provider":
+        if intent.provider_mode == "provider" and provider_patch is None:
             raise NotImplementedError("Provider-backed edit is not implemented in v1.1.0.")
         with self.lock:
             title = _clean_title(name) or f"{parent_plan.title} {intent.edit_type}"
@@ -290,6 +307,12 @@ class JobStore:
                 created_at=now,
             )
             metadata["preset"] = preset
+            if provider_patch is not None:
+                metadata["provider_patch"] = provider_patch
+                metadata["provider"] = provider_snapshot or {}
+                metadata["provider_usage"] = provider_usage or {}
+                metadata["template_id"] = template_id
+                metadata["preview_id"] = preview_id
             job = JobState(
                 job_id=job_id,
                 title=title,
@@ -306,7 +329,7 @@ class JobStore:
                     "parent_version_id": parent_version_id,
                     "project_id": project_id,
                 },
-                provider_snapshot={"mode": "local", "summary": "Local deterministic edit engine"},
+                provider_snapshot=provider_snapshot or {"mode": "local", "summary": "Local deterministic edit engine"},
                 heartbeat_at=now,
                 generation_mode=intent.provider_mode,
                 pipeline_mode=parent_job.pipeline_mode,
@@ -315,6 +338,13 @@ class JobStore:
             )
             if preset:
                 job.input_payload["preset_id"] = preset.get("preset_id")
+            if provider_patch is not None:
+                job.input_payload["provider_patch"] = {
+                    "summary": provider_patch.get("summary"),
+                    "operation_count": len(provider_patch.get("operations", [])),
+                }
+                job.input_payload["template_id"] = template_id
+                job.input_payload["preview_id"] = preview_id
             self.jobs[job_id] = job
             self._write_job(job)
             write_json(ProjectPaths.create(run_dir).data / "edit-metadata.json", metadata)
@@ -794,7 +824,12 @@ class JobStore:
             parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
             append_event(paths, {"event": "edit_started", "edit_type": intent.edit_type, "target": intent.target.to_dict()})
             self._heartbeat(job)
-            result = apply_edit_intent(parent_plan, intent)
+            provider_patch_data = metadata.get("provider_patch")
+            if provider_patch_data:
+                patch = ProviderEditPatch.from_dict(provider_patch_data)
+                result = apply_provider_edit_patch(parent_plan, patch)
+            else:
+                result = apply_edit_intent(parent_plan, intent)
             if job.cancel_requested:
                 raise JobCancelled()
             plan_path = paths.data / "song-plan.json"
@@ -812,7 +847,18 @@ class JobStore:
                 warnings=result.warnings,
             )
             edit_metadata["preset"] = metadata.get("preset")
+            if provider_patch_data:
+                edit_metadata["provider_mode"] = "provider"
+                edit_metadata["provider_patch"] = provider_patch_data
+                edit_metadata["provider"] = metadata.get("provider") or {}
+                edit_metadata["template_id"] = metadata.get("template_id")
+                edit_metadata["preview_id"] = metadata.get("preview_id")
             write_json(paths.data / "edit-metadata.json", edit_metadata)
+            if metadata.get("provider_usage"):
+                usage = dict(metadata["provider_usage"])
+                usage["completed_at"] = _utc_now()
+                usage["status"] = "completed"
+                write_json(paths.data / "provider-usage.json", usage)
             write_json(plan_path, result.plan.to_dict())
             render_midi(result.plan, midi_path)
             clear_stem_artifacts(run_dir)
@@ -822,6 +868,8 @@ class JobStore:
             write_json(paths.data / "run-summary.json", summary)
             artifacts = _job_artifacts(run_dir, plan_path, midi_path, validator_report_path)
             artifacts["edit_metadata"] = str(paths.data / "edit-metadata.json")
+            if (paths.data / "provider-usage.json").exists():
+                artifacts["provider_usage"] = str(paths.data / "provider-usage.json")
             self._update_job(
                 job,
                 status="completed",
@@ -1800,6 +1848,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.edit_preset_store  # type: ignore[attr-defined]
 
     @property
+    def prompt_template_store(self) -> PromptTemplateStore:
+        return self.server.prompt_template_store  # type: ignore[attr-defined]
+
+    @property
     def auth_config(self) -> AuthConfig:
         return self.server.auth_config  # type: ignore[attr-defined]
 
@@ -1904,6 +1956,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/edit-presets/reset":
                 self._handle_edit_presets_reset(method)
+                return
+
+            if path == "/api/prompt-templates":
+                self._handle_prompt_templates_root(method)
+                return
+
+            if path == "/api/prompt-templates/reset":
+                self._handle_prompt_templates_reset(method)
+                return
+
+            prompt_template_route = _match_prompt_template_route(path)
+            if prompt_template_route is not None:
+                template_id, tail = prompt_template_route
+                self._handle_prompt_template_route(method, template_id, tail)
                 return
 
             edit_preset_route = _match_edit_preset_route(path)
@@ -2071,6 +2137,55 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         self.edit_preset_store.reset()
         self._send_json({"ok": True, **self.edit_preset_store.to_response()})
 
+    def _handle_prompt_templates_root(self, method: str) -> None:
+        if method == "GET":
+            self._send_json(self.prompt_template_store.to_response())
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_prompt_templates_reset(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        self.prompt_template_store.reset()
+        self._send_json({"ok": True, **self.prompt_template_store.to_response()})
+
+    def _handle_prompt_template_route(self, method: str, template_id: str, tail: str) -> None:
+        if tail == "":
+            if method == "GET":
+                try:
+                    template = self.prompt_template_store.get_template(template_id)
+                except (FileNotFoundError, ValueError):
+                    self._send_error(HTTPStatus.NOT_FOUND, "Prompt template not found.")
+                    return
+                self._send_json({"template": template.to_dict()})
+                return
+            if method == "POST":
+                try:
+                    template = self.prompt_template_store.save_template(template_id, self._read_json_body())
+                except FileNotFoundError:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Prompt template not found.")
+                    return
+                except ValueError as exc:
+                    self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                    return
+                self._send_json({"ok": True, "template": template.to_dict(), **self.prompt_template_store.to_response()})
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        if tail == "/reset":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            try:
+                self.prompt_template_store.reset_template(template_id)
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json({"ok": True, **self.prompt_template_store.to_response()})
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Prompt template route not found.")
+
     def _handle_projects_root(self, method: str, query_string: str) -> None:
         if method == "GET":
             query = parse_qs(query_string)
@@ -2152,6 +2267,17 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_project_edit(method, project_id, version_id)
             else:
                 self._handle_project_edit_targets(method, project_id, version_id)
+            return
+
+        preview_match = _match_project_edit_preview_tail(tail)
+        if preview_match is not None:
+            parent_version_id, preview_id, action = preview_match
+            if action == "create":
+                self._handle_project_edit_preview(method, project_id, parent_version_id)
+            elif action == "apply":
+                self._handle_project_edit_preview_apply(method, project_id, parent_version_id, preview_id)
+            elif action == "delete":
+                self._handle_project_edit_preview_delete(method, project_id, parent_version_id, preview_id)
             return
 
         if tail == "":
@@ -2315,6 +2441,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
             except ValueError as exc:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+
+        provider_preview_tail = _match_project_edit_preview_tail(tail)
+        if provider_preview_tail is not None:
+            parent_version_id, preview_id, action = provider_preview_tail
+            if action == "create":
+                self._handle_project_edit_preview(method, project_id, parent_version_id)
+            elif action == "apply":
+                self._handle_project_edit_preview_apply(method, project_id, parent_version_id, preview_id)
+            elif action == "delete":
+                self._handle_project_edit_preview_delete(method, project_id, parent_version_id, preview_id)
+            return
+
+        if tail == "/provider-usage":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self._handle_project_provider_usage(project_id)
             return
 
         if tail == "/export":
@@ -2757,6 +2901,196 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_json(build_edit_targets(plan))
 
+    def _handle_project_edit_preview(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            instruction = str(payload.get("instruction") or "").strip()
+            if not instruction:
+                self._send_error(HTTPStatus.BAD_REQUEST, "instruction is required.")
+                return
+            template_id = str(payload.get("template_id") or "provider-edit-intent").strip()
+            template = self.prompt_template_store.get_template(template_id)
+            if not template.enabled:
+                self._send_error(HTTPStatus.CONFLICT, "Prompt template is disabled.")
+                return
+            config, _sources = load_provider_config()
+            patch, provider_snapshot = generate_provider_edit_patch(
+                parent_plan=parent_plan,
+                instruction=instruction,
+                template=template,
+                config=config,
+            )
+            preview = create_provider_edit_preview(
+                project_dir=self.project_store.project_dir(project_id),
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_job_id=parent_job.job_id,
+                parent_plan=parent_plan,
+                instruction=instruction,
+                template=template,
+                patch=patch,
+                now=_utc_now(),
+            )
+            usage = _provider_usage_record(
+                config_snapshot=provider_snapshot,
+                operation="provider_edit_preview",
+                template_id=template.template_id,
+                started_at=preview.created_at,
+                status="completed",
+            )
+            write_json(
+                self.project_store.project_dir(project_id) / "edit-previews" / preview.preview_id / "provider-usage.json",
+                usage,
+            )
+            self.project_store.append_event(
+                project_id,
+                "provider_edit_preview_created",
+                {"parent_version_id": parent.version_id, "preview_id": preview.preview_id, "template_id": template.template_id},
+            )
+        except FileNotFoundError as exc:
+            message = "Version not found." if str(exc) == version_id else "Provider edit resource not found."
+            self._send_error(HTTPStatus.NOT_FOUND, message)
+            return
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "preview": preview.to_dict(), "patch": patch.to_dict()}, status=HTTPStatus.CREATED)
+
+    def _handle_project_edit_preview_apply(self, method: str, project_id: str, version_id: str, preview_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._optional_json_body()
+        try:
+            document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            preview = read_provider_edit_preview(self.project_store.project_dir(project_id), preview_id)
+            if preview.parent_version_id != parent.version_id:
+                self._send_error(HTTPStatus.CONFLICT, "Preview does not belong to this parent version.")
+                return
+            patch = preview_patch(self.project_store.project_dir(project_id), preview_id)
+            candidate = preview_candidate_plan(self.project_store.project_dir(project_id), preview_id)
+            candidate.validate()
+            intent = EditIntent.from_dict(
+                {
+                    "edit_type": "section_energy",
+                    "target": {"section_name": parent_plan.sections[0].name},
+                    "instruction": preview.instruction,
+                    "strength": 6,
+                    "provider_mode": "provider",
+                    "payload": {"preview_id": preview_id},
+                }
+            )
+            config, _sources = load_provider_config()
+            provider_snapshot = config.to_snapshot("provider", _utc_now())
+            usage = _provider_usage_record(
+                config_snapshot=provider_snapshot,
+                operation="provider_edit_apply",
+                template_id=preview.template_id,
+                started_at=_utc_now(),
+                status="queued",
+            )
+            job = self.store.create_edit_job(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_job=parent_job,
+                parent_plan=parent_plan,
+                intent=intent,
+                name=str(payload.get("name") or "") or f"Provider Edit {len(document.versions) + 1}",
+                start_immediately=bool(payload.get("start_immediately", True)),
+                provider_patch=patch.to_dict(),
+                provider_usage=usage,
+                provider_snapshot=provider_snapshot,
+                template_id=preview.template_id,
+                preview_id=preview_id,
+            )
+            document = self.project_store.add_version_from_job(
+                project_id,
+                job,
+                name=str(payload.get("name") or "") or f"Provider Edit {len(document.versions) + 1}",
+                note=str(payload.get("note") or ""),
+                parent_version_id=parent.version_id,
+                variant_type="provider_edit",
+                change_summary=str(payload.get("change_summary") or patch.summary),
+            )
+            version = next(version for version in document.versions if version.job_id == job.job_id)
+            mark_provider_edit_preview_applied(self.project_store.project_dir(project_id), preview_id, job.job_id, version.version_id)
+            self.project_store.append_event(
+                project_id,
+                "provider_edit_applied",
+                {"parent_version_id": parent.version_id, "preview_id": preview_id, "version_id": version.version_id, "job_id": job.job_id},
+            )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Provider edit preview not found.")
+            return
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, **document.to_dict(), "version": version.to_dict(), "job": job.to_dict(), "preview": preview.to_dict()}, status=HTTPStatus.ACCEPTED)
+
+    def _handle_project_edit_preview_delete(self, method: str, project_id: str, version_id: str, preview_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            delete_provider_edit_preview(self.project_store.project_dir(project_id), preview_id)
+            self.project_store.append_event(project_id, "provider_edit_preview_deleted", {"preview_id": preview_id, "parent_version_id": version_id})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Provider edit preview not found.")
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "deleted": True, "preview_id": preview_id})
+
+    def _handle_project_provider_usage(self, project_id: str) -> None:
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        usage_records = []
+        for version in document.versions:
+            usage_path = Path(version.output_dir) / "data" / "provider-usage.json"
+            if usage_path.exists():
+                usage = read_json(usage_path)
+                usage_records.append({"version_id": version.version_id, "job_id": version.job_id, "usage": usage})
+        total_tokens = sum(int(record["usage"].get("total_tokens") or 0) for record in usage_records)
+        self._send_json(
+            {
+                "project_id": project_id,
+                "total_calls": len(usage_records),
+                "total_tokens": total_tokens,
+                "records": usage_records,
+            }
+        )
+
+    def _project_edit_parent(self, project_id: str, version_id: str) -> tuple[Any, Any, JobState, SongPlan]:
+        document = self.project_store.sync_project(project_id, self.store.get_job)
+        parent = next((version for version in document.versions if version.version_id == version_id), None)
+        if parent is None:
+            raise FileNotFoundError(version_id)
+        parent_job = self.store.get_job(parent.job_id)
+        if parent_job is None:
+            raise ValueError("Parent version job is missing.")
+        if parent.status != "completed" or parent_job.status != "completed":
+            raise ValueError("Parent version must be completed before editing.")
+        parent_plan_path = Path(parent.output_dir) / "data" / "song-plan.json"
+        if not parent_plan_path.exists():
+            raise ValueError("Parent song-plan.json is missing.")
+        parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
+        return document, parent, parent_job, parent_plan
+
     def _handle_batch_route(self, method: str, batch_id: str, tail: str) -> None:
         if tail == "":
             if method != "GET":
@@ -3037,6 +3371,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             self._send_json({"job_id": job.job_id, "edit": metadata})
             return
+        if tail == "/provider-usage":
+            usage_path = run_dir / "data" / "provider-usage.json"
+            if not usage_path.exists():
+                self._send_error(HTTPStatus.NOT_FOUND, "Provider usage not found.")
+                return
+            self._send_json({"job_id": job.job_id, "usage": read_json(usage_path)})
+            return
         if tail == "/events":
             self._send_json({"events": _read_events(run_dir / "logs" / "events.jsonl")})
             return
@@ -3303,6 +3644,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
         self.edit_preset_store = EditPresetStore()
+        self.prompt_template_store = PromptTemplateStore()
         self.batch_runner = BatchRunner(self.batch_store, self.job_store, self.project_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
@@ -3452,6 +3794,31 @@ def _build_validator_report(plan_path: Path, midi_path: Path) -> dict[str, Any]:
         "midi_exists": midi_path.exists(),
         "midi_size": midi_path.stat().st_size if midi_path.exists() else 0,
         "checked_at": _utc_now(),
+    }
+
+
+def _provider_usage_record(
+    *,
+    config_snapshot: dict[str, Any],
+    operation: str,
+    template_id: str,
+    started_at: str,
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "provider_type": config_snapshot.get("wire_api") or "unknown",
+        "model": config_snapshot.get("model") or "",
+        "operation": operation,
+        "template_id": template_id,
+        "started_at": started_at,
+        "completed_at": _utc_now() if status != "queued" else None,
+        "latency_ms": None,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "estimated_cost": None,
+        "request_id": None,
+        "status": status,
     }
 
 
@@ -3621,6 +3988,19 @@ def _match_edit_preset_route(path: str) -> tuple[str, str] | None:
     return unquote(rest), ""
 
 
+def _match_prompt_template_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/prompt-templates/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest or rest == "reset":
+        return None
+    if "/" in rest:
+        template_id, tail = rest.split("/", 1)
+        return unquote(template_id), "/" + tail
+    return unquote(rest), ""
+
+
 def _match_project_variation_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "variation":
@@ -3632,6 +4012,15 @@ def _match_project_edit_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] in {"edit", "edit-targets"}:
         return unquote(parts[1]), parts[2]
+    return None
+
+
+def _match_project_edit_preview_tail(tail: str) -> tuple[str, str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "edit-preview":
+        return unquote(parts[1]), "", "create"
+    if len(parts) == 5 and parts[0] == "versions" and parts[2] == "edit-preview" and parts[4] in {"apply", "delete"}:
+        return unquote(parts[1]), unquote(parts[3]), parts[4]
     return None
 
 

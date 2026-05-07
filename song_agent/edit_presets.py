@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from song_agent.edits import EDIT_TYPES, PRESERVE_FIELDS, SUPPORTED_HARMONY_CHORDS
+from song_agent.edits import EDIT_TYPES, EditIntent, PRESERVE_FIELDS, SUPPORTED_HARMONY_CHORDS, validate_edit_intent
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.schemas.song import SongPlan
@@ -16,7 +16,20 @@ from song_agent.schemas.song import SongPlan
 SCHEMA_VERSION = 1
 PRESET_PATH = Path(".musicforge") / "edit-presets.json"
 PRESET_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,63}$")
-BLOCKED_PAYLOAD_KEYS = {"path", "file", "absolute_path", "local_path", "token", "api_key"}
+BLOCKED_PAYLOAD_KEYS = {
+    "path",
+    "file",
+    "absolute_path",
+    "local_path",
+    "token",
+    "api_key",
+    "secret",
+    "password",
+    "credential",
+}
+MAX_PRESET_JSON_BYTES = 16_384
+MAX_PRESET_TEXT_FIELD = 240
+MAX_PRESET_PAYLOAD_DEPTH = 6
 
 
 @dataclass(frozen=True)
@@ -41,7 +54,7 @@ class EditPreset:
         preset = cls(
             preset_id=_clean_preset_id(data.get("preset_id")),
             name=_bounded_text(data.get("name"), "name", 80) or "Untitled Preset",
-            description=_bounded_text(data.get("description"), "description", 240),
+            description=_bounded_text(data.get("description"), "description", MAX_PRESET_TEXT_FIELD),
             edit_type=str(data.get("edit_type") or "").strip(),
             strength=float(data.get("strength", 0.5)),
             target_defaults=_mapping(data.get("target_defaults"), "target_defaults"),
@@ -71,11 +84,12 @@ class EditPreset:
             raise ValueError(f"edit_type must be one of: {', '.join(sorted(EDIT_TYPES))}.")
         if self.strength < 0.0 or self.strength > 1.0:
             raise ValueError("strength must be between 0.0 and 1.0.")
+        _validate_preset_json_size(self)
         unsupported = sorted(set(self.preserve) - PRESERVE_FIELDS)
         if unsupported:
             raise ValueError(f"preserve contains unsupported fields: {', '.join(unsupported)}.")
-        _validate_no_blocked_payload_keys(self.payload)
-        _validate_no_blocked_payload_keys(self.target_defaults)
+        _validate_payload_shape(self.payload, "payload")
+        _validate_payload_shape(self.target_defaults, "target_defaults")
         if self.edit_type == "section_harmony":
             chords = self.payload.get("chords")
             if chords is not None:
@@ -194,6 +208,8 @@ def merge_preset_intent(preset: EditPreset, payload: dict[str, Any], plan: SongP
     for key in ("name", "note", "change_summary", "start_immediately"):
         if key in payload:
             merged[key] = payload[key]
+    intent = EditIntent.from_dict(merged)
+    validate_edit_intent(plan, intent)
     return merged
 
 
@@ -280,16 +296,30 @@ def _string_list(value: Any, field_name: str, *, max_items: int) -> list[str]:
     return items[:max_items]
 
 
-def _validate_no_blocked_payload_keys(value: Any) -> None:
+def _validate_preset_json_size(preset: EditPreset) -> None:
+    size = len(json.dumps(preset.to_dict(), ensure_ascii=False).encode("utf-8"))
+    if size > MAX_PRESET_JSON_BYTES:
+        raise ValueError(f"preset JSON must be {MAX_PRESET_JSON_BYTES} bytes or fewer.")
+
+
+def _validate_payload_shape(value: Any, field_name: str) -> None:
+    _validate_no_blocked_payload_keys(value, field_name=field_name, depth=0)
+
+
+def _validate_no_blocked_payload_keys(value: Any, *, field_name: str, depth: int) -> None:
+    if depth > MAX_PRESET_PAYLOAD_DEPTH:
+        raise ValueError(f"{field_name} is nested too deeply.")
     if isinstance(value, dict):
         for key, item in value.items():
             lowered = str(key).lower()
             if lowered in BLOCKED_PAYLOAD_KEYS or lowered.endswith("_path"):
                 raise ValueError(f"preset payload contains unsupported path or secret field: {key}.")
-            _validate_no_blocked_payload_keys(item)
+            _validate_no_blocked_payload_keys(item, field_name=field_name, depth=depth + 1)
     elif isinstance(value, list):
         for item in value:
-            _validate_no_blocked_payload_keys(item)
+            _validate_no_blocked_payload_keys(item, field_name=field_name, depth=depth + 1)
+    elif isinstance(value, str) and len(value) > MAX_PRESET_TEXT_FIELD:
+        raise ValueError(f"{field_name} text values must be {MAX_PRESET_TEXT_FIELD} characters or fewer.")
 
 
 BUILT_IN_PRESETS = [

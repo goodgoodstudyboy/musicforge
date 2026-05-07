@@ -249,6 +249,47 @@ def test_edit_preset_api_rejects_invalid_harmony_chord(tmp_path, monkeypatch):
     assert "Unsupported chord names: Hmaj7" in data["error"]
 
 
+def test_project_edit_with_preset_rejects_unresolved_target_and_bad_override(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        create_status, _created = request_json(
+            server,
+            "POST",
+            "/api/edit-presets",
+            {
+                "preset_id": "missing-section",
+                "name": "Missing Section",
+                "edit_type": "section_energy",
+                "target_defaults": {"section_name": "bridge"},
+            },
+        )
+        project_id, _parent_job = create_project_version(server)
+        missing_status, missing = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit",
+            {"preset_id": "missing-section"},
+        )
+        bad_override_status, bad_override = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit",
+            {
+                "preset_id": "brighter-chorus-harmony",
+                "intent": {"payload": {"chords": ["Hmaj7"]}},
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    assert create_status == 201
+    assert missing_status == 400
+    assert "Section not found" in missing["error"]
+    assert bad_override_status == 400
+    assert "Unsupported chord names: Hmaj7" in bad_override["error"]
+
+
 def test_project_edit_requires_completed_parent_and_existing_plan(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()
@@ -307,3 +348,83 @@ def test_cancelled_edit_job_does_not_start(tmp_path, monkeypatch):
     assert final_status == 200
     assert final["status"] == "cancelled"
     assert not (Path(final["output_dir"]) / "data" / "song-plan.json").exists()
+
+
+def test_provider_edit_preview_and_apply_create_child_version_with_usage(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main", "api_key": "sk-provider-secret"})
+        project_id, parent_job = create_project_version(server)
+        parent_plan_path = Path(parent_job["output_dir"]) / "data" / "song-plan.json"
+        parent_before = parent_plan_path.read_bytes()
+        preview_status, preview_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview",
+            {
+                "instruction": "Make the final chorus more energetic but keep lyrics.",
+                "template_id": "provider-edit-intent",
+            },
+        )
+        detail_after_preview_status, detail_after_preview = request_json(server, "GET", f"/api/projects/{project_id}")
+        preview_id = preview_data["preview"]["preview_id"]
+        apply_status, applied = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview/{preview_id}/apply",
+            {"name": "Provider edit child"},
+        )
+        edit_job = wait_for_job(server, applied["job"]["job_id"])
+        compare_status, compare = request_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right=v002")
+        usage_status, usage = request_json(server, "GET", f"/api/jobs/{edit_job['job_id']}/provider-usage")
+        project_usage_status, project_usage = request_json(server, "GET", f"/api/projects/{project_id}/provider-usage")
+        metadata_status, metadata = request_json(server, "GET", f"/api/projects/{project_id}/versions/v002/edit")
+    finally:
+        stop_test_server(server)
+
+    assert preview_status == 201
+    assert preview_data["preview"]["status"] == "ready"
+    assert detail_after_preview_status == 200
+    assert len(detail_after_preview["versions"]) == 1
+    assert apply_status == 202
+    assert edit_job["status"] == "completed"
+    assert applied["version"]["variant_type"] == "provider_edit"
+    assert parent_plan_path.read_bytes() == parent_before
+    assert compare_status == 200
+    assert compare["right"]["edit"]["provider_mode"] == "provider"
+    assert usage_status == 200
+    assert usage["usage"]["operation"] == "provider_edit_apply"
+    assert project_usage_status == 200
+    assert project_usage["total_calls"] == 1
+    assert metadata_status == 200
+    serialized = json.dumps({"job": edit_job, "usage": usage, "metadata": metadata})
+    assert "sk-provider-secret" not in serialized
+
+
+def test_provider_edit_preview_delete_does_not_delete_versions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main"})
+        project_id, _parent_job = create_project_version(server)
+        _preview_status, preview_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview",
+            {"instruction": "Make chorus brighter.", "template_id": "provider-edit-intent"},
+        )
+        preview_id = preview_data["preview"]["preview_id"]
+        delete_status, deleted = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview/{preview_id}/delete",
+        )
+        detail_status, detail = request_json(server, "GET", f"/api/projects/{project_id}")
+    finally:
+        stop_test_server(server)
+
+    assert delete_status == 200
+    assert deleted["deleted"] is True
+    assert detail_status == 200
+    assert len(detail["versions"]) == 1

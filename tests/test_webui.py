@@ -6,6 +6,7 @@ def test_webui_contains_music_fields():
 
     assert "MusicForge Studio" in html
     assert "Provider Settings" in html
+    assert "Prompt Templates" in html
     assert 'id="provider-base-url"' in html
     assert 'id="provider-api-key"' in html
     assert 'id="provider-model"' in html
@@ -97,6 +98,9 @@ def test_webui_contains_provider_form_calls():
     assert "api_key_masked" in html
     assert "/api/provider/test" in html
     assert "providerSnapshotHtml" in html
+    assert "/api/prompt-templates" in html
+    assert "prompt-template-system" in html
+    assert "Save Template Override" in html
 
 
 def test_webui_contains_renderer_settings():
@@ -208,6 +212,8 @@ def test_webui_contains_project_workspace_controls():
     assert "Create Variation" in html
     assert "Edit Version" in html
     assert "Create Edit Version" in html
+    assert "Generate Preview" in html
+    assert "Apply Preview" in html
     assert "Edit Preset" in html
     assert "Apply Preset" in html
     assert "Save Current As Preset" in html
@@ -237,6 +243,7 @@ def test_webui_calls_project_apis():
     assert "/api/projects/${id}/versions/from-job" in html
     assert "/versions/${encodeURIComponent(parentId)}/variation" in html
     assert "/versions/${encodeURIComponent(parent)}/edit" in html
+    assert "/edit-preview" in html
     assert "/edit-targets" in html
     assert "/api/edit-presets" in html
     assert "projectEditPresetPayload" in html
@@ -255,6 +262,15 @@ def test_webui_calls_project_apis():
     assert "/api/projects/${id}/hide" in html
     assert "/api/projects/${id}/unhide" in html
     assert "/api/projects/${id}/delete" in html
+
+
+def test_webui_compare_layout_is_responsive():
+    html = panel_html()
+
+    assert ".compare-grid" in html
+    assert ".table-scroll" in html
+    assert "wrap-cell" in html
+    assert "WAV not rendered" in html
 
 
 def test_webui_calls_batch_apis():

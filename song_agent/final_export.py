@@ -66,6 +66,7 @@ def build_final_export_bundle(
     _require_source(run_dir, plan_path, "data/song-plan.json")
     _require_source(run_dir, midi_path, "renders/song.mid")
     plan = _load_song_plan(plan_path)
+    clear_final_export_zip(project_dir)
     export_dir = _prepare_export_dir(project_dir)
 
     files: list[dict[str, Any]] = []
@@ -121,6 +122,17 @@ def final_export_dir(project_dir: Path) -> Path:
 
 def final_export_zip_path(project_dir: Path) -> Path:
     return project_dir / "final-export.zip"
+
+
+def clear_final_export_zip(project_dir: Path) -> None:
+    project_dir = project_dir.resolve()
+    zip_path = final_export_zip_path(project_dir).resolve()
+    _ensure_within(project_dir, zip_path)
+    if not zip_path.exists():
+        return
+    if zip_path.is_symlink():
+        raise FinalExportError("Refusing to remove a symlinked final export ZIP.")
+    zip_path.unlink()
 
 
 def build_final_export_zip(project_dir: Path, *, now: str) -> dict[str, Any]:

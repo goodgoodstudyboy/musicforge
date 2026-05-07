@@ -518,6 +518,35 @@ def test_project_final_export_creates_bundle_and_can_read_manifest(tmp_path, mon
     assert any(event["type"] == "final_export_zip_created" for event in events["events"])
 
 
+def test_project_final_export_rebuild_invalidates_zip_download(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/projects", {"name": "Zip Stale Project"})
+        project_id = created["project"]["project_id"]
+        _first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"request": request_payload("Zip Stale Version"), "name": "Zip Stale Version"},
+        )
+        wait_for_job(server, first["job"]["job_id"])
+        request_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": "v001"})
+        request_json(server, "POST", f"/api/projects/{project_id}/final-export")
+        zip_status, _zipped = request_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+        request_json(server, "POST", f"/api/projects/{project_id}/final-export")
+        download_status, download = request_json(server, "GET", f"/api/projects/{project_id}/final-export.zip")
+        read_status, read_back = request_json(server, "GET", f"/api/projects/{project_id}/final-export")
+    finally:
+        stop_test_server(server)
+
+    assert zip_status == 200
+    assert download_status == 404
+    assert download["error"] == "File not found."
+    assert read_status == 200
+    assert "zip" not in read_back["final_export"]
+
+
 def test_project_list_search_and_filters(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

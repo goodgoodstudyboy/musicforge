@@ -7,6 +7,7 @@ import pytest
 
 from song_agent.agent.pipeline import deterministic_compose
 from song_agent.final_export import (
+    clear_final_export_zip,
     FinalExportError,
     FinalExportOptions,
     build_final_export_zip,
@@ -250,3 +251,48 @@ def test_final_export_zip_contains_only_safe_relative_entries(tmp_path: Path) ->
 def test_final_export_zip_requires_existing_export_dir(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="Final export"):
         build_final_export_zip(tmp_path / ".musicforge" / "projects" / "missing", now="2026-05-06T00:00:00Z")
+
+
+def test_final_export_bundle_clears_stale_zip_and_manifest_zip_info(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+    )
+    zip_info = build_final_export_zip(project_dir, now="2026-05-06T00:00:00Z")
+    assert zip_info["entry_count"] > 0
+    assert (project_dir / "final-export.zip").exists()
+
+    build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T01:00:00Z",
+    )
+
+    assert not (project_dir / "final-export.zip").exists()
+    assert "zip" not in read_final_export_manifest(project_dir)
+
+
+def test_clear_final_export_zip_refuses_symlink(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    project_dir.mkdir(parents=True)
+    target = tmp_path / "outside.zip"
+    target.write_bytes(b"PK")
+    zip_path = project_dir / "final-export.zip"
+    try:
+        zip_path.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation is not available on this platform")
+
+    with pytest.raises(FinalExportError, match="symlinked"):
+        clear_final_export_zip(project_dir)

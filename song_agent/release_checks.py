@@ -13,10 +13,13 @@ from song_agent.agent.pipeline import deterministic_compose
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
+from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.project_compare import compare_project_versions
 from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.projectio import write_json
 from song_agent.projects import ProjectStore
+from song_agent.provider import ProviderConfig
+from song_agent.provider_edits import generate_provider_edit_patch, apply_provider_edit_patch
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
 
@@ -41,6 +44,7 @@ SECRET_SCAN_PATHS = [
     "song_agent",
     "tests",
     "pyproject.toml",
+    ".gitignore",
 ]
 ALLOWED_SECRET_FIXTURE_PATTERNS = [
     "tests/test_provider_client.py",
@@ -90,13 +94,34 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
         remotes.returncode == 0 and not _remote_has_token(remotes.stdout),
         _redact_remote(remotes.stdout.strip()),
     )
-    tracked = _run(["git", "ls-files", ".musicforge/provider.json", ".musicforge/renderer.json", ".musicforge/edit-presets.json"], root)
+    tracked = _run(
+        [
+            "git",
+            "ls-files",
+            ".musicforge/provider.json",
+            ".musicforge/renderer.json",
+            ".musicforge/edit-presets.json",
+            ".musicforge/prompt-templates.json",
+        ],
+        root,
+    )
     report.add(
         ".musicforge configs untracked",
         tracked.returncode == 0 and not tracked.stdout.strip(),
         tracked.stdout.strip(),
     )
-    ignored = _run(["git", "check-ignore", "-v", ".musicforge/provider.json", ".musicforge/renderer.json", ".musicforge/edit-presets.json"], root)
+    ignored = _run(
+        [
+            "git",
+            "check-ignore",
+            "-v",
+            ".musicforge/provider.json",
+            ".musicforge/renderer.json",
+            ".musicforge/edit-presets.json",
+            ".musicforge/prompt-templates.json",
+        ],
+        root,
+    )
     report.add(
         ".musicforge configs ignored",
         ignored.returncode == 0,
@@ -107,6 +132,8 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("final export smoke", *_final_export_smoke(root))
     report.add("edit smoke", *_edit_smoke(root))
     report.add("v1.2 workflow smoke", *_v12_workflow_smoke(root))
+    report.add("v1.2.1 hardening smoke", *_v121_hardening_smoke(root))
+    report.add("v1.3 provider edit smoke", *_v13_provider_edit_smoke(root))
     return report
 
 
@@ -358,6 +385,157 @@ def _v12_workflow_smoke(root: Path) -> tuple[bool, str]:
                 and safe_entries
             )
             return ok, f"preset={preset.preset_id}, compare={compare['summary']['recommendation']}, zip_entries={zip_info['entry_count']}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _v121_hardening_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v121-") as temp_dir:
+            base = Path(temp_dir)
+            store = ProjectStore(base / ".musicforge" / "projects")
+            document = store.create_project("Release v1.2.1 Smoke")
+            request = SongRequest(
+                title="Release v1.2.1 Smoke",
+                language="en",
+                style="synth pop",
+                theme="release check",
+                tempo_bpm=96,
+            )
+            run_dir = base / "runs" / "v121-parent"
+            plan = deterministic_compose(request)
+            write_json(run_dir / "data" / "song-plan.json", plan.to_dict())
+            write_json(run_dir / "data" / "run-summary.json", {"title": plan.title})
+            write_json(run_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(plan, run_dir / "renders" / "song.mid")
+            document = store.add_version_from_job(
+                document.state.project_id,
+                _SmokeJob("v121-parent", run_dir, request.to_dict()),
+                name="Parent",
+            )
+            project_dir = store.project_dir(document.state.project_id)
+            gate = evaluate_quality_gate(run_dir, QualityGateConfig(), now="2026-05-07T00:00:00+00:00")
+            build_final_export_bundle(
+                project=document.state,
+                version=document.versions[0],
+                project_dir=project_dir,
+                run_dir=run_dir,
+                gate=gate,
+                options=FinalExportOptions(version_id="v001"),
+                now="2026-05-07T00:00:00+00:00",
+                project_export=store.export_project(document.state.project_id),
+            )
+            build_final_export_zip(project_dir, now="2026-05-07T00:00:00+00:00")
+            zip_exists_before = (project_dir / "final-export.zip").exists()
+            build_final_export_bundle(
+                project=document.state,
+                version=document.versions[0],
+                project_dir=project_dir,
+                run_dir=run_dir,
+                gate=gate,
+                options=FinalExportOptions(version_id="v001"),
+                now="2026-05-07T01:00:00+00:00",
+                project_export=store.export_project(document.state.project_id),
+            )
+            zip_cleared = not (project_dir / "final-export.zip").exists()
+            try:
+                compare_project_versions(document, "", "v001")
+            except ValueError as exc:
+                compare_guard = "left and right version ids are required" in str(exc)
+            else:
+                compare_guard = False
+            ok = zip_exists_before and zip_cleared and compare_guard
+            return ok, f"zip_cleared={zip_cleared}, compare_guard={compare_guard}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _v13_provider_edit_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v13-") as temp_dir:
+            base = Path(temp_dir)
+            store = ProjectStore(base / ".musicforge" / "projects")
+            templates = PromptTemplateStore(base / ".musicforge" / "prompt-templates.json")
+            document = store.create_project("Release v1.3 Smoke")
+            request = SongRequest(
+                title="Release v1.3 Smoke",
+                language="en",
+                style="synth pop",
+                theme="provider edit smoke",
+                tempo_bpm=96,
+            )
+            parent_dir = base / "runs" / "v13-parent"
+            parent_plan = deterministic_compose(request)
+            write_json(parent_dir / "data" / "song-plan.json", parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_dir / "renders" / "song.mid")
+            parent_job = _SmokeJob("v13-parent", parent_dir, request.to_dict())
+            document = store.add_version_from_job(document.state.project_id, parent_job, name="Parent")
+            template = templates.get_template("provider-edit-intent")
+            patch, snapshot = generate_provider_edit_patch(
+                parent_plan=parent_plan,
+                instruction="Make the final chorus more energetic but keep lyrics.",
+                template=template,
+                config=ProviderConfig(wire_api="mock", model="mock-main", api_key="sk-release-secret"),
+            )
+            result = apply_provider_edit_patch(parent_plan, patch)
+            child_dir = base / "runs" / "v13-child"
+            write_json(child_dir / "data" / "song-plan.json", result.plan.to_dict())
+            write_json(
+                child_dir / "data" / "edit-metadata.json",
+                build_edit_metadata(
+                    project_id=document.state.project_id,
+                    parent_version_id="v001",
+                    parent_job_id="v13-parent",
+                    intent=EditIntent.from_dict(
+                        {
+                            "edit_type": "section_energy",
+                            "target": {"section_name": "chorus"},
+                            "provider_mode": "provider",
+                        }
+                    ),
+                    created_at="2026-05-07T00:00:00+00:00",
+                    summary=result.summary,
+                    warnings=result.warnings,
+                )
+                | {
+                    "provider_mode": "provider",
+                    "provider_patch": patch.to_dict(),
+                    "provider": snapshot,
+                    "template_id": template.template_id,
+                },
+            )
+            write_json(
+                child_dir / "data" / "provider-usage.json",
+                {
+                    "provider_type": "mock",
+                    "model": "mock-main",
+                    "operation": "provider_edit_apply",
+                    "template_id": template.template_id,
+                    "total_tokens": 0,
+                },
+            )
+            render_midi(result.plan, child_dir / "renders" / "song.mid")
+            child_job = _SmokeJob("v13-child", child_dir, request.to_dict())
+            child_job.generation_mode = "provider"
+            child_job.artifacts["provider_usage"] = str(child_dir / "data" / "provider-usage.json")
+            document = store.add_version_from_job(
+                document.state.project_id,
+                child_job,
+                name="Provider Edit",
+                parent_version_id="v001",
+                variant_type="provider_edit",
+                change_summary=patch.summary,
+            )
+            compare = compare_project_versions(document, "v001", "v002")
+            serialized = str(compare) + str(snapshot)
+            ok = (
+                compare["right"]["edit"]["provider_mode"] == "provider"
+                and compare["right"]["edit"]["provider_patch"]["operation_count"] >= 1
+                and "sk-release-secret" not in serialized
+            )
+            return ok, f"template={template.template_id}, operations={len(patch.operations)}, compare={compare['summary']['recommendation']}"
     except Exception as exc:
         return False, str(exc)
 

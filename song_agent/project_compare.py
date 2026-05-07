@@ -11,6 +11,8 @@ from song_agent.schemas.song import SongPlan
 
 
 def compare_project_versions(document: ProjectDocument, left_id: str, right_id: str) -> dict[str, Any]:
+    if not str(left_id or "").strip() or not str(right_id or "").strip():
+        raise ValueError("left and right version ids are required.")
     left = _find_version(document, left_id)
     right = _find_version(document, right_id)
     left_plan = _read_plan(left)
@@ -96,6 +98,11 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         "instruction": metadata.get("instruction") or "",
         "preserve": metadata.get("preserve") or [],
         "strength": metadata.get("strength"),
+        "provider_mode": metadata.get("provider_mode") or "local",
+        "provider": metadata.get("provider") if isinstance(metadata.get("provider"), dict) else {},
+        "template_id": metadata.get("template_id"),
+        "preview_id": metadata.get("preview_id"),
+        "provider_patch": _provider_patch_view(metadata.get("provider_patch")),
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,
         "summary": metadata.get("summary") or {},
@@ -221,3 +228,14 @@ def _short_text(value: str | None) -> str | None:
         return None
     text = str(value).strip()
     return text[:120] + ("..." if len(text) > 120 else "")
+
+
+def _provider_patch_view(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    operations = value.get("operations")
+    return {
+        "summary": value.get("summary") or "",
+        "operation_count": len(operations) if isinstance(operations, list) else 0,
+        "confidence": value.get("confidence"),
+    }

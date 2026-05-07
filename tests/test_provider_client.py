@@ -101,6 +101,42 @@ def test_openai_compatible_client_builds_request_without_logging_key():
     assert "sk-example-secret" not in json.dumps(captured["body"])
 
 
+def test_openai_compatible_client_generates_edit_patch_json():
+    captured = {}
+    parent = SongPlan.from_dict(MockProviderClient().generate_song_plan_json(request(), ProviderConfig()))
+    response = {
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "schema_version": 1,
+                            "summary": "lift chorus",
+                            "operations": [{"op": "set_section_energy", "section_name": "chorus", "energy": 0.9}],
+                            "confidence": 0.8,
+                        }
+                    )
+                }
+            }
+        ]
+    }
+
+    def opener(req, timeout):
+        captured["body"] = json.loads(req.data.decode("utf-8"))
+        return FakeResponse(json.dumps(response).encode("utf-8"))
+
+    data = OpenAICompatibleClient(opener=opener).generate_edit_patch_json(
+        parent,
+        "lift chorus",
+        config(),
+        "Return patch JSON.",
+    )
+
+    assert data["operations"][0]["op"] == "set_section_energy"
+    assert captured["body"]["messages"][0]["content"] == "Return patch JSON."
+    assert "sk-example-secret" not in json.dumps(captured["body"])
+
+
 def test_openai_compatible_client_handles_non_2xx():
     def opener(req, timeout):
         raise urllib.error.HTTPError(

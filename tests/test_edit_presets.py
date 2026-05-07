@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from song_agent.agent.pipeline import deterministic_compose
+from song_agent.edits import EditIntent
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
 from song_agent.schemas.song import SongRequest
 
@@ -74,6 +75,24 @@ def test_preset_validation_rejects_bad_id_type_path_and_chord(tmp_path: Path) ->
         store.save_preset({"preset_id": "bad-type", "name": "Bad", "edit_type": "provider_magic"})
     with pytest.raises(ValueError, match="path"):
         store.save_preset({"preset_id": "bad-path", "name": "Bad", "edit_type": "section_energy", "payload": {"path": "C:/secret"}})
+    with pytest.raises(ValueError, match="secret"):
+        store.save_preset(
+            {
+                "preset_id": "bad-secret",
+                "name": "Bad",
+                "edit_type": "section_energy",
+                "payload": {"nested": [{"api_key": "sk-secret-value"}]},
+            }
+        )
+    with pytest.raises(ValueError, match="bytes"):
+        store.save_preset(
+            {
+                "preset_id": "too-large",
+                "name": "Bad",
+                "edit_type": "lyrics_rewrite",
+                "payload": {f"k{i}": "small" for i in range(3000)},
+            }
+        )
     with pytest.raises(ValueError, match="Unsupported chord names"):
         store.save_preset(
             {
@@ -112,3 +131,23 @@ def test_merge_preset_intent_resolves_targets_and_allows_explicit_override(tmp_p
     assert merged["payload"]["chords"] == ["G7", "Cmaj7"]
     assert merged["strength"] == 4
     assert merged["name"] == "Preset Override"
+    assert EditIntent.from_dict(merged).target.section_name == "verse"
+
+
+def test_merge_preset_intent_validates_resolved_target_and_payload(tmp_path: Path) -> None:
+    store = EditPresetStore(tmp_path / ".musicforge" / "edit-presets.json")
+    missing = store.save_preset(
+        {
+            "preset_id": "missing-target",
+            "name": "Missing Target",
+            "edit_type": "section_energy",
+            "target_defaults": {"section_name": "bridge"},
+        }
+    )
+    harmony = store.get_preset("brighter-chorus-harmony")
+
+    with pytest.raises(ValueError, match="Section not found"):
+        merge_preset_intent(missing, {}, plan())
+
+    with pytest.raises(ValueError, match="Unsupported chord names"):
+        merge_preset_intent(harmony, {"intent": {"payload": {"chords": ["Hmaj7"]}}}, plan())

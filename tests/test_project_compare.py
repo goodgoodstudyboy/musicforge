@@ -93,10 +93,33 @@ def test_compare_missing_plan_and_missing_version_are_safe(tmp_path: Path) -> No
     compare = compare_project_versions(document, "v001", "v001")
 
     assert compare["left"]["quality"]["overall"] is None
+    assert compare["summary"]["recommendation"] == "unknown"
     assert compare["sections"] == []
+    try:
+        compare_project_versions(document, "", "v001")
+    except ValueError as exc:
+        assert "left and right version ids are required" in str(exc)
+    else:
+        raise AssertionError("missing left/right should raise")
     try:
         compare_project_versions(document, "v001", "v999")
     except FileNotFoundError as exc:
         assert str(exc)
     else:
         raise AssertionError("missing version should raise")
+
+
+def test_compare_ignores_corrupt_edit_metadata(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / ".musicforge" / "projects")
+    document = store.create_project("Corrupt Compare")
+    request = request_payload("Corrupt Metadata")
+    run_dir = tmp_path / "runs" / "corrupt-metadata"
+    write_plan(run_dir, request)
+    write_json(run_dir / "data" / "edit-metadata.json", {"valid": True})
+    (run_dir / "data" / "edit-metadata.json").write_text("{bad json", encoding="utf-8")
+    document = store.add_version_from_job(document.state.project_id, Job("corrupt-metadata", run_dir, request), name="Corrupt")
+
+    compare = compare_project_versions(document, "v001", "v001")
+
+    assert compare["left"]["edit"] is None
+    assert compare["right"]["edit"] is None

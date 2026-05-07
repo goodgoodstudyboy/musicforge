@@ -299,6 +299,24 @@ def panel_html() -> str:
       width: 100%;
       margin: 8px 0 4px;
     }
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      align-items: start;
+    }
+    .table-scroll {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+    .table-scroll table {
+      min-width: 720px;
+    }
+    .wrap-cell {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 360px;
+    }
     td .actions {
       margin-top: 0;
     }
@@ -309,6 +327,7 @@ def panel_html() -> str:
       .summary-grid { grid-template-columns: 1fr 1fr; }
       .batch-layout { grid-template-columns: 1fr; }
       .project-layout { grid-template-columns: 1fr; }
+      .compare-grid { grid-template-columns: 1fr; }
       header { height: auto; align-items: flex-start; flex-direction: column; gap: 6px; padding: 12px 16px; }
       header .meta { flex-wrap: wrap; }
     }
@@ -390,6 +409,28 @@ def panel_html() -> str:
               <span id="provider-message"></span>
             </div>
           </form>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Prompt Templates</span>
+          <span id="prompt-template-status" class="status">built-in</span>
+        </div>
+        <div class="panel-body">
+          <label>Template
+            <select id="prompt-template-select"></select>
+          </label>
+          <label>System Prompt
+            <textarea id="prompt-template-system" spellcheck="false"></textarea>
+          </label>
+          <label>User Prompt
+            <textarea id="prompt-template-user" spellcheck="false"></textarea>
+          </label>
+          <div class="actions">
+            <button id="prompt-template-save" type="button">Save Template Override</button>
+            <button class="secondary" id="prompt-template-reset" type="button">Reset Template</button>
+            <span id="prompt-template-message" class="message"></span>
+          </div>
         </div>
       </section>
       <section>
@@ -651,6 +692,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let projectVariationParentId = null;
     let projectEditParentId = null;
     let editPresets = [];
+    let promptTemplates = [];
+    let providerEditPreview = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -694,6 +737,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       fillPresets();
       fillForm(template.defaults);
       await loadProvider();
+      await loadPromptTemplates();
       await loadRenderer();
       await loadEditPresets();
       await loadJobs();
@@ -884,6 +928,36 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         $("provider-message").textContent = err.message;
       }
     });
+    $("prompt-template-select").addEventListener("change", () => {
+      applyPromptTemplateSelection();
+    });
+    $("prompt-template-save").addEventListener("click", async () => {
+      const templateId = $("prompt-template-select").value || "provider-edit-intent";
+      try {
+        await api(`/api/prompt-templates/${encodeURIComponent(templateId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_prompt: $("prompt-template-system").value,
+            user_prompt: $("prompt-template-user").value,
+          }),
+        });
+        $("prompt-template-message").textContent = "saved";
+        await loadPromptTemplates();
+      } catch (err) {
+        $("prompt-template-message").textContent = err.message;
+      }
+    });
+    $("prompt-template-reset").addEventListener("click", async () => {
+      const templateId = $("prompt-template-select").value || "provider-edit-intent";
+      try {
+        await api(`/api/prompt-templates/${encodeURIComponent(templateId)}/reset`, { method: "POST" });
+        $("prompt-template-message").textContent = "reset";
+        await loadPromptTemplates();
+      } catch (err) {
+        $("prompt-template-message").textContent = err.message;
+      }
+    });
     $("renderer-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       try {
@@ -960,6 +1034,25 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     async function loadEditPresets() {
       const data = await api("/api/edit-presets");
       editPresets = data.presets || [];
+    }
+
+    async function loadPromptTemplates() {
+      const data = await api("/api/prompt-templates");
+      promptTemplates = data.templates || [];
+      const select = $("prompt-template-select");
+      select.innerHTML = promptTemplates.map((template) => `<option value="${escapeHtml(template.template_id)}">${escapeHtml(template.name)}${template.overridden ? " · override" : ""}</option>`).join("");
+      if (!select.value && promptTemplates.some((template) => template.template_id === "provider-edit-intent")) {
+        select.value = "provider-edit-intent";
+      }
+      $("prompt-template-status").textContent = `${data.override_count || 0} overrides`;
+      applyPromptTemplateSelection();
+    }
+
+    function applyPromptTemplateSelection() {
+      const template = promptTemplates.find((item) => item.template_id === $("prompt-template-select").value) || promptTemplates[0];
+      if (!template) return;
+      $("prompt-template-system").value = template.system_prompt || "";
+      $("prompt-template-user").value = template.user_prompt || "";
     }
 
     function applyRenderer(data) {
@@ -1476,6 +1569,32 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadJobs();
         await loadProjects();
       });
+      bindAction("project-provider-preview", async () => {
+        const parent = $("project-edit-parent").value;
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parent)}/edit-preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectProviderPreviewPayload()),
+        });
+        providerEditPreview = data.preview;
+        $("project-provider-preview-result").innerHTML = providerPreviewHtml(data.preview, data.patch);
+      });
+      bindAction("project-provider-apply-preview", async () => {
+        if (!providerEditPreview) return;
+        const parent = $("project-edit-parent").value;
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parent)}/edit-preview/${encodeURIComponent(providerEditPreview.preview_id)}/apply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: $("project-edit-name").value.trim(),
+            change_summary: $("project-edit-summary").value.trim(),
+          }),
+        });
+        providerEditPreview = null;
+        activeProjectTab = "versions";
+        await loadJobs();
+        await loadProjects();
+      });
       bindAction("project-apply-preset", async () => {
         applyEditPresetToForm();
       });
@@ -1575,8 +1694,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         <div class="actions">
           <button id="project-create-edit" type="button" ${parentId ? "" : "disabled"}>Create Edit Version</button>
+          <button class="secondary" id="project-provider-preview" type="button" ${parentId ? "" : "disabled"}>Generate Preview</button>
+          <button class="secondary" id="project-provider-apply-preview" type="button">Apply Preview</button>
           <span id="project-edit-message" class="message"></span>
         </div>
+        <div id="project-provider-preview-result"><div class="empty">Provider edit preview will appear here.</div></div>
         <pre>${escapeHtml(preview || "{}")}</pre>
       `;
     }
@@ -1604,6 +1726,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       };
       if (presetId) data.preset_id = presetId;
       return data;
+    }
+
+    function projectProviderPreviewPayload() {
+      return {
+        provider_mode: "provider",
+        instruction: $("project-edit-instruction").value.trim(),
+        template_id: "provider-edit-intent",
+      };
+    }
+
+    function providerPreviewHtml(preview, patch) {
+      if (!preview) return `<div class="empty">No preview.</div>`;
+      return `
+        <div class="summary-grid">
+          ${metric("Preview", preview.preview_id || "-")}
+          ${metric("Status", preview.status || "-")}
+          ${metric("Template", preview.template_id || "-")}
+          ${metric("Operations", ((patch || {}).operations || []).length)}
+        </div>
+        <pre>${escapeHtml(JSON.stringify({ preview, patch }, null, 2))}</pre>
+      `;
     }
 
     function applyEditPresetToForm() {
@@ -1861,16 +2004,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <tr>
           <td>${escapeHtml(row.section)}</td>
           <td>${escapeHtml(row.changed ? "changed" : "-")}</td>
-          <td>${escapeHtml(JSON.stringify(row.left || {}))}</td>
-          <td>${escapeHtml(JSON.stringify(row.right || {}))}</td>
+          <td class="wrap-cell">${escapeHtml(JSON.stringify(row.left || {}))}</td>
+          <td class="wrap-cell">${escapeHtml(JSON.stringify(row.right || {}))}</td>
         </tr>
       `).join("");
       const trackRows = (compare.tracks || []).map((row) => `
         <tr>
           <td>${escapeHtml(row.track)}</td>
           <td>${escapeHtml(row.changed ? "changed" : "-")}</td>
-          <td>${escapeHtml(JSON.stringify(row.left || {}))}</td>
-          <td>${escapeHtml(JSON.stringify(row.right || {}))}</td>
+          <td class="wrap-cell">${escapeHtml(JSON.stringify(row.left || {}))}</td>
+          <td class="wrap-cell">${escapeHtml(JSON.stringify(row.right || {}))}</td>
         </tr>
       `).join("");
       return `
@@ -1880,18 +2023,22 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Section Changes", compare.summary.section_changes || 0)}
           ${metric("Track Changes", compare.summary.track_changes || 0)}
         </div>
-        <div class="grid2">
+        <div class="compare-grid">
           ${projectCompareSideHtml("Left", compare.left, (compare.artifacts || {}).left)}
           ${projectCompareSideHtml("Right", compare.right, (compare.artifacts || {}).right)}
         </div>
-        <table>
-          <thead><tr><th>Section</th><th>Changed</th><th>Left</th><th>Right</th></tr></thead>
-          <tbody>${sectionRows || "<tr><td colspan='4'>No section data.</td></tr>"}</tbody>
-        </table>
-        <table>
-          <thead><tr><th>Track</th><th>Changed</th><th>Left</th><th>Right</th></tr></thead>
-          <tbody>${trackRows || "<tr><td colspan='4'>No track data.</td></tr>"}</tbody>
-        </table>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Section</th><th>Changed</th><th>Left</th><th>Right</th></tr></thead>
+            <tbody>${sectionRows || "<tr><td colspan='4'>No section data.</td></tr>"}</tbody>
+          </table>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Track</th><th>Changed</th><th>Left</th><th>Right</th></tr></thead>
+            <tbody>${trackRows || "<tr><td colspan='4'>No track data.</td></tr>"}</tbody>
+          </table>
+        </div>
       `;
     }
 
@@ -1908,7 +2055,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </div>
           <div class="actions">
             ${artifacts && artifacts.midi ? `<a class="button-link secondary" href="${escapeHtml(artifacts.midi)}">MIDI</a>` : ""}
-            ${artifacts && artifacts.audio ? `<a class="button-link secondary" href="${escapeHtml(artifacts.audio)}">WAV</a>` : ""}
+            ${artifacts && artifacts.audio ? `<a class="button-link secondary" href="${escapeHtml(artifacts.audio)}">WAV</a>` : `<span class="message">WAV not rendered</span>`}
           </div>
           ${artifacts && artifacts.audio ? `<audio class="audio-player" controls src="${escapeHtml(artifacts.audio)}"></audio>` : ""}
         </div>
