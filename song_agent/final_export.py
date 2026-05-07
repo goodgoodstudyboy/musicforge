@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import threading
 import zipfile
@@ -25,6 +26,7 @@ class FinalExportOptions:
     include_audio: bool = True
     include_stems: bool = True
     include_stem_audio: bool = True
+    include_asset_refs: bool = True
     force: bool = False
 
     @classmethod
@@ -34,6 +36,7 @@ class FinalExportOptions:
             include_audio=bool(data.get("include_audio", True)),
             include_stems=bool(data.get("include_stems", True)),
             include_stem_audio=bool(data.get("include_stem_audio", True)),
+            include_asset_refs=bool(data.get("include_asset_refs", True)),
             force=bool(data.get("force", False)),
         )
 
@@ -43,6 +46,7 @@ class FinalExportOptions:
             "include_audio": self.include_audio,
             "include_stems": self.include_stems,
             "include_stem_audio": self.include_stem_audio,
+            "include_asset_refs": self.include_asset_refs,
             "force": self.force,
         }
 
@@ -87,6 +91,14 @@ def build_final_export_bundle(
         _copy_stems(run_dir, export_dir, options, files, plan=plan)
     else:
         files.append({"kind": "stem_manifest", "path": "stems/manifest.json", "exists": False, "required": False, "skipped": "disabled"})
+    asset_refs = _write_asset_ref_summaries(
+        run_dir=run_dir,
+        export_dir=export_dir,
+        version_id=version.version_id,
+        project_export=project_export,
+        files=files,
+        enabled=options.include_asset_refs,
+    )
 
     manifest = {
         "project_id": project.project_id,
@@ -97,6 +109,7 @@ def build_final_export_bundle(
         "generated_at": now,
         "options": options.to_dict(),
         "quality_gate": gate.to_dict(),
+        "asset_refs": asset_refs,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -259,6 +272,92 @@ def _write_quality_report(
     quality = plan.quality.to_dict() if plan is not None and plan.quality is not None else None
     write_json(export_dir / "quality-report.json", {"quality_gate": gate.to_dict(), "quality": quality})
     files.append({"kind": "quality_report", "path": "quality-report.json", "exists": True, "required": False})
+
+
+def _write_asset_ref_summaries(
+    *,
+    run_dir: Path,
+    export_dir: Path,
+    version_id: str,
+    project_export: dict[str, Any] | None,
+    files: list[dict[str, Any]],
+    enabled: bool,
+) -> list[dict[str, Any]]:
+    if not enabled:
+        files.append({"kind": "asset_refs", "path": "assets", "exists": False, "required": False, "skipped": "disabled"})
+        return []
+    refs = _final_version_asset_refs(run_dir, version_id, project_export)
+    if not refs:
+        files.append({"kind": "asset_refs", "path": "assets", "exists": False, "required": False})
+        return []
+    assets_dir = export_dir / "assets"
+    _ensure_within(export_dir, assets_dir)
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    written: list[dict[str, Any]] = []
+    for ref in refs:
+        asset_id = _safe_asset_id(str(ref.get("asset_id") or ""))
+        summary = _asset_ref_export_summary(ref)
+        target = assets_dir / f"{asset_id}.json"
+        _ensure_within(export_dir, target)
+        write_json(target, summary)
+        record = {"kind": "asset_ref", "path": f"assets/{asset_id}.json", "exists": True, "required": False, "size_bytes": target.stat().st_size}
+        files.append(record)
+        written.append(summary)
+    return written
+
+
+def _final_version_asset_refs(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> list[dict[str, Any]]:
+    refs_by_id: dict[str, dict[str, Any]] = {}
+    snapshot_path = run_dir / "data" / "asset-refs.json"
+    if snapshot_path.exists():
+        _ensure_within(run_dir, snapshot_path)
+        try:
+            snapshot = read_json(snapshot_path)
+        except (OSError, ValueError, TypeError):
+            snapshot = {}
+        for ref in snapshot.get("asset_refs", []) if isinstance(snapshot, dict) else []:
+            if isinstance(ref, dict) and ref.get("asset_id"):
+                refs_by_id[str(ref["asset_id"])] = _asset_ref_export_summary({**ref, "used_by_versions": [version_id]})
+    if isinstance(project_export, dict):
+        for ref in project_export.get("asset_refs", []):
+            if not isinstance(ref, dict) or not ref.get("asset_id"):
+                continue
+            used_by_versions = ref.get("used_by_versions") if isinstance(ref.get("used_by_versions"), list) else []
+            if version_id not in used_by_versions:
+                continue
+            asset_id = str(ref["asset_id"])
+            refs_by_id.setdefault(asset_id, _asset_ref_export_summary(ref))
+    return [refs_by_id[key] for key in sorted(refs_by_id)]
+
+
+def _asset_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
+    summary = {
+        "asset_id": _safe_asset_id(str(ref.get("asset_id") or "")),
+        "asset_type": str(ref.get("asset_type") or ""),
+        "name": str(ref.get("name") or ref.get("asset_id") or ""),
+        "roles": [str(item) for item in ref.get("roles", []) if str(item).strip()] if isinstance(ref.get("roles"), list) else [],
+        "role": str(ref.get("role") or "") if ref.get("role") else None,
+        "strength": ref.get("strength") if isinstance(ref.get("strength"), (int, float)) else None,
+        "used_by_versions": [str(item) for item in ref.get("used_by_versions", []) if str(item).strip()] if isinstance(ref.get("used_by_versions"), list) else [],
+        "used_by_candidate_groups": [str(item) for item in ref.get("used_by_candidate_groups", []) if str(item).strip()] if isinstance(ref.get("used_by_candidate_groups"), list) else [],
+        "content_summary": ref.get("content_summary") if isinstance(ref.get("content_summary"), dict) else {},
+        "source": ref.get("source") if isinstance(ref.get("source"), dict) else {},
+    }
+    return _drop_empty(summary)
+
+
+def _drop_empty(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: item
+        for key, item in value.items()
+        if item not in (None, "", [], {})
+    }
+
+
+def _safe_asset_id(asset_id: str) -> str:
+    if not re.match(r"^asset-[0-9]{3,6}$", asset_id):
+        raise FinalExportError("Invalid asset id in asset refs.")
+    return asset_id
 
 
 def _write_readme(export_dir: Path, project: Any, version: Any, gate: QualityGateResult, manifest: dict[str, Any]) -> None:

@@ -92,6 +92,83 @@ def test_final_export_bundle_copies_core_audio_stems_and_manifest(tmp_path: Path
     assert read_final_export_manifest(project_dir)["version_id"] == "v001"
 
 
+def test_final_export_includes_sanitized_asset_refs(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    write_json(
+        run_dir / "data" / "asset-refs.json",
+        {
+            "schema_version": 1,
+            "asset_refs": [
+                {
+                    "asset_id": "asset-001",
+                    "asset_type": "chord_progression",
+                    "name": "Good Chords",
+                    "role": "chord_reference",
+                    "strength": 0.9,
+                    "content_summary": {"chord_count": 4},
+                    "source": {"project_id": "source", "version_id": "v003"},
+                }
+            ],
+        },
+    )
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+        project_export={
+            "project": {"project_id": "export-project"},
+            "asset_refs": [
+                {
+                    "asset_id": "asset-001",
+                    "asset_type": "chord_progression",
+                    "name": "Good Chords",
+                    "roles": ["chord_reference"],
+                    "used_by_versions": ["v001"],
+                    "used_by_candidate_groups": ["cg-001"],
+                    "content_summary": {"chord_count": 4},
+                    "source": {"project_id": "source", "version_id": "v003"},
+                }
+            ],
+        },
+    )
+
+    asset_path = project_dir / "final-export" / "assets" / "asset-001.json"
+    assert asset_path.exists()
+    asset_summary = read_json(asset_path)
+    assert manifest["asset_refs"][0]["asset_id"] == "asset-001"
+    assert manifest["asset_refs"][0]["used_by_versions"] == ["v001"]
+    assert asset_summary["content_summary"] == {"chord_count": 4}
+    serialized = str(manifest) + asset_path.read_text(encoding="utf-8")
+    assert str(tmp_path) not in serialized
+    assert "provider.json" not in serialized
+
+
+def test_final_export_can_disable_asset_refs(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    write_json(run_dir / "data" / "asset-refs.json", {"schema_version": 1, "asset_refs": [{"asset_id": "asset-001"}]})
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(include_asset_refs=False),
+        now="2026-05-06T00:00:00Z",
+    )
+
+    assert manifest["asset_refs"] == []
+    assert not (project_dir / "final-export" / "assets").exists()
+    assert any(file["kind"] == "asset_refs" and file["skipped"] == "disabled" for file in manifest["files"])
+
+
 def test_final_export_skips_stale_stems(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, plan = make_run(tmp_path)

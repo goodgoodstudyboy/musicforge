@@ -324,6 +324,65 @@ Prompt templates are managed from Studio's Prompt Templates panel and stored in
 edit templates can be overridden locally and reset. Templates are validated for
 size and local absolute path leakage before saving.
 
+## Creative Assets
+
+v1.6.0 adds a local Creative Asset Library for reusable motifs, chord
+progressions, drum patterns, bass patterns, section templates, arrangement
+templates, and lyric hooks. Assets are stored as independent local snapshots:
+
+```text
+.musicforge/assets/<asset-id>/
+  asset.json
+  source-fragment.json
+  preview.mid
+  preview.wav
+  events.jsonl
+```
+
+Studio can extract assets from a completed job, a Project version, or a provider
+candidate. The Assets workspace supports search, type/tag/favorite filters,
+metadata edits, hide/unhide, favorite, delete, MIDI preview rendering, and WAV
+preview rendering when the local renderer is configured.
+
+Asset references can be attached to new jobs, Project versions, variations,
+local/provider edits, provider previews, candidate groups, and Prompt A/B. Each
+run that uses assets writes a compact snapshot:
+
+```text
+runs/<job-id>/data/asset-refs.json
+```
+
+The snapshot records asset id, type, name, role, strength, source summary, and
+content summary. Full notes and source fragments remain in `.musicforge/assets/`
+instead of being copied into every job. Hidden assets cannot be used as
+references.
+
+Provider prompts receive only sanitized asset summaries. Project export and
+Final Export include asset reference summaries for traceability, but do not copy
+asset preview WAV files, API keys, raw provider responses, or local config
+files.
+
+Creative Asset APIs:
+
+```text
+GET  /api/assets
+POST /api/assets
+GET  /api/assets/<asset-id>
+POST /api/assets/<asset-id>
+POST /api/assets/<asset-id>/hide
+POST /api/assets/<asset-id>/unhide
+POST /api/assets/<asset-id>/favorite
+POST /api/assets/<asset-id>/unfavorite
+POST /api/assets/<asset-id>/delete
+POST /api/assets/<asset-id>/render-midi
+POST /api/assets/<asset-id>/render-audio
+GET  /api/assets/<asset-id>/midi
+GET  /api/assets/<asset-id>/audio
+POST /api/assets/extract/from-job
+POST /api/assets/extract/from-project-version
+POST /api/assets/extract/from-candidate
+```
+
 Quality Gate is stored per Project. Defaults require the generated `SongPlan`
 to meet baseline quality scores, but do not require WAV or stems because local
 audio rendering depends on user renderer setup. Setting final evaluates the gate
@@ -343,6 +402,8 @@ Final Export writes a directory bundle under the Project:
   quality-report.json
   song.mid
   song.wav
+  assets/
+    asset-001.json
   stems/
 ```
 

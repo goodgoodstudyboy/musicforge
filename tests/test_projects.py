@@ -192,6 +192,64 @@ def test_export_project_writes_manifest_without_deleting_runs(tmp_path: Path) ->
     assert run_dir.exists()
 
 
+def test_export_project_includes_asset_refs_from_versions_and_candidates(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    document = store.create_project("Asset Export Project")
+    run_dir = make_run(tmp_path, "asset-job")
+    write_json(
+        run_dir / "data" / "asset-refs.json",
+        {
+            "schema_version": 1,
+            "asset_refs": [
+                {
+                    "asset_id": "asset-001",
+                    "asset_type": "motif",
+                    "name": "Saved Motif",
+                    "role": "motif_reference",
+                    "strength": 0.8,
+                    "content_summary": {"note_count": 8},
+                    "source": {"project_id": "source-project", "version_id": "v002"},
+                }
+            ],
+        },
+    )
+    document = store.add_version_from_job(document.state.project_id, FakeJob(job_id="asset-job", title="Asset", output_dir=str(run_dir)))
+    group_dir = tmp_path / "projects" / document.state.project_id / "candidate-groups" / "cg-001"
+    write_json(
+        group_dir / "group.json",
+        {
+            "group_id": "cg-001",
+            "source": {
+                "asset_refs": [
+                    {
+                        "asset_id": "asset-001",
+                        "asset_type": "motif",
+                        "name": "Saved Motif",
+                        "role": "candidate_reference",
+                        "strength": 0.6,
+                    }
+                ]
+            },
+        },
+    )
+
+    export = store.export_project(document.state.project_id)
+
+    assert export["asset_refs"] == [
+        {
+            "asset_id": "asset-001",
+            "asset_type": "motif",
+            "name": "Saved Motif",
+            "roles": ["motif_reference", "candidate_reference"],
+            "used_by_versions": ["v001"],
+            "used_by_candidate_groups": ["cg-001"],
+            "content_summary": {"note_count": 8},
+            "source": {"project_id": "source-project", "version_id": "v002"},
+        }
+    ]
+    assert str(tmp_path) not in json.dumps(export["asset_refs"])
+
+
 def test_old_project_json_defaults_and_missing_job_sync(tmp_path: Path) -> None:
     project_dir = tmp_path / "projects" / "legacy"
     project_dir.mkdir(parents=True)

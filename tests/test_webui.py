@@ -244,6 +244,50 @@ def test_webui_contains_project_workspace_controls():
     assert "Delete Project" in html
 
 
+def test_webui_contains_assets_workspace_controls():
+    html = panel_html()
+
+    assert "Assets" in html
+    assert 'id="asset-search"' in html
+    assert 'id="asset-type-filter"' in html
+    assert 'id="asset-list"' in html
+    assert 'id="asset-detail"' in html
+    assert "Render Asset MIDI" in html
+    assert "Render Asset Audio" in html
+    assert "Download Asset MIDI" in html
+    assert "Download Asset WAV" in html
+    assert "Extract Asset" in html
+    assert "Save Motif" in html
+    assert "Save Chords" in html
+    assert "Save Drums" in html
+    assert "Save Bass" in html
+    assert "Save as Asset" in html
+    assert "Asset References" in html
+    assert "asset-ref-list" in html
+    assert "<audio" in html
+
+
+def test_webui_calls_asset_apis():
+    html = panel_html()
+
+    assert "/api/assets" in html
+    assert "/api/assets/extract/from-job" in html
+    assert "/api/assets/extract/from-project-version" in html
+    assert "/api/assets/extract/from-candidate" in html
+    assert "/api/assets/${encodeURIComponent(assetId)}" in html
+    assert "/render-midi" in html
+    assert "/render-audio" in html
+    assert "/midi" in html
+    assert "/audio" in html
+    assert "/favorite" in html
+    assert "/unfavorite" in html
+    assert "/hide" in html
+    assert "/unhide" in html
+    assert "/delete" in html
+    assert "assetRefsPayload" in html
+    assert "asset_refs" in html
+
+
 def test_webui_calls_project_apis():
     html = panel_html()
 

@@ -19,8 +19,20 @@ from urllib.parse import parse_qs
 from song_agent import __version__
 from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.auth import AuthConfig, validate_bearer_header
+from song_agent.assets import (
+    AssetStore,
+    apply_asset_refs_to_plan,
+    asset_audio_path,
+    asset_midi_path,
+    asset_public_dict,
+    asset_prompt_summaries,
+    asset_refs_snapshot,
+    extract_assets_from_song_plan,
+    write_asset_refs_snapshot,
+)
 from song_agent.batching import BatchDocument, BatchStore, now_iso
 from song_agent.candidate_groups import (
+    CandidateGroup,
     CandidateGroupStore,
     candidate_audio_path,
     candidate_group_stale,
@@ -30,6 +42,7 @@ from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.cli import generate_request
 from song_agent.edits import (
     EditIntent,
+    EditedSongPlanResult,
     apply_edit_intent,
     build_edit_metadata,
     build_edit_targets,
@@ -214,8 +227,9 @@ class JobState:
 
 
 class JobStore:
-    def __init__(self, runs_dir: Path = RUNS_DIR) -> None:
+    def __init__(self, runs_dir: Path = RUNS_DIR, asset_store: AssetStore | None = None) -> None:
         self.runs_dir = Path(runs_dir).resolve()
+        self.asset_store = asset_store or AssetStore()
         self.lock = threading.RLock()
         self.jobs: dict[str, JobState] = {}
         self.load_existing_jobs()
@@ -256,6 +270,7 @@ class JobStore:
 
     def create_job(self, payload: dict[str, Any], start_immediately: bool = True) -> JobState:
         request = SongRequest.from_dict(payload)
+        asset_refs = payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else []
         generation_mode = _generation_mode(payload)
         pipeline_mode = _pipeline_mode(payload)
         provider_snapshot: dict[str, Any]
@@ -278,7 +293,7 @@ class JobStore:
                 updated_at=now,
                 step="queued",
                 message="Queued for local deterministic generation.",
-                input_payload=request.to_dict(),
+                input_payload={**request.to_dict(), "asset_refs": asset_refs} if asset_refs else request.to_dict(),
                 provider_snapshot=provider_snapshot,
                 heartbeat_at=now,
                 generation_mode=generation_mode,
@@ -310,6 +325,7 @@ class JobStore:
         candidate_group_id: str | None = None,
         candidate_id: str | None = None,
         candidate: dict[str, Any] | None = None,
+        asset_refs: list[dict[str, Any]] | None = None,
     ) -> JobState:
         validate_edit_intent(parent_plan, intent)
         if intent.provider_mode == "provider" and provider_patch is None:
@@ -339,6 +355,8 @@ class JobStore:
                     metadata["candidate_id"] = candidate_id
                 if candidate:
                     metadata["candidate"] = _candidate_source_summary(candidate)
+            if asset_refs:
+                metadata["asset_refs"] = list(asset_refs)
             job = JobState(
                 job_id=job_id,
                 title=title,
@@ -354,6 +372,7 @@ class JobStore:
                     "parent_job_id": parent_job.job_id,
                     "parent_version_id": parent_version_id,
                     "project_id": project_id,
+                    **({"asset_refs": list(asset_refs)} if asset_refs else {}),
                 },
                 provider_snapshot=provider_snapshot or {"mode": "local", "summary": "Local deterministic edit engine"},
                 heartbeat_at=now,
@@ -746,6 +765,7 @@ class JobStore:
                     )
                 return
             self._heartbeat(job)
+            asset_snapshot = self._prepare_asset_refs_for_job(job)
             plan_path, midi_path = generate_request(
                 request,
                 out_dir=Path(job.output_dir),
@@ -755,6 +775,13 @@ class JobStore:
                 control=self._control_callback(job_id),
                 pipeline_mode=job.pipeline_mode,
             )
+            if asset_snapshot["asset_refs"]:
+                plan = SongPlan.from_dict(read_json(plan_path))
+                plan = apply_asset_refs_to_plan(plan, self.asset_store, asset_snapshot["asset_refs"])
+                write_json(plan_path, plan.to_dict())
+                render_midi(plan, midi_path)
+                write_asset_refs_snapshot(Path(job.output_dir), asset_snapshot)
+                self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "job_generation", "job_id": job.job_id})
             clear_stem_artifacts(Path(job.output_dir))
             job = self.get_job(job_id)
             if job is None:
@@ -787,6 +814,8 @@ class JobStore:
             nodes_dir = Path(job.output_dir) / "data" / "nodes"
             if nodes_dir.exists():
                 artifacts["nodes"] = str(nodes_dir)
+            if (Path(job.output_dir) / "data" / "asset-refs.json").exists():
+                artifacts["asset_refs"] = str(Path(job.output_dir) / "data" / "asset-refs.json")
             self._update_job(
                 job,
                 status="completed",
@@ -856,12 +885,16 @@ class JobStore:
             parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
             append_event(paths, {"event": "edit_started", "edit_type": intent.edit_type, "target": intent.target.to_dict()})
             self._heartbeat(job)
+            asset_snapshot = self._prepare_asset_refs_for_job(job)
             provider_patch_data = metadata.get("provider_patch")
             if provider_patch_data:
                 patch = ProviderEditPatch.from_dict(provider_patch_data)
                 result = apply_provider_edit_patch(parent_plan, patch)
             else:
                 result = apply_edit_intent(parent_plan, intent)
+            if asset_snapshot["asset_refs"]:
+                result_plan = apply_asset_refs_to_plan(result.plan, self.asset_store, asset_snapshot["asset_refs"])
+                result = EditedSongPlanResult(plan=result_plan, summary=result.summary, warnings=result.warnings)
             if job.cancel_requested:
                 raise JobCancelled()
             plan_path = paths.data / "song-plan.json"
@@ -891,7 +924,12 @@ class JobStore:
                     edit_metadata["candidate_id"] = metadata.get("candidate_id")
                 if metadata.get("candidate"):
                     edit_metadata["candidate"] = _candidate_source_summary(metadata.get("candidate"))
+            if asset_snapshot["asset_refs"]:
+                edit_metadata["asset_refs"] = list(asset_snapshot["asset_refs"])
             write_json(paths.data / "edit-metadata.json", edit_metadata)
+            if asset_snapshot["asset_refs"]:
+                write_asset_refs_snapshot(run_dir, asset_snapshot)
+                self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "edit", "job_id": job.job_id, "project_id": metadata.get("project_id"), "version_id": metadata.get("parent_version_id")})
             if metadata.get("provider_usage"):
                 usage = dict(metadata["provider_usage"])
                 usage["completed_at"] = _utc_now()
@@ -906,6 +944,8 @@ class JobStore:
             write_json(paths.data / "run-summary.json", summary)
             artifacts = _job_artifacts(run_dir, plan_path, midi_path, validator_report_path)
             artifacts["edit_metadata"] = str(paths.data / "edit-metadata.json")
+            if (paths.data / "asset-refs.json").exists():
+                artifacts["asset_refs"] = str(paths.data / "asset-refs.json")
             if (paths.data / "provider-usage.json").exists():
                 artifacts["provider_usage"] = str(paths.data / "provider-usage.json")
             self._update_job(
@@ -942,6 +982,13 @@ class JobStore:
                 last_error=str(exc),
                 finished_at=_utc_now(),
             )
+
+    def _prepare_asset_refs_for_job(self, job: JobState) -> dict[str, Any]:
+        snapshot = asset_refs_snapshot(self.asset_store, job.input_payload.get("asset_refs"), captured_at=_utc_now())
+        if snapshot["asset_refs"]:
+            ProjectPaths.create(Path(job.output_dir))
+            write_asset_refs_snapshot(Path(job.output_dir), snapshot)
+        return snapshot
 
     def _run_node_retry(
         self,
@@ -1890,6 +1937,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.prompt_template_store  # type: ignore[attr-defined]
 
     @property
+    def asset_store(self) -> AssetStore:
+        return self.server.asset_store  # type: ignore[attr-defined]
+
+    @property
     def auth_config(self) -> AuthConfig:
         return self.server.auth_config  # type: ignore[attr-defined]
 
@@ -1992,6 +2043,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_provider_usage_root(method)
                 return
 
+            if path == "/api/assets":
+                self._handle_assets_root(method, parsed.query)
+                return
+
+            if path == "/api/assets/extract/from-job":
+                self._handle_asset_extract_from_job(method)
+                return
+
+            if path == "/api/assets/extract/from-project-version":
+                self._handle_asset_extract_from_project_version(method)
+                return
+
+            if path == "/api/assets/extract/from-candidate":
+                self._handle_asset_extract_from_candidate(method)
+                return
+
             if path == "/api/edit-presets":
                 self._handle_edit_presets_root(method)
                 return
@@ -2018,6 +2085,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if edit_preset_route is not None:
                 preset_id, tail = edit_preset_route
                 self._handle_edit_preset_route(method, preset_id, tail)
+                return
+
+            asset_route = _match_asset_route(path)
+            if asset_route is not None:
+                asset_id, tail = asset_route
+                self._handle_asset_route(method, asset_id, tail)
                 return
 
             project_route = _match_project_route(path)
@@ -2295,6 +2368,194 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
 
+    def _handle_assets_root(self, method: str, query_string: str) -> None:
+        if method == "GET":
+            query = parse_qs(query_string)
+            filters = {key: _query_value(query, key) for key in ("q", "type", "tag", "style", "mood", "min_quality", "favorite")}
+            include_hidden = _query_value(query, "include_hidden") in {"1", "true", "yes"}
+            limit_value = _query_value(query, "limit")
+            limit = int(limit_value) if limit_value else 100
+            assets = self.asset_store.list_assets(include_hidden=include_hidden, filters=filters)[: max(1, min(limit, 500))]
+            self._send_json({"assets": [asset_public_dict(asset) for asset in assets], "count": len(assets), "filters": {**filters, "include_hidden": include_hidden}})
+            return
+        if method == "POST":
+            try:
+                asset = self.asset_store.create_asset(self._read_json_body(), now=_utc_now())
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json({"ok": True, "asset": asset_public_dict(asset)}, status=HTTPStatus.CREATED)
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_asset_route(self, method: str, asset_id: str, tail: str) -> None:
+        try:
+            if tail == "":
+                if method == "GET":
+                    self._send_json({"asset": asset_public_dict(self.asset_store.read_asset(asset_id))})
+                    return
+                if method == "POST":
+                    asset = self.asset_store.update_asset(asset_id, self._read_json_body())
+                    self._send_json({"ok": True, "asset": asset_public_dict(asset)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail in {"/hide", "/unhide"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                asset = self.asset_store.hide_asset(asset_id, hidden=tail == "/hide")
+                self._send_json({"ok": True, "asset": asset_public_dict(asset)})
+                return
+            if tail in {"/favorite", "/unfavorite"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                asset = self.asset_store.favorite_asset(asset_id, favorite=tail == "/favorite")
+                self._send_json({"ok": True, "asset": asset_public_dict(asset)})
+                return
+            if tail == "/delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.asset_store.delete_asset(asset_id)
+                self._send_json({"ok": True, "deleted": True, "asset_id": asset_id})
+                return
+            if tail == "/render-midi":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                asset = self.asset_store.render_asset_midi(asset_id)
+                self._send_json({"ok": True, "asset": asset_public_dict(asset)})
+                return
+            if tail == "/render-audio":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                config, _sources = load_renderer_config()
+                config.validate_ready_for_render()
+                asset = self.asset_store.render_asset_audio(asset_id, config)
+                self._send_json({"ok": True, "asset": asset_public_dict(asset)})
+                return
+            if tail == "/midi":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.asset_store.read_asset(asset_id)
+                self._send_file(asset_midi_path(self.asset_store.asset_dir(asset_id)), "audio/midi", filename=f"{asset_id}.mid")
+                return
+            if tail == "/audio":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.asset_store.read_asset(asset_id)
+                self._send_file(asset_audio_path(self.asset_store.asset_dir(asset_id)), "audio/wav", filename=f"{asset_id}.wav")
+                return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Asset not found.")
+            return
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            status = HTTPStatus.CONFLICT if "MIDI preview" in str(exc) or "do not have MIDI" in str(exc) else HTTPStatus.BAD_REQUEST
+            self._send_error(status, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Asset route not found.")
+
+    def _handle_asset_extract_from_job(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        job_id = str(payload.get("job_id") or "")
+        job = self.store.get_job(job_id)
+        if job is None:
+            self._send_error(HTTPStatus.NOT_FOUND, "Job not found.")
+            return
+        plan_path = Path(job.output_dir) / "data" / "song-plan.json"
+        if not plan_path.exists():
+            self._send_error(HTTPStatus.CONFLICT, "song-plan.json is missing.")
+            return
+        try:
+            plan = SongPlan.from_dict(read_json(plan_path))
+            assets = self._create_assets_from_plan(plan, {"source_type": "job", "job_id": job.job_id, "style": job.input_payload.get("style")}, payload)
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "assets": [asset_public_dict(asset) for asset in assets]}, status=HTTPStatus.CREATED)
+
+    def _handle_asset_extract_from_project_version(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        project_id = str(payload.get("project_id") or "")
+        version_id = str(payload.get("version_id") or "")
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+            version = next(version for version in document.versions if version.version_id == version_id)
+        except StopIteration:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        plan_path = Path(version.output_dir) / "data" / "song-plan.json"
+        if not plan_path.exists():
+            self._send_error(HTTPStatus.CONFLICT, "song-plan.json is missing.")
+            return
+        try:
+            plan = SongPlan.from_dict(read_json(plan_path))
+            assets = self._create_assets_from_plan(
+                plan,
+                {"source_type": "project_version", "project_id": project_id, "version_id": version.version_id, "job_id": version.job_id, "style": version.request.get("style")},
+                payload,
+            )
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "assets": [asset_public_dict(asset) for asset in assets]}, status=HTTPStatus.CREATED)
+
+    def _handle_asset_extract_from_candidate(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        project_id = str(payload.get("project_id") or "")
+        group_id = str(payload.get("candidate_group_id") or "")
+        candidate_id = str(payload.get("candidate_id") or "")
+        try:
+            self.project_store.get_project(project_id)
+            group_store = CandidateGroupStore(self.project_store.project_dir(project_id))
+            group = group_store.read_group(group_id)
+            plan = SongPlan.from_dict(group_store.read_candidate_plan(group.group_id, candidate_id))
+            assets = self._create_assets_from_plan(
+                plan,
+                {
+                    "source_type": "candidate",
+                    "project_id": project_id,
+                    "version_id": group.parent_version_id,
+                    "job_id": group.parent_job_id,
+                    "candidate_group_id": group.group_id,
+                    "candidate_id": candidate_id,
+                },
+                payload,
+            )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Candidate not found.")
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "assets": [asset_public_dict(asset) for asset in assets]}, status=HTTPStatus.CREATED)
+
+    def _create_assets_from_plan(self, plan: SongPlan, source: dict[str, Any], payload: dict[str, Any]) -> list[Any]:
+        assets = []
+        for asset_payload in extract_assets_from_song_plan(plan, source, payload):
+            assets.append(self.asset_store.create_asset(asset_payload, now=_utc_now()))
+        return assets
+
     def _handle_provider_usage_root(self, method: str) -> None:
         if method != "GET":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2429,6 +2690,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     "generation_mode": payload.get("generation_mode", request_data.get("generation_mode", "local")),
                     "pipeline_mode": payload.get("pipeline_mode", request_data.get("pipeline_mode", "single")),
                 }
+                if isinstance(payload.get("asset_refs"), list):
+                    request_payload["asset_refs"] = payload["asset_refs"]
                 job = self.store.create_job(request_payload)
                 document = self.project_store.add_version_from_job(
                     project_id,
@@ -2859,6 +3122,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 generation_mode=payload.get("generation_mode"),
                 pipeline_mode=payload.get("pipeline_mode"),
             )
+            if isinstance(payload.get("asset_refs"), list):
+                request_payload["asset_refs"] = payload["asset_refs"]
             job = self.store.create_job(request_payload)
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -2949,6 +3214,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 preset=preset_ref,
                 name=str(payload.get("name") or ""),
                 start_immediately=bool(payload.get("start_immediately", True)),
+                asset_refs=payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else None,
             )
             variant_type = edit_variant_type(intent.edit_type)
             document = self.project_store.add_version_from_job(
@@ -3032,11 +3298,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(HTTPStatus.CONFLICT, "Prompt template is disabled.")
                 return
             config, _sources = load_provider_config()
+            asset_snapshot = asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_utc_now())
+            asset_prompt_refs = asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
             patch, provider_snapshot = generate_provider_edit_patch(
                 parent_plan=parent_plan,
                 instruction=instruction,
                 template=template,
                 config=config,
+                asset_references=asset_prompt_refs,
             )
             provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
             preview = create_provider_edit_preview(
@@ -3051,7 +3320,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 now=_utc_now(),
                 provider_usage=provider_usage,
                 provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
+                asset_refs=asset_snapshot["asset_refs"],
             )
+            if asset_snapshot["asset_refs"]:
+                self.asset_store.mark_used(
+                    asset_snapshot["asset_refs"],
+                    {
+                        "usage_type": "provider_edit_preview",
+                        "project_id": project_id,
+                        "version_id": parent.version_id,
+                        "preview_id": preview.preview_id,
+                    },
+                )
             usage = _provider_usage_record(
                 config_snapshot=provider_snapshot,
                 operation="provider_edit_preview",
@@ -3136,6 +3416,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 provider_snapshot=provider_snapshot,
                 template_id=preview.template_id,
                 preview_id=preview_id,
+                asset_refs=preview.source.get("asset_refs") if isinstance(preview.source.get("asset_refs"), list) else None,
             )
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -3199,7 +3480,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_json({"ok": True, "group": group.to_dict()}, status=HTTPStatus.CREATED)
 
-    def _create_project_candidate_group(self, project_id: str, version_id: str, payload: dict[str, Any]) -> Any:
+    def _create_project_candidate_group(self, project_id: str, version_id: str, payload: dict[str, Any], *, mark_asset_usage: bool = True) -> Any:
         _document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
         instruction = str(payload.get("instruction") or "").strip()
         if not instruction:
@@ -3210,12 +3491,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if not template.enabled:
             raise ValueError("Prompt template is disabled.")
         config, _sources = load_provider_config()
+        asset_snapshot = asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_utc_now())
+        asset_prompt_refs = asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
         patches, provider_snapshot = generate_provider_edit_candidates(
             parent_plan=parent_plan,
             instruction=instruction,
             template=template,
             config=config,
             candidate_count=candidate_count,
+            asset_references=asset_prompt_refs,
         )
         provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
         project_dir = self.project_store.project_dir(project_id)
@@ -3231,6 +3515,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 "parent_version_id": parent.version_id,
                 "parent_job_id": parent_job.job_id,
                 "song_plan_sha256": song_plan_hash(parent_plan),
+                "asset_refs": list(asset_snapshot["asset_refs"]),
             },
             provider_usage=provider_usage,
             provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
@@ -3287,7 +3572,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     error=str(exc),
                     now=_utc_now(),
                 )
-        group = group_store.read_group(group.group_id)
+            group = group_store.read_group(group.group_id)
+        if asset_snapshot["asset_refs"] and mark_asset_usage:
+            self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "candidate_generation", "project_id": project_id, "version_id": parent.version_id, "candidate_group_id": group.group_id})
         self.project_store.append_event(
             project_id,
             "provider_edit_candidate_group_created",
@@ -3422,6 +3709,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                         "created_at": candidate.created_at,
                     }
                 ),
+                asset_refs=group.source.get("asset_refs") if isinstance(group.source.get("asset_refs"), list) else None,
             )
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -3605,6 +3893,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                         "candidate_count": candidate_count,
                         "template_id": template_id,
                     },
+                    mark_asset_usage=False,
                 )
                 groups.append(group)
                 created_group_ids.append(group.group_id)
@@ -3623,6 +3912,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 "provider_prompt_ab_created",
                 {"ab_id": experiment.ab_id, "group_ids": list(experiment.group_ids), "template_ids": list(template_ids)},
             )
+            for group in groups:
+                refs = group.source.get("asset_refs") if isinstance(group.source, dict) else None
+                if isinstance(refs, list) and refs:
+                    self.asset_store.mark_used(
+                        refs,
+                        {
+                            "usage_type": "prompt_ab_candidate_generation",
+                            "project_id": project_id,
+                            "version_id": version_id,
+                            "candidate_group_id": group.group_id,
+                            "prompt_ab_id": experiment.ab_id,
+                        },
+                    )
         except FileNotFoundError as exc:
             self._rollback_prompt_ab_groups(project_id, created_group_ids)
             message = "Version not found." if str(exc) == version_id else "Provider edit resource not found."
@@ -4319,7 +4621,8 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
     ) -> None:
         super().__init__(server_address, MusicForgeHandler)
         self.auth_config = auth_config or AuthConfig(enabled=False)
-        self.job_store = JobStore()
+        self.asset_store = AssetStore()
+        self.job_store = JobStore(asset_store=self.asset_store)
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
         self.edit_preset_store = EditPresetStore()
@@ -4736,6 +5039,19 @@ def _match_prompt_template_route(path: str) -> tuple[str, str] | None:
     if "/" in rest:
         template_id, tail = rest.split("/", 1)
         return unquote(template_id), "/" + tail
+    return unquote(rest), ""
+
+
+def _match_asset_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/assets/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest or rest.startswith("extract/"):
+        return None
+    if "/" in rest:
+        asset_id, tail = rest.split("/", 1)
+        return unquote(asset_id), "/" + tail
     return unquote(rest), ""
 
 

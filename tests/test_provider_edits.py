@@ -109,6 +109,55 @@ def test_mock_provider_generates_multiple_edit_candidates() -> None:
     assert "sk-secret" not in str(snapshot)
 
 
+def test_provider_edit_prompt_receives_sanitized_asset_references() -> None:
+    plan = parent_plan()
+    template = PromptTemplateStore().get_template("provider-edit-candidates")
+    captured = {}
+
+    class Client:
+        def generate_edit_candidates_json(self, parent_plan, instruction, config, *, candidate_count, prompt):
+            captured["prompt"] = prompt
+            return {
+                "schema_version": 1,
+                "candidates": [
+                    {
+                        "schema_version": 1,
+                        "summary": "Lift chorus energy",
+                        "operations": [{"op": "set_section_energy", "section_name": "chorus", "energy": 0.9}],
+                    },
+                    {
+                        "schema_version": 1,
+                        "summary": "Brighten chorus harmony",
+                        "operations": [{"op": "set_section_chords", "section_name": "chorus", "chords": ["Cmaj7", "Am7", "Fmaj7", "G7"]}],
+                    },
+                ],
+            }
+
+    _patches, snapshot = generate_provider_edit_candidates(
+        parent_plan=plan,
+        instruction="Use my saved hook.",
+        template=template,
+        config=ProviderConfig(wire_api="mock", model="mock-main"),
+        candidate_count=2,
+        asset_references=[
+            {
+                "asset_id": "asset-001",
+                "asset_type": "motif",
+                "name": "Saved Hook",
+                "role": "motif_reference",
+                "strength": 0.8,
+                "content": {"pitch_intervals": [0, 3, 5], "notes": [{"pitch": 64}]},
+            }
+        ],
+        client=Client(),
+    )
+
+    assert snapshot["asset_reference_count"] == 1
+    assert '"asset_references"' in captured["prompt"]
+    assert "Saved Hook" in captured["prompt"]
+    assert "api_key" not in captured["prompt"]
+
+
 def test_provider_edit_candidates_rejects_invalid_count() -> None:
     plan = parent_plan()
     template = PromptTemplateStore().get_template("provider-edit-candidates")

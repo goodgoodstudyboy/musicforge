@@ -299,6 +299,34 @@ def panel_html() -> str:
       width: 100%;
       margin: 8px 0 4px;
     }
+    .asset-layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .asset-list {
+      overflow: auto;
+      max-height: 520px;
+    }
+    .asset-ref-list {
+      display: grid;
+      gap: 6px;
+      max-height: 180px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      margin-top: 4px;
+      background: #fbfcfe;
+    }
+    .asset-ref-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) 72px;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+    }
     .candidate-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(220px, 1fr));
@@ -353,6 +381,7 @@ def panel_html() -> str:
       .summary-grid { grid-template-columns: 1fr 1fr; }
       .batch-layout { grid-template-columns: 1fr; }
       .project-layout { grid-template-columns: 1fr; }
+      .asset-layout { grid-template-columns: 1fr; }
       .compare-grid { grid-template-columns: 1fr; }
       .candidate-grid { grid-template-columns: 1fr; }
       header { height: auto; align-items: flex-start; flex-direction: column; gap: 6px; padding: 12px 16px; }
@@ -549,6 +578,9 @@ def panel_html() -> str:
             <label>Lyrics
               <textarea id="lyrics" name="lyrics"></textarea>
             </label>
+            <label>Asset References
+              <div id="song-asset-refs" class="asset-ref-list"></div>
+            </label>
             <div class="actions">
               <button type="submit">Generate</button>
               <button class="secondary" id="reset-form" type="button">Reset</button>
@@ -617,6 +649,50 @@ def panel_html() -> str:
             </label>
           </div>
           <div id="project-list" class="project-list"><div class="empty">No projects yet.</div></div>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Assets</span>
+          <div class="actions" style="margin-top:0;">
+            <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+              <input id="include-hidden-assets" type="checkbox" style="width:auto;margin:0;">
+              Hidden
+            </label>
+            <button class="secondary" id="refresh-assets" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="grid2">
+            <label>Search Assets
+              <input id="asset-search" placeholder="name, tag, style">
+            </label>
+            <label>Asset Type
+              <select id="asset-type-filter">
+                <option value="">all</option>
+                <option value="motif">motif</option>
+                <option value="chord_progression">chord_progression</option>
+                <option value="drum_pattern">drum_pattern</option>
+                <option value="bass_pattern">bass_pattern</option>
+                <option value="section_template">section_template</option>
+                <option value="arrangement_template">arrangement_template</option>
+                <option value="lyric_hook">lyric_hook</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Tag
+              <input id="asset-tag-filter" placeholder="chorus">
+            </label>
+            <label>Favorite
+              <select id="asset-favorite-filter">
+                <option value="">all</option>
+                <option value="1">favorite</option>
+              </select>
+            </label>
+          </div>
+          <div id="asset-list" class="asset-list"><div class="empty">No assets yet.</div></div>
+          <div id="asset-detail"><div class="empty">Select an asset.</div></div>
         </div>
       </section>
     </div>
@@ -721,6 +797,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let editPresets = [];
     let promptTemplates = [];
     let providerEditPreview = null;
+    let assets = [];
+    let selectedAssetId = null;
+    let includeHiddenAssets = false;
 
     const $ = (id) => document.getElementById(id);
 
@@ -767,12 +846,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadPromptTemplates();
       await loadRenderer();
       await loadEditPresets();
+      await loadAssets();
       await loadJobs();
       await loadProjects();
       await loadBatches();
       setInterval(() => {
         loadJobs();
         loadProjects();
+        loadAssets();
         loadBatches();
       }, 2000);
       $("poll").textContent = "polling 2s";
@@ -840,6 +921,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if ($("tempo_bpm").value) payload.tempo_bpm = Number($("tempo_bpm").value);
       if ($("key").value.trim()) payload.key = $("key").value.trim();
       if ($("lyrics").value.trim()) payload.lyrics = $("lyrics").value;
+      const refs = assetRefsPayload("song-asset-refs");
+      if (refs.length) payload.asset_refs = refs;
       return payload;
     }
 
@@ -896,6 +979,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } catch (err) {
         $("project-message").textContent = err.message;
       }
+    });
+    $("refresh-assets").addEventListener("click", loadAssets);
+    $("include-hidden-assets").addEventListener("change", async () => {
+      includeHiddenAssets = $("include-hidden-assets").checked;
+      await loadAssets();
+    });
+    ["asset-type-filter", "asset-favorite-filter"].forEach((id) => {
+      $(id).addEventListener("change", loadAssets);
+    });
+    ["asset-search", "asset-tag-filter"].forEach((id) => {
+      $(id).addEventListener("input", debounce(loadAssets, 250));
     });
     $("refresh-batches").addEventListener("click", loadBatches);
     $("include-hidden-batches").addEventListener("change", async () => {
@@ -1184,6 +1278,190 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     }
 
+    async function loadAssets() {
+      try {
+        const params = new URLSearchParams();
+        if (includeHiddenAssets) params.set("include_hidden", "1");
+        if ($("asset-search").value.trim()) params.set("q", $("asset-search").value.trim());
+        if ($("asset-type-filter").value) params.set("type", $("asset-type-filter").value);
+        if ($("asset-tag-filter").value.trim()) params.set("tag", $("asset-tag-filter").value.trim());
+        if ($("asset-favorite-filter").value) params.set("favorite", $("asset-favorite-filter").value);
+        const data = await api(`/api/assets${params.toString() ? "?" + params.toString() : ""}`);
+        assets = data.assets || [];
+        if (selectedAssetId && !assets.some((asset) => asset.asset_id === selectedAssetId)) {
+          selectedAssetId = null;
+          $("asset-detail").innerHTML = "<div class='empty'>Select an asset.</div>";
+        }
+        renderAssets();
+        renderAssetSelectors();
+        if (selectedAssetId) await renderAssetDetail(selectedAssetId);
+      } catch (err) {
+        $("asset-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderAssets() {
+      const list = $("asset-list");
+      if (!assets.length) {
+        list.innerHTML = "<div class='empty'>No assets yet.</div>";
+        renderAssetSelectors();
+        return;
+      }
+      const rows = assets.map((asset) => `
+        <tr>
+          <td><button class="secondary asset-open" data-asset-id="${escapeHtml(asset.asset_id)}" type="button">Open</button></td>
+          <td>${escapeHtml(asset.name)}</td>
+          <td>${escapeHtml(asset.asset_type)}</td>
+          <td>${escapeHtml((asset.tags || []).join(", "))}</td>
+          <td>${escapeHtml(asset.quality_score ?? "-")}</td>
+          <td>${escapeHtml(asset.usage_count || 0)}</td>
+          <td>${asset.favorite ? "yes" : "-"}</td>
+        </tr>
+      `).join("");
+      list.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Name</th><th>Type</th><th>Tags</th><th>Quality</th><th>Uses</th><th>Favorite</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      list.querySelectorAll(".asset-open").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedAssetId = button.dataset.assetId;
+          await renderAssetDetail(selectedAssetId);
+        });
+      });
+    }
+
+    async function renderAssetDetail(assetId) {
+      const data = await api(`/api/assets/${encodeURIComponent(assetId)}`);
+      const asset = data.asset;
+      const preview = asset.preview || {};
+      $("asset-detail").innerHTML = `
+        <div class="summary-grid">
+          ${metric("Asset", asset.asset_id)}
+          ${metric("Type", asset.asset_type)}
+          ${metric("Quality", asset.quality_score ?? "-")}
+          ${metric("Uses", asset.usage_count || 0)}
+          ${metric("Key", asset.key || "-")}
+          ${metric("Tempo", asset.tempo_bpm || "-")}
+          ${metric("MIDI", preview.midi_status || "not_started")}
+          ${metric("WAV", preview.audio_status || "not_started")}
+        </div>
+        <div class="grid2">
+          <label>Name
+            <input id="asset-name" value="${escapeHtml(asset.name)}">
+          </label>
+          <label>Tags
+            <input id="asset-tags" value="${escapeHtml((asset.tags || []).join(", "))}">
+          </label>
+        </div>
+        <label>Description
+          <textarea id="asset-description">${escapeHtml(asset.description || "")}</textarea>
+        </label>
+        <div class="actions">
+          <button id="asset-save" type="button">Save Metadata</button>
+          <button class="secondary" id="asset-render-midi" type="button">Render Asset MIDI</button>
+          <button class="secondary" id="asset-render-audio" type="button">Render Asset Audio</button>
+          ${preview.midi_url ? `<a class="button-link secondary" href="${escapeHtml(preview.midi_url)}">Download Asset MIDI</a>` : ""}
+          ${preview.audio_url ? `<a class="button-link secondary" href="${escapeHtml(preview.audio_url)}">Download Asset WAV</a>` : ""}
+          ${asset.hidden ? `<button class="secondary" id="asset-unhide" type="button">Unhide Asset</button>` : `<button class="secondary" id="asset-hide" type="button">Hide Asset</button>`}
+          ${asset.favorite ? `<button class="secondary" id="asset-unfavorite" type="button">Unfavorite</button>` : `<button class="secondary" id="asset-favorite" type="button">Favorite</button>`}
+          <button class="danger" id="asset-delete" type="button">Delete Asset</button>
+        </div>
+        ${preview.audio_url ? `<audio class="audio-player" controls src="${escapeHtml(preview.audio_url)}"></audio>` : ""}
+        <pre>${escapeHtml(JSON.stringify({ source: asset.source, content_summary: assetContentSummary(asset), content: asset.content }, null, 2))}</pre>
+      `;
+      bindAction("asset-save", async () => {
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: $("asset-name").value.trim(),
+            description: $("asset-description").value,
+            tags: $("asset-tags").value.split(",").map((tag) => tag.trim()).filter(Boolean),
+          }),
+        });
+        await loadAssets();
+      });
+      bindAction("asset-render-midi", async () => {
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}/render-midi`, { method: "POST" });
+        await loadAssets();
+      });
+      bindAction("asset-render-audio", async () => {
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}/render-audio`, { method: "POST" });
+        await loadAssets();
+      });
+      bindAction("asset-hide", async () => {
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}/hide`, { method: "POST" });
+        await loadAssets();
+      });
+      bindAction("asset-unhide", async () => {
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}/unhide`, { method: "POST" });
+        await loadAssets();
+      });
+      bindAction("asset-favorite", async () => {
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}/favorite`, { method: "POST" });
+        await loadAssets();
+      });
+      bindAction("asset-unfavorite", async () => {
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}/unfavorite`, { method: "POST" });
+        await loadAssets();
+      });
+      bindAction("asset-delete", async () => {
+        if (!confirm("Delete this asset?")) return;
+        await api(`/api/assets/${encodeURIComponent(asset.asset_id)}/delete`, { method: "POST" });
+        selectedAssetId = null;
+        await loadAssets();
+      });
+    }
+
+    function renderAssetSelectors() {
+      document.querySelectorAll(".asset-ref-list").forEach((container) => {
+        const previous = new Map(Array.from(container.querySelectorAll("input[type='checkbox']")).map((input) => [input.value, input.checked]));
+        const strengths = new Map(Array.from(container.querySelectorAll("input[type='number']")).map((input) => [input.dataset.assetId, input.value]));
+        container.innerHTML = assets.slice(0, 60).map((asset) => `
+          <label class="asset-ref-row">
+            <input type="checkbox" value="${escapeHtml(asset.asset_id)}" ${previous.get(asset.asset_id) ? "checked" : ""}>
+            <span>${escapeHtml(asset.asset_type)} · ${escapeHtml(asset.name)}</span>
+            <input type="number" data-asset-id="${escapeHtml(asset.asset_id)}" min="0" max="1" step="0.1" value="${escapeHtml(strengths.get(asset.asset_id) || "0.7")}">
+          </label>
+        `).join("") || "<div class='empty'>No assets available.</div>";
+      });
+    }
+
+    function assetRefsPayload(containerId) {
+      const container = $(containerId);
+      if (!container) return [];
+      return Array.from(container.querySelectorAll("input[type='checkbox']:checked")).slice(0, 5).map((checkbox) => {
+        const asset = assets.find((item) => item.asset_id === checkbox.value) || {};
+        const strengthInput = container.querySelector(`input[type='number'][data-asset-id="${CSS.escape(checkbox.value)}"]`);
+        return {
+          asset_id: checkbox.value,
+          role: defaultAssetRole(asset.asset_type),
+          strength: Number((strengthInput && strengthInput.value) || 0.7),
+        };
+      });
+    }
+
+    function defaultAssetRole(assetType) {
+      return {
+        motif: "motif_reference",
+        chord_progression: "chord_reference",
+        drum_pattern: "drum_reference",
+        bass_pattern: "bass_reference",
+      }[assetType] || "reference";
+    }
+
+    function assetContentSummary(asset) {
+      const content = asset.content || {};
+      return {
+        note_count: Array.isArray(content.notes) ? content.notes.length : 0,
+        chord_count: Array.isArray(content.chords) ? content.chords.length : 0,
+        section_name: content.section_name || "",
+        track_name: content.track_name || "",
+      };
+    }
+
     function renderProjects() {
       const list = $("project-list");
       if (!projects.length) {
@@ -1249,6 +1527,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Version Note
           <input id="project-version-note" placeholder="short note">
         </label>
+        <label>Asset References
+          <div id="project-version-asset-refs" class="asset-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-new-version" type="button">New Version</button>
           <button class="secondary" id="project-add-job" type="button">Add Existing Job</button>
@@ -1265,6 +1546,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
       });
       wireProjectActions(project, versions);
+      renderAssetSelectors();
       await renderProjectTab(project, versions);
     }
 
@@ -1292,6 +1574,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             note: $("project-version-note").value.trim(),
             generation_mode: $("generation_mode").value,
             pipeline_mode: $("pipeline_mode").value,
+            asset_refs: assetRefsPayload("project-version-asset-refs"),
           }),
         });
         await loadJobs();
@@ -1375,6 +1658,22 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             body: JSON.stringify({ version_id: target.dataset.projectFinalVersion }),
           });
           await loadProjects();
+          return;
+        }
+        if (target.dataset.projectExtractVersion) {
+          await api("/api/assets/extract/from-project-version", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              project_id: project.project_id,
+              version_id: target.dataset.projectExtractVersion,
+              asset_types: [target.dataset.assetType || "motif"],
+              section_name: "chorus",
+              tags: ["studio"],
+              favorite: true,
+            }),
+          });
+          await loadAssets();
         }
       });
     }
@@ -1385,6 +1684,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         target.innerHTML = projectVersionsTable(project, versions);
       } else if (activeProjectTab === "variation") {
         target.innerHTML = projectVariationControls(project, versions);
+        renderAssetSelectors();
         bindAction("project-create-variation", async () => {
           const parentId = $("project-variation-parent").value;
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parentId)}/variation`, {
@@ -1453,6 +1753,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               <button class="secondary" data-project-edit-version="${escapeHtml(version.version_id)}" type="button">Edit Version</button>
               <button class="secondary" data-project-evaluate-version="${escapeHtml(version.version_id)}" type="button">Evaluate Gate</button>
               <button class="secondary" data-project-export-version="${escapeHtml(version.version_id)}" type="button">Export Final</button>
+              <button class="secondary" data-project-extract-version="${escapeHtml(version.version_id)}" data-asset-type="motif" type="button">Save Motif</button>
+              <button class="secondary" data-project-extract-version="${escapeHtml(version.version_id)}" data-asset-type="chord_progression" type="button">Save Chords</button>
+              <button class="secondary" data-project-extract-version="${escapeHtml(version.version_id)}" data-asset-type="drum_pattern" type="button">Save Drums</button>
+              <button class="secondary" data-project-extract-version="${escapeHtml(version.version_id)}" data-asset-type="bass_pattern" type="button">Save Bass</button>
             </div>
           </td>
         </tr>
@@ -1533,6 +1837,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <textarea id="project-variation-lyrics"></textarea>
           </label>
         </div>
+        <label>Asset References
+          <div id="project-variation-asset-refs" class="asset-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-create-variation" type="button" ${parent ? "" : "disabled"}>Create Variation</button>
           <span id="project-variation-message" class="message"></span>
@@ -1561,6 +1868,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         change_summary: $("project-variation-summary").value.trim(),
         request_patch: requestPatch,
       };
+      const refs = assetRefsPayload("project-variation-asset-refs");
+      if (refs.length) payload.asset_refs = refs;
       if ($("project-variation-generation-mode").value) payload.generation_mode = $("project-variation-generation-mode").value;
       if ($("project-variation-pipeline-mode").value) payload.pipeline_mode = $("project-variation-pipeline-mode").value;
       return payload;
@@ -1579,6 +1888,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         }
       }
       target.innerHTML = projectEditControls(project, versions, parentId, targets, preview);
+      renderAssetSelectors();
       const parentSelect = $("project-edit-parent");
       if (parentSelect) {
         parentSelect.addEventListener("change", async () => {
@@ -1721,6 +2031,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <div class="actions">
           ${["tempo", "key", "structure", "lyrics", "harmony", "melody", "arrangement"].map((item) => `<label><input class="project-edit-preserve" type="checkbox" value="${item}" ${["tempo", "key", "structure"].includes(item) ? "checked" : ""}> ${item}</label>`).join("")}
         </div>
+        <label>Asset References
+          <div id="project-edit-asset-refs" class="asset-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-create-edit" type="button" ${parentId ? "" : "disabled"}>Create Edit Version</button>
           <button class="secondary" id="project-provider-preview" type="button" ${parentId ? "" : "disabled"}>Generate Preview</button>
@@ -1754,15 +2067,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         change_summary: $("project-edit-summary").value.trim(),
       };
       if (presetId) data.preset_id = presetId;
+      const refs = assetRefsPayload("project-edit-asset-refs");
+      if (refs.length) data.asset_refs = refs;
       return data;
     }
 
     function projectProviderPreviewPayload() {
-      return {
+      const payload = {
         provider_mode: "provider",
         instruction: $("project-edit-instruction").value.trim(),
         template_id: "provider-edit-intent",
       };
+      const refs = assetRefsPayload("project-edit-asset-refs");
+      if (refs.length) payload.asset_refs = refs;
+      return payload;
     }
 
     function providerPreviewHtml(preview, patch) {
@@ -1795,6 +2113,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         return;
       }
       target.innerHTML = projectCandidateControls(versions, parentId, groups, usage, experiments);
+      renderAssetSelectors();
       const parentSelect = $("project-candidate-parent");
       if (parentSelect) {
         parentSelect.addEventListener("change", async () => {
@@ -1866,6 +2185,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await renderProjectCandidates(project, versions, target);
         });
       });
+      target.querySelectorAll("[data-save-candidate-asset]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api("/api/assets/extract/from-candidate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              project_id: project.project_id,
+              candidate_group_id: button.dataset.groupId,
+              candidate_id: button.dataset.candidateId,
+              asset_types: [button.dataset.assetType || "motif"],
+              section_name: "chorus",
+              tags: ["candidate", "studio"],
+              favorite: true,
+            }),
+          });
+          await loadAssets();
+        });
+      });
     }
 
     function projectCandidateControls(versions, parentId, groups, usage, experiments) {
@@ -1894,6 +2231,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Instruction
           <textarea id="project-candidate-instruction" placeholder="Give me 3 stronger chorus options while preserving tempo and key."></textarea>
         </label>
+        <label>Asset References
+          <div id="project-candidate-asset-refs" class="asset-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-generate-candidates" type="button" ${parentId ? "" : "disabled"}>Generate Candidates</button>
           <span id="project-candidate-message" class="message"></span>
@@ -1916,15 +2256,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     }
 
     function projectCandidatePayload() {
-      return {
+      const payload = {
         instruction: $("project-candidate-instruction").value.trim(),
         candidate_count: Number($("project-candidate-count").value || 3),
         template_id: $("project-candidate-template").value.trim() || "provider-edit-candidates",
       };
+      const refs = assetRefsPayload("project-candidate-asset-refs");
+      if (refs.length) payload.asset_refs = refs;
+      return payload;
     }
 
     function projectCandidateABPayload() {
-      return {
+      const payload = {
         instruction: $("project-candidate-instruction").value.trim(),
         candidate_count: Number($("project-candidate-count").value || 2),
         template_ids: [
@@ -1932,6 +2275,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           $("project-candidate-template-b").value.trim() || "provider-edit-candidates",
         ],
       };
+      const refs = assetRefsPayload("project-candidate-asset-refs");
+      if (refs.length) payload.asset_refs = refs;
+      return payload;
     }
 
     function projectCandidateUsageHtml(usage) {
@@ -1983,6 +2329,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" data-render-candidate-group-audio="${escapeHtml(group.group_id)}" data-group-id="${escapeHtml(group.group_id)}" type="button">Render Group Audio</button>
             <button class="danger" data-delete-candidate-group="${escapeHtml(group.group_id)}" type="button">Delete Candidate Group</button>
           </div>
+          ${group.source && group.source.asset_refs ? `<pre>${escapeHtml(JSON.stringify({ asset_refs: group.source.asset_refs }, null, 2))}</pre>` : ""}
           <div class="candidate-grid">
             ${(group.candidates || []).map((candidate) => candidateCardHtml(group, candidate)).join("")}
           </div>
@@ -2011,6 +2358,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${candidate.midi_url ? `<a class="button-link secondary" href="${escapeHtml(candidate.midi_url)}">Download MIDI</a>` : ""}
             <button class="secondary" data-render-candidate-audio data-group-id="${escapeHtml(group.group_id)}" data-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button">Render Audio</button>
             ${candidate.audio_url ? `<a class="button-link secondary" href="${escapeHtml(candidate.audio_url)}">Download WAV</a>` : ""}
+            <button class="secondary" data-save-candidate-asset data-group-id="${escapeHtml(group.group_id)}" data-candidate-id="${escapeHtml(candidate.candidate_id)}" data-asset-type="motif" type="button">Save as Asset</button>
           </div>
           ${candidate.audio_url ? `<audio class="audio-player" controls src="${escapeHtml(candidate.audio_url)}"></audio>` : ""}
           ${candidate.audio_error ? `<div class="empty error">${escapeHtml(candidate.audio_error)}</div>` : ""}
@@ -2570,7 +2918,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
       const detail = $("detail");
       const summary = job.summary || {};
-      const tabs = ["summary", "edit", "nodes", "timeline", "tracks", "stems", "quality", "validator", "json", "logs", "artifacts"];
+      const tabs = ["summary", "edit", "assets", "nodes", "timeline", "tracks", "stems", "quality", "validator", "json", "logs", "artifacts"];
       detail.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
           <span>${escapeHtml(job.title)}</span>
@@ -2622,6 +2970,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         target.innerHTML = `<pre>${escapeHtml(JSON.stringify(job, null, 2))}</pre>`;
       } else if (activeTab === "edit") {
         await renderEdit(job, target);
+      } else if (activeTab === "assets") {
+        await renderJobAssets(job, target);
       } else if (activeTab === "timeline") {
         await renderTimeline(job, target);
       } else if (activeTab === "nodes") {
@@ -2705,6 +3055,46 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } catch (err) {
         target.innerHTML = `<div class="empty">No edit metadata for this job.</div>`;
       }
+    }
+
+    async function renderJobAssets(job, target) {
+      target.innerHTML = `
+        <div class="grid2">
+          <label>Asset Types
+            <input id="job-asset-types" value="motif,chord_progression">
+          </label>
+          <label>Section
+            <input id="job-asset-section" value="chorus">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Track
+            <input id="job-asset-track" placeholder="melody, drums, bass">
+          </label>
+          <label>Tags
+            <input id="job-asset-tags" placeholder="chorus, hook">
+          </label>
+        </div>
+        <div class="actions">
+          <button id="job-extract-asset" type="button">Extract Asset</button>
+          <span id="job-asset-message" class="message"></span>
+        </div>
+      `;
+      bindAction("job-extract-asset", async () => {
+        const data = await api("/api/assets/extract/from-job", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: job.job_id,
+            asset_types: $("job-asset-types").value.split(",").map((item) => item.trim()).filter(Boolean),
+            section_name: $("job-asset-section").value.trim(),
+            track_name: $("job-asset-track").value.trim(),
+            tags: $("job-asset-tags").value.split(",").map((tag) => tag.trim()).filter(Boolean),
+          }),
+        });
+        $("job-asset-message").textContent = `saved ${data.count || 0}`;
+        await loadAssets();
+      });
     }
 
     async function renderNodes(job, target) {
@@ -3011,6 +3401,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const labels = {
         summary: "Summary",
         edit: "Edit",
+        assets: "Assets",
         nodes: "Nodes",
         timeline: "Timeline",
         tracks: "Tracks",

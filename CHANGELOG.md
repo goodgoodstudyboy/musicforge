@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.6.0 - 2026-05-07
+
+### Added
+- Local Creative Asset Library under `.musicforge/assets/` with per-asset metadata, source fragments, events, MIDI preview, and optional WAV preview.
+- Asset extraction from completed jobs, Project versions, and provider edit candidates.
+- Asset references for job generation, Project version creation, variation, local/provider edit, provider previews, candidate groups, and Prompt A/B.
+- Studio Assets workspace with search/filter, metadata editing, hide/favorite/delete, MIDI/WAV preview controls, extraction buttons, and asset selectors.
+- Project export and Final Export now include sanitized asset reference summaries.
+- Release-check now covers creative asset extraction, reuse, usage tracking, Project export, and Final Export asset refs.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.5.1 - 2026-05-07
 
 ### Fixed

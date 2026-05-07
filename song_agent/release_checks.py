@@ -10,6 +10,7 @@ from pathlib import Path
 
 from song_agent import __version__
 from song_agent.agent.pipeline import deterministic_compose
+from song_agent.assets import AssetStore, apply_asset_refs_to_plan, extract_assets_from_song_plan, write_asset_refs_snapshot
 from song_agent import candidate_groups as candidate_groups_module
 from song_agent.candidate_groups import CandidateGroupStore, candidate_audio_path, candidate_group_stale, candidate_midi_path
 from song_agent.candidate_scoring import score_provider_edit_candidate
@@ -151,6 +152,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.3 provider edit smoke", *_v13_provider_edit_smoke(root))
     report.add("v1.4 candidate edit smoke", *_v14_candidate_edit_smoke(root))
     report.add("v1.5 candidate audition and usage smoke", *_v15_candidate_audition_usage_smoke(root))
+    report.add("v1.6 creative assets smoke", *_v16_creative_assets_smoke(root))
     return report
 
 
@@ -880,6 +882,89 @@ def _v15_candidate_audition_usage_smoke(root: Path) -> tuple[bool, str]:
                 and "sk-release-secret" not in serialized
             )
             return ok, f"groups={len(created_groups)}, ab={ab.ab_id}, midi={candidate_midi_path(candidate_dir).stat().st_size}, wav={audio_candidate.audio_size_bytes}, tokens={usage_report['total_tokens']}, cost={usage_report['estimated_cost']}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _v16_creative_assets_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v16-") as temp_dir:
+            base = Path(temp_dir)
+            store = ProjectStore(base / ".musicforge" / "projects")
+            asset_store = AssetStore(base / ".musicforge" / "assets")
+            document = store.create_project("Release v1.6 Smoke")
+            request = SongRequest(
+                title="Release v1.6 Smoke",
+                language="en",
+                style="synth pop",
+                theme="creative asset smoke",
+                tempo_bpm=100,
+            )
+            parent_dir = base / "runs" / "v16-parent"
+            parent_plan = deterministic_compose(request)
+            write_json(parent_dir / "data" / "song-plan.json", parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_dir / "renders" / "song.mid")
+            document = store.add_version_from_job(
+                document.state.project_id,
+                _SmokeJob("v16-parent", parent_dir, request.to_dict()),
+                name="Parent",
+            )
+            payloads = extract_assets_from_song_plan(
+                parent_plan,
+                {"source_type": "project_version", "project_id": document.state.project_id, "version_id": "v001", "job_id": "v16-parent", "style": request.style},
+                {"asset_types": ["motif"], "section_name": "chorus", "tags": ["release"], "favorite": True},
+            )
+            asset = asset_store.create_asset(payloads[0], now="2026-05-07T00:00:00+00:00")
+            asset = asset_store.render_asset_midi(asset.asset_id)
+            asset_refs = [{"asset_id": asset.asset_id, "role": "motif_reference", "strength": 0.9}]
+            child_dir = base / "runs" / "v16-child"
+            child_plan = apply_asset_refs_to_plan(deterministic_compose(request), asset_store, asset_refs)
+            write_json(child_dir / "data" / "song-plan.json", child_plan.to_dict())
+            write_json(child_dir / "data" / "run-summary.json", {"title": child_plan.title})
+            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(child_plan, child_dir / "renders" / "song.mid")
+            snapshot = {
+                "schema_version": 1,
+                "asset_refs": asset_store.mark_used(asset_refs, {"usage_type": "release_check", "project_id": document.state.project_id, "version_id": "v002"}),
+                "captured_at": "2026-05-07T00:00:00+00:00",
+            }
+            write_asset_refs_snapshot(child_dir, snapshot)
+            child_job = _SmokeJob("v16-child", child_dir, request.to_dict() | {"asset_refs": asset_refs})
+            child_job.artifacts["asset_refs"] = str(child_dir / "data" / "asset-refs.json")
+            document = store.add_version_from_job(
+                document.state.project_id,
+                child_job,
+                name="Asset Child",
+                parent_version_id="v001",
+                variant_type="manual",
+                change_summary="reuse motif asset",
+            )
+            project_export = store.export_project(document.state.project_id)
+            gate = evaluate_quality_gate(child_dir, QualityGateConfig(), now="2026-05-07T00:00:00+00:00")
+            manifest = build_final_export_bundle(
+                project=document.state,
+                version=document.versions[-1],
+                project_dir=store.project_dir(document.state.project_id),
+                run_dir=child_dir,
+                gate=gate,
+                options=FinalExportOptions(version_id="v002"),
+                now="2026-05-07T00:00:00+00:00",
+                project_export=project_export,
+            )
+            serialized = str(project_export.get("asset_refs")) + str(manifest.get("asset_refs"))
+            ok = (
+                asset.preview["midi_status"] == "completed"
+                and (child_dir / "data" / "asset-refs.json").exists()
+                and asset_store.read_asset(asset.asset_id).usage_count == 1
+                and project_export["asset_refs"][0]["asset_id"] == asset.asset_id
+                and manifest["asset_refs"][0]["asset_id"] == asset.asset_id
+                and ".musicforge/provider.json" not in serialized
+                and "sk-" not in serialized
+                and str(base) not in serialized
+            )
+            return ok, f"asset={asset.asset_id}, usage={asset_store.read_asset(asset.asset_id).usage_count}, export_refs={len(project_export['asset_refs'])}, final_refs={len(manifest['asset_refs'])}"
     except Exception as exc:
         return False, str(exc)
 

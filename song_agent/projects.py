@@ -502,6 +502,7 @@ class ProjectStore:
             "versions": [self._export_version(version) for version in document.versions],
             "selected_version": _version_or_none(document, document.state.selected_version_id),
             "final_version": _version_or_none(document, document.state.final_version_id),
+            "asset_refs": _collect_project_asset_refs(self.project_dir(project_id), document),
             "generated_at": now_iso(),
         }
         write_json(self.project_dir(project_id) / "export.json", export)
@@ -809,3 +810,64 @@ def _optional_int(value: Any) -> int | None:
     if value is None or str(value).strip() == "":
         return None
     return int(value)
+
+
+def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) -> list[dict[str, Any]]:
+    refs: dict[str, dict[str, Any]] = {}
+
+    def add_ref(ref: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None) -> None:
+        asset_id = str(ref.get("asset_id") or "").strip()
+        if not asset_id:
+            return
+        record = refs.setdefault(
+            asset_id,
+            {
+                "asset_id": asset_id,
+                "asset_type": str(ref.get("asset_type") or ""),
+                "name": str(ref.get("name") or asset_id),
+                "roles": [],
+                "used_by_versions": [],
+                "used_by_candidate_groups": [],
+                "content_summary": ref.get("content_summary") if isinstance(ref.get("content_summary"), dict) else {},
+                "source": ref.get("source") if isinstance(ref.get("source"), dict) else {},
+            },
+        )
+        if ref.get("asset_type") and not record.get("asset_type"):
+            record["asset_type"] = str(ref.get("asset_type"))
+        if ref.get("name") and record.get("name") == asset_id:
+            record["name"] = str(ref.get("name"))
+        role = str(ref.get("role") or "").strip()
+        if role and role not in record["roles"]:
+            record["roles"].append(role)
+        if version_id and version_id not in record["used_by_versions"]:
+            record["used_by_versions"].append(version_id)
+        if candidate_group_id and candidate_group_id not in record["used_by_candidate_groups"]:
+            record["used_by_candidate_groups"].append(candidate_group_id)
+
+    for version in document.versions:
+        path = Path(version.output_dir) / "data" / "asset-refs.json"
+        if not path.exists():
+            continue
+        try:
+            data = read_json(path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        for ref in data.get("asset_refs", []) if isinstance(data, dict) else []:
+            if isinstance(ref, dict):
+                add_ref(ref, version_id=version.version_id)
+
+    candidate_root = project_dir / "candidate-groups"
+    if candidate_root.exists():
+        for group_json in candidate_root.glob("*/group.json"):
+            try:
+                data = read_json(group_json)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            if not isinstance(source, dict):
+                continue
+            for ref in source.get("asset_refs", []):
+                if isinstance(ref, dict):
+                    add_ref(ref, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
+
+    return sorted(refs.values(), key=lambda item: item["asset_id"])
