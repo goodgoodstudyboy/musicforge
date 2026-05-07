@@ -75,6 +75,92 @@ class MockProviderClient:
             "confidence": 0.82,
         }
 
+    def generate_edit_candidates_json(
+        self,
+        parent_plan: SongPlan,
+        instruction: str,
+        config: Any,
+        candidate_count: int = 3,
+        prompt: str = "",
+    ) -> dict[str, Any]:
+        if self.mode == "request_error":
+            raise ProviderRequestError("Mock provider request failed.")
+        if self.mode == "invalid_schema":
+            return {"schema_version": 1, "candidates": [{"schema_version": 1, "operations": [{"op": "write_file", "path": "C:/secret"}]}]}
+        count = max(2, min(5, int(candidate_count or 3)))
+        variants = [
+            {
+                "summary": "Lift chorus energy",
+                "operations": [
+                    {
+                        "op": "set_section_energy",
+                        "section_name": _target_section(parent_plan, instruction),
+                        "energy": 0.88,
+                        "preserve": ["tempo", "key", "structure"],
+                    }
+                ],
+                "confidence": 0.86,
+            },
+            {
+                "summary": "Brighten chorus harmony",
+                "operations": [
+                    {
+                        "op": "set_section_chords",
+                        "section_name": _target_section(parent_plan, instruction),
+                        "chords": ["Cmaj7", "Am7", "Fmaj7", "G7"],
+                        "preserve": ["tempo", "key", "structure"],
+                    }
+                ],
+                "confidence": 0.82,
+            },
+            {
+                "summary": "Tighten rhythm section",
+                "operations": [
+                    {
+                        "op": "set_track_density",
+                        "section_name": _target_section(parent_plan, instruction),
+                        "track_name": "drums",
+                        "strength": 8,
+                        "preserve": ["tempo", "key", "structure"],
+                    }
+                ],
+                "confidence": 0.78,
+            },
+            {
+                "summary": "Rewrite hook lyric",
+                "operations": [
+                    {
+                        "op": "rewrite_section_lyrics",
+                        "section_name": _target_section(parent_plan, instruction),
+                        "lyrics": "A brighter hook line shaped for the final lift",
+                        "preserve": ["tempo", "key", "structure", "harmony"],
+                    }
+                ],
+                "confidence": 0.74,
+            },
+            {
+                "summary": "Add arrangement variation",
+                "operations": [
+                    {
+                        "op": "arrangement_variation",
+                        "section_name": _target_section(parent_plan, instruction),
+                        "track_name": "melody",
+                        "instrument": "lead synth",
+                        "strength": 7,
+                        "preserve": ["tempo", "key", "structure"],
+                    }
+                ],
+                "confidence": 0.70,
+            },
+        ]
+        return {
+            "schema_version": 1,
+            "candidates": [
+                {"schema_version": 1, "warnings": [], **variant}
+                for variant in variants[:count]
+            ],
+        }
+
     def generate_node_json(
         self,
         node_name: str,

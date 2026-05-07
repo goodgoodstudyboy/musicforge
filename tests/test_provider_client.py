@@ -143,6 +143,60 @@ def test_openai_compatible_client_generates_edit_patch_json():
     assert "sk-example-secret" not in json.dumps(captured["body"])
 
 
+def test_openai_compatible_client_generates_edit_candidates_json():
+    captured = {}
+    parent = SongPlan.from_dict(MockProviderClient().generate_song_plan_json(request(), ProviderConfig()))
+    response = {
+        "id": "chatcmpl-candidates",
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "schema_version": 1,
+                            "candidates": [
+                                {
+                                    "schema_version": 1,
+                                    "summary": "one",
+                                    "operations": [{"op": "set_section_energy", "section_name": "chorus", "energy": 0.8}],
+                                    "confidence": 0.8,
+                                },
+                                {
+                                    "schema_version": 1,
+                                    "summary": "two",
+                                    "operations": [{"op": "set_track_density", "track_name": "drums", "strength": 8}],
+                                    "confidence": 0.7,
+                                },
+                            ],
+                        }
+                    )
+                }
+            }
+        ],
+        "usage": {"prompt_tokens": 21, "completion_tokens": 13, "total_tokens": 34},
+    }
+
+    def opener(req, timeout):
+        captured["body"] = json.loads(req.data.decode("utf-8"))
+        return FakeResponse(json.dumps(response).encode("utf-8"))
+
+    data = OpenAICompatibleClient(opener=opener).generate_edit_candidates_json(
+        parent,
+        "give options",
+        config(),
+        candidate_count=2,
+        prompt="Return candidates.",
+    )
+
+    assert isinstance(data, ProviderEditResponse)
+    assert len(data.data["candidates"]) == 2
+    assert data.usage == {"prompt_tokens": 21, "completion_tokens": 13, "total_tokens": 34}
+    assert data.request_id == "chatcmpl-candidates"
+    assert captured["body"]["messages"][0]["content"] == "Return candidates."
+    assert captured["body"]["messages"][1]["content"].find("candidate_count") >= 0
+    assert "sk-example-secret" not in json.dumps(captured["body"])
+
+
 def test_openai_compatible_client_handles_non_2xx():
     def opener(req, timeout):
         raise urllib.error.HTTPError(

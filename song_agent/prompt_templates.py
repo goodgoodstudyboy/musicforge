@@ -256,6 +256,21 @@ PROVIDER_EDIT_PATCH_SCHEMA = {
 }
 
 
+PROVIDER_EDIT_CANDIDATES_SCHEMA = {
+    "type": "object",
+    "required": ["schema_version", "candidates"],
+    "properties": {
+        "schema_version": {"const": 1},
+        "candidates": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 5,
+            "items": PROVIDER_EDIT_PATCH_SCHEMA,
+        },
+    },
+}
+
+
 BUILT_IN_TEMPLATES = [
     PromptTemplate.from_dict(
         {
@@ -286,6 +301,26 @@ BUILT_IN_TEMPLATES = [
             "user_prompt": "{{context_json}}",
             "output_schema": {"type": "object", "required": ["title", "sections", "tracks"]},
             "enabled": False,
+        },
+        built_in=True,
+    ),
+    PromptTemplate.from_dict(
+        {
+            "template_id": "provider-edit-candidates",
+            "name": "Provider edit candidates",
+            "description": "Generate multiple constrained MusicForge edit patch candidates for one instruction.",
+            "task": "provider_edit_candidates",
+            "system_prompt": (
+                "You are a MusicForge edit planner. Return one JSON object only with a candidates array. "
+                "Each candidate must be distinct, concise, and use only supported operations and chord names. "
+                "Do not include file paths, URLs, secrets, or free-form code."
+            ),
+            "user_prompt": (
+                "Create the requested number of candidate edit patches for this context. "
+                "Each candidate summary must explain how it differs from the others.\n"
+                "{{context_json}}"
+            ),
+            "output_schema": PROVIDER_EDIT_CANDIDATES_SCHEMA,
         },
         built_in=True,
     ),

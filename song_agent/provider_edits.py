@@ -25,7 +25,10 @@ from song_agent.schemas.song import SongPlan
 
 SCHEMA_VERSION = 1
 MAX_PATCH_JSON_BYTES = 32_768
+MAX_CANDIDATE_SET_JSON_BYTES = 128_000
 MAX_OPERATION_COUNT = 8
+MIN_CANDIDATE_COUNT = 2
+MAX_CANDIDATE_COUNT = 5
 MAX_PATCH_TEXT = 800
 MAX_LYRIC_TEXT = 2_000
 ALLOWED_OPS = {
@@ -135,6 +138,39 @@ class ProviderEditPatch:
 
 
 @dataclass(frozen=True)
+class ProviderEditCandidateSet:
+    schema_version: int
+    candidates: list[ProviderEditPatch]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ProviderEditCandidateSet":
+        if not isinstance(data, dict):
+            raise ProviderEditError("provider edit candidate set must be an object.")
+        _scan_blocked_fields(data)
+        size = len(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        if size > MAX_CANDIDATE_SET_JSON_BYTES:
+            raise ProviderEditError(f"provider edit candidate set must be {MAX_CANDIDATE_SET_JSON_BYTES} bytes or fewer.")
+        schema_version = int(data.get("schema_version", SCHEMA_VERSION) or SCHEMA_VERSION)
+        if schema_version != SCHEMA_VERSION:
+            raise ProviderEditError(f"provider edit candidate set schema_version must be {SCHEMA_VERSION}.")
+        raw_candidates = data.get("candidates")
+        if not isinstance(raw_candidates, list) or not raw_candidates:
+            raise ProviderEditError("provider edit candidate set candidates must be a non-empty list.")
+        candidates = [ProviderEditPatch.from_dict(item) for item in raw_candidates if isinstance(item, dict)]
+        if not candidates:
+            raise ProviderEditError("provider edit candidate set has no valid candidates.")
+        if len(candidates) > MAX_CANDIDATE_COUNT:
+            candidates = candidates[:MAX_CANDIDATE_COUNT]
+        return cls(schema_version=schema_version, candidates=candidates)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "candidates": [candidate.to_dict() for candidate in self.candidates],
+        }
+
+
+@dataclass(frozen=True)
 class ProviderEditPreview:
     preview_id: str
     project_id: str
@@ -229,6 +265,66 @@ def generate_provider_edit_patch(
         "request_id": request_id,
     }
     return patch, snapshot
+
+
+def generate_provider_edit_candidates(
+    *,
+    parent_plan: SongPlan,
+    instruction: str,
+    template: PromptTemplate,
+    config: ProviderConfig,
+    candidate_count: int,
+    client: Any | None = None,
+) -> tuple[list[ProviderEditPatch], dict[str, Any]]:
+    count = _candidate_count(candidate_count)
+    config.validate_ready_for_provider()
+    prompt = render_prompt_template(
+        template,
+        {
+            "instruction": instruction,
+            "candidate_count": count,
+            "song_plan": parent_plan.to_dict(),
+            "supported_chords": list(SUPPORTED_HARMONY_CHORDS),
+            "supported_operations": sorted(ALLOWED_OPS),
+        },
+    )
+    client = client or _client_for_config(config)
+    try:
+        if hasattr(client, "generate_edit_candidates_json"):
+            response = client.generate_edit_candidates_json(parent_plan, instruction, config, candidate_count=count, prompt=prompt)
+            data, usage, request_id = _provider_edit_response_parts(response)
+            candidate_set = ProviderEditCandidateSet.from_dict(data)
+            patches = candidate_set.candidates[:count]
+        else:
+            patches = []
+            usage = {}
+            request_id = None
+            for _index in range(count):
+                response = client.generate_edit_patch_json(parent_plan, instruction, config, prompt=prompt)
+                data, call_usage, call_request_id = _provider_edit_response_parts(response)
+                patches.append(ProviderEditPatch.from_dict(data))
+                usage = _merge_usage(usage, call_usage)
+                request_id = request_id or call_request_id
+        if len(patches) < MIN_CANDIDATE_COUNT:
+            raise ProviderEditError(f"provider returned fewer than {MIN_CANDIDATE_COUNT} candidates.")
+        for patch in patches:
+            provider_patch_to_intents(patch, parent_plan)
+    except ProviderEditError as exc:
+        raise ProviderOutputError(str(exc)) from exc
+    except ValueError as exc:
+        raise ProviderOutputError(f"Provider edit candidates are invalid: {exc}") from exc
+    snapshot = {
+        "mode": "provider",
+        "operation": "provider_edit_candidates",
+        "wire_api": config.wire_api,
+        "model": config.model,
+        "template_id": template.template_id,
+        "api_key_set": bool(config.api_key),
+        "usage": usage,
+        "request_id": request_id,
+        "candidate_count": len(patches),
+    }
+    return patches, snapshot
 
 
 def create_provider_edit_preview(
@@ -538,6 +634,20 @@ def _confidence(value: Any) -> float:
     if number < 0.0 or number > 1.0:
         raise ProviderEditError("confidence must be between 0.0 and 1.0.")
     return number
+
+
+def _candidate_count(value: Any) -> int:
+    count = int(value or MIN_CANDIDATE_COUNT)
+    if count < MIN_CANDIDATE_COUNT or count > MAX_CANDIDATE_COUNT:
+        raise ProviderEditError(f"candidate_count must be between {MIN_CANDIDATE_COUNT} and {MAX_CANDIDATE_COUNT}.")
+    return count
+
+
+def _merge_usage(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    result = dict(left)
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        result[key] = int(result.get(key) or 0) + int(right.get(key) or 0)
+    return result
 
 
 def _next_preview_id(preview_root: Path) -> str:

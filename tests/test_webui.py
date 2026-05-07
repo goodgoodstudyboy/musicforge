@@ -214,6 +214,11 @@ def test_webui_contains_project_workspace_controls():
     assert "Create Edit Version" in html
     assert "Generate Preview" in html
     assert "Apply Preview" in html
+    assert "Candidates" in html
+    assert "Candidate Count" in html
+    assert "Generate Candidates" in html
+    assert "Apply Candidate" in html
+    assert "Delete Candidate Group" in html
     assert "Edit Preset" in html
     assert "Apply Preset" in html
     assert "Save Current As Preset" in html
@@ -244,6 +249,9 @@ def test_webui_calls_project_apis():
     assert "/versions/${encodeURIComponent(parentId)}/variation" in html
     assert "/versions/${encodeURIComponent(parent)}/edit" in html
     assert "/edit-preview" in html
+    assert "/edit-candidates" in html
+    assert "/candidate-groups" in html
+    assert "/apply" in html
     assert "/edit-targets" in html
     assert "/api/edit-presets" in html
     assert "projectEditPresetPayload" in html
@@ -271,6 +279,15 @@ def test_webui_compare_layout_is_responsive():
     assert ".table-scroll" in html
     assert "wrap-cell" in html
     assert "WAV not rendered" in html
+
+
+def test_webui_candidate_review_layout_is_responsive():
+    html = panel_html()
+
+    assert ".candidate-grid" in html
+    assert ".candidate-group" in html
+    assert ".candidate-card" in html
+    assert ".candidate-grid { grid-template-columns: 1fr; }" in html
 
 
 def test_webui_calls_batch_apis():

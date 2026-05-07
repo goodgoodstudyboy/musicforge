@@ -535,3 +535,103 @@ def test_provider_edit_preview_rejects_stale_and_duplicate_apply(tmp_path, monke
     assert duplicate["error"] == "Provider edit preview has already been applied."
     assert final_detail_status == 200
     assert len(final_detail["versions"]) == 2
+
+
+def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main", "api_key": "sk-provider-secret"})
+        project_id, _parent_job = create_project_version(server)
+        create_status, created = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-candidates",
+            {
+                "instruction": "Give me 3 stronger chorus options.",
+                "candidate_count": 3,
+                "template_id": "provider-edit-candidates",
+            },
+        )
+        group_id = created["group"]["group_id"]
+        list_status, listed = request_json(server, "GET", f"/api/projects/{project_id}/candidate-groups")
+        detail_status, detail = request_json(server, "GET", f"/api/projects/{project_id}/candidate-groups/{group_id}")
+        apply_status, applied = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/apply",
+            {"name": "Best candidate"},
+        )
+        edit_job = wait_for_job(server, applied["job"]["job_id"])
+        duplicate_status, duplicate = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/apply",
+            {"name": "Duplicate candidate"},
+        )
+        usage_status, usage = request_json(server, "GET", f"/api/projects/{project_id}/provider-usage")
+        project_status, project = request_json(server, "GET", f"/api/projects/{project_id}")
+    finally:
+        stop_test_server(server)
+
+    assert create_status == 201
+    assert created["group"]["status"] == "ready"
+    assert len(created["group"]["candidates"]) == 3
+    assert len(created["group"]["ranking"]) == 3
+    assert list_status == 200
+    assert listed["groups"][0]["group_id"] == group_id
+    assert detail_status == 200
+    assert detail["group"]["ranking"][0]["candidate_id"]
+    assert apply_status == 202
+    assert applied["group"]["status"] == "applied"
+    assert applied["version"]["parent_version_id"] == "v001"
+    assert edit_job["status"] == "completed"
+    assert duplicate_status == 409
+    assert "already been applied" in duplicate["error"]
+    assert usage_status == 200
+    assert usage["total_calls"] >= 2
+    serialized = json.dumps({"created": created, "applied": applied, "usage": usage})
+    assert "sk-provider-secret" not in serialized
+    assert project_status == 200
+    assert len(project["versions"]) == 2
+
+
+def test_provider_edit_candidates_reject_stale_parent_and_delete(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main"})
+        project_id, parent_job = create_project_version(server)
+        create_status, created = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-candidates",
+            {"instruction": "Give me 2 chorus options.", "candidate_count": 2},
+        )
+        group_id = created["group"]["group_id"]
+        parent_plan_path = Path(parent_job["output_dir"]) / "data" / "song-plan.json"
+        parent_plan = json.loads(parent_plan_path.read_text(encoding="utf-8"))
+        parent_plan["tempo_bpm"] = int(parent_plan["tempo_bpm"]) + 1
+        parent_plan_path.write_text(json.dumps(parent_plan), encoding="utf-8")
+        stale_status, stale = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/apply",
+            {"candidate_id": created["group"]["ranking"][0]["candidate_id"]},
+        )
+        delete_status, deleted = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/delete",
+        )
+        missing_status, missing = request_json(server, "GET", f"/api/projects/{project_id}/candidate-groups/{group_id}")
+    finally:
+        stop_test_server(server)
+
+    assert create_status == 201
+    assert stale_status == 409
+    assert "stale" in stale["error"]
+    assert delete_status == 200
+    assert deleted["deleted"] is True
+    assert missing_status == 404
+    assert missing["error"] == "Candidate group not found."

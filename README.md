@@ -264,6 +264,33 @@ after apply; they contain model, operation, template, status, request id, and
 token counts when the provider returns usage data, but no API key or raw
 credential.
 
+v1.4.0 adds Provider Edit Candidate Groups. In the Project Candidates tab,
+choose a parent version, set Candidate Count from 2 to 5, and Generate
+Candidates. MusicForge stores each provider patch candidate under the Project,
+applies it locally to a candidate SongPlan, validates it, scores it, and ranks
+the ready candidates. Candidate groups do not create official Project versions
+until one candidate is applied.
+
+```text
+.musicforge/projects/<project-id>/candidate-groups/<group-id>/
+  group.json
+  provider-usage.json
+  candidates/
+    cand-001/
+      candidate.json
+      patch.json
+      candidate-song-plan.json
+      validator-report.json
+      quality.json
+      critic.json
+```
+
+Candidate groups are bound to the parent `song-plan.json` source hash. If the
+parent changes after candidate generation, applying the group is rejected as
+stale. Applying a candidate creates one official child Project version; the
+remaining candidates stay as review artifacts and are not added to the version
+list.
+
 Prompt templates are managed from Studio's Prompt Templates panel and stored in
 `.musicforge/prompt-templates.json`, which is ignored by Git. Built-in provider
 edit templates can be overridden locally and reset. Templates are validated for
@@ -321,6 +348,11 @@ GET  /api/projects/<project-id>/versions/<version-id>/edit-targets
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/apply
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/delete
+POST /api/projects/<project-id>/versions/<version-id>/edit-candidates
+GET  /api/projects/<project-id>/candidate-groups
+GET  /api/projects/<project-id>/candidate-groups/<group-id>
+POST /api/projects/<project-id>/candidate-groups/<group-id>/apply
+POST /api/projects/<project-id>/candidate-groups/<group-id>/delete
 POST /api/projects/<project-id>/versions/<version-id>/evaluate
 POST /api/projects/<project-id>/selected
 POST /api/projects/<project-id>/final

@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.4.0 - 2026-05-07
+
+### Added
+- Provider Edit Candidate Groups for generating, storing, ranking, applying, and deleting multiple provider edit candidates.
+- Built-in `provider-edit-candidates` prompt template and OpenAI-compatible multi-candidate edit response support.
+- Deterministic candidate scoring based on quality, validator status, provider confidence, novelty, and instruction fit.
+- Project Candidate APIs and Studio Candidates tab for Generate Candidates, candidate review, Apply Candidate, and Delete Candidate Group.
+- Project provider usage now includes candidate group generation usage in addition to applied provider edit versions.
+- Release-check coverage for the v1.4 multi-candidate provider edit workflow.
+
+### Verified
+- `python -m pytest tests\test_candidate_groups.py tests\test_candidate_scoring.py tests\test_provider_edits.py tests\test_provider_client.py tests\test_prompt_templates.py tests\test_server_edits.py tests\test_server_auth.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.3.1 - 2026-05-07
 
 ### Fixed

@@ -299,6 +299,32 @@ def panel_html() -> str:
       width: 100%;
       margin: 8px 0 4px;
     }
+    .candidate-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .candidate-group {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      margin-top: 16px;
+    }
+    .candidate-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: white;
+      min-width: 0;
+    }
+    .candidate-card .summary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .candidate-card h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
     .compare-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -328,6 +354,7 @@ def panel_html() -> str:
       .batch-layout { grid-template-columns: 1fr; }
       .project-layout { grid-template-columns: 1fr; }
       .compare-grid { grid-template-columns: 1fr; }
+      .candidate-grid { grid-template-columns: 1fr; }
       header { height: auto; align-items: flex-start; flex-direction: column; gap: 6px; padding: 12px 16px; }
       header .meta { flex-wrap: wrap; }
     }
@@ -1194,7 +1221,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "variation", "edit", "quality-gate", "final-export", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "edit", "candidates", "quality-gate", "final-export", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -1372,6 +1399,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
       } else if (activeProjectTab === "edit") {
         await renderProjectEdit(project, versions, target);
+      } else if (activeProjectTab === "candidates") {
+        await renderProjectCandidates(project, versions, target);
       } else if (activeProjectTab === "quality-gate") {
         await renderProjectQualityGate(project, versions, target);
       } else if (activeProjectTab === "final-export") {
@@ -1749,6 +1778,140 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    async function renderProjectCandidates(project, versions, target) {
+      const parentId = projectEditParentId || project.selected_version_id || project.final_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
+      let groups = [];
+      try {
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups`);
+        groups = data.groups || [];
+      } catch (err) {
+        target.innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+        return;
+      }
+      target.innerHTML = projectCandidateControls(versions, parentId, groups);
+      const parentSelect = $("project-candidate-parent");
+      if (parentSelect) {
+        parentSelect.addEventListener("change", async () => {
+          projectEditParentId = parentSelect.value;
+          await renderProjectCandidates(project, versions, target);
+        });
+      }
+      bindAction("project-generate-candidates", async () => {
+        const parent = $("project-candidate-parent").value;
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parent)}/edit-candidates`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectCandidatePayload()),
+        });
+        await renderProjectCandidates(project, versions, target);
+      });
+      target.querySelectorAll("[data-apply-candidate-group]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups/${encodeURIComponent(button.dataset.applyCandidateGroup)}/apply`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              candidate_id: button.dataset.applyCandidateId,
+              name: $("project-candidate-version-name").value.trim(),
+              change_summary: "Applied provider edit candidate",
+            }),
+          });
+          activeProjectTab = "versions";
+          await loadJobs();
+          await loadProjects();
+        });
+      });
+      target.querySelectorAll("[data-delete-candidate-group]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups/${encodeURIComponent(button.dataset.deleteCandidateGroup)}/delete`, { method: "POST" });
+          await renderProjectCandidates(project, versions, target);
+        });
+      });
+    }
+
+    function projectCandidateControls(versions, parentId, groups) {
+      return `
+        <div class="grid2">
+          <label>Parent Version
+            <select id="project-candidate-parent">${projectVersionOptions(versions, parentId)}</select>
+          </label>
+          <label>Candidate Count
+            <select id="project-candidate-count">
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Version Name
+            <input id="project-candidate-version-name" value="Provider Candidate ${(versions.length || 0) + 1}">
+          </label>
+          <label>Template
+            <input id="project-candidate-template" value="provider-edit-candidates">
+          </label>
+        </div>
+        <label>Instruction
+          <textarea id="project-candidate-instruction" placeholder="Give me 3 stronger chorus options while preserving tempo and key."></textarea>
+        </label>
+        <div class="actions">
+          <button id="project-generate-candidates" type="button" ${parentId ? "" : "disabled"}>Generate Candidates</button>
+          <span id="project-candidate-message" class="message"></span>
+        </div>
+        ${projectCandidateGroupsHtml(groups)}
+      `;
+    }
+
+    function projectCandidatePayload() {
+      return {
+        instruction: $("project-candidate-instruction").value.trim(),
+        candidate_count: Number($("project-candidate-count").value || 3),
+        template_id: $("project-candidate-template").value.trim() || "provider-edit-candidates",
+      };
+    }
+
+    function projectCandidateGroupsHtml(groups) {
+      if (!groups.length) return `<div class="empty">Candidate groups will appear here.</div>`;
+      return groups.map((group) => `
+        <div class="candidate-group">
+          <div class="summary-grid">
+            ${metric("Group", group.group_id)}
+            ${metric("Status", group.status)}
+            ${metric("Parent", group.parent_version_id)}
+            ${metric("Candidates", (group.candidates || []).length)}
+          </div>
+          <div class="actions">
+            <button class="danger" data-delete-candidate-group="${escapeHtml(group.group_id)}" type="button">Delete Candidate Group</button>
+          </div>
+          <div class="candidate-grid">
+            ${(group.candidates || []).map((candidate) => candidateCardHtml(group, candidate)).join("")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function candidateCardHtml(group, candidate) {
+      const scores = candidate.scores || {};
+      const disabled = group.status === "applied" || candidate.status !== "ready";
+      return `
+        <div class="candidate-card">
+          <h4>${escapeHtml(candidate.rank ? `#${candidate.rank} ` : "")}${escapeHtml(candidate.candidate_id)}</h4>
+          <div class="summary-grid">
+            ${metric("Score", scores.combined ?? "-")}
+            ${metric("Quality", scores.quality_overall ?? "-")}
+            ${metric("Novelty", scores.novelty ?? "-")}
+            ${metric("Status", candidate.status || "-")}
+          </div>
+          <p>${escapeHtml(candidate.summary || "-")}</p>
+          <div class="actions">
+            <button class="secondary" data-apply-candidate-group="${escapeHtml(group.group_id)}" data-apply-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button" ${disabled ? "disabled" : ""}>Apply Candidate</button>
+          </div>
+          <pre>${escapeHtml(JSON.stringify({ patch: candidate.patch, scores }, null, 2))}</pre>
+        </div>
+      `;
+    }
+
     function applyEditPresetToForm() {
       const preset = editPresets.find((item) => item.preset_id === $("project-edit-preset").value);
       if (!preset) return;
@@ -2073,6 +2236,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         versions: "Versions",
         variation: "Variation",
         edit: "Edit",
+        candidates: "Candidates",
         "quality-gate": "Quality Gate",
         "final-export": "Final Export",
         compare: "Compare",

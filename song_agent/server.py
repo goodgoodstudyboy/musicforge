@@ -20,6 +20,11 @@ from song_agent import __version__
 from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.auth import AuthConfig, validate_bearer_header
 from song_agent.batching import BatchDocument, BatchStore, now_iso
+from song_agent.candidate_groups import (
+    CandidateGroupStore,
+    candidate_group_stale,
+)
+from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.cli import generate_request
 from song_agent.edits import (
     EditIntent,
@@ -50,12 +55,14 @@ from song_agent.provider_edits import (
     apply_provider_edit_patch,
     create_provider_edit_preview,
     delete_provider_edit_preview,
+    generate_provider_edit_candidates,
     generate_provider_edit_patch,
     mark_provider_edit_preview_applied,
     preview_candidate_plan,
     preview_patch,
     preview_stale,
     read_provider_edit_preview,
+    song_plan_hash,
 )
 from song_agent.projects import ProjectStore
 from song_agent.project_quality import (
@@ -2281,6 +2288,29 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_project_edit_preview_delete(method, project_id, parent_version_id, preview_id)
             return
 
+        candidate_create_match = _match_project_edit_candidates_tail(tail)
+        if candidate_create_match is not None:
+            self._handle_project_edit_candidates(method, project_id, candidate_create_match)
+            return
+
+        candidate_group_match = _match_project_candidate_group_tail(tail)
+        if candidate_group_match is not None:
+            group_id, action = candidate_group_match
+            if action == "detail":
+                self._handle_project_candidate_group_detail(method, project_id, group_id)
+            elif action == "apply":
+                self._handle_project_candidate_group_apply(method, project_id, group_id)
+            elif action == "delete":
+                self._handle_project_candidate_group_delete(method, project_id, group_id)
+            return
+
+        if tail == "/candidate-groups":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self._handle_project_candidate_groups_list(project_id)
+            return
+
         if tail == "":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -3056,6 +3086,263 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_json({"ok": True, "deleted": True, "preview_id": preview_id})
 
+    def _handle_project_edit_candidates(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            instruction = str(payload.get("instruction") or "").strip()
+            if not instruction:
+                self._send_error(HTTPStatus.BAD_REQUEST, "instruction is required.")
+                return
+            candidate_count = int(payload.get("candidate_count") or 3)
+            template_id = str(payload.get("template_id") or "provider-edit-candidates").strip()
+            template = self.prompt_template_store.get_template(template_id)
+            if not template.enabled:
+                self._send_error(HTTPStatus.CONFLICT, "Prompt template is disabled.")
+                return
+            config, _sources = load_provider_config()
+            patches, provider_snapshot = generate_provider_edit_candidates(
+                parent_plan=parent_plan,
+                instruction=instruction,
+                template=template,
+                config=config,
+                candidate_count=candidate_count,
+            )
+            provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+            project_dir = self.project_store.project_dir(project_id)
+            group_store = CandidateGroupStore(project_dir)
+            source_hash = song_plan_hash(parent_plan)
+            group = group_store.create_group(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_job_id=parent_job.job_id,
+                instruction=instruction,
+                template_id=template.template_id,
+                candidate_count=len(patches),
+                source={
+                    "parent_version_id": parent.version_id,
+                    "parent_job_id": parent_job.job_id,
+                    "song_plan_sha256": source_hash,
+                },
+                provider_usage=provider_usage,
+                provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
+                now=_utc_now(),
+            )
+            usage_record = _provider_usage_record(
+                config_snapshot=provider_snapshot,
+                operation="provider_edit_candidates",
+                template_id=template.template_id,
+                started_at=group.created_at,
+                status="completed",
+                provider_usage=provider_usage,
+                request_id=provider_snapshot.get("request_id"),
+            )
+            write_json(project_dir / "candidate-groups" / group.group_id / "provider-usage.json", usage_record)
+            for patch in patches:
+                try:
+                    result = apply_provider_edit_patch(parent_plan, patch)
+                    validator = {
+                        "status": "passed",
+                        "checks": ["provider_edit_patch_schema", "edit_intent_validation", "song_plan_validation"],
+                        "checked_at": _utc_now(),
+                    }
+                    scores = score_provider_edit_candidate(
+                        parent_plan=parent_plan,
+                        candidate_plan=result.plan,
+                        patch=patch,
+                        validator_status="passed",
+                    )
+                    group_store.add_candidate(
+                        group,
+                        summary=patch.summary,
+                        status="ready",
+                        patch=patch.to_dict(),
+                        scores=scores.to_dict(),
+                        validator=validator,
+                        quality=result.plan.quality.to_dict() if result.plan.quality else None,
+                        provider_usage={},
+                        candidate_plan=result.plan.to_dict(),
+                        now=_utc_now(),
+                    )
+                except Exception as exc:
+                    group_store.add_candidate(
+                        group,
+                        summary=patch.summary,
+                        status="failed",
+                        patch=patch.to_dict(),
+                        scores={},
+                        validator={"status": "failed", "error": str(exc), "checked_at": _utc_now()},
+                        quality=None,
+                        error=str(exc),
+                        now=_utc_now(),
+                    )
+            group = group_store.read_group(group.group_id)
+            self.project_store.append_event(
+                project_id,
+                "provider_edit_candidate_group_created",
+                {
+                    "parent_version_id": parent.version_id,
+                    "group_id": group.group_id,
+                    "candidate_count": len(group.candidates),
+                    "status": group.status,
+                },
+            )
+        except FileNotFoundError as exc:
+            message = "Version not found." if str(exc) == version_id else "Provider edit resource not found."
+            self._send_error(HTTPStatus.NOT_FOUND, message)
+            return
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "group": group.to_dict()}, status=HTTPStatus.CREATED)
+
+    def _handle_project_candidate_groups_list(self, project_id: str) -> None:
+        try:
+            self.project_store.get_project(project_id)
+            group_store = CandidateGroupStore(self.project_store.project_dir(project_id))
+            self._send_json({"project_id": project_id, "groups": [group.to_dict() for group in group_store.list_groups()]})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_candidate_group_detail(self, method: str, project_id: str, group_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            group_store = CandidateGroupStore(self.project_store.project_dir(project_id))
+            group = group_store.read_group(group_id)
+            self._send_json({"project_id": project_id, "group": group.to_dict()})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Candidate group not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_candidate_group_apply(self, method: str, project_id: str, group_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._optional_json_body()
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+            group_store = CandidateGroupStore(self.project_store.project_dir(project_id))
+            group = group_store.read_group(group_id)
+            parent = next((version for version in document.versions if version.version_id == group.parent_version_id), None)
+            if parent is None:
+                self._send_error(HTTPStatus.NOT_FOUND, "Parent version not found.")
+                return
+            _document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, parent.version_id)
+            if candidate_group_stale(group, song_plan_hash(parent_plan)):
+                self._send_error(HTTPStatus.CONFLICT, "Provider edit candidate group is stale because the parent song-plan.json has changed.")
+                return
+            if group.status == "applied":
+                self._send_error(HTTPStatus.CONFLICT, "Provider edit candidate group has already been applied.")
+                return
+            candidate_id = str(payload.get("candidate_id") or _top_ranked_candidate_id(group) or "")
+            candidate = next((item for item in group.candidates if item.candidate_id == candidate_id), None)
+            if candidate is None:
+                self._send_error(HTTPStatus.NOT_FOUND, "Candidate not found.")
+                return
+            if candidate.status != "ready":
+                self._send_error(HTTPStatus.CONFLICT, "Only ready candidates can be applied.")
+                return
+            patch = ProviderEditPatch.from_dict(group_store.read_candidate_patch(group.group_id, candidate.candidate_id))
+            candidate_plan = SongPlan.from_dict(group_store.read_candidate_plan(group.group_id, candidate.candidate_id))
+            candidate_plan.validate()
+            intent = EditIntent.from_dict(
+                {
+                    "edit_type": "section_energy",
+                    "target": {"section_name": parent_plan.sections[0].name},
+                    "instruction": group.instruction,
+                    "strength": 6,
+                    "provider_mode": "provider",
+                    "payload": {"candidate_group_id": group.group_id, "candidate_id": candidate.candidate_id},
+                }
+            )
+            config, _sources = load_provider_config()
+            provider_snapshot = config.to_snapshot("provider", _utc_now())
+            usage = _provider_usage_record(
+                config_snapshot=provider_snapshot,
+                operation="provider_edit_candidate_apply",
+                template_id=group.template_id,
+                started_at=_utc_now(),
+                status="queued",
+                provider_usage=group.provider_usage,
+                request_id=group.provider_request_id,
+            )
+            name = str(payload.get("name") or "") or f"Provider Candidate {len(document.versions) + 1}"
+            job = self.store.create_edit_job(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_job=parent_job,
+                parent_plan=parent_plan,
+                intent=intent,
+                name=name,
+                start_immediately=bool(payload.get("start_immediately", True)),
+                provider_patch=patch.to_dict(),
+                provider_usage=usage,
+                provider_snapshot=provider_snapshot,
+                template_id=group.template_id,
+                preview_id=group.group_id,
+            )
+            document = self.project_store.add_version_from_job(
+                project_id,
+                job,
+                name=name,
+                note=str(payload.get("note") or ""),
+                parent_version_id=parent.version_id,
+                variant_type="provider_edit",
+                change_summary=str(payload.get("change_summary") or patch.summary),
+            )
+            version = next(version for version in document.versions if version.job_id == job.job_id)
+            group = group_store.mark_applied(group.group_id, candidate.candidate_id, version_id=version.version_id, job_id=job.job_id)
+            self.project_store.append_event(
+                project_id,
+                "provider_edit_candidate_applied",
+                {
+                    "parent_version_id": parent.version_id,
+                    "group_id": group.group_id,
+                    "candidate_id": candidate.candidate_id,
+                    "version_id": version.version_id,
+                    "job_id": job.job_id,
+                },
+            )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Candidate group not found.")
+            return
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, **document.to_dict(), "group": group.to_dict(), "version": version.to_dict(), "job": job.to_dict()}, status=HTTPStatus.ACCEPTED)
+
+    def _handle_project_candidate_group_delete(self, method: str, project_id: str, group_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            group_store = CandidateGroupStore(self.project_store.project_dir(project_id))
+            group_store.delete_group(group_id)
+            self.project_store.append_event(project_id, "provider_edit_candidate_group_deleted", {"group_id": group_id})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Candidate group not found.")
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "deleted": True, "group_id": group_id})
+
     def _handle_project_provider_usage(self, project_id: str) -> None:
         try:
             document = self.project_store.sync_project(project_id, self.store.get_job)
@@ -3068,13 +3355,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if usage_path.exists():
                 usage = read_json(usage_path)
                 usage_records.append({"version_id": version.version_id, "job_id": version.job_id, "usage": usage})
+        group_records = []
+        groups_dir = self.project_store.project_dir(project_id) / "candidate-groups"
+        if groups_dir.exists():
+            for usage_path in sorted(groups_dir.glob("*/provider-usage.json")):
+                try:
+                    usage = read_json(usage_path)
+                except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                    continue
+                group_records.append({"group_id": usage_path.parent.name, "usage": usage})
         total_tokens = sum(int(record["usage"].get("total_tokens") or 0) for record in usage_records)
+        total_tokens += sum(int(record["usage"].get("total_tokens") or 0) for record in group_records)
         self._send_json(
             {
                 "project_id": project_id,
-                "total_calls": len(usage_records),
+                "total_calls": len(usage_records) + len(group_records),
                 "total_tokens": total_tokens,
                 "records": usage_records,
+                "candidate_group_records": group_records,
             }
         )
 
@@ -3957,6 +4255,15 @@ def _read_edit_metadata_for_run(run_dir: Path) -> dict[str, Any] | None:
     return metadata
 
 
+def _top_ranked_candidate_id(group: Any) -> str | None:
+    if group.ranking:
+        return str(group.ranking[0].get("candidate_id") or "") or None
+    ready = [candidate for candidate in group.candidates if candidate.status == "ready"]
+    if not ready:
+        return None
+    return max(ready, key=lambda candidate: int(candidate.scores.get("combined") or 0)).candidate_id
+
+
 def _match_job_route(path: str) -> tuple[str, str] | None:
     prefix = "/api/jobs/"
     if not path.startswith(prefix):
@@ -4040,6 +4347,22 @@ def _match_project_edit_preview_tail(tail: str) -> tuple[str, str, str] | None:
         return unquote(parts[1]), "", "create"
     if len(parts) == 5 and parts[0] == "versions" and parts[2] == "edit-preview" and parts[4] in {"apply", "delete"}:
         return unquote(parts[1]), unquote(parts[3]), parts[4]
+    return None
+
+
+def _match_project_edit_candidates_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "edit-candidates":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_candidate_group_tail(tail: str) -> tuple[str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 2 and parts[0] == "candidate-groups":
+        return unquote(parts[1]), "detail"
+    if len(parts) == 3 and parts[0] == "candidate-groups" and parts[2] in {"apply", "delete"}:
+        return unquote(parts[1]), parts[2]
     return None
 
 

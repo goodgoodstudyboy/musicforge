@@ -11,6 +11,7 @@ from song_agent.provider_edits import (
     apply_provider_edit_patch,
     create_provider_edit_preview,
     delete_provider_edit_preview,
+    generate_provider_edit_candidates,
     generate_provider_edit_patch,
     preview_candidate_plan,
     preview_patch,
@@ -87,6 +88,39 @@ def test_mock_provider_generates_valid_edit_patch() -> None:
     assert snapshot["mode"] == "provider"
     assert snapshot["template_id"] == "provider-edit-intent"
     assert "sk-secret" not in str(snapshot)
+
+
+def test_mock_provider_generates_multiple_edit_candidates() -> None:
+    plan = parent_plan()
+    template = PromptTemplateStore().get_template("provider-edit-candidates")
+
+    patches, snapshot = generate_provider_edit_candidates(
+        parent_plan=plan,
+        instruction="Give me three stronger chorus options.",
+        template=template,
+        config=ProviderConfig(wire_api="mock", model="mock-main", api_key="sk-secret"),
+        candidate_count=3,
+    )
+
+    assert len(patches) == 3
+    assert {patch.summary for patch in patches} >= {"Lift chorus energy", "Brighten chorus harmony"}
+    assert snapshot["operation"] == "provider_edit_candidates"
+    assert snapshot["candidate_count"] == 3
+    assert "sk-secret" not in str(snapshot)
+
+
+def test_provider_edit_candidates_rejects_invalid_count() -> None:
+    plan = parent_plan()
+    template = PromptTemplateStore().get_template("provider-edit-candidates")
+
+    with pytest.raises(ValueError, match="candidate_count"):
+        generate_provider_edit_candidates(
+            parent_plan=plan,
+            instruction="too many",
+            template=template,
+            config=ProviderConfig(wire_api="mock", model="mock-main"),
+            candidate_count=6,
+        )
 
 
 def test_invalid_mock_provider_patch_is_wrapped_as_provider_output_error() -> None:

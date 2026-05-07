@@ -10,6 +10,8 @@ from pathlib import Path
 
 from song_agent import __version__
 from song_agent.agent.pipeline import deterministic_compose
+from song_agent.candidate_groups import CandidateGroupStore, candidate_group_stale
+from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
@@ -20,11 +22,14 @@ from song_agent.projectio import write_json
 from song_agent.projects import ProjectStore
 from song_agent.provider import ProviderConfig
 from song_agent.provider_edits import (
+    ProviderEditPatch,
     create_provider_edit_preview,
+    generate_provider_edit_candidates,
     generate_provider_edit_patch,
     apply_provider_edit_patch,
     mark_provider_edit_preview_applied,
     preview_stale,
+    song_plan_hash,
 )
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
@@ -140,6 +145,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.2 workflow smoke", *_v12_workflow_smoke(root))
     report.add("v1.2.1 hardening smoke", *_v121_hardening_smoke(root))
     report.add("v1.3 provider edit smoke", *_v13_provider_edit_smoke(root))
+    report.add("v1.4 candidate edit smoke", *_v14_candidate_edit_smoke(root))
     return report
 
 
@@ -571,6 +577,153 @@ def _v13_provider_edit_smoke(root: Path) -> tuple[bool, str]:
                 and "sk-release-secret" not in serialized
             )
             return ok, f"template={template.template_id}, operations={len(patch.operations)}, usage={preview.provider_usage['total_tokens']}, stale_guard={stale_guard}, compare={compare['summary']['recommendation']}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _v14_candidate_edit_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v14-") as temp_dir:
+            base = Path(temp_dir)
+            store = ProjectStore(base / ".musicforge" / "projects")
+            templates = PromptTemplateStore(base / ".musicforge" / "prompt-templates.json")
+            document = store.create_project("Release v1.4 Smoke")
+            request = SongRequest(
+                title="Release v1.4 Smoke",
+                language="en",
+                style="synth pop",
+                theme="candidate edit smoke",
+                tempo_bpm=98,
+            )
+            parent_dir = base / "runs" / "v14-parent"
+            parent_plan = deterministic_compose(request)
+            write_json(parent_dir / "data" / "song-plan.json", parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_dir / "renders" / "song.mid")
+            parent_job = _SmokeJob("v14-parent", parent_dir, request.to_dict())
+            document = store.add_version_from_job(document.state.project_id, parent_job, name="Parent")
+            template = templates.get_template("provider-edit-candidates")
+            patches, snapshot = generate_provider_edit_candidates(
+                parent_plan=parent_plan,
+                instruction="Give me three stronger chorus options.",
+                template=template,
+                config=ProviderConfig(wire_api="mock", model="mock-main", api_key="sk-release-secret"),
+                candidate_count=3,
+            )
+            snapshot["usage"] = {"prompt_tokens": 20, "completion_tokens": 9, "total_tokens": 29}
+            snapshot["request_id"] = "req-candidate-smoke"
+            project_dir = store.project_dir(document.state.project_id)
+            group_store = CandidateGroupStore(project_dir)
+            group = group_store.create_group(
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v14-parent",
+                instruction="Give me three stronger chorus options.",
+                template_id=template.template_id,
+                candidate_count=3,
+                source={"parent_version_id": "v001", "parent_job_id": "v14-parent", "song_plan_sha256": song_plan_hash(parent_plan)},
+                provider_usage=snapshot["usage"],
+                provider_request_id=snapshot["request_id"],
+                now="2026-05-07T00:00:00+00:00",
+            )
+            write_json(
+                project_dir / "candidate-groups" / group.group_id / "provider-usage.json",
+                {
+                    "provider_type": "mock",
+                    "model": "mock-main",
+                    "operation": "provider_edit_candidates",
+                    "template_id": template.template_id,
+                    "prompt_tokens": snapshot["usage"]["prompt_tokens"],
+                    "completion_tokens": snapshot["usage"]["completion_tokens"],
+                    "total_tokens": snapshot["usage"]["total_tokens"],
+                    "request_id": snapshot["request_id"],
+                },
+            )
+            for patch in patches:
+                result = apply_provider_edit_patch(parent_plan, patch)
+                scores = score_provider_edit_candidate(parent_plan=parent_plan, candidate_plan=result.plan, patch=patch)
+                group_store.add_candidate(
+                    group,
+                    summary=patch.summary,
+                    status="ready",
+                    patch=patch.to_dict(),
+                    scores=scores.to_dict(),
+                    validator={"status": "passed"},
+                    quality=result.plan.quality.to_dict() if result.plan.quality else None,
+                    candidate_plan=result.plan.to_dict(),
+                    now="2026-05-07T00:00:00+00:00",
+                )
+            group = group_store.read_group(group.group_id)
+            candidate_id = str(group.ranking[0]["candidate_id"])
+            selected_patch = ProviderEditPatch.from_dict(group_store.read_candidate_patch(group.group_id, candidate_id))
+            result = apply_provider_edit_patch(parent_plan, selected_patch)
+            child_dir = base / "runs" / "v14-child"
+            write_json(child_dir / "data" / "song-plan.json", result.plan.to_dict())
+            write_json(
+                child_dir / "data" / "edit-metadata.json",
+                build_edit_metadata(
+                    project_id=document.state.project_id,
+                    parent_version_id="v001",
+                    parent_job_id="v14-parent",
+                    intent=EditIntent.from_dict(
+                        {
+                            "edit_type": "section_energy",
+                            "target": {"section_name": "chorus"},
+                            "provider_mode": "provider",
+                        }
+                    ),
+                    created_at="2026-05-07T00:00:00+00:00",
+                    summary=result.summary,
+                    warnings=result.warnings,
+                )
+                | {
+                    "provider_mode": "provider",
+                    "provider_patch": selected_patch.to_dict(),
+                    "provider": snapshot,
+                    "template_id": template.template_id,
+                    "candidate_group_id": group.group_id,
+                    "candidate_id": candidate_id,
+                },
+            )
+            write_json(
+                child_dir / "data" / "provider-usage.json",
+                {
+                    "provider_type": "mock",
+                    "model": "mock-main",
+                    "operation": "provider_edit_candidate_apply",
+                    "template_id": template.template_id,
+                    "total_tokens": group.provider_usage["total_tokens"],
+                    "request_id": group.provider_request_id,
+                },
+            )
+            render_midi(result.plan, child_dir / "renders" / "song.mid")
+            child_job = _SmokeJob("v14-child", child_dir, request.to_dict())
+            child_job.generation_mode = "provider"
+            child_job.artifacts["provider_usage"] = str(child_dir / "data" / "provider-usage.json")
+            document = store.add_version_from_job(
+                document.state.project_id,
+                child_job,
+                name="Provider Candidate",
+                parent_version_id="v001",
+                variant_type="provider_edit",
+                change_summary=selected_patch.summary,
+            )
+            applied_group = group_store.mark_applied(group.group_id, candidate_id, version_id="v002", job_id="v14-child")
+            stale_plan = deterministic_compose(SongRequest(title="Different Candidate Parent", language="en", style="pop", theme="changed"))
+            stale_guard = candidate_group_stale(group, song_plan_hash(stale_plan))
+            compare = compare_project_versions(document, "v001", "v002")
+            serialized = str(group.to_dict()) + str(compare) + str(snapshot)
+            ok = (
+                len(group.candidates) == 3
+                and len(group.ranking) == 3
+                and applied_group.status == "applied"
+                and applied_group.selected_candidate_id == candidate_id
+                and stale_guard
+                and compare["right"]["edit"]["provider_mode"] == "provider"
+                and "sk-release-secret" not in serialized
+            )
+            return ok, f"group={group.group_id}, candidates={len(group.candidates)}, selected={candidate_id}, usage={group.provider_usage['total_tokens']}, stale_guard={stale_guard}"
     except Exception as exc:
         return False, str(exc)
 
