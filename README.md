@@ -291,7 +291,8 @@ until one candidate is applied.
 
 Candidate groups are bound to the parent `song-plan.json` source hash. If the
 parent changes after candidate generation, applying the group is rejected as
-stale. Applying a candidate creates one official child Project version; the
+stale, and candidate MIDI/WAV download or re-render endpoints return `409`
+instead of serving old audition files. Applying a candidate creates one official child Project version; the
 remaining candidates stay as review artifacts and are not added to the version
 list. Candidate MIDI previews are generated for ready candidates; WAV previews
 can be rendered when `.musicforge/renderer.json` is configured.

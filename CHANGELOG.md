@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.5.1 - 2026-05-07
+
+### Fixed
+- Stale provider edit candidate groups now return `409` for candidate MIDI/WAV downloads and candidate/group re-render endpoints.
+- Prompt A/B creation now rolls back already-created candidate groups if a later template fails, preventing orphaned usage and UI artifacts.
+
+### Verified
+- `python -m pytest tests\test_server_edits.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.5.0 - 2026-05-07
 
 ### Added

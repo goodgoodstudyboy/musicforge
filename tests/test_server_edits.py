@@ -758,6 +758,32 @@ def test_provider_edit_candidates_reject_stale_parent_and_delete(tmp_path, monke
             f"/api/projects/{project_id}/candidate-groups/{group_id}/apply",
             {"candidate_id": created["group"]["ranking"][0]["candidate_id"]},
         )
+        candidate_id = created["group"]["ranking"][0]["candidate_id"]
+        midi_status, midi = request_json(
+            server,
+            "GET",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/midi",
+        )
+        rerender_status, rerender = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/render-midi",
+        )
+        group_render_status, group_render = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/render-midi",
+        )
+        audio_status, audio = request_json(
+            server,
+            "GET",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/audio",
+        )
+        audio_render_status, audio_render = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/render-audio",
+        )
         delete_status, deleted = request_json(
             server,
             "POST",
@@ -770,7 +796,52 @@ def test_provider_edit_candidates_reject_stale_parent_and_delete(tmp_path, monke
     assert create_status == 201
     assert stale_status == 409
     assert "stale" in stale["error"]
+    assert midi_status == 409
+    assert "stale" in midi["error"]
+    assert rerender_status == 409
+    assert "stale" in rerender["error"]
+    assert group_render_status == 409
+    assert "stale" in group_render["error"]
+    assert audio_status == 409
+    assert "stale" in audio["error"]
+    assert audio_render_status == 409
+    assert "stale" in audio_render["error"]
     assert delete_status == 200
     assert deleted["deleted"] is True
     assert missing_status == 404
     assert missing["error"] == "Candidate group not found."
+
+
+def test_prompt_ab_rolls_back_created_groups_when_later_template_fails(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main"})
+        project_id, _parent_job = create_project_version(server)
+        ab_status, ab_error = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-candidates/ab",
+            {
+                "instruction": "Compare one good and one bad template.",
+                "candidate_count": 2,
+                "template_ids": ["provider-edit-candidates", "missing-template"],
+            },
+        )
+        groups_status, groups = request_json(server, "GET", f"/api/projects/{project_id}/candidate-groups")
+        usage_status, usage = request_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+        ab_list_status, ab_list = request_json(server, "GET", f"/api/projects/{project_id}/prompt-ab")
+        events_status, events = request_json(server, "GET", f"/api/projects/{project_id}/events")
+    finally:
+        stop_test_server(server)
+
+    assert ab_status == 404
+    assert ab_error["error"] == "Provider edit resource not found."
+    assert groups_status == 200
+    assert groups["groups"] == []
+    assert usage_status == 200
+    assert usage["total_calls"] == 0
+    assert ab_list_status == 200
+    assert ab_list["experiments"] == []
+    assert events_status == 200
+    assert any(event["type"] == "provider_prompt_ab_rolled_back" for event in events["events"])

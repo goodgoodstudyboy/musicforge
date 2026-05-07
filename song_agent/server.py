@@ -3478,14 +3478,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         try:
-            self.project_store.get_project(project_id)
             group_store = CandidateGroupStore(self.project_store.project_dir(project_id))
+            group = self._project_candidate_group_or_conflict(project_id, group_store, group_id)
+            if group is None:
+                return
             if action == "render-midi":
-                group = group_store.render_group_midi(group_id)
+                group = group_store.render_group_midi(group.group_id)
             else:
                 config, _sources = load_renderer_config()
                 config.validate_ready_for_render()
-                group = group_store.render_group_audio(group_id, config)
+                group = group_store.render_group_audio(group.group_id, config)
         except FileNotFoundError:
             self._send_error(HTTPStatus.NOT_FOUND, "Candidate group not found.")
             return
@@ -3499,9 +3501,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
     def _handle_project_candidate_artifact(self, method: str, project_id: str, group_id: str, candidate_id: str, action: str) -> None:
         try:
-            self.project_store.get_project(project_id)
             group_store = CandidateGroupStore(self.project_store.project_dir(project_id))
-            candidate_dir = group_store.candidate_dir(group_id, candidate_id)
+            group = self._project_candidate_group_or_conflict(project_id, group_store, group_id)
+            if group is None:
+                return
+            candidate_dir = group_store.candidate_dir(group.group_id, candidate_id)
         except FileNotFoundError:
             self._send_error(HTTPStatus.NOT_FOUND, "Candidate group not found.")
             return
@@ -3536,8 +3540,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
             try:
-                candidate = group_store.render_candidate_midi(group_id, candidate_id)
-                group = group_store.read_group(group_id)
+                candidate = group_store.render_candidate_midi(group.group_id, candidate_id)
+                group = group_store.read_group(group.group_id)
                 self._send_json({"ok": True, "candidate": candidate.to_dict(), "group": group.to_dict()})
             except FileNotFoundError:
                 self._send_error(HTTPStatus.NOT_FOUND, "Candidate not found.")
@@ -3552,8 +3556,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             try:
                 config, _sources = load_renderer_config()
                 config.validate_ready_for_render()
-                candidate = group_store.render_candidate_audio(group_id, candidate_id, config)
-                group = group_store.read_group(group_id)
+                candidate = group_store.render_candidate_audio(group.group_id, candidate_id, config)
+                group = group_store.read_group(group.group_id)
                 self._send_json({"ok": True, "candidate": candidate.to_dict(), "group": group.to_dict()})
             except FileNotFoundError:
                 self._send_error(HTTPStatus.NOT_FOUND, "Candidate not found.")
@@ -3565,19 +3569,34 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
         self._send_error(HTTPStatus.NOT_FOUND, "Candidate artifact route not found.")
 
+    def _project_candidate_group_or_conflict(self, project_id: str, group_store: CandidateGroupStore, group_id: str) -> Any | None:
+        document = self.project_store.sync_project(project_id, self.store.get_job)
+        group = group_store.read_group(group_id)
+        parent = next((version for version in document.versions if version.version_id == group.parent_version_id), None)
+        if parent is None:
+            self._send_error(HTTPStatus.NOT_FOUND, "Parent version not found.")
+            return None
+        _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, parent.version_id)
+        if candidate_group_stale(group, song_plan_hash(parent_plan)):
+            self._send_error(HTTPStatus.CONFLICT, "Provider edit candidate group is stale because the parent song-plan.json has changed.")
+            return None
+        return group
+
     def _handle_project_prompt_ab_create(self, method: str, project_id: str, version_id: str) -> None:
         if method != "POST":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         payload = self._read_json_body()
+        created_group_ids: list[str] = []
         try:
             instruction = str(payload.get("instruction") or "").strip()
             if not instruction:
                 raise ValueError("instruction is required.")
             candidate_count = int(payload.get("candidate_count") or 2)
             template_ids = _prompt_ab_template_ids(payload.get("template_ids"))
-            groups = [
-                self._create_project_candidate_group(
+            groups = []
+            for template_id in template_ids:
+                group = self._create_project_candidate_group(
                     project_id,
                     version_id,
                     {
@@ -3587,8 +3606,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                         "template_id": template_id,
                     },
                 )
-                for template_id in template_ids
-            ]
+                groups.append(group)
+                created_group_ids.append(group.group_id)
             project_dir = self.project_store.project_dir(project_id)
             experiment = PromptABStore(project_dir).create_experiment(
                 project_id=project_id,
@@ -3605,19 +3624,40 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 {"ab_id": experiment.ab_id, "group_ids": list(experiment.group_ids), "template_ids": list(template_ids)},
             )
         except FileNotFoundError as exc:
+            self._rollback_prompt_ab_groups(project_id, created_group_ids)
             message = "Version not found." if str(exc) == version_id else "Provider edit resource not found."
             self._send_error(HTTPStatus.NOT_FOUND, message)
             return
         except ProviderError as exc:
+            self._rollback_prompt_ab_groups(project_id, created_group_ids)
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         except ValueError as exc:
+            self._rollback_prompt_ab_groups(project_id, created_group_ids)
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         self._send_json(
             {"ok": True, "experiment": experiment.to_dict(), "groups": [group.to_dict() for group in groups]},
             status=HTTPStatus.CREATED,
         )
+
+    def _rollback_prompt_ab_groups(self, project_id: str, group_ids: list[str]) -> None:
+        if not group_ids:
+            return
+        try:
+            project_dir = self.project_store.project_dir(project_id)
+            group_store = CandidateGroupStore(project_dir)
+            deleted = []
+            for group_id in group_ids:
+                try:
+                    group_store.delete_group(group_id)
+                    deleted.append(group_id)
+                except (FileNotFoundError, ValueError):
+                    continue
+            if deleted:
+                self.project_store.append_event(project_id, "provider_prompt_ab_rolled_back", {"group_ids": deleted})
+        except (FileNotFoundError, ValueError):
+            return
 
     def _handle_project_prompt_ab_list(self, method: str, project_id: str) -> None:
         if method != "GET":
