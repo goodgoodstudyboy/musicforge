@@ -43,6 +43,7 @@ class FinalExportOptions:
     include_stems: bool = True
     include_stem_audio: bool = True
     include_asset_refs: bool = True
+    include_reference_refs: bool = True
     force: bool = False
 
     @classmethod
@@ -53,6 +54,7 @@ class FinalExportOptions:
             include_stems=bool(data.get("include_stems", True)),
             include_stem_audio=bool(data.get("include_stem_audio", True)),
             include_asset_refs=bool(data.get("include_asset_refs", True)),
+            include_reference_refs=bool(data.get("include_reference_refs", True)),
             force=bool(data.get("force", False)),
         )
 
@@ -63,6 +65,7 @@ class FinalExportOptions:
             "include_stems": self.include_stems,
             "include_stem_audio": self.include_stem_audio,
             "include_asset_refs": self.include_asset_refs,
+            "include_reference_refs": self.include_reference_refs,
             "force": self.force,
         }
 
@@ -115,6 +118,14 @@ def build_final_export_bundle(
         files=files,
         enabled=options.include_asset_refs,
     )
+    reference_refs = _write_reference_ref_summaries(
+        run_dir=run_dir,
+        export_dir=export_dir,
+        version_id=version.version_id,
+        project_export=project_export,
+        files=files,
+        enabled=options.include_reference_refs,
+    )
 
     manifest = {
         "project_id": project.project_id,
@@ -126,6 +137,7 @@ def build_final_export_bundle(
         "options": options.to_dict(),
         "quality_gate": gate.to_dict(),
         "asset_refs": asset_refs,
+        "reference_refs": reference_refs,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -346,6 +358,78 @@ def _final_version_asset_refs(run_dir: Path, version_id: str, project_export: di
     return [refs_by_id[key] for key in sorted(refs_by_id)]
 
 
+def _write_reference_ref_summaries(
+    *,
+    run_dir: Path,
+    export_dir: Path,
+    version_id: str,
+    project_export: dict[str, Any] | None,
+    files: list[dict[str, Any]],
+    enabled: bool,
+) -> list[dict[str, Any]]:
+    if not enabled:
+        files.append({"kind": "reference_refs", "path": "references", "exists": False, "required": False, "skipped": "disabled"})
+        return []
+    refs = _final_version_reference_refs(run_dir, version_id, project_export)
+    if not refs:
+        files.append({"kind": "reference_refs", "path": "references", "exists": False, "required": False})
+        return []
+    refs_dir = export_dir / "references"
+    _ensure_within(export_dir, refs_dir)
+    refs_dir.mkdir(parents=True, exist_ok=True)
+    written: list[dict[str, Any]] = []
+    for ref in refs:
+        reference_id = _safe_reference_id(str(ref.get("reference_id") or ""))
+        summary = _reference_ref_export_summary(ref)
+        target = refs_dir / f"{reference_id}.json"
+        _ensure_within(export_dir, target)
+        write_json(target, summary)
+        record = {"kind": "reference_ref", "path": f"references/{reference_id}.json", "exists": True, "required": False, "size_bytes": target.stat().st_size}
+        files.append(record)
+        written.append(summary)
+    return written
+
+
+def _final_version_reference_refs(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> list[dict[str, Any]]:
+    refs_by_id: dict[str, dict[str, Any]] = {}
+    snapshot_path = run_dir / "data" / "reference-refs.json"
+    if snapshot_path.exists():
+        _ensure_within(run_dir, snapshot_path)
+        try:
+            snapshot = read_json(snapshot_path)
+        except (OSError, ValueError, TypeError):
+            snapshot = {}
+        for ref in snapshot.get("reference_refs", []) if isinstance(snapshot, dict) else []:
+            if isinstance(ref, dict) and ref.get("reference_id"):
+                refs_by_id[str(ref["reference_id"])] = _reference_ref_export_summary({**ref, "used_by_versions": [version_id]})
+    if isinstance(project_export, dict):
+        for ref in project_export.get("reference_refs", []):
+            if not isinstance(ref, dict) or not ref.get("reference_id"):
+                continue
+            used_by_versions = ref.get("used_by_versions") if isinstance(ref.get("used_by_versions"), list) else []
+            if version_id not in used_by_versions and not ref.get("linked_to_project"):
+                continue
+            reference_id = str(ref["reference_id"])
+            refs_by_id.setdefault(reference_id, _reference_ref_export_summary(ref))
+    return [refs_by_id[key] for key in sorted(refs_by_id)]
+
+
+def _reference_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
+    summary = {
+        "reference_id": _safe_reference_id(str(ref.get("reference_id") or "")),
+        "reference_type": str(ref.get("reference_type") or ""),
+        "title": str(ref.get("title") or ref.get("reference_id") or ""),
+        "roles": [str(item) for item in ref.get("roles", []) if str(item).strip()] if isinstance(ref.get("roles"), list) else [],
+        "role": str(ref.get("role") or "") if ref.get("role") else None,
+        "strength": ref.get("strength") if isinstance(ref.get("strength"), (int, float)) else None,
+        "used_by_versions": [str(item) for item in ref.get("used_by_versions", []) if str(item).strip()] if isinstance(ref.get("used_by_versions"), list) else [],
+        "used_by_candidate_groups": [str(item) for item in ref.get("used_by_candidate_groups", []) if str(item).strip()] if isinstance(ref.get("used_by_candidate_groups"), list) else [],
+        "linked_to_project": True if ref.get("linked_to_project") else None,
+        "metadata_summary": _sanitize_asset_metadata(ref.get("metadata_summary")) if isinstance(ref.get("metadata_summary"), dict) else {},
+    }
+    return _drop_empty(summary)
+
+
 def _asset_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
     summary = {
         "asset_id": _safe_asset_id(str(ref.get("asset_id") or "")),
@@ -374,6 +458,12 @@ def _safe_asset_id(asset_id: str) -> str:
     if not re.match(r"^asset-[0-9]{3,6}$", asset_id):
         raise FinalExportError("Invalid asset id in asset refs.")
     return asset_id
+
+
+def _safe_reference_id(reference_id: str) -> str:
+    if not re.match(r"^ref-[0-9]{3,6}$", reference_id):
+        raise FinalExportError("Invalid reference id in reference refs.")
+    return reference_id
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:

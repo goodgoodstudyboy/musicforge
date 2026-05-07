@@ -316,6 +316,63 @@ def test_export_project_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> N
     assert '"path"' not in serialized
 
 
+def test_export_project_includes_redacted_reference_refs(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    document = store.create_project("Reference Export Project")
+    run_dir = make_run(tmp_path, "reference-job")
+    write_json(
+        run_dir / "data" / "reference-refs.json",
+        {
+            "schema_version": 1,
+            "reference_refs": [
+                {
+                    "reference_id": "ref-001",
+                    "reference_type": "style_note",
+                    "title": "Style Seed",
+                    "role": "style",
+                    "metadata_summary": {
+                        "text_excerpt": "Use a bright hook.",
+                        "path": str(tmp_path / "secret.wav"),
+                        "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
+                    },
+                }
+            ],
+        },
+    )
+    document = store.add_version_from_job(document.state.project_id, FakeJob(job_id="reference-job", title="Reference", output_dir=str(run_dir)))
+    group_dir = tmp_path / "projects" / document.state.project_id / "candidate-groups" / "cg-001"
+    write_json(
+        group_dir / "group.json",
+        {
+            "group_id": "cg-001",
+            "source": {
+                "reference_refs": [
+                    {
+                        "reference_id": "ref-002",
+                        "reference_type": "midi",
+                        "title": "MIDI Seed",
+                        "metadata_summary": {"local_path": str(tmp_path), "key": "C"},
+                    }
+                ]
+            },
+        },
+    )
+
+    export = store.export_project(document.state.project_id)
+    serialized = json.dumps(export["reference_refs"], ensure_ascii=False)
+
+    assert [ref["reference_id"] for ref in export["reference_refs"]] == ["ref-001", "ref-002"]
+    assert export["reference_refs"][0]["used_by_versions"] == ["v001"]
+    assert export["reference_refs"][1]["used_by_candidate_groups"] == ["cg-001"]
+    assert "text_excerpt" in serialized
+    assert "key" in serialized
+    assert str(tmp_path) not in serialized
+    assert "sk-polluted-secret" not in serialized
+    assert "api_key" not in serialized
+    assert "local_path" not in serialized
+    assert '"path"' not in serialized
+
+
 def test_old_project_json_defaults_and_missing_job_sync(tmp_path: Path) -> None:
     project_dir = tmp_path / "projects" / "legacy"
     project_dir.mkdir(parents=True)

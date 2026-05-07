@@ -517,6 +517,7 @@ class ProjectStore:
             "selected_version": _version_or_none(document, document.state.selected_version_id),
             "final_version": _version_or_none(document, document.state.final_version_id),
             "asset_refs": _collect_project_asset_refs(self.project_dir(project_id), document),
+            "reference_refs": _collect_project_reference_refs(self.project_dir(project_id), document),
             "generated_at": now_iso(),
         }
         write_json(self.project_dir(project_id) / "export.json", export)
@@ -891,6 +892,100 @@ def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) ->
                     add_ref(ref, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
 
     return sorted(refs.values(), key=lambda item: item["asset_id"])
+
+
+def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument) -> list[dict[str, Any]]:
+    refs: dict[str, dict[str, Any]] = {}
+
+    def add_ref(ref: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None, linked: bool = False) -> None:
+        reference_id = str(ref.get("reference_id") or "").strip()
+        if not reference_id:
+            return
+        metadata_summary = _sanitize_asset_metadata(ref.get("metadata_summary")) if isinstance(ref.get("metadata_summary"), dict) else {}
+        record = refs.setdefault(
+            reference_id,
+            {
+                "reference_id": reference_id,
+                "reference_type": str(ref.get("reference_type") or ""),
+                "title": str(ref.get("title") or reference_id),
+                "roles": [],
+                "used_by_versions": [],
+                "used_by_candidate_groups": [],
+                "linked_to_project": linked,
+                "metadata_summary": metadata_summary,
+            },
+        )
+        if ref.get("reference_type") and not record.get("reference_type"):
+            record["reference_type"] = str(ref.get("reference_type"))
+        if ref.get("title") and record.get("title") == reference_id:
+            record["title"] = str(ref.get("title"))
+        role = str(ref.get("role") or "").strip()
+        if role and role not in record["roles"]:
+            record["roles"].append(role)
+        if metadata_summary and not record.get("metadata_summary"):
+            record["metadata_summary"] = metadata_summary
+        if linked:
+            record["linked_to_project"] = True
+        if version_id and version_id not in record["used_by_versions"]:
+            record["used_by_versions"].append(version_id)
+        if candidate_group_id and candidate_group_id not in record["used_by_candidate_groups"]:
+            record["used_by_candidate_groups"].append(candidate_group_id)
+
+    reference_root = Path(".musicforge") / "references"
+    if reference_root.exists():
+        for path in reference_root.glob("*/reference.json"):
+            try:
+                data = read_json(path)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            linked_project_ids = data.get("linked_project_ids") if isinstance(data, dict) else []
+            if document.state.project_id in linked_project_ids:
+                add_ref(
+                    {
+                        "reference_id": data.get("reference_id"),
+                        "reference_type": data.get("reference_type"),
+                        "title": data.get("title"),
+                        "metadata_summary": {
+                            "description": data.get("description"),
+                            "tags": data.get("tags"),
+                            "tempo_bpm": data.get("tempo_bpm"),
+                            "key": data.get("key"),
+                            "meter": data.get("meter"),
+                            "source_note": data.get("source_note"),
+                            "license_note": data.get("license_note"),
+                            "text_excerpt": data.get("text_excerpt"),
+                        },
+                    },
+                    linked=True,
+                )
+
+    for version in document.versions:
+        path = Path(version.output_dir) / "data" / "reference-refs.json"
+        if not path.exists():
+            continue
+        try:
+            data = read_json(path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        for ref in data.get("reference_refs", []) if isinstance(data, dict) else []:
+            if isinstance(ref, dict):
+                add_ref(ref, version_id=version.version_id)
+
+    candidate_root = project_dir / "candidate-groups"
+    if candidate_root.exists():
+        for group_json in candidate_root.glob("*/group.json"):
+            try:
+                data = read_json(group_json)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            if not isinstance(source, dict):
+                continue
+            for ref in source.get("reference_refs", []):
+                if isinstance(ref, dict):
+                    add_ref(ref, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
+
+    return sorted(refs.values(), key=lambda item: item["reference_id"])
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:

@@ -223,6 +223,85 @@ def test_final_export_can_disable_asset_refs(tmp_path: Path) -> None:
     assert any(file["kind"] == "asset_refs" and file["skipped"] == "disabled" for file in manifest["files"])
 
 
+def test_final_export_includes_sanitized_reference_refs_without_original_files(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    write_json(
+        run_dir / "data" / "reference-refs.json",
+        {
+            "schema_version": 1,
+            "reference_refs": [
+                {
+                    "reference_id": "ref-001",
+                    "reference_type": "style_note",
+                    "title": "Style Seed",
+                    "role": "style",
+                    "metadata_summary": {
+                        "text_excerpt": "Use a bright hook.",
+                        "path": str(tmp_path / "reference.wav"),
+                        "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
+                    },
+                }
+            ],
+        },
+    )
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-08T00:00:00Z",
+        project_export={
+            "project": {"project_id": "export-project"},
+            "reference_refs": [
+                {
+                    "reference_id": "ref-001",
+                    "reference_type": "style_note",
+                    "title": "Style Seed",
+                    "used_by_versions": ["v001"],
+                    "metadata_summary": {"text_excerpt": "Use a bright hook."},
+                }
+            ],
+        },
+    )
+
+    ref_path = project_dir / "final-export" / "references" / "ref-001.json"
+    assert ref_path.exists()
+    assert manifest["reference_refs"][0]["reference_id"] == "ref-001"
+    assert manifest["reference_refs"][0]["used_by_versions"] == ["v001"]
+    serialized = json.dumps(manifest["reference_refs"], ensure_ascii=False) + ref_path.read_text(encoding="utf-8")
+    assert "text_excerpt" in serialized
+    assert "safe" in serialized
+    assert str(tmp_path) not in serialized
+    assert "sk-polluted-secret" not in serialized
+    assert "api_key" not in serialized
+    assert '"path"' not in serialized
+    assert not any(file["path"].endswith(".wav") and file["path"].startswith("references/") for file in manifest["files"])
+
+
+def test_final_export_can_disable_reference_refs(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    write_json(run_dir / "data" / "reference-refs.json", {"schema_version": 1, "reference_refs": [{"reference_id": "ref-001"}]})
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(include_reference_refs=False),
+        now="2026-05-08T00:00:00Z",
+    )
+
+    assert manifest["reference_refs"] == []
+    assert not (project_dir / "final-export" / "references").exists()
+    assert any(file["kind"] == "reference_refs" and file["skipped"] == "disabled" for file in manifest["files"])
+
+
 def test_final_export_skips_stale_stems(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, plan = make_run(tmp_path)
