@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.7.0 - 2026-05-08
+
+### Added
+- Local Reference Library under `.musicforge/references/` for safe WAV, MIDI, lyrics text, and style-note imports.
+- Reference import validates extension, header/UTF-8 content, size limits, path-like filenames, and duplicate SHA-256 content.
+- Reference APIs for import/list/detail/update, hide/favorite/delete, fixed-path original download, Project link/unlink, and reference-to-asset conversion.
+- `reference_refs` for jobs, Project versions, variations, local/provider edits, provider previews, candidate groups, and Prompt A/B.
+- Project export and Final Export now include sanitized reference summaries without copying original reference files into final delivery bundles or ZIPs.
+- Studio References workspace with safe import, search/filter, metadata editing, Project linking, asset conversion, and reference selectors.
+- Release-check now covers reference import, dedupe, usage tracking, Project export, Final Export, and redaction behavior.
+
+### Scope
+- v1.7.0 intentionally does not add MP3 import, audio transcription, audio-to-MIDI, waveform analysis, BPM detection, or key detection.
+
+### Verified
+- `python -m pytest tests\test_references.py tests\test_server_references.py tests\test_server_auth.py -q`
+- `python -m pytest tests\test_projects.py tests\test_final_export.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.6.1 - 2026-05-07
 
 ### Fixed

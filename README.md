@@ -383,6 +383,63 @@ POST /api/assets/extract/from-project-version
 POST /api/assets/extract/from-candidate
 ```
 
+## Reference Materials
+
+v1.7.0 adds a local Reference Library for safely importing external materials
+before they are reused in generation or editing. References are stored under
+`.musicforge/references/` and are ignored by Git:
+
+```text
+.musicforge/references/<reference-id>/
+  reference.json
+  original/reference.wav
+  original/reference.mid
+  original/reference.txt
+  original/reference.md
+  events.jsonl
+```
+
+Supported v1.7.0 reference types are `audio_wav`, `midi`, `lyrics_text`, and
+`style_note`. Import uses JSON plus base64 content, validates extension and
+file headers, rejects path-like filenames, rejects MP3 and unsupported formats,
+and deduplicates identical content by SHA-256. Automated tests use synthetic
+fixtures only; do not put real reference material into tests.
+
+References can be linked to Projects and attached as `reference_refs` to new
+jobs, Project versions, variations, local/provider edits, provider previews,
+candidate groups, and Prompt A/B. Each run that uses references writes:
+
+```text
+runs/<job-id>/data/reference-refs.json
+```
+
+Provider prompts receive only sanitized metadata summaries. Project export and
+Final Export include reference summaries for traceability, but Final Export
+does not copy original imported reference files into delivery bundles or ZIPs.
+v1.7.0 intentionally does not do audio transcription, audio-to-MIDI, MP3
+import, waveform analysis, BPM detection, or key detection.
+
+Reference APIs:
+
+```text
+GET  /api/references
+POST /api/references/import
+GET  /api/references/<reference-id>
+POST /api/references/<reference-id>
+GET  /api/references/<reference-id>/file
+POST /api/references/<reference-id>/hide
+POST /api/references/<reference-id>/unhide
+POST /api/references/<reference-id>/favorite
+POST /api/references/<reference-id>/unfavorite
+POST /api/references/<reference-id>/delete
+POST /api/references/<reference-id>/link-project
+POST /api/references/<reference-id>/unlink-project
+POST /api/references/<reference-id>/create-asset
+GET  /api/projects/<project-id>/references
+POST /api/projects/<project-id>/references/link
+POST /api/projects/<project-id>/references/unlink
+```
+
 Quality Gate is stored per Project. Defaults require the generated `SongPlan`
 to meet baseline quality scores, but do not require WAV or stems because local
 audio rendering depends on user renderer setup. Setting final evaluates the gate

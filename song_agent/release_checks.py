@@ -35,6 +35,7 @@ from song_agent.provider_edits import (
     preview_stale,
     song_plan_hash,
 )
+from song_agent.references import ReferenceStore, reference_refs_snapshot, write_reference_refs_snapshot
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
@@ -118,6 +119,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
             ".musicforge/renderer.json",
             ".musicforge/edit-presets.json",
             ".musicforge/prompt-templates.json",
+            ".musicforge/references/ref-001/reference.json",
         ],
         root,
     )
@@ -135,6 +137,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
             ".musicforge/renderer.json",
             ".musicforge/edit-presets.json",
             ".musicforge/prompt-templates.json",
+            ".musicforge/references/ref-001/reference.json",
         ],
         root,
     )
@@ -153,6 +156,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.4 candidate edit smoke", *_v14_candidate_edit_smoke(root))
     report.add("v1.5 candidate audition and usage smoke", *_v15_candidate_audition_usage_smoke(root))
     report.add("v1.6 creative assets smoke", *_v16_creative_assets_smoke(root))
+    report.add("v1.7 reference library smoke", *_v17_reference_library_smoke(root))
     return report
 
 
@@ -965,6 +969,106 @@ def _v16_creative_assets_smoke(root: Path) -> tuple[bool, str]:
                 and str(base) not in serialized
             )
             return ok, f"asset={asset.asset_id}, usage={asset_store.read_asset(asset.asset_id).usage_count}, export_refs={len(project_export['asset_refs'])}, final_refs={len(manifest['asset_refs'])}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _v17_reference_library_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v17-") as temp_dir:
+            base = Path(temp_dir)
+            project_store = ProjectStore(base / ".musicforge" / "projects")
+            reference_store = ReferenceStore(base / ".musicforge" / "references")
+            asset_store = AssetStore(base / ".musicforge" / "assets")
+            document = project_store.create_project("Release v1.7 Smoke")
+            request = SongRequest(
+                title="Release v1.7 Smoke",
+                language="en",
+                style="synth pop",
+                theme="reference library smoke",
+                tempo_bpm=102,
+            )
+            parent_dir = base / "runs" / "v17-parent"
+            parent_plan = deterministic_compose(request)
+            write_json(parent_dir / "data" / "song-plan.json", parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_dir / "renders" / "song.mid")
+            document = project_store.add_version_from_job(
+                document.state.project_id,
+                _SmokeJob("v17-parent", parent_dir, request.to_dict()),
+                name="Parent",
+            )
+            reference, duplicate = reference_store.import_reference(
+                {
+                    "reference_type": "style_note",
+                    "filename": "style.md",
+                    "title": "Reference Style Seed",
+                    "tags": ["release"],
+                    "content_base64": "VXNlIGEgc3BhcnNlIHZlcnNlIGFuZCBicmlnaHQgaG9vay4=",
+                    "metadata": {"path": str(base), "api_key": "sk-release-secret", "note": "safe"},
+                },
+                now="2026-05-08T00:00:00+00:00",
+            )
+            duplicate_ref, duplicate_again = reference_store.import_reference(
+                {
+                    "reference_type": "style_note",
+                    "filename": "copy.md",
+                    "content_base64": "VXNlIGEgc3BhcnNlIHZlcnNlIGFuZCBicmlnaHQgaG9vay4=",
+                },
+                now="2026-05-08T00:00:00+00:00",
+            )
+            reference_store.link_project(reference.reference_id, document.state.project_id)
+            asset = reference_store.create_asset_from_reference(reference.reference_id, {"asset_type": "section_template"}, asset_store)
+            refs = [{"reference_id": reference.reference_id, "role": "reference_style", "strength": 0.8}]
+            snapshot = reference_refs_snapshot(reference_store, refs, captured_at="2026-05-08T00:00:00+00:00")
+            child_dir = base / "runs" / "v17-child"
+            child_plan = deterministic_compose(request)
+            write_json(child_dir / "data" / "song-plan.json", child_plan.to_dict())
+            write_json(child_dir / "data" / "run-summary.json", {"title": child_plan.title})
+            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(child_plan, child_dir / "renders" / "song.mid")
+            write_reference_refs_snapshot(child_dir, snapshot)
+            reference_store.mark_used(refs, {"usage_type": "release_check", "project_id": document.state.project_id, "version_id": "v002"})
+            child_job = _SmokeJob("v17-child", child_dir, request.to_dict() | {"reference_refs": refs})
+            child_job.artifacts["reference_refs"] = str(child_dir / "data" / "reference-refs.json")
+            document = project_store.add_version_from_job(
+                document.state.project_id,
+                child_job,
+                name="Reference Child",
+                parent_version_id="v001",
+                variant_type="manual",
+                change_summary="use reference material",
+            )
+            project_export = project_store.export_project(document.state.project_id)
+            gate = evaluate_quality_gate(child_dir, QualityGateConfig(), now="2026-05-08T00:00:00+00:00")
+            manifest = build_final_export_bundle(
+                project=document.state,
+                version=document.versions[-1],
+                project_dir=project_store.project_dir(document.state.project_id),
+                run_dir=child_dir,
+                gate=gate,
+                options=FinalExportOptions(version_id="v002"),
+                now="2026-05-08T00:00:00+00:00",
+                project_export=project_export,
+            )
+            final_export_dir = project_store.project_dir(document.state.project_id) / "final-export"
+            serialized = str(project_export.get("reference_refs")) + str(manifest.get("reference_refs")) + str(asset)
+            ok = (
+                not duplicate
+                and duplicate_again
+                and duplicate_ref.reference_id == reference.reference_id
+                and asset["asset_type"] == "section_template"
+                and (child_dir / "data" / "reference-refs.json").exists()
+                and reference_store.read_reference(reference.reference_id).usage_count == 1
+                and project_export["reference_refs"][0]["reference_id"] == reference.reference_id
+                and manifest["reference_refs"][0]["reference_id"] == reference.reference_id
+                and (final_export_dir / "references" / f"{reference.reference_id}.json").exists()
+                and not any((final_export_dir / "references").glob("*.wav"))
+                and "sk-release-secret" not in serialized
+                and str(base) not in serialized
+            )
+            return ok, f"reference={reference.reference_id}, duplicate={duplicate_again}, asset={asset['asset_id']}, export_refs={len(project_export['reference_refs'])}, final_refs={len(manifest['reference_refs'])}"
     except Exception as exc:
         return False, str(exc)
 
