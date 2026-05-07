@@ -571,6 +571,9 @@ def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypat
         )
         usage_status, usage = request_json(server, "GET", f"/api/projects/{project_id}/provider-usage")
         project_status, project = request_json(server, "GET", f"/api/projects/{project_id}")
+        metadata_status, metadata = request_json(server, "GET", f"/api/projects/{project_id}/versions/v002/edit")
+        delete_status, _deleted = request_json(server, "POST", f"/api/projects/{project_id}/candidate-groups/{group_id}/delete")
+        metadata_after_delete_status, metadata_after_delete = request_json(server, "GET", f"/api/projects/{project_id}/versions/v002/edit")
     finally:
         stop_test_server(server)
 
@@ -590,6 +593,21 @@ def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypat
     assert "already been applied" in duplicate["error"]
     assert usage_status == 200
     assert usage["total_calls"] >= 2
+    assert metadata_status == 200
+    assert metadata["edit"]["candidate_group_id"] == group_id
+    assert metadata["edit"]["candidate_id"] == applied["group"]["selected_candidate_id"]
+    assert metadata["edit"]["candidate"]["candidate_group_id"] == group_id
+    assert metadata["edit"]["candidate"]["candidate_id"] == applied["group"]["selected_candidate_id"]
+    assert metadata["edit"]["candidate"]["rank"] == 1
+    assert metadata["edit"]["candidate"]["score"] is not None
+    assert metadata["edit"]["candidate"]["summary"]
+    assert metadata["edit"]["preview_id"] == group_id
+    assert delete_status == 200
+    assert metadata_after_delete_status == 200
+    assert metadata_after_delete["edit"]["candidate_group_id"] == group_id
+    assert metadata_after_delete["edit"]["candidate_id"] == applied["group"]["selected_candidate_id"]
+    assert metadata_after_delete["edit"]["candidate"]["rank"] == 1
+    assert metadata_after_delete["edit"]["candidate"]["score"] is not None
     serialized = json.dumps({"created": created, "applied": applied, "usage": usage})
     assert "sk-provider-secret" not in serialized
     assert project_status == 200

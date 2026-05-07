@@ -298,6 +298,9 @@ class JobStore:
         provider_snapshot: dict[str, Any] | None = None,
         template_id: str | None = None,
         preview_id: str | None = None,
+        candidate_group_id: str | None = None,
+        candidate_id: str | None = None,
+        candidate: dict[str, Any] | None = None,
     ) -> JobState:
         validate_edit_intent(parent_plan, intent)
         if intent.provider_mode == "provider" and provider_patch is None:
@@ -321,6 +324,12 @@ class JobStore:
                 metadata["provider_usage"] = provider_usage or {}
                 metadata["template_id"] = template_id
                 metadata["preview_id"] = preview_id
+                if candidate_group_id:
+                    metadata["candidate_group_id"] = candidate_group_id
+                if candidate_id:
+                    metadata["candidate_id"] = candidate_id
+                if candidate:
+                    metadata["candidate"] = _candidate_source_summary(candidate)
             job = JobState(
                 job_id=job_id,
                 title=title,
@@ -353,6 +362,12 @@ class JobStore:
                 }
                 job.input_payload["template_id"] = template_id
                 job.input_payload["preview_id"] = preview_id
+                if candidate_group_id:
+                    job.input_payload["candidate_group_id"] = candidate_group_id
+                if candidate_id:
+                    job.input_payload["candidate_id"] = candidate_id
+                if candidate:
+                    job.input_payload["candidate"] = _candidate_source_summary(candidate)
             self.jobs[job_id] = job
             self._write_job(job)
             write_json(ProjectPaths.create(run_dir).data / "edit-metadata.json", metadata)
@@ -861,6 +876,12 @@ class JobStore:
                 edit_metadata["provider"] = metadata.get("provider") or {}
                 edit_metadata["template_id"] = metadata.get("template_id")
                 edit_metadata["preview_id"] = metadata.get("preview_id")
+                if metadata.get("candidate_group_id"):
+                    edit_metadata["candidate_group_id"] = metadata.get("candidate_group_id")
+                if metadata.get("candidate_id"):
+                    edit_metadata["candidate_id"] = metadata.get("candidate_id")
+                if metadata.get("candidate"):
+                    edit_metadata["candidate"] = _candidate_source_summary(metadata.get("candidate"))
             write_json(paths.data / "edit-metadata.json", edit_metadata)
             if metadata.get("provider_usage"):
                 usage = dict(metadata["provider_usage"])
@@ -3292,6 +3313,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 provider_snapshot=provider_snapshot,
                 template_id=group.template_id,
                 preview_id=group.group_id,
+                candidate_group_id=group.group_id,
+                candidate_id=candidate.candidate_id,
+                candidate=_candidate_source_summary(
+                    {
+                        "candidate_group_id": group.group_id,
+                        "candidate_id": candidate.candidate_id,
+                        "rank": candidate.rank,
+                        "score": candidate.scores.get("combined"),
+                        "quality_overall": candidate.scores.get("quality_overall"),
+                        "summary": candidate.summary,
+                        "status": candidate.status,
+                        "created_at": candidate.created_at,
+                    }
+                ),
             )
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -4262,6 +4297,29 @@ def _top_ranked_candidate_id(group: Any) -> str | None:
     if not ready:
         return None
     return max(ready, key=lambda candidate: int(candidate.scores.get("combined") or 0)).candidate_id
+
+
+def _candidate_source_summary(value: Any) -> dict[str, Any]:
+    data = value if isinstance(value, dict) else {}
+    return {
+        "candidate_group_id": str(data.get("candidate_group_id") or ""),
+        "candidate_id": str(data.get("candidate_id") or ""),
+        "rank": _optional_positive_int(data.get("rank")),
+        "score": _optional_positive_int(data.get("score")),
+        "quality_overall": _optional_positive_int(data.get("quality_overall")),
+        "summary": str(data.get("summary") or "")[:240],
+        "status": str(data.get("status") or ""),
+        "created_at": str(data.get("created_at") or ""),
+    }
+
+
+def _optional_positive_int(value: Any) -> int | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _match_job_route(path: str) -> tuple[str, str] | None:

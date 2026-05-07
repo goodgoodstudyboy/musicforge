@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4.1 - 2026-05-07
+
+### Fixed
+- Provider candidate apply now writes explicit `candidate_group_id` and `candidate_id` fields into the official child version edit metadata.
+- Candidate-derived versions remain traceable to their selected candidate even if the original candidate group review artifacts are deleted later.
+- Release-check now verifies provider candidate metadata survives candidate group deletion.
+
+### Verified
+- `python -m pytest tests\test_server_edits.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.4.0 - 2026-05-07
 
 ### Added

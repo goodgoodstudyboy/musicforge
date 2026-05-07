@@ -18,7 +18,7 @@ from song_agent.final_export import FinalExportOptions, build_final_export_bundl
 from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.project_compare import compare_project_versions
 from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
-from song_agent.projectio import write_json
+from song_agent.projectio import read_json, write_json
 from song_agent.projects import ProjectStore
 from song_agent.provider import ProviderConfig
 from song_agent.provider_edits import (
@@ -656,9 +656,20 @@ def _v14_candidate_edit_smoke(root: Path) -> tuple[bool, str]:
                 )
             group = group_store.read_group(group.group_id)
             candidate_id = str(group.ranking[0]["candidate_id"])
+            selected_candidate = next(candidate for candidate in group.candidates if candidate.candidate_id == candidate_id)
             selected_patch = ProviderEditPatch.from_dict(group_store.read_candidate_patch(group.group_id, candidate_id))
             result = apply_provider_edit_patch(parent_plan, selected_patch)
             child_dir = base / "runs" / "v14-child"
+            candidate_summary = {
+                "candidate_group_id": group.group_id,
+                "candidate_id": candidate_id,
+                "rank": selected_candidate.rank,
+                "score": selected_candidate.scores.get("combined"),
+                "quality_overall": selected_candidate.scores.get("quality_overall"),
+                "summary": selected_candidate.summary,
+                "status": selected_candidate.status,
+                "created_at": selected_candidate.created_at,
+            }
             write_json(child_dir / "data" / "song-plan.json", result.plan.to_dict())
             write_json(
                 child_dir / "data" / "edit-metadata.json",
@@ -684,6 +695,7 @@ def _v14_candidate_edit_smoke(root: Path) -> tuple[bool, str]:
                     "template_id": template.template_id,
                     "candidate_group_id": group.group_id,
                     "candidate_id": candidate_id,
+                    "candidate": candidate_summary,
                 },
             )
             write_json(
@@ -710,20 +722,26 @@ def _v14_candidate_edit_smoke(root: Path) -> tuple[bool, str]:
                 change_summary=selected_patch.summary,
             )
             applied_group = group_store.mark_applied(group.group_id, candidate_id, version_id="v002", job_id="v14-child")
+            group_store.delete_group(group.group_id)
+            child_metadata_after_delete = read_json(child_dir / "data" / "edit-metadata.json")
             stale_plan = deterministic_compose(SongRequest(title="Different Candidate Parent", language="en", style="pop", theme="changed"))
             stale_guard = candidate_group_stale(group, song_plan_hash(stale_plan))
             compare = compare_project_versions(document, "v001", "v002")
-            serialized = str(group.to_dict()) + str(compare) + str(snapshot)
+            serialized = str(group.to_dict()) + str(compare) + str(snapshot) + str(child_metadata_after_delete)
             ok = (
                 len(group.candidates) == 3
                 and len(group.ranking) == 3
                 and applied_group.status == "applied"
                 and applied_group.selected_candidate_id == candidate_id
+                and child_metadata_after_delete.get("candidate_group_id") == group.group_id
+                and child_metadata_after_delete.get("candidate_id") == candidate_id
+                and (child_metadata_after_delete.get("candidate") or {}).get("rank") is not None
+                and (child_metadata_after_delete.get("candidate") or {}).get("score") is not None
                 and stale_guard
                 and compare["right"]["edit"]["provider_mode"] == "provider"
                 and "sk-release-secret" not in serialized
             )
-            return ok, f"group={group.group_id}, candidates={len(group.candidates)}, selected={candidate_id}, usage={group.provider_usage['total_tokens']}, stale_guard={stale_guard}"
+            return ok, f"group={group.group_id}, candidates={len(group.candidates)}, selected={candidate_id}, rank={(child_metadata_after_delete.get('candidate') or {}).get('rank')}, usage={group.provider_usage['total_tokens']}, stale_guard={stale_guard}"
     except Exception as exc:
         return False, str(exc)
 
