@@ -267,6 +267,25 @@ def test_webui_contains_assets_workspace_controls():
     assert "<audio" in html
 
 
+def test_webui_contains_reference_workspace_controls():
+    html = panel_html()
+
+    assert "References" in html
+    assert 'id="reference-import-form"' in html
+    assert 'id="reference-type"' in html
+    assert 'id="reference-file"' in html
+    assert 'id="reference-search"' in html
+    assert 'id="reference-type-filter"' in html
+    assert 'id="reference-list"' in html
+    assert 'id="reference-detail"' in html
+    assert "Import Reference" in html
+    assert "Download Original" in html
+    assert "Create Asset" in html
+    assert "Reference Materials" in html
+    assert "reference-ref-list" in html
+    assert "Include Reference Summaries" in html
+
+
 def test_webui_calls_asset_apis():
     html = panel_html()
 
@@ -286,6 +305,22 @@ def test_webui_calls_asset_apis():
     assert "/delete" in html
     assert "assetRefsPayload" in html
     assert "asset_refs" in html
+
+
+def test_webui_calls_reference_apis():
+    html = panel_html()
+
+    assert "/api/references" in html
+    assert "/api/references/import" in html
+    assert "/api/references/${encodeURIComponent(referenceId)}" in html
+    assert "file_url" in html
+    assert "/create-asset" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/references" in html
+    assert "/references/link" in html
+    assert "/references/unlink" in html
+    assert "referenceRefsPayload" in html
+    assert "reference_refs" in html
+    assert "fileToBase64" in html
 
 
 def test_webui_calls_project_apis():

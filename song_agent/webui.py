@@ -581,6 +581,9 @@ def panel_html() -> str:
             <label>Asset References
               <div id="song-asset-refs" class="asset-ref-list"></div>
             </label>
+            <label>Reference Materials
+              <div id="song-reference-refs" class="reference-ref-list"></div>
+            </label>
             <div class="actions">
               <button type="submit">Generate</button>
               <button class="secondary" id="reset-form" type="button">Reset</button>
@@ -649,6 +652,72 @@ def panel_html() -> str:
             </label>
           </div>
           <div id="project-list" class="project-list"><div class="empty">No projects yet.</div></div>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>References</span>
+          <div class="actions" style="margin-top:0;">
+            <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+              <input id="include-hidden-references" type="checkbox" style="width:auto;margin:0;">
+              Hidden
+            </label>
+            <button class="secondary" id="refresh-references" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <form id="reference-import-form">
+            <div class="grid2">
+              <label>Reference Type
+                <select id="reference-type">
+                  <option value="audio_wav">audio_wav</option>
+                  <option value="midi">midi</option>
+                  <option value="lyrics_text">lyrics_text</option>
+                  <option value="style_note">style_note</option>
+                </select>
+              </label>
+              <label>Title
+                <input id="reference-title" placeholder="Reference title">
+              </label>
+            </div>
+            <label>File
+              <input id="reference-file" type="file" accept=".wav,.mid,.midi,.txt,.md">
+            </label>
+            <label>Tags
+              <input id="reference-tags" placeholder="hook, style, client">
+            </label>
+            <div class="actions">
+              <button type="submit">Import Reference</button>
+              <span id="reference-message" class="message"></span>
+            </div>
+          </form>
+          <div class="grid2">
+            <label>Search References
+              <input id="reference-search" placeholder="title, tag">
+            </label>
+            <label>Reference Type
+              <select id="reference-type-filter">
+                <option value="">all</option>
+                <option value="audio_wav">audio_wav</option>
+                <option value="midi">midi</option>
+                <option value="lyrics_text">lyrics_text</option>
+                <option value="style_note">style_note</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Tag
+              <input id="reference-tag-filter" placeholder="hook">
+            </label>
+            <label>Favorite
+              <select id="reference-favorite-filter">
+                <option value="">all</option>
+                <option value="1">favorite</option>
+              </select>
+            </label>
+          </div>
+          <div id="reference-list" class="asset-list"><div class="empty">No references yet.</div></div>
+          <div id="reference-detail"><div class="empty">Select a reference.</div></div>
         </div>
       </section>
       <section>
@@ -800,6 +869,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let assets = [];
     let selectedAssetId = null;
     let includeHiddenAssets = false;
+    let references = [];
+    let selectedReferenceId = null;
+    let includeHiddenReferences = false;
 
     const $ = (id) => document.getElementById(id);
 
@@ -847,6 +919,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadRenderer();
       await loadEditPresets();
       await loadAssets();
+      await loadReferences();
       await loadJobs();
       await loadProjects();
       await loadBatches();
@@ -854,6 +927,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadJobs();
         loadProjects();
         loadAssets();
+        loadReferences();
         loadBatches();
       }, 2000);
       $("poll").textContent = "polling 2s";
@@ -923,6 +997,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if ($("lyrics").value.trim()) payload.lyrics = $("lyrics").value;
       const refs = assetRefsPayload("song-asset-refs");
       if (refs.length) payload.asset_refs = refs;
+      const referenceRefs = referenceRefsPayload("song-reference-refs");
+      if (referenceRefs.length) payload.reference_refs = referenceRefs;
       return payload;
     }
 
@@ -990,6 +1066,34 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     });
     ["asset-search", "asset-tag-filter"].forEach((id) => {
       $(id).addEventListener("input", debounce(loadAssets, 250));
+    });
+    $("refresh-references").addEventListener("click", loadReferences);
+    $("include-hidden-references").addEventListener("change", async () => {
+      includeHiddenReferences = $("include-hidden-references").checked;
+      await loadReferences();
+    });
+    ["reference-type-filter", "reference-favorite-filter"].forEach((id) => {
+      $(id).addEventListener("change", loadReferences);
+    });
+    ["reference-search", "reference-tag-filter"].forEach((id) => {
+      $(id).addEventListener("input", debounce(loadReferences, 250));
+    });
+    $("reference-import-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const payload = await referenceImportPayload();
+        const data = await api("/api/references/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        selectedReferenceId = data.reference.reference_id;
+        $("reference-message").textContent = data.duplicate ? "duplicate" : "imported";
+        $("reference-file").value = "";
+        await loadReferences();
+      } catch (err) {
+        $("reference-message").textContent = err.message;
+      }
     });
     $("refresh-batches").addEventListener("click", loadBatches);
     $("include-hidden-batches").addEventListener("change", async () => {
@@ -1300,6 +1404,237 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     }
 
+    async function loadReferences() {
+      try {
+        const params = new URLSearchParams();
+        if (includeHiddenReferences) params.set("include_hidden", "1");
+        if ($("reference-search").value.trim()) params.set("q", $("reference-search").value.trim());
+        if ($("reference-type-filter").value) params.set("type", $("reference-type-filter").value);
+        if ($("reference-tag-filter").value.trim()) params.set("tag", $("reference-tag-filter").value.trim());
+        if ($("reference-favorite-filter").value) params.set("favorite", $("reference-favorite-filter").value);
+        const data = await api(`/api/references${params.toString() ? "?" + params.toString() : ""}`);
+        references = data.references || [];
+        if (selectedReferenceId && !references.some((reference) => reference.reference_id === selectedReferenceId)) {
+          selectedReferenceId = null;
+          $("reference-detail").innerHTML = "<div class='empty'>Select a reference.</div>";
+        }
+        renderReferences();
+        renderReferenceSelectors();
+        if (selectedReferenceId) await renderReferenceDetail(selectedReferenceId);
+      } catch (err) {
+        $("reference-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderReferences() {
+      const list = $("reference-list");
+      if (!references.length) {
+        list.innerHTML = "<div class='empty'>No references yet.</div>";
+        renderReferenceSelectors();
+        return;
+      }
+      const rows = references.map((reference) => `
+        <tr>
+          <td><button class="secondary reference-open" data-reference-id="${escapeHtml(reference.reference_id)}" type="button">Open</button></td>
+          <td>${escapeHtml(reference.title)}</td>
+          <td>${escapeHtml(reference.reference_type)}</td>
+          <td>${escapeHtml((reference.tags || []).join(", "))}</td>
+          <td>${escapeHtml(reference.size_bytes || 0)}</td>
+          <td>${escapeHtml(reference.usage_count || 0)}</td>
+          <td>${reference.favorite ? "yes" : "-"}</td>
+        </tr>
+      `).join("");
+      list.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Title</th><th>Type</th><th>Tags</th><th>Bytes</th><th>Uses</th><th>Favorite</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      list.querySelectorAll(".reference-open").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedReferenceId = button.dataset.referenceId;
+          await renderReferenceDetail(selectedReferenceId);
+        });
+      });
+    }
+
+    async function renderReferenceDetail(referenceId) {
+      const data = await api(`/api/references/${encodeURIComponent(referenceId)}`);
+      const reference = data.reference;
+      $("reference-detail").innerHTML = `
+        <div class="summary-grid">
+          ${metric("Reference", reference.reference_id)}
+          ${metric("Type", reference.reference_type)}
+          ${metric("Size", reference.size_bytes || 0)}
+          ${metric("Uses", reference.usage_count || 0)}
+          ${metric("Key", reference.key || "-")}
+          ${metric("Tempo", reference.tempo_bpm || "-")}
+          ${metric("Projects", (reference.linked_project_ids || []).length)}
+          ${metric("Assets", (reference.derived_asset_ids || []).length)}
+        </div>
+        <div class="grid2">
+          <label>Title
+            <input id="reference-edit-title" value="${escapeHtml(reference.title)}">
+          </label>
+          <label>Tags
+            <input id="reference-edit-tags" value="${escapeHtml((reference.tags || []).join(", "))}">
+          </label>
+        </div>
+        <label>Description
+          <textarea id="reference-edit-description">${escapeHtml(reference.description || "")}</textarea>
+        </label>
+        <div class="actions">
+          <button id="reference-save" type="button">Save Metadata</button>
+          <a class="button-link secondary" href="${escapeHtml(reference.file_url)}">Download Original</a>
+          ${reference.reference_type !== "audio_wav" ? `<button class="secondary" id="reference-create-asset" type="button">Create Asset</button>` : ""}
+          ${selectedProjectId ? `<button class="secondary" id="reference-link-project" type="button">Link Project</button><button class="secondary" id="reference-unlink-project" type="button">Unlink Project</button>` : ""}
+          ${reference.hidden ? `<button class="secondary" id="reference-unhide" type="button">Unhide Reference</button>` : `<button class="secondary" id="reference-hide" type="button">Hide Reference</button>`}
+          ${reference.favorite ? `<button class="secondary" id="reference-unfavorite" type="button">Unfavorite</button>` : `<button class="secondary" id="reference-favorite" type="button">Favorite</button>`}
+          <button class="danger" id="reference-delete" type="button">Delete Reference</button>
+        </div>
+        <pre>${escapeHtml(JSON.stringify({ summary: referenceSummary(reference), linked_project_ids: reference.linked_project_ids, derived_asset_ids: reference.derived_asset_ids }, null, 2))}</pre>
+      `;
+      bindAction("reference-save", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: $("reference-edit-title").value.trim(),
+            description: $("reference-edit-description").value,
+            tags: $("reference-edit-tags").value.split(",").map((tag) => tag.trim()).filter(Boolean),
+          }),
+        });
+        await loadReferences();
+      });
+      bindAction("reference-create-asset", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/create-asset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ asset_type: defaultAssetTypeForReference(reference.reference_type) }),
+        });
+        await loadAssets();
+        await loadReferences();
+      });
+      bindAction("reference-link-project", async () => {
+        if (!selectedProjectId) return;
+        await api(`/api/projects/${encodeURIComponent(selectedProjectId)}/references/link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reference_id: reference.reference_id }),
+        });
+        await loadReferences();
+        await loadProjects();
+      });
+      bindAction("reference-unlink-project", async () => {
+        if (!selectedProjectId) return;
+        await api(`/api/projects/${encodeURIComponent(selectedProjectId)}/references/unlink`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reference_id: reference.reference_id }),
+        });
+        await loadReferences();
+        await loadProjects();
+      });
+      bindAction("reference-hide", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/hide`, { method: "POST" });
+        await loadReferences();
+      });
+      bindAction("reference-unhide", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/unhide`, { method: "POST" });
+        await loadReferences();
+      });
+      bindAction("reference-favorite", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/favorite`, { method: "POST" });
+        await loadReferences();
+      });
+      bindAction("reference-unfavorite", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/unfavorite`, { method: "POST" });
+        await loadReferences();
+      });
+      bindAction("reference-delete", async () => {
+        if (!confirm("Delete this reference?")) return;
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/delete`, { method: "POST" });
+        selectedReferenceId = null;
+        await loadReferences();
+      });
+    }
+
+    function renderReferenceSelectors() {
+      document.querySelectorAll(".reference-ref-list").forEach((container) => {
+        const previous = new Map(Array.from(container.querySelectorAll("input[type='checkbox']")).map((input) => [input.value, input.checked]));
+        const strengths = new Map(Array.from(container.querySelectorAll("input[type='number']")).map((input) => [input.dataset.referenceId, input.value]));
+        container.innerHTML = references.slice(0, 60).map((reference) => `
+          <label class="asset-ref-row">
+            <input type="checkbox" value="${escapeHtml(reference.reference_id)}" ${previous.get(reference.reference_id) ? "checked" : ""}>
+            <span>${escapeHtml(reference.reference_type)} · ${escapeHtml(reference.title)}</span>
+            <input type="number" data-reference-id="${escapeHtml(reference.reference_id)}" min="0" max="1" step="0.1" value="${escapeHtml(strengths.get(reference.reference_id) || "0.7")}">
+          </label>
+        `).join("") || "<div class='empty'>No references available.</div>";
+      });
+    }
+
+    function referenceRefsPayload(containerId) {
+      const container = $(containerId);
+      if (!container) return [];
+      return Array.from(container.querySelectorAll("input[type='checkbox']:checked")).slice(0, 5).map((checkbox) => {
+        const reference = references.find((item) => item.reference_id === checkbox.value) || {};
+        const strengthInput = container.querySelector(`input[type='number'][data-reference-id="${CSS.escape(checkbox.value)}"]`);
+        return {
+          reference_id: checkbox.value,
+          role: defaultReferenceRole(reference.reference_type),
+          strength: Number((strengthInput && strengthInput.value) || 0.7),
+        };
+      });
+    }
+
+    async function referenceImportPayload() {
+      const file = $("reference-file").files && $("reference-file").files[0];
+      if (!file) throw new Error("Choose a reference file.");
+      return {
+        reference_type: $("reference-type").value,
+        filename: file.name,
+        title: $("reference-title").value.trim() || file.name,
+        tags: $("reference-tags").value.split(",").map((tag) => tag.trim()).filter(Boolean),
+        content_base64: await fileToBase64(file),
+      };
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+        reader.onerror = () => reject(reader.error || new Error("File read failed."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function defaultReferenceRole(referenceType) {
+      return {
+        audio_wav: "reference_audio",
+        midi: "reference_midi",
+        lyrics_text: "reference_lyrics",
+        style_note: "reference_style",
+      }[referenceType] || "reference";
+    }
+
+    function defaultAssetTypeForReference(referenceType) {
+      return {
+        midi: "motif",
+        lyrics_text: "lyric_hook",
+        style_note: "section_template",
+      }[referenceType] || "lyric_hook";
+    }
+
+    function referenceSummary(reference) {
+      return {
+        description: reference.description,
+        tags: reference.tags || [],
+        text_excerpt: reference.text_excerpt,
+        source_note: reference.source_note,
+        license_note: reference.license_note,
+      };
+    }
+
     function renderAssets() {
       const list = $("asset-list");
       if (!assets.length) {
@@ -1499,7 +1834,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "variation", "edit", "candidates", "quality-gate", "final-export", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "edit", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -1530,6 +1865,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Asset References
           <div id="project-version-asset-refs" class="asset-ref-list"></div>
         </label>
+        <label>Reference Materials
+          <div id="project-version-reference-refs" class="reference-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-new-version" type="button">New Version</button>
           <button class="secondary" id="project-add-job" type="button">Add Existing Job</button>
@@ -1547,6 +1885,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       wireProjectActions(project, versions);
       renderAssetSelectors();
+      renderReferenceSelectors();
       await renderProjectTab(project, versions);
     }
 
@@ -1575,6 +1914,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             generation_mode: $("generation_mode").value,
             pipeline_mode: $("pipeline_mode").value,
             asset_refs: assetRefsPayload("project-version-asset-refs"),
+            reference_refs: referenceRefsPayload("project-version-reference-refs"),
           }),
         });
         await loadJobs();
@@ -1705,6 +2045,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await renderProjectQualityGate(project, versions, target);
       } else if (activeProjectTab === "final-export") {
         await renderProjectFinalExport(project, versions, target);
+      } else if (activeProjectTab === "references") {
+        await renderProjectReferences(project, target);
       } else if (activeProjectTab === "compare") {
         target.innerHTML = projectCompareControls(versions);
         bindAction("project-compare", async () => {
@@ -1840,6 +2182,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Asset References
           <div id="project-variation-asset-refs" class="asset-ref-list"></div>
         </label>
+        <label>Reference Materials
+          <div id="project-variation-reference-refs" class="reference-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-create-variation" type="button" ${parent ? "" : "disabled"}>Create Variation</button>
           <span id="project-variation-message" class="message"></span>
@@ -1870,6 +2215,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       };
       const refs = assetRefsPayload("project-variation-asset-refs");
       if (refs.length) payload.asset_refs = refs;
+      const referenceRefs = referenceRefsPayload("project-variation-reference-refs");
+      if (referenceRefs.length) payload.reference_refs = referenceRefs;
       if ($("project-variation-generation-mode").value) payload.generation_mode = $("project-variation-generation-mode").value;
       if ($("project-variation-pipeline-mode").value) payload.pipeline_mode = $("project-variation-pipeline-mode").value;
       return payload;
@@ -1889,6 +2236,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
       target.innerHTML = projectEditControls(project, versions, parentId, targets, preview);
       renderAssetSelectors();
+      renderReferenceSelectors();
       const parentSelect = $("project-edit-parent");
       if (parentSelect) {
         parentSelect.addEventListener("change", async () => {
@@ -2034,6 +2382,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Asset References
           <div id="project-edit-asset-refs" class="asset-ref-list"></div>
         </label>
+        <label>Reference Materials
+          <div id="project-edit-reference-refs" class="reference-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-create-edit" type="button" ${parentId ? "" : "disabled"}>Create Edit Version</button>
           <button class="secondary" id="project-provider-preview" type="button" ${parentId ? "" : "disabled"}>Generate Preview</button>
@@ -2069,6 +2420,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (presetId) data.preset_id = presetId;
       const refs = assetRefsPayload("project-edit-asset-refs");
       if (refs.length) data.asset_refs = refs;
+      const referenceRefs = referenceRefsPayload("project-edit-reference-refs");
+      if (referenceRefs.length) data.reference_refs = referenceRefs;
       return data;
     }
 
@@ -2080,6 +2433,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       };
       const refs = assetRefsPayload("project-edit-asset-refs");
       if (refs.length) payload.asset_refs = refs;
+      const referenceRefs = referenceRefsPayload("project-edit-reference-refs");
+      if (referenceRefs.length) payload.reference_refs = referenceRefs;
       return payload;
     }
 
@@ -2114,6 +2469,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
       target.innerHTML = projectCandidateControls(versions, parentId, groups, usage, experiments);
       renderAssetSelectors();
+      renderReferenceSelectors();
       const parentSelect = $("project-candidate-parent");
       if (parentSelect) {
         parentSelect.addEventListener("change", async () => {
@@ -2234,6 +2590,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Asset References
           <div id="project-candidate-asset-refs" class="asset-ref-list"></div>
         </label>
+        <label>Reference Materials
+          <div id="project-candidate-reference-refs" class="reference-ref-list"></div>
+        </label>
         <div class="actions">
           <button id="project-generate-candidates" type="button" ${parentId ? "" : "disabled"}>Generate Candidates</button>
           <span id="project-candidate-message" class="message"></span>
@@ -2263,6 +2622,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       };
       const refs = assetRefsPayload("project-candidate-asset-refs");
       if (refs.length) payload.asset_refs = refs;
+      const referenceRefs = referenceRefsPayload("project-candidate-reference-refs");
+      if (referenceRefs.length) payload.reference_refs = referenceRefs;
       return payload;
     }
 
@@ -2277,6 +2638,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       };
       const refs = assetRefsPayload("project-candidate-asset-refs");
       if (refs.length) payload.asset_refs = refs;
+      const referenceRefs = referenceRefsPayload("project-candidate-reference-refs");
+      if (referenceRefs.length) payload.reference_refs = referenceRefs;
       return payload;
     }
 
@@ -2329,7 +2692,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" data-render-candidate-group-audio="${escapeHtml(group.group_id)}" data-group-id="${escapeHtml(group.group_id)}" type="button">Render Group Audio</button>
             <button class="danger" data-delete-candidate-group="${escapeHtml(group.group_id)}" type="button">Delete Candidate Group</button>
           </div>
-          ${group.source && group.source.asset_refs ? `<pre>${escapeHtml(JSON.stringify({ asset_refs: group.source.asset_refs }, null, 2))}</pre>` : ""}
+          ${group.source && (group.source.asset_refs || group.source.reference_refs) ? `<pre>${escapeHtml(JSON.stringify({ asset_refs: group.source.asset_refs || [], reference_refs: group.source.reference_refs || [] }, null, 2))}</pre>` : ""}
           <div class="candidate-grid">
             ${(group.candidates || []).map((candidate) => candidateCardHtml(group, candidate)).join("")}
           </div>
@@ -2534,6 +2897,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <label><input id="project-final-export-audio" type="checkbox" checked> Include Audio</label>
           <label><input id="project-final-export-stems" type="checkbox" checked> Include Stems</label>
           <label><input id="project-final-export-stem-audio" type="checkbox" checked> Include Stem Audio</label>
+          <label><input id="project-final-export-references" type="checkbox" checked> Include Reference Summaries</label>
         </div>
         <div class="actions">
           <button id="project-generate-final-export" type="button" ${versions.length ? "" : "disabled"}>Generate Final Export</button>
@@ -2568,6 +2932,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         include_audio: $("project-final-export-audio").checked,
         include_stems: $("project-final-export-stems").checked,
         include_stem_audio: $("project-final-export-stem-audio").checked,
+        include_reference_refs: $("project-final-export-references").checked,
         force: $("project-final-export-force").value === "true",
       };
     }
@@ -2599,6 +2964,60 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <tbody>${rows || "<tr><td colspan='4'>No files.</td></tr>"}</tbody>
         </table>
       `;
+    }
+
+    async function renderProjectReferences(project, target) {
+      try {
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/references`);
+        const rows = (data.references || []).map((reference) => `
+          <tr>
+            <td>${escapeHtml(reference.reference_id)}</td>
+            <td>${escapeHtml(reference.title)}</td>
+            <td>${escapeHtml(reference.reference_type)}</td>
+            <td>${escapeHtml((reference.tags || []).join(", "))}</td>
+            <td>${escapeHtml(reference.usage_count || 0)}</td>
+            <td><button class="secondary project-reference-unlink" data-reference-id="${escapeHtml(reference.reference_id)}" type="button">Unlink</button></td>
+          </tr>
+        `).join("");
+        target.innerHTML = `
+          <label>Link Reference
+            <div id="project-link-reference-refs" class="reference-ref-list"></div>
+          </label>
+          <div class="actions">
+            <button id="project-link-selected-reference" type="button">Link Selected Reference</button>
+          </div>
+          <table>
+            <thead><tr><th>Reference</th><th>Title</th><th>Type</th><th>Tags</th><th>Uses</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='6'>No linked references.</td></tr>"}</tbody>
+          </table>
+        `;
+        renderReferenceSelectors();
+        bindAction("project-link-selected-reference", async () => {
+          const refs = referenceRefsPayload("project-link-reference-refs");
+          for (const ref of refs) {
+            await api(`/api/projects/${encodeURIComponent(project.project_id)}/references/link`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reference_id: ref.reference_id }),
+            });
+          }
+          await loadReferences();
+          await renderProjectReferences(project, target);
+        });
+        target.querySelectorAll(".project-reference-unlink").forEach((button) => {
+          button.addEventListener("click", async () => {
+            await api(`/api/projects/${encodeURIComponent(project.project_id)}/references/unlink`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reference_id: button.dataset.referenceId }),
+            });
+            await loadReferences();
+            await renderProjectReferences(project, target);
+          });
+        });
+      } catch (err) {
+        target.innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
     }
 
     function projectCompareControls(versions) {
@@ -2695,6 +3114,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         "quality-gate": "Quality Gate",
         "final-export": "Final Export",
         compare: "Compare",
+        references: "References",
         export: "Export JSON",
         events: "Events",
       }[tab] || tab;
