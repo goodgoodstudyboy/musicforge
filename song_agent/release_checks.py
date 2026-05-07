@@ -10,12 +10,15 @@ from pathlib import Path
 
 from song_agent import __version__
 from song_agent.agent.pipeline import deterministic_compose
-from song_agent.candidate_groups import CandidateGroupStore, candidate_group_stale
+from song_agent import candidate_groups as candidate_groups_module
+from song_agent.candidate_groups import CandidateGroupStore, candidate_audio_path, candidate_group_stale, candidate_midi_path
 from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
 from song_agent.prompt_templates import PromptTemplateStore
+from song_agent.provider_usage import build_provider_usage_report, collect_project_provider_usage_records
+from song_agent.prompt_ab import PromptABStore
 from song_agent.project_compare import compare_project_versions
 from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.projectio import read_json, write_json
@@ -31,6 +34,7 @@ from song_agent.provider_edits import (
     preview_stale,
     song_plan_hash,
 )
+from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
 
@@ -146,6 +150,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.2.1 hardening smoke", *_v121_hardening_smoke(root))
     report.add("v1.3 provider edit smoke", *_v13_provider_edit_smoke(root))
     report.add("v1.4 candidate edit smoke", *_v14_candidate_edit_smoke(root))
+    report.add("v1.5 candidate audition and usage smoke", *_v15_candidate_audition_usage_smoke(root))
     return report
 
 
@@ -742,6 +747,139 @@ def _v14_candidate_edit_smoke(root: Path) -> tuple[bool, str]:
                 and "sk-release-secret" not in serialized
             )
             return ok, f"group={group.group_id}, candidates={len(group.candidates)}, selected={candidate_id}, rank={(child_metadata_after_delete.get('candidate') or {}).get('rank')}, usage={group.provider_usage['total_tokens']}, stale_guard={stale_guard}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _v15_candidate_audition_usage_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v15-") as temp_dir:
+            base = Path(temp_dir)
+            store = ProjectStore(base / ".musicforge" / "projects")
+            templates = PromptTemplateStore(base / ".musicforge" / "prompt-templates.json")
+            document = store.create_project("Release v1.5 Smoke")
+            request = SongRequest(
+                title="Release v1.5 Smoke",
+                language="en",
+                style="synth pop",
+                theme="candidate audition smoke",
+                tempo_bpm=100,
+            )
+            parent_dir = base / "runs" / "v15-parent"
+            parent_plan = deterministic_compose(request)
+            write_json(parent_dir / "data" / "song-plan.json", parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_dir / "renders" / "song.mid")
+            parent_job = _SmokeJob("v15-parent", parent_dir, request.to_dict())
+            document = store.add_version_from_job(document.state.project_id, parent_job, name="Parent")
+            project_id = document.state.project_id
+            project_dir = store.project_dir(project_id)
+            template = templates.get_template("provider-edit-candidates")
+            group_store = CandidateGroupStore(project_dir)
+            created_groups = []
+            for label in ("A", "B"):
+                patches, snapshot = generate_provider_edit_candidates(
+                    parent_plan=parent_plan,
+                    instruction=f"Give me two stronger chorus options {label}.",
+                    template=template,
+                    config=ProviderConfig(wire_api="mock", model="mock-main", api_key="sk-release-secret"),
+                    candidate_count=2,
+                )
+                snapshot["usage"] = {"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20}
+                snapshot["request_id"] = f"req-v15-{label.lower()}"
+                group = group_store.create_group(
+                    project_id=project_id,
+                    parent_version_id="v001",
+                    parent_job_id="v15-parent",
+                    instruction=f"Give me two stronger chorus options {label}.",
+                    template_id=template.template_id,
+                    candidate_count=2,
+                    source={"parent_version_id": "v001", "parent_job_id": "v15-parent", "song_plan_sha256": song_plan_hash(parent_plan)},
+                    provider_usage=snapshot["usage"],
+                    provider_request_id=snapshot["request_id"],
+                    now="2026-05-07T00:00:00+00:00",
+                )
+                write_json(
+                    project_dir / "candidate-groups" / group.group_id / "provider-usage.json",
+                    {
+                        "provider_type": "mock",
+                        "model": "mock-main",
+                        "operation": "provider_edit_candidates",
+                        "template_id": template.template_id,
+                        "prompt_tokens": snapshot["usage"]["prompt_tokens"],
+                        "completion_tokens": snapshot["usage"]["completion_tokens"],
+                        "total_tokens": snapshot["usage"]["total_tokens"],
+                        "request_id": snapshot["request_id"],
+                    },
+                )
+                for patch in patches:
+                    result = apply_provider_edit_patch(parent_plan, patch)
+                    scores = score_provider_edit_candidate(parent_plan=parent_plan, candidate_plan=result.plan, patch=patch)
+                    candidate = group_store.add_candidate(
+                        group,
+                        summary=patch.summary,
+                        status="ready",
+                        patch=patch.to_dict(),
+                        scores=scores.to_dict(),
+                        validator={"status": "passed"},
+                        quality=result.plan.quality.to_dict() if result.plan.quality else None,
+                        candidate_plan=result.plan.to_dict(),
+                        now="2026-05-07T00:00:00+00:00",
+                    )
+                    group_store.render_candidate_midi(group.group_id, candidate.candidate_id)
+                created_groups.append(group_store.read_group(group.group_id))
+            ab = PromptABStore(project_dir).create_experiment(
+                project_id=project_id,
+                parent_version_id="v001",
+                instruction="Compare prompt candidates.",
+                candidate_count=2,
+                template_ids=[template.template_id, template.template_id],
+                group_ids=[group.group_id for group in created_groups],
+                now="2026-05-07T00:00:00+00:00",
+            )
+            candidate_id = created_groups[0].ranking[0]["candidate_id"]
+            candidate_dir = group_store.candidate_dir(created_groups[0].group_id, str(candidate_id))
+            soundfont = base / "soundfont.sf2"
+            soundfont.write_bytes(b"sf2")
+
+            def fake_runner(cmd, capture_output, text, timeout, shell):
+                wav_path = Path(cmd[cmd.index("-F") + 1])
+                wav_path.write_bytes(b"RIFFfakeWAVE")
+                class Result:
+                    returncode = 0
+                    stdout = ""
+                    stderr = ""
+                return Result()
+
+            original_render_audio = candidate_groups_module.render_audio
+            try:
+                candidate_groups_module.render_audio = lambda midi, wav, cfg: original_render_audio(midi, wav, cfg, runner=fake_runner)
+                audio_candidate = group_store.render_candidate_audio(
+                    created_groups[0].group_id,
+                    str(candidate_id),
+                    RendererConfig(soundfont_path=str(soundfont)),
+                )
+            finally:
+                candidate_groups_module.render_audio = original_render_audio
+            usage_report = build_provider_usage_report(
+                scope="project",
+                project_id=project_id,
+                records=collect_project_provider_usage_records(project_id, document.versions, project_dir),
+            )
+            serialized = str([group.to_dict() for group in created_groups]) + str(usage_report)
+            ok = (
+                len(created_groups) == 2
+                and len(ab.group_ids) == 2
+                and candidate_midi_path(candidate_dir).read_bytes().startswith(b"MThd")
+                and audio_candidate.audio_status == "completed"
+                and candidate_audio_path(candidate_dir).read_bytes().startswith(b"RIFF")
+                and usage_report["total_calls"] == 2
+                and usage_report["total_tokens"] == 40
+                and usage_report["estimated_cost"] is None
+                and "sk-release-secret" not in serialized
+            )
+            return ok, f"groups={len(created_groups)}, ab={ab.ab_id}, midi={candidate_midi_path(candidate_dir).stat().st_size}, wav={audio_candidate.audio_size_bytes}, tokens={usage_report['total_tokens']}, cost={usage_report['estimated_cost']}"
     except Exception as exc:
         return False, str(exc)
 

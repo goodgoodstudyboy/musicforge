@@ -280,6 +280,10 @@ until one candidate is applied.
       candidate.json
       patch.json
       candidate-song-plan.json
+      song.mid
+      song.wav
+      render-report.json
+      audio-render-report.json
       validator-report.json
       quality.json
       critic.json
@@ -289,7 +293,30 @@ Candidate groups are bound to the parent `song-plan.json` source hash. If the
 parent changes after candidate generation, applying the group is rejected as
 stale. Applying a candidate creates one official child Project version; the
 remaining candidates stay as review artifacts and are not added to the version
-list.
+list. Candidate MIDI previews are generated for ready candidates; WAV previews
+can be rendered when `.musicforge/renderer.json` is configured.
+
+Provider usage reports aggregate version jobs and candidate group generation by
+model, operation, and prompt template. Reports never include API keys or raw
+prompts. Optional local pricing can be placed in
+`.musicforge/provider-pricing.json`, which is ignored by Git:
+
+```json
+{
+  "schema_version": 1,
+  "models": {
+    "mock-main": {
+      "input_per_1m": 0.0,
+      "output_per_1m": 0.0,
+      "currency": "USD"
+    }
+  }
+}
+```
+
+Prompt A/B in the Candidates tab runs the same instruction through two prompt
+templates and creates two candidate groups. It does not auto-apply a candidate;
+the user still reviews, listens, and applies manually.
 
 Prompt templates are managed from Studio's Prompt Templates panel and stored in
 `.musicforge/prompt-templates.json`, which is ignored by Git. Built-in provider
@@ -349,10 +376,21 @@ POST /api/projects/<project-id>/versions/<version-id>/edit-preview
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/apply
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/delete
 POST /api/projects/<project-id>/versions/<version-id>/edit-candidates
+POST /api/projects/<project-id>/versions/<version-id>/edit-candidates/ab
 GET  /api/projects/<project-id>/candidate-groups
 GET  /api/projects/<project-id>/candidate-groups/<group-id>
 POST /api/projects/<project-id>/candidate-groups/<group-id>/apply
 POST /api/projects/<project-id>/candidate-groups/<group-id>/delete
+POST /api/projects/<project-id>/candidate-groups/<group-id>/render-midi
+POST /api/projects/<project-id>/candidate-groups/<group-id>/render-audio
+GET  /api/projects/<project-id>/candidate-groups/<group-id>/usage
+GET  /api/projects/<project-id>/candidate-groups/<group-id>/candidates/<candidate-id>/midi
+GET  /api/projects/<project-id>/candidate-groups/<group-id>/candidates/<candidate-id>/audio
+POST /api/projects/<project-id>/candidate-groups/<group-id>/candidates/<candidate-id>/render-midi
+POST /api/projects/<project-id>/candidate-groups/<group-id>/candidates/<candidate-id>/render-audio
+GET  /api/projects/<project-id>/prompt-ab
+GET  /api/projects/<project-id>/prompt-ab/<ab-id>
+POST /api/projects/<project-id>/prompt-ab/<ab-id>/delete
 POST /api/projects/<project-id>/versions/<version-id>/evaluate
 POST /api/projects/<project-id>/selected
 POST /api/projects/<project-id>/final
@@ -366,12 +404,14 @@ GET  /api/projects/<project-id>/final-export.zip
 GET  /api/projects/<project-id>/diff?left=v001&right=v002
 GET  /api/projects/<project-id>/compare?left=v001&right=v002
 GET  /api/projects/<project-id>/provider-usage
+GET  /api/projects/<project-id>/usage/provider
 GET  /api/projects/<project-id>/export
 GET  /api/projects/<project-id>/events
 POST /api/projects/<project-id>/hide
 POST /api/projects/<project-id>/unhide
 POST /api/projects/<project-id>/delete
 GET  /api/jobs/<job-id>/edit
+GET  /api/usage/provider
 GET  /api/edit-presets
 POST /api/edit-presets
 GET  /api/edit-presets/<preset-id>

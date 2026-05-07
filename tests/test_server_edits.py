@@ -39,6 +39,21 @@ def request_json(server, method, path, payload=None):
     return response.status, data
 
 
+def request_bytes(server, method, path, payload=None):
+    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=10)
+    body = None
+    headers = {}
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        headers["Content-Length"] = str(len(body))
+    connection.request(method, path, body=body, headers=headers)
+    response = connection.getresponse()
+    data = response.read()
+    connection.close()
+    return response.status, data
+
+
 def wait_for_job(server, job_id):
     for _ in range(120):
         status, job = request_json(server, "GET", f"/api/jobs/{job_id}")
@@ -554,6 +569,22 @@ def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypat
             },
         )
         group_id = created["group"]["group_id"]
+        candidate_id = created["group"]["ranking"][0]["candidate_id"]
+        midi_status, midi_bytes = request_bytes(
+            server,
+            "GET",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/midi",
+        )
+        rerender_status, rerendered = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/render-midi",
+        )
+        audio_status, audio_error = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/render-audio",
+        )
         list_status, listed = request_json(server, "GET", f"/api/projects/{project_id}/candidate-groups")
         detail_status, detail = request_json(server, "GET", f"/api/projects/{project_id}/candidate-groups/{group_id}")
         apply_status, applied = request_json(
@@ -570,6 +601,9 @@ def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypat
             {"name": "Duplicate candidate"},
         )
         usage_status, usage = request_json(server, "GET", f"/api/projects/{project_id}/provider-usage")
+        report_status, report = request_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+        group_usage_status, group_usage = request_json(server, "GET", f"/api/projects/{project_id}/candidate-groups/{group_id}/usage")
+        global_usage_status, global_usage = request_json(server, "GET", "/api/usage/provider")
         project_status, project = request_json(server, "GET", f"/api/projects/{project_id}")
         metadata_status, metadata = request_json(server, "GET", f"/api/projects/{project_id}/versions/v002/edit")
         delete_status, _deleted = request_json(server, "POST", f"/api/projects/{project_id}/candidate-groups/{group_id}/delete")
@@ -581,6 +615,14 @@ def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypat
     assert created["group"]["status"] == "ready"
     assert len(created["group"]["candidates"]) == 3
     assert len(created["group"]["ranking"]) == 3
+    assert created["group"]["candidates"][0]["midi_status"] == "completed"
+    assert created["group"]["candidates"][0]["midi_url"].endswith("/midi")
+    assert midi_status == 200
+    assert midi_bytes.startswith(b"MThd")
+    assert rerender_status == 200
+    assert rerendered["candidate"]["midi_status"] == "completed"
+    assert audio_status == 400
+    assert "soundfont_path is required" in audio_error["error"]
     assert list_status == 200
     assert listed["groups"][0]["group_id"] == group_id
     assert detail_status == 200
@@ -593,6 +635,19 @@ def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypat
     assert "already been applied" in duplicate["error"]
     assert usage_status == 200
     assert usage["total_calls"] >= 2
+    assert report_status == 200
+    assert report["scope"] == "project"
+    assert report["total_calls"] >= 2
+    assert report["total_tokens"] >= 0
+    assert report["estimated_cost"] is None
+    assert report["by_operation"]
+    assert any(item["operation"] == "provider_edit_candidates" for item in report["by_operation"])
+    assert not any("api_key" in record for record in report["records"])
+    assert group_usage_status == 200
+    assert group_usage["scope"] == "candidate_group"
+    assert group_usage["candidate_group_records"][0]["group_id"] == group_id
+    assert global_usage_status == 200
+    assert global_usage["scope"] == "global"
     assert metadata_status == 200
     assert metadata["edit"]["candidate_group_id"] == group_id
     assert metadata["edit"]["candidate_id"] == applied["group"]["selected_candidate_id"]
@@ -612,6 +667,72 @@ def test_provider_edit_candidates_create_rank_and_apply_best(tmp_path, monkeypat
     assert "sk-provider-secret" not in serialized
     assert project_status == 200
     assert len(project["versions"]) == 2
+
+
+def test_provider_usage_report_pricing_and_prompt_ab(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main", "api_key": "sk-provider-secret"})
+        project_id, _parent_job = create_project_version(server)
+        ab_status, ab_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-candidates/ab",
+            {
+                "instruction": "Compare two prompt treatments for the chorus.",
+                "candidate_count": 2,
+                "template_ids": ["provider-edit-candidates", "provider-edit-candidates"],
+            },
+        )
+        ab_id = ab_data["experiment"]["ab_id"]
+        group_ids = ab_data["experiment"]["group_ids"]
+        list_status, listed = request_json(server, "GET", f"/api/projects/{project_id}/prompt-ab")
+        detail_status, detail = request_json(server, "GET", f"/api/projects/{project_id}/prompt-ab/{ab_id}")
+        no_price_status, no_price = request_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+        pricing_path = tmp_path / ".musicforge" / "provider-pricing.json"
+        pricing_path.parent.mkdir(parents=True, exist_ok=True)
+        pricing_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "models": {
+                        "mock-main": {
+                            "input_per_1m": 1.0,
+                            "output_per_1m": 2.0,
+                            "currency": "USD",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        priced_status, priced = request_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+        delete_status, deleted = request_json(server, "POST", f"/api/projects/{project_id}/prompt-ab/{ab_id}/delete")
+        missing_status, missing = request_json(server, "GET", f"/api/projects/{project_id}/prompt-ab/{ab_id}")
+    finally:
+        stop_test_server(server)
+
+    assert ab_status == 201
+    assert len(group_ids) == 2
+    assert len(ab_data["groups"]) == 2
+    assert all(group["ranking"] for group in ab_data["groups"])
+    assert list_status == 200
+    assert listed["experiments"][0]["ab_id"] == ab_id
+    assert detail_status == 200
+    assert [group["group_id"] for group in detail["groups"]] == group_ids
+    assert no_price_status == 200
+    assert no_price["total_calls"] >= 2
+    assert no_price["estimated_cost"] is None
+    assert priced_status == 200
+    assert priced["estimated_cost"] is not None
+    assert priced["currency"] == "USD"
+    assert delete_status == 200
+    assert deleted["deleted"] is True
+    assert missing_status == 404
+    assert missing["error"] == "Prompt A/B experiment not found."
+    serialized = json.dumps({"ab": ab_data, "priced": priced})
+    assert "sk-provider-secret" not in serialized
 
 
 def test_provider_edit_candidates_reject_stale_parent_and_delete(tmp_path, monkeypatch):

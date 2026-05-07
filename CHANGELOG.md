@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.5.0 - 2026-05-07
+
+### Added
+- Provider edit candidates now render MIDI previews and expose safe candidate MIDI download URLs.
+- Candidate WAV previews can be rendered when the local renderer is configured, with Studio playback controls.
+- Provider usage reports aggregate jobs and candidate groups by model, operation, and prompt template, with optional local pricing.
+- Lightweight Prompt A/B experiments generate multiple candidate groups from different prompt templates for manual comparison.
+- Release-check now covers candidate audition artifacts, usage reporting, and Prompt A/B smoke behavior.
+
+### Verified
+- `python -m pytest tests\test_candidate_groups.py tests\test_server_edits.py tests\test_server_auth.py tests\test_webui.py tests\test_release_check.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.4.1 - 2026-05-07
 
 ### Fixed

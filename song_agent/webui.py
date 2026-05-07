@@ -1781,14 +1781,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     async function renderProjectCandidates(project, versions, target) {
       const parentId = projectEditParentId || project.selected_version_id || project.final_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
       let groups = [];
+      let usage = null;
+      let experiments = [];
       try {
         const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups`);
         groups = data.groups || [];
+        const usageData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/usage/provider`);
+        usage = usageData;
+        const abData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/prompt-ab`);
+        experiments = abData.experiments || [];
       } catch (err) {
         target.innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
         return;
       }
-      target.innerHTML = projectCandidateControls(versions, parentId, groups);
+      target.innerHTML = projectCandidateControls(versions, parentId, groups, usage, experiments);
       const parentSelect = $("project-candidate-parent");
       if (parentSelect) {
         parentSelect.addEventListener("change", async () => {
@@ -1804,6 +1810,39 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           body: JSON.stringify(projectCandidatePayload()),
         });
         await renderProjectCandidates(project, versions, target);
+      });
+      bindAction("project-generate-candidates-ab", async () => {
+        const parent = $("project-candidate-parent").value;
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parent)}/edit-candidates/ab`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectCandidateABPayload()),
+        });
+        await renderProjectCandidates(project, versions, target);
+      });
+      target.querySelectorAll("[data-render-candidate-midi]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups/${encodeURIComponent(button.dataset.groupId)}/candidates/${encodeURIComponent(button.dataset.candidateId)}/render-midi`, { method: "POST" });
+          await renderProjectCandidates(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-render-candidate-audio]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups/${encodeURIComponent(button.dataset.groupId)}/candidates/${encodeURIComponent(button.dataset.candidateId)}/render-audio`, { method: "POST" });
+          await renderProjectCandidates(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-render-candidate-group-midi]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups/${encodeURIComponent(button.dataset.groupId)}/render-midi`, { method: "POST" });
+          await renderProjectCandidates(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-render-candidate-group-audio]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/candidate-groups/${encodeURIComponent(button.dataset.groupId)}/render-audio`, { method: "POST" });
+          await renderProjectCandidates(project, versions, target);
+        });
       });
       target.querySelectorAll("[data-apply-candidate-group]").forEach((button) => {
         button.addEventListener("click", async () => {
@@ -1829,7 +1868,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
     }
 
-    function projectCandidateControls(versions, parentId, groups) {
+    function projectCandidateControls(versions, parentId, groups, usage, experiments) {
       return `
         <div class="grid2">
           <label>Parent Version
@@ -1859,6 +1898,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button id="project-generate-candidates" type="button" ${parentId ? "" : "disabled"}>Generate Candidates</button>
           <span id="project-candidate-message" class="message"></span>
         </div>
+        <div class="grid2">
+          <label>Prompt A
+            <input id="project-candidate-template-a" value="provider-edit-candidates">
+          </label>
+          <label>Prompt B
+            <input id="project-candidate-template-b" value="provider-edit-candidates">
+          </label>
+        </div>
+        <div class="actions">
+          <button id="project-generate-candidates-ab" type="button" ${parentId ? "" : "disabled"}>Generate Prompt A/B</button>
+        </div>
+        ${projectCandidateUsageHtml(usage)}
+        ${projectPromptABHtml(experiments)}
         ${projectCandidateGroupsHtml(groups)}
       `;
     }
@@ -1869,6 +1921,51 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         candidate_count: Number($("project-candidate-count").value || 3),
         template_id: $("project-candidate-template").value.trim() || "provider-edit-candidates",
       };
+    }
+
+    function projectCandidateABPayload() {
+      return {
+        instruction: $("project-candidate-instruction").value.trim(),
+        candidate_count: Number($("project-candidate-count").value || 2),
+        template_ids: [
+          $("project-candidate-template-a").value.trim() || "provider-edit-candidates",
+          $("project-candidate-template-b").value.trim() || "provider-edit-candidates",
+        ],
+      };
+    }
+
+    function projectCandidateUsageHtml(usage) {
+      if (!usage) return "";
+      return `
+        <div class="summary-grid">
+          ${metric("Provider Calls", usage.total_calls ?? 0)}
+          ${metric("Total Tokens", usage.total_tokens ?? 0)}
+          ${metric("Prompt Tokens", usage.prompt_tokens ?? 0)}
+          ${metric("Completion Tokens", usage.completion_tokens ?? 0)}
+          ${metric("Estimated Cost", usage.estimated_cost == null ? "-" : `${usage.estimated_cost} ${usage.currency || ""}`)}
+          ${metric("Unpriced Calls", usage.unpriced_calls ?? 0)}
+        </div>
+        <pre>${escapeHtml(JSON.stringify({ by_model: usage.by_model, by_operation: usage.by_operation, by_template: usage.by_template }, null, 2))}</pre>
+      `;
+    }
+
+    function projectPromptABHtml(experiments) {
+      if (!experiments || !experiments.length) return `<div class="empty">Prompt A/B experiments will appear here.</div>`;
+      return `
+        <table>
+          <thead><tr><th>A/B</th><th>Templates</th><th>Groups</th><th>Status</th></tr></thead>
+          <tbody>
+            ${experiments.map((experiment) => `
+              <tr>
+                <td>${escapeHtml(experiment.ab_id)}</td>
+                <td>${escapeHtml((experiment.template_ids || []).join(" / "))}</td>
+                <td>${escapeHtml((experiment.group_ids || []).join(", "))}</td>
+                <td>${escapeHtml(experiment.status || "-")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
     }
 
     function projectCandidateGroupsHtml(groups) {
@@ -1882,6 +1979,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${metric("Candidates", (group.candidates || []).length)}
           </div>
           <div class="actions">
+            <button class="secondary" data-render-candidate-group-midi="${escapeHtml(group.group_id)}" data-group-id="${escapeHtml(group.group_id)}" type="button">Render Group MIDI</button>
+            <button class="secondary" data-render-candidate-group-audio="${escapeHtml(group.group_id)}" data-group-id="${escapeHtml(group.group_id)}" type="button">Render Group Audio</button>
             <button class="danger" data-delete-candidate-group="${escapeHtml(group.group_id)}" type="button">Delete Candidate Group</button>
           </div>
           <div class="candidate-grid">
@@ -1902,11 +2001,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${metric("Quality", scores.quality_overall ?? "-")}
             ${metric("Novelty", scores.novelty ?? "-")}
             ${metric("Status", candidate.status || "-")}
+            ${metric("MIDI", candidate.midi_status || "not_started")}
+            ${metric("WAV", candidate.audio_status || "not_started")}
           </div>
           <p>${escapeHtml(candidate.summary || "-")}</p>
           <div class="actions">
             <button class="secondary" data-apply-candidate-group="${escapeHtml(group.group_id)}" data-apply-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button" ${disabled ? "disabled" : ""}>Apply Candidate</button>
+            <button class="secondary" data-render-candidate-midi data-group-id="${escapeHtml(group.group_id)}" data-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button">Render MIDI</button>
+            ${candidate.midi_url ? `<a class="button-link secondary" href="${escapeHtml(candidate.midi_url)}">Download MIDI</a>` : ""}
+            <button class="secondary" data-render-candidate-audio data-group-id="${escapeHtml(group.group_id)}" data-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button">Render Audio</button>
+            ${candidate.audio_url ? `<a class="button-link secondary" href="${escapeHtml(candidate.audio_url)}">Download WAV</a>` : ""}
           </div>
+          ${candidate.audio_url ? `<audio class="audio-player" controls src="${escapeHtml(candidate.audio_url)}"></audio>` : ""}
+          ${candidate.audio_error ? `<div class="empty error">${escapeHtml(candidate.audio_error)}</div>` : ""}
           <pre>${escapeHtml(JSON.stringify({ patch: candidate.patch, scores }, null, 2))}</pre>
         </div>
       `;

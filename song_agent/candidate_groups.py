@@ -10,6 +10,9 @@ from typing import Any
 from song_agent.candidate_scoring import group_status_for_candidates, rank_candidate_summaries
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
+from song_agent.renderers.audio import RendererConfig, RendererError, render_audio
+from song_agent.renderers.midi import render_midi
+from song_agent.schemas.song import SongPlan
 
 
 GROUP_ID_PATTERN = re.compile(r"^cg-[0-9]{3,5}$")
@@ -33,6 +36,14 @@ class CandidateSummary:
     quality: dict[str, Any] | None = None
     provider_usage: dict[str, Any] = field(default_factory=dict)
     provider_request_id: str | None = None
+    midi_status: str = "not_started"
+    midi_error: str | None = None
+    midi_size_bytes: int = 0
+    midi_url: str | None = None
+    audio_status: str = "not_started"
+    audio_error: str | None = None
+    audio_size_bytes: int = 0
+    audio_url: str | None = None
     error: str | None = None
     created_at: str = ""
 
@@ -55,6 +66,14 @@ class CandidateSummary:
             quality=data.get("quality") if isinstance(data.get("quality"), dict) else None,
             provider_usage=dict(data.get("provider_usage") or {}),
             provider_request_id=None if data.get("provider_request_id") is None else str(data.get("provider_request_id")),
+            midi_status=str(data.get("midi_status") or "not_started"),
+            midi_error=None if data.get("midi_error") is None else str(data.get("midi_error")),
+            midi_size_bytes=int(data.get("midi_size_bytes") or 0),
+            midi_url=None if data.get("midi_url") is None else str(data.get("midi_url")),
+            audio_status=str(data.get("audio_status") or "not_started"),
+            audio_error=None if data.get("audio_error") is None else str(data.get("audio_error")),
+            audio_size_bytes=int(data.get("audio_size_bytes") or 0),
+            audio_url=None if data.get("audio_url") is None else str(data.get("audio_url")),
             error=None if data.get("error") is None else str(data.get("error")),
             created_at=str(data.get("created_at") or ""),
         )
@@ -289,31 +308,105 @@ class CandidateGroupStore:
             if candidate_plan is not None:
                 write_json(candidate_dir / "candidate-song-plan.json", candidate_plan)
             candidates = [*current.candidates, candidate]
-            status_value = group_status_for_candidates([item.to_dict() for item in candidates])
-            ranking = rank_candidate_summaries([item.to_dict() for item in candidates])
-            updated = CandidateGroup(
-                group_id=current.group_id,
-                project_id=current.project_id,
-                parent_version_id=current.parent_version_id,
-                parent_job_id=current.parent_job_id,
-                instruction=current.instruction,
-                template_id=current.template_id,
-                candidate_count=current.candidate_count,
-                status=status_value,
-                created_at=current.created_at,
-                updated_at=now_iso(),
-                source=dict(current.source),
-                candidates=candidates,
-                ranking=ranking,
-                selected_candidate_id=current.selected_candidate_id,
-                applied_version_id=current.applied_version_id,
-                applied_job_id=current.applied_job_id,
-                provider_usage=dict(current.provider_usage),
-                provider_request_id=current.provider_request_id,
-                error=current.error,
-            )
-            self.write_group(updated)
+            self._write_candidates(current, candidates)
             return candidate
+
+    def render_candidate_midi(self, group_id: str, candidate_id: str) -> CandidateSummary:
+        candidate_dir = self.candidate_dir(group_id, candidate_id)
+        plan = SongPlan.from_dict(self.read_candidate_plan(group_id, candidate_id))
+        midi_path = candidate_midi_path(candidate_dir)
+        report = {
+            "candidate_id": candidate_id,
+            "group_id": group_id,
+            "status": "completed",
+            "rendered_at": now_iso(),
+            "midi_path": str(midi_path),
+        }
+        candidate = self._candidate_by_id(group_id, candidate_id)
+        try:
+            render_midi(plan, midi_path)
+            report["midi_size_bytes"] = midi_path.stat().st_size
+            updated = CandidateSummary.from_dict(
+                {
+                    **candidate.to_dict(),
+                    "midi_status": "completed",
+                    "midi_error": None,
+                    "midi_size_bytes": midi_path.stat().st_size,
+                    "midi_url": candidate_midi_url(self.project_dir.name, group_id, candidate_id),
+                }
+            )
+        except Exception as exc:
+            report["status"] = "failed"
+            report["error"] = str(exc)
+            updated = CandidateSummary.from_dict(
+                {
+                    **candidate.to_dict(),
+                    "midi_status": "failed",
+                    "midi_error": str(exc),
+                    "midi_size_bytes": 0,
+                    "midi_url": None,
+                }
+            )
+        write_json(candidate_dir / "render-report.json", report)
+        return self._replace_candidate(group_id, updated)
+
+    def render_group_midi(self, group_id: str) -> CandidateGroup:
+        group = self.read_group(group_id)
+        for candidate in group.candidates:
+            if candidate.status == "ready":
+                self.render_candidate_midi(group_id, candidate.candidate_id)
+        return self.read_group(group_id)
+
+    def render_candidate_audio(self, group_id: str, candidate_id: str, config: RendererConfig) -> CandidateSummary:
+        candidate_dir = self.candidate_dir(group_id, candidate_id)
+        midi_path = candidate_midi_path(candidate_dir)
+        if not midi_path.exists():
+            self.render_candidate_midi(group_id, candidate_id)
+        wav_path = candidate_audio_path(candidate_dir)
+        candidate = self._candidate_by_id(group_id, candidate_id)
+        report = {
+            "candidate_id": candidate_id,
+            "group_id": group_id,
+            "status": "completed",
+            "rendered_at": now_iso(),
+            "audio_path": str(wav_path),
+        }
+        try:
+            render_audio(midi_path, wav_path, config)
+            report["audio_size_bytes"] = wav_path.stat().st_size
+            updated = CandidateSummary.from_dict(
+                {
+                    **candidate.to_dict(),
+                    "audio_status": "completed",
+                    "audio_error": None,
+                    "audio_size_bytes": wav_path.stat().st_size,
+                    "audio_url": candidate_audio_url(self.project_dir.name, group_id, candidate_id),
+                    "midi_status": "completed",
+                    "midi_size_bytes": midi_path.stat().st_size,
+                    "midi_url": candidate_midi_url(self.project_dir.name, group_id, candidate_id),
+                }
+            )
+        except RendererError as exc:
+            report["status"] = "failed"
+            report["error"] = str(exc)
+            updated = CandidateSummary.from_dict(
+                {
+                    **candidate.to_dict(),
+                    "audio_status": "failed",
+                    "audio_error": str(exc),
+                    "audio_size_bytes": 0,
+                    "audio_url": None,
+                }
+            )
+        write_json(candidate_dir / "audio-render-report.json", report)
+        return self._replace_candidate(group_id, updated)
+
+    def render_group_audio(self, group_id: str, config: RendererConfig) -> CandidateGroup:
+        group = self.read_group(group_id)
+        for candidate in group.candidates:
+            if candidate.status == "ready":
+                self.render_candidate_audio(group_id, candidate.candidate_id, config)
+        return self.read_group(group_id)
 
     def mark_applied(self, group_id: str, candidate_id: str, *, version_id: str, job_id: str) -> CandidateGroup:
         with self.lock:
@@ -374,6 +467,58 @@ class CandidateGroupStore:
             raise FileNotFoundError(candidate_id)
         return read_json(candidate_dir / "candidate-song-plan.json")
 
+    def _candidate_by_id(self, group_id: str, candidate_id: str) -> CandidateSummary:
+        group = self.read_group(group_id)
+        for candidate in group.candidates:
+            if candidate.candidate_id == candidate_id:
+                return candidate
+        raise FileNotFoundError(candidate_id)
+
+    def _replace_candidate(self, group_id: str, updated_candidate: CandidateSummary) -> CandidateSummary:
+        group = self.read_group(group_id)
+        replaced = False
+        candidates = []
+        for candidate in group.candidates:
+            if candidate.candidate_id == updated_candidate.candidate_id:
+                candidates.append(updated_candidate)
+                replaced = True
+            else:
+                candidates.append(candidate)
+        if not replaced:
+            raise FileNotFoundError(updated_candidate.candidate_id)
+        self._write_candidate_file(group_id, updated_candidate)
+        self._write_candidates(group, candidates)
+        return updated_candidate
+
+    def _write_candidate_file(self, group_id: str, candidate: CandidateSummary) -> None:
+        write_json(self.candidate_dir(group_id, candidate.candidate_id) / "candidate.json", candidate.to_dict())
+
+    def _write_candidates(self, group: CandidateGroup, candidates: list[CandidateSummary]) -> CandidateGroup:
+        status_value = group.status if group.status in {"applied", "deleted"} else group_status_for_candidates([item.to_dict() for item in candidates])
+        ranking = rank_candidate_summaries([item.to_dict() for item in candidates])
+        updated = CandidateGroup(
+            group_id=group.group_id,
+            project_id=group.project_id,
+            parent_version_id=group.parent_version_id,
+            parent_job_id=group.parent_job_id,
+            instruction=group.instruction,
+            template_id=group.template_id,
+            candidate_count=group.candidate_count,
+            status=status_value,
+            created_at=group.created_at,
+            updated_at=now_iso(),
+            source=dict(group.source),
+            candidates=candidates,
+            ranking=ranking,
+            selected_candidate_id=group.selected_candidate_id,
+            applied_version_id=group.applied_version_id,
+            applied_job_id=group.applied_job_id,
+            provider_usage=dict(group.provider_usage),
+            provider_request_id=group.provider_request_id,
+            error=group.error,
+        )
+        return self.write_group(updated)
+
     def group_dir(self, group_id: str) -> Path:
         group_id = validate_group_id(group_id)
         base = self.root.resolve()
@@ -427,6 +572,22 @@ def candidate_group_stale(group: CandidateGroup, source_hash: str) -> bool:
     return bool(expected and expected != source_hash)
 
 
+def candidate_midi_path(candidate_dir: Path) -> Path:
+    return _safe_artifact_path(candidate_dir, "song.mid")
+
+
+def candidate_audio_path(candidate_dir: Path) -> Path:
+    return _safe_artifact_path(candidate_dir, "song.wav")
+
+
+def candidate_midi_url(project_id: str, group_id: str, candidate_id: str) -> str:
+    return f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/midi"
+
+
+def candidate_audio_url(project_id: str, group_id: str, candidate_id: str) -> str:
+    return f"/api/projects/{project_id}/candidate-groups/{group_id}/candidates/{candidate_id}/audio"
+
+
 def _candidate_count(value: Any) -> int:
     count = int(value or MIN_CANDIDATE_COUNT)
     if count < MIN_CANDIDATE_COUNT or count > MAX_CANDIDATE_COUNT:
@@ -444,3 +605,13 @@ def _optional_int(value: Any) -> int | None:
     if value is None or str(value).strip() == "":
         return None
     return int(value)
+
+
+def _safe_artifact_path(candidate_dir: Path, filename: str) -> Path:
+    base = candidate_dir.resolve()
+    target = (base / filename).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError as exc:
+        raise ValueError("Refusing to operate outside candidate directory.") from exc
+    return target

@@ -217,6 +217,14 @@ def test_webui_contains_project_workspace_controls():
     assert "Candidates" in html
     assert "Candidate Count" in html
     assert "Generate Candidates" in html
+    assert "Generate Prompt A/B" in html
+    assert "Provider Calls" in html
+    assert "Render Group MIDI" in html
+    assert "Render Group Audio" in html
+    assert "Render MIDI" in html
+    assert "Download MIDI" in html
+    assert "Render Audio" in html
+    assert "Download WAV" in html
     assert "Apply Candidate" in html
     assert "Delete Candidate Group" in html
     assert "Edit Preset" in html
@@ -250,7 +258,14 @@ def test_webui_calls_project_apis():
     assert "/versions/${encodeURIComponent(parent)}/edit" in html
     assert "/edit-preview" in html
     assert "/edit-candidates" in html
+    assert "/edit-candidates/ab" in html
     assert "/candidate-groups" in html
+    assert "/usage/provider" in html
+    assert "/prompt-ab" in html
+    assert "/render-midi" in html
+    assert "/render-audio" in html
+    assert "/midi" in html
+    assert "/audio" in html
     assert "/apply" in html
     assert "/edit-targets" in html
     assert "/api/edit-presets" in html
