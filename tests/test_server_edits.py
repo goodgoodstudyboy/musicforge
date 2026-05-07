@@ -7,6 +7,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 from song_agent.server import create_server
+import song_agent.provider_edits as provider_edits_module
 
 
 def start_test_server():
@@ -428,3 +429,109 @@ def test_provider_edit_preview_delete_does_not_delete_versions(tmp_path, monkeyp
     assert deleted["deleted"] is True
     assert detail_status == 200
     assert len(detail["versions"]) == 1
+
+
+def test_provider_edit_apply_reuses_preview_usage(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    original_generate = provider_edits_module.generate_provider_edit_patch
+
+    def fake_generate(**kwargs):
+        patch, snapshot = original_generate(**kwargs)
+        snapshot["usage"] = {"prompt_tokens": 13, "completion_tokens": 5, "total_tokens": 18}
+        snapshot["request_id"] = "req-preview-1"
+        return patch, snapshot
+
+    monkeypatch.setattr("song_agent.server.generate_provider_edit_patch", fake_generate)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main"})
+        project_id, _parent_job = create_project_version(server)
+        preview_status, preview_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview",
+            {"instruction": "Make the final chorus more energetic.", "template_id": "provider-edit-intent"},
+        )
+        preview_id = preview_data["preview"]["preview_id"]
+        apply_status, applied = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview/{preview_id}/apply",
+            {"name": "Provider usage child"},
+        )
+        edit_job = wait_for_job(server, applied["job"]["job_id"])
+        usage_status, usage = request_json(server, "GET", f"/api/jobs/{edit_job['job_id']}/provider-usage")
+    finally:
+        stop_test_server(server)
+
+    assert preview_status == 201
+    assert preview_data["preview"]["provider_usage"]["total_tokens"] == 18
+    assert preview_data["preview"]["provider_request_id"] == "req-preview-1"
+    assert apply_status == 202
+    assert usage_status == 200
+    assert usage["usage"]["prompt_tokens"] == 13
+    assert usage["usage"]["completion_tokens"] == 5
+    assert usage["usage"]["total_tokens"] == 18
+    assert usage["usage"]["request_id"] == "req-preview-1"
+
+
+def test_provider_edit_preview_rejects_stale_and_duplicate_apply(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main"})
+        project_id, parent_job = create_project_version(server)
+        preview_status, preview_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview",
+            {"instruction": "Make the final chorus more energetic.", "template_id": "provider-edit-intent"},
+        )
+        stale_preview_id = preview_data["preview"]["preview_id"]
+        parent_plan_path = Path(parent_job["output_dir"]) / "data" / "song-plan.json"
+        parent_plan = json.loads(parent_plan_path.read_text(encoding="utf-8"))
+        parent_plan["tempo_bpm"] = int(parent_plan["tempo_bpm"]) + 1
+        parent_plan_path.write_text(json.dumps(parent_plan), encoding="utf-8")
+        stale_status, stale = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview/{stale_preview_id}/apply",
+            {"name": "stale child"},
+        )
+        detail_after_stale_status, detail_after_stale = request_json(server, "GET", f"/api/projects/{project_id}")
+        parent_plan["tempo_bpm"] = int(parent_plan["tempo_bpm"]) - 1
+        parent_plan_path.write_text(json.dumps(parent_plan), encoding="utf-8")
+        _fresh_status, fresh_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview",
+            {"instruction": "Make the final chorus more energetic.", "template_id": "provider-edit-intent"},
+        )
+        fresh_preview_id = fresh_data["preview"]["preview_id"]
+        first_apply_status, first_apply = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview/{fresh_preview_id}/apply",
+            {"name": "fresh child"},
+        )
+        wait_for_job(server, first_apply["job"]["job_id"])
+        duplicate_status, duplicate = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/edit-preview/{fresh_preview_id}/apply",
+            {"name": "duplicate child"},
+        )
+        final_detail_status, final_detail = request_json(server, "GET", f"/api/projects/{project_id}")
+    finally:
+        stop_test_server(server)
+
+    assert preview_status == 201
+    assert stale_status == 409
+    assert "stale" in stale["error"]
+    assert detail_after_stale_status == 200
+    assert len(detail_after_stale["versions"]) == 1
+    assert first_apply_status == 202
+    assert duplicate_status == 409
+    assert duplicate["error"] == "Provider edit preview has already been applied."
+    assert final_detail_status == 200
+    assert len(final_detail["versions"]) == 2

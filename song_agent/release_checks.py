@@ -19,7 +19,13 @@ from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.projectio import write_json
 from song_agent.projects import ProjectStore
 from song_agent.provider import ProviderConfig
-from song_agent.provider_edits import generate_provider_edit_patch, apply_provider_edit_patch
+from song_agent.provider_edits import (
+    create_provider_edit_preview,
+    generate_provider_edit_patch,
+    apply_provider_edit_patch,
+    mark_provider_edit_preview_applied,
+    preview_stale,
+)
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
 
@@ -479,6 +485,23 @@ def _v13_provider_edit_smoke(root: Path) -> tuple[bool, str]:
                 template=template,
                 config=ProviderConfig(wire_api="mock", model="mock-main", api_key="sk-release-secret"),
             )
+            snapshot["usage"] = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+            snapshot["request_id"] = "req-release-smoke"
+            preview = create_provider_edit_preview(
+                project_dir=store.project_dir(document.state.project_id),
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v13-parent",
+                parent_plan=parent_plan,
+                instruction="Make the final chorus more energetic but keep lyrics.",
+                template=template,
+                patch=patch,
+                now="2026-05-07T00:00:00+00:00",
+                provider_usage=snapshot["usage"],
+                provider_request_id=snapshot["request_id"],
+            )
+            stale_plan = deterministic_compose(SongRequest(title="Different Parent", language="en", style="pop", theme="changed"))
+            stale_guard = preview_stale(preview, stale_plan)
             result = apply_provider_edit_patch(parent_plan, patch)
             child_dir = base / "runs" / "v13-child"
             write_json(child_dir / "data" / "song-plan.json", result.plan.to_dict())
@@ -513,7 +536,10 @@ def _v13_provider_edit_smoke(root: Path) -> tuple[bool, str]:
                     "model": "mock-main",
                     "operation": "provider_edit_apply",
                     "template_id": template.template_id,
-                    "total_tokens": 0,
+                    "prompt_tokens": preview.provider_usage["prompt_tokens"],
+                    "completion_tokens": preview.provider_usage["completion_tokens"],
+                    "total_tokens": preview.provider_usage["total_tokens"],
+                    "request_id": preview.provider_request_id,
                 },
             )
             render_midi(result.plan, child_dir / "renders" / "song.mid")
@@ -528,14 +554,23 @@ def _v13_provider_edit_smoke(root: Path) -> tuple[bool, str]:
                 variant_type="provider_edit",
                 change_summary=patch.summary,
             )
+            applied_preview = mark_provider_edit_preview_applied(
+                store.project_dir(document.state.project_id),
+                preview.preview_id,
+                "v13-child",
+                "v002",
+            )
             compare = compare_project_versions(document, "v001", "v002")
             serialized = str(compare) + str(snapshot)
             ok = (
                 compare["right"]["edit"]["provider_mode"] == "provider"
                 and compare["right"]["edit"]["provider_patch"]["operation_count"] >= 1
+                and stale_guard
+                and applied_preview.status == "applied"
+                and preview.provider_usage["total_tokens"] == 15
                 and "sk-release-secret" not in serialized
             )
-            return ok, f"template={template.template_id}, operations={len(patch.operations)}, compare={compare['summary']['recommendation']}"
+            return ok, f"template={template.template_id}, operations={len(patch.operations)}, usage={preview.provider_usage['total_tokens']}, stale_guard={stale_guard}, compare={compare['summary']['recommendation']}"
     except Exception as exc:
         return False, str(exc)
 

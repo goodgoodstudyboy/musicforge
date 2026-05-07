@@ -34,6 +34,13 @@ class ProviderOutputError(ProviderError):
 
 
 @dataclass(frozen=True)
+class ProviderEditResponse:
+    data: dict[str, Any]
+    usage: dict[str, Any] | None = None
+    request_id: str | None = None
+
+
+@dataclass(frozen=True)
 class ProviderConfig:
     base_url: str = ""
     wire_api: str = "openai_chat_completions"

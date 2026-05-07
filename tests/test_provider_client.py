@@ -6,6 +6,7 @@ import pytest
 
 from song_agent.provider import (
     ProviderConfig,
+    ProviderEditResponse,
     ProviderOutputError,
     ProviderRequestError,
     ProviderResponseError,
@@ -105,6 +106,7 @@ def test_openai_compatible_client_generates_edit_patch_json():
     captured = {}
     parent = SongPlan.from_dict(MockProviderClient().generate_song_plan_json(request(), ProviderConfig()))
     response = {
+        "id": "chatcmpl-test",
         "choices": [
             {
                 "message": {
@@ -118,7 +120,8 @@ def test_openai_compatible_client_generates_edit_patch_json():
                     )
                 }
             }
-        ]
+        ],
+        "usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18},
     }
 
     def opener(req, timeout):
@@ -132,7 +135,10 @@ def test_openai_compatible_client_generates_edit_patch_json():
         "Return patch JSON.",
     )
 
-    assert data["operations"][0]["op"] == "set_section_energy"
+    assert isinstance(data, ProviderEditResponse)
+    assert data.data["operations"][0]["op"] == "set_section_energy"
+    assert data.usage == {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18}
+    assert data.request_id == "chatcmpl-test"
     assert captured["body"]["messages"][0]["content"] == "Return patch JSON."
     assert "sk-example-secret" not in json.dumps(captured["body"])
 

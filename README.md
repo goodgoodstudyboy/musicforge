@@ -260,8 +260,9 @@ under:
 Apply Preview creates the official child Project version. Preview alone does
 not modify the parent version, selected version, final version, or version
 list. Provider usage records are written to `runs/<job-id>/data/provider-usage.json`
-after apply; they contain model, operation, template, status, and token fields,
-but no API key or raw credential.
+after apply; they contain model, operation, template, status, request id, and
+token counts when the provider returns usage data, but no API key or raw
+credential.
 
 Prompt templates are managed from Studio's Prompt Templates panel and stored in
 `.musicforge/prompt-templates.json`, which is ignored by Git. Built-in provider

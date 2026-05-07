@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from song_agent.provider import (
     ProviderConfig,
+    ProviderEditResponse,
     ProviderRequestError,
     ProviderResponseError,
 )
@@ -122,7 +123,11 @@ class OpenAICompatibleClient:
             raise ProviderResponseError("Provider edit response content was not valid JSON.") from exc
         if not isinstance(data, dict):
             raise ProviderResponseError("Provider edit response content must be a JSON object.")
-        return data
+        return ProviderEditResponse(
+            data=data,
+            usage=_usage_dict(response.get("usage")),
+            request_id=_request_id(response),
+        )
 
     def _request(
         self,
@@ -191,6 +196,18 @@ def _extract_content(response: dict[str, Any]) -> str:
     if not isinstance(content, str) or not content.strip():
         raise ProviderResponseError("Provider response message content is empty.")
     return content
+
+
+def _usage_dict(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _request_id(response: dict[str, Any]) -> str | None:
+    for key in ("id", "request_id"):
+        value = response.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return None
 
 
 def _join_url(base_url: str, path: str) -> str:

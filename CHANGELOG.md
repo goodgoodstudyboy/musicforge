@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.3.1 - 2026-05-07
+
+### Fixed
+- Removed a duplicate Project edit-preview route branch from the Studio server router.
+- Provider edit previews now record a parent song-plan source hash and reject stale applies after the parent version changes.
+- Provider edit previews can no longer be applied more than once.
+- OpenAI-compatible provider edit responses now preserve returned `usage` token counts and request ids for preview/apply audit records.
+- Provider edit apply usage now reuses preview usage data instead of always writing zero-token placeholders when the provider supplies usage.
+
+### Verified
+- `python -m pytest tests\test_provider_client.py tests\test_provider_edits.py tests\test_server_edits.py tests\test_server_auth.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.3.0 - 2026-05-07
 
 ### Added

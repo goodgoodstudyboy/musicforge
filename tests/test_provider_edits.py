@@ -14,7 +14,9 @@ from song_agent.provider_edits import (
     generate_provider_edit_patch,
     preview_candidate_plan,
     preview_patch,
+    preview_stale,
     read_provider_edit_preview,
+    song_plan_hash,
 )
 from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.schemas.song import SongRequest
@@ -127,6 +129,8 @@ def test_provider_edit_preview_files_are_safe_and_deletable(tmp_path: Path) -> N
     )
 
     assert preview.preview_id == "preview-001"
+    assert preview.source["song_plan_sha256"] == song_plan_hash(plan)
+    assert preview_stale(preview, plan) is False
     assert read_provider_edit_preview(project_dir, "preview-001").status == "ready"
     assert preview_candidate_plan(project_dir, "preview-001").title == plan.title
     assert preview_patch(project_dir, "preview-001").summary == "lift chorus"

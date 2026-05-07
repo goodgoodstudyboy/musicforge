@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -15,7 +16,7 @@ from song_agent.edits import (
 )
 from song_agent.music_quality import attach_quality
 from song_agent.prompt_templates import PromptTemplate, render_prompt_template
-from song_agent.provider import ProviderConfig, ProviderConfigError, ProviderOutputError
+from song_agent.provider import ProviderConfig, ProviderConfigError, ProviderEditResponse, ProviderOutputError
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.quality import validate_song_plan
@@ -145,8 +146,11 @@ class ProviderEditPreview:
     created_at: str
     patch: dict[str, Any]
     summary: dict[str, Any]
+    source: dict[str, Any] = field(default_factory=dict)
     quality: dict[str, Any] | None = None
     validator: dict[str, Any] = field(default_factory=dict)
+    provider_usage: dict[str, Any] = field(default_factory=dict)
+    provider_request_id: str | None = None
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -204,9 +208,10 @@ def generate_provider_edit_patch(
     client = client or _client_for_config(config)
     try:
         if config.wire_api == "mock":
-            data = client.generate_edit_patch_json(parent_plan, instruction, config, prompt=prompt)
+            response = client.generate_edit_patch_json(parent_plan, instruction, config, prompt=prompt)
         else:
-            data = client.generate_edit_patch_json(parent_plan, instruction, config, prompt=prompt)
+            response = client.generate_edit_patch_json(parent_plan, instruction, config, prompt=prompt)
+        data, usage, request_id = _provider_edit_response_parts(response)
         patch = ProviderEditPatch.from_dict(data)
         provider_patch_to_intents(patch, parent_plan)
     except ProviderEditError as exc:
@@ -220,6 +225,8 @@ def generate_provider_edit_patch(
         "model": config.model,
         "template_id": template.template_id,
         "api_key_set": bool(config.api_key),
+        "usage": usage,
+        "request_id": request_id,
     }
     return patch, snapshot
 
@@ -235,6 +242,8 @@ def create_provider_edit_preview(
     template: PromptTemplate,
     patch: ProviderEditPatch,
     now: str | None = None,
+    provider_usage: dict[str, Any] | None = None,
+    provider_request_id: str | None = None,
 ) -> ProviderEditPreview:
     now = now or now_iso()
     preview_root = project_dir / "edit-previews"
@@ -268,8 +277,15 @@ def create_provider_edit_preview(
         created_at=now,
         patch=patch.to_dict(),
         summary=result.summary,
+        source={
+            "parent_version_id": parent_version_id,
+            "parent_job_id": parent_job_id,
+            "song_plan_sha256": song_plan_hash(parent_plan),
+        },
         quality=quality,
         validator=validator,
+        provider_usage=dict(provider_usage or {}),
+        provider_request_id=provider_request_id,
     )
     write_json(preview_dir / "preview.json", preview.to_dict())
     return preview
@@ -289,8 +305,11 @@ def read_provider_edit_preview(project_dir: Path, preview_id: str) -> ProviderEd
         created_at=str(data.get("created_at") or ""),
         patch=dict(data.get("patch") or {}),
         summary=dict(data.get("summary") or {}),
+        source=dict(data.get("source") or {}),
         quality=data.get("quality") if isinstance(data.get("quality"), dict) else None,
         validator=dict(data.get("validator") or {}),
+        provider_usage=dict(data.get("provider_usage") or {}),
+        provider_request_id=None if data.get("provider_request_id") is None else str(data.get("provider_request_id")),
         error=None if data.get("error") is None else str(data.get("error")),
     )
 
@@ -326,6 +345,16 @@ def preview_candidate_plan(project_dir: Path, preview_id: str) -> SongPlan:
 def preview_patch(project_dir: Path, preview_id: str) -> ProviderEditPatch:
     preview_dir = _safe_preview_dir(project_dir, preview_id)
     return ProviderEditPatch.from_dict(read_json(preview_dir / "patch.json"))
+
+
+def song_plan_hash(plan: SongPlan) -> str:
+    payload = json.dumps(plan.to_dict(), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def preview_stale(preview: ProviderEditPreview, parent_plan: SongPlan) -> bool:
+    expected = str(preview.source.get("song_plan_sha256") or "")
+    return bool(expected and expected != song_plan_hash(parent_plan))
 
 
 def _operation_to_intent(operation: ProviderEditOperation) -> EditIntent:
@@ -415,6 +444,18 @@ def _client_for_config(config: ProviderConfig) -> Any:
 
         return OpenAICompatibleClient()
     raise ProviderConfigError(f"Unsupported provider wire_api: {config.wire_api}.")
+
+
+def _provider_edit_response_parts(response: Any) -> tuple[dict[str, Any], dict[str, Any], str | None]:
+    if isinstance(response, ProviderEditResponse):
+        return response.data, dict(response.usage or {}), response.request_id
+    if isinstance(response, dict) and "data" in response and isinstance(response.get("data"), dict):
+        usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+        request_id = response.get("request_id")
+        return response["data"], dict(usage), None if request_id is None else str(request_id)
+    if isinstance(response, dict):
+        return response, {}, None
+    raise ProviderEditError("provider edit response must be a JSON object.")
 
 
 def _scan_blocked_fields(value: Any) -> None:

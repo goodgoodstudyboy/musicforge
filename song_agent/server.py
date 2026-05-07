@@ -54,6 +54,7 @@ from song_agent.provider_edits import (
     mark_provider_edit_preview_applied,
     preview_candidate_plan,
     preview_patch,
+    preview_stale,
     read_provider_edit_preview,
 )
 from song_agent.projects import ProjectStore
@@ -2443,17 +2444,6 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
 
-        provider_preview_tail = _match_project_edit_preview_tail(tail)
-        if provider_preview_tail is not None:
-            parent_version_id, preview_id, action = provider_preview_tail
-            if action == "create":
-                self._handle_project_edit_preview(method, project_id, parent_version_id)
-            elif action == "apply":
-                self._handle_project_edit_preview_apply(method, project_id, parent_version_id, preview_id)
-            elif action == "delete":
-                self._handle_project_edit_preview_delete(method, project_id, parent_version_id, preview_id)
-            return
-
         if tail == "/provider-usage":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2924,6 +2914,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 template=template,
                 config=config,
             )
+            provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
             preview = create_provider_edit_preview(
                 project_dir=self.project_store.project_dir(project_id),
                 project_id=project_id,
@@ -2934,6 +2925,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 template=template,
                 patch=patch,
                 now=_utc_now(),
+                provider_usage=provider_usage,
+                provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
             )
             usage = _provider_usage_record(
                 config_snapshot=provider_snapshot,
@@ -2941,6 +2934,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 template_id=template.template_id,
                 started_at=preview.created_at,
                 status="completed",
+                provider_usage=provider_usage,
+                request_id=provider_snapshot.get("request_id"),
             )
             write_json(
                 self.project_store.project_dir(project_id) / "edit-previews" / preview.preview_id / "provider-usage.json",
@@ -2974,6 +2969,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if preview.parent_version_id != parent.version_id:
                 self._send_error(HTTPStatus.CONFLICT, "Preview does not belong to this parent version.")
                 return
+            if preview.status == "applied":
+                self._send_error(HTTPStatus.CONFLICT, "Provider edit preview has already been applied.")
+                return
+            if preview_stale(preview, parent_plan):
+                self._send_error(HTTPStatus.CONFLICT, "Provider edit preview is stale because the parent song-plan.json has changed.")
+                return
             patch = preview_patch(self.project_store.project_dir(project_id), preview_id)
             candidate = preview_candidate_plan(self.project_store.project_dir(project_id), preview_id)
             candidate.validate()
@@ -2995,6 +2996,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 template_id=preview.template_id,
                 started_at=_utc_now(),
                 status="queued",
+                provider_usage=preview.provider_usage,
+                request_id=preview.provider_request_id,
             )
             job = self.store.create_edit_job(
                 project_id=project_id,
@@ -3804,7 +3807,13 @@ def _provider_usage_record(
     template_id: str,
     started_at: str,
     status: str,
+    provider_usage: dict[str, Any] | None = None,
+    request_id: Any = None,
 ) -> dict[str, Any]:
+    provider_usage = provider_usage or {}
+    prompt_tokens = _usage_int(provider_usage, "prompt_tokens")
+    completion_tokens = _usage_int(provider_usage, "completion_tokens")
+    total_tokens = _usage_int(provider_usage, "total_tokens") or prompt_tokens + completion_tokens
     return {
         "provider_type": config_snapshot.get("wire_api") or "unknown",
         "model": config_snapshot.get("model") or "",
@@ -3813,13 +3822,23 @@ def _provider_usage_record(
         "started_at": started_at,
         "completed_at": _utc_now() if status != "queued" else None,
         "latency_ms": None,
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-        "total_tokens": 0,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
         "estimated_cost": None,
-        "request_id": None,
+        "request_id": None if request_id is None else str(request_id),
         "status": status,
     }
+
+
+def _usage_int(usage: dict[str, Any], field_name: str) -> int:
+    value = usage.get(field_name)
+    if value is None:
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _audio_report(audio_path: Path) -> dict[str, Any]:
