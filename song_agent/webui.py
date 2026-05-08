@@ -969,6 +969,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let projectEditorState = null;
     let projectEditorPatch = [];
     let projectEditorPreview = null;
+    let projectEditorPreviewHistory = [];
     let editPresets = [];
     let promptTemplates = [];
     let providerEditPreview = null;
@@ -2703,6 +2704,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await renderProjectEditor(project, versions, target);
         });
       }
+      bindAction("project-editor-load-history", async () => {
+        await loadProjectEditorPreviewHistory(project.project_id);
+      });
+      bindAction("project-editor-cleanup-history", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/editor-previews/cleanup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ delete_unapplied_older_than_days: 7, keep_latest: 20 }),
+        });
+        await loadProjectEditorPreviewHistory(project.project_id);
+      });
       bindAction("project-editor-load", async () => {
         await loadProjectEditorState(project.project_id, $("project-editor-parent").value);
       });
@@ -2749,6 +2761,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadProjects();
       });
       if (parentId) await loadProjectEditorState(project.project_id, parentId);
+      await loadProjectEditorPreviewHistory(project.project_id);
     }
 
     function projectEditorShell(versions, parentId) {
@@ -2774,10 +2787,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="project-editor-clear" type="button">Clear Patch</button>
           <button id="project-editor-preview" type="button" disabled>Preview</button>
           <button id="project-editor-apply" type="button" disabled>Apply as Version</button>
+          <button class="secondary" id="project-editor-load-history" type="button">Preview History</button>
+          <button class="secondary" id="project-editor-cleanup-history" type="button">Cleanup Previews</button>
           <span id="project-editor-message" class="message"></span>
         </div>
         <div id="project-editor-state"><div class="empty">Select a version to open the editor.</div></div>
         <div id="project-editor-preview-result"><div class="empty">Preview result will appear here.</div></div>
+        <div id="project-editor-history"><div class="empty">Preview history will appear here.</div></div>
       `;
     }
 
@@ -2794,6 +2810,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const target = $("project-editor-state");
       if (!target || !projectEditorState) return;
       const sectionOptions = projectEditorState.sections.map((section) => `<option value="${escapeHtml(section.section_id)}">${escapeHtml(section.name)} · bar ${escapeHtml(section.start_bar)}</option>`).join("");
+      const afterSectionOptions = `<option value="">start/end</option>${sectionOptions}`;
       const trackOptions = projectEditorState.tracks.map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.name)} · ${escapeHtml(track.note_count)}</option>`).join("");
       const firstTrack = projectEditorState.tracks[0] || { notes: [] };
       target.innerHTML = `
@@ -2825,7 +2842,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         <div class="grid2">
           <section>
-            <h3>Section Patch</h3>
+            <h3>Section Fields</h3>
             <label>Section <select id="project-editor-section">${sectionOptions}</select></label>
             <label>Chords <input id="project-editor-chords" placeholder="Cmaj7, G7, Am7, Fmaj7"></label>
             <label>Lyrics <textarea id="project-editor-lyrics"></textarea></label>
@@ -2835,11 +2852,47 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             </div>
           </section>
           <section>
-            <h3>Track Patch</h3>
+            <h3>Track Fields</h3>
             <label>Track <select id="project-editor-track">${trackOptions}</select></label>
             <label>Instrument <input id="project-editor-instrument" placeholder="warm lead synth"></label>
             <div class="actions">
               <button class="secondary" id="project-editor-add-instrument" type="button">Set Instrument</button>
+            </div>
+          </section>
+        </div>
+        <div class="grid2">
+          <section>
+            <h3>Section Structure</h3>
+            <label>Name <input id="project-editor-section-name" placeholder="bridge"></label>
+            <label>After <select id="project-editor-after-section">${afterSectionOptions}</select></label>
+            <label>Bars <input id="project-editor-section-bars" type="number" min="1" max="64" value="4"></label>
+            <label>Chords <input id="project-editor-section-structure-chords" placeholder="Fmaj7, G7"></label>
+            <label>Note Policy
+              <select id="project-editor-section-note-policy">
+                <option value="delete">delete</option>
+                <option value="shift_left">shift_left</option>
+                <option value="crop">crop</option>
+                <option value="shift_tail">shift_tail</option>
+              </select>
+            </label>
+            <div class="actions">
+              <button class="secondary" id="project-editor-add-section-op" type="button">Add Section</button>
+              <button class="secondary" id="project-editor-duplicate-section-op" type="button">Duplicate Section</button>
+              <button class="secondary" id="project-editor-delete-section-op" type="button">Delete Section</button>
+              <button class="secondary" id="project-editor-resize-section-op" type="button">Resize Section</button>
+              <button class="secondary" id="project-editor-move-section-op" type="button">Move Section</button>
+            </div>
+          </section>
+          <section>
+            <h3>Track Structure</h3>
+            <label>Name <input id="project-editor-track-name" placeholder="counter melody"></label>
+            <label>Instrument <input id="project-editor-track-structure-instrument" placeholder="warm pad"></label>
+            <label>Transpose <input id="project-editor-track-transpose" type="number" min="-24" max="24" value="0"></label>
+            <div class="actions">
+              <button class="secondary" id="project-editor-add-track-op" type="button">Add Track</button>
+              <button class="secondary" id="project-editor-duplicate-track-op" type="button">Duplicate Track</button>
+              <button class="secondary" id="project-editor-delete-track-op" type="button">Delete Track</button>
+              <button class="secondary" id="project-editor-rename-track-op" type="button">Rename Track</button>
             </div>
           </section>
         </div>
@@ -2874,6 +2927,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("project-editor-add-chords", () => addProjectEditorOperation({ op: "set_section_chords", section_id: $("project-editor-section").value, chords: $("project-editor-chords").value.split(",").map((item) => item.trim()).filter(Boolean) }));
       bindAction("project-editor-add-lyrics", () => addProjectEditorOperation({ op: "set_section_lyrics", section_id: $("project-editor-section").value, lyrics: $("project-editor-lyrics").value }));
       bindAction("project-editor-add-instrument", () => addProjectEditorOperation({ op: "set_track_instrument", track_id: $("project-editor-track").value, instrument: $("project-editor-instrument").value.trim() }));
+      bindAction("project-editor-add-section-op", () => addProjectEditorOperation({ op: "add_section", after_section_id: $("project-editor-after-section").value, name: $("project-editor-section-name").value.trim(), bars: Number($("project-editor-section-bars").value || 4), chords: chordList("project-editor-section-structure-chords") }));
+      bindAction("project-editor-duplicate-section-op", () => addProjectEditorOperation({ op: "duplicate_section", section_id: $("project-editor-section").value, after_section_id: $("project-editor-after-section").value, name: $("project-editor-section-name").value.trim(), copy_notes: true }));
+      bindAction("project-editor-delete-section-op", () => addProjectEditorOperation({ op: "delete_section", section_id: $("project-editor-section").value, note_policy: $("project-editor-section-note-policy").value === "shift_left" ? "shift_left" : "delete" }));
+      bindAction("project-editor-resize-section-op", () => addProjectEditorOperation({ op: "resize_section", section_id: $("project-editor-section").value, bars: Number($("project-editor-section-bars").value || 4), note_policy: $("project-editor-section-note-policy").value === "crop" ? "crop" : "shift_tail" }));
+      bindAction("project-editor-move-section-op", () => addProjectEditorOperation({ op: "move_section", section_id: $("project-editor-section").value, after_section_id: $("project-editor-after-section").value, move_notes: true }));
+      bindAction("project-editor-add-track-op", () => addProjectEditorOperation({ op: "add_track", name: $("project-editor-track-name").value.trim(), instrument: $("project-editor-track-structure-instrument").value.trim() }));
+      bindAction("project-editor-duplicate-track-op", () => addProjectEditorOperation({ op: "duplicate_track", track_id: $("project-editor-track").value, name: $("project-editor-track-name").value.trim(), instrument: $("project-editor-track-structure-instrument").value.trim(), transpose: Number($("project-editor-track-transpose").value || 0) }));
+      bindAction("project-editor-delete-track-op", () => addProjectEditorOperation({ op: "delete_track", track_id: $("project-editor-track").value }));
+      bindAction("project-editor-rename-track-op", () => addProjectEditorOperation({ op: "rename_track", track_id: $("project-editor-track").value, name: $("project-editor-track-name").value.trim() }));
       bindAction("project-editor-add-note", () => addProjectEditorOperation({ op: "add_note", track_id: $("project-editor-track").value, note: parseJsonField("project-editor-add-note-json") }));
       bindAction("project-editor-update-note", () => addProjectEditorOperation({ op: "update_note", track_id: $("project-editor-track").value, note_id: $("project-editor-note").value, patch: parseJsonField("project-editor-note-patch") }));
       bindAction("project-editor-delete-note", () => addProjectEditorOperation({ op: "delete_notes", track_id: $("project-editor-track").value, note_ids: [$("project-editor-note").value] }));
@@ -2893,9 +2955,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       renderProjectEditorDraft();
     }
 
+    function chordList(id) {
+      return $(id).value.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+
     function renderProjectEditorDraft() {
       const pre = $("project-editor-patch-json");
-      if (pre) pre.textContent = JSON.stringify({ operations: projectEditorPatch }, null, 2);
+      if (pre) pre.textContent = projectEditorPatch.map(describeProjectEditorOperation).join("\\n") + "\\n\\n" + JSON.stringify({ operations: projectEditorPatch }, null, 2);
       const preview = $("project-editor-preview");
       if (preview) preview.disabled = !projectEditorState || projectEditorPatch.length === 0;
       const apply = $("project-editor-apply");
@@ -2921,6 +2987,60 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
       const apply = $("project-editor-apply");
       if (apply) apply.disabled = false;
+    }
+
+    async function loadProjectEditorPreviewHistory(projectId) {
+      const target = $("project-editor-history");
+      if (!target) return;
+      const data = await api(`/api/projects/${encodeURIComponent(projectId)}/editor-previews`);
+      projectEditorPreviewHistory = data.previews || [];
+      target.innerHTML = `
+        <section>
+          <h3>Preview History</h3>
+          ${projectEditorPreviewHistory.length ? `
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Preview</th><th>Status</th><th>Ops</th><th>Sections</th><th>Tracks</th><th>Actions</th></tr></thead>
+                <tbody>${projectEditorPreviewHistory.map((preview) => `
+                  <tr>
+                    <td>${escapeHtml(preview.preview_id)}</td>
+                    <td>${escapeHtml(preview.status)}</td>
+                    <td>${escapeHtml(preview.operation_count)}</td>
+                    <td>${escapeHtml((preview.changed_sections || []).join(", ") || "-")}</td>
+                    <td>${escapeHtml((preview.changed_tracks || []).join(", ") || "-")}</td>
+                    <td>
+                      <button class="secondary" data-editor-history-preview="${escapeHtml(preview.preview_id)}" type="button">Open Summary</button>
+                      ${preview.midi_url ? `<a class="button-link secondary" href="${escapeHtml(preview.midi_url)}">MIDI</a>` : ""}
+                    </td>
+                  </tr>
+                `).join("")}</tbody>
+              </table>
+            </div>` : "<div class='empty'>No editor previews yet.</div>"}
+          <div id="project-editor-history-detail"></div>
+        </section>
+      `;
+      target.querySelectorAll("[data-editor-history-preview]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const detail = await api(`/api/projects/${encodeURIComponent(projectId)}/editor-previews/${encodeURIComponent(button.dataset.editorHistoryPreview)}/patch`);
+          $("project-editor-history-detail").innerHTML = `<pre>${escapeHtml(JSON.stringify(detail.patch, null, 2))}</pre>`;
+          projectEditorPreview = projectEditorPreviewHistory.find((item) => item.preview_id === button.dataset.editorHistoryPreview) || null;
+          renderProjectEditorPreview();
+        });
+      });
+    }
+
+    function describeProjectEditorOperation(operation) {
+      const op = operation.op || "operation";
+      if (op === "add_section") return `add_section: ${operation.name || "section"} after ${operation.after_section_id || "end"}`;
+      if (op === "duplicate_section") return `duplicate_section: ${operation.section_id || "section"} -> ${operation.name || "copy"}`;
+      if (op === "delete_section") return `delete_section: ${operation.section_id || "section"}`;
+      if (op === "resize_section") return `resize_section: ${operation.section_id || "section"} -> ${operation.bars || "?"} bars`;
+      if (op === "move_section") return `move_section: ${operation.section_id || "section"} after ${operation.after_section_id || "start"}`;
+      if (op === "add_track") return `add_track: ${operation.name || "track"}`;
+      if (op === "duplicate_track") return `duplicate_track: ${operation.track_id || "track"} -> ${operation.name || "copy"}`;
+      if (op === "delete_track") return `delete_track: ${operation.track_id || "track"}`;
+      if (op === "rename_track") return `rename_track: ${operation.track_id || "track"} -> ${operation.name || "track"}`;
+      return `${op}: ${operation.section_id || operation.track_id || ""}`.trim();
     }
 
     function parseJsonField(id) {

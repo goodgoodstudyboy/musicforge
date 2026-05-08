@@ -629,6 +629,7 @@ class ProjectStore:
             "midi": str(output_dir / "renders" / "song.mid") if output_dir else None,
             "audio": str(output_dir / "renders" / "song.wav") if output_dir else None,
             "stem_manifest": str(output_dir / "stems" / "manifest.json") if output_dir else None,
+            "edit": _edit_info(version),
         }
 
 
@@ -727,6 +728,7 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "changed_sections": metadata.get("changed_sections") or [],
         "changed_tracks": metadata.get("changed_tracks") or [],
         "summary": metadata.get("summary") or {},
+        "structure": metadata.get("structure") or {},
         "warnings": metadata.get("warnings") or [],
     }
 

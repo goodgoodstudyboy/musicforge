@@ -3119,6 +3119,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_editor_preview_create(method, project_id, editor_preview_create)
             return
 
+        editor_preview_root = _match_project_editor_preview_root_tail(tail)
+        if editor_preview_root is not None:
+            self._handle_project_editor_preview_root(method, project_id, editor_preview_root)
+            return
+
         editor_preview_match = _match_project_editor_preview_tail(tail)
         if editor_preview_match is not None:
             preview_id, action = editor_preview_match
@@ -3937,6 +3942,37 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_json({"ok": True, "preview": preview.to_dict()}, status=HTTPStatus.CREATED)
 
+    def _handle_project_editor_preview_root(self, method: str, project_id: str, action: str) -> None:
+        store = EditorPreviewStore(self.project_store.project_dir(project_id))
+        try:
+            self.project_store.get_project(project_id)
+            if action == "list":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "project_id": project_id, "previews": [preview.to_dict() for preview in store.list_previews()]})
+                return
+            if action == "cleanup":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                result = store.cleanup_previews(
+                    delete_unapplied_older_than_days=int(payload.get("delete_unapplied_older_than_days", 7) or 7),
+                    keep_latest=int(payload.get("keep_latest", 20) or 20),
+                    now=_utc_now(),
+                )
+                self.project_store.append_event(project_id, "editor_previews_cleanup", result)
+                self._send_json({"ok": True, **result})
+                return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Editor preview route not found.")
+
     def _handle_project_editor_preview_route(self, method: str, project_id: str, preview_id: str, action: str) -> None:
         store = EditorPreviewStore(self.project_store.project_dir(project_id))
         try:
@@ -3947,6 +3983,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 preview = store.read_preview(preview_id)
                 self._send_json({"ok": True, "preview": preview.to_dict()})
+                return
+            if action == "patch":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                include_operations = "include_operations=true" in self.path or "include_operations=1" in self.path
+                self._send_json({"ok": True, "patch": store.read_patch_summary(preview_id, include_operations=include_operations)})
                 return
             if action == "song-plan":
                 if method != "GET":
@@ -6026,11 +6069,20 @@ def _match_project_editor_preview_create_tail(tail: str) -> str | None:
     return None
 
 
+def _match_project_editor_preview_root_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 1 and parts[0] == "editor-previews":
+        return "list"
+    if len(parts) == 2 and parts[0] == "editor-previews" and parts[1] == "cleanup":
+        return "cleanup"
+    return None
+
+
 def _match_project_editor_preview_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 2 and parts[0] == "editor-previews":
         return unquote(parts[1]), "detail"
-    if len(parts) == 3 and parts[0] == "editor-previews" and parts[2] in {"song-plan", "midi", "audio", "render-audio", "delete", "apply"}:
+    if len(parts) == 3 and parts[0] == "editor-previews" and parts[2] in {"patch", "song-plan", "midi", "audio", "render-audio", "delete", "apply"}:
         return unquote(parts[1]), parts[2]
     return None
 

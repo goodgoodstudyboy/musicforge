@@ -278,6 +278,17 @@ Edit metadata records the parent version/job, target, instruction, preserve
 constraints, strength, summary, and warnings. Stems and audio are not inherited;
 render them again for the edited version when needed.
 
+v2.0.0 adds a Visual SongPlan Editor for Project versions. The Project Editor
+tab can preview manual patches for section chords, lyrics, track instruments,
+and note-level changes, then apply the preview as a new child version without
+modifying the parent run.
+
+v2.1.0 extends the Visual Editor with structure edits: add, duplicate, delete,
+resize, and move sections; add, duplicate, delete, and rename tracks; and view
+or clean up editor preview history. Section edits normalize `start_bar` values
+and adjust affected notes deterministically. Applied editor previews are kept
+for audit history and are not removed by preview cleanup.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

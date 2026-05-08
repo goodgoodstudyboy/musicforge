@@ -369,6 +369,18 @@ def test_webui_calls_project_apis():
     assert "/editor-previews/" in html
     assert "Open Editor" in html
     assert "project-editor-preview" in html
+    assert "Add Section" in html
+    assert "Duplicate Section" in html
+    assert "Delete Section" in html
+    assert "Resize Section" in html
+    assert "Move Section" in html
+    assert "Add Track" in html
+    assert "Duplicate Track" in html
+    assert "Delete Track" in html
+    assert "Rename Track" in html
+    assert "Preview History" in html
+    assert "/editor-previews/cleanup" in html
+    assert "describeProjectEditorOperation" in html
     assert "/edit-candidates" in html
     assert "/edit-candidates/ab" in html
     assert "/candidate-groups" in html

@@ -128,6 +128,7 @@ def build_final_export_bundle(
         enabled=options.include_reference_refs,
     )
     context_pack = _final_version_context_pack(run_dir, version.version_id, project_export)
+    edit_metadata = _final_version_edit_metadata(run_dir, version.version_id, project_export)
 
     manifest = {
         "project_id": project.project_id,
@@ -141,6 +142,7 @@ def build_final_export_bundle(
         "asset_refs": asset_refs,
         "reference_refs": reference_refs,
         "context_pack": context_pack,
+        "edit": edit_metadata,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -435,6 +437,35 @@ def _final_version_context_pack(run_dir: Path, version_id: str, project_export: 
             if version_id in used_by_versions:
                 return _context_pack_export_summary(pack)
     return {}
+
+
+def _final_version_edit_metadata(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> dict[str, Any]:
+    path = run_dir / "data" / "edit-metadata.json"
+    if path.exists():
+        try:
+            return _edit_metadata_export_summary(read_json(path))
+        except (OSError, ValueError, TypeError):
+            pass
+    if isinstance(project_export, dict):
+        for version in project_export.get("versions", []):
+            if isinstance(version, dict) and version.get("version_id") == version_id and isinstance(version.get("edit"), dict):
+                return _edit_metadata_export_summary(version["edit"])
+    return {}
+
+
+def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
+    summary = {
+        "edit_source": metadata.get("edit_source"),
+        "edit_type": metadata.get("edit_type"),
+        "preview_id": metadata.get("preview_id"),
+        "operation_count": metadata.get("operation_count"),
+        "changed_sections": metadata.get("changed_sections") or [],
+        "changed_tracks": metadata.get("changed_tracks") or [],
+        "summary": metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {},
+        "structure": metadata.get("structure") if isinstance(metadata.get("structure"), dict) else {},
+        "warnings": metadata.get("warnings") or [],
+    }
+    return _drop_empty(_sanitize_asset_metadata(summary))
 
 
 def _context_pack_export_summary(pack: dict[str, Any]) -> dict[str, Any]:

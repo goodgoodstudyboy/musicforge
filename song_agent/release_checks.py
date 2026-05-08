@@ -168,6 +168,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.8 reference analysis smoke", *_v18_reference_analysis_smoke(root))
     report.add("v1.9 library context smoke", *_v19_library_context_smoke(root))
     report.add("v2.0 visual editor smoke", *_v20_visual_editor_smoke(root))
+    report.add("v2.1 structure editor smoke", *_v21_structure_editor_smoke(root))
     return report
 
 
@@ -1401,6 +1402,132 @@ def _v20_visual_editor_smoke(root: Path) -> tuple[bool, str]:
                 and parent_plan_path.read_bytes()
             )
             return ok, f"preview={preview.preview_id}, version={document.versions[-1].version_id}, ops={metadata['operation_count']}, tracks={len(metadata['changed_tracks'])}"
+        except Exception as exc:
+            return False, str(exc)
+
+
+def _v21_structure_editor_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        try:
+            project_store = ProjectStore(base / ".musicforge" / "projects")
+            request = SongRequest(
+                title="Release v2.1 Smoke",
+                language="English",
+                style="synth pop",
+                theme="structure editor",
+                tempo_bpm=120,
+                key="C",
+            )
+            parent_plan = deterministic_compose(request)
+            parent_dir = base / "runs" / "v21-parent"
+            parent_plan_path = parent_dir / "data" / "song-plan.json"
+            parent_midi_path = parent_dir / "renders" / "song.mid"
+            write_json(parent_plan_path, parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_midi_path)
+            document = project_store.create_project("Release v2.1 Smoke")
+            document = project_store.add_version_from_job(document.state.project_id, _SmokeJob("v21-parent", parent_dir, request.to_dict()), name="Parent")
+            parent_bytes = parent_plan_path.read_bytes()
+            state = build_editor_state(parent_plan)
+            result = apply_editor_patch(
+                parent_plan,
+                {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "label": "Structure editor patch sk-release-secret",
+                    "operations": [
+                        {"op": "duplicate_section", "section_id": "section-003", "name": "chorus 2", "copy_notes": True, "after_section_id": "section-003"},
+                        {"op": "resize_section", "section_id": "section-002", "bars": 4, "note_policy": "crop"},
+                        {"op": "add_track", "name": "pad", "instrument": "warm pad"},
+                        {"op": "duplicate_track", "track_id": "track-001", "name": "counter melody", "transpose": 12},
+                        {"op": "rename_track", "track_id": "track-002", "name": "chords keys"},
+                    ],
+                },
+            )
+            preview_store = EditorPreviewStore(project_store.project_dir(document.state.project_id))
+            preview, _preview_dir = preview_store.create_preview(
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v21-parent",
+                parent_plan=parent_plan,
+                patch=result.patch,
+                result=result,
+                now="2026-05-08T00:00:00+00:00",
+            )
+            child_dir = base / "runs" / "v21-child"
+            child_plan_path = child_dir / "data" / "song-plan.json"
+            child_midi_path = child_dir / "renders" / "song.mid"
+            metadata = editor_edit_metadata(
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v21-parent",
+                preview_id=preview.preview_id,
+                patch=result.patch,
+                result=result,
+                created_at="2026-05-08T00:00:00+00:00",
+            )
+            write_json(child_plan_path, result.plan.to_dict())
+            write_json(child_dir / "data" / "editor-patch.json", result.patch.to_dict())
+            write_json(child_dir / "data" / "edit-metadata.json", metadata)
+            write_json(child_dir / "data" / "run-summary.json", {"title": result.plan.title, "edit": metadata["summary"]})
+            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(result.plan, child_midi_path)
+            document = project_store.add_version_from_job(
+                document.state.project_id,
+                _SmokeJob("v21-child", child_dir, request.to_dict() | {"edit_type": "manual_editor_edit"}),
+                name="Structure Child",
+                parent_version_id="v001",
+                variant_type="manual_editor_edit",
+                change_summary="structure editor patch",
+            )
+            preview_store.mark_applied(preview.preview_id, version_id="v002", job_id="v21-child", now="2026-05-08T00:00:00+00:00")
+            history = preview_store.list_previews()
+            patch_summary = preview_store.read_patch_summary(preview.preview_id)
+            cleanup = preview_store.cleanup_previews(delete_unapplied_older_than_days=0, keep_latest=5, now="2026-05-09T00:00:00+00:00")
+            compare = compare_project_versions(document, "v001", "v002")
+            project_export = project_store.export_project(document.state.project_id)
+            gate = evaluate_quality_gate(
+                child_dir,
+                QualityGateConfig(
+                    min_overall=0,
+                    min_structure=0,
+                    min_melody=0,
+                    min_harmony=0,
+                    min_arrangement=0,
+                    require_audio=False,
+                    require_stems=False,
+                ),
+                now="2026-05-08T00:00:00+00:00",
+            )
+            manifest = build_final_export_bundle(
+                project=document.state,
+                version=document.versions[-1],
+                project_dir=project_store.project_dir(document.state.project_id),
+                run_dir=child_dir,
+                gate=gate,
+                options=FinalExportOptions(include_audio=False, include_stems=False),
+                now="2026-05-08T00:00:00+00:00",
+                project_export=project_export,
+            )
+            section_starts = [section.start_bar for section in result.plan.sections]
+            serialized = str(project_export) + str(manifest) + str(patch_summary)
+            ok = (
+                preview.preview_id == "preview-001"
+                and len(result.plan.sections) == len(parent_plan.sections) + 1
+                and len(result.plan.tracks) == len(parent_plan.tracks) + 2
+                and section_starts == sorted(section_starts)
+                and parent_plan_path.read_bytes() == parent_bytes
+                and document.versions[-1].variant_type == "manual_editor_edit"
+                and compare["right"]["edit"]["structure"]["section_operations"]["duplicate_section"] == 1
+                and project_export["versions"][1]["edit"]["structure"]["track_operations"]["add_track"] == 1
+                and manifest["edit"]["structure"]["section_operations"]["resize_section"] == 1
+                and history[0].preview_id == preview.preview_id
+                and cleanup["deleted_count"] == 0
+                and "sk-release-secret" not in serialized
+            )
+            return ok, f"preview={preview.preview_id}, version={document.versions[-1].version_id}, sections={len(result.plan.sections)}, tracks={len(result.plan.tracks)}, operations={metadata['operation_count']}"
         except Exception as exc:
             return False, str(exc)
 

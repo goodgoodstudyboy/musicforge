@@ -111,6 +111,7 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,
         "summary": metadata.get("summary") or {},
+        "structure": metadata.get("structure") or {},
         "warnings": metadata.get("warnings") or [],
     }
 

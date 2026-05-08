@@ -62,8 +62,9 @@ def _validate_tracks(plan: SongPlan, total_beats: int) -> None:
             raise ValueError("TrackPlan.name must not be empty.")
         if not track.instrument.strip():
             raise ValueError(f"Track {track.name} instrument must not be empty.")
-        if not track.notes:
-            raise ValueError(f"Track {track.name} must contain notes.")
+        role = _track_role(track.name)
+        if not track.notes and role in REQUIRED_TRACKS:
+            raise ValueError(f"Required track {track.name} must contain notes.")
 
         for note in track.notes:
             if note.pitch < 0 or note.pitch > 127:

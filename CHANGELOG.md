@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.1.0 - 2026-05-08
+
+### Added
+- Visual Editor structure patch operations for add/duplicate/delete/resize/move section and add/duplicate/delete/rename track.
+- Section timeline normalization with deterministic note shifting, copying, cropping, and bounds checks.
+- Editor Preview History APIs for listing previews, reading patch summaries, and cleaning old unapplied previews.
+- Studio structure editor controls and Preview History management.
+- Project diff, Project Compare, Project Export, Final Export, and release-check now surface structure edit summaries.
+
+### Scope
+- v2.1.0 intentionally does not add a full DAW, piano-roll drag editing, MIDI import merge, arranger solver, or realtime audio playback.
+
+### Verified
+- `python -m pytest tests\test_song_editor.py tests\test_song_editor_structure.py tests\test_editor_previews.py -q`
+- `python -m pytest tests\test_server_editor_structure.py tests\test_server_auth.py tests\test_projects.py tests\test_project_compare.py tests\test_final_export.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.0.1 - 2026-05-08
 
 ### Fixed
