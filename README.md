@@ -90,6 +90,39 @@ note-based Creative Asset.
 v1.8.0 keeps the scope local and low-dependency: it does not add MP3 import,
 audio-to-MIDI, transcription, or automatic BPM/key detection.
 
+## Library Search and Context Packs
+
+v1.9.0 adds a local Library Index over Creative Assets and References. Search
+and recommendation are deterministic and explainable: results include score
+breakdowns for token, role, style, tempo/key, quality, favorite, usage, and
+freshness matches. The index is derived data under `.musicforge/library/` and
+can be rebuilt at any time.
+
+Context Packs are saved selections of `asset_refs` and `reference_refs` under
+`.musicforge/context-packs/`. Applying a pack expands back into the existing
+reference snapshot chain, so generation, Project versions, variations, edits,
+provider previews, candidates, and Prompt A/B all keep using the same safety
+checks. Hidden or stale sources are rejected before use.
+
+Library and Context Pack APIs:
+
+```text
+GET  /api/library/index
+POST /api/library/rebuild
+POST /api/library/search
+POST /api/library/recommend
+GET  /api/context-packs
+POST /api/context-packs
+GET  /api/context-packs/<pack-id>
+POST /api/context-packs/<pack-id>/apply-preview
+POST /api/context-packs/<pack-id>/hide
+POST /api/context-packs/<pack-id>/unhide
+POST /api/context-packs/<pack-id>/delete
+```
+
+v1.9.0 intentionally does not add embeddings, vector databases, audio
+fingerprinting, MP3 import, or automatic application of recommended context.
+
 You can also use `MUSICFORGE_ACCESS_TOKEN`. When auth is enabled, Studio stores
 the token only in `sessionStorage` and sends it as `Authorization: Bearer ...`.
 `GET /api/info` remains public and reports whether auth is required; jobs,

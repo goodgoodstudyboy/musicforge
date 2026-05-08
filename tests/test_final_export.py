@@ -150,6 +150,39 @@ def test_final_export_includes_sanitized_asset_refs(tmp_path: Path) -> None:
     assert "provider.json" not in serialized
 
 
+def test_final_export_manifest_includes_context_pack_summary(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    write_json(
+        run_dir / "data" / "context-pack.json",
+        {
+            "schema_version": 1,
+            "pack_id": "pack-001",
+            "name": "Final Context",
+            "query": {"text": "Bearer secret-token D:\\Music\\seed.mid"},
+            "asset_refs": [{"asset_id": "asset-001"}],
+            "reference_refs": [{"reference_id": "ref-001"}],
+        },
+    )
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+        project_export={"project": {"project_id": "export-project"}},
+    )
+    serialized = json.dumps(manifest, ensure_ascii=False)
+
+    assert manifest["context_pack"]["pack_id"] == "pack-001"
+    assert manifest["context_pack"]["asset_count"] == 1
+    assert "secret-token" not in serialized
+    assert "D:\\Music" not in serialized
+
+
 def test_final_export_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, _plan = make_run(tmp_path)

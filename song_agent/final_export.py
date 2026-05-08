@@ -127,6 +127,7 @@ def build_final_export_bundle(
         files=files,
         enabled=options.include_reference_refs,
     )
+    context_pack = _final_version_context_pack(run_dir, version.version_id, project_export)
 
     manifest = {
         "project_id": project.project_id,
@@ -139,6 +140,7 @@ def build_final_export_bundle(
         "quality_gate": gate.to_dict(),
         "asset_refs": asset_refs,
         "reference_refs": reference_refs,
+        "context_pack": context_pack,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -413,6 +415,39 @@ def _final_version_reference_refs(run_dir: Path, version_id: str, project_export
             reference_id = str(ref["reference_id"])
             refs_by_id.setdefault(reference_id, _reference_ref_export_summary(ref))
     return [refs_by_id[key] for key in sorted(refs_by_id)]
+
+
+def _final_version_context_pack(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> dict[str, Any]:
+    snapshot_path = run_dir / "data" / "context-pack.json"
+    if snapshot_path.exists():
+        _ensure_within(run_dir, snapshot_path)
+        try:
+            snapshot = read_json(snapshot_path)
+        except (OSError, ValueError, TypeError):
+            snapshot = {}
+        if isinstance(snapshot, dict) and snapshot.get("pack_id"):
+            return _context_pack_export_summary({**snapshot, "used_by_versions": [version_id]})
+    if isinstance(project_export, dict):
+        for pack in project_export.get("context_packs", []):
+            if not isinstance(pack, dict) or not pack.get("pack_id"):
+                continue
+            used_by_versions = pack.get("used_by_versions") if isinstance(pack.get("used_by_versions"), list) else []
+            if version_id in used_by_versions:
+                return _context_pack_export_summary(pack)
+    return {}
+
+
+def _context_pack_export_summary(pack: dict[str, Any]) -> dict[str, Any]:
+    summary = {
+        "pack_id": str(pack.get("pack_id") or ""),
+        "name": str(pack.get("name") or pack.get("pack_id") or ""),
+        "asset_count": len(pack.get("asset_refs") or []) if isinstance(pack.get("asset_refs"), list) else int(pack.get("asset_count") or 0),
+        "reference_count": len(pack.get("reference_refs") or []) if isinstance(pack.get("reference_refs"), list) else int(pack.get("reference_count") or 0),
+        "created_from": _sanitize_asset_metadata(pack.get("created_from")) if isinstance(pack.get("created_from"), dict) else {},
+        "query": _sanitize_asset_metadata(pack.get("query")) if isinstance(pack.get("query"), dict) else {},
+        "used_by_versions": [str(item) for item in pack.get("used_by_versions", []) if str(item).strip()] if isinstance(pack.get("used_by_versions"), list) else [],
+    }
+    return _drop_empty(_sanitize_asset_metadata(summary))
 
 
 def _reference_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:

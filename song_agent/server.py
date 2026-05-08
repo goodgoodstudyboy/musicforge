@@ -61,6 +61,16 @@ from song_agent.final_export import (
     final_export_zip_path,
     read_final_export_manifest,
 )
+from song_agent.context_packs import (
+    ContextPackStaleError,
+    ContextPackStore,
+    apply_context_pack,
+    context_pack_public_dict,
+    context_pack_snapshot,
+    merge_context_refs,
+    write_context_pack_snapshot,
+)
+from song_agent.library_index import LibraryIndexStore, recommend_library_context, search_library
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
 from song_agent.prompt_templates import PromptTemplateStore
@@ -252,10 +262,17 @@ class JobState:
 
 
 class JobStore:
-    def __init__(self, runs_dir: Path = RUNS_DIR, asset_store: AssetStore | None = None, reference_store: ReferenceStore | None = None) -> None:
+    def __init__(
+        self,
+        runs_dir: Path = RUNS_DIR,
+        asset_store: AssetStore | None = None,
+        reference_store: ReferenceStore | None = None,
+        context_pack_store: ContextPackStore | None = None,
+    ) -> None:
         self.runs_dir = Path(runs_dir).resolve()
         self.asset_store = asset_store or AssetStore()
         self.reference_store = reference_store or ReferenceStore()
+        self.context_pack_store = context_pack_store or ContextPackStore()
         self.lock = threading.RLock()
         self.jobs: dict[str, JobState] = {}
         self.load_existing_jobs()
@@ -298,6 +315,7 @@ class JobStore:
         request = SongRequest.from_dict(payload)
         asset_refs = payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else []
         reference_refs = payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else []
+        context_pack = payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None
         generation_mode = _generation_mode(payload)
         pipeline_mode = _pipeline_mode(payload)
         provider_snapshot: dict[str, Any]
@@ -324,6 +342,7 @@ class JobStore:
                     **request.to_dict(),
                     **({"asset_refs": asset_refs} if asset_refs else {}),
                     **({"reference_refs": reference_refs} if reference_refs else {}),
+                    **({"context_pack": context_pack} if context_pack else {}),
                 },
                 provider_snapshot=provider_snapshot,
                 heartbeat_at=now,
@@ -358,6 +377,7 @@ class JobStore:
         candidate: dict[str, Any] | None = None,
         asset_refs: list[dict[str, Any]] | None = None,
         reference_refs: list[dict[str, Any]] | None = None,
+        context_pack: dict[str, Any] | None = None,
     ) -> JobState:
         validate_edit_intent(parent_plan, intent)
         if intent.provider_mode == "provider" and provider_patch is None:
@@ -391,6 +411,8 @@ class JobStore:
                 metadata["asset_refs"] = list(asset_refs)
             if reference_refs:
                 metadata["reference_refs"] = list(reference_refs)
+            if context_pack:
+                metadata["context_pack"] = dict(context_pack)
             job = JobState(
                 job_id=job_id,
                 title=title,
@@ -408,6 +430,7 @@ class JobStore:
                     "project_id": project_id,
                     **({"asset_refs": list(asset_refs)} if asset_refs else {}),
                     **({"reference_refs": list(reference_refs)} if reference_refs else {}),
+                    **({"context_pack": dict(context_pack)} if context_pack else {}),
                 },
                 provider_snapshot=provider_snapshot or {"mode": "local", "summary": "Local deterministic edit engine"},
                 heartbeat_at=now,
@@ -800,6 +823,7 @@ class JobStore:
                     )
                 return
             self._heartbeat(job)
+            context_snapshot = self._prepare_context_pack_for_job(job)
             asset_snapshot = self._prepare_asset_refs_for_job(job)
             reference_snapshot = self._prepare_reference_refs_for_job(job)
             plan_path, midi_path = generate_request(
@@ -857,6 +881,8 @@ class JobStore:
                 artifacts["asset_refs"] = str(Path(job.output_dir) / "data" / "asset-refs.json")
             if (Path(job.output_dir) / "data" / "reference-refs.json").exists():
                 artifacts["reference_refs"] = str(Path(job.output_dir) / "data" / "reference-refs.json")
+            if (Path(job.output_dir) / "data" / "context-pack.json").exists():
+                artifacts["context_pack"] = str(Path(job.output_dir) / "data" / "context-pack.json")
             self._update_job(
                 job,
                 status="completed",
@@ -926,6 +952,7 @@ class JobStore:
             parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
             append_event(paths, {"event": "edit_started", "edit_type": intent.edit_type, "target": intent.target.to_dict()})
             self._heartbeat(job)
+            context_snapshot = self._prepare_context_pack_for_job(job)
             asset_snapshot = self._prepare_asset_refs_for_job(job)
             reference_snapshot = self._prepare_reference_refs_for_job(job)
             provider_patch_data = metadata.get("provider_patch")
@@ -970,6 +997,8 @@ class JobStore:
                 edit_metadata["asset_refs"] = list(asset_snapshot["asset_refs"])
             if reference_snapshot["reference_refs"]:
                 edit_metadata["reference_refs"] = list(reference_snapshot["reference_refs"])
+            if context_snapshot:
+                edit_metadata["context_pack"] = context_snapshot
             write_json(paths.data / "edit-metadata.json", edit_metadata)
             if asset_snapshot["asset_refs"]:
                 write_asset_refs_snapshot(run_dir, asset_snapshot)
@@ -995,6 +1024,8 @@ class JobStore:
                 artifacts["asset_refs"] = str(paths.data / "asset-refs.json")
             if (paths.data / "reference-refs.json").exists():
                 artifacts["reference_refs"] = str(paths.data / "reference-refs.json")
+            if (paths.data / "context-pack.json").exists():
+                artifacts["context_pack"] = str(paths.data / "context-pack.json")
             if (paths.data / "provider-usage.json").exists():
                 artifacts["provider_usage"] = str(paths.data / "provider-usage.json")
             self._update_job(
@@ -1044,6 +1075,20 @@ class JobStore:
         if snapshot["reference_refs"]:
             ProjectPaths.create(Path(job.output_dir))
             write_reference_refs_snapshot(Path(job.output_dir), snapshot)
+        return snapshot
+
+    def _prepare_context_pack_for_job(self, job: JobState) -> dict[str, Any] | None:
+        context_pack = job.input_payload.get("context_pack")
+        if not isinstance(context_pack, dict) or not context_pack.get("pack_id"):
+            return None
+        pack = self.context_pack_store.read_pack(str(context_pack["pack_id"]))
+        applied = {
+            "asset_refs": job.input_payload.get("asset_refs") if isinstance(job.input_payload.get("asset_refs"), list) else [],
+            "reference_refs": job.input_payload.get("reference_refs") if isinstance(job.input_payload.get("reference_refs"), list) else [],
+        }
+        snapshot = context_pack_snapshot(pack, applied, captured_at=_utc_now())
+        ProjectPaths.create(Path(job.output_dir))
+        write_context_pack_snapshot(Path(job.output_dir), snapshot)
         return snapshot
 
     def _run_node_retry(
@@ -2031,6 +2076,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.reference_store  # type: ignore[attr-defined]
 
     @property
+    def library_index_store(self) -> LibraryIndexStore:
+        return self.server.library_index_store  # type: ignore[attr-defined]
+
+    @property
+    def context_pack_store(self) -> ContextPackStore:
+        return self.server.context_pack_store  # type: ignore[attr-defined]
+
+    @property
     def auth_config(self) -> AuthConfig:
         return self.server.auth_config  # type: ignore[attr-defined]
 
@@ -2088,6 +2141,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 if method == "POST":
                     payload = self._read_json_body()
+                    payload = self._expand_context_pack_payload(payload)
                     job = self.store.create_job(payload)
                     self._send_json(job.to_dict(), status=HTTPStatus.ACCEPTED)
                     return
@@ -2149,6 +2203,26 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_asset_extract_from_candidate(method)
                 return
 
+            if path == "/api/library/index":
+                self._handle_library_index(method)
+                return
+
+            if path == "/api/library/rebuild":
+                self._handle_library_rebuild(method)
+                return
+
+            if path == "/api/library/search":
+                self._handle_library_search(method)
+                return
+
+            if path == "/api/library/recommend":
+                self._handle_library_recommend(method)
+                return
+
+            if path == "/api/context-packs":
+                self._handle_context_packs_root(method, parsed.query)
+                return
+
             if path == "/api/references":
                 self._handle_references_root(method, parsed.query)
                 return
@@ -2197,6 +2271,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_reference_route(method, reference_id, tail)
                 return
 
+            context_pack_route = _match_context_pack_route(path)
+            if context_pack_route is not None:
+                pack_id, tail = context_pack_route
+                self._handle_context_pack_route(method, pack_id, tail)
+                return
+
             project_route = _match_project_route(path)
             if project_route is not None:
                 project_id, tail = project_route
@@ -2218,6 +2298,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Route not found.")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ContextPackStaleError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ProviderError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except RendererError as exc:
@@ -2455,6 +2537,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     "generation_mode": payload.get("generation_mode", payload["request"].get("generation_mode", "local")),
                     "pipeline_mode": payload.get("pipeline_mode", payload["request"].get("pipeline_mode", "single")),
                 }
+                if isinstance(payload.get("asset_refs"), list):
+                    request_payload["asset_refs"] = payload["asset_refs"]
+                if isinstance(payload.get("reference_refs"), list):
+                    request_payload["reference_refs"] = payload["reference_refs"]
+                if payload.get("context_pack_id"):
+                    request_payload["context_pack_id"] = payload["context_pack_id"]
+                request_payload = self._expand_context_pack_payload(request_payload)
                 job = self.store.create_job(request_payload)
                 document = self.project_store.add_version_from_job(
                     document.state.project_id,
@@ -2491,6 +2580,120 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "asset": asset_public_dict(asset)}, status=HTTPStatus.CREATED)
             return
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_library_index(self, method: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        index = self.library_index_store.load_or_build(self.asset_store, self.reference_store)
+        self._send_json({"ok": True, "index": index.summary()})
+
+    def _handle_library_rebuild(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        index = self.library_index_store.rebuild(self.asset_store, self.reference_store, now=_utc_now())
+        self._send_json({"ok": True, "index": index.summary()})
+
+    def _handle_library_search(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        index = self.library_index_store.load_or_build(self.asset_store, self.reference_store)
+        result = search_library(index, payload)
+        self.library_index_store.append_event("library_search_requested", {"result_count": result["count"], "query": result.get("query")}, now=_utc_now())
+        self._send_json(result)
+
+    def _handle_library_recommend(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        index = self.library_index_store.load_or_build(self.asset_store, self.reference_store)
+        result = recommend_library_context(index, payload)
+        recommendation = result.get("recommendation", {})
+        self.library_index_store.append_event(
+            "library_recommend_requested",
+            {
+                "asset_count": len(recommendation.get("asset_results", [])),
+                "reference_count": len(recommendation.get("reference_results", [])),
+                "goal": payload.get("goal"),
+            },
+            now=_utc_now(),
+        )
+        self._send_json(result)
+
+    def _handle_context_packs_root(self, method: str, query_string: str) -> None:
+        if method == "GET":
+            query = parse_qs(query_string)
+            include_hidden = _query_value(query, "include_hidden") in {"1", "true", "yes"}
+            packs = self.context_pack_store.list_packs(include_hidden=include_hidden)
+            self._send_json({"context_packs": [context_pack_public_dict(pack) for pack in packs], "count": len(packs)})
+            return
+        if method == "POST":
+            try:
+                pack = self.context_pack_store.create_pack(
+                    self._read_json_body(),
+                    asset_store=self.asset_store,
+                    reference_store=self.reference_store,
+                    now=_utc_now(),
+                )
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json({"ok": True, "context_pack": context_pack_public_dict(pack)}, status=HTTPStatus.CREATED)
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_context_pack_route(self, method: str, pack_id: str, tail: str) -> None:
+        try:
+            if tail == "":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"context_pack": context_pack_public_dict(self.context_pack_store.read_pack(pack_id))})
+                return
+            if tail == "/apply-preview":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                applied = self.context_pack_store.apply_preview(pack_id, asset_store=self.asset_store, reference_store=self.reference_store, captured_at=_utc_now())
+                self.context_pack_store.append_event(pack_id, "context_pack_applied", {"mode": "preview"}, now=_utc_now())
+                self._send_json(applied)
+                return
+            if tail == "/hide":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                pack = self.context_pack_store.hide_pack(pack_id, True)
+                self._send_json({"ok": True, "context_pack": context_pack_public_dict(pack)})
+                return
+            if tail == "/unhide":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                pack = self.context_pack_store.hide_pack(pack_id, False)
+                self._send_json({"ok": True, "context_pack": context_pack_public_dict(pack)})
+                return
+            if tail == "/delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.context_pack_store.delete_pack(pack_id)
+                self._send_json({"ok": True, "deleted": True, "pack_id": pack_id})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Context pack route not found.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Context pack not found.")
+        except ContextPackStaleError as exc:
+            try:
+                self.context_pack_store.append_event(pack_id, "context_pack_stale", {"error": str(exc)}, now=_utc_now())
+            except (OSError, ValueError):
+                pass
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_asset_route(self, method: str, asset_id: str, tail: str) -> None:
         try:
@@ -3003,6 +3206,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     request_payload["asset_refs"] = payload["asset_refs"]
                 if isinstance(payload.get("reference_refs"), list):
                     request_payload["reference_refs"] = payload["reference_refs"]
+                if payload.get("context_pack_id"):
+                    request_payload["context_pack_id"] = payload["context_pack_id"]
+                request_payload = self._expand_context_pack_payload(request_payload)
                 job = self.store.create_job(request_payload)
                 document = self.project_store.add_version_from_job(
                     project_id,
@@ -3479,6 +3685,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 request_payload["asset_refs"] = payload["asset_refs"]
             if isinstance(payload.get("reference_refs"), list):
                 request_payload["reference_refs"] = payload["reference_refs"]
+            if payload.get("context_pack_id"):
+                request_payload["context_pack_id"] = payload["context_pack_id"]
+            request_payload = self._expand_context_pack_payload(request_payload)
             job = self.store.create_job(request_payload)
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -3551,6 +3760,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         preset_ref = None
         try:
+            payload = self._expand_context_pack_payload(payload)
             parent_plan = SongPlan.from_dict(read_json(parent_plan_path))
             preset_id = str(payload.get("preset_id") or "").strip()
             intent_payload = payload
@@ -3571,6 +3781,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 start_immediately=bool(payload.get("start_immediately", True)),
                 asset_refs=payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else None,
                 reference_refs=payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else None,
+                context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
             )
             variant_type = edit_variant_type(intent.edit_type)
             document = self.project_store.add_version_from_job(
@@ -3643,6 +3854,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         payload = self._read_json_body()
         try:
+            payload = self._expand_context_pack_payload(payload)
             document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
             instruction = str(payload.get("instruction") or "").strip()
             if not instruction:
@@ -3681,6 +3893,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
                 asset_refs=asset_snapshot["asset_refs"],
                 reference_refs=reference_snapshot["reference_refs"],
+                context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
             )
             if asset_snapshot["asset_refs"]:
                 self.asset_store.mark_used(
@@ -3773,6 +3986,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 provider_usage=preview.provider_usage,
                 request_id=preview.provider_request_id,
             )
+            context_pack = preview.source.get("context_pack") if isinstance(preview.source.get("context_pack"), dict) else None
             job = self.store.create_edit_job(
                 project_id=project_id,
                 parent_version_id=parent.version_id,
@@ -3788,6 +4002,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 preview_id=preview_id,
                 asset_refs=preview.source.get("asset_refs") if isinstance(preview.source.get("asset_refs"), list) else None,
                 reference_refs=preview.source.get("reference_refs") if isinstance(preview.source.get("reference_refs"), list) else None,
+                context_pack=context_pack,
             )
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -3838,7 +4053,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         payload = self._read_json_body()
         try:
+            payload = self._expand_context_pack_payload(payload)
             group = self._create_project_candidate_group(project_id, version_id, payload)
+        except ContextPackStaleError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
         except FileNotFoundError as exc:
             message = "Version not found." if str(exc) == version_id else "Provider edit resource not found."
             self._send_error(HTTPStatus.NOT_FOUND, message)
@@ -3891,6 +4110,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 "song_plan_sha256": song_plan_hash(parent_plan),
                 "asset_refs": list(asset_snapshot["asset_refs"]),
                 "reference_refs": list(reference_snapshot["reference_refs"]),
+                **({"context_pack": dict(payload["context_pack"])} if isinstance(payload.get("context_pack"), dict) else {}),
             },
             provider_usage=provider_usage,
             provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
@@ -4087,6 +4307,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     }
                 ),
                 asset_refs=group.source.get("asset_refs") if isinstance(group.source.get("asset_refs"), list) else None,
+                reference_refs=group.source.get("reference_refs") if isinstance(group.source.get("reference_refs"), list) else None,
+                context_pack=group.source.get("context_pack") if isinstance(group.source.get("context_pack"), dict) else None,
             )
             document = self.project_store.add_version_from_job(
                 project_id,
@@ -4254,6 +4476,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         payload = self._read_json_body()
         created_group_ids: list[str] = []
         try:
+            payload = self._expand_context_pack_payload(payload)
             instruction = str(payload.get("instruction") or "").strip()
             if not instruction:
                 raise ValueError("instruction is required.")
@@ -4318,6 +4541,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._rollback_prompt_ab_groups(project_id, created_group_ids)
             message = "Version not found." if str(exc) == version_id else "Provider edit resource not found."
             self._send_error(HTTPStatus.NOT_FOUND, message)
+            return
+        except ContextPackStaleError as exc:
+            self._rollback_prompt_ab_groups(project_id, created_group_ids)
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
             return
         except ProviderError as exc:
             self._rollback_prompt_ab_groups(project_id, created_group_ids)
@@ -4983,6 +5210,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return False
         return 0 <= length <= limit
 
+    def _expand_context_pack_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        pack_id = str(payload.get("context_pack_id") or "").strip()
+        if not pack_id:
+            return payload
+        pack = self.context_pack_store.read_pack(pack_id)
+        applied = apply_context_pack(pack, asset_store=self.asset_store, reference_store=self.reference_store, captured_at=_utc_now())
+        asset_refs = merge_context_refs(payload.get("asset_refs"), applied["asset_refs"], "asset_id", 5)
+        reference_refs = merge_context_refs(payload.get("reference_refs"), applied["reference_refs"], "reference_id", 5)
+        return {
+            **payload,
+            "asset_refs": asset_refs,
+            "reference_refs": reference_refs,
+            "context_pack": context_pack_snapshot(pack, {"asset_refs": asset_refs, "reference_refs": reference_refs}, captured_at=_utc_now()),
+        }
+
     def _send_error(self, status: HTTPStatus, message: str) -> None:
         self._send_json({"error": message}, status=status)
 
@@ -5019,7 +5261,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.auth_config = auth_config or AuthConfig(enabled=False)
         self.asset_store = AssetStore()
         self.reference_store = ReferenceStore()
-        self.job_store = JobStore(asset_store=self.asset_store, reference_store=self.reference_store)
+        self.library_index_store = LibraryIndexStore()
+        self.context_pack_store = ContextPackStore()
+        self.job_store = JobStore(asset_store=self.asset_store, reference_store=self.reference_store, context_pack_store=self.context_pack_store)
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
         self.edit_preset_store = EditPresetStore()
@@ -5462,6 +5706,19 @@ def _match_reference_route(path: str) -> tuple[str, str] | None:
     if "/" in rest:
         reference_id, tail = rest.split("/", 1)
         return unquote(reference_id), "/" + tail
+    return unquote(rest), ""
+
+
+def _match_context_pack_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/context-packs/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest:
+        return None
+    if "/" in rest:
+        pack_id, tail = rest.split("/", 1)
+        return unquote(pack_id), "/" + tail
     return unquote(rest), ""
 
 

@@ -350,6 +350,18 @@ def panel_html() -> str:
       align-items: center;
       font-size: 12px;
     }
+    .library-result {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      margin: 8px 0;
+      background: #fbfcfe;
+    }
+    .library-result h4 {
+      margin: 0 0 6px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
     .candidate-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(220px, 1fr));
@@ -607,11 +619,78 @@ def panel_html() -> str:
             <label>Reference Materials
               <div id="song-reference-refs" class="reference-ref-list"></div>
             </label>
+            <label>Context Pack
+              <select id="song-context-pack"><option value="">none</option></select>
+            </label>
             <div class="actions">
               <button type="submit">Generate</button>
+              <button class="secondary" id="song-suggest-context" type="button">Suggest Context</button>
               <button class="secondary" id="reset-form" type="button">Reset</button>
             </div>
+            <div id="song-context-suggestion" class="message"></div>
           </form>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Library</span>
+          <button class="secondary" id="library-rebuild" type="button">Rebuild Index</button>
+        </div>
+        <div class="panel-body">
+          <div class="grid2">
+            <label>Search
+              <input id="library-query" placeholder="rainy synth hook">
+            </label>
+            <label>Kind
+              <select id="library-kind">
+                <option value="">assets + references</option>
+                <option value="asset">assets</option>
+                <option value="reference">references</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Role
+              <input id="library-role" placeholder="hook, melody, harmony">
+            </label>
+            <label>Tempo BPM
+              <input id="library-tempo" type="number" min="40" max="240">
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Key
+              <input id="library-key" placeholder="C">
+            </label>
+            <label>Flags
+              <span style="display:flex;gap:10px;margin-top:8px;">
+                <label style="margin:0;"><input id="library-include-stale" type="checkbox"> stale</label>
+                <label style="margin:0;"><input id="library-include-hidden" type="checkbox"> hidden</label>
+              </span>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="library-search" type="button">Search Library</button>
+            <button class="secondary" id="library-recommend" type="button">Recommend</button>
+            <span id="library-message" class="message"></span>
+          </div>
+          <div id="library-results"><div class="empty">Library results will appear here.</div></div>
+          <div class="panel-title subhead"><span>Context Packs</span></div>
+          <div class="grid2">
+            <label>Name
+              <input id="context-pack-name" placeholder="Rainy context">
+            </label>
+            <label>Saved Packs
+              <select id="context-pack-select"><option value="">none</option></select>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="context-pack-save-selection" type="button">Save Selected Context</button>
+            <button class="secondary" id="context-pack-apply-preview" type="button">Apply Preview</button>
+            <button class="secondary" id="context-pack-refresh" type="button">Refresh Packs</button>
+            <span id="context-pack-message" class="message"></span>
+          </div>
+          <div id="context-pack-list"><div class="empty">No context packs yet.</div></div>
+          <pre id="context-pack-preview">{}</pre>
         </div>
       </section>
       <section>
@@ -895,6 +974,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let references = [];
     let selectedReferenceId = null;
     let includeHiddenReferences = false;
+    let contextPacks = [];
+    let librarySelection = { asset_refs: [], reference_refs: [] };
 
     const $ = (id) => document.getElementById(id);
 
@@ -943,6 +1024,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadEditPresets();
       await loadAssets();
       await loadReferences();
+      await loadContextPacks();
       await loadJobs();
       await loadProjects();
       await loadBatches();
@@ -951,6 +1033,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadProjects();
         loadAssets();
         loadReferences();
+        loadContextPacks();
         loadBatches();
       }, 2000);
       $("poll").textContent = "polling 2s";
@@ -1022,6 +1105,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (refs.length) payload.asset_refs = refs;
       const referenceRefs = referenceRefsPayload("song-reference-refs");
       if (referenceRefs.length) payload.reference_refs = referenceRefs;
+      const contextPackId = contextPackIdPayload("song-context-pack");
+      if (contextPackId) payload.context_pack_id = contextPackId;
       return payload;
     }
 
@@ -1041,6 +1126,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     });
     $("reset-form").addEventListener("click", () => fillForm(template.defaults));
+    $("song-suggest-context").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/library/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: "song_request",
+            goal: "generate",
+            song_request: formPayload(),
+          }),
+        });
+        applyLibraryPreview(data.recommendation.context_pack_preview || {});
+        renderLibraryResults([...(data.recommendation.asset_results || []), ...(data.recommendation.reference_results || [])]);
+        $("song-context-suggestion").textContent = "context suggested";
+      } catch (err) {
+        $("song-context-suggestion").textContent = err.message;
+      }
+    });
     $("refresh").addEventListener("click", loadJobs);
     $("include-hidden").addEventListener("change", async () => {
       includeHidden = $("include-hidden").checked;
@@ -1100,6 +1203,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     });
     ["reference-search", "reference-tag-filter"].forEach((id) => {
       $(id).addEventListener("input", debounce(loadReferences, 250));
+    });
+    $("library-search").addEventListener("click", searchLibrary);
+    $("library-recommend").addEventListener("click", recommendLibrary);
+    $("library-rebuild").addEventListener("click", rebuildLibrary);
+    $("context-pack-refresh").addEventListener("click", loadContextPacks);
+    $("context-pack-save-selection").addEventListener("click", saveSelectedContextPack);
+    $("context-pack-apply-preview").addEventListener("click", previewSelectedContextPack);
+    $("context-pack-select").addEventListener("change", () => {
+      $("song-context-pack").value = $("context-pack-select").value;
     });
     $("reference-import-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -1344,6 +1456,185 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           .map((tag) => tag.trim())
           .filter(Boolean),
       };
+    }
+
+    async function loadContextPacks() {
+      try {
+        const data = await api("/api/context-packs");
+        contextPacks = data.context_packs || [];
+        renderContextPacks();
+        renderContextPackSelectors();
+      } catch (err) {
+        $("context-pack-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function rebuildLibrary() {
+      const data = await api("/api/library/rebuild", { method: "POST" });
+      $("library-message").textContent = `${data.index.item_count} indexed`;
+    }
+
+    async function searchLibrary() {
+      const payload = librarySearchPayload();
+      const data = await api("/api/library/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      renderLibraryResults(data.results || []);
+      $("library-message").textContent = `${data.total || 0} results`;
+    }
+
+    async function recommendLibrary() {
+      const data = await api("/api/library/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "song_request",
+          goal: "generate",
+          song_request: formPayload(),
+          limit: 10,
+        }),
+      });
+      const recommendation = data.recommendation || {};
+      applyLibraryPreview(recommendation.context_pack_preview || {});
+      renderLibraryResults([...(recommendation.asset_results || []), ...(recommendation.reference_results || [])]);
+      $("library-message").textContent = "recommended";
+    }
+
+    function librarySearchPayload() {
+      const payload = {
+        query: $("library-query").value.trim(),
+        include_stale: $("library-include-stale").checked,
+        include_hidden: $("library-include-hidden").checked,
+        limit: 30,
+      };
+      if ($("library-kind").value) payload.item_kinds = [$("library-kind").value];
+      if ($("library-role").value.trim()) payload.roles = $("library-role").value.split(",").map((item) => item.trim()).filter(Boolean);
+      if ($("library-tempo").value) payload.tempo_bpm = Number($("library-tempo").value);
+      if ($("library-key").value.trim()) payload.key = $("library-key").value.trim();
+      return payload;
+    }
+
+    function renderLibraryResults(results) {
+      const target = $("library-results");
+      if (!results.length) {
+        target.innerHTML = "<div class='empty'>No library results.</div>";
+        return;
+      }
+      target.innerHTML = results.map((result) => `
+        <div class="library-result">
+          <h4>${escapeHtml(result.title)} <span class="status">${escapeHtml(result.item_kind)} · ${escapeHtml(result.item_type)}</span></h4>
+          <div class="summary-grid">
+            ${metric("Score", result.score ?? "-")}
+            ${metric("Key", result.key || "-")}
+            ${metric("Tempo", result.tempo_bpm || "-")}
+            ${metric("Uses", result.usage_count || 0)}
+          </div>
+          <div class="actions">
+            <button class="secondary" data-library-add="${escapeHtml(result.item_id)}" data-kind="${escapeHtml(result.item_kind)}" data-source-id="${escapeHtml(result.source_id)}" data-role="${escapeHtml(((result.features || {}).roles || ["reference"])[0] || "reference")}" type="button">Add to Context</button>
+          </div>
+          <pre>${escapeHtml(JSON.stringify({ tags: result.tags || [], reasons: result.score_breakdown || [], summary: result.summary || {} }, null, 2))}</pre>
+        </div>
+      `).join("");
+      target.querySelectorAll("[data-library-add]").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (button.dataset.kind === "asset") {
+            upsertContextRef(librarySelection.asset_refs, "asset_id", { asset_id: button.dataset.sourceId, role: button.dataset.role, strength: 0.8 });
+          } else {
+            upsertContextRef(librarySelection.reference_refs, "reference_id", { reference_id: button.dataset.sourceId, role: button.dataset.role, strength: 0.6 });
+          }
+          renderContextPackPreview();
+        });
+      });
+    }
+
+    function applyLibraryPreview(preview) {
+      librarySelection = {
+        asset_refs: (preview.asset_refs || []).slice(0, 5),
+        reference_refs: (preview.reference_refs || []).slice(0, 5),
+      };
+      renderContextPackPreview();
+    }
+
+    function upsertContextRef(list, key, item) {
+      if (list.some((ref) => ref[key] === item[key])) return;
+      if (list.length >= 5) return;
+      list.push(item);
+    }
+
+    async function saveSelectedContextPack() {
+      try {
+        const pack = await api("/api/context-packs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: $("context-pack-name").value.trim() || "Studio Context",
+            created_from: { source: "studio", goal: "generate" },
+            query: librarySearchPayload(),
+            asset_refs: librarySelection.asset_refs,
+            reference_refs: librarySelection.reference_refs,
+            selection: { mode: "manual", selected_by: "user" },
+          }),
+        });
+        $("context-pack-message").textContent = "saved";
+        $("context-pack-select").value = pack.context_pack.pack_id;
+        await loadContextPacks();
+      } catch (err) {
+        $("context-pack-message").textContent = err.message;
+      }
+    }
+
+    async function previewSelectedContextPack() {
+      const packId = $("context-pack-select").value;
+      if (!packId) return;
+      try {
+        const data = await api(`/api/context-packs/${encodeURIComponent(packId)}/apply-preview`, { method: "POST" });
+        $("context-pack-preview").textContent = JSON.stringify(data, null, 2);
+        librarySelection = { asset_refs: data.asset_refs || [], reference_refs: data.reference_refs || [] };
+      } catch (err) {
+        $("context-pack-preview").textContent = err.message;
+      }
+    }
+
+    function renderContextPacks() {
+      const target = $("context-pack-list");
+      if (!contextPacks.length) {
+        target.innerHTML = "<div class='empty'>No context packs yet.</div>";
+        return;
+      }
+      target.innerHTML = `
+        <table><thead><tr><th>Pack</th><th>Assets</th><th>References</th><th>Updated</th></tr></thead><tbody>
+          ${contextPacks.map((pack) => `<tr><td>${escapeHtml(pack.name)} · ${escapeHtml(pack.pack_id)}</td><td>${escapeHtml((pack.asset_refs || []).length)}</td><td>${escapeHtml((pack.reference_refs || []).length)}</td><td>${escapeHtml(pack.updated_at || "-")}</td></tr>`).join("")}
+        </tbody></table>
+      `;
+    }
+
+    function renderContextPackSelectors() {
+      document.querySelectorAll(".context-pack-select").forEach((select) => {
+        const selected = select.value;
+        select.innerHTML = `<option value="">none</option>${contextPacks.map((pack) => `<option value="${escapeHtml(pack.pack_id)}">${escapeHtml(pack.name)} · ${escapeHtml(pack.pack_id)}</option>`).join("")}`;
+        select.value = selected;
+      });
+      if ($("context-pack-select")) {
+        const selected = $("context-pack-select").value;
+        $("context-pack-select").innerHTML = `<option value="">none</option>${contextPacks.map((pack) => `<option value="${escapeHtml(pack.pack_id)}">${escapeHtml(pack.name)} · ${escapeHtml(pack.pack_id)}</option>`).join("")}`;
+        $("context-pack-select").value = selected;
+      }
+      if ($("song-context-pack")) {
+        const selected = $("song-context-pack").value;
+        $("song-context-pack").innerHTML = `<option value="">none</option>${contextPacks.map((pack) => `<option value="${escapeHtml(pack.pack_id)}">${escapeHtml(pack.name)} · ${escapeHtml(pack.pack_id)}</option>`).join("")}`;
+        $("song-context-pack").value = selected;
+      }
+    }
+
+    function renderContextPackPreview() {
+      $("context-pack-preview").textContent = JSON.stringify(librarySelection, null, 2);
+    }
+
+    function contextPackIdPayload(selectId) {
+      const select = $(selectId);
+      return select && select.value ? select.value : "";
     }
 
     async function loadJobs() {
@@ -2021,6 +2312,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Reference Materials
           <div id="project-version-reference-refs" class="reference-ref-list"></div>
         </label>
+        <label>Context Pack
+          <select id="project-version-context-pack" class="context-pack-select"><option value="">none</option></select>
+        </label>
         <div class="actions">
           <button id="project-new-version" type="button">New Version</button>
           <button class="secondary" id="project-add-job" type="button">Add Existing Job</button>
@@ -2039,6 +2333,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       wireProjectActions(project, versions);
       renderAssetSelectors();
       renderReferenceSelectors();
+      renderContextPackSelectors();
       await renderProjectTab(project, versions);
     }
 
@@ -2068,6 +2363,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             pipeline_mode: $("pipeline_mode").value,
             asset_refs: assetRefsPayload("project-version-asset-refs"),
             reference_refs: referenceRefsPayload("project-version-reference-refs"),
+            context_pack_id: contextPackIdPayload("project-version-context-pack"),
           }),
         });
         await loadJobs();
@@ -2178,6 +2474,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } else if (activeProjectTab === "variation") {
         target.innerHTML = projectVariationControls(project, versions);
         renderAssetSelectors();
+        renderContextPackSelectors();
         bindAction("project-create-variation", async () => {
           const parentId = $("project-variation-parent").value;
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(parentId)}/variation`, {
@@ -2338,6 +2635,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Reference Materials
           <div id="project-variation-reference-refs" class="reference-ref-list"></div>
         </label>
+        <label>Context Pack
+          <select id="project-variation-context-pack" class="context-pack-select"><option value="">none</option></select>
+        </label>
         <div class="actions">
           <button id="project-create-variation" type="button" ${parent ? "" : "disabled"}>Create Variation</button>
           <span id="project-variation-message" class="message"></span>
@@ -2370,6 +2670,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (refs.length) payload.asset_refs = refs;
       const referenceRefs = referenceRefsPayload("project-variation-reference-refs");
       if (referenceRefs.length) payload.reference_refs = referenceRefs;
+      const contextPackId = contextPackIdPayload("project-variation-context-pack");
+      if (contextPackId) payload.context_pack_id = contextPackId;
       if ($("project-variation-generation-mode").value) payload.generation_mode = $("project-variation-generation-mode").value;
       if ($("project-variation-pipeline-mode").value) payload.pipeline_mode = $("project-variation-pipeline-mode").value;
       return payload;
@@ -2390,6 +2692,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       target.innerHTML = projectEditControls(project, versions, parentId, targets, preview);
       renderAssetSelectors();
       renderReferenceSelectors();
+      renderContextPackSelectors();
       const parentSelect = $("project-edit-parent");
       if (parentSelect) {
         parentSelect.addEventListener("change", async () => {
@@ -2538,6 +2841,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Reference Materials
           <div id="project-edit-reference-refs" class="reference-ref-list"></div>
         </label>
+        <label>Context Pack
+          <select id="project-edit-context-pack" class="context-pack-select"><option value="">none</option></select>
+        </label>
         <div class="actions">
           <button id="project-create-edit" type="button" ${parentId ? "" : "disabled"}>Create Edit Version</button>
           <button class="secondary" id="project-provider-preview" type="button" ${parentId ? "" : "disabled"}>Generate Preview</button>
@@ -2575,6 +2881,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (refs.length) data.asset_refs = refs;
       const referenceRefs = referenceRefsPayload("project-edit-reference-refs");
       if (referenceRefs.length) data.reference_refs = referenceRefs;
+      const contextPackId = contextPackIdPayload("project-edit-context-pack");
+      if (contextPackId) data.context_pack_id = contextPackId;
       return data;
     }
 
@@ -2588,6 +2896,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (refs.length) payload.asset_refs = refs;
       const referenceRefs = referenceRefsPayload("project-edit-reference-refs");
       if (referenceRefs.length) payload.reference_refs = referenceRefs;
+      const contextPackId = contextPackIdPayload("project-edit-context-pack");
+      if (contextPackId) payload.context_pack_id = contextPackId;
       return payload;
     }
 
@@ -2623,6 +2933,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       target.innerHTML = projectCandidateControls(versions, parentId, groups, usage, experiments);
       renderAssetSelectors();
       renderReferenceSelectors();
+      renderContextPackSelectors();
       const parentSelect = $("project-candidate-parent");
       if (parentSelect) {
         parentSelect.addEventListener("change", async () => {
@@ -2746,6 +3057,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Reference Materials
           <div id="project-candidate-reference-refs" class="reference-ref-list"></div>
         </label>
+        <label>Context Pack
+          <select id="project-candidate-context-pack" class="context-pack-select"><option value="">none</option></select>
+        </label>
         <div class="actions">
           <button id="project-generate-candidates" type="button" ${parentId ? "" : "disabled"}>Generate Candidates</button>
           <span id="project-candidate-message" class="message"></span>
@@ -2777,6 +3091,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (refs.length) payload.asset_refs = refs;
       const referenceRefs = referenceRefsPayload("project-candidate-reference-refs");
       if (referenceRefs.length) payload.reference_refs = referenceRefs;
+      const contextPackId = contextPackIdPayload("project-candidate-context-pack");
+      if (contextPackId) payload.context_pack_id = contextPackId;
       return payload;
     }
 
@@ -2793,6 +3109,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (refs.length) payload.asset_refs = refs;
       const referenceRefs = referenceRefsPayload("project-candidate-reference-refs");
       if (referenceRefs.length) payload.reference_refs = referenceRefs;
+      const contextPackId = contextPackIdPayload("project-candidate-context-pack");
+      if (contextPackId) payload.context_pack_id = contextPackId;
       return payload;
     }
 
@@ -3515,6 +3833,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Step", job.step || "-")}
           ${metric("Updated", job.updated_at || "-")}
         </div>
+        ${job.input_payload && job.input_payload.context_pack ? `
+          <div class="summary-grid">
+            ${metric("Context Pack", job.input_payload.context_pack.pack_id || "-")}
+            ${metric("Context Name", job.input_payload.context_pack.name || "-")}
+            ${metric("Context Assets", (job.input_payload.context_pack.asset_refs || []).length)}
+            ${metric("Context References", (job.input_payload.context_pack.reference_refs || []).length)}
+          </div>
+        ` : ""}
         ${providerSnapshotHtml(job.provider_snapshot || {})}
         <div class="actions">
           ${actionButtons(job)}

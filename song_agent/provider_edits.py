@@ -358,6 +358,7 @@ def create_provider_edit_preview(
     provider_request_id: str | None = None,
     asset_refs: list[dict[str, Any]] | None = None,
     reference_refs: list[dict[str, Any]] | None = None,
+    context_pack: dict[str, Any] | None = None,
 ) -> ProviderEditPreview:
     now = now or now_iso()
     preview_root = project_dir / "edit-previews"
@@ -394,10 +395,11 @@ def create_provider_edit_preview(
         source={
             "parent_version_id": parent_version_id,
             "parent_job_id": parent_job_id,
-            "song_plan_sha256": song_plan_hash(parent_plan),
-            "asset_refs": list(asset_refs or []),
-            "reference_refs": list(reference_refs or []),
-        },
+             "song_plan_sha256": song_plan_hash(parent_plan),
+             "asset_refs": list(asset_refs or []),
+             "reference_refs": list(reference_refs or []),
+             **({"context_pack": dict(context_pack)} if context_pack else {}),
+         },
         quality=quality,
         validator=validator,
         provider_usage=dict(provider_usage or {}),

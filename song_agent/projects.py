@@ -519,6 +519,7 @@ class ProjectStore:
             "final_version": _version_or_none(document, document.state.final_version_id),
             "asset_refs": _collect_project_asset_refs(self.project_dir(project_id), document),
             "reference_refs": _collect_project_reference_refs(self.project_dir(project_id), document),
+            "context_packs": _collect_project_context_packs(self.project_dir(project_id), document),
             "generated_at": now_iso(),
         }
         write_json(self.project_dir(project_id) / "export.json", export)
@@ -991,6 +992,59 @@ def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument
                     add_ref(ref, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
 
     return sorted(refs.values(), key=lambda item: item["reference_id"])
+
+
+def _collect_project_context_packs(project_dir: Path, document: ProjectDocument) -> list[dict[str, Any]]:
+    packs: dict[str, dict[str, Any]] = {}
+
+    def add_pack(data: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None) -> None:
+        pack_id = str(data.get("pack_id") or "").strip()
+        if not pack_id:
+            return
+        record = packs.setdefault(
+            pack_id,
+            {
+                "pack_id": pack_id,
+                "name": str(data.get("name") or pack_id),
+                "asset_count": len(data.get("asset_refs") or []) if isinstance(data.get("asset_refs"), list) else int(data.get("asset_count") or 0),
+                "reference_count": len(data.get("reference_refs") or []) if isinstance(data.get("reference_refs"), list) else int(data.get("reference_count") or 0),
+                "created_from": _sanitize_asset_metadata(data.get("created_from")) if isinstance(data.get("created_from"), dict) else {},
+                "query": _sanitize_asset_metadata(data.get("query")) if isinstance(data.get("query"), dict) else {},
+                "used_by_versions": [],
+                "used_by_candidate_groups": [],
+            },
+        )
+        if data.get("name") and record.get("name") == pack_id:
+            record["name"] = str(data.get("name"))
+        if version_id and version_id not in record["used_by_versions"]:
+            record["used_by_versions"].append(version_id)
+        if candidate_group_id and candidate_group_id not in record["used_by_candidate_groups"]:
+            record["used_by_candidate_groups"].append(candidate_group_id)
+
+    for version in document.versions:
+        path = Path(version.output_dir) / "data" / "context-pack.json"
+        if not path.exists():
+            continue
+        try:
+            data = read_json(path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict):
+            add_pack(data, version_id=version.version_id)
+
+    candidate_root = project_dir / "candidate-groups"
+    if candidate_root.exists():
+        for group_json in candidate_root.glob("*/group.json"):
+            try:
+                data = read_json(group_json)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            context_pack = source.get("context_pack") if isinstance(source, dict) else None
+            if isinstance(context_pack, dict):
+                add_pack(context_pack, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
+
+    return sorted((_sanitize_asset_metadata(record) for record in packs.values()), key=lambda item: item["pack_id"])
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:

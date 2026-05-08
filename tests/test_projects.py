@@ -97,6 +97,35 @@ def test_add_version_from_job_sets_index_flags_and_quality(tmp_path: Path) -> No
     assert updated.versions[0].quality_gate_status == "not_evaluated"
 
 
+def test_export_project_collects_context_pack_summaries(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    document = store.create_project("Context Export")
+    run_dir = make_run(tmp_path, "context-job")
+    write_json(
+        run_dir / "data" / "context-pack.json",
+        {
+            "schema_version": 1,
+            "pack_id": "pack-001",
+            "name": "Context Pack sk-secret123456",
+            "created_from": {"source": "song_request", "path": str(tmp_path)},
+            "query": {"text": "D:\\Music\\seed.mid rainy"},
+            "asset_refs": [{"asset_id": "asset-001"}],
+            "reference_refs": [{"reference_id": "ref-001"}],
+        },
+    )
+    job = FakeJob(job_id="context-job", title="Project Song", output_dir=str(run_dir))
+    store.add_version_from_job(document.state.project_id, job)
+
+    exported = store.export_project(document.state.project_id)
+    serialized = json.dumps(exported, ensure_ascii=False)
+
+    assert exported["context_packs"][0]["pack_id"] == "pack-001"
+    assert exported["context_packs"][0]["used_by_versions"] == ["v001"]
+    assert exported["context_packs"][0]["asset_count"] == 1
+    assert "sk-secret123456" not in serialized
+    assert str(tmp_path) not in serialized
+
+
 def test_add_version_rejects_duplicate_job(tmp_path: Path) -> None:
     store = ProjectStore(tmp_path / "projects")
     document = store.create_project("Duplicate Song")

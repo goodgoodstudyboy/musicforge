@@ -21,6 +21,8 @@ from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
+from song_agent.context_packs import ContextPackStore, context_pack_snapshot, write_context_pack_snapshot
+from song_agent.library_index import LibraryIndexStore, recommend_library_context, search_library
 from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.provider_usage import build_provider_usage_report, collect_project_provider_usage_records
 from song_agent.prompt_ab import PromptABStore
@@ -163,6 +165,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.6 creative assets smoke", *_v16_creative_assets_smoke(root))
     report.add("v1.7 reference library smoke", *_v17_reference_library_smoke(root))
     report.add("v1.8 reference analysis smoke", *_v18_reference_analysis_smoke(root))
+    report.add("v1.9 library context smoke", *_v19_library_context_smoke(root))
     return report
 
 
@@ -1188,6 +1191,122 @@ def _v18_reference_analysis_smoke(root: Path) -> tuple[bool, str]:
             return ok, f"wav={wav_ref.reference_id}, midi={midi_ref.reference_id}, slices={len(slices['slices'])}, asset={asset['asset_id']}"
     except Exception as exc:
         return False, str(exc)
+
+
+def _v19_library_context_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        try:
+            project_store = ProjectStore(base / ".musicforge" / "projects")
+            reference_store = ReferenceStore(base / ".musicforge" / "references")
+            asset_store = AssetStore(base / ".musicforge" / "assets")
+            context_store = ContextPackStore(base / ".musicforge" / "context-packs")
+            library_store = LibraryIndexStore(base / ".musicforge" / "library")
+            request = SongRequest(
+                title="Release v1.9 Smoke",
+                language="English",
+                style="rainy synth pop",
+                theme="rainy hook context",
+                tempo_bpm=120,
+                key="C",
+            )
+            document = project_store.create_project("Release v1.9 Smoke")
+            asset = asset_store.create_asset(
+                {
+                    "asset_type": "motif",
+                    "name": "Rainy synth hook",
+                    "description": "Reusable hook for rainy synth pop.",
+                    "tags": ["rainy", "hook", "synth"],
+                    "style": "synth pop",
+                    "key": "C",
+                    "tempo_bpm": 120,
+                    "quality_score": 88,
+                    "content": {"notes": [{"pitch": 60, "start_beat": 0, "duration_beats": 1}, {"pitch": 64, "start_beat": 1, "duration_beats": 1}]},
+                    "source": {"source_type": "release_check", "path": "D:\\Music\\secret.mid"},
+                },
+                now="2026-05-08T00:00:00+00:00",
+            )
+            midi_ref, _ = reference_store.import_reference(
+                {
+                    "reference_type": "midi",
+                    "filename": "seed.mid",
+                    "title": "Rainy MIDI Reference",
+                    "tags": ["rainy", "midi"],
+                    "content_base64": base64.b64encode(_tiny_reference_midi_bytes()).decode("ascii"),
+                    "source_note": "Bearer v19-token \\\\server\\share\\seed.mid",
+                },
+                now="2026-05-08T00:00:00+00:00",
+            )
+            analyze_reference(reference_store, midi_ref.reference_id, now="2026-05-08T00:00:00+00:00")
+            generate_slices(reference_store, midi_ref.reference_id, now="2026-05-08T00:00:00+00:00")
+            index = library_store.rebuild(asset_store, reference_store, now="2026-05-08T00:00:00+00:00")
+            results = search_library(index, {"query": "rainy hook synth", "roles": ["hook"], "tempo_bpm": 120, "key": "C"})
+            recommendation = recommend_library_context(index, {"source": "song_request", "goal": "generate", "song_request": request.to_dict()})
+            preview = recommendation["recommendation"]["context_pack_preview"]
+            pack = context_store.create_pack(
+                {
+                    "name": "Release Context",
+                    "created_from": {"source": "song_request", "goal": "generate"},
+                    "query": recommendation["recommendation"]["query"],
+                    "asset_refs": preview["asset_refs"][:1],
+                    "reference_refs": preview["reference_refs"][:1],
+                    "selection": {"mode": "recommended", "selected_by": "system"},
+                },
+                asset_store=asset_store,
+                reference_store=reference_store,
+                now="2026-05-08T00:00:00+00:00",
+            )
+            applied = context_store.apply_preview(pack.pack_id, asset_store=asset_store, reference_store=reference_store, captured_at="2026-05-08T00:00:00+00:00")
+            child_dir = base / "runs" / "v19-child"
+            child_plan = apply_asset_refs_to_plan(deterministic_compose(request), asset_store, applied["asset_refs"])
+            write_json(child_dir / "data" / "song-plan.json", child_plan.to_dict())
+            write_json(child_dir / "data" / "run-summary.json", {"title": child_plan.title})
+            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(child_plan, child_dir / "renders" / "song.mid")
+            write_asset_refs_snapshot(child_dir, {"schema_version": 1, "asset_refs": applied["asset_refs"], "captured_at": "2026-05-08T00:00:00+00:00"})
+            write_reference_refs_snapshot(child_dir, {"schema_version": 1, "reference_refs": applied["reference_refs"], "captured_at": "2026-05-08T00:00:00+00:00"})
+            write_context_pack_snapshot(child_dir, context_pack_snapshot(pack, applied, captured_at="2026-05-08T00:00:00+00:00"))
+            child_job = _SmokeJob("v19-child", child_dir, request.to_dict() | {"context_pack_id": pack.pack_id, "context_pack": context_pack_snapshot(pack, applied)})
+            child_job.artifacts["asset_refs"] = str(child_dir / "data" / "asset-refs.json")
+            child_job.artifacts["reference_refs"] = str(child_dir / "data" / "reference-refs.json")
+            child_job.artifacts["context_pack"] = str(child_dir / "data" / "context-pack.json")
+            document = project_store.add_version_from_job(
+                document.state.project_id,
+                child_job,
+                name="Library Context Child",
+                variant_type="manual",
+                change_summary="use library context pack",
+            )
+            project_export = project_store.export_project(document.state.project_id)
+            gate = evaluate_quality_gate(child_dir, QualityGateConfig(), now="2026-05-08T00:00:00+00:00")
+            manifest = build_final_export_bundle(
+                project=document.state,
+                version=document.versions[-1],
+                project_dir=project_store.project_dir(document.state.project_id),
+                run_dir=child_dir,
+                gate=gate,
+                options=FinalExportOptions(version_id="v001"),
+                now="2026-05-08T00:00:00+00:00",
+                project_export=project_export,
+            )
+            serialized = str(results) + str(recommendation) + str(project_export.get("context_packs")) + str(manifest.get("context_pack"))
+            ok = (
+                index.summary()["item_count"] == 2
+                and results["results"]
+                and results["results"][0]["score_breakdown"]
+                and pack.pack_id == "pack-001"
+                and applied["asset_refs"]
+                and applied["reference_refs"]
+                and project_export["context_packs"][0]["pack_id"] == pack.pack_id
+                and manifest["context_pack"]["pack_id"] == pack.pack_id
+                and "v19-token" not in serialized
+                and "D:\\Music" not in serialized
+                and "\\\\server\\share" not in serialized
+                and "content_base64" not in serialized
+            )
+            return ok, f"index_items={index.summary()['item_count']}, results={len(results['results'])}, pack={pack.pack_id}, assets={len(applied['asset_refs'])}, references={len(applied['reference_refs'])}"
+        except Exception as exc:
+            return False, str(exc)
 
 
 def _tiny_wav_bytes() -> bytes:

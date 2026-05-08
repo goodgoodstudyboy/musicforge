@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.9.0 - 2026-05-08
+
+### Added
+- Local Library Index for searchable Creative Assets and References with deterministic scoring and score breakdowns.
+- Library search and recommendation APIs for local, explainable retrieval without embeddings or external services.
+- Persistent Context Packs under `.musicforge/context-packs/` with stale/hidden source validation.
+- `context_pack_id` support for jobs, Project versions, variations, local/provider edits, provider previews, candidate groups, and Prompt A/B.
+- Project Export and Final Export now include sanitized Context Pack summaries.
+- Studio Library workflow with search, recommendation, Context Pack save/apply preview, and context selectors.
+- Release-check now covers the v1.9 library/context-pack workflow.
+
+### Scope
+- v1.9.0 intentionally does not add vector databases, embeddings, audio fingerprinting, MP3, audio-to-MIDI, or automatic application of recommended context.
+
+### Verified
+- `python -m pytest tests\test_library_index.py tests\test_context_packs.py tests\test_server_library_context.py tests\test_projects.py::test_export_project_collects_context_pack_summaries tests\test_final_export.py::test_final_export_manifest_includes_context_pack_summary tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.8.0 - 2026-05-08
 
 ### Added

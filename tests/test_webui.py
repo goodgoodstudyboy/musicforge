@@ -336,6 +336,21 @@ def test_webui_calls_reference_apis():
     assert "fileToBase64" in html
 
 
+def test_webui_calls_library_context_pack_apis():
+    html = panel_html()
+
+    assert "Library" in html
+    assert "/api/library/index" in html or "/api/library/rebuild" in html
+    assert "/api/library/search" in html
+    assert "/api/library/recommend" in html
+    assert "/api/context-packs" in html
+    assert "/api/context-packs/${encodeURIComponent(packId)}/apply-preview" in html
+    assert "context_pack_id" in html
+    assert "context-pack-select" in html
+    assert "song-suggest-context" in html
+    assert "score_breakdown" in html
+
+
 def test_webui_calls_project_apis():
     html = panel_html()
 
