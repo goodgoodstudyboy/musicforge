@@ -51,6 +51,48 @@ def test_add_section_normalizes_timeline_and_shifts_later_notes() -> None:
     assert any("without notes" in warning for warning in result.warnings)
 
 
+def test_section_ids_remain_stable_after_prior_insert_in_same_patch() -> None:
+    plan = sample_plan()
+    result = apply_editor_patch(
+        plan,
+        patch(
+            plan,
+            [
+                {"op": "add_section", "after_section_id": "section-001", "name": "pre chorus", "bars": 2, "chords": ["Fmaj7", "G7"]},
+                {"op": "resize_section", "section_id": "section-002", "bars": 4, "note_policy": "crop"},
+                {"op": "set_section_lyrics", "section_id": "section-002", "lyrics": "verse stays targeted"},
+            ],
+        ),
+    )
+
+    sections = {section.name: section for section in result.plan.sections}
+    assert sections["pre chorus"].bars == 2
+    assert sections["verse"].bars == 4
+    assert sections["verse"].lyrics == "verse stays targeted"
+    assert [section.name for section in result.plan.sections] == ["intro", "pre chorus", "verse", "chorus", "outro"]
+
+
+def test_track_ids_remain_stable_after_prior_add_in_same_patch() -> None:
+    plan = sample_plan()
+    result = apply_editor_patch(
+        plan,
+        patch(
+            plan,
+            [
+                {"op": "add_track", "name": "pad", "instrument": "warm pad"},
+                {"op": "rename_track", "track_id": "track-002", "name": "chords keys"},
+                {"op": "set_track_instrument", "track_id": "track-002", "instrument": "glass keys"},
+            ],
+        ),
+    )
+
+    tracks = {track.name: track for track in result.plan.tracks}
+    assert "pad" in tracks
+    assert tracks["pad"].instrument == "warm pad"
+    assert "chords keys" in tracks
+    assert tracks["chords keys"].instrument == "glass keys"
+
+
 def test_duplicate_section_copies_notes_to_new_section() -> None:
     plan = sample_plan()
     result = apply_editor_patch(

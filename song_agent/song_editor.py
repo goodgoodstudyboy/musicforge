@@ -420,6 +420,8 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
     if patch.base_plan_hash != current_hash:
         raise EditorPatchStaleError("Editor patch is stale because the base song-plan hash changed.")
     state = build_editor_state(parent_plan)
+    base_section_names_by_id: dict[str, str | None] = {section["section_id"]: str(section["name"]) for section in state["sections"]}
+    base_track_names_by_id: dict[str, str | None] = {track["track_id"]: str(track["name"]) for track in state["tracks"]}
     sections = list(parent_plan.sections)
     tracks = list(parent_plan.tracks)
     summary_counts: dict[str, int] = {}
@@ -432,19 +434,19 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
         op = str(operation.get("op") or "")
         summary_counts[op] = summary_counts.get(op, 0) + 1
         if op == "set_section_chords":
-            section_index = _section_index_for_plan(operation, sections)
+            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
             chords = _chords(operation.get("chords"))
             section = sections[section_index]
             sections[section_index] = SongSection(section.name, section.start_bar, section.bars, chords, section.lyrics)
             changed_sections.add(section.name)
         elif op == "set_section_lyrics":
-            section_index = _section_index_for_plan(operation, sections)
+            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
             lyrics = _clean_lyrics(operation.get("lyrics"))
             section = sections[section_index]
             sections[section_index] = SongSection(section.name, section.start_bar, section.bars, section.chords, lyrics)
             changed_sections.add(section.name)
         elif op == "set_track_instrument":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             instrument = _bounded_text(operation.get("instrument"), MAX_INSTRUMENT_LENGTH)
             if not instrument:
                 raise EditorPatchError("instrument must not be empty.")
@@ -454,7 +456,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
         elif op == "add_section":
             beats_per_bar = _beats_per_bar(parent_plan)
             section = _section_from_operation(operation, sections)
-            after_index = _optional_after_section_index(operation, sections)
+            after_index = _optional_after_section_index(operation, sections, base_section_names_by_id)
             insert_index = len(sections) if after_index is None else after_index + 1
             insert_start = _section_start_beat_at_index(sections, insert_index, beats_per_bar)
             delta = section.bars * beats_per_bar
@@ -467,10 +469,10 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
             warnings.append(f"Section {section.name} was added without notes.")
         elif op == "duplicate_section":
             beats_per_bar = _beats_per_bar(parent_plan)
-            source_index = _section_index_for_plan(operation, sections)
+            source_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
             source = sections[source_index]
             new_name = _unique_section_name(operation.get("name"), sections)
-            after_index = _optional_after_section_index(operation, sections)
+            after_index = _optional_after_section_index(operation, sections, base_section_names_by_id)
             insert_index = len(sections) if after_index is None else after_index + 1
             source_start = _section_start_beat(source, beats_per_bar)
             source_end = source_start + source.bars * beats_per_bar
@@ -494,7 +496,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
             beats_per_bar = _beats_per_bar(parent_plan)
             if len(sections) <= 1:
                 raise EditorPatchError("Cannot delete the last section.")
-            section_index = _section_index_for_plan(operation, sections)
+            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
             section = sections[section_index]
             policy = _choice(operation.get("note_policy") or "delete", "note_policy", {"delete", "shift_left", "keep_absolute"})
             start = _section_start_beat(section, beats_per_bar)
@@ -504,6 +506,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
                 tracks = delete_notes_in_range(tracks, start, end)
                 tracks = shift_notes_after_beat(tracks, end, delta)
             sections.pop(section_index)
+            base_section_names_by_id[str(operation.get("section_id") or "")] = None
             sections = normalize_sections(sections)
             total_beats = _total_bars_from_sections(sections) * beats_per_bar
             if policy == "keep_absolute":
@@ -512,7 +515,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
             changed_tracks.update(track.name for track in tracks)
         elif op == "resize_section":
             beats_per_bar = _beats_per_bar(parent_plan)
-            section_index = _section_index_for_plan(operation, sections)
+            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
             section = sections[section_index]
             new_bars = _int_range(operation.get("bars"), "bars", 1, MAX_SECTION_BARS)
             policy = _choice(operation.get("note_policy") or "shift_tail", "note_policy", {"shift_tail", "crop"})
@@ -535,8 +538,8 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
                 changed_tracks.update(track.name for track in tracks)
         elif op == "move_section":
             beats_per_bar = _beats_per_bar(parent_plan)
-            section_index = _section_index_for_plan(operation, sections)
-            after_index = _optional_after_section_index(operation, sections, allow_self=False)
+            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
+            after_index = _optional_after_section_index(operation, sections, base_section_names_by_id, allow_self=False)
             section = sections[section_index]
             before_names = [item.name for item in sections]
             old_spans_by_name = {item.name: _section_span(item, beats_per_bar) for item in sections}
@@ -571,7 +574,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
         elif op == "duplicate_track":
             if len(tracks) >= MAX_EDITOR_TRACKS:
                 raise EditorPatchError(f"editor supports at most {MAX_EDITOR_TRACKS} tracks.")
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             source = tracks[track_index]
             name = _unique_track_name(operation.get("name"), tracks)
             instrument = _bounded_text(operation.get("instrument") or source.instrument, MAX_INSTRUMENT_LENGTH)
@@ -585,7 +588,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
         elif op == "delete_track":
             if len(tracks) <= 1:
                 raise EditorPatchError("Cannot delete the last track.")
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             track = tracks[track_index]
             remaining = [item for index, item in enumerate(tracks) if index != track_index]
             if track.notes and not any(item.notes for item in remaining) and not bool(operation.get("allow_empty_song")):
@@ -595,15 +598,17 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
             if _missing_required_track_roles(remaining) and not bool(operation.get("allow_empty_song")):
                 raise EditorPatchError("Cannot delete required track roles unless allow_empty_song is true.")
             tracks = remaining
+            base_track_names_by_id[str(operation.get("track_id") or "")] = None
             changed_tracks.add(track.name)
         elif op == "rename_track":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             track = tracks[track_index]
             name = _unique_track_name(operation.get("name"), [item for index, item in enumerate(tracks) if index != track_index])
             tracks[track_index] = TrackPlan(name, track.instrument, track.notes)
+            base_track_names_by_id[str(operation.get("track_id") or "")] = name
             changed_tracks.update({track.name, name})
         elif op == "add_note":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             if added_notes >= MAX_ADDED_NOTES_PER_PATCH:
                 raise EditorPatchError(f"editor patch can add at most {MAX_ADDED_NOTES_PER_PATCH} notes.")
             note = _note(operation.get("note"), total_beats)
@@ -612,13 +617,13 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
             changed_tracks.add(track.name)
             added_notes += 1
         elif op == "update_note":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             track = tracks[track_index]
             notes = _update_note(track, state["tracks"][track_index], operation, total_beats)
             tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
             changed_tracks.add(track.name)
         elif op == "delete_notes":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             track = tracks[track_index]
             selected = set(_note_ids(operation.get("note_ids")))
             existing = {item["note_id"] for item in state["tracks"][track_index]["notes"]}
@@ -631,21 +636,21 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
             tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
             changed_tracks.add(track.name)
         elif op == "move_notes":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             delta = _float_range(operation.get("delta_beats"), "delta_beats", -64.0, 64.0)
             track = tracks[track_index]
             ids = set(_note_ids(operation.get("note_ids")))
             tracks[track_index] = TrackPlan(track.name, track.instrument, _map_selected_notes(track, track_index, ids=ids, total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, _round_beat(note.start_beat + delta), note.duration_beats, note.velocity)))
             changed_tracks.add(track.name)
         elif op == "transpose_notes":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             semitones = _int_range(operation.get("semitones"), "semitones", -24, 24)
             track = tracks[track_index]
             selector = _note_selector(operation, track, track_index)
             tracks[track_index] = TrackPlan(track.name, track.instrument, _map_selected_notes(track, track_index, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(_clamp(note.pitch + semitones, 0, 127), note.start_beat, note.duration_beats, note.velocity)))
             changed_tracks.add(track.name)
         elif op == "quantize_notes":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             grid = float(operation.get("grid"))
             if grid not in QUANTIZE_GRIDS:
                 raise EditorPatchError("grid must be one of 0.125, 0.25, 0.5, 1.0.")
@@ -654,7 +659,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
             tracks[track_index] = TrackPlan(track.name, track.instrument, _map_selected_notes(track, track_index, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, _round_beat(round(note.start_beat / grid) * grid), note.duration_beats, note.velocity)))
             changed_tracks.add(track.name)
         elif op == "scale_velocity":
-            track_index = _track_index_for_plan(operation, tracks)
+            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
             factor = _float_range(operation.get("factor"), "factor", 0.25, 2.0)
             track = tracks[track_index]
             selector = _note_selector(operation, track, track_index)
@@ -829,7 +834,18 @@ def _section_index(operation: dict[str, Any]) -> int:
     return index
 
 
-def _section_index_for_plan(operation: dict[str, Any], sections: list[SongSection]) -> int:
+def _section_index_for_plan(operation: dict[str, Any], sections: list[SongSection], base_names_by_id: dict[str, str | None] | None = None) -> int:
+    section_id = str(operation.get("section_id") or "").strip()
+    if base_names_by_id is not None:
+        name = base_names_by_id.get(section_id)
+        if section_id not in base_names_by_id:
+            raise EditorPatchError("section_id is out of range.")
+        if name is None:
+            raise EditorPatchError("section_id is no longer available in this patch.")
+        for index, section in enumerate(sections):
+            if section.name == name:
+                return index
+        raise EditorPatchError(f"Section {name} is no longer available in this patch.")
     index = _section_index(operation)
     if index >= len(sections):
         raise EditorPatchError("section_id is out of range.")
@@ -846,7 +862,18 @@ def _track_index(operation: dict[str, Any]) -> int:
     return index
 
 
-def _track_index_for_plan(operation: dict[str, Any], tracks: list[TrackPlan]) -> int:
+def _track_index_for_plan(operation: dict[str, Any], tracks: list[TrackPlan], base_names_by_id: dict[str, str | None] | None = None) -> int:
+    track_id = str(operation.get("track_id") or "").strip()
+    if base_names_by_id is not None:
+        name = base_names_by_id.get(track_id)
+        if track_id not in base_names_by_id:
+            raise EditorPatchError("track_id is out of range.")
+        if name is None:
+            raise EditorPatchError("track_id is no longer available in this patch.")
+        for index, track in enumerate(tracks):
+            if track.name == name:
+                return index
+        raise EditorPatchError(f"Track {name} is no longer available in this patch.")
     index = _track_index(operation)
     if index >= len(tracks):
         raise EditorPatchError("track_id is out of range.")
@@ -1104,12 +1131,18 @@ def _unique_track_name(value: Any, tracks: list[TrackPlan]) -> str:
     return name
 
 
-def _optional_after_section_index(operation: dict[str, Any], sections: list[SongSection], *, allow_self: bool = True) -> int | None:
+def _optional_after_section_index(
+    operation: dict[str, Any],
+    sections: list[SongSection],
+    base_names_by_id: dict[str, str] | None = None,
+    *,
+    allow_self: bool = True,
+) -> int | None:
     value = operation.get("after_section_id")
     if value is None or str(value).strip() == "":
         return None
     candidate = {"section_id": value}
-    index = _section_index_for_plan(candidate, sections)
+    index = _section_index_for_plan(candidate, sections, base_names_by_id)
     if not allow_self and operation.get("section_id") and str(operation.get("section_id")) == str(value):
         raise EditorPatchError("after_section_id must not equal section_id.")
     return index

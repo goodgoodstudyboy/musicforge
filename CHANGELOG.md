@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.1.1 - 2026-05-09
+
+### Fixed
+- Visual Editor patch operations now resolve `section-*` and `track-*` IDs against the base editor state, so structure edits earlier in the same patch cannot retarget later operations to the wrong section or track.
+- Track identity now follows `rename_track` within the same patch, while deleted base IDs become unavailable for later operations.
+
+### Verified
+- `python -m pytest tests\test_song_editor_structure.py tests\test_editor_previews.py tests\test_server_editor_structure.py tests\test_server_edits.py::test_project_editor_apply_ignores_polluted_preview_song_plan -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.1.0 - 2026-05-08
 
 ### Added
