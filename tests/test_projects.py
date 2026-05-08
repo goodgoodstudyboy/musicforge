@@ -332,7 +332,7 @@ def test_export_project_includes_redacted_reference_refs(tmp_path: Path) -> None
                     "role": "style",
                     "metadata_summary": {
                         "text_excerpt": "Use a bright hook.",
-                        "license_note": "api_key=sk-polluted-secret",
+                        "license_note": "api_key=sk-polluted-secret D:\\Music\\private\\reference.wav",
                         "path": str(tmp_path / "secret.wav"),
                         "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
                     },
@@ -352,7 +352,11 @@ def test_export_project_includes_redacted_reference_refs(tmp_path: Path) -> None
                         "reference_id": "ref-002",
                         "reference_type": "midi",
                         "title": "MIDI Seed",
-                        "metadata_summary": {"local_path": str(tmp_path), "source_note": "Authorization: Bearer bad-token", "key": "C"},
+                        "metadata_summary": {
+                            "local_path": str(tmp_path),
+                            "source_note": "Authorization: Bearer bad-token \\\\server\\share\\client\\seed.mid",
+                            "key": "C",
+                        },
                     }
                 ]
             },
@@ -368,6 +372,8 @@ def test_export_project_includes_redacted_reference_refs(tmp_path: Path) -> None
     assert "text_excerpt" in serialized
     assert "key" in serialized
     assert str(tmp_path) not in serialized
+    assert "D:\\Music\\private" not in serialized
+    assert "\\\\server\\share" not in serialized
     assert "sk-polluted-secret" not in serialized
     assert "bad-token" not in serialized
     assert "api_key" not in serialized

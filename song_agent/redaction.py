@@ -25,7 +25,8 @@ SENSITIVE_VALUE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"sk-[A-Za-z0-9_-]{8,}"), "sk-[REDACTED]"),
     (re.compile(r"(?i)Authorization\s*:\s*Bearer\s+[^\s,;]+"), "[REDACTED]"),
     (re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s,;]+"), "[REDACTED]"),
-    (re.compile(r"(?i)\b[A-Z]:[\\/]+Users[\\/]+[^\\/\s,;]+(?:[\\/]+[^\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
+    (re.compile(r"(?i)\b[A-Z]:[\\/]+[^\\/\s,;]+(?:[\\/]+[^\\/\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
+    (re.compile(r"(?<![\\/\w])(?:\\\\|(?<!:)//)[^\\/\s,;]+[\\/]+[^\\/\s,;]+(?:[\\/]+[^\\/\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
     (re.compile(r"(?<!\S)/Users/[^/\s,;]+(?:/[^\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
     (re.compile(r"(?<!\S)/home/[^/\s,;]+(?:/[^\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
 )

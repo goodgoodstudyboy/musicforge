@@ -186,11 +186,12 @@ def test_reference_public_dict_redacts_metadata_and_adds_file_url(tmp_path: Path
 
 def test_reference_text_fields_redact_sensitive_values(tmp_path: Path) -> None:
     store = ReferenceStore(tmp_path / ".musicforge" / "references")
+    content = "api_key=sk-polluted-secret use hook from C:\\Users\\bad\\song.wav and D:\\Music\\client\\hook.wav".encode("utf-8")
     reference, _ = store.import_reference(
         {
-            **import_payload("style_note", "style.md", b"api_key=sk-polluted-secret use hook from C:\\Users\\bad\\song.wav"),
-            "source_note": "Authorization: Bearer secret-token-value",
-            "license_note": "github_pat_123456789012345678901234 and /Users/bad/private/ref.wav",
+            **import_payload("style_note", "style.md", content),
+            "source_note": "Authorization: Bearer secret-token-value from \\\\server\\share\\client\\ref.mid",
+            "license_note": "github_pat_123456789012345678901234 and /Users/bad/private/ref.wav plus //server/share/client/ref.wav",
         }
     )
     updated = store.update_reference(reference.reference_id, {"description": "token=super-secret-value ghp_123456789012345678901234"})
@@ -202,5 +203,8 @@ def test_reference_text_fields_redact_sensitive_values(tmp_path: Path) -> None:
     assert "github_pat_123456789012345678901234" not in serialized
     assert "ghp_123456789012345678901234" not in serialized
     assert "C:\\Users\\bad" not in serialized
+    assert "D:\\Music\\client" not in serialized
+    assert "\\\\server\\share" not in serialized
+    assert "//server/share" not in serialized
     assert "/Users/bad" not in serialized
     assert "[REDACTED]" in serialized or "[REDACTED_LOCAL_PATH]" in serialized

@@ -1006,8 +1006,8 @@ def _v17_reference_library_smoke(root: Path) -> tuple[bool, str]:
                     "title": "Reference Style Seed",
                     "tags": ["release"],
                     "content_base64": "YXBpX2tleT1zay1yZWxlYXNlLXNlY3JldCB1c2UgaG9vayBmcm9tIEM6XFVzZXJzXGJhZFxzb25nLndhdg==",
-                    "source_note": "Authorization: Bearer release-token-value",
-                    "license_note": "github_pat_123456789012345678901234 and /Users/bad/private/ref.wav",
+                    "source_note": "Authorization: Bearer release-token-value D:\\Music\\private\\song.wav",
+                    "license_note": "github_pat_123456789012345678901234 and /Users/bad/private/ref.wav plus \\\\server\\share\\client\\ref.wav",
                     "metadata": {"path": str(base), "api_key": "sk-release-secret", "note": "safe"},
                 },
                 now="2026-05-08T00:00:00+00:00",
@@ -1072,6 +1072,8 @@ def _v17_reference_library_smoke(root: Path) -> tuple[bool, str]:
                 and "github_pat_123456789012345678901234" not in serialized
                 and "/Users/bad" not in serialized
                 and "C:\\Users\\bad" not in serialized
+                and "D:\\Music" not in serialized
+                and "\\\\server\\share" not in serialized
                 and "api_key" not in serialized
                 and str(base) not in serialized
             )

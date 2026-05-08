@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.7.2 - 2026-05-08
+
+### Fixed
+- Value-level redaction now covers arbitrary Windows drive paths such as `D:\Music\...`.
+- Value-level redaction now covers UNC and network-share style paths such as `\\server\share\...` and `//server/share/...`.
+- Reference summaries, provider prompt summaries, Project export, Final Export, and release-check now share the expanded local-path redaction coverage.
+
+### Verified
+- `python -m pytest tests\test_references.py tests\test_projects.py tests\test_final_export.py tests\test_release_check.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.7.1 - 2026-05-08
 
 ### Fixed

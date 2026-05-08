@@ -238,7 +238,7 @@ def test_final_export_includes_sanitized_reference_refs_without_original_files(t
                     "role": "style",
                     "metadata_summary": {
                         "text_excerpt": "Use a bright hook.",
-                        "license_note": "api_key=sk-polluted-secret",
+                        "license_note": "api_key=sk-polluted-secret D:\\Music\\private\\reference.wav",
                         "path": str(tmp_path / "reference.wav"),
                         "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
                     },
@@ -263,7 +263,7 @@ def test_final_export_includes_sanitized_reference_refs_without_original_files(t
                     "reference_type": "style_note",
                     "title": "Style Seed",
                     "used_by_versions": ["v001"],
-                    "metadata_summary": {"text_excerpt": "Use a bright hook."},
+                    "metadata_summary": {"text_excerpt": "Use a bright hook from \\\\server\\share\\client\\ref.wav."},
                 }
             ],
         },
@@ -277,6 +277,8 @@ def test_final_export_includes_sanitized_reference_refs_without_original_files(t
     assert "text_excerpt" in serialized
     assert "safe" in serialized
     assert str(tmp_path) not in serialized
+    assert "D:\\Music\\private" not in serialized
+    assert "\\\\server\\share" not in serialized
     assert "sk-polluted-secret" not in serialized
     assert "api_key" not in serialized
     assert '"path"' not in serialized
