@@ -256,6 +256,49 @@ def test_project_editor_preview_rejects_stale_hash_and_concurrent_apply(tmp_path
     assert detail["project"]["version_count"] == 2
 
 
+def test_project_editor_apply_ignores_polluted_preview_song_plan(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, _parent_job = create_project_version(server)
+        state_status, state = request_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+        preview_status, preview_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-preview",
+            {
+                "patch": {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "operations": [{"op": "set_track_instrument", "track_id": "track-001", "instrument": "trusted instrument"}],
+                }
+            },
+        )
+        preview_id = preview_data["preview"]["preview_id"]
+        polluted_path = Path(".musicforge") / "projects" / project_id / "editor-previews" / preview_id / "song-plan.json"
+        polluted = json.loads(polluted_path.read_text(encoding="utf-8"))
+        polluted["tracks"][0]["instrument"] = "polluted instrument"
+        polluted_path.write_text(json.dumps(polluted), encoding="utf-8")
+        apply_status, apply_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/editor-previews/{preview_id}/apply",
+            {"version_name": "Trusted Apply"},
+        )
+        child_plan = json.loads((Path(apply_data["job"]["output_dir"]) / "data" / "song-plan.json").read_text(encoding="utf-8"))
+        metadata = json.loads((Path(apply_data["job"]["output_dir"]) / "data" / "edit-metadata.json").read_text(encoding="utf-8"))
+    finally:
+        stop_test_server(server)
+
+    assert state_status == 200
+    assert preview_status == 201
+    assert apply_status == 201
+    assert child_plan["tracks"][0]["instrument"] == "trusted instrument"
+    assert child_plan["tracks"][0]["instrument"] != "polluted instrument"
+    assert metadata["preview_plan_mismatch"] is True
+    assert any("recomputed" in warning for warning in metadata["warnings"])
+
+
 def test_project_edit_targets_and_validation_errors(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

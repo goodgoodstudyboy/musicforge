@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.0.1 - 2026-05-08
+
+### Fixed
+- Visual Editor Apply now writes and renders the recomputed editor patch result, instead of trusting the persisted preview `song-plan.json`.
+- Editor Apply records a warning when a preview plan differs from the recomputed patch result, preserving the official child version from the trusted patch path.
+
+### Verified
+- `python -m pytest tests\test_server_edits.py::test_project_editor_apply_ignores_polluted_preview_song_plan tests\test_server_edits.py::test_project_editor_preview_apply_creates_manual_editor_version tests\test_song_editor.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.0.0 - 2026-05-08
 
 ### Added

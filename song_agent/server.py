@@ -4041,13 +4041,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(HTTPStatus.CONFLICT, "Editor preview is stale because the parent song-plan.json has changed.")
                 return
             patch = store.read_patch(preview_id)
-            plan = store.read_plan(preview_id)
-            plan.validate()
+            result = apply_editor_patch(parent_plan, patch)
+            result.plan.validate()
+            preview_plan_mismatch = False
+            try:
+                preview_plan = store.read_plan(preview_id)
+                preview_plan_mismatch = editor_song_plan_hash(preview_plan) != editor_song_plan_hash(result.plan)
+            except (OSError, ValueError, TypeError, KeyError):
+                preview_plan_mismatch = True
             run_title = str(payload.get("version_name") or payload.get("name") or preview.label or "Editor Version")
             run_dir = self.store._reserve_run_dir(run_title)
             job_id = run_dir.name
             now = _utc_now()
-            result = apply_editor_patch(parent_plan, patch)
             metadata = editor_edit_metadata(
                 project_id=project_id,
                 parent_version_id=parent.version_id,
@@ -4057,6 +4062,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 result=result,
                 created_at=now,
             )
+            if preview_plan_mismatch:
+                metadata["warnings"] = [
+                    *metadata.get("warnings", []),
+                    "Preview song-plan.json differed from recomputed editor patch result; applied recomputed plan.",
+                ]
+                metadata["preview_plan_mismatch"] = True
             paths = ProjectPaths.create(run_dir)
             plan_path = paths.data / "song-plan.json"
             midi_path = paths.renders / "song.mid"
@@ -4072,8 +4083,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             write_json(paths.data / "request.json", request_payload)
             write_json(paths.data / "editor-patch.json", patch.to_dict())
             write_json(paths.data / "edit-metadata.json", metadata)
-            write_json(plan_path, plan.to_dict())
-            render_midi(plan, midi_path)
+            write_json(plan_path, result.plan.to_dict())
+            render_midi(result.plan, midi_path)
             clear_stem_artifacts(run_dir)
             write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
             summary = _build_summary(plan_path, midi_path)
