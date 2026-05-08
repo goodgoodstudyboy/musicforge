@@ -9,6 +9,7 @@ from typing import Any, Protocol
 
 from song_agent.music_quality import analyze_song_quality
 from song_agent.projectio import read_json, slugify, write_json
+from song_agent.redaction import sanitize_metadata
 from song_agent.schemas.song import SongPlan
 
 
@@ -989,13 +990,4 @@ def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:
-    if isinstance(value, dict):
-        cleaned: dict[str, Any] = {}
-        for key, item in value.items():
-            if str(key).lower() in BLOCKED_ASSET_METADATA_KEYS:
-                continue
-            cleaned[str(key)] = _sanitize_asset_metadata(item)
-        return cleaned
-    if isinstance(value, list):
-        return [_sanitize_asset_metadata(item) for item in value]
-    return value
+    return sanitize_metadata(value, blocked_keys=BLOCKED_ASSET_METADATA_KEYS)

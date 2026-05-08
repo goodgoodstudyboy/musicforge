@@ -14,6 +14,7 @@ from typing import Any
 from song_agent.assets import AssetStore, asset_public_dict, sanitize_asset_metadata
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
+from song_agent.redaction import sanitize_sensitive_text
 
 
 REFERENCE_ROOT = Path(".musicforge") / "references"
@@ -46,6 +47,7 @@ WINDOWS_RESERVED_NAMES = {
     *(f"COM{index}" for index in range(1, 10)),
     *(f"LPT{index}" for index in range(1, 10)),
 }
+SAFE_FILENAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]{0,159}$")
 
 
 @dataclass(frozen=True)
@@ -97,27 +99,27 @@ class ReferenceItem:
             schema_version=int(data.get("schema_version", REFERENCE_SCHEMA_VERSION) or REFERENCE_SCHEMA_VERSION),
             reference_id=reference_id,
             reference_type=reference_type,
-            title=_bounded_text(data.get("title"), "title", 120) or reference_id,
-            original_filename=_safe_filename(str(data.get("original_filename") or f"reference{extension}")),
+            title=sanitize_sensitive_text(_bounded_text(data.get("title"), "title", 120)) or reference_id,
+            original_filename=_safe_filename(str(data.get("original_filename") or f"reference{extension}"), strict=False),
             stored_filename=_stored_filename(reference_type, extension),
             extension=extension,
             media_type=REFERENCE_MEDIA_TYPES.get(extension, "application/octet-stream"),
             size_bytes=size_bytes,
             sha256=sha256,
-            description=_bounded_text(data.get("description"), "description", 1000),
+            description=sanitize_sensitive_text(_bounded_text(data.get("description"), "description", 1000)),
             tags=_clean_tags(data.get("tags", [])),
             tempo_bpm=tempo,
-            key=_bounded_text(data.get("key"), "key", 40),
-            meter=_bounded_text(data.get("meter"), "meter", 16),
+            key=sanitize_sensitive_text(_bounded_text(data.get("key"), "key", 40)),
+            meter=sanitize_sensitive_text(_bounded_text(data.get("meter"), "meter", 16)),
             favorite=bool(data.get("favorite", False)),
             hidden=bool(data.get("hidden", False)),
             usage_count=max(0, int(data.get("usage_count") or 0)),
             created_at=str(data.get("created_at") or ""),
             updated_at=str(data.get("updated_at") or data.get("created_at") or ""),
             imported_at=str(data.get("imported_at") or data.get("created_at") or ""),
-            source_note=_bounded_text(data.get("source_note"), "source_note", 1000),
-            license_note=_bounded_text(data.get("license_note"), "license_note", 1000),
-            text_excerpt=_bounded_text(data.get("text_excerpt"), "text_excerpt", 2000),
+            source_note=sanitize_sensitive_text(_bounded_text(data.get("source_note"), "source_note", 1000)),
+            license_note=sanitize_sensitive_text(_bounded_text(data.get("license_note"), "license_note", 1000)),
+            text_excerpt=sanitize_sensitive_text(_bounded_text(data.get("text_excerpt"), "text_excerpt", 2000)),
             linked_project_ids=_clean_ids(data.get("linked_project_ids", []), "project"),
             derived_asset_ids=_clean_ids(data.get("derived_asset_ids", []), "asset"),
             metadata=sanitize_reference_metadata(dict(data.get("metadata") or {})),
@@ -536,18 +538,44 @@ def _validate_size(reference_type: str, size_bytes: int) -> None:
         raise ValueError(f"{reference_type} references must be {limit} bytes or fewer.")
 
 
-def _safe_filename(value: str) -> str:
+def _safe_filename(value: str, *, strict: bool = True) -> str:
     filename = value.strip()
     if not filename:
         raise ValueError("filename is required.")
-    if "\x00" in filename or "/" in filename or "\\" in filename or ":" in filename:
-        raise ValueError("filename must not contain path separators.")
+    if not _filename_is_safe(filename):
+        if strict:
+            if "\x00" in filename or any(ord(char) < 32 or char == "\x7f" for char in filename):
+                raise ValueError("filename must not contain control characters.")
+            if "/" in filename or "\\" in filename or ":" in filename:
+                raise ValueError("filename must not contain path separators.")
+            raise ValueError("filename contains unsupported characters.")
+        filename = _fallback_safe_filename(filename)
     if filename in {".", ".."} or len(filename) > 160:
         raise ValueError("filename is invalid.")
     stem = Path(filename).stem.upper().rstrip(". ")
     if stem in WINDOWS_RESERVED_NAMES:
         raise ValueError("filename uses a reserved system name.")
     return filename
+
+
+def _filename_is_safe(filename: str) -> bool:
+    if "\x00" in filename or any(ord(char) < 32 or char == "\x7f" for char in filename):
+        return False
+    if "/" in filename or "\\" in filename or ":" in filename:
+        return False
+    if '"' in filename or "'" in filename or "\t" in filename:
+        return False
+    return bool(SAFE_FILENAME_PATTERN.match(filename))
+
+
+def _fallback_safe_filename(filename: str) -> str:
+    suffix = _extension(Path(filename).suffix or ".bin")
+    prefix = re.split(r"[\x00-\x1f\x7f]+", filename, maxsplit=1)[0]
+    stem = re.sub(r"[^A-Za-z0-9._ -]+", "_", Path(prefix).stem)
+    stem = stem.strip(" ._") or "reference"
+    if len(stem) > 120:
+        stem = stem[:120].rstrip(" ._") or "reference"
+    return f"{stem}{suffix}"
 
 
 def _extension(value: str) -> str:

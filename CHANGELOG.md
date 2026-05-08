@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.7.1 - 2026-05-08
+
+### Fixed
+- Reference metadata summaries now redact sensitive values embedded in free-text fields such as `source_note`, `license_note`, `text_excerpt`, and descriptions.
+- Project export and Final Export now apply value-level redaction to reference summaries even when local artifact JSON was polluted.
+- Reference import now rejects control-character and unsafe quoted filenames, and legacy/polluted filenames are safely downgraded before download.
+- File downloads now emit sanitized `Content-Disposition` filenames with RFC 5987 `filename*` support.
+- Reference import now rejects oversized request bodies before reading and base64-decoding them.
+
+### Verified
+- `python -m pytest tests\test_references.py tests\test_server_references.py tests\test_projects.py tests\test_final_export.py tests\test_assets.py tests\test_server_assets.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.7.0 - 2026-05-08
 
 ### Added

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import shutil
 import threading
 import time
@@ -88,6 +89,7 @@ from song_agent.provider_usage import (
 from song_agent.prompt_ab import PromptABStore
 from song_agent.projects import ProjectStore
 from song_agent.references import (
+    MAX_REFERENCE_WAV_BYTES,
     ReferenceStore,
     reference_file_url,
     reference_prompt_summaries,
@@ -141,6 +143,7 @@ from song_agent.webui import panel_html
 
 
 RUNS_DIR = Path("runs")
+REFERENCE_IMPORT_MAX_BODY_BYTES = int(MAX_REFERENCE_WAV_BYTES * 4 / 3) + 1_000_000
 
 
 class JobCancelled(Exception):
@@ -2665,6 +2668,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if method != "POST":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
+        if not self._content_length_within(REFERENCE_IMPORT_MAX_BODY_BYTES):
+            self._send_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Reference import request body is too large.")
+            return
         try:
             reference, duplicate = self.reference_store.import_reference(self._read_json_body(), now=_utc_now())
         except ValueError as exc:
@@ -4852,9 +4858,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream",
         )
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Content-Disposition", f'attachment; filename="{filename or path.name}"')
+        self.send_header("Content-Disposition", _content_disposition_filename(filename or path.name))
         self.end_headers()
         self.wfile.write(body)
+
+    def _content_length_within(self, limit: int) -> bool:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return False
+        return 0 <= length <= limit
 
     def _send_error(self, status: HTTPStatus, message: str) -> None:
         self._send_json({"error": message}, status=status)
@@ -5508,6 +5521,30 @@ def _artifact_dict(path: Path) -> dict[str, Any]:
         "size": path.stat().st_size,
         "size_bytes": path.stat().st_size,
     }
+
+
+def _content_disposition_filename(filename: str) -> str:
+    ascii_name = _safe_download_filename(filename)
+    utf8_name = "".join(char for char in str(filename) if ord(char) >= 32 and char not in {'"', "\r", "\n"})
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{_rfc5987_quote(utf8_name)}"
+
+
+def _safe_download_filename(filename: str) -> str:
+    name = Path(str(filename or "download")).name
+    cleaned = re.sub(r"[^A-Za-z0-9._ -]+", "_", name)
+    cleaned = cleaned.strip(" ._")
+    if not cleaned:
+        cleaned = "download"
+    if len(cleaned) > 120:
+        suffix = Path(cleaned).suffix[:16]
+        stem = Path(cleaned).stem[: max(1, 120 - len(suffix))]
+        cleaned = f"{stem}{suffix}"
+    return cleaned
+
+
+def _rfc5987_quote(value: str) -> str:
+    allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$&+-.^_`|~"
+    return "".join(char if char in allowed else f"%{byte:02X}" for char in value for byte in char.encode("utf-8"))
 
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:

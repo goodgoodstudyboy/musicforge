@@ -11,6 +11,7 @@ from typing import Any
 
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
+from song_agent.redaction import sanitize_metadata
 from song_agent.renderers.audio import RendererConfig, RendererError, render_audio
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
@@ -441,17 +442,7 @@ def song_plan_hash(plan: SongPlan) -> str:
 
 
 def sanitize_asset_metadata(value: Any) -> Any:
-    if isinstance(value, dict):
-        cleaned: dict[str, Any] = {}
-        for key, item in value.items():
-            lowered = str(key).lower()
-            if lowered in BLOCKED_CONTENT_KEYS:
-                continue
-            cleaned[str(key)] = sanitize_asset_metadata(item)
-        return cleaned
-    if isinstance(value, list):
-        return [sanitize_asset_metadata(item) for item in value]
-    return value
+    return sanitize_metadata(value, blocked_keys=BLOCKED_CONTENT_KEYS)
 
 
 def asset_preview_song_plan(asset: CreativeAsset) -> SongPlan:

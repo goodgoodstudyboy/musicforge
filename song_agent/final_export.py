@@ -12,6 +12,7 @@ from typing import Any
 
 from song_agent.project_quality import QualityGateResult
 from song_agent.projectio import read_json, write_json
+from song_agent.redaction import sanitize_metadata
 from song_agent.schemas.song import SongPlan
 from song_agent.stems import read_stem_manifest, stem_audio_path, stem_manifest_stale, stem_midi_path
 
@@ -467,16 +468,7 @@ def _safe_reference_id(reference_id: str) -> str:
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:
-    if isinstance(value, dict):
-        cleaned: dict[str, Any] = {}
-        for key, item in value.items():
-            if str(key).lower() in BLOCKED_ASSET_METADATA_KEYS:
-                continue
-            cleaned[str(key)] = _sanitize_asset_metadata(item)
-        return cleaned
-    if isinstance(value, list):
-        return [_sanitize_asset_metadata(item) for item in value]
-    return value
+    return sanitize_metadata(value, blocked_keys=BLOCKED_ASSET_METADATA_KEYS)
 
 
 def _write_readme(export_dir: Path, project: Any, version: Any, gate: QualityGateResult, manifest: dict[str, Any]) -> None:

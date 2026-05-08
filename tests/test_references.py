@@ -83,6 +83,10 @@ def test_reference_store_rejects_unsafe_imports(tmp_path: Path) -> None:
         store.import_reference(import_payload("lyrics_text", "../lyric.txt", b"hello"))
     with pytest.raises(ValueError, match="reserved system name"):
         store.import_reference(import_payload("lyrics_text", "CON.txt", b"hello"))
+    with pytest.raises(ValueError, match="control characters"):
+        store.import_reference(import_payload("lyrics_text", "safe\r\nXInjected yes.txt", b"hello"))
+    with pytest.raises(ValueError, match="unsupported characters"):
+        store.import_reference(import_payload("lyrics_text", 'quote"bad.txt', b"hello"))
     with pytest.raises(ValueError, match="UTF-8"):
         store.import_reference(import_payload("lyrics_text", "lyric.txt", b"\xff\xff"))
 
@@ -178,3 +182,25 @@ def test_reference_public_dict_redacts_metadata_and_adds_file_url(tmp_path: Path
 
     assert public["file_url"] == "/api/references/ref-001/file"
     assert "api_key" not in public["metadata"]
+
+
+def test_reference_text_fields_redact_sensitive_values(tmp_path: Path) -> None:
+    store = ReferenceStore(tmp_path / ".musicforge" / "references")
+    reference, _ = store.import_reference(
+        {
+            **import_payload("style_note", "style.md", b"api_key=sk-polluted-secret use hook from C:\\Users\\bad\\song.wav"),
+            "source_note": "Authorization: Bearer secret-token-value",
+            "license_note": "github_pat_123456789012345678901234 and /Users/bad/private/ref.wav",
+        }
+    )
+    updated = store.update_reference(reference.reference_id, {"description": "token=super-secret-value ghp_123456789012345678901234"})
+    summary = reference_prompt_summaries(store, [{"reference_id": reference.reference_id}])[0]["summary"]
+    serialized = str(updated.to_dict()) + str(summary)
+
+    assert "sk-polluted-secret" not in serialized
+    assert "secret-token-value" not in serialized
+    assert "github_pat_123456789012345678901234" not in serialized
+    assert "ghp_123456789012345678901234" not in serialized
+    assert "C:\\Users\\bad" not in serialized
+    assert "/Users/bad" not in serialized
+    assert "[REDACTED]" in serialized or "[REDACTED_LOCAL_PATH]" in serialized

@@ -56,6 +56,16 @@ def request_bytes(server, method, path):
     return response.status, data
 
 
+def request_bytes_with_headers(server, method, path):
+    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=10)
+    connection.request(method, path)
+    response = connection.getresponse()
+    data = response.read()
+    headers = {key.lower(): value for key, value in response.getheaders()}
+    connection.close()
+    return response.status, data, headers
+
+
 def wait_for_job(server, job_id):
     for _ in range(120):
         status, job = request_json(server, "GET", f"/api/jobs/{job_id}")
@@ -175,6 +185,49 @@ def test_reference_duplicate_invalid_and_create_asset_api(tmp_path, monkeypatch)
     assert asset["asset"]["content"]["text"] == "Sing the saved line"
     assert midi_asset_status == 201
     assert midi_asset["asset"]["content"]["midi_sha256"] == midi_ref["sha256"]
+
+
+def test_reference_import_rejects_large_request_body_before_decode(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=10)
+        connection.request(
+            "POST",
+            "/api/references/import",
+            body=b"{}",
+            headers={"Content-Type": "application/json", "Content-Length": str(80_000_000)},
+        )
+        response = connection.getresponse()
+        body = json.loads(response.read().decode("utf-8"))
+        connection.close()
+    finally:
+        stop_test_server(server)
+
+    assert response.status == 413
+    assert "too large" in body["error"]
+
+
+def test_reference_download_uses_safe_content_disposition(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        reference = import_reference(server, "lyrics_text", "safe-name.txt", b"safe text")
+        ref_dir = Path(".musicforge") / "references" / reference["reference_id"]
+        metadata = json.loads((ref_dir / "reference.json").read_text(encoding="utf-8"))
+        metadata["original_filename"] = 'unsafe"name\r\nXInjected yes.txt'
+        (ref_dir / "reference.json").write_text(json.dumps(metadata), encoding="utf-8")
+        status, data, headers = request_bytes_with_headers(server, "GET", f"/api/references/{reference['reference_id']}/file")
+    finally:
+        stop_test_server(server)
+
+    disposition = headers["content-disposition"]
+    assert status == 200
+    assert data == b"safe text"
+    assert "\r" not in disposition
+    assert "\n" not in disposition
+    assert "XInjected" not in disposition
+    assert 'filename="unsafe_name.txt"' in disposition
 
 
 def test_project_reference_link_and_job_reference_snapshot(tmp_path, monkeypatch):

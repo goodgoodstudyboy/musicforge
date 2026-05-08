@@ -238,6 +238,7 @@ def test_final_export_includes_sanitized_reference_refs_without_original_files(t
                     "role": "style",
                     "metadata_summary": {
                         "text_excerpt": "Use a bright hook.",
+                        "license_note": "api_key=sk-polluted-secret",
                         "path": str(tmp_path / "reference.wav"),
                         "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
                     },
