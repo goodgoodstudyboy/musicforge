@@ -97,6 +97,20 @@ from song_agent.references import (
     reference_refs_snapshot,
     write_reference_refs_snapshot,
 )
+from song_agent.reference_analysis import (
+    ReferenceAnalysisError,
+    analyze_reference,
+    create_asset_from_slice,
+    generate_slices,
+    get_analysis_report,
+    get_slice_manifest,
+    render_reference_slice_audio,
+    render_reference_slice_midi,
+    require_fresh_analysis,
+    require_fresh_slices,
+    slice_audio_path,
+    slice_midi_path,
+)
 from song_agent.project_quality import (
     QualityGateConfig,
     evaluate_quality_gate,
@@ -2721,6 +2735,37 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 reference = self.reference_store.read_reference(reference_id)
                 self._send_file(self.reference_store.file_path(reference_id), reference.media_type, filename=reference.original_filename)
                 return
+            if tail == "/analysis":
+                if method == "GET":
+                    self._send_json({"analysis": get_analysis_report(self.reference_store, reference_id)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    self._send_json({"ok": True, "analysis": analyze_reference(self.reference_store, reference_id, force=bool(payload.get("force", False)), now=_utc_now())})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/analyze":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                self._send_json({"ok": True, "analysis": analyze_reference(self.reference_store, reference_id, force=bool(payload.get("force", False)), now=_utc_now())})
+                return
+            if tail == "/slices":
+                if method == "GET":
+                    self._send_json({"manifest": get_slice_manifest(self.reference_store, reference_id)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    require_fresh_analysis(self.reference_store, reference_id)
+                    self._send_json({"ok": True, "manifest": generate_slices(self.reference_store, reference_id, force=bool(payload.get("force", False)), now=_utc_now())})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail.startswith("/slices/"):
+                self._handle_reference_slice_route(method, reference_id, tail)
+                return
             if tail in {"/link-project", "/unlink-project"}:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -2745,11 +2790,80 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except FileNotFoundError:
             self._send_error(HTTPStatus.NOT_FOUND, "Reference not found.")
             return
+        except ReferenceAnalysisError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
         except ValueError as exc:
             status = HTTPStatus.CONFLICT if "Hidden references" in str(exc) or "cannot be converted" in str(exc) else HTTPStatus.BAD_REQUEST
             self._send_error(status, str(exc))
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Reference route not found.")
+
+    def _handle_reference_slice_route(self, method: str, reference_id: str, tail: str) -> None:
+        parts = tail.strip("/").split("/")
+        if len(parts) != 3 or parts[0] != "slices":
+            self._send_error(HTTPStatus.NOT_FOUND, "Reference slice route not found.")
+            return
+        slice_id = unquote(parts[1])
+        action = parts[2]
+        try:
+            if action == "render-midi":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **render_reference_slice_midi(self.reference_store, reference_id, slice_id, now=_utc_now())})
+                return
+            if action == "render-audio":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                config, _sources = load_renderer_config()
+                config.validate_ready_for_render()
+                self._send_json({"ok": True, **render_reference_slice_audio(self.reference_store, reference_id, slice_id, config, now=_utc_now())})
+                return
+            if action == "create-asset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                asset = create_asset_from_slice(self.reference_store, reference_id, slice_id, self._read_json_body(), self.asset_store, now=_utc_now())
+                self._send_json({"ok": True, "asset": asset}, status=HTTPStatus.CREATED)
+                return
+            if action == "midi":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = require_fresh_slices(self.reference_store, reference_id)
+                reference_dir = self.reference_store.reference_dir(reference_id)
+                if not any(item.get("slice_id") == slice_id for item in manifest.get("slices", []) if isinstance(item, dict)):
+                    raise FileNotFoundError(slice_id)
+                self._send_file(slice_midi_path(reference_dir, slice_id), "audio/midi", filename=f"{reference_id}-{slice_id}.mid")
+                return
+            if action == "audio":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = require_fresh_slices(self.reference_store, reference_id)
+                if not any(item.get("slice_id") == slice_id for item in manifest.get("slices", []) if isinstance(item, dict)):
+                    raise FileNotFoundError(slice_id)
+                reference_dir = self.reference_store.reference_dir(reference_id)
+                self._send_file(slice_audio_path(reference_dir, slice_id), "audio/wav", filename=f"{reference_id}-{slice_id}.wav")
+                return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Reference slice not found.")
+            return
+        except ReferenceAnalysisError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Reference slice route not found.")
 
     def _handle_provider_usage_root(self, method: str) -> None:
         if method != "GET":

@@ -79,6 +79,17 @@ Binding to a non-localhost host requires a token:
 python -m song_agent.cli serve --host 0.0.0.0 --port 8787 --access-token <token>
 ```
 
+## Reference Analysis
+
+Studio can import local WAV, MIDI, lyrics text, and style-note references, then
+analyze them without external services. WAV analysis reports basic PCM metadata
+and a bounded waveform envelope. MIDI analysis parses format 0/1 files, shows
+track role hints, generates slice suggestions, and can turn a slice into a real
+note-based Creative Asset.
+
+v1.8.0 keeps the scope local and low-dependency: it does not add MP3 import,
+audio-to-MIDI, transcription, or automatic BPM/key detection.
+
 You can also use `MUSICFORGE_ACCESS_TOKEN`. When auth is enabled, Studio stores
 the token only in `sessionStorage` and sends it as `Authorization: Bearer ...`.
 `GET /api/info` remains public and reports whether auth is required; jobs,

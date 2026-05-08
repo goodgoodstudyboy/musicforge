@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.8.0 - 2026-05-08
+
+### Added
+- Reference analysis reports for imported PCM WAV, MIDI, lyrics text, and style-note references.
+- WAV summaries now include duration, sample rate, channels, sample width, peak, RMS, silence ratio, loudness hint, and bounded waveform envelopes.
+- Lightweight Standard MIDI parser for format 0/1, PPQ, tempo, time signature, running status, program changes, note pairing, and role hints.
+- MIDI reference slice suggestions, fixed-path slice MIDI/WAV previews, and note-based Creative Asset creation from slices.
+- Studio References analysis tools with Analyze, MIDI slice generation, preview render/download, WAV envelope, MIDI track summaries, and slice asset actions.
+- Project export, Final Export, provider reference summaries, and release-check now include bounded, sanitized analysis summaries.
+
+### Scope
+- v1.8.0 intentionally does not add MP3 import, audio-to-MIDI, audio transcription, BPM/key auto-detection, or heavy audio-analysis dependencies.
+
+### Verified
+- `python -m pytest tests\test_midi_analysis.py tests\test_reference_analysis.py tests\test_server_reference_analysis.py tests\test_server_auth.py tests\test_projects.py::test_export_project_includes_redacted_reference_refs tests\test_final_export.py::test_final_export_includes_sanitized_reference_refs_without_original_files tests\test_webui.py tests\test_references.py tests\test_provider_edits.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.7.2 - 2026-05-08
 
 ### Fixed

@@ -359,18 +359,25 @@ def resolve_reference_refs(store: ReferenceStore, raw_refs: Any) -> list[dict[st
         reference = store.read_reference(reference_id)
         if reference.hidden:
             raise ValueError("Hidden references cannot be used.")
-        refs.append(
-            {
-                "reference_id": reference.reference_id,
-                "reference_type": reference.reference_type,
-                "title": reference.title,
-                "role": _bounded_text(item.get("role"), "role", 80) or _default_reference_role(reference.reference_type),
-                "strength": _strength(item.get("strength")),
-                "sha256": reference.sha256,
-                "size_bytes": reference.size_bytes,
-                "metadata_summary": reference_metadata_summary(reference),
-            }
-        )
+        ref = {
+            "reference_id": reference.reference_id,
+            "reference_type": reference.reference_type,
+            "title": reference.title,
+            "role": _bounded_text(item.get("role"), "role", 80) or _default_reference_role(reference.reference_type),
+            "strength": _strength(item.get("strength")),
+            "sha256": reference.sha256,
+            "size_bytes": reference.size_bytes,
+            "metadata_summary": reference_metadata_summary(reference),
+        }
+        try:
+            from song_agent.reference_analysis import reference_analysis_summary_for_export
+
+            analysis_summary = reference_analysis_summary_for_export(store, reference.reference_id)
+            if analysis_summary:
+                ref["analysis_summary"] = analysis_summary
+        except (OSError, ValueError, TypeError):
+            pass
+        refs.append(ref)
     return refs
 
 
@@ -392,9 +399,15 @@ def reference_prompt_summaries(store: ReferenceStore, raw_refs: Any) -> list[dic
                 "role": ref["role"],
                 "strength": ref["strength"],
                 "summary": reference_metadata_summary(reference),
+                "analysis_summary": ref.get("analysis_summary"),
             }
         )
-    return summaries
+    try:
+        from song_agent.reference_analysis import provider_reference_summaries_with_analysis
+
+        return provider_reference_summaries_with_analysis(store, summaries)
+    except (OSError, ValueError, TypeError):
+        return summaries
 
 
 def write_reference_refs_snapshot(run_dir: Path, snapshot: dict[str, Any]) -> Path:

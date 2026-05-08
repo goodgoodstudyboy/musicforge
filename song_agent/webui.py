@@ -213,6 +213,29 @@ def panel_html() -> str:
       gap: 10px;
       margin-bottom: 12px;
     }
+    .panel-title.subhead {
+      margin-top: 12px;
+      padding: 8px 0;
+      border-bottom: 0;
+      min-height: 0;
+    }
+    .waveform {
+      display: flex;
+      align-items: end;
+      gap: 1px;
+      min-height: 52px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      overflow: hidden;
+    }
+    .waveform span {
+      flex: 1 1 2px;
+      min-width: 1px;
+      background: var(--accent);
+      border-radius: 2px 2px 0 0;
+    }
     .metric {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1461,6 +1484,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     async function renderReferenceDetail(referenceId) {
       const data = await api(`/api/references/${encodeURIComponent(referenceId)}`);
       const reference = data.reference;
+      let analysis = { status: "not_loaded", summary: {} };
+      let sliceManifest = { status: "not_loaded", slices: [] };
+      try {
+        analysis = (await api(`/api/references/${encodeURIComponent(referenceId)}/analysis`)).analysis || analysis;
+      } catch (err) {
+        analysis = { status: "error", error: err.message, summary: {} };
+      }
+      if (reference.reference_type === "midi") {
+        try {
+          sliceManifest = (await api(`/api/references/${encodeURIComponent(referenceId)}/slices`)).manifest || sliceManifest;
+        } catch (err) {
+          sliceManifest = { status: "error", error: err.message, slices: [] };
+        }
+      }
       $("reference-detail").innerHTML = `
         <div class="summary-grid">
           ${metric("Reference", reference.reference_id)}
@@ -1492,6 +1529,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${reference.favorite ? `<button class="secondary" id="reference-unfavorite" type="button">Unfavorite</button>` : `<button class="secondary" id="reference-favorite" type="button">Favorite</button>`}
           <button class="danger" id="reference-delete" type="button">Delete Reference</button>
         </div>
+        <div class="panel-title subhead"><span>Analysis</span></div>
+        <div class="summary-grid">
+          ${metric("Analysis", analysis.status || "-")}
+          ${metric("Slices", (sliceManifest.slices || []).length)}
+          ${metric("Stale", analysis.stale ? "yes" : "-")}
+          ${metric("Warnings", (analysis.warnings || []).length)}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="reference-analyze" type="button">Analyze Reference</button>
+          ${reference.reference_type === "midi" ? `<button class="secondary" id="reference-generate-slices" type="button">Generate MIDI Slices</button>` : ""}
+        </div>
+        ${referenceAnalysisHtml(reference, analysis, sliceManifest)}
         <pre>${escapeHtml(JSON.stringify({ summary: referenceSummary(reference), linked_project_ids: reference.linked_project_ids, derived_asset_ids: reference.derived_asset_ids }, null, 2))}</pre>
       `;
       bindAction("reference-save", async () => {
@@ -1514,6 +1563,37 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
         await loadAssets();
         await loadReferences();
+      });
+      bindAction("reference-analyze", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/analyze`, { method: "POST" });
+        await renderReferenceDetail(reference.reference_id);
+      });
+      bindAction("reference-generate-slices", async () => {
+        await api(`/api/references/${encodeURIComponent(reference.reference_id)}/slices`, { method: "POST" });
+        await renderReferenceDetail(reference.reference_id);
+      });
+      $("reference-detail").querySelectorAll("[data-render-reference-slice-midi]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/references/${encodeURIComponent(reference.reference_id)}/slices/${encodeURIComponent(button.dataset.sliceId)}/render-midi`, { method: "POST" });
+          await renderReferenceDetail(reference.reference_id);
+        });
+      });
+      $("reference-detail").querySelectorAll("[data-render-reference-slice-audio]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/references/${encodeURIComponent(reference.reference_id)}/slices/${encodeURIComponent(button.dataset.sliceId)}/render-audio`, { method: "POST" });
+          await renderReferenceDetail(reference.reference_id);
+        });
+      });
+      $("reference-detail").querySelectorAll("[data-create-reference-slice-asset]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/references/${encodeURIComponent(reference.reference_id)}/slices/${encodeURIComponent(button.dataset.sliceId)}/create-asset`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: `${reference.title} ${button.dataset.sliceId}` }),
+          });
+          await loadAssets();
+          await loadReferences();
+        });
       });
       bindAction("reference-link-project", async () => {
         if (!selectedProjectId) return;
@@ -1557,6 +1637,79 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         selectedReferenceId = null;
         await loadReferences();
       });
+    }
+
+    function referenceAnalysisHtml(reference, analysis, sliceManifest) {
+      const summary = analysis.summary || {};
+      let body = "";
+      if (reference.reference_type === "audio_wav" && analysis.status === "completed") {
+        const envelope = summary.envelope || [];
+        body = `
+          <div class="summary-grid">
+            ${metric("Duration", summary.duration_seconds ?? "-")}
+            ${metric("Sample Rate", summary.sample_rate ?? "-")}
+            ${metric("Channels", summary.channels ?? "-")}
+            ${metric("Peak / RMS", `${summary.peak ?? "-"} / ${summary.rms ?? "-"}`)}
+          </div>
+          <div class="waveform">${envelope.map((point) => `<span style="height:${Math.max(2, Math.round((Number(point.peak) || 0) * 44))}px"></span>`).join("")}</div>
+        `;
+      } else if (reference.reference_type === "midi" && analysis.status === "completed") {
+        const tracks = summary.track_summaries || [];
+        body = `
+          <div class="summary-grid">
+            ${metric("Format", summary.format ?? "-")}
+            ${metric("PPQ", summary.ppq ?? "-")}
+            ${metric("Tempo", summary.tempo_bpm ?? "-")}
+            ${metric("Notes", summary.note_count ?? "-")}
+          </div>
+          <div class="table-scroll">
+            <table><thead><tr><th>Track</th><th>Role</th><th>Notes</th><th>Pitch</th></tr></thead><tbody>
+              ${tracks.map((track) => `<tr><td>${escapeHtml(track.track_index)}</td><td>${escapeHtml(track.likely_role || "-")}</td><td>${escapeHtml(track.note_count || 0)}</td><td>${escapeHtml(track.pitch_min ?? "-")} - ${escapeHtml(track.pitch_max ?? "-")}</td></tr>`).join("") || `<tr><td colspan="4">No MIDI tracks.</td></tr>`}
+            </tbody></table>
+          </div>
+          ${referenceSlicesHtml(reference, sliceManifest)}
+        `;
+      } else if ((reference.reference_type === "lyrics_text" || reference.reference_type === "style_note") && analysis.status === "completed") {
+        body = `
+          <div class="summary-grid">
+            ${metric("Characters", summary.character_count ?? "-")}
+            ${metric("Lines", summary.line_count ?? "-")}
+            ${metric("Words", summary.word_count ?? "-")}
+            ${metric("Language", summary.language_hint || "-")}
+          </div>
+          <pre>${escapeHtml(JSON.stringify({ keywords: summary.keywords || [], safe_excerpt: summary.safe_excerpt || "" }, null, 2))}</pre>
+        `;
+      } else {
+        body = `<div class="empty">${escapeHtml(analysis.error || "Analysis is not available yet.")}</div>`;
+      }
+      return body;
+    }
+
+    function referenceSlicesHtml(reference, sliceManifest) {
+      const slices = sliceManifest.slices || [];
+      if (!slices.length) return `<div class="empty">No MIDI slices yet.</div>`;
+      return `
+        <div class="table-scroll">
+          <table><thead><tr><th>Slice</th><th>Type</th><th>Start</th><th>Beats</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+            ${slices.map((slice) => `
+              <tr>
+                <td>${escapeHtml(slice.slice_id)}</td>
+                <td>${escapeHtml(slice.slice_type)}</td>
+                <td>${escapeHtml(slice.start_beat)}</td>
+                <td>${escapeHtml(slice.duration_beats)}</td>
+                <td>${escapeHtml(slice.note_count)}</td>
+                <td>
+                  <button class="secondary" data-render-reference-slice-midi data-slice-id="${escapeHtml(slice.slice_id)}" type="button">Render MIDI</button>
+                  ${slice.midi_url ? `<a class="button-link secondary" href="${escapeHtml(slice.midi_url)}">Download MIDI</a>` : ""}
+                  <button class="secondary" data-render-reference-slice-audio data-slice-id="${escapeHtml(slice.slice_id)}" type="button">Render WAV</button>
+                  ${slice.audio_url ? `<a class="button-link secondary" href="${escapeHtml(slice.audio_url)}">Download WAV</a><audio controls src="${escapeHtml(slice.audio_url)}"></audio>` : ""}
+                  <button class="secondary" data-create-reference-slice-asset data-slice-id="${escapeHtml(slice.slice_id)}" type="button">Create Asset</button>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody></table>
+        </div>
+      `;
     }
 
     function renderReferenceSelectors() {

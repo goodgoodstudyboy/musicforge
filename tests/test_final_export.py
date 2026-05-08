@@ -242,6 +242,11 @@ def test_final_export_includes_sanitized_reference_refs_without_original_files(t
                         "path": str(tmp_path / "reference.wav"),
                         "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
                     },
+                    "analysis_summary": {
+                        "status": "completed",
+                        "summary": {"duration_beats": 8, "preview_path": str(tmp_path / "preview.mid")},
+                        "slice_count": 1,
+                    },
                 }
             ],
         },
@@ -264,6 +269,7 @@ def test_final_export_includes_sanitized_reference_refs_without_original_files(t
                     "title": "Style Seed",
                     "used_by_versions": ["v001"],
                     "metadata_summary": {"text_excerpt": "Use a bright hook from \\\\server\\share\\client\\ref.wav."},
+                    "analysis_summary": {"status": "completed", "summary": {"note_count": 4}, "slice_count": 1},
                 }
             ],
         },
@@ -273,6 +279,7 @@ def test_final_export_includes_sanitized_reference_refs_without_original_files(t
     assert ref_path.exists()
     assert manifest["reference_refs"][0]["reference_id"] == "ref-001"
     assert manifest["reference_refs"][0]["used_by_versions"] == ["v001"]
+    assert manifest["reference_refs"][0]["analysis_summary"]["slice_count"] == 1
     serialized = json.dumps(manifest["reference_refs"], ensure_ascii=False) + ref_path.read_text(encoding="utf-8")
     assert "text_excerpt" in serialized
     assert "safe" in serialized

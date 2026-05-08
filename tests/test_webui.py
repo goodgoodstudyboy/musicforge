@@ -281,6 +281,13 @@ def test_webui_contains_reference_workspace_controls():
     assert "Import Reference" in html
     assert "Download Original" in html
     assert "Create Asset" in html
+    assert "Analysis" in html
+    assert "Analyze Reference" in html
+    assert "Generate MIDI Slices" in html
+    assert "Render MIDI" in html
+    assert "Render WAV" in html
+    assert "Create Asset" in html
+    assert ".waveform" in html
     assert "Reference Materials" in html
     assert "reference-ref-list" in html
     assert "Include Reference Summaries" in html
@@ -313,6 +320,12 @@ def test_webui_calls_reference_apis():
     assert "/api/references" in html
     assert "/api/references/import" in html
     assert "/api/references/${encodeURIComponent(referenceId)}" in html
+    assert "/api/references/${encodeURIComponent(referenceId)}/analysis" in html
+    assert "/api/references/${encodeURIComponent(reference.reference_id)}/analyze" in html
+    assert "/api/references/${encodeURIComponent(reference.reference_id)}/slices" in html
+    assert "/slices/${encodeURIComponent(button.dataset.sliceId)}/render-midi" in html
+    assert "/slices/${encodeURIComponent(button.dataset.sliceId)}/render-audio" in html
+    assert "/slices/${encodeURIComponent(button.dataset.sliceId)}/create-asset" in html
     assert "file_url" in html
     assert "/create-asset" in html
     assert "/api/projects/${encodeURIComponent(project.project_id)}/references" in html

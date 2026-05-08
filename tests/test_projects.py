@@ -336,6 +336,11 @@ def test_export_project_includes_redacted_reference_refs(tmp_path: Path) -> None
                         "path": str(tmp_path / "secret.wav"),
                         "nested": {"api_key": "sk-polluted-secret", "safe": "ok"},
                     },
+                    "analysis_summary": {
+                        "status": "completed",
+                        "summary": {"duration_beats": 8, "local_path": str(tmp_path / "preview.mid")},
+                        "slice_count": 1,
+                    },
                 }
             ],
         },
@@ -369,6 +374,7 @@ def test_export_project_includes_redacted_reference_refs(tmp_path: Path) -> None
     assert [ref["reference_id"] for ref in export["reference_refs"]] == ["ref-001", "ref-002"]
     assert export["reference_refs"][0]["used_by_versions"] == ["v001"]
     assert export["reference_refs"][1]["used_by_candidate_groups"] == ["cg-001"]
+    assert export["reference_refs"][0]["analysis_summary"]["slice_count"] == 1
     assert "text_excerpt" in serialized
     assert "key" in serialized
     assert str(tmp_path) not in serialized

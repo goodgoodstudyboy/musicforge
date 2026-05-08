@@ -914,6 +914,7 @@ def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument
                 "used_by_candidate_groups": [],
                 "linked_to_project": linked,
                 "metadata_summary": metadata_summary,
+                "analysis_summary": _sanitize_asset_metadata(ref.get("analysis_summary")) if isinstance(ref.get("analysis_summary"), dict) else {},
             },
         )
         if ref.get("reference_type") and not record.get("reference_type"):
@@ -925,6 +926,9 @@ def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument
             record["roles"].append(role)
         if metadata_summary and not record.get("metadata_summary"):
             record["metadata_summary"] = metadata_summary
+        analysis_summary = _sanitize_asset_metadata(ref.get("analysis_summary")) if isinstance(ref.get("analysis_summary"), dict) else {}
+        if analysis_summary and not record.get("analysis_summary"):
+            record["analysis_summary"] = analysis_summary
         if linked:
             record["linked_to_project"] = True
         if version_id and version_id not in record["used_by_versions"]:

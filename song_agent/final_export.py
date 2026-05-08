@@ -427,6 +427,7 @@ def _reference_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
         "used_by_candidate_groups": [str(item) for item in ref.get("used_by_candidate_groups", []) if str(item).strip()] if isinstance(ref.get("used_by_candidate_groups"), list) else [],
         "linked_to_project": True if ref.get("linked_to_project") else None,
         "metadata_summary": _sanitize_asset_metadata(ref.get("metadata_summary")) if isinstance(ref.get("metadata_summary"), dict) else {},
+        "analysis_summary": _sanitize_asset_metadata(ref.get("analysis_summary")) if isinstance(ref.get("analysis_summary"), dict) else {},
     }
     return _drop_empty(summary)
 

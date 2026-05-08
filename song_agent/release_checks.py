@@ -5,6 +5,10 @@ import subprocess
 import sys
 import tempfile
 import hashlib
+import base64
+import struct
+import wave
+from io import BytesIO
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -36,6 +40,7 @@ from song_agent.provider_edits import (
     song_plan_hash,
 )
 from song_agent.references import ReferenceStore, reference_refs_snapshot, write_reference_refs_snapshot
+from song_agent.reference_analysis import analyze_reference, create_asset_from_slice, generate_slices, render_reference_slice_midi
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
@@ -157,6 +162,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.5 candidate audition and usage smoke", *_v15_candidate_audition_usage_smoke(root))
     report.add("v1.6 creative assets smoke", *_v16_creative_assets_smoke(root))
     report.add("v1.7 reference library smoke", *_v17_reference_library_smoke(root))
+    report.add("v1.8 reference analysis smoke", *_v18_reference_analysis_smoke(root))
     return report
 
 
@@ -1080,6 +1086,150 @@ def _v17_reference_library_smoke(root: Path) -> tuple[bool, str]:
             return ok, f"reference={reference.reference_id}, duplicate={duplicate_again}, asset={asset['asset_id']}, export_refs={len(project_export['reference_refs'])}, final_refs={len(manifest['reference_refs'])}"
     except Exception as exc:
         return False, str(exc)
+
+
+def _v18_reference_analysis_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="musicforge-v18-") as temp_dir:
+            base = Path(temp_dir)
+            project_store = ProjectStore(base / ".musicforge" / "projects")
+            reference_store = ReferenceStore(base / ".musicforge" / "references")
+            asset_store = AssetStore(base / ".musicforge" / "assets")
+            request = SongRequest(
+                title="Release v1.8 Smoke",
+                language="en",
+                style="synth pop",
+                theme="reference analysis smoke",
+                tempo_bpm=120,
+            )
+            document = project_store.create_project("Release v1.8 Smoke")
+            parent_dir = base / "runs" / "v18-parent"
+            plan = deterministic_compose(request)
+            write_json(parent_dir / "data" / "song-plan.json", plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(plan, parent_dir / "renders" / "song.mid")
+            document = project_store.add_version_from_job(document.state.project_id, _SmokeJob("v18-parent", parent_dir, request.to_dict()), name="Parent")
+
+            wav_ref, _ = reference_store.import_reference(
+                {
+                    "reference_type": "audio_wav",
+                    "filename": "tiny.wav",
+                    "title": "Tiny WAV",
+                    "content_base64": base64.b64encode(_tiny_wav_bytes()).decode("ascii"),
+                    "license_note": "api_key=sk-v18-secret D:\\Music\\private\\tiny.wav",
+                },
+                now="2026-05-08T00:00:00+00:00",
+            )
+            midi_ref, _ = reference_store.import_reference(
+                {
+                    "reference_type": "midi",
+                    "filename": "seed.mid",
+                    "title": "MIDI Seed",
+                    "content_base64": base64.b64encode(_tiny_reference_midi_bytes()).decode("ascii"),
+                    "source_note": "Authorization: Bearer v18-token \\\\server\\share\\seed.mid",
+                },
+                now="2026-05-08T00:00:00+00:00",
+            )
+            wav_report = analyze_reference(reference_store, wav_ref.reference_id, now="2026-05-08T00:00:00+00:00")
+            midi_report = analyze_reference(reference_store, midi_ref.reference_id, now="2026-05-08T00:00:00+00:00")
+            slices = generate_slices(reference_store, midi_ref.reference_id, now="2026-05-08T00:00:00+00:00")
+            slice_id = slices["slices"][0]["slice_id"]
+            rendered = render_reference_slice_midi(reference_store, midi_ref.reference_id, slice_id, now="2026-05-08T00:00:00+00:00")
+            asset = create_asset_from_slice(reference_store, midi_ref.reference_id, slice_id, {"name": "Release slice"}, asset_store, now="2026-05-08T00:00:00+00:00")
+            refs = [{"reference_id": wav_ref.reference_id}, {"reference_id": midi_ref.reference_id}]
+            snapshot = reference_refs_snapshot(reference_store, refs, captured_at="2026-05-08T00:00:00+00:00")
+            child_dir = base / "runs" / "v18-child"
+            child_plan = deterministic_compose(request)
+            write_json(child_dir / "data" / "song-plan.json", child_plan.to_dict())
+            write_json(child_dir / "data" / "run-summary.json", {"title": child_plan.title})
+            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(child_plan, child_dir / "renders" / "song.mid")
+            write_reference_refs_snapshot(child_dir, snapshot)
+            child_job = _SmokeJob("v18-child", child_dir, request.to_dict() | {"reference_refs": refs})
+            child_job.artifacts["reference_refs"] = str(child_dir / "data" / "reference-refs.json")
+            document = project_store.add_version_from_job(
+                document.state.project_id,
+                child_job,
+                name="Reference Analysis Child",
+                parent_version_id="v001",
+                variant_type="manual",
+                change_summary="use analyzed reference material",
+            )
+            project_export = project_store.export_project(document.state.project_id)
+            gate = evaluate_quality_gate(child_dir, QualityGateConfig(), now="2026-05-08T00:00:00+00:00")
+            manifest = build_final_export_bundle(
+                project=document.state,
+                version=document.versions[-1],
+                project_dir=project_store.project_dir(document.state.project_id),
+                run_dir=child_dir,
+                gate=gate,
+                options=FinalExportOptions(version_id="v002"),
+                now="2026-05-08T00:00:00+00:00",
+                project_export=project_export,
+            )
+            serialized = str(snapshot) + str(project_export.get("reference_refs")) + str(manifest.get("reference_refs")) + str(asset)
+            ok = (
+                wav_report["summary"].get("duration_seconds", 0) > 0
+                and wav_report["summary"].get("envelope")
+                and midi_report["summary"].get("track_count") == 3
+                and slices["slices"]
+                and rendered["slice"]["midi_status"] == "completed"
+                and asset["content"].get("notes")
+                and "analysis_summary" in snapshot["reference_refs"][0]
+                and "analysis_summary" in project_export["reference_refs"][0]
+                and "analysis_summary" in manifest["reference_refs"][0]
+                and "sk-v18-secret" not in serialized
+                and "v18-token" not in serialized
+                and "D:\\Music" not in serialized
+                and "\\\\server\\share" not in serialized
+                and "content_base64" not in serialized
+            )
+            return ok, f"wav={wav_ref.reference_id}, midi={midi_ref.reference_id}, slices={len(slices['slices'])}, asset={asset['asset_id']}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _tiny_wav_bytes() -> bytes:
+    buffer = BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(8000)
+        wav.writeframes((1200).to_bytes(2, "little", signed=True) * 512)
+    return buffer.getvalue()
+
+
+def _tiny_reference_midi_bytes() -> bytes:
+    meta = _midi_track([(0, b"\xff\x51\x03\x07\xa1\x20")])
+    melody = _midi_track([(0, b"\x90\x40\x64"), (480, b"\x40\x00"), (0, b"\x43\x64"), (480, b"\x43\x00")])
+    bass = _midi_track([(0, b"\x92\x24\x58"), (960, b"\x82\x24\x00")])
+    return b"MThd" + struct.pack(">IHHH", 6, 1, 3, 480) + meta + melody + bass
+
+
+def _midi_track(events: list[tuple[int, bytes]]) -> bytes:
+    body = bytearray()
+    for delta, payload in events:
+        body.extend(_midi_vlq(delta))
+        body.extend(payload)
+    body.extend(b"\x00\xff\x2f\x00")
+    return b"MTrk" + struct.pack(">I", len(body)) + bytes(body)
+
+
+def _midi_vlq(value: int) -> bytes:
+    buffer = value & 0x7F
+    value >>= 7
+    while value:
+        buffer <<= 8
+        buffer |= (value & 0x7F) | 0x80
+        value >>= 7
+    out = bytearray()
+    while True:
+        out.append(buffer & 0xFF)
+        if buffer & 0x80:
+            buffer >>= 8
+        else:
+            return bytes(out)
 
 
 class _SmokeProject:
