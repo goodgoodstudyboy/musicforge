@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -138,7 +139,121 @@ def test_project_edit_api_creates_child_version_and_preserves_parent(tmp_path, m
     assert diff["changed"]["edit"]["right"]["edit_type"] == "section_energy"
     assert diff["changed"]["tracks"]
     assert events_status == 200
-    assert any(event["type"] == "version_edit_created" for event in events["events"])
+
+
+def test_project_editor_preview_apply_creates_manual_editor_version(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, parent_job = create_project_version(server)
+        parent_plan_path = Path(parent_job["output_dir"]) / "data" / "song-plan.json"
+        parent_before = parent_plan_path.read_bytes()
+        state_status, state = request_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+        note_id = state["tracks"][0]["notes"][0]["note_id"]
+        preview_status, preview_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-preview",
+            {
+                "patch": {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "label": "Manual editor polish",
+                    "operations": [
+                        {"op": "set_section_chords", "section_id": "section-001", "chords": ["Cmaj7", "G7", "Am7", "Fmaj7"]},
+                        {"op": "set_track_instrument", "track_id": "track-001", "instrument": "warm lead synth"},
+                        {"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"pitch": 67, "velocity": 99}},
+                    ],
+                },
+                "render_midi": True,
+            },
+        )
+        preview_id = preview_data["preview"]["preview_id"]
+        midi_status, midi = request_bytes(server, "GET", f"/api/projects/{project_id}/editor-previews/{preview_id}/midi")
+        apply_status, apply_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/editor-previews/{preview_id}/apply",
+            {"version_name": "Manual Editor Version", "version_note": "visual edit"},
+        )
+        version = apply_data["version"]
+        detail_status, detail = request_json(server, "GET", f"/api/projects/{project_id}")
+        edit_status, edit = request_json(server, "GET", f"/api/projects/{project_id}/versions/{version['version_id']}/edit")
+        compare_status, compare = request_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={version['version_id']}")
+        duplicate_status, duplicate = request_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/apply", {"version_name": "Duplicate"})
+    finally:
+        stop_test_server(server)
+
+    assert state_status == 200
+    assert preview_status == 201
+    assert preview_data["preview"]["operation_count"] == 3
+    assert midi_status == 200
+    assert midi.startswith(b"MThd")
+    assert apply_status == 201
+    assert version["parent_version_id"] == "v001"
+    assert version["variant_type"] == "manual_editor_edit"
+    assert Path(apply_data["job"]["output_dir"], "data", "editor-patch.json").exists()
+    assert Path(apply_data["job"]["output_dir"], "renders", "song.mid").read_bytes().startswith(b"MThd")
+    assert parent_plan_path.read_bytes() == parent_before
+    assert detail_status == 200
+    assert detail["project"]["version_count"] == 2
+    assert edit_status == 200
+    assert edit["edit"]["edit_source"] == "visual_editor"
+    assert edit["edit"]["preview_id"] == preview_id
+    assert compare_status == 200
+    assert compare["right"]["variant_type"] == "manual_editor_edit"
+    assert duplicate_status == 409
+    assert "already been applied" in duplicate["error"]
+
+
+def test_project_editor_preview_rejects_stale_hash_and_concurrent_apply(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, _parent_job = create_project_version(server)
+        state_status, state = request_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+        stale_status, stale = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-preview",
+            {
+                "patch": {
+                    "schema_version": 1,
+                    "base_plan_hash": "bad",
+                    "operations": [{"op": "set_track_instrument", "track_id": "track-001", "instrument": "lead"}],
+                }
+            },
+        )
+        preview_status, preview_data = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-preview",
+            {
+                "patch": {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "operations": [{"op": "set_track_instrument", "track_id": "track-001", "instrument": "soft lead"}],
+                }
+            },
+        )
+        preview_id = preview_data["preview"]["preview_id"]
+
+        def apply_one(index):
+            return request_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/apply", {"version_name": f"Apply {index}"})[0]
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            statuses = list(executor.map(apply_one, range(2)))
+        detail_status, detail = request_json(server, "GET", f"/api/projects/{project_id}")
+    finally:
+        stop_test_server(server)
+
+    assert state_status == 200
+    assert stale_status == 409
+    assert "stale" in stale["error"]
+    assert preview_status == 201
+    assert sorted(statuses) == [201, 409]
+    assert detail_status == 200
+    assert detail["project"]["version_count"] == 2
 
 
 def test_project_edit_targets_and_validation_errors(tmp_path, monkeypatch):

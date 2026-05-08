@@ -467,12 +467,25 @@ def test_diff_versions_reports_changed_request_and_artifacts(tmp_path: Path) -> 
         artifacts={"midi": str(right_run / "renders" / "song.mid"), "audio": str(right_run / "renders" / "song.wav")},
     )
     (right_run / "renders" / "song.wav").write_bytes(b"RIFF")
+    write_json(
+        right_run / "data" / "edit-metadata.json",
+        {
+            "schema_version": 2,
+            "edit_source": "visual_editor",
+            "edit_type": "manual_editor_edit",
+            "preview_id": "preview-001",
+            "operation_count": 2,
+            "changed_sections": ["intro"],
+            "changed_tracks": ["melody"],
+            "summary": {"set_track_instrument": 1, "update_note": 1},
+        },
+    )
     store.add_version_from_job(document.state.project_id, left)
     store.add_version_from_job(
         document.state.project_id,
         right,
         parent_version_id="v001",
-        variant_type="tempo_key_variation",
+        variant_type="manual_editor_edit",
         change_summary="tempo -> 96",
     )
 
@@ -481,8 +494,10 @@ def test_diff_versions_reports_changed_request_and_artifacts(tmp_path: Path) -> 
     assert diff["changed"]["request"]["tempo_bpm"] == {"left": None, "right": 96}
     assert diff["changed"]["artifacts"]["audio"] == {"left": False, "right": True}
     assert diff["right"]["parent_version_id"] == "v001"
-    assert diff["right"]["variant_type"] == "tempo_key_variation"
+    assert diff["right"]["variant_type"] == "manual_editor_edit"
     assert diff["changed"]["lineage"]["change_summary"] == {"left": "", "right": "tempo -> 96"}
+    assert diff["changed"]["edit"]["right"]["edit_source"] == "visual_editor"
+    assert diff["changed"]["edit"]["right"]["operation_count"] == 2
 
 
 def test_project_version_rejects_invalid_version_id() -> None:

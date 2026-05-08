@@ -46,6 +46,7 @@ from song_agent.reference_analysis import analyze_reference, create_asset_from_s
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongRequest
+from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
 
 
 SECRET_PATTERNS = [
@@ -166,6 +167,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.7 reference library smoke", *_v17_reference_library_smoke(root))
     report.add("v1.8 reference analysis smoke", *_v18_reference_analysis_smoke(root))
     report.add("v1.9 library context smoke", *_v19_library_context_smoke(root))
+    report.add("v2.0 visual editor smoke", *_v20_visual_editor_smoke(root))
     return report
 
 
@@ -1305,6 +1307,100 @@ def _v19_library_context_smoke(root: Path) -> tuple[bool, str]:
                 and "content_base64" not in serialized
             )
             return ok, f"index_items={index.summary()['item_count']}, results={len(results['results'])}, pack={pack.pack_id}, assets={len(applied['asset_refs'])}, references={len(applied['reference_refs'])}"
+        except Exception as exc:
+            return False, str(exc)
+
+
+def _v20_visual_editor_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        try:
+            project_store = ProjectStore(base / ".musicforge" / "projects")
+            request = SongRequest(
+                title="Release v2.0 Smoke",
+                language="English",
+                style="synth pop",
+                theme="visual editor",
+                tempo_bpm=120,
+                key="C",
+            )
+            parent_plan = deterministic_compose(request)
+            parent_dir = base / "runs" / "v20-parent"
+            parent_plan_path = parent_dir / "data" / "song-plan.json"
+            parent_midi_path = parent_dir / "renders" / "song.mid"
+            write_json(parent_plan_path, parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_midi_path)
+            document = project_store.create_project("Release v2.0 Smoke")
+            document = project_store.add_version_from_job(document.state.project_id, _SmokeJob("v20-parent", parent_dir, request.to_dict()), name="Parent")
+            state = build_editor_state(parent_plan)
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            result = apply_editor_patch(
+                parent_plan,
+                {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "label": "Release editor patch",
+                    "operations": [
+                        {"op": "set_section_chords", "section_id": "section-001", "chords": ["Cmaj7", "G7", "Am7", "Fmaj7"]},
+                        {"op": "set_track_instrument", "track_id": "track-001", "instrument": "warm lead synth"},
+                        {"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"pitch": 67, "velocity": 96}},
+                    ],
+                },
+            )
+            preview_store = EditorPreviewStore(project_store.project_dir(document.state.project_id))
+            preview, preview_dir = preview_store.create_preview(
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v20-parent",
+                parent_plan=parent_plan,
+                patch=result.patch,
+                result=result,
+                now="2026-05-08T00:00:00+00:00",
+            )
+            child_dir = base / "runs" / "v20-child"
+            child_plan_path = child_dir / "data" / "song-plan.json"
+            child_midi_path = child_dir / "renders" / "song.mid"
+            metadata = editor_edit_metadata(
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v20-parent",
+                preview_id=preview.preview_id,
+                patch=result.patch,
+                result=result,
+                created_at="2026-05-08T00:00:00+00:00",
+            )
+            write_json(child_plan_path, result.plan.to_dict())
+            write_json(child_dir / "data" / "editor-patch.json", result.patch.to_dict())
+            write_json(child_dir / "data" / "edit-metadata.json", metadata)
+            write_json(child_dir / "data" / "run-summary.json", {"title": result.plan.title, "edit": metadata["summary"]})
+            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(result.plan, child_midi_path)
+            document = project_store.add_version_from_job(
+                document.state.project_id,
+                _SmokeJob("v20-child", child_dir, request.to_dict() | {"edit_type": "manual_editor_edit"}),
+                name="Editor Child",
+                parent_version_id="v001",
+                variant_type="manual_editor_edit",
+                change_summary="visual editor patch",
+            )
+            preview_store.mark_applied(preview.preview_id, version_id="v002", job_id="v20-child", now="2026-05-08T00:00:00+00:00")
+            compare = compare_project_versions(document, "v001", "v002")
+            project_export = project_store.export_project(document.state.project_id)
+            ok = (
+                state["sections"][0]["section_id"] == "section-001"
+                and preview.preview_id == "preview-001"
+                and (preview_dir / "song.mid").exists()
+                and metadata["edit_source"] == "visual_editor"
+                and metadata["operation_count"] == 3
+                and document.versions[-1].variant_type == "manual_editor_edit"
+                and compare["right"]["edit"]["edit_source"] == "visual_editor"
+                and project_export["versions"][1]["variant_type"] == "manual_editor_edit"
+                and child_midi_path.exists()
+                and parent_plan_path.read_bytes()
+            )
+            return ok, f"preview={preview.preview_id}, version={document.versions[-1].version_id}, ops={metadata['operation_count']}, tracks={len(metadata['changed_tracks'])}"
         except Exception as exc:
             return False, str(exc)
 

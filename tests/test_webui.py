@@ -364,6 +364,11 @@ def test_webui_calls_project_apis():
     assert "/versions/${encodeURIComponent(parentId)}/variation" in html
     assert "/versions/${encodeURIComponent(parent)}/edit" in html
     assert "/edit-preview" in html
+    assert "/editor-state" in html
+    assert "/editor-preview" in html
+    assert "/editor-previews/" in html
+    assert "Open Editor" in html
+    assert "project-editor-preview" in html
     assert "/edit-candidates" in html
     assert "/edit-candidates/ab" in html
     assert "/candidate-groups" in html

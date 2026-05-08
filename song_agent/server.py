@@ -152,6 +152,15 @@ from song_agent.runtime_views import (
     build_quality_view,
 )
 from song_agent.schemas.song import SongPlan, SongRequest
+from song_agent.song_editor import (
+    EditorPatchError,
+    EditorPatchStaleError,
+    EditorPreviewStore,
+    apply_editor_patch,
+    build_editor_state,
+    editor_edit_metadata,
+    song_plan_hash as editor_song_plan_hash,
+)
 from song_agent.stems import (
     StemManifest,
     clear_stem_artifacts,
@@ -3100,6 +3109,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         self._send_json(build_provider_usage_report(scope="global", records=records))
 
     def _handle_project_route(self, method: str, project_id: str, tail: str, query_string: str) -> None:
+        editor_state_version = _match_project_editor_state_tail(tail)
+        if editor_state_version is not None:
+            self._handle_project_editor_state(method, project_id, editor_state_version)
+            return
+
+        editor_preview_create = _match_project_editor_preview_create_tail(tail)
+        if editor_preview_create is not None:
+            self._handle_project_editor_preview_create(method, project_id, editor_preview_create)
+            return
+
+        editor_preview_match = _match_project_editor_preview_tail(tail)
+        if editor_preview_match is not None:
+            preview_id, action = editor_preview_match
+            self._handle_project_editor_preview_route(method, project_id, preview_id, action)
+            return
+
         variation_match = _match_project_variation_tail(tail)
         if variation_match is not None:
             parent_version_id = variation_match
@@ -3847,6 +3872,253 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._send_json(build_edit_targets(plan))
+
+    def _handle_project_editor_state(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            _document, version, _job, plan = self._project_edit_parent(project_id, version_id)
+            state = build_editor_state(plan)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except EditorPatchError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._send_json({"project_id": project_id, "version_id": version.version_id, **state})
+
+    def _handle_project_editor_preview_create(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        patch_data = payload.get("patch")
+        if not isinstance(patch_data, dict):
+            self._send_error(HTTPStatus.BAD_REQUEST, "patch must be an object.")
+            return
+        try:
+            _document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            result = apply_editor_patch(parent_plan, patch_data)
+            project_dir = self.project_store.project_dir(project_id)
+            preview, _preview_dir = EditorPreviewStore(project_dir).create_preview(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_job_id=parent_job.job_id,
+                parent_plan=parent_plan,
+                patch=result.patch,
+                result=result,
+                render_midi=bool(payload.get("render_midi", True)),
+                now=_utc_now(),
+            )
+            self.project_store.append_event(
+                project_id,
+                "editor_preview_created",
+                {
+                    "parent_version_id": parent.version_id,
+                    "preview_id": preview.preview_id,
+                    "operation_count": preview.operation_count,
+                },
+            )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except EditorPatchStaleError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except EditorPatchError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "preview": preview.to_dict()}, status=HTTPStatus.CREATED)
+
+    def _handle_project_editor_preview_route(self, method: str, project_id: str, preview_id: str, action: str) -> None:
+        store = EditorPreviewStore(self.project_store.project_dir(project_id))
+        try:
+            self.project_store.get_project(project_id)
+            if action == "detail":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preview = store.read_preview(preview_id)
+                self._send_json({"ok": True, "preview": preview.to_dict()})
+                return
+            if action == "song-plan":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "song_plan": store.read_plan(preview_id).to_dict()})
+                return
+            if action == "midi":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                store.read_preview(preview_id)
+                self._send_file(store.preview_dir(preview_id) / "song.mid", "audio/midi", filename=f"{project_id}-{preview_id}.mid")
+                return
+            if action == "audio":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                store.read_preview(preview_id)
+                self._send_file(store.preview_dir(preview_id) / "song.wav", "audio/wav", filename=f"{project_id}-{preview_id}.wav")
+                return
+            if action == "render-audio":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "preview": self._render_editor_preview_audio(project_id, preview_id).to_dict()})
+                return
+            if action == "delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                store.delete_preview(preview_id)
+                self.project_store.append_event(project_id, "editor_preview_deleted", {"preview_id": preview_id})
+                self._send_json({"ok": True, "deleted": True, "preview_id": preview_id})
+                return
+            if action == "apply":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                self._handle_project_editor_preview_apply(project_id, preview_id, payload)
+                return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor preview not found.")
+            return
+        except EditorPatchStaleError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Editor preview route not found.")
+
+    def _render_editor_preview_audio(self, project_id: str, preview_id: str) -> Any:
+        store = EditorPreviewStore(self.project_store.project_dir(project_id))
+        preview = store.read_preview(preview_id)
+        preview_dir = store.preview_dir(preview_id)
+        midi_path = preview_dir / "song.mid"
+        if not midi_path.exists():
+            plan = store.read_plan(preview_id)
+            render_midi(plan, midi_path)
+        config, _sources = load_renderer_config()
+        config.validate_ready_for_render()
+        wav_path = render_audio(midi_path, preview_dir / "song.wav", config)
+        updated = type(preview).from_dict({**preview.to_dict(), "audio_url": f"/api/projects/{project_id}/editor-previews/{preview_id}/audio", "updated_at": _utc_now()})
+        write_json(preview_dir / "preview.json", updated.to_dict())
+        report_path = preview_dir / "validator-report.json"
+        report = read_json(report_path) if report_path.exists() else {}
+        report["audio"] = _audio_report(wav_path)
+        write_json(report_path, report)
+        return updated
+
+    def _handle_project_editor_preview_apply(self, project_id: str, preview_id: str, payload: dict[str, Any]) -> None:
+        store = EditorPreviewStore(self.project_store.project_dir(project_id))
+        with self.project_store.lock, store.lock:
+            preview = store.read_preview(preview_id)
+            if preview.applied_version_id:
+                self._send_error(HTTPStatus.CONFLICT, "Editor preview has already been applied.")
+                return
+            try:
+                document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, preview.parent_version_id)
+            except FileNotFoundError:
+                self._send_error(HTTPStatus.NOT_FOUND, "Parent version not found.")
+                return
+            if preview.parent_job_id != parent_job.job_id:
+                self._send_error(HTTPStatus.CONFLICT, "Editor preview parent job does not match the current version.")
+                return
+            if editor_song_plan_hash(parent_plan) != preview.base_plan_hash:
+                self._send_error(HTTPStatus.CONFLICT, "Editor preview is stale because the parent song-plan.json has changed.")
+                return
+            patch = store.read_patch(preview_id)
+            plan = store.read_plan(preview_id)
+            plan.validate()
+            run_title = str(payload.get("version_name") or payload.get("name") or preview.label or "Editor Version")
+            run_dir = self.store._reserve_run_dir(run_title)
+            job_id = run_dir.name
+            now = _utc_now()
+            result = apply_editor_patch(parent_plan, patch)
+            metadata = editor_edit_metadata(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_job_id=parent_job.job_id,
+                preview_id=preview.preview_id,
+                patch=patch,
+                result=result,
+                created_at=now,
+            )
+            paths = ProjectPaths.create(run_dir)
+            plan_path = paths.data / "song-plan.json"
+            midi_path = paths.renders / "song.mid"
+            validator_report_path = paths.data / "validator-report.json"
+            request_payload = {
+                **parent.request,
+                "project_id": project_id,
+                "parent_version_id": parent.version_id,
+                "parent_job_id": parent_job.job_id,
+                "editor_preview_id": preview.preview_id,
+                "edit_type": "manual_editor_edit",
+            }
+            write_json(paths.data / "request.json", request_payload)
+            write_json(paths.data / "editor-patch.json", patch.to_dict())
+            write_json(paths.data / "edit-metadata.json", metadata)
+            write_json(plan_path, plan.to_dict())
+            render_midi(plan, midi_path)
+            clear_stem_artifacts(run_dir)
+            write_json(validator_report_path, _build_validator_report(plan_path, midi_path))
+            summary = _build_summary(plan_path, midi_path)
+            summary["edit"] = metadata["summary"]
+            write_json(paths.data / "run-summary.json", summary)
+            append_event(paths, {"event": "editor_preview_applied", "preview_id": preview.preview_id, "parent_version_id": parent.version_id})
+            job = JobState(
+                job_id=job_id,
+                title=run_title,
+                output_dir=str(run_dir),
+                status="completed",
+                created_at=now,
+                updated_at=now,
+                step="completed",
+                message="Editor patch applied.",
+                summary=summary,
+                input_payload=request_payload,
+                provider_snapshot={"mode": "local", "summary": "Visual editor patch"},
+                artifacts={**_job_artifacts(run_dir, plan_path, midi_path, validator_report_path), "editor_patch": str(paths.data / "editor-patch.json")},
+                finished_at=now,
+                heartbeat_at=now,
+                generation_mode="local",
+                pipeline_mode=parent.pipeline_mode,
+                job_type="edit",
+                edit_metadata=metadata,
+            )
+            self.store.jobs[job.job_id] = job
+            self.store._write_job(job)
+            document = self.project_store.add_version_from_job(
+                project_id,
+                job,
+                name=run_title,
+                note=str(payload.get("version_note") or payload.get("note") or ""),
+                parent_version_id=parent.version_id,
+                variant_type="manual_editor_edit",
+                change_summary=str(payload.get("change_summary") or preview.label or "Visual editor patch"),
+            )
+            version = next(version for version in document.versions if version.job_id == job.job_id)
+            updated_preview = store.mark_applied(preview_id, version_id=version.version_id, job_id=job.job_id, now=_utc_now())
+            self.project_store.append_event(
+                project_id,
+                "editor_preview_applied",
+                {"parent_version_id": parent.version_id, "preview_id": preview_id, "version_id": version.version_id, "job_id": job.job_id},
+            )
+        self._send_json({"ok": True, **document.to_dict(), "version": version.to_dict(), "job": job.to_dict(), "preview": updated_preview.to_dict()}, status=HTTPStatus.CREATED)
 
     def _handle_project_edit_preview(self, method: str, project_id: str, version_id: str) -> None:
         if method != "POST":
@@ -5726,6 +5998,29 @@ def _match_project_variation_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "variation":
         return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_state_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-state":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_preview_create_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-preview":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_preview_tail(tail: str) -> tuple[str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 2 and parts[0] == "editor-previews":
+        return unquote(parts[1]), "detail"
+    if len(parts) == 3 and parts[0] == "editor-previews" and parts[2] in {"song-plan", "midi", "audio", "render-audio", "delete", "apply"}:
+        return unquote(parts[1]), parts[2]
     return None
 
 

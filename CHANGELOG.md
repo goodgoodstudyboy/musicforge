@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.0.0 - 2026-05-08
+
+### Added
+- Visual SongPlan Editor for Project Versions with editor state, stable section/track/note IDs, patch preview, MIDI preview, and apply-as-version.
+- Editor Patch engine for safe section chord/lyrics edits, track instrument edits, note add/update/delete/move/transpose/quantize/velocity operations.
+- Persistent Project editor previews under `.musicforge/projects/<project>/editor-previews/`.
+- Manual editor apply creates a new Project Version with `manual_editor_edit` lineage, `editor-patch.json`, `edit-metadata.json`, validator report, summary, and MIDI render.
+- Studio Project Editor tab for local visual/manual SongPlan edits.
+- Project diff, Project Compare, Project Export, and release-check now surface visual editor metadata.
+
+### Scope
+- v2.0.0 intentionally does not add a full DAW, browser synthesizer, realtime audio engine, recording, audio-to-MIDI, MP3/FLAC import, or section/track structural rearranging.
+
+### Verified
+- `python -m pytest tests\test_song_editor.py tests\test_server_edits.py tests\test_projects.py tests\test_project_compare.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.9.1 - 2026-05-08
 
 ### Fixed

@@ -93,6 +93,8 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         return None
     preset = metadata.get("preset") if isinstance(metadata.get("preset"), dict) else None
     return {
+        "schema_version": metadata.get("schema_version"),
+        "edit_source": metadata.get("edit_source"),
         "edit_type": metadata.get("edit_type"),
         "target": metadata.get("target") or {},
         "instruction": metadata.get("instruction") or "",
@@ -102,6 +104,9 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         "provider": metadata.get("provider") if isinstance(metadata.get("provider"), dict) else {},
         "template_id": metadata.get("template_id"),
         "preview_id": metadata.get("preview_id"),
+        "operation_count": metadata.get("operation_count"),
+        "changed_sections": metadata.get("changed_sections") or [],
+        "changed_tracks": metadata.get("changed_tracks") or [],
         "provider_patch": _provider_patch_view(metadata.get("provider_patch")),
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,

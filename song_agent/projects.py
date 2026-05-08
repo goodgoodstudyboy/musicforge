@@ -29,6 +29,7 @@ VARIANT_TYPES = {
     "melody_edit",
     "arrangement_edit",
     "provider_edit",
+    "manual_editor_edit",
 }
 QUALITY_GATE_STATUSES = {
     "not_evaluated",
@@ -714,11 +715,17 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return None
     return {
+        "schema_version": metadata.get("schema_version"),
+        "edit_source": metadata.get("edit_source"),
         "edit_type": metadata.get("edit_type"),
         "target": metadata.get("target") or {},
         "instruction": metadata.get("instruction") or "",
         "preserve": metadata.get("preserve") or [],
         "strength": metadata.get("strength"),
+        "preview_id": metadata.get("preview_id"),
+        "operation_count": metadata.get("operation_count"),
+        "changed_sections": metadata.get("changed_sections") or [],
+        "changed_tracks": metadata.get("changed_tracks") or [],
         "summary": metadata.get("summary") or {},
         "warnings": metadata.get("warnings") or [],
     }

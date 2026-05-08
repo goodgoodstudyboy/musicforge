@@ -1,0 +1,797 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import shutil
+import threading
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from song_agent.edits import SUPPORTED_HARMONY_CHORDS
+from song_agent.music_quality import attach_quality, analyze_song_quality
+from song_agent.projectio import read_json, write_json
+from song_agent.projects import now_iso
+from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
+from song_agent.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
+
+
+EDITOR_PREVIEW_SCHEMA_VERSION = 1
+EDITOR_PATCH_SCHEMA_VERSION = 1
+MAX_EDITOR_TRACKS = 32
+MAX_EDITOR_NOTES_PER_TRACK = 4096
+MAX_EDITOR_PATCH_BYTES = 256 * 1024
+MAX_EDITOR_OPERATIONS = 200
+MAX_NOTE_IDS_PER_OPERATION = 512
+MAX_ADDED_NOTES_PER_PATCH = 512
+MAX_TOTAL_NOTES_AFTER_PATCH = 16000
+MAX_LYRICS_LENGTH = 2000
+MAX_INSTRUMENT_LENGTH = 80
+NOTE_PATCH_FIELDS = {"pitch", "start_beat", "duration_beats", "velocity"}
+SUPPORTED_EDITOR_OPS = {
+    "set_section_chords",
+    "set_section_lyrics",
+    "set_track_instrument",
+    "add_note",
+    "update_note",
+    "delete_notes",
+    "move_notes",
+    "transpose_notes",
+    "quantize_notes",
+    "scale_velocity",
+}
+QUANTIZE_GRIDS = {0.125, 0.25, 0.5, 1.0}
+_SUPPORTED_CHORDS_BY_LOWER = {chord.lower(): chord for chord in SUPPORTED_HARMONY_CHORDS}
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+class EditorPatchError(ValueError):
+    pass
+
+
+class EditorPatchStaleError(EditorPatchError):
+    pass
+
+
+@dataclass(frozen=True)
+class EditorPatch:
+    schema_version: int
+    base_plan_hash: str
+    label: str = ""
+    operations: list[dict[str, Any]] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EditorPatch":
+        if not isinstance(data, dict):
+            raise EditorPatchError("patch must be an object.")
+        raw = json.dumps(data, ensure_ascii=False)
+        if len(raw.encode("utf-8")) > MAX_EDITOR_PATCH_BYTES:
+            raise EditorPatchError(f"editor patch must be {MAX_EDITOR_PATCH_BYTES} bytes or fewer.")
+        schema_version = int(data.get("schema_version", EDITOR_PATCH_SCHEMA_VERSION) or EDITOR_PATCH_SCHEMA_VERSION)
+        if schema_version != EDITOR_PATCH_SCHEMA_VERSION:
+            raise EditorPatchError(f"editor patch schema_version must be {EDITOR_PATCH_SCHEMA_VERSION}.")
+        operations = data.get("operations")
+        if not isinstance(operations, list) or not operations:
+            raise EditorPatchError("editor patch operations must be a non-empty list.")
+        if len(operations) > MAX_EDITOR_OPERATIONS:
+            raise EditorPatchError(f"editor patch supports at most {MAX_EDITOR_OPERATIONS} operations.")
+        cleaned_ops = []
+        for operation in operations:
+            if not isinstance(operation, dict):
+                raise EditorPatchError("editor patch operations must be objects.")
+            op = str(operation.get("op") or "").strip()
+            if op not in SUPPORTED_EDITOR_OPS:
+                raise EditorPatchError(f"Unsupported editor operation: {op}.")
+            cleaned_ops.append(sanitize_metadata(dict(operation)))
+        return cls(
+            schema_version=schema_version,
+            base_plan_hash=str(data.get("base_plan_hash") or "").strip(),
+            label=_bounded_text(data.get("label"), 160),
+            operations=cleaned_ops,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class EditorPatchResult:
+    plan: SongPlan
+    patch: EditorPatch
+    summary: dict[str, Any]
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class EditorPreview:
+    schema_version: int
+    preview_id: str
+    project_id: str
+    parent_version_id: str
+    parent_job_id: str
+    base_plan_hash: str
+    status: str
+    label: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+    operation_count: int = 0
+    changed_sections: list[str] = field(default_factory=list)
+    changed_tracks: list[str] = field(default_factory=list)
+    quality: dict[str, Any] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    midi_url: str | None = None
+    audio_url: str | None = None
+    applied_version_id: str | None = None
+    applied_job_id: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EditorPreview":
+        return cls(
+            schema_version=int(data.get("schema_version", EDITOR_PREVIEW_SCHEMA_VERSION) or EDITOR_PREVIEW_SCHEMA_VERSION),
+            preview_id=validate_editor_preview_id(str(data.get("preview_id") or "preview-001")),
+            project_id=str(data.get("project_id") or ""),
+            parent_version_id=str(data.get("parent_version_id") or ""),
+            parent_job_id=str(data.get("parent_job_id") or ""),
+            base_plan_hash=str(data.get("base_plan_hash") or ""),
+            status=str(data.get("status") or "created"),
+            label=sanitize_sensitive_text(str(data.get("label") or "")),
+            created_at=str(data.get("created_at") or ""),
+            updated_at=str(data.get("updated_at") or data.get("created_at") or ""),
+            operation_count=max(0, int(data.get("operation_count") or 0)),
+            changed_sections=[str(item) for item in data.get("changed_sections", [])],
+            changed_tracks=[str(item) for item in data.get("changed_tracks", [])],
+            quality=sanitize_metadata(dict(data.get("quality") or {})),
+            warnings=[sanitize_sensitive_text(str(item)) for item in data.get("warnings", [])],
+            midi_url=_optional_str(data.get("midi_url")),
+            audio_url=_optional_str(data.get("audio_url")),
+            applied_version_id=_optional_str(data.get("applied_version_id")),
+            applied_job_id=_optional_str(data.get("applied_job_id")),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class EditorPreviewStore:
+    def __init__(self, project_dir: Path | str):
+        self.project_dir = Path(project_dir).resolve()
+        self.root = self.project_dir / "editor-previews"
+        self.lock = threading.RLock()
+
+    def create_preview(
+        self,
+        *,
+        project_id: str,
+        parent_version_id: str,
+        parent_job_id: str,
+        parent_plan: SongPlan,
+        patch: EditorPatch,
+        result: EditorPatchResult,
+        render_midi: bool = True,
+        now: str | None = None,
+    ) -> tuple[EditorPreview, Path]:
+        from song_agent.renderers.midi import render_midi as render_song_midi
+
+        now = now or now_iso()
+        with self.lock:
+            self.root.mkdir(parents=True, exist_ok=True)
+            preview_id, preview_dir = self._reserve_preview_dir()
+            midi_url = f"/api/projects/{project_id}/editor-previews/{preview_id}/midi" if render_midi else None
+            preview = EditorPreview(
+                schema_version=EDITOR_PREVIEW_SCHEMA_VERSION,
+                preview_id=preview_id,
+                project_id=project_id,
+                parent_version_id=parent_version_id,
+                parent_job_id=parent_job_id,
+                base_plan_hash=song_plan_hash(parent_plan),
+                status="completed",
+                label=patch.label,
+                created_at=now,
+                updated_at=now,
+                operation_count=len(patch.operations),
+                changed_sections=list(result.summary.get("changed_sections") or []),
+                changed_tracks=list(result.summary.get("changed_tracks") or []),
+                quality=_quality_summary(result.plan),
+                warnings=list(result.warnings),
+                midi_url=midi_url,
+            )
+            try:
+                write_json(preview_dir / "patch.json", patch.to_dict())
+                write_json(preview_dir / "song-plan.json", result.plan.to_dict())
+                write_json(preview_dir / "validator-report.json", _preview_validator_report(result.plan, render_midi))
+                write_json(preview_dir / "quality.json", {"quality": result.plan.quality.to_dict() if result.plan.quality else {}})
+                if render_midi:
+                    render_song_midi(result.plan, preview_dir / "song.mid")
+                    report = read_json(preview_dir / "validator-report.json")
+                    report["midi_exists"] = True
+                    report["midi_size"] = (preview_dir / "song.mid").stat().st_size
+                    write_json(preview_dir / "validator-report.json", report)
+                write_json(preview_dir / "preview.json", preview.to_dict())
+                _append_preview_event(preview_dir, "editor_preview_created", {"operation_count": preview.operation_count}, now)
+            except Exception:
+                if preview_dir.exists() and not (preview_dir / "preview.json").exists():
+                    shutil.rmtree(preview_dir)
+                raise
+            return preview, preview_dir
+
+    def read_preview(self, preview_id: str) -> EditorPreview:
+        return EditorPreview.from_dict(read_json(self.preview_dir(preview_id) / "preview.json"))
+
+    def read_patch(self, preview_id: str) -> EditorPatch:
+        return EditorPatch.from_dict(read_json(self.preview_dir(preview_id) / "patch.json"))
+
+    def read_plan(self, preview_id: str) -> SongPlan:
+        return SongPlan.from_dict(read_json(self.preview_dir(preview_id) / "song-plan.json"))
+
+    def mark_applied(self, preview_id: str, *, version_id: str, job_id: str, now: str | None = None) -> EditorPreview:
+        with self.lock:
+            preview = self.read_preview(preview_id)
+            if preview.applied_version_id:
+                raise EditorPatchStaleError("Editor preview has already been applied.")
+            updated = EditorPreview.from_dict({**preview.to_dict(), "status": "applied", "applied_version_id": version_id, "applied_job_id": job_id, "updated_at": now or now_iso()})
+            write_json(self.preview_dir(preview_id) / "preview.json", updated.to_dict())
+            _append_preview_event(self.preview_dir(preview_id), "editor_preview_applied", {"version_id": version_id, "job_id": job_id}, updated.updated_at)
+            return updated
+
+    def delete_preview(self, preview_id: str) -> None:
+        with self.lock:
+            preview_dir = self.preview_dir(preview_id)
+            if not preview_dir.exists():
+                raise FileNotFoundError(preview_id)
+            if preview_dir.resolve().is_symlink():
+                raise ValueError("Refusing to delete symlink editor preview.")
+            shutil.rmtree(preview_dir)
+
+    def preview_dir(self, preview_id: str) -> Path:
+        preview_id = validate_editor_preview_id(preview_id)
+        base = self.root.resolve()
+        target = (base / preview_id).resolve()
+        try:
+            target.relative_to(base)
+        except ValueError as exc:
+            raise ValueError("Refusing to operate outside editor previews.") from exc
+        return target
+
+    def _reserve_preview_dir(self) -> tuple[str, Path]:
+        for index in range(1, 1_000_000):
+            preview_id = f"preview-{index:03d}"
+            preview_dir = self.preview_dir(preview_id)
+            try:
+                preview_dir.mkdir(parents=True, exist_ok=False)
+            except FileExistsError:
+                continue
+            return preview_id, preview_dir
+        raise RuntimeError("Could not allocate editor preview id.")
+
+
+def build_editor_state(plan: SongPlan) -> dict[str, Any]:
+    if len(plan.tracks) > MAX_EDITOR_TRACKS:
+        raise EditorPatchError("SongPlan has too many tracks for visual editor.")
+    if any(len(track.notes) > MAX_EDITOR_NOTES_PER_TRACK for track in plan.tracks):
+        raise EditorPatchError("SongPlan has too many notes for visual editor.")
+    beats_per_bar = _beats_per_bar(plan)
+    total_bars = _total_bars(plan)
+    sections = []
+    for index, section in enumerate(plan.sections):
+        section_id = section_id_for_index(index)
+        start_beat = (section.start_bar - 1) * beats_per_bar
+        end_beat = start_beat + section.bars * beats_per_bar
+        sections.append(
+            {
+                "section_id": section_id,
+                "name": section.name,
+                "start_bar": section.start_bar,
+                "bars": section.bars,
+                "start_beat": start_beat,
+                "end_beat": end_beat,
+                "chords": list(section.chords),
+                "lyrics": section.lyrics or "",
+            }
+        )
+    tracks = []
+    for track_index, track in enumerate(plan.tracks):
+        track_id = track_id_for_index(track_index)
+        pitches = [note.pitch for note in track.notes]
+        notes = [
+            {
+                "note_id": note_id_for(track_id, note_index, note),
+                "pitch": note.pitch,
+                "start_beat": note.start_beat,
+                "duration_beats": note.duration_beats,
+                "velocity": note.velocity,
+            }
+            for note_index, note in enumerate(track.notes)
+        ]
+        tracks.append(
+            {
+                "track_id": track_id,
+                "name": track.name,
+                "instrument": track.instrument,
+                "role": _track_role(track.name),
+                "note_count": len(track.notes),
+                "pitch_min": min(pitches) if pitches else None,
+                "pitch_max": max(pitches) if pitches else None,
+                "notes": notes,
+            }
+        )
+    quality = plan.quality.to_dict() if plan.quality else analyze_song_quality(plan).to_dict()
+    return {
+        "ok": True,
+        "base_plan_hash": song_plan_hash(plan),
+        "song": {
+            "title": plan.title,
+            "key": plan.key,
+            "tempo_bpm": plan.tempo_bpm,
+            "meter": plan.meter,
+            "total_bars": total_bars,
+            "beats_per_bar": beats_per_bar,
+        },
+        "sections": sections,
+        "tracks": tracks,
+        "quality": quality,
+        "warnings": [],
+    }
+
+
+def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | EditorPatch) -> EditorPatchResult:
+    patch = patch_data if isinstance(patch_data, EditorPatch) else EditorPatch.from_dict(patch_data)
+    current_hash = song_plan_hash(parent_plan)
+    if patch.base_plan_hash != current_hash:
+        raise EditorPatchStaleError("Editor patch is stale because the base song-plan hash changed.")
+    state = build_editor_state(parent_plan)
+    sections = list(parent_plan.sections)
+    tracks = list(parent_plan.tracks)
+    summary_counts: dict[str, int] = {}
+    changed_sections: set[str] = set()
+    changed_tracks: set[str] = set()
+    warnings: list[str] = []
+    added_notes = 0
+    total_beats = _total_bars(parent_plan) * _beats_per_bar(parent_plan)
+    for operation in patch.operations:
+        op = str(operation.get("op") or "")
+        summary_counts[op] = summary_counts.get(op, 0) + 1
+        if op == "set_section_chords":
+            section_index = _section_index_for_plan(operation, sections)
+            chords = _chords(operation.get("chords"))
+            section = sections[section_index]
+            sections[section_index] = SongSection(section.name, section.start_bar, section.bars, chords, section.lyrics)
+            changed_sections.add(section.name)
+        elif op == "set_section_lyrics":
+            section_index = _section_index_for_plan(operation, sections)
+            lyrics = _clean_lyrics(operation.get("lyrics"))
+            section = sections[section_index]
+            sections[section_index] = SongSection(section.name, section.start_bar, section.bars, section.chords, lyrics)
+            changed_sections.add(section.name)
+        elif op == "set_track_instrument":
+            track_index = _track_index_for_plan(operation, tracks)
+            instrument = _bounded_text(operation.get("instrument"), MAX_INSTRUMENT_LENGTH)
+            if not instrument:
+                raise EditorPatchError("instrument must not be empty.")
+            track = tracks[track_index]
+            tracks[track_index] = TrackPlan(track.name, instrument, track.notes)
+            changed_tracks.add(track.name)
+        elif op == "add_note":
+            track_index = _track_index_for_plan(operation, tracks)
+            if added_notes >= MAX_ADDED_NOTES_PER_PATCH:
+                raise EditorPatchError(f"editor patch can add at most {MAX_ADDED_NOTES_PER_PATCH} notes.")
+            note = _note(operation.get("note"), total_beats)
+            track = tracks[track_index]
+            tracks[track_index] = TrackPlan(track.name, track.instrument, _sorted_notes([*track.notes, note]))
+            changed_tracks.add(track.name)
+            added_notes += 1
+        elif op == "update_note":
+            track_index = _track_index_for_plan(operation, tracks)
+            track = tracks[track_index]
+            notes = _update_note(track, state["tracks"][track_index], operation, total_beats)
+            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
+            changed_tracks.add(track.name)
+        elif op == "delete_notes":
+            track_index = _track_index_for_plan(operation, tracks)
+            track = tracks[track_index]
+            selected = set(_note_ids(operation.get("note_ids")))
+            existing = {item["note_id"] for item in state["tracks"][track_index]["notes"]}
+            missing = selected - existing
+            if missing:
+                raise EditorPatchError(f"Unknown note ids: {', '.join(sorted(missing)[:5])}.")
+            notes = [note for index, note in enumerate(track.notes) if note_id_for(track_id_for_index(track_index), index, note) not in selected]
+            if not notes:
+                warnings.append(f"Track {track.name} has no notes after editor patch.")
+            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
+            changed_tracks.add(track.name)
+        elif op == "move_notes":
+            track_index = _track_index_for_plan(operation, tracks)
+            delta = _float_range(operation.get("delta_beats"), "delta_beats", -64.0, 64.0)
+            track = tracks[track_index]
+            ids = set(_note_ids(operation.get("note_ids")))
+            tracks[track_index] = TrackPlan(track.name, track.instrument, _map_selected_notes(track, track_index, ids=ids, total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, _round_beat(note.start_beat + delta), note.duration_beats, note.velocity)))
+            changed_tracks.add(track.name)
+        elif op == "transpose_notes":
+            track_index = _track_index_for_plan(operation, tracks)
+            semitones = _int_range(operation.get("semitones"), "semitones", -24, 24)
+            track = tracks[track_index]
+            selector = _note_selector(operation, track, track_index)
+            tracks[track_index] = TrackPlan(track.name, track.instrument, _map_selected_notes(track, track_index, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(_clamp(note.pitch + semitones, 0, 127), note.start_beat, note.duration_beats, note.velocity)))
+            changed_tracks.add(track.name)
+        elif op == "quantize_notes":
+            track_index = _track_index_for_plan(operation, tracks)
+            grid = float(operation.get("grid"))
+            if grid not in QUANTIZE_GRIDS:
+                raise EditorPatchError("grid must be one of 0.125, 0.25, 0.5, 1.0.")
+            track = tracks[track_index]
+            selector = _note_selector(operation, track, track_index)
+            tracks[track_index] = TrackPlan(track.name, track.instrument, _map_selected_notes(track, track_index, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, _round_beat(round(note.start_beat / grid) * grid), note.duration_beats, note.velocity)))
+            changed_tracks.add(track.name)
+        elif op == "scale_velocity":
+            track_index = _track_index_for_plan(operation, tracks)
+            factor = _float_range(operation.get("factor"), "factor", 0.25, 2.0)
+            track = tracks[track_index]
+            selector = _note_selector(operation, track, track_index)
+            tracks[track_index] = TrackPlan(track.name, track.instrument, _map_selected_notes(track, track_index, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, note.start_beat, note.duration_beats, _clamp(round(note.velocity * factor), 1, 127))))
+            changed_tracks.add(track.name)
+    _validate_note_limits(tracks)
+    edited = SongPlan(
+        title=parent_plan.title,
+        key=parent_plan.key,
+        tempo_bpm=parent_plan.tempo_bpm,
+        meter=parent_plan.meter,
+        sections=sections,
+        tracks=[TrackPlan(track.name, track.instrument, _sorted_notes(track.notes)) for track in tracks],
+        quality=parent_plan.quality,
+    )
+    edited = attach_quality(edited)
+    edited.validate()
+    summary = {
+        "operation_counts": summary_counts,
+        "changed_sections": sorted(changed_sections),
+        "changed_tracks": sorted(changed_tracks),
+    }
+    return EditorPatchResult(plan=edited, patch=patch, summary=summary, warnings=warnings)
+
+
+def summarize_editor_patch(result: EditorPatchResult) -> dict[str, Any]:
+    return {
+        "operation_count": len(result.patch.operations),
+        "changed_sections": list(result.summary.get("changed_sections") or []),
+        "changed_tracks": list(result.summary.get("changed_tracks") or []),
+        "operation_counts": dict(result.summary.get("operation_counts") or {}),
+        "warnings": list(result.warnings),
+    }
+
+
+def editor_edit_metadata(
+    *,
+    project_id: str,
+    parent_version_id: str,
+    parent_job_id: str,
+    preview_id: str,
+    patch: EditorPatch,
+    result: EditorPatchResult,
+    created_at: str | None = None,
+) -> dict[str, Any]:
+    summary = summarize_editor_patch(result)
+    return sanitize_metadata(
+        {
+            "schema_version": 2,
+            "edit_source": "visual_editor",
+            "edit_type": "manual_editor_edit",
+            "provider_mode": "local",
+            "project_id": project_id,
+            "parent_version_id": parent_version_id,
+            "parent_job_id": parent_job_id,
+            "preview_id": preview_id,
+            "base_plan_hash": patch.base_plan_hash,
+            "label": patch.label,
+            "operation_count": summary["operation_count"],
+            "changed_sections": summary["changed_sections"],
+            "changed_tracks": summary["changed_tracks"],
+            "summary": {
+                **summary["operation_counts"],
+                "changed_sections": summary["changed_sections"],
+                "changed_tracks": summary["changed_tracks"],
+            },
+            "warnings": summary["warnings"],
+            "created_at": created_at or now_iso(),
+        }
+    )
+
+
+def song_plan_hash(plan: SongPlan) -> str:
+    payload = json.dumps(plan.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def validate_editor_preview_id(preview_id: str) -> str:
+    if not re.match(r"^preview-[0-9]{3,6}$", preview_id):
+        raise ValueError("Invalid editor preview id.")
+    return preview_id
+
+
+def section_id_for_index(index: int) -> str:
+    return f"section-{index + 1:03d}"
+
+
+def track_id_for_index(index: int) -> str:
+    return f"track-{index + 1:03d}"
+
+
+def note_id_for(track_id: str, note_index: int, note: NoteEvent) -> str:
+    raw = f"{track_id}:{note_index}:{note.pitch}:{note.start_beat:.6f}:{note.duration_beats:.6f}:{note.velocity}"
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+    return f"note-{track_id}-{note_index + 1:04d}-{digest}"
+
+
+def _section_index(operation: dict[str, Any]) -> int:
+    section_id = str(operation.get("section_id") or "").strip()
+    if not re.match(r"^section-[0-9]{3}$", section_id):
+        raise EditorPatchError("section_id is required.")
+    index = int(section_id.split("-")[1]) - 1
+    if index < 0:
+        raise EditorPatchError("section_id is out of range.")
+    return index
+
+
+def _section_index_for_plan(operation: dict[str, Any], sections: list[SongSection]) -> int:
+    index = _section_index(operation)
+    if index >= len(sections):
+        raise EditorPatchError("section_id is out of range.")
+    return index
+
+
+def _track_index(operation: dict[str, Any]) -> int:
+    track_id = str(operation.get("track_id") or "").strip()
+    if not re.match(r"^track-[0-9]{3}$", track_id):
+        raise EditorPatchError("track_id is required.")
+    index = int(track_id.split("-")[1]) - 1
+    if index < 0:
+        raise EditorPatchError("track_id is out of range.")
+    return index
+
+
+def _track_index_for_plan(operation: dict[str, Any], tracks: list[TrackPlan]) -> int:
+    index = _track_index(operation)
+    if index >= len(tracks):
+        raise EditorPatchError("track_id is out of range.")
+    return index
+
+
+def _chords(value: Any) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise EditorPatchError("chords must be a non-empty list.")
+    if len(value) > 16:
+        raise EditorPatchError("chords supports at most 16 chords.")
+    chords = []
+    invalid = []
+    for item in value:
+        chord = _SUPPORTED_CHORDS_BY_LOWER.get(str(item).strip().lower())
+        if chord is None:
+            invalid.append(str(item))
+        else:
+            chords.append(chord)
+    if invalid:
+        raise EditorPatchError(f"Unsupported chord names: {', '.join(invalid)}.")
+    return chords
+
+
+def _clean_lyrics(value: Any) -> str:
+    lyrics = sanitize_sensitive_text(str(value or ""))
+    if _CONTROL_CHARS.search(lyrics):
+        raise EditorPatchError("lyrics must not contain control characters.")
+    if len(lyrics) > MAX_LYRICS_LENGTH:
+        raise EditorPatchError(f"lyrics must be {MAX_LYRICS_LENGTH} characters or fewer.")
+    return lyrics
+
+
+def _bounded_text(value: Any, max_length: int) -> str:
+    text = sanitize_sensitive_text(str(value or "")).strip()
+    if _CONTROL_CHARS.search(text):
+        raise EditorPatchError("text fields must not contain control characters.")
+    return text[:max_length].rstrip()
+
+
+def _note(value: Any, total_beats: float) -> NoteEvent:
+    if not isinstance(value, dict):
+        raise EditorPatchError("note must be an object.")
+    note = NoteEvent(
+        pitch=_int_range(value.get("pitch"), "pitch", 0, 127),
+        start_beat=_float_min(value.get("start_beat"), "start_beat", 0.0),
+        duration_beats=_float_min(value.get("duration_beats"), "duration_beats", 0.0001),
+        velocity=_int_range(value.get("velocity", 90), "velocity", 1, 127),
+    )
+    _ensure_note_bounds(note, total_beats)
+    return note
+
+
+def _update_note(track: TrackPlan, track_state: dict[str, Any], operation: dict[str, Any], total_beats: float) -> list[NoteEvent]:
+    note_id = str(operation.get("note_id") or "").strip()
+    patch = operation.get("patch")
+    if not isinstance(patch, dict) or not patch:
+        raise EditorPatchError("update_note patch must be a non-empty object.")
+    unknown = sorted(set(patch) - NOTE_PATCH_FIELDS)
+    if unknown:
+        raise EditorPatchError(f"update_note patch contains unsupported fields: {', '.join(unknown)}.")
+    ids = [item["note_id"] for item in track_state["notes"]]
+    if note_id not in ids:
+        raise EditorPatchError(f"Unknown note id: {note_id}.")
+    target_index = ids.index(note_id)
+    notes = list(track.notes)
+    current = notes[target_index]
+    updated = NoteEvent(
+        pitch=_int_range(patch.get("pitch", current.pitch), "pitch", 0, 127),
+        start_beat=_float_min(patch.get("start_beat", current.start_beat), "start_beat", 0.0),
+        duration_beats=_float_min(patch.get("duration_beats", current.duration_beats), "duration_beats", 0.0001),
+        velocity=_int_range(patch.get("velocity", current.velocity), "velocity", 1, 127),
+    )
+    _ensure_note_bounds(updated, total_beats)
+    notes[target_index] = updated
+    return _sorted_notes(notes)
+
+
+def _note_ids(value: Any) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise EditorPatchError("note_ids must be a non-empty list.")
+    if len(value) > MAX_NOTE_IDS_PER_OPERATION:
+        raise EditorPatchError(f"note_ids supports at most {MAX_NOTE_IDS_PER_OPERATION} notes.")
+    result = [str(item).strip() for item in value if str(item).strip()]
+    if len(result) != len(value):
+        raise EditorPatchError("note_ids must not contain empty ids.")
+    return result
+
+
+def _note_selector(operation: dict[str, Any], track: TrackPlan, track_index: int) -> dict[str, Any]:
+    if isinstance(operation.get("note_ids"), list):
+        return {"ids": set(_note_ids(operation.get("note_ids")))}
+    if isinstance(operation.get("range"), dict):
+        beat_range = _beat_range(operation["range"])
+        if not any(beat_range[0] <= note.start_beat < beat_range[1] for note in track.notes):
+            raise EditorPatchError("range did not select any notes.")
+        return {"range": beat_range}
+    raise EditorPatchError("operation requires note_ids or range.")
+
+
+def _map_selected_notes(
+    track: TrackPlan,
+    track_index: int,
+    *,
+    total_beats: float,
+    mapper: Any,
+    ids: set[str] | None = None,
+    beat_range: tuple[float, float] | None = None,
+) -> list[NoteEvent]:
+    selected = 0
+    mapped = []
+    existing_ids = set()
+    track_id = track_id_for_index(track_index)
+    for index, note in enumerate(track.notes):
+        note_id = note_id_for(track_id, index, note)
+        existing_ids.add(note_id)
+        match = (ids is not None and note_id in ids) or (beat_range is not None and beat_range[0] <= note.start_beat < beat_range[1])
+        if match:
+            updated = mapper(note)
+            _ensure_note_bounds(updated, total_beats)
+            mapped.append(updated)
+            selected += 1
+        else:
+            mapped.append(note)
+    if ids is not None:
+        missing = ids - existing_ids
+        if missing:
+            raise EditorPatchError(f"Unknown note ids: {', '.join(sorted(missing)[:5])}.")
+    if selected == 0:
+        raise EditorPatchError("operation did not select any notes.")
+    return _sorted_notes(mapped)
+
+
+def _beat_range(value: dict[str, Any]) -> tuple[float, float]:
+    start = _float_min(value.get("start_beat"), "range.start_beat", 0.0)
+    end = _float_min(value.get("end_beat"), "range.end_beat", 0.0)
+    if end <= start:
+        raise EditorPatchError("range.end_beat must be greater than range.start_beat.")
+    return start, end
+
+
+def _validate_note_limits(tracks: list[TrackPlan]) -> None:
+    total = sum(len(track.notes) for track in tracks)
+    if total > MAX_TOTAL_NOTES_AFTER_PATCH:
+        raise EditorPatchError(f"editor patch result supports at most {MAX_TOTAL_NOTES_AFTER_PATCH} total notes.")
+    for track in tracks:
+        if len(track.notes) > MAX_EDITOR_NOTES_PER_TRACK:
+            raise EditorPatchError(f"Track {track.name} has too many notes after editor patch.")
+
+
+def _ensure_note_bounds(note: NoteEvent, total_beats: float) -> None:
+    if note.start_beat < 0:
+        raise EditorPatchError("note start_beat must be >= 0.")
+    if note.duration_beats <= 0:
+        raise EditorPatchError("note duration_beats must be > 0.")
+    if note.start_beat + note.duration_beats > total_beats + 0.001:
+        raise EditorPatchError("note end exceeds song length.")
+
+
+def _sorted_notes(notes: list[NoteEvent]) -> list[NoteEvent]:
+    return sorted(notes, key=lambda note: (note.start_beat, note.pitch, note.duration_beats, note.velocity))
+
+
+def _int_range(value: Any, name: str, low: int, high: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise EditorPatchError(f"{name} must be an integer.") from exc
+    if number < low or number > high:
+        raise EditorPatchError(f"{name} must be between {low} and {high}.")
+    return number
+
+
+def _float_min(value: Any, name: str, minimum: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise EditorPatchError(f"{name} must be a number.") from exc
+    if number < minimum:
+        raise EditorPatchError(f"{name} must be >= {minimum}.")
+    return _round_beat(number)
+
+
+def _float_range(value: Any, name: str, low: float, high: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise EditorPatchError(f"{name} must be a number.") from exc
+    if number < low or number > high:
+        raise EditorPatchError(f"{name} must be between {low} and {high}.")
+    return number
+
+
+def _round_beat(value: float) -> float:
+    return round(float(value), 6)
+
+
+def _clamp(value: int, low: int, high: int) -> int:
+    return max(low, min(high, int(value)))
+
+
+def _total_bars(plan: SongPlan) -> int:
+    if not plan.sections:
+        return 0
+    return max(section.start_bar - 1 + section.bars for section in plan.sections)
+
+
+def _beats_per_bar(plan: SongPlan) -> int:
+    return 4 if plan.meter == "4/4" else 4
+
+
+def _track_role(name: str) -> str:
+    lower_name = name.lower()
+    for role in ("melody", "chords", "bass", "drums"):
+        if role in lower_name:
+            return role
+    return lower_name.strip()
+
+
+def _quality_summary(plan: SongPlan) -> dict[str, Any]:
+    quality = plan.quality or analyze_song_quality(plan)
+    scores = quality.scores.to_dict() if quality.scores else {}
+    return {"overall": scores.get("overall"), "dimension_scores": scores, "warnings": list(quality.warnings)}
+
+
+def _preview_validator_report(plan: SongPlan, render_midi: bool) -> dict[str, Any]:
+    return {
+        "status": "passed",
+        "checks": ["song_plan_schema", "song_plan_validation", *(("midi_render",) if render_midi else ())],
+        "title": plan.title,
+        "midi_exists": False,
+        "midi_size": 0,
+        "checked_at": now_iso(),
+    }
+
+
+def _append_preview_event(preview_dir: Path, event_type: str, payload: dict[str, Any], now: str | None = None) -> None:
+    event = {"timestamp": now or now_iso(), "type": event_type, "payload": sanitize_metadata(payload)}
+    with (preview_dir / "events.jsonl").open("a", encoding="utf-8") as file:
+        file.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def _optional_str(value: Any) -> str | None:
+    if value is None or str(value).strip() == "":
+        return None
+    return str(value)

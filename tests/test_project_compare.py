@@ -81,6 +81,48 @@ def test_compare_original_and_edit_version(tmp_path: Path) -> None:
     assert compare["artifacts"]["left"]["midi"] == "/api/jobs/compare-one/midi"
 
 
+def test_compare_reports_visual_editor_metadata(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / ".musicforge" / "projects")
+    document = store.create_project("Visual Compare")
+    request = request_payload("Visual Parent")
+    parent_dir = tmp_path / "runs" / "visual-parent"
+    plan = write_plan(parent_dir, request)
+    document = store.add_version_from_job(document.state.project_id, Job("visual-parent", parent_dir, request), name="Parent")
+
+    child_dir = tmp_path / "runs" / "visual-child"
+    edited = plan.to_dict()
+    edited["tracks"][0]["instrument"] = "warm lead synth"
+    write_json(child_dir / "data" / "song-plan.json", edited)
+    write_json(
+        child_dir / "data" / "edit-metadata.json",
+        {
+            "schema_version": 2,
+            "edit_source": "visual_editor",
+            "edit_type": "manual_editor_edit",
+            "preview_id": "preview-001",
+            "operation_count": 1,
+            "changed_sections": [],
+            "changed_tracks": ["melody"],
+            "summary": {"set_track_instrument": 1},
+        },
+    )
+    render_midi(plan, child_dir / "renders" / "song.mid")
+    document = store.add_version_from_job(
+        document.state.project_id,
+        Job("visual-child", child_dir, request),
+        name="Visual Child",
+        parent_version_id="v001",
+        variant_type="manual_editor_edit",
+        change_summary="visual edit",
+    )
+
+    compare = compare_project_versions(document, "v001", "v002")
+
+    assert compare["right"]["edit"]["edit_source"] == "visual_editor"
+    assert compare["right"]["edit"]["preview_id"] == "preview-001"
+    assert compare["right"]["edit"]["operation_count"] == 1
+
+
 def test_compare_missing_plan_and_missing_version_are_safe(tmp_path: Path) -> None:
     store = ProjectStore(tmp_path / ".musicforge" / "projects")
     document = store.create_project("Missing Compare")

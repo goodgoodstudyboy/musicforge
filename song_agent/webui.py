@@ -965,6 +965,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let activeProjectTab = "versions";
     let projectVariationParentId = null;
     let projectEditParentId = null;
+    let projectEditorParentId = null;
+    let projectEditorState = null;
+    let projectEditorPatch = [];
+    let projectEditorPreview = null;
     let editPresets = [];
     let promptTemplates = [];
     let providerEditPreview = null;
@@ -2278,7 +2282,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "variation", "edit", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "edit", "editor", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -2425,6 +2429,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await renderProjectDetail(project.project_id);
           return;
         }
+        if (target.dataset.projectEditorVersion) {
+          projectEditorParentId = target.dataset.projectEditorVersion;
+          activeProjectTab = "editor";
+          await renderProjectDetail(project.project_id);
+          return;
+        }
         if (target.dataset.projectEvaluateVersion) {
           await api(`/api/projects/${id}/versions/${encodeURIComponent(target.dataset.projectEvaluateVersion)}/evaluate`, { method: "POST" });
           await loadProjects();
@@ -2489,6 +2499,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
       } else if (activeProjectTab === "edit") {
         await renderProjectEdit(project, versions, target);
+      } else if (activeProjectTab === "editor") {
+        await renderProjectEditor(project, versions, target);
       } else if (activeProjectTab === "candidates") {
         await renderProjectCandidates(project, versions, target);
       } else if (activeProjectTab === "quality-gate") {
@@ -2543,6 +2555,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               <button class="secondary" data-project-final-version="${escapeHtml(version.version_id)}" type="button">Set Final</button>
               <button class="secondary" data-project-variation-version="${escapeHtml(version.version_id)}" type="button">Create Variation</button>
               <button class="secondary" data-project-edit-version="${escapeHtml(version.version_id)}" type="button">Edit Version</button>
+              <button class="secondary" data-project-editor-version="${escapeHtml(version.version_id)}" type="button">Open Editor</button>
               <button class="secondary" data-project-evaluate-version="${escapeHtml(version.version_id)}" type="button">Evaluate Gate</button>
               <button class="secondary" data-project-export-version="${escapeHtml(version.version_id)}" type="button">Export Final</button>
               <button class="secondary" data-project-extract-version="${escapeHtml(version.version_id)}" data-asset-type="motif" type="button">Save Motif</button>
@@ -2675,6 +2688,245 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if ($("project-variation-generation-mode").value) payload.generation_mode = $("project-variation-generation-mode").value;
       if ($("project-variation-pipeline-mode").value) payload.pipeline_mode = $("project-variation-pipeline-mode").value;
       return payload;
+    }
+
+    async function renderProjectEditor(project, versions, target) {
+      const parentId = projectEditorParentId || project.selected_version_id || project.final_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
+      target.innerHTML = projectEditorShell(versions, parentId);
+      const parentSelect = $("project-editor-parent");
+      if (parentSelect) {
+        parentSelect.addEventListener("change", async () => {
+          projectEditorParentId = parentSelect.value;
+          projectEditorState = null;
+          projectEditorPatch = [];
+          projectEditorPreview = null;
+          await renderProjectEditor(project, versions, target);
+        });
+      }
+      bindAction("project-editor-load", async () => {
+        await loadProjectEditorState(project.project_id, $("project-editor-parent").value);
+      });
+      bindAction("project-editor-clear", () => {
+        projectEditorPatch = [];
+        projectEditorPreview = null;
+        renderProjectEditorDraft();
+      });
+      bindAction("project-editor-preview", async () => {
+        if (!projectEditorState) await loadProjectEditorState(project.project_id, $("project-editor-parent").value);
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent($("project-editor-parent").value)}/editor-preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patch: {
+              schema_version: 1,
+              base_plan_hash: projectEditorState.base_plan_hash,
+              label: $("project-editor-label").value.trim(),
+              operations: projectEditorPatch,
+            },
+            render_midi: true,
+          }),
+        });
+        projectEditorPreview = data.preview;
+        renderProjectEditorPreview();
+      });
+      bindAction("project-editor-apply", async () => {
+        if (!projectEditorPreview) return;
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/apply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            version_name: $("project-editor-version-name").value.trim(),
+            version_note: $("project-editor-version-note").value.trim(),
+            change_summary: $("project-editor-label").value.trim(),
+          }),
+        });
+        projectEditorParentId = null;
+        projectEditorState = null;
+        projectEditorPatch = [];
+        projectEditorPreview = null;
+        activeProjectTab = "versions";
+        await loadJobs();
+        await loadProjects();
+      });
+      if (parentId) await loadProjectEditorState(project.project_id, parentId);
+    }
+
+    function projectEditorShell(versions, parentId) {
+      return `
+        <div class="grid2">
+          <label>Parent Version
+            <select id="project-editor-parent">${projectVersionOptions(versions, parentId)}</select>
+          </label>
+          <label>Patch Label
+            <input id="project-editor-label" value="Manual editor patch">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>New Version Name
+            <input id="project-editor-version-name" value="Editor Version ${(versions.length || 0) + 1}">
+          </label>
+          <label>Version Note
+            <input id="project-editor-version-note" placeholder="manual visual editor patch">
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="project-editor-load" type="button" ${parentId ? "" : "disabled"}>Open</button>
+          <button class="secondary" id="project-editor-clear" type="button">Clear Patch</button>
+          <button id="project-editor-preview" type="button" disabled>Preview</button>
+          <button id="project-editor-apply" type="button" disabled>Apply as Version</button>
+          <span id="project-editor-message" class="message"></span>
+        </div>
+        <div id="project-editor-state"><div class="empty">Select a version to open the editor.</div></div>
+        <div id="project-editor-preview-result"><div class="empty">Preview result will appear here.</div></div>
+      `;
+    }
+
+    async function loadProjectEditorState(projectId, versionId) {
+      if (!versionId) return;
+      projectEditorState = await api(`/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/editor-state`);
+      projectEditorPatch = [];
+      projectEditorPreview = null;
+      renderProjectEditorState();
+      renderProjectEditorDraft();
+    }
+
+    function renderProjectEditorState() {
+      const target = $("project-editor-state");
+      if (!target || !projectEditorState) return;
+      const sectionOptions = projectEditorState.sections.map((section) => `<option value="${escapeHtml(section.section_id)}">${escapeHtml(section.name)} · bar ${escapeHtml(section.start_bar)}</option>`).join("");
+      const trackOptions = projectEditorState.tracks.map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.name)} · ${escapeHtml(track.note_count)}</option>`).join("");
+      const firstTrack = projectEditorState.tracks[0] || { notes: [] };
+      target.innerHTML = `
+        <div class="summary-grid">
+          ${metric("Title", projectEditorState.song.title)}
+          ${metric("Tempo", projectEditorState.song.tempo_bpm)}
+          ${metric("Key", projectEditorState.song.key)}
+          ${metric("Base Hash", projectEditorState.base_plan_hash.slice(0, 12))}
+        </div>
+        <div class="grid2">
+          <section>
+            <h3>Sections</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Bars</th><th>Chords</th><th>Lyrics</th></tr></thead>
+                <tbody>${projectEditorState.sections.map((section) => `<tr><td>${escapeHtml(section.name)}</td><td>${escapeHtml(section.start_bar)}+${escapeHtml(section.bars)}</td><td>${escapeHtml(section.chords.join(" · "))}</td><td>${escapeHtml((section.lyrics || "").slice(0, 80))}</td></tr>`).join("")}</tbody>
+              </table>
+            </div>
+          </section>
+          <section>
+            <h3>Tracks</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Instrument</th><th>Notes</th><th>Range</th></tr></thead>
+                <tbody>${projectEditorState.tracks.map((track) => `<tr><td>${escapeHtml(track.name)}</td><td>${escapeHtml(track.instrument)}</td><td>${escapeHtml(track.note_count)}</td><td>${escapeHtml(track.pitch_min ?? "-")}..${escapeHtml(track.pitch_max ?? "-")}</td></tr>`).join("")}</tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <div class="grid2">
+          <section>
+            <h3>Section Patch</h3>
+            <label>Section <select id="project-editor-section">${sectionOptions}</select></label>
+            <label>Chords <input id="project-editor-chords" placeholder="Cmaj7, G7, Am7, Fmaj7"></label>
+            <label>Lyrics <textarea id="project-editor-lyrics"></textarea></label>
+            <div class="actions">
+              <button class="secondary" id="project-editor-add-chords" type="button">Set Chords</button>
+              <button class="secondary" id="project-editor-add-lyrics" type="button">Set Lyrics</button>
+            </div>
+          </section>
+          <section>
+            <h3>Track Patch</h3>
+            <label>Track <select id="project-editor-track">${trackOptions}</select></label>
+            <label>Instrument <input id="project-editor-instrument" placeholder="warm lead synth"></label>
+            <div class="actions">
+              <button class="secondary" id="project-editor-add-instrument" type="button">Set Instrument</button>
+            </div>
+          </section>
+        </div>
+        <section>
+          <h3>Notes</h3>
+          <div class="grid2">
+            <label>Note <select id="project-editor-note">${(firstTrack.notes || []).slice(0, 256).map((note) => `<option value="${escapeHtml(note.note_id)}">${escapeHtml(note.pitch)} @ ${escapeHtml(note.start_beat)}</option>`).join("")}</select></label>
+            <label>Patch <input id="project-editor-note-patch" placeholder='{"pitch":67,"velocity":96}'></label>
+          </div>
+          <div class="grid2">
+            <label>Add Note <input id="project-editor-add-note-json" placeholder='{"pitch":64,"start_beat":4,"duration_beats":1,"velocity":90}'></label>
+            <label>Batch Range <input id="project-editor-range-json" placeholder='{"start_beat":0,"end_beat":16}'></label>
+          </div>
+          <div class="grid2">
+            <label>Transpose Semitones <input id="project-editor-transpose" type="number" min="-24" max="24" value="0"></label>
+            <label>Velocity Factor <input id="project-editor-velocity-factor" type="number" min="0.25" max="2" step="0.05" value="1"></label>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="project-editor-add-note" type="button">Add Note</button>
+            <button class="secondary" id="project-editor-update-note" type="button">Update Note</button>
+            <button class="secondary" id="project-editor-delete-note" type="button">Delete Note</button>
+            <button class="secondary" id="project-editor-transpose-range" type="button">Transpose Range</button>
+            <button class="secondary" id="project-editor-velocity-range" type="button">Scale Velocity</button>
+          </div>
+        </section>
+        <section>
+          <h3>Patch Summary</h3>
+          <pre id="project-editor-patch-json"></pre>
+        </section>
+      `;
+      $("project-editor-track").addEventListener("change", renderProjectEditorNoteOptions);
+      bindAction("project-editor-add-chords", () => addProjectEditorOperation({ op: "set_section_chords", section_id: $("project-editor-section").value, chords: $("project-editor-chords").value.split(",").map((item) => item.trim()).filter(Boolean) }));
+      bindAction("project-editor-add-lyrics", () => addProjectEditorOperation({ op: "set_section_lyrics", section_id: $("project-editor-section").value, lyrics: $("project-editor-lyrics").value }));
+      bindAction("project-editor-add-instrument", () => addProjectEditorOperation({ op: "set_track_instrument", track_id: $("project-editor-track").value, instrument: $("project-editor-instrument").value.trim() }));
+      bindAction("project-editor-add-note", () => addProjectEditorOperation({ op: "add_note", track_id: $("project-editor-track").value, note: parseJsonField("project-editor-add-note-json") }));
+      bindAction("project-editor-update-note", () => addProjectEditorOperation({ op: "update_note", track_id: $("project-editor-track").value, note_id: $("project-editor-note").value, patch: parseJsonField("project-editor-note-patch") }));
+      bindAction("project-editor-delete-note", () => addProjectEditorOperation({ op: "delete_notes", track_id: $("project-editor-track").value, note_ids: [$("project-editor-note").value] }));
+      bindAction("project-editor-transpose-range", () => addProjectEditorOperation({ op: "transpose_notes", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), semitones: Number($("project-editor-transpose").value || 0) }));
+      bindAction("project-editor-velocity-range", () => addProjectEditorOperation({ op: "scale_velocity", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), factor: Number($("project-editor-velocity-factor").value || 1) }));
+    }
+
+    function renderProjectEditorNoteOptions() {
+      const select = $("project-editor-note");
+      const track = (projectEditorState.tracks || []).find((item) => item.track_id === $("project-editor-track").value) || { notes: [] };
+      select.innerHTML = (track.notes || []).slice(0, 256).map((note) => `<option value="${escapeHtml(note.note_id)}">${escapeHtml(note.pitch)} @ ${escapeHtml(note.start_beat)}</option>`).join("");
+    }
+
+    function addProjectEditorOperation(operation) {
+      projectEditorPatch.push(operation);
+      projectEditorPreview = null;
+      renderProjectEditorDraft();
+    }
+
+    function renderProjectEditorDraft() {
+      const pre = $("project-editor-patch-json");
+      if (pre) pre.textContent = JSON.stringify({ operations: projectEditorPatch }, null, 2);
+      const preview = $("project-editor-preview");
+      if (preview) preview.disabled = !projectEditorState || projectEditorPatch.length === 0;
+      const apply = $("project-editor-apply");
+      if (apply) apply.disabled = !projectEditorPreview;
+      const result = $("project-editor-preview-result");
+      if (result && !projectEditorPreview) result.innerHTML = "<div class='empty'>Preview result will appear here.</div>";
+    }
+
+    function renderProjectEditorPreview() {
+      const target = $("project-editor-preview-result");
+      if (!target || !projectEditorPreview) return;
+      target.innerHTML = `
+        <div class="summary-grid">
+          ${metric("Preview", projectEditorPreview.preview_id)}
+          ${metric("Ops", projectEditorPreview.operation_count)}
+          ${metric("Quality", (projectEditorPreview.quality || {}).overall ?? "-")}
+          ${metric("Status", projectEditorPreview.status)}
+        </div>
+        <div class="actions">
+          ${projectEditorPreview.midi_url ? `<a class="button-link secondary" href="${escapeHtml(projectEditorPreview.midi_url)}">MIDI</a>` : ""}
+        </div>
+        <pre>${escapeHtml(JSON.stringify(projectEditorPreview, null, 2))}</pre>
+      `;
+      const apply = $("project-editor-apply");
+      if (apply) apply.disabled = false;
+    }
+
+    function parseJsonField(id) {
+      const raw = $(id).value.trim();
+      if (!raw) return {};
+      return JSON.parse(raw);
     }
 
     async function renderProjectEdit(project, versions, target) {
@@ -3581,6 +3833,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         versions: "Versions",
         variation: "Variation",
         edit: "Edit",
+        editor: "Editor",
         candidates: "Candidates",
         "quality-gate": "Quality Gate",
         "final-export": "Final Export",
