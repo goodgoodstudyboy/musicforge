@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -108,3 +109,36 @@ def test_context_pack_delete_rejects_symlink(tmp_path: Path, monkeypatch) -> Non
 
     with pytest.raises(ValueError, match="symlink"):
         store.delete_pack("pack-001")
+
+
+def test_context_pack_concurrent_create_allocates_unique_ids(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    asset_store = AssetStore()
+    reference_store = ReferenceStore()
+    asset = create_asset(asset_store)
+    reference = create_reference(reference_store)
+    store = ContextPackStore()
+
+    def create_one(index: int) -> str:
+        pack = store.create_pack(
+            {
+                "name": "Shared Context",
+                "created_from": {"index": index},
+                "asset_refs": [{"asset_id": asset.asset_id, "role": "hook"}],
+                "reference_refs": [{"reference_id": reference.reference_id, "role": "style"}],
+            },
+            asset_store=asset_store,
+            reference_store=reference_store,
+            now="2026-05-08T00:00:00+00:00",
+        )
+        return pack.pack_id
+
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        pack_ids = list(executor.map(create_one, range(48)))
+
+    assert len(pack_ids) == 48
+    assert len(set(pack_ids)) == 48
+    assert sorted(pack_ids)[0] == "pack-001"
+    assert sorted(pack_ids)[-1] == "pack-048"
+    for pack_id in pack_ids:
+        assert (Path(".musicforge") / "context-packs" / pack_id / "pack.json").exists()

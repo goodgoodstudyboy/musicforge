@@ -309,15 +309,11 @@ def search_library(index: LibraryIndex, request: dict[str, Any]) -> dict[str, An
         if score <= 0 and _has_search_constraints(request):
             continue
         results.append({"score": score, "score_breakdown": breakdown, **library_result_dict(item)})
-    results.sort(
-        key=lambda result: (
-            -int(result["score"]),
-            not bool(result.get("favorite")),
-            -int(result.get("quality_score") or 0),
-            str(result.get("updated_at") or ""),
-            str(result.get("item_id") or ""),
-        )
-    )
+    results.sort(key=lambda result: str(result.get("item_id") or ""))
+    results.sort(key=lambda result: str(result.get("updated_at") or ""), reverse=True)
+    results.sort(key=lambda result: int(result.get("quality_score") or 0), reverse=True)
+    results.sort(key=lambda result: bool(result.get("favorite")), reverse=True)
+    results.sort(key=lambda result: int(result["score"]), reverse=True)
     return {
         "ok": True,
         "results": results[:limit],

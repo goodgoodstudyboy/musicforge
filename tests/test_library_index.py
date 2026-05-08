@@ -84,3 +84,32 @@ def test_library_index_store_rebuild_persists_summary(tmp_path: Path, monkeypatc
 
     assert index.summary()["item_count"] == 1
     assert loaded.items[0].item_id == "asset:asset-001"
+
+
+def test_library_search_tie_break_prefers_newer_items(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    asset_store = AssetStore()
+    reference_store = ReferenceStore()
+    old_asset = asset_store.create_asset(
+        {
+            "asset_type": "motif",
+            "name": "Shared hook",
+            "tags": ["shared", "hook"],
+            "content": {"notes": [{"pitch": 60, "start_beat": 0, "duration_beats": 1}]},
+        },
+        now="2026-05-01T00:00:00+00:00",
+    )
+    new_asset = asset_store.create_asset(
+        {
+            "asset_type": "motif",
+            "name": "Shared hook",
+            "tags": ["shared", "hook"],
+            "content": {"notes": [{"pitch": 64, "start_beat": 0, "duration_beats": 1}]},
+        },
+        now="2026-05-08T00:00:00+00:00",
+    )
+
+    index = build_library_index(asset_store, reference_store, now="2026-05-08T00:00:00+00:00")
+    result = search_library(index, {"query": "shared hook", "limit": 2})
+
+    assert [item["source_id"] for item in result["results"]] == [new_asset.asset_id, old_asset.asset_id]

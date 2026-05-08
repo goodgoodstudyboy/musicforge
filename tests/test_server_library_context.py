@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -160,3 +161,36 @@ def test_context_pack_stale_returns_409(tmp_path, monkeypatch):
 
     assert status == 409
     assert "stale" in error["error"]
+
+
+def test_context_pack_api_concurrent_create_uses_unique_ids(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        asset = create_asset(server)
+        reference = create_reference(server)
+
+        def create_pack(index):
+            status, data = request_json(
+                server,
+                "POST",
+                "/api/context-packs",
+                {
+                    "name": "Concurrent Context",
+                    "created_from": {"index": index},
+                    "asset_refs": [{"asset_id": asset["asset_id"], "role": "hook"}],
+                    "reference_refs": [{"reference_id": reference["reference_id"], "role": "style"}],
+                },
+            )
+            assert status == 201
+            return data["context_pack"]["pack_id"]
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            pack_ids = list(executor.map(create_pack, range(24)))
+    finally:
+        stop_test_server(server)
+
+    assert len(pack_ids) == 24
+    assert len(set(pack_ids)) == 24
+    for pack_id in pack_ids:
+        assert (Path(".musicforge") / "context-packs" / pack_id / "pack.json").exists()

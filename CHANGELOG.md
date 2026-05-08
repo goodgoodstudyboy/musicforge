@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.9.1 - 2026-05-08
+
+### Fixed
+- Context Pack creation is now protected by a store-level `RLock` and atomic directory reservation, preventing duplicate `pack-*` IDs under concurrent API requests.
+- Context Pack creation cleanup now only removes the current thread's incomplete reservation, avoiding cross-thread directory deletion during failures.
+- Library search now prefers newer items when score, favorite status, and quality score are tied.
+
+### Verified
+- `python -m pytest tests\test_context_packs.py tests\test_library_index.py tests\test_server_library_context.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v1.9.0 - 2026-05-08
 
 ### Added

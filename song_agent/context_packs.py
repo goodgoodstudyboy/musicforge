@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import threading
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,7 @@ class ContextPack:
 class ContextPackStore:
     def __init__(self, root: Path | str = CONTEXT_PACK_ROOT):
         self.root = Path(root)
+        self.lock = threading.RLock()
 
     def list_packs(self, include_hidden: bool = False) -> list[ContextPack]:
         if not self.root.exists():
@@ -96,55 +98,56 @@ class ContextPackStore:
 
     def create_pack(self, payload: dict[str, Any], *, asset_store: AssetStore, reference_store: ReferenceStore, now: str | None = None) -> ContextPack:
         now = now or now_iso()
-        self.root.mkdir(parents=True, exist_ok=True)
-        pack_id = self._next_pack_id()
         asset_refs, reference_refs = prepare_context_pack_refs(payload, asset_store, reference_store)
-        data = {
-            "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
-            "pack_id": pack_id,
-            "name": payload.get("name") or pack_id,
-            "description": payload.get("description") or "",
-            "created_at": now,
-            "updated_at": now,
-            "created_from": payload.get("created_from") or {},
-            "query": payload.get("query") or {},
-            "asset_refs": asset_refs,
-            "reference_refs": reference_refs,
-            "selection": payload.get("selection") or {"mode": "manual", "selected_by": "user", "score_summary": []},
-            "hidden": False,
-        }
-        pack = ContextPack.from_dict(data)
-        pack_dir = self.pack_dir(pack.pack_id)
-        try:
-            pack_dir.mkdir(parents=True, exist_ok=False)
-            write_json(pack_dir / "pack.json", pack.to_dict())
-            self.append_event(pack.pack_id, "context_pack_created", {"asset_count": len(pack.asset_refs), "reference_count": len(pack.reference_refs)}, now=now)
-        except Exception:
-            if pack_dir.exists() and not (pack_dir / "pack.json").exists():
-                shutil.rmtree(pack_dir)
-            raise
-        return pack
+        with self.lock:
+            self.root.mkdir(parents=True, exist_ok=True)
+            pack_id, pack_dir = self._reserve_pack_dir()
+            try:
+                data = {
+                    "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
+                    "pack_id": pack_id,
+                    "name": payload.get("name") or pack_id,
+                    "description": payload.get("description") or "",
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_from": payload.get("created_from") or {},
+                    "query": payload.get("query") or {},
+                    "asset_refs": asset_refs,
+                    "reference_refs": reference_refs,
+                    "selection": payload.get("selection") or {"mode": "manual", "selected_by": "user", "score_summary": []},
+                    "hidden": False,
+                }
+                pack = ContextPack.from_dict(data)
+                write_json(pack_dir / "pack.json", pack.to_dict())
+                self.append_event(pack.pack_id, "context_pack_created", {"asset_count": len(pack.asset_refs), "reference_count": len(pack.reference_refs)}, now=now)
+            except Exception:
+                if pack_dir.exists() and not (pack_dir / "pack.json").exists():
+                    shutil.rmtree(pack_dir)
+                raise
+            return pack
 
     def hide_pack(self, pack_id: str, hidden: bool = True) -> ContextPack:
-        pack = self.read_pack(pack_id)
-        updated = ContextPack.from_dict({**pack.to_dict(), "hidden": hidden, "updated_at": now_iso()})
-        self._write_pack(updated)
-        self.append_event(pack_id, "context_pack_hidden" if hidden else "context_pack_unhidden", {}, now=updated.updated_at)
-        return updated
+        with self.lock:
+            pack = self.read_pack(pack_id)
+            updated = ContextPack.from_dict({**pack.to_dict(), "hidden": hidden, "updated_at": now_iso()})
+            self._write_pack(updated)
+            self.append_event(pack_id, "context_pack_hidden" if hidden else "context_pack_unhidden", {}, now=updated.updated_at)
+            return updated
 
     def delete_pack(self, pack_id: str) -> None:
-        pack_dir = self.pack_dir(pack_id)
-        if not pack_dir.exists():
-            raise FileNotFoundError(pack_id)
-        resolved = pack_dir.resolve()
-        base = self.root.resolve()
-        try:
-            resolved.relative_to(base)
-        except ValueError as exc:
-            raise ValueError("Refusing to delete outside context packs.") from exc
-        if resolved.is_symlink():
-            raise ValueError("Refusing to delete symlink context pack.")
-        shutil.rmtree(resolved)
+        with self.lock:
+            pack_dir = self.pack_dir(pack_id)
+            if not pack_dir.exists():
+                raise FileNotFoundError(pack_id)
+            resolved = pack_dir.resolve()
+            base = self.root.resolve()
+            try:
+                resolved.relative_to(base)
+            except ValueError as exc:
+                raise ValueError("Refusing to delete outside context packs.") from exc
+            if resolved.is_symlink():
+                raise ValueError("Refusing to delete symlink context pack.")
+            shutil.rmtree(resolved)
 
     def apply_preview(self, pack_id: str, *, asset_store: AssetStore, reference_store: ReferenceStore, captured_at: str | None = None) -> dict[str, Any]:
         pack = self.read_pack(pack_id)
@@ -161,21 +164,27 @@ class ContextPackStore:
         return target
 
     def append_event(self, pack_id: str, event_type: str, payload: dict[str, Any], *, now: str | None = None) -> None:
-        pack_dir = self.pack_dir(pack_id)
-        pack_dir.mkdir(parents=True, exist_ok=True)
-        event = {"timestamp": now or now_iso(), "type": event_type, "payload": sanitize_metadata(payload)}
-        with (pack_dir / "events.jsonl").open("a", encoding="utf-8") as file:
-            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+        with self.lock:
+            pack_dir = self.pack_dir(pack_id)
+            pack_dir.mkdir(parents=True, exist_ok=True)
+            event = {"timestamp": now or now_iso(), "type": event_type, "payload": sanitize_metadata(payload)}
+            with (pack_dir / "events.jsonl").open("a", encoding="utf-8") as file:
+                file.write(json.dumps(event, ensure_ascii=False) + "\n")
 
     def _write_pack(self, pack: ContextPack) -> ContextPack:
-        write_json(self.pack_dir(pack.pack_id) / "pack.json", pack.to_dict())
-        return pack
+        with self.lock:
+            write_json(self.pack_dir(pack.pack_id) / "pack.json", pack.to_dict())
+            return pack
 
-    def _next_pack_id(self) -> str:
+    def _reserve_pack_dir(self) -> tuple[str, Path]:
         for index in range(1, 1_000_000):
             pack_id = f"pack-{index:03d}"
-            if not (self.root / pack_id).exists():
-                return pack_id
+            pack_dir = self.pack_dir(pack_id)
+            try:
+                pack_dir.mkdir(parents=True, exist_ok=False)
+            except FileExistsError:
+                continue
+            return pack_id, pack_dir
         raise RuntimeError("Could not allocate context pack id.")
 
 
