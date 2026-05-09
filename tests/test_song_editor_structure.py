@@ -93,6 +93,68 @@ def test_track_ids_remain_stable_after_prior_add_in_same_patch() -> None:
     assert tracks["chords keys"].instrument == "glass keys"
 
 
+def test_note_ids_remain_stable_after_prior_track_structure_change() -> None:
+    plan = sample_plan()
+    state = build_editor_state(plan)
+    chord_note_id = state["tracks"][1]["notes"][0]["note_id"]
+    result = apply_editor_patch(
+        plan,
+        patch(
+            plan,
+            [
+                {"op": "duplicate_track", "track_id": "track-001", "name": "melody sketch"},
+                {"op": "delete_track", "track_id": "track-001"},
+                {"op": "update_note", "track_id": "track-002", "note_id": chord_note_id, "patch": {"velocity": 77}},
+                {"op": "move_notes", "track_id": "track-002", "note_ids": [chord_note_id], "delta_beats": 0.5},
+            ],
+        ),
+    )
+
+    chords = next(track for track in result.plan.tracks if track.name == "chords")
+    assert any(note.pitch == plan.tracks[1].notes[0].pitch and note.start_beat == 0.5 and note.velocity == 77 for note in chords.notes)
+
+
+def test_note_ids_remain_stable_after_renaming_track_in_same_patch() -> None:
+    plan = sample_plan()
+    state = build_editor_state(plan)
+    chord_note_id = state["tracks"][1]["notes"][1]["note_id"]
+    result = apply_editor_patch(
+        plan,
+        patch(
+            plan,
+            [
+                {"op": "rename_track", "track_id": "track-002", "name": "chords keys"},
+                {"op": "update_note", "track_id": "track-002", "note_id": chord_note_id, "patch": {"pitch": 65}},
+            ],
+        ),
+    )
+
+    chords = next(track for track in result.plan.tracks if track.name == "chords keys")
+    assert any(note.pitch == 65 and note.start_beat == plan.tracks[1].notes[1].start_beat for note in chords.notes)
+
+
+def test_note_ids_remain_stable_after_prior_section_shift_in_same_patch() -> None:
+    plan = sample_plan()
+    state = build_editor_state(plan)
+    note_index, original_note = next((index, note) for index, note in enumerate(plan.tracks[0].notes) if note.start_beat >= 16)
+    melody_note_id = state["tracks"][0]["notes"][note_index]["note_id"]
+    result = apply_editor_patch(
+        plan,
+        patch(
+            plan,
+            [
+                {"op": "add_section", "after_section_id": "section-001", "name": "pre chorus", "bars": 2, "chords": ["Fmaj7", "G7"]},
+                {"op": "update_note", "track_id": "track-001", "note_id": melody_note_id, "patch": {"velocity": 66}},
+                {"op": "move_notes", "track_id": "track-001", "note_ids": [melody_note_id], "delta_beats": 0.5},
+            ],
+        ),
+    )
+
+    melody = next(track for track in result.plan.tracks if track.name == "melody")
+    shifted_start = original_note.start_beat + 8.5
+    assert any(note.pitch == original_note.pitch and note.start_beat == shifted_start and note.velocity == 66 for note in melody.notes)
+
+
 def test_duplicate_section_copies_notes_to_new_section() -> None:
     plan = sample_plan()
     result = apply_editor_patch(

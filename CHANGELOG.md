@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.1.2 - 2026-05-09
+
+### Fixed
+- Visual Editor note operations now resolve `note-*` IDs from the base editor state's `track_id` plus note identity, so earlier track structure edits in the same patch cannot make later note operations fail.
+- Note identity is refreshed after `update_note`, `delete_notes`, `move_notes`, `transpose_notes`, `quantize_notes`, and `scale_velocity` within a patch.
+- Section structure operations now keep base note identities aligned when notes are shifted, cropped, trimmed, or remapped by section movement.
+
+### Verified
+- `python -m pytest tests\test_song_editor_structure.py -q`
+- `python -m pytest tests\test_song_editor.py tests\test_song_editor_structure.py tests\test_editor_previews.py tests\test_server_editor_structure.py tests\test_server_edits.py tests\test_projects.py tests\test_project_compare.py tests\test_final_export.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.1.1 - 2026-05-09
 
 ### Fixed
