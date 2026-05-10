@@ -705,6 +705,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
         "operation_counts": summary_counts,
         "changed_sections": sorted(changed_sections),
         "changed_tracks": sorted(changed_tracks),
+        "note_identity": _note_identity_by_track_id(base_note_keys_by_track_id),
     }
     return EditorPatchResult(plan=edited, patch=patch, summary=summary, warnings=warnings)
 
@@ -1026,6 +1027,22 @@ def _note_index_by_key(notes: list[NoteEvent], target_key: NoteKey, note_id: str
         if _note_key(note) == target_key:
             return index
     raise EditorPatchError(f"Note {note_id} is no longer available in this patch.")
+
+
+def _note_identity_by_track_id(note_keys_by_track_id: dict[str, dict[str, NoteKey | None]]) -> dict[str, dict[str, dict[str, float | int]]]:
+    identity: dict[str, dict[str, dict[str, float | int]]] = {}
+    for track_id, note_keys_by_id in note_keys_by_track_id.items():
+        notes = {}
+        for note_id, note_key in note_keys_by_id.items():
+            if note_key is not None:
+                notes[note_id] = {
+                    "pitch": note_key[0],
+                    "start_beat": note_key[1],
+                    "duration_beats": note_key[2],
+                    "velocity": note_key[3],
+                }
+        identity[track_id] = notes
+    return identity
 
 
 def normalize_sections(sections: list[SongSection]) -> list[SongSection]:

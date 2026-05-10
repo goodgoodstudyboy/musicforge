@@ -289,6 +289,14 @@ or clean up editor preview history. Section edits normalize `start_bar` values
 and adjust affected notes deterministically. Applied editor previews are kept
 for audit history and are not removed by preview cleanup.
 
+v2.2.0 upgrades the Project Editor into an interactive arranger workspace.
+Studio now shows an Arranger Timeline, track overview lanes, a current-track
+Piano Roll, an Inspector, Patch Queue, Undo/Redo, and Draft Refresh. Draft
+Refresh calls a nonpersistent draft API, so users can check patch results
+without creating preview directories, runs, MIDI files, or project events.
+Preview still creates an auditable editor preview, and Apply as Version still
+creates a child Project Version without modifying the parent.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored
@@ -546,6 +554,16 @@ POST /api/projects/<project-id>/versions/<version-id>/variation
 POST /api/projects/<project-id>/versions/<version-id>/edit
 GET  /api/projects/<project-id>/versions/<version-id>/edit
 GET  /api/projects/<project-id>/versions/<version-id>/edit-targets
+GET  /api/projects/<project-id>/versions/<version-id>/editor-state
+GET  /api/projects/<project-id>/versions/<version-id>/editor-view
+POST /api/projects/<project-id>/versions/<version-id>/editor-draft
+POST /api/projects/<project-id>/versions/<version-id>/editor-preview
+GET  /api/projects/<project-id>/editor-previews
+GET  /api/projects/<project-id>/editor-previews/<preview-id>
+GET  /api/projects/<project-id>/editor-previews/<preview-id>/patch
+GET  /api/projects/<project-id>/editor-previews/<preview-id>/song-plan
+GET  /api/projects/<project-id>/editor-previews/<preview-id>/midi
+POST /api/projects/<project-id>/editor-previews/<preview-id>/apply
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/apply
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/delete

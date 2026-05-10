@@ -406,6 +406,130 @@ def panel_html() -> str:
       word-break: break-word;
       max-width: 360px;
     }
+    .editor-workbench {
+      display: grid;
+      gap: 12px;
+    }
+    .editor-arranger, .editor-piano-roll, .patch-queue {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      padding: 10px;
+      overflow: auto;
+    }
+    .arranger-ruler, .track-lane {
+      display: grid;
+      grid-template-columns: 90px minmax(520px, 1fr);
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .bar-ruler, .section-row, .lane-notes {
+      position: relative;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: white;
+      overflow: hidden;
+    }
+    .bar-tick {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-left: 1px solid #eef2f7;
+      color: var(--muted);
+      font-size: 10px;
+      padding-left: 2px;
+    }
+    .project-editor-section-block, .lane-note, .project-editor-note-rect {
+      position: absolute;
+      border: 1px solid #0f766e;
+      background: #ccfbf1;
+      color: #134e4a;
+      border-radius: 6px;
+      padding: 4px 6px;
+      min-width: 26px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      font-size: 12px;
+      text-align: left;
+    }
+    .project-editor-section-block.selected, .project-editor-note-rect.selected {
+      outline: 2px solid #101828;
+      outline-offset: 1px;
+    }
+    .lane-note {
+      height: 14px;
+      top: 9px;
+      padding: 0;
+      background: #dbeafe;
+      border-color: #2563eb;
+    }
+    .editor-split {
+      display: grid;
+      grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+    .track-list {
+      display: grid;
+      gap: 6px;
+    }
+    .track-list button {
+      width: 100%;
+      justify-content: flex-start;
+      background: white;
+      color: var(--ink);
+      border-color: #c7cedb;
+    }
+    .track-list button.active {
+      background: #e6fffb;
+      border-color: var(--accent);
+      color: var(--accent-dark);
+    }
+    .piano-grid {
+      position: relative;
+      min-width: 680px;
+      min-height: 360px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: repeating-linear-gradient(to bottom, #ffffff 0, #ffffff 19px, #f8fafc 20px), repeating-linear-gradient(to right, transparent 0, transparent 39px, #eef2f7 40px);
+      overflow: hidden;
+    }
+    .pitch-label {
+      position: absolute;
+      left: 0;
+      width: 42px;
+      height: 20px;
+      padding: 2px 4px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.8);
+      font-size: 10px;
+    }
+    .project-editor-note-rect {
+      height: 18px;
+      padding: 0 4px;
+      background: #fde68a;
+      border-color: #b45309;
+      color: #78350f;
+    }
+    .patch-queue-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      padding: 7px 0;
+    }
+    .patch-queue-row:last-child { border-bottom: 0; }
+    .editor-inspector {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: white;
+    }
     td .actions {
       margin-top: 0;
     }
@@ -419,6 +543,7 @@ def panel_html() -> str:
       .asset-layout { grid-template-columns: 1fr; }
       .compare-grid { grid-template-columns: 1fr; }
       .candidate-grid { grid-template-columns: 1fr; }
+      .editor-split { grid-template-columns: 1fr; }
       header { height: auto; align-items: flex-start; flex-direction: column; gap: 6px; padding: 12px 16px; }
       header .meta { flex-wrap: wrap; }
     }
@@ -967,9 +1092,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let projectEditParentId = null;
     let projectEditorParentId = null;
     let projectEditorState = null;
+    let projectEditorView = null;
     let projectEditorPatch = [];
+    let projectEditorRedo = [];
     let projectEditorPreview = null;
     let projectEditorPreviewHistory = [];
+    let projectEditorDraft = null;
+    let projectEditorSelectedSectionId = null;
+    let projectEditorSelectedTrackId = null;
+    let projectEditorSelectedNoteId = null;
     let editPresets = [];
     let promptTemplates = [];
     let providerEditPreview = null;
@@ -2699,7 +2830,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         parentSelect.addEventListener("change", async () => {
           projectEditorParentId = parentSelect.value;
           projectEditorState = null;
+          projectEditorView = null;
           projectEditorPatch = [];
+          projectEditorRedo = [];
+          projectEditorDraft = null;
           projectEditorPreview = null;
           await renderProjectEditor(project, versions, target);
         });
@@ -2720,8 +2854,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       bindAction("project-editor-clear", () => {
         projectEditorPatch = [];
+        projectEditorRedo = [];
+        projectEditorDraft = null;
         projectEditorPreview = null;
         renderProjectEditorDraft();
+        renderProjectEditorState();
+      });
+      bindAction("project-editor-undo", () => {
+        const op = projectEditorPatch.pop();
+        if (op) projectEditorRedo.push(op);
+        projectEditorPreview = null;
+        renderProjectEditorDraft();
+      });
+      bindAction("project-editor-redo", () => {
+        const op = projectEditorRedo.pop();
+        if (op) projectEditorPatch.push(op);
+        projectEditorPreview = null;
+        renderProjectEditorDraft();
+      });
+      bindAction("project-editor-draft-refresh", async () => {
+        await refreshProjectEditorDraft(project.project_id, $("project-editor-parent").value);
       });
       bindAction("project-editor-preview", async () => {
         if (!projectEditorState) await loadProjectEditorState(project.project_id, $("project-editor-parent").value);
@@ -2754,7 +2906,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
         projectEditorParentId = null;
         projectEditorState = null;
+        projectEditorView = null;
         projectEditorPatch = [];
+        projectEditorRedo = [];
+        projectEditorDraft = null;
         projectEditorPreview = null;
         activeProjectTab = "versions";
         await loadJobs();
@@ -2784,6 +2939,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         <div class="actions">
           <button class="secondary" id="project-editor-load" type="button" ${parentId ? "" : "disabled"}>Open</button>
+          <button class="secondary" id="project-editor-draft-refresh" type="button" disabled>Draft Refresh</button>
+          <button class="secondary" id="project-editor-undo" type="button" disabled>Undo</button>
+          <button class="secondary" id="project-editor-redo" type="button" disabled>Redo</button>
           <button class="secondary" id="project-editor-clear" type="button">Clear Patch</button>
           <button id="project-editor-preview" type="button" disabled>Preview</button>
           <button id="project-editor-apply" type="button" disabled>Apply as Version</button>
@@ -2800,8 +2958,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     async function loadProjectEditorState(projectId, versionId) {
       if (!versionId) return;
       projectEditorState = await api(`/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/editor-state`);
+      const viewData = await api(`/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/editor-view`);
+      projectEditorView = viewData.view;
       projectEditorPatch = [];
+      projectEditorRedo = [];
+      projectEditorDraft = null;
       projectEditorPreview = null;
+      projectEditorSelectedSectionId = (projectEditorState.sections[0] || {}).section_id || null;
+      projectEditorSelectedTrackId = (projectEditorState.tracks[0] || {}).track_id || null;
+      projectEditorSelectedNoteId = firstProjectEditorNoteId(projectEditorSelectedTrackId);
       renderProjectEditorState();
       renderProjectEditorDraft();
     }
@@ -2809,16 +2974,65 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     function renderProjectEditorState() {
       const target = $("project-editor-state");
       if (!target || !projectEditorState) return;
+      const view = currentProjectEditorView();
       const sectionOptions = projectEditorState.sections.map((section) => `<option value="${escapeHtml(section.section_id)}">${escapeHtml(section.name)} · bar ${escapeHtml(section.start_bar)}</option>`).join("");
       const afterSectionOptions = `<option value="">start/end</option>${sectionOptions}`;
       const trackOptions = projectEditorState.tracks.map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.name)} · ${escapeHtml(track.note_count)}</option>`).join("");
-      const firstTrack = projectEditorState.tracks[0] || { notes: [] };
+      const selectedTrack = projectEditorState.tracks.find((track) => track.track_id === projectEditorSelectedTrackId) || projectEditorState.tracks[0] || { notes: [] };
+      projectEditorSelectedTrackId = selectedTrack.track_id || projectEditorSelectedTrackId;
       target.innerHTML = `
         <div class="summary-grid">
           ${metric("Title", projectEditorState.song.title)}
           ${metric("Tempo", projectEditorState.song.tempo_bpm)}
           ${metric("Key", projectEditorState.song.key)}
           ${metric("Base Hash", projectEditorState.base_plan_hash.slice(0, 12))}
+        </div>
+        <div class="editor-workbench">
+          <section>
+            <h3>Arranger Timeline</h3>
+            <div id="project-editor-arranger" class="editor-arranger">
+              <div id="project-editor-section-ruler" class="arranger-ruler">
+                <strong>Bars</strong>
+                ${projectEditorBarRuler(view)}
+              </div>
+              <div class="arranger-ruler">
+                <strong>Sections</strong>
+                <div class="section-row">${projectEditorSectionBlocks(view)}</div>
+              </div>
+              ${projectEditorTrackOverview(view)}
+            </div>
+          </section>
+          <div class="editor-split">
+            <section>
+              <h3>Tracks</h3>
+              <div class="track-list">${projectEditorTrackButtons(view)}</div>
+            </section>
+            <section>
+              <h3>Piano Roll</h3>
+              <div id="project-editor-piano-roll" class="editor-piano-roll">
+                ${projectEditorPianoRoll(view)}
+              </div>
+            </section>
+          </div>
+          <section id="project-editor-note-inspector" class="editor-inspector">
+            <h3>Inspector</h3>
+            <div class="summary-grid">
+              ${metric("Selected Section", projectEditorSelectedSectionId || "-")}
+              ${metric("Selected Track", projectEditorSelectedTrackId || "-")}
+              ${metric("Selected Note", projectEditorSelectedNoteId || "-")}
+              ${metric("Patch Ops", projectEditorPatch.length)}
+            </div>
+            <div class="actions">
+              <button class="secondary" id="project-editor-section-move-left" type="button">Move Section Left</button>
+              <button class="secondary" id="project-editor-section-move-right" type="button">Move Section Right</button>
+              <button class="secondary" id="project-editor-section-shorten" type="button">Shorten</button>
+              <button class="secondary" id="project-editor-section-lengthen" type="button">Lengthen</button>
+              <button class="secondary" id="project-editor-nudge-left" type="button">Nudge Left</button>
+              <button class="secondary" id="project-editor-nudge-right" type="button">Nudge Right</button>
+              <button class="secondary" id="project-editor-pitch-up" type="button">Pitch Up</button>
+              <button class="secondary" id="project-editor-pitch-down" type="button">Pitch Down</button>
+            </div>
+          </section>
         </div>
         <div class="grid2">
           <section>
@@ -2899,7 +3113,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <section>
           <h3>Notes</h3>
           <div class="grid2">
-            <label>Note <select id="project-editor-note">${(firstTrack.notes || []).slice(0, 256).map((note) => `<option value="${escapeHtml(note.note_id)}">${escapeHtml(note.pitch)} @ ${escapeHtml(note.start_beat)}</option>`).join("")}</select></label>
+            <label>Note <select id="project-editor-note"></select></label>
             <label>Patch <input id="project-editor-note-patch" placeholder='{"pitch":67,"velocity":96}'></label>
           </div>
           <div class="grid2">
@@ -2919,11 +3133,45 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </div>
         </section>
         <section>
+          <h3>Patch Queue</h3>
+          <div id="project-editor-patch-queue" class="patch-queue"></div>
           <h3>Patch Summary</h3>
           <pre id="project-editor-patch-json"></pre>
         </section>
       `;
+      setSelectValue("project-editor-section", projectEditorSelectedSectionId);
+      setSelectValue("project-editor-track", projectEditorSelectedTrackId);
+      renderProjectEditorNoteOptions();
+      setSelectValue("project-editor-note", projectEditorSelectedNoteId);
       $("project-editor-track").addEventListener("change", renderProjectEditorNoteOptions);
+      $("project-editor-section").addEventListener("change", () => { projectEditorSelectedSectionId = $("project-editor-section").value; });
+      $("project-editor-track").addEventListener("change", () => {
+        projectEditorSelectedTrackId = $("project-editor-track").value;
+        projectEditorSelectedNoteId = firstProjectEditorNoteId(projectEditorSelectedTrackId);
+        renderProjectEditorState();
+      });
+      $("project-editor-note").addEventListener("change", () => { projectEditorSelectedNoteId = $("project-editor-note").value; fillSelectedProjectEditorNotePatch(); });
+      target.querySelectorAll("[data-editor-section-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          projectEditorSelectedSectionId = button.dataset.editorSectionId;
+          setSelectValue("project-editor-section", projectEditorSelectedSectionId);
+          renderProjectEditorState();
+        });
+      });
+      target.querySelectorAll("[data-editor-track-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          projectEditorSelectedTrackId = button.dataset.editorTrackId;
+          projectEditorSelectedNoteId = firstProjectEditorNoteId(projectEditorSelectedTrackId);
+          renderProjectEditorState();
+        });
+      });
+      target.querySelectorAll("[data-editor-note-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          projectEditorSelectedTrackId = button.dataset.editorTrackId;
+          projectEditorSelectedNoteId = button.dataset.editorNoteId;
+          renderProjectEditorState();
+        });
+      });
       bindAction("project-editor-add-chords", () => addProjectEditorOperation({ op: "set_section_chords", section_id: $("project-editor-section").value, chords: $("project-editor-chords").value.split(",").map((item) => item.trim()).filter(Boolean) }));
       bindAction("project-editor-add-lyrics", () => addProjectEditorOperation({ op: "set_section_lyrics", section_id: $("project-editor-section").value, lyrics: $("project-editor-lyrics").value }));
       bindAction("project-editor-add-instrument", () => addProjectEditorOperation({ op: "set_track_instrument", track_id: $("project-editor-track").value, instrument: $("project-editor-instrument").value.trim() }));
@@ -2939,20 +3187,60 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("project-editor-add-note", () => addProjectEditorOperation({ op: "add_note", track_id: $("project-editor-track").value, note: parseJsonField("project-editor-add-note-json") }));
       bindAction("project-editor-update-note", () => addProjectEditorOperation({ op: "update_note", track_id: $("project-editor-track").value, note_id: $("project-editor-note").value, patch: parseJsonField("project-editor-note-patch") }));
       bindAction("project-editor-delete-note", () => addProjectEditorOperation({ op: "delete_notes", track_id: $("project-editor-track").value, note_ids: [$("project-editor-note").value] }));
+      bindAction("project-editor-nudge-left", () => addSelectedProjectEditorNoteOperation({ op: "move_notes", delta_beats: -0.25 }));
+      bindAction("project-editor-nudge-right", () => addSelectedProjectEditorNoteOperation({ op: "move_notes", delta_beats: 0.25 }));
+      bindAction("project-editor-pitch-up", () => addSelectedProjectEditorNoteOperation({ op: "transpose_notes", semitones: 1 }));
+      bindAction("project-editor-pitch-down", () => addSelectedProjectEditorNoteOperation({ op: "transpose_notes", semitones: -1 }));
+      bindAction("project-editor-section-move-left", () => addProjectEditorSectionMove(-1));
+      bindAction("project-editor-section-move-right", () => addProjectEditorSectionMove(1));
+      bindAction("project-editor-section-shorten", () => addProjectEditorSectionResize(-1));
+      bindAction("project-editor-section-lengthen", () => addProjectEditorSectionResize(1));
       bindAction("project-editor-transpose-range", () => addProjectEditorOperation({ op: "transpose_notes", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), semitones: Number($("project-editor-transpose").value || 0) }));
       bindAction("project-editor-velocity-range", () => addProjectEditorOperation({ op: "scale_velocity", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), factor: Number($("project-editor-velocity-factor").value || 1) }));
+      renderProjectEditorDraft();
     }
 
     function renderProjectEditorNoteOptions() {
       const select = $("project-editor-note");
-      const track = (projectEditorState.tracks || []).find((item) => item.track_id === $("project-editor-track").value) || { notes: [] };
+      if (!select) return;
+      const trackId = $("project-editor-track") ? $("project-editor-track").value : projectEditorSelectedTrackId;
+      const track = (projectEditorViewTrackWithNotes(trackId) || { notes: [] });
       select.innerHTML = (track.notes || []).slice(0, 256).map((note) => `<option value="${escapeHtml(note.note_id)}">${escapeHtml(note.pitch)} @ ${escapeHtml(note.start_beat)}</option>`).join("");
+      if (!projectEditorSelectedNoteId || !(track.notes || []).some((note) => note.note_id === projectEditorSelectedNoteId)) {
+        projectEditorSelectedNoteId = ((track.notes || [])[0] || {}).note_id || null;
+      }
+      setSelectValue("project-editor-note", projectEditorSelectedNoteId);
+      fillSelectedProjectEditorNotePatch();
     }
 
     function addProjectEditorOperation(operation) {
       projectEditorPatch.push(operation);
+      projectEditorRedo = [];
       projectEditorPreview = null;
+      projectEditorDraft = null;
       renderProjectEditorDraft();
+    }
+
+    function addSelectedProjectEditorNoteOperation(operation) {
+      if (!projectEditorSelectedTrackId || !projectEditorSelectedNoteId) return;
+      addProjectEditorOperation({ ...operation, track_id: projectEditorSelectedTrackId, note_ids: [projectEditorSelectedNoteId] });
+    }
+
+    function addProjectEditorSectionMove(delta) {
+      const sections = (projectEditorView || projectEditorState || { sections: [] }).sections || [];
+      const index = sections.findIndex((section) => section.section_id === projectEditorSelectedSectionId);
+      if (index < 0) return;
+      if (delta < 0 && index === 0) return;
+      if (delta > 0 && index >= sections.length - 1) return;
+      const targetIndex = delta < 0 ? index - 2 : index + 1;
+      const after = targetIndex >= 0 ? sections[targetIndex].section_id : "";
+      addProjectEditorOperation({ op: "move_section", section_id: projectEditorSelectedSectionId, after_section_id: after, move_notes: true });
+    }
+
+    function addProjectEditorSectionResize(delta) {
+      const section = ((projectEditorView || projectEditorState || { sections: [] }).sections || []).find((item) => item.section_id === projectEditorSelectedSectionId);
+      if (!section) return;
+      addProjectEditorOperation({ op: "resize_section", section_id: section.section_id, bars: Math.max(1, Number(section.bars || 1) + delta), note_policy: delta < 0 ? "crop" : "shift_tail" });
     }
 
     function chordList(id) {
@@ -2962,12 +3250,33 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     function renderProjectEditorDraft() {
       const pre = $("project-editor-patch-json");
       if (pre) pre.textContent = projectEditorPatch.map(describeProjectEditorOperation).join("\\n") + "\\n\\n" + JSON.stringify({ operations: projectEditorPatch }, null, 2);
+      const queue = $("project-editor-patch-queue");
+      if (queue) queue.innerHTML = projectEditorPatch.length ? projectEditorPatch.map((operation, index) => `
+        <div class="patch-queue-row">
+          <span>${escapeHtml(index + 1)}. ${escapeHtml(describeProjectEditorOperation(operation))}</span>
+          <button class="secondary" data-editor-remove-op="${escapeHtml(index)}" type="button">Remove</button>
+        </div>
+      `).join("") : "<div class='empty'>Patch queue is empty.</div>";
+      if (queue) queue.querySelectorAll("[data-editor-remove-op]").forEach((button) => {
+        button.addEventListener("click", () => {
+          projectEditorPatch.splice(Number(button.dataset.editorRemoveOp), 1);
+          projectEditorPreview = null;
+          projectEditorDraft = null;
+          renderProjectEditorDraft();
+        });
+      });
       const preview = $("project-editor-preview");
       if (preview) preview.disabled = !projectEditorState || projectEditorPatch.length === 0;
+      const draftRefresh = $("project-editor-draft-refresh");
+      if (draftRefresh) draftRefresh.disabled = !projectEditorState || projectEditorPatch.length === 0;
+      const undo = $("project-editor-undo");
+      if (undo) undo.disabled = projectEditorPatch.length === 0;
+      const redo = $("project-editor-redo");
+      if (redo) redo.disabled = projectEditorRedo.length === 0;
       const apply = $("project-editor-apply");
       if (apply) apply.disabled = !projectEditorPreview;
       const result = $("project-editor-preview-result");
-      if (result && !projectEditorPreview) result.innerHTML = "<div class='empty'>Preview result will appear here.</div>";
+      if (result && !projectEditorPreview && !projectEditorDraft) result.innerHTML = "<div class='empty'>Preview result will appear here.</div>";
     }
 
     function renderProjectEditorPreview() {
@@ -2987,6 +3296,148 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
       const apply = $("project-editor-apply");
       if (apply) apply.disabled = false;
+    }
+
+    async function refreshProjectEditorDraft(projectId, versionId) {
+      if (!projectEditorState || !projectEditorPatch.length) return;
+      const data = await api(`/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/editor-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          include_view: true,
+          include_diff: true,
+          patch: {
+            schema_version: 1,
+            base_plan_hash: projectEditorState.base_plan_hash,
+            label: $("project-editor-label").value.trim(),
+            operations: projectEditorPatch,
+          },
+        }),
+      });
+      projectEditorDraft = data;
+      projectEditorView = data.view;
+      const track = projectEditorViewTrackWithNotes(projectEditorSelectedTrackId);
+      if (!track || !(track.notes || []).some((note) => note.note_id === projectEditorSelectedNoteId)) {
+        projectEditorSelectedNoteId = firstProjectEditorNoteId(projectEditorSelectedTrackId);
+      }
+      renderProjectEditorState();
+      const result = $("project-editor-preview-result");
+      if (result) {
+        result.innerHTML = `
+          <div class="summary-grid">
+            ${metric("Draft Ops", data.operation_count)}
+            ${metric("Sections", (data.summary.changed_sections || []).join(", ") || "-")}
+            ${metric("Tracks", (data.summary.changed_tracks || []).join(", ") || "-")}
+            ${metric("Validator", (data.validator || {}).status || "-")}
+          </div>
+          <pre>${escapeHtml(JSON.stringify({ summary: data.summary, diff: data.diff }, null, 2))}</pre>
+        `;
+      }
+    }
+
+    function currentProjectEditorView() {
+      return projectEditorView || {
+        song: { ...(projectEditorState.song || {}), total_beats: (projectEditorState.song.total_bars || 1) * (projectEditorState.song.beats_per_bar || 4) },
+        sections: projectEditorState.sections || [],
+        tracks: (projectEditorState.tracks || []).map((track) => {
+          const copy = { ...track };
+          delete copy.notes;
+          return copy;
+        }),
+        lanes: (projectEditorState.tracks || []).map((track) => ({ track_id: track.track_id, notes: track.notes || [] })),
+        pitch_range: { min: 36, max: 84 },
+      };
+    }
+
+    function projectEditorViewTrackWithNotes(trackId) {
+      const view = currentProjectEditorView();
+      const track = (view.tracks || []).find((item) => item.track_id === trackId) || (view.tracks || [])[0] || null;
+      if (!track) return null;
+      const lane = (view.lanes || []).find((item) => item.track_id === track.track_id) || { notes: [] };
+      return { ...track, notes: lane.notes || [] };
+    }
+
+    function firstProjectEditorNoteId(trackId) {
+      const track = projectEditorViewTrackWithNotes(trackId);
+      return ((track && track.notes) || [])[0]?.note_id || null;
+    }
+
+    function fillSelectedProjectEditorNotePatch() {
+      const input = $("project-editor-note-patch");
+      if (!input) return;
+      const track = projectEditorViewTrackWithNotes(projectEditorSelectedTrackId);
+      const note = ((track && track.notes) || []).find((item) => item.note_id === projectEditorSelectedNoteId);
+      if (note) {
+        input.value = JSON.stringify({ pitch: note.pitch, start_beat: note.start_beat, duration_beats: note.duration_beats, velocity: note.velocity });
+      }
+    }
+
+    function setSelectValue(id, value) {
+      const select = $(id);
+      if (select && value != null) select.value = value;
+    }
+
+    function projectEditorBarRuler(view) {
+      const totalBeats = Math.max(1, Number((view.song || {}).total_beats || 1));
+      const beatsPerBar = Math.max(1, Number((view.song || {}).beats_per_bar || 4));
+      const totalBars = Math.max(1, Number((view.song || {}).total_bars || Math.ceil(totalBeats / beatsPerBar)));
+      return `<div class="bar-ruler">${Array.from({ length: totalBars }, (_, index) => {
+        const left = (index * beatsPerBar / totalBeats) * 100;
+        return `<span class="bar-tick" style="left:${left}%">${index + 1}</span>`;
+      }).join("")}</div>`;
+    }
+
+    function projectEditorSectionBlocks(view) {
+      const totalBeats = Math.max(1, Number((view.song || {}).total_beats || 1));
+      return (view.sections || []).map((section) => {
+        const left = (Number(section.start_beat || 0) / totalBeats) * 100;
+        const width = Math.max(2, ((Number(section.end_beat || 0) - Number(section.start_beat || 0)) / totalBeats) * 100);
+        const selected = section.section_id === projectEditorSelectedSectionId ? " selected" : "";
+        return `<button class="project-editor-section-block${selected}" data-editor-section-id="${escapeHtml(section.section_id)}" style="left:${left}%;width:${width}%;" type="button">${escapeHtml(section.name)} · ${escapeHtml(section.bars)} bars</button>`;
+      }).join("");
+    }
+
+    function projectEditorTrackOverview(view) {
+      const totalBeats = Math.max(1, Number((view.song || {}).total_beats || 1));
+      return (view.tracks || []).map((track) => {
+        const lane = (view.lanes || []).find((item) => item.track_id === track.track_id) || { notes: [] };
+        const notes = (lane.notes || []).slice(0, 180).map((note) => {
+          const left = (Number(note.start_beat || 0) / totalBeats) * 100;
+          const width = Math.max(0.6, (Number(note.duration_beats || 0.25) / totalBeats) * 100);
+          return `<span class="lane-note" style="left:${left}%;width:${width}%"></span>`;
+        }).join("");
+        return `<div class="track-lane"><button class="secondary" data-editor-track-id="${escapeHtml(track.track_id)}" type="button">${escapeHtml(track.name)}</button><div class="lane-notes">${notes}</div></div>`;
+      }).join("");
+    }
+
+    function projectEditorTrackButtons(view) {
+      return (view.tracks || []).map((track) => {
+        const active = track.track_id === projectEditorSelectedTrackId ? " active" : "";
+        return `<button class="${active}" data-editor-track-id="${escapeHtml(track.track_id)}" type="button">${escapeHtml(track.name)} · ${escapeHtml(track.note_count || 0)}</button>`;
+      }).join("") || "<div class='empty'>No tracks.</div>";
+    }
+
+    function projectEditorPianoRoll(view) {
+      const track = projectEditorViewTrackWithNotes(projectEditorSelectedTrackId);
+      if (!track) return "<div class='empty'>Select a track.</div>";
+      const notes = track.notes || [];
+      const totalBeats = Math.max(1, Number((view.song || {}).total_beats || 1));
+      const pitchMin = Math.max(0, Number((view.pitch_range || {}).min ?? 36));
+      const pitchMax = Math.min(127, Number((view.pitch_range || {}).max ?? 84));
+      const pitchSpan = Math.max(1, pitchMax - pitchMin + 1);
+      const labels = [];
+      for (let pitch = pitchMax; pitch >= pitchMin; pitch -= 12) {
+        const top = ((pitchMax - pitch) / pitchSpan) * 100;
+        labels.push(`<span class="pitch-label" style="top:${top}%">${pitch}</span>`);
+      }
+      const rects = notes.slice(0, 1200).map((note) => {
+        const left = Math.max(0, (Number(note.start_beat || 0) / totalBeats) * 100);
+        const width = Math.max(0.8, (Number(note.duration_beats || 0.25) / totalBeats) * 100);
+        const top = Math.max(0, Math.min(96, ((pitchMax - Number(note.pitch || pitchMin)) / pitchSpan) * 100));
+        const selected = note.note_id === projectEditorSelectedNoteId ? " selected" : "";
+        return `<button class="project-editor-note-rect${selected}" data-editor-track-id="${escapeHtml(track.track_id)}" data-editor-note-id="${escapeHtml(note.note_id)}" style="left:${left}%;top:${top}%;width:${width}%;" type="button">${escapeHtml(note.pitch)}</button>`;
+      }).join("");
+      return `<div class="piano-grid">${labels.join("")}${rects || "<div class='empty'>No notes in this track.</div>"}</div>`;
     }
 
     async function loadProjectEditorPreviewHistory(projectId) {

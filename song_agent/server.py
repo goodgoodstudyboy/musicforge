@@ -52,6 +52,7 @@ from song_agent.edits import (
     validate_edit_intent,
 )
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
+from song_agent.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.final_export import (
     FinalExportError,
     FinalExportOptions,
@@ -3114,6 +3115,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_editor_state(method, project_id, editor_state_version)
             return
 
+        editor_view_match = _match_project_editor_view_tail(tail)
+        if editor_view_match is not None:
+            self._handle_project_editor_view(method, project_id, editor_view_match)
+            return
+
+        editor_draft_match = _match_project_editor_draft_tail(tail)
+        if editor_draft_match is not None:
+            self._handle_project_editor_draft(method, project_id, editor_draft_match)
+            return
+
         editor_preview_create = _match_project_editor_preview_create_tail(tail)
         if editor_preview_create is not None:
             self._handle_project_editor_preview_create(method, project_id, editor_preview_create)
@@ -3895,6 +3906,71 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._send_json({"project_id": project_id, "version_id": version.version_id, **state})
+
+    def _handle_project_editor_view(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            _document, version, _job, plan = self._project_edit_parent(project_id, version_id)
+            view = build_editor_view(plan)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except EditorPatchError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._send_json({"project_id": project_id, "version_id": version.version_id, "view": view})
+
+    def _handle_project_editor_draft(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        patch_data = payload.get("patch")
+        if not isinstance(patch_data, dict):
+            self._send_error(HTTPStatus.BAD_REQUEST, "patch must be an object.")
+            return
+        try:
+            _document, version, _parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            result = apply_editor_patch(parent_plan, patch_data)
+            summary = {
+                "operation_count": len(result.patch.operations),
+                "changed_sections": list(result.summary.get("changed_sections") or []),
+                "changed_tracks": list(result.summary.get("changed_tracks") or []),
+                "warnings": list(result.warnings),
+                "operation_counts": dict(result.summary.get("operation_counts") or {}),
+            }
+            response: dict[str, Any] = {
+                "ok": True,
+                "project_id": project_id,
+                "version_id": version.version_id,
+                "base_plan_hash": result.patch.base_plan_hash,
+                "operation_count": len(result.patch.operations),
+                "summary": summary,
+                "quality": result.plan.quality.to_dict() if result.plan.quality else {},
+                "validator": {"status": "passed", "checks": ["editor_patch_schema", "song_plan_validation"]},
+            }
+            if bool(payload.get("include_view", False)):
+                response["view"] = build_editor_view_from_result(result)
+            if bool(payload.get("include_diff", False)):
+                response["diff"] = build_editor_diff(parent_plan, result.plan, result.patch)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except EditorPatchStaleError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except EditorPatchError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json(response)
 
     def _handle_project_editor_preview_create(self, method: str, project_id: str, version_id: str) -> None:
         if method != "POST":
@@ -6058,6 +6134,20 @@ def _match_project_variation_tail(tail: str) -> str | None:
 def _match_project_editor_state_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-state":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_view_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-view":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_draft_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-draft":
         return unquote(parts[1])
     return None
 

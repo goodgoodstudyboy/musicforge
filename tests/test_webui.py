@@ -411,6 +411,29 @@ def test_webui_calls_project_apis():
     assert "/api/projects/${id}/delete" in html
 
 
+def test_webui_contains_interactive_editor_controls():
+    html = panel_html()
+
+    assert 'id="project-editor-arranger"' in html
+    assert 'id="project-editor-section-ruler"' in html
+    assert "project-editor-section-block" in html
+    assert 'id="project-editor-piano-roll"' in html
+    assert "project-editor-note-rect" in html
+    assert 'id="project-editor-note-inspector"' in html
+    assert 'id="project-editor-patch-queue"' in html
+    assert 'id="project-editor-draft-refresh"' in html
+    assert 'id="project-editor-undo"' in html
+    assert 'id="project-editor-redo"' in html
+    assert 'id="project-editor-nudge-left"' in html
+    assert 'id="project-editor-nudge-right"' in html
+    assert 'id="project-editor-pitch-up"' in html
+    assert 'id="project-editor-pitch-down"' in html
+    assert "/editor-view" in html
+    assert "/editor-draft" in html
+    assert "refreshProjectEditorDraft" in html
+    assert "projectEditorRedo" in html
+
+
 def test_webui_compare_layout_is_responsive():
     html = panel_html()
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.2.0 - 2026-05-10
+
+### Added
+- Editor View Model for arranger timeline and piano-roll rendering, including section blocks, track lanes, note rectangles, pitch range, and note-to-section assignment.
+- Nonpersistent Editor Draft API at `POST /api/projects/<project-id>/versions/<version-id>/editor-draft`, with optional view/diff output and no preview/run/project writes.
+- Studio Project Editor now includes Arranger Timeline, Piano Roll, Inspector controls, Patch Queue, Undo/Redo, and Draft Refresh.
+- release-check now includes a v2.2 interactive editor smoke covering draft, preview, apply, and metadata continuity.
+
+### Scope
+- v2.2.0 intentionally does not add a full DAW, realtime browser synthesizer, recording, audio-to-MIDI, drag editing, multi-user collaboration, or cloud storage.
+
+### Verified
+- `python -m pytest tests\test_editor_view.py tests\test_server_editor_draft.py tests\test_song_editor.py tests\test_song_editor_structure.py tests\test_server_editor_structure.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.1.2 - 2026-05-09
 
 ### Fixed

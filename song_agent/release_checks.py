@@ -20,6 +20,7 @@ from song_agent.candidate_groups import CandidateGroupStore, candidate_audio_pat
 from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
+from song_agent.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
 from song_agent.context_packs import ContextPackStore, context_pack_snapshot, write_context_pack_snapshot
 from song_agent.library_index import LibraryIndexStore, recommend_library_context, search_library
@@ -169,6 +170,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v1.9 library context smoke", *_v19_library_context_smoke(root))
     report.add("v2.0 visual editor smoke", *_v20_visual_editor_smoke(root))
     report.add("v2.1 structure editor smoke", *_v21_structure_editor_smoke(root))
+    report.add("v2.2 interactive editor smoke", *_v22_interactive_editor_smoke(root))
     return report
 
 
@@ -1528,6 +1530,111 @@ def _v21_structure_editor_smoke(root: Path) -> tuple[bool, str]:
                 and "sk-release-secret" not in serialized
             )
             return ok, f"preview={preview.preview_id}, version={document.versions[-1].version_id}, sections={len(result.plan.sections)}, tracks={len(result.plan.tracks)}, operations={metadata['operation_count']}"
+        except Exception as exc:
+            return False, str(exc)
+
+
+def _v22_interactive_editor_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        try:
+            project_store = ProjectStore(base / ".musicforge" / "projects")
+            request = SongRequest(
+                title="Release v2.2 Smoke",
+                language="English",
+                style="synth pop",
+                theme="interactive editor",
+                tempo_bpm=120,
+                key="C",
+            )
+            parent_plan = deterministic_compose(request)
+            parent_dir = base / "runs" / "v22-parent"
+            parent_plan_path = parent_dir / "data" / "song-plan.json"
+            parent_midi_path = parent_dir / "renders" / "song.mid"
+            write_json(parent_plan_path, parent_plan.to_dict())
+            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
+            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(parent_plan, parent_midi_path)
+            document = project_store.create_project("Release v2.2 Smoke")
+            document = project_store.add_version_from_job(document.state.project_id, _SmokeJob("v22-parent", parent_dir, request.to_dict()), name="Parent")
+            parent_bytes = parent_plan_path.read_bytes()
+            state = build_editor_state(parent_plan)
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            draft_result = apply_editor_patch(
+                parent_plan,
+                {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "label": "Interactive editor patch",
+                    "operations": [
+                        {"op": "resize_section", "section_id": "section-002", "bars": 4, "note_policy": "crop"},
+                        {"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 76}},
+                        {"op": "move_notes", "track_id": "track-001", "note_ids": [note_id], "delta_beats": 0.5},
+                        {"op": "transpose_notes", "track_id": "track-001", "note_ids": [note_id], "semitones": 1},
+                    ],
+                },
+            )
+            base_view = build_editor_view(parent_plan)
+            draft_view = build_editor_view_from_result(draft_result)
+            draft_diff = build_editor_diff(parent_plan, draft_result.plan, draft_result.patch)
+            preview_store = EditorPreviewStore(project_store.project_dir(document.state.project_id))
+            previews_root = project_store.project_dir(document.state.project_id) / "editor-previews"
+            draft_nonpersistent = not previews_root.exists()
+            preview, preview_dir = preview_store.create_preview(
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v22-parent",
+                parent_plan=parent_plan,
+                patch=draft_result.patch,
+                result=draft_result,
+                now="2026-05-10T00:00:00+00:00",
+            )
+            child_dir = base / "runs" / "v22-child"
+            child_plan_path = child_dir / "data" / "song-plan.json"
+            child_midi_path = child_dir / "renders" / "song.mid"
+            metadata = editor_edit_metadata(
+                project_id=document.state.project_id,
+                parent_version_id="v001",
+                parent_job_id="v22-parent",
+                preview_id=preview.preview_id,
+                patch=draft_result.patch,
+                result=draft_result,
+                created_at="2026-05-10T00:00:00+00:00",
+            )
+            write_json(child_plan_path, draft_result.plan.to_dict())
+            write_json(child_dir / "data" / "editor-patch.json", draft_result.patch.to_dict())
+            write_json(child_dir / "data" / "edit-metadata.json", metadata)
+            write_json(child_dir / "data" / "run-summary.json", {"title": draft_result.plan.title, "edit": metadata["summary"]})
+            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
+            render_midi(draft_result.plan, child_midi_path)
+            document = project_store.add_version_from_job(
+                document.state.project_id,
+                _SmokeJob("v22-child", child_dir, request.to_dict() | {"edit_type": "manual_editor_edit"}),
+                name="Interactive Child",
+                parent_version_id="v001",
+                variant_type="manual_editor_edit",
+                change_summary="interactive editor patch",
+            )
+            preview_store.mark_applied(preview.preview_id, version_id="v002", job_id="v22-child", now="2026-05-10T00:00:00+00:00")
+            compare = compare_project_versions(document, "v001", "v002")
+            project_export = project_store.export_project(document.state.project_id)
+            moved_note = next(note for note in draft_view["lanes"][0]["notes"] if note["note_id"] == note_id)
+            ok = (
+                base_view["lanes"][0]["notes"]
+                and draft_nonpersistent
+                and preview.preview_id == "preview-001"
+                and (preview_dir / "song.mid").exists()
+                and moved_note["start_beat"] == parent_plan.tracks[0].notes[0].start_beat + 0.5
+                and moved_note["pitch"] == parent_plan.tracks[0].notes[0].pitch + 1
+                and draft_diff["notes"]["changed"] == 2
+                and draft_diff["notes"]["moved"] == 1
+                and parent_plan_path.read_bytes() == parent_bytes
+                and document.versions[-1].variant_type == "manual_editor_edit"
+                and compare["right"]["edit"]["edit_source"] == "visual_editor"
+                and project_export["versions"][1]["edit"]["summary"]["move_notes"] == 1
+                and child_midi_path.exists()
+            )
+            return ok, f"preview={preview.preview_id}, version={document.versions[-1].version_id}, draft_notes={len(draft_view['lanes'][0]['notes'])}, operations={metadata['operation_count']}"
         except Exception as exc:
             return False, str(exc)
 
