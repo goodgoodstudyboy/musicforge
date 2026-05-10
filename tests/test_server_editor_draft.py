@@ -158,3 +158,87 @@ def test_project_editor_draft_track_view_keeps_visible_base_track_ids(tmp_path, 
     assert draft["view"]["tracks"][0]["track_id"] == "track-002"
     assert draft["view"]["tracks"][-1]["name"] == "melody copy"
     assert draft["view"]["tracks"][-1]["track_id"].startswith("derived-track-")
+
+
+def test_project_editor_draft_shows_added_notes_as_derived(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, _parent_job = create_project_version(server)
+        _state_status, state = request_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+        original_count = len(state["tracks"][0]["notes"])
+        status, draft = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-draft",
+            {
+                "include_view": True,
+                "include_diff": True,
+                "patch": {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "operations": [
+                        {
+                            "op": "add_note",
+                            "track_id": "track-001",
+                            "note": {"pitch": 72, "start_beat": 2.5, "duration_beats": 0.5, "velocity": 88},
+                        }
+                    ],
+                },
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    notes = draft["view"]["lanes"][0]["notes"]
+    derived_notes = [note for note in notes if note["note_id"].startswith("derived-note-")]
+    assert status == 200
+    assert len(notes) == original_count + 1
+    assert len(derived_notes) == 1
+    assert derived_notes[0]["editable"] is False
+    assert draft["diff"]["notes"]["added"] == 1
+
+
+def test_project_editor_draft_shows_duplicate_section_notes_as_derived(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, _parent_job = create_project_version(server)
+        _state_status, state = request_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+        status, draft = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-draft",
+            {
+                "include_view": True,
+                "include_diff": True,
+                "patch": {
+                    "schema_version": 1,
+                    "base_plan_hash": state["base_plan_hash"],
+                    "operations": [
+                        {
+                            "op": "duplicate_section",
+                            "section_id": "section-002",
+                            "after_section_id": "section-002",
+                            "name": "verse copy",
+                            "copy_notes": True,
+                        }
+                    ],
+                },
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    copied_section = next(section for section in draft["view"]["sections"] if section["name"] == "verse copy")
+    copied_notes = [
+        note
+        for lane in draft["view"]["lanes"]
+        for note in lane["notes"]
+        if note["section_id"] == copied_section["section_id"]
+    ]
+    assert status == 200
+    assert copied_section["section_id"].startswith("derived-section-")
+    assert copied_notes
+    assert all(note["note_id"].startswith("derived-note-") for note in copied_notes)
+    assert all(note["editable"] is False for note in copied_notes)

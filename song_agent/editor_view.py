@@ -27,8 +27,12 @@ def build_editor_view(
     stable_tracks = _stable_tracks(state["tracks"], track_identity)
     for track in stable_tracks:
         notes = []
-        identity_notes = _identity_notes_for_track(note_identity, str(track["track_id"]))
-        source_notes = identity_notes if identity_notes is not None else list(track.get("notes", []))
+        source_notes = _view_notes_for_track(
+            list(track.get("notes", [])),
+            note_identity,
+            str(track["track_id"]),
+            track_derived=bool(track.get("derived", False)),
+        )
         for note in source_notes:
             section_id = _section_id_for_beat(float(note["start_beat"]), sections)
             end_beat = round(float(note["start_beat"]) + float(note["duration_beats"]), 6)
@@ -40,6 +44,8 @@ def build_editor_view(
                 "duration_beats": float(note["duration_beats"]),
                 "velocity": int(note["velocity"]),
                 "section_id": section_id,
+                "editable": bool(note.get("editable", True)),
+                "derived": bool(note.get("derived", False)),
             }
             notes.append(view_note)
             pitches.append(view_note["pitch"])
@@ -150,21 +156,48 @@ def _stable_tracks(tracks: list[dict[str, Any]], track_identity: dict[str, str |
     return stable
 
 
-def _identity_notes_for_track(note_identity: dict[str, dict[str, dict[str, Any]]] | None, track_id: str) -> list[dict[str, Any]] | None:
+def _view_notes_for_track(
+    source_notes: list[dict[str, Any]],
+    note_identity: dict[str, dict[str, dict[str, Any]]] | None,
+    track_id: str,
+    *,
+    track_derived: bool,
+) -> list[dict[str, Any]]:
+    if track_derived:
+        return [_derived_note(track_id, index, note) for index, note in enumerate(source_notes, start=1)]
     if not note_identity or track_id not in note_identity:
-        return None
-    notes = []
+        return [dict(note, editable=True, derived=False) for note in source_notes]
+    ids_by_key: dict[tuple[int, float, float, int], list[str]] = {}
     for note_id, note in note_identity[track_id].items():
-        notes.append(
-            {
-                "note_id": note_id,
-                "pitch": int(note["pitch"]),
-                "start_beat": float(note["start_beat"]),
-                "duration_beats": float(note["duration_beats"]),
-                "velocity": int(note["velocity"]),
-            }
-        )
-    return sorted(notes, key=lambda item: (item["start_beat"], item["pitch"], item["note_id"]))
+        ids_by_key.setdefault(_note_key(note), []).append(note_id)
+    notes = []
+    derived_index = 1
+    for note in source_notes:
+        candidates = ids_by_key.get(_note_key(note)) or []
+        if candidates:
+            notes.append({**note, "note_id": candidates.pop(0), "editable": True, "derived": False})
+        else:
+            notes.append(_derived_note(track_id, derived_index, note))
+            derived_index += 1
+    return notes
+
+
+def _note_key(note: dict[str, Any]) -> tuple[int, float, float, int]:
+    return (
+        int(note["pitch"]),
+        round(float(note["start_beat"]), 6),
+        round(float(note["duration_beats"]), 6),
+        int(note["velocity"]),
+    )
+
+
+def _derived_note(track_id: str, index: int, note: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **note,
+        "note_id": f"derived-note-{track_id}-{index:04d}",
+        "editable": False,
+        "derived": True,
+    }
 
 
 def _pitch_range(pitches: list[int]) -> dict[str, int]:

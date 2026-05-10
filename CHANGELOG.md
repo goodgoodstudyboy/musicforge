@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.2.2 - 2026-05-10
+
+### Fixed
+- Draft editor views now include notes created by `add_note` and `duplicate_section copy_notes` as visible `derived-note-*` entries.
+- Derived draft notes are shown for audition/inspection but marked non-editable until the patch is previewed/applied or cleared.
+- release-check now verifies the HTTP draft flow includes a derived note created during the same patch.
+
+### Verified
+- `python -m pytest tests\test_editor_view.py tests\test_server_editor_draft.py tests\test_webui.py tests\test_release_check.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.2.1 - 2026-05-10
 
 ### Fixed

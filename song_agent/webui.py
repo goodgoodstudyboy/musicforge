@@ -515,6 +515,11 @@ def panel_html() -> str:
       border-color: #b45309;
       color: #78350f;
     }
+    .project-editor-note-rect.derived {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+      color: #475569;
+    }
     .patch-queue-row {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -3198,8 +3203,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("project-editor-delete-track-op", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "delete_track", track_id: $("project-editor-track").value }); });
       bindAction("project-editor-rename-track-op", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "rename_track", track_id: $("project-editor-track").value, name: $("project-editor-track-name").value.trim() }); });
       bindAction("project-editor-add-note", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "add_note", track_id: $("project-editor-track").value, note: parseJsonField("project-editor-add-note-json") }); });
-      bindAction("project-editor-update-note", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "update_note", track_id: $("project-editor-track").value, note_id: $("project-editor-note").value, patch: parseJsonField("project-editor-note-patch") }); });
-      bindAction("project-editor-delete-note", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "delete_notes", track_id: $("project-editor-track").value, note_ids: [$("project-editor-note").value] }); });
+      bindAction("project-editor-update-note", () => { if (!isDerivedTrack($("project-editor-track").value) && !isDerivedNote($("project-editor-note").value)) addProjectEditorOperation({ op: "update_note", track_id: $("project-editor-track").value, note_id: $("project-editor-note").value, patch: parseJsonField("project-editor-note-patch") }); });
+      bindAction("project-editor-delete-note", () => { if (!isDerivedTrack($("project-editor-track").value) && !isDerivedNote($("project-editor-note").value)) addProjectEditorOperation({ op: "delete_notes", track_id: $("project-editor-track").value, note_ids: [$("project-editor-note").value] }); });
       bindAction("project-editor-nudge-left", () => addSelectedProjectEditorNoteOperation({ op: "move_notes", delta_beats: -0.25 }));
       bindAction("project-editor-nudge-right", () => addSelectedProjectEditorNoteOperation({ op: "move_notes", delta_beats: 0.25 }));
       bindAction("project-editor-pitch-up", () => addSelectedProjectEditorNoteOperation({ op: "transpose_notes", semitones: 1 }));
@@ -3235,7 +3240,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     }
 
     function addSelectedProjectEditorNoteOperation(operation) {
-      if (!projectEditorSelectedTrackId || !projectEditorSelectedNoteId || projectEditorSelectedTrackId.startsWith("derived-track-")) return;
+      if (!projectEditorSelectedTrackId || !projectEditorSelectedNoteId || isDerivedTrack(projectEditorSelectedTrackId) || isDerivedNote(projectEditorSelectedNoteId)) return;
       addProjectEditorOperation({ ...operation, track_id: projectEditorSelectedTrackId, note_ids: [projectEditorSelectedNoteId] });
     }
 
@@ -3401,6 +3406,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       return String(trackId || "").startsWith("derived-track-");
     }
 
+    function isDerivedNote(noteId) {
+      return String(noteId || "").startsWith("derived-note-");
+    }
+
     function projectEditorBarRuler(view) {
       const totalBeats = Math.max(1, Number((view.song || {}).total_beats || 1));
       const beatsPerBar = Math.max(1, Number((view.song || {}).beats_per_bar || 4));
@@ -3459,7 +3468,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         const width = Math.max(0.8, (Number(note.duration_beats || 0.25) / totalBeats) * 100);
         const top = Math.max(0, Math.min(96, ((pitchMax - Number(note.pitch || pitchMin)) / pitchSpan) * 100));
         const selected = note.note_id === projectEditorSelectedNoteId ? " selected" : "";
-        return `<button class="project-editor-note-rect${selected}" data-editor-track-id="${escapeHtml(track.track_id)}" data-editor-note-id="${escapeHtml(note.note_id)}" style="left:${left}%;top:${top}%;width:${width}%;" type="button">${escapeHtml(note.pitch)}</button>`;
+        const derived = isDerivedNote(note.note_id) ? " derived" : "";
+        return `<button class="project-editor-note-rect${selected}${derived}" data-editor-track-id="${escapeHtml(track.track_id)}" data-editor-note-id="${escapeHtml(note.note_id)}" style="left:${left}%;top:${top}%;width:${width}%;" type="button">${escapeHtml(note.pitch)}</button>`;
       }).join("");
       return `<div class="piano-grid">${labels.join("")}${rects || "<div class='empty'>No notes in this track.</div>"}</div>`;
     }

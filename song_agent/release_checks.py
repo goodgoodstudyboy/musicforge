@@ -1599,6 +1599,7 @@ def _v22_interactive_editor_smoke(root: Path) -> tuple[bool, str]:
                     {"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 76}},
                     {"op": "move_notes", "track_id": "track-001", "note_ids": [note_id], "delta_beats": 0.5},
                     {"op": "transpose_notes", "track_id": "track-001", "note_ids": [note_id], "semitones": 1},
+                    {"op": "add_note", "track_id": "track-001", "note": {"pitch": 72, "start_beat": 2.5, "duration_beats": 0.5, "velocity": 88}},
                 ],
             }
             second_status, second = _release_http_json(
@@ -1626,6 +1627,7 @@ def _v22_interactive_editor_smoke(root: Path) -> tuple[bool, str]:
             compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
             export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
             moved_note = next(note for note in second["view"]["lanes"][0]["notes"] if note["note_id"] == note_id)
+            derived_notes = [note for note in second["view"]["lanes"][0]["notes"] if str(note.get("note_id", "")).startswith("derived-note-")]
             child_midi_path = Path(applied["job"]["output_dir"]) / "renders" / "song.mid"
             ok = (
                 created_status == 201
@@ -1649,13 +1651,17 @@ def _v22_interactive_editor_smoke(root: Path) -> tuple[bool, str]:
                 and export_status == 200
                 and moved_note["start_beat"] == visible_note["start_beat"] + 0.5
                 and moved_note["pitch"] == visible_note["pitch"] + 1
+                and len(second["view"]["lanes"][0]["notes"]) > 0
+                and len(derived_notes) == 1
+                and derived_notes[0]["editable"] is False
                 and second["diff"]["notes"]["changed"] == 2
                 and second["diff"]["notes"]["moved"] == 1
+                and second["summary"]["operation_counts"]["add_note"] == 1
                 and compare["right"]["edit"]["edit_source"] == "visual_editor"
                 and project_export["versions"][1]["edit"]["summary"]["move_notes"] == 1
                 and child_midi_path.exists()
             )
-            return ok, f"preview={preview['preview_id']}, version={child_version}, visible_section={visible_section['section_id']}, draft_notes={len(second['view']['lanes'][0]['notes'])}, operations={second['operation_count']}"
+            return ok, f"preview={preview['preview_id']}, version={child_version}, visible_section={visible_section['section_id']}, draft_notes={len(second['view']['lanes'][0]['notes'])}, derived_notes={len(derived_notes)}, operations={second['operation_count']}"
         except Exception as exc:
             return False, str(exc)
         finally:

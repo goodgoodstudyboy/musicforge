@@ -127,3 +127,66 @@ def test_build_editor_view_from_result_keeps_base_track_ids_after_delete_duplica
     assert view["tracks"][-1]["name"] == "melody copy"
     assert view["tracks"][-1]["track_id"].startswith("derived-track-")
     assert view["tracks"][-1]["editable"] is False
+
+
+def test_build_editor_view_from_result_shows_added_notes_as_derived() -> None:
+    plan = sample_plan()
+    state = build_editor_state(plan)
+    original_count = len(state["tracks"][0]["notes"])
+    result = apply_editor_patch(
+        plan,
+        {
+            "schema_version": 1,
+            "base_plan_hash": state["base_plan_hash"],
+            "operations": [
+                {
+                    "op": "add_note",
+                    "track_id": "track-001",
+                    "note": {"pitch": 72, "start_beat": 2.5, "duration_beats": 0.5, "velocity": 88},
+                }
+            ],
+        },
+    )
+    view = build_editor_view_from_result(result)
+    melody_notes = view["lanes"][0]["notes"]
+    derived_notes = [note for note in melody_notes if note["note_id"].startswith("derived-note-")]
+
+    assert len(melody_notes) == original_count + 1
+    assert len(derived_notes) == 1
+    assert derived_notes[0]["pitch"] == 72
+    assert derived_notes[0]["editable"] is False
+    assert derived_notes[0]["derived"] is True
+
+
+def test_build_editor_view_from_result_shows_copied_section_notes_as_derived() -> None:
+    plan = sample_plan()
+    state = build_editor_state(plan)
+    result = apply_editor_patch(
+        plan,
+        {
+            "schema_version": 1,
+            "base_plan_hash": state["base_plan_hash"],
+            "operations": [
+                {
+                    "op": "duplicate_section",
+                    "section_id": "section-002",
+                    "after_section_id": "section-002",
+                    "name": "verse copy",
+                    "copy_notes": True,
+                }
+            ],
+        },
+    )
+    view = build_editor_view_from_result(result)
+    copied_section = next(section for section in view["sections"] if section["name"] == "verse copy")
+    copied_notes = [
+        note
+        for lane in view["lanes"]
+        for note in lane["notes"]
+        if note["section_id"] == copied_section["section_id"]
+    ]
+
+    assert copied_section["section_id"].startswith("derived-section-")
+    assert copied_notes
+    assert all(note["note_id"].startswith("derived-note-") for note in copied_notes)
+    assert all(note["editable"] is False for note in copied_notes)
