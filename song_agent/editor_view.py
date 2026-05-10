@@ -12,13 +12,20 @@ DEFAULT_PITCH_MIN = 36
 DEFAULT_PITCH_MAX = 84
 
 
-def build_editor_view(plan: SongPlan, *, note_identity: dict[str, dict[str, dict[str, Any]]] | None = None) -> dict[str, Any]:
+def build_editor_view(
+    plan: SongPlan,
+    *,
+    section_identity: dict[str, str | None] | None = None,
+    track_identity: dict[str, str | None] | None = None,
+    note_identity: dict[str, dict[str, dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
     state = build_editor_state(plan)
-    sections = [dict(section) for section in state["sections"]]
+    sections = _stable_sections(state["sections"], section_identity)
     tracks = []
     lanes = []
     pitches: list[int] = []
-    for track in state["tracks"]:
+    stable_tracks = _stable_tracks(state["tracks"], track_identity)
+    for track in stable_tracks:
         notes = []
         identity_notes = _identity_notes_for_track(note_identity, str(track["track_id"]))
         source_notes = identity_notes if identity_notes is not None else list(track.get("notes", []))
@@ -56,7 +63,12 @@ def build_editor_view(plan: SongPlan, *, note_identity: dict[str, dict[str, dict
 
 
 def build_editor_view_from_result(result: EditorPatchResult) -> dict[str, Any]:
-    return build_editor_view(result.plan, note_identity=result.summary.get("note_identity") or None)
+    return build_editor_view(
+        result.plan,
+        section_identity=result.summary.get("section_identity") or None,
+        track_identity=result.summary.get("track_identity") or None,
+        note_identity=result.summary.get("note_identity") or None,
+    )
 
 
 def build_editor_diff(parent: SongPlan, edited: SongPlan, patch: EditorPatch) -> dict[str, Any]:
@@ -102,6 +114,40 @@ def _section_id_for_beat(start_beat: float, sections: list[dict[str, Any]]) -> s
         if float(section["start_beat"]) <= start_beat < float(section["end_beat"]):
             return str(section["section_id"])
     return sections[-1]["section_id"] if sections else None
+
+
+def _stable_sections(sections: list[dict[str, Any]], section_identity: dict[str, str | None] | None) -> list[dict[str, Any]]:
+    if not section_identity:
+        return [dict(section, editable=True, derived=False) for section in sections]
+    id_by_name = {name: section_id for section_id, name in section_identity.items() if name is not None}
+    stable = []
+    derived_index = 1
+    for section in sections:
+        name = str(section.get("name") or "")
+        section_id = id_by_name.get(name)
+        if section_id:
+            stable.append({**section, "section_id": section_id, "editable": True, "derived": False})
+        else:
+            stable.append({**section, "section_id": f"derived-section-{derived_index:03d}", "editable": False, "derived": True})
+            derived_index += 1
+    return stable
+
+
+def _stable_tracks(tracks: list[dict[str, Any]], track_identity: dict[str, str | None] | None) -> list[dict[str, Any]]:
+    if not track_identity:
+        return [dict(track, editable=True, derived=False) for track in tracks]
+    id_by_name = {name: track_id for track_id, name in track_identity.items() if name is not None}
+    stable = []
+    derived_index = 1
+    for track in tracks:
+        name = str(track.get("name") or "")
+        track_id = id_by_name.get(name)
+        if track_id:
+            stable.append({**track, "track_id": track_id, "editable": True, "derived": False})
+        else:
+            stable.append({**track, "track_id": f"derived-track-{derived_index:03d}", "editable": False, "derived": True, "notes": list(track.get("notes", []))})
+            derived_index += 1
+    return stable
 
 
 def _identity_notes_for_track(note_identity: dict[str, dict[str, dict[str, Any]]] | None, track_id: str) -> list[dict[str, Any]] | None:

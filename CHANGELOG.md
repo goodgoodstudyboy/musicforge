@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.2.1 - 2026-05-10
+
+### Fixed
+- Draft editor views now preserve base section and track identities after structural edits, so continued draft edits target the visible base section or track instead of a re-numbered array position.
+- Newly added or duplicated draft-only sections/tracks are marked as derived and non-editable in the Studio controls until the user previews/applies or clears the patch.
+- release-check now exercises the Project Editor draft flow through real HTTP calls, including delete-section followed by continued editing of the visible section ID.
+
+### Verified
+- `python -m pytest tests\test_editor_view.py tests\test_song_editor_structure.py tests\test_server_editor_draft.py tests\test_server_editor_structure.py tests\test_server_edits.py::test_project_editor_apply_ignores_polluted_preview_song_plan tests\test_webui.py tests\test_release_check.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.2.0 - 2026-05-10
 
 ### Added

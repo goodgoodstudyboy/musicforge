@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 import sys
@@ -7,10 +9,14 @@ import tempfile
 import hashlib
 import base64
 import struct
+import threading
+import time
 import wave
+from http.client import HTTPConnection
 from io import BytesIO
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from song_agent import __version__
 from song_agent.agent.pipeline import deterministic_compose
@@ -1537,106 +1543,167 @@ def _v21_structure_editor_smoke(root: Path) -> tuple[bool, str]:
 def _v22_interactive_editor_smoke(root: Path) -> tuple[bool, str]:
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
         try:
-            project_store = ProjectStore(base / ".musicforge" / "projects")
-            request = SongRequest(
-                title="Release v2.2 Smoke",
-                language="English",
-                style="synth pop",
-                theme="interactive editor",
-                tempo_bpm=120,
-                key="C",
-            )
-            parent_plan = deterministic_compose(request)
-            parent_dir = base / "runs" / "v22-parent"
-            parent_plan_path = parent_dir / "data" / "song-plan.json"
-            parent_midi_path = parent_dir / "renders" / "song.mid"
-            write_json(parent_plan_path, parent_plan.to_dict())
-            write_json(parent_dir / "data" / "run-summary.json", {"title": parent_plan.title})
-            write_json(parent_dir / "data" / "validator-report.json", {"status": "passed"})
-            render_midi(parent_plan, parent_midi_path)
-            document = project_store.create_project("Release v2.2 Smoke")
-            document = project_store.add_version_from_job(document.state.project_id, _SmokeJob("v22-parent", parent_dir, request.to_dict()), name="Parent")
-            parent_bytes = parent_plan_path.read_bytes()
-            state = build_editor_state(parent_plan)
-            note_id = state["tracks"][0]["notes"][0]["note_id"]
-            draft_result = apply_editor_patch(
-                parent_plan,
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v2.2 HTTP Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
                 {
-                    "schema_version": 1,
-                    "base_plan_hash": state["base_plan_hash"],
-                    "label": "Interactive editor patch",
-                    "operations": [
-                        {"op": "resize_section", "section_id": "section-002", "bars": 4, "note_policy": "crop"},
-                        {"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 76}},
-                        {"op": "move_notes", "track_id": "track-001", "note_ids": [note_id], "delta_beats": 0.5},
-                        {"op": "transpose_notes", "track_id": "track-001", "note_ids": [note_id], "semitones": 1},
-                    ],
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v2.2 HTTP Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "interactive editor",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
                 },
             )
-            base_view = build_editor_view(parent_plan)
-            draft_view = build_editor_view_from_result(draft_result)
-            draft_diff = build_editor_diff(parent_plan, draft_result.plan, draft_result.patch)
-            preview_store = EditorPreviewStore(project_store.project_dir(document.state.project_id))
-            previews_root = project_store.project_dir(document.state.project_id) / "editor-previews"
-            draft_nonpersistent = not previews_root.exists()
-            preview, preview_dir = preview_store.create_preview(
-                project_id=document.state.project_id,
-                parent_version_id="v001",
-                parent_job_id="v22-parent",
-                parent_plan=parent_plan,
-                patch=draft_result.patch,
-                result=draft_result,
-                now="2026-05-10T00:00:00+00:00",
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            first_status, first = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-draft",
+                {
+                    "include_view": True,
+                    "include_diff": True,
+                    "patch": {
+                        "schema_version": 1,
+                        "base_plan_hash": state["base_plan_hash"],
+                        "operations": [{"op": "delete_section", "section_id": "section-001", "note_policy": "shift_left"}],
+                    },
+                },
             )
-            child_dir = base / "runs" / "v22-child"
-            child_plan_path = child_dir / "data" / "song-plan.json"
-            child_midi_path = child_dir / "renders" / "song.mid"
-            metadata = editor_edit_metadata(
-                project_id=document.state.project_id,
-                parent_version_id="v001",
-                parent_job_id="v22-parent",
-                preview_id=preview.preview_id,
-                patch=draft_result.patch,
-                result=draft_result,
-                created_at="2026-05-10T00:00:00+00:00",
+            visible_section = first["view"]["sections"][0]
+            visible_note = first["view"]["lanes"][0]["notes"][0]
+            note_id = visible_note["note_id"]
+            second_patch = {
+                "schema_version": 1,
+                "base_plan_hash": state["base_plan_hash"],
+                "label": "Interactive editor patch",
+                "operations": [
+                    {"op": "delete_section", "section_id": "section-001", "note_policy": "shift_left"},
+                    {"op": "resize_section", "section_id": visible_section["section_id"], "bars": 4, "note_policy": "crop"},
+                    {"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 76}},
+                    {"op": "move_notes", "track_id": "track-001", "note_ids": [note_id], "delta_beats": 0.5},
+                    {"op": "transpose_notes", "track_id": "track-001", "note_ids": [note_id], "semitones": 1},
+                ],
+            }
+            second_status, second = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-draft",
+                {"include_view": True, "include_diff": True, "patch": second_patch},
             )
-            write_json(child_plan_path, draft_result.plan.to_dict())
-            write_json(child_dir / "data" / "editor-patch.json", draft_result.patch.to_dict())
-            write_json(child_dir / "data" / "edit-metadata.json", metadata)
-            write_json(child_dir / "data" / "run-summary.json", {"title": draft_result.plan.title, "edit": metadata["summary"]})
-            write_json(child_dir / "data" / "validator-report.json", {"status": "passed"})
-            render_midi(draft_result.plan, child_midi_path)
-            document = project_store.add_version_from_job(
-                document.state.project_id,
-                _SmokeJob("v22-child", child_dir, request.to_dict() | {"edit_type": "manual_editor_edit"}),
-                name="Interactive Child",
-                parent_version_id="v001",
-                variant_type="manual_editor_edit",
-                change_summary="interactive editor patch",
+            history_status, history = _release_http_json(server, "GET", f"/api/projects/{project_id}/editor-previews")
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {"patch": second_patch, "render_midi": True},
             )
-            preview_store.mark_applied(preview.preview_id, version_id="v002", job_id="v22-child", now="2026-05-10T00:00:00+00:00")
-            compare = compare_project_versions(document, "v001", "v002")
-            project_export = project_store.export_project(document.state.project_id)
-            moved_note = next(note for note in draft_view["lanes"][0]["notes"] if note["note_id"] == note_id)
+            preview = preview_data["preview"]
+            midi_status, midi = _release_http_bytes(server, "GET", f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/midi")
+            apply_status, applied = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/apply",
+                {"version_name": "Interactive Child", "version_note": "release smoke"},
+            )
+            child_version = applied["version"]["version_id"]
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            moved_note = next(note for note in second["view"]["lanes"][0]["notes"] if note["note_id"] == note_id)
+            child_midi_path = Path(applied["job"]["output_dir"]) / "renders" / "song.mid"
             ok = (
-                base_view["lanes"][0]["notes"]
-                and draft_nonpersistent
-                and preview.preview_id == "preview-001"
-                and (preview_dir / "song.mid").exists()
-                and moved_note["start_beat"] == parent_plan.tracks[0].notes[0].start_beat + 0.5
-                and moved_note["pitch"] == parent_plan.tracks[0].notes[0].pitch + 1
-                and draft_diff["notes"]["changed"] == 2
-                and draft_diff["notes"]["moved"] == 1
-                and parent_plan_path.read_bytes() == parent_bytes
-                and document.versions[-1].variant_type == "manual_editor_edit"
+                created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and state_status == 200
+                and first_status == 200
+                and first["view"]["sections"][0]["section_id"] != "section-001"
+                and visible_section["section_id"] == "section-002"
+                and second_status == 200
+                and "verse" in second["summary"]["changed_sections"]
+                and history_status == 200
+                and history["previews"] == []
+                and preview_status == 201
+                and preview["preview_id"] == "preview-001"
+                and midi_status == 200
+                and midi.startswith(b"MThd")
+                and apply_status == 201
+                and applied["version"]["variant_type"] == "manual_editor_edit"
+                and compare_status == 200
+                and export_status == 200
+                and moved_note["start_beat"] == visible_note["start_beat"] + 0.5
+                and moved_note["pitch"] == visible_note["pitch"] + 1
+                and second["diff"]["notes"]["changed"] == 2
+                and second["diff"]["notes"]["moved"] == 1
                 and compare["right"]["edit"]["edit_source"] == "visual_editor"
                 and project_export["versions"][1]["edit"]["summary"]["move_notes"] == 1
                 and child_midi_path.exists()
             )
-            return ok, f"preview={preview.preview_id}, version={document.versions[-1].version_id}, draft_notes={len(draft_view['lanes'][0]['notes'])}, operations={metadata['operation_count']}"
+            return ok, f"preview={preview['preview_id']}, version={child_version}, visible_section={visible_section['section_id']}, draft_notes={len(second['view']['lanes'][0]['notes'])}, operations={second['operation_count']}"
         except Exception as exc:
             return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _release_http_json(server: Any, method: str, path: str, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
+    status, body = _release_http_request(server, method, path, payload=payload)
+    if isinstance(body, dict):
+        return status, body
+    return status, {}
+
+
+def _release_http_bytes(server: Any, method: str, path: str, payload: dict[str, Any] | None = None) -> tuple[int, bytes]:
+    status, body = _release_http_request(server, method, path, payload=payload)
+    if isinstance(body, bytes):
+        return status, body
+    return status, json.dumps(body, sort_keys=True).encode("utf-8")
+
+
+def _release_http_request(server: Any, method: str, path: str, *, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any] | bytes]:
+    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=15)
+    body = None
+    headers = {}
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        headers["Content-Length"] = str(len(body))
+    connection.request(method, path, body=body, headers=headers)
+    response = connection.getresponse()
+    data = response.read()
+    content_type = response.getheader("Content-Type", "")
+    connection.close()
+    if content_type.startswith("application/json"):
+        return response.status, json.loads(data.decode("utf-8"))
+    return response.status, data
+
+
+def _release_wait_http_job(server: Any, job_id: str) -> dict[str, Any]:
+    for _ in range(160):
+        status, job = _release_http_json(server, "GET", f"/api/jobs/{job_id}")
+        if status == 200 and job.get("status") in {"completed", "failed", "cancelled", "interrupted"}:
+            return job
+        time.sleep(0.05)
+    raise TimeoutError(f"Job {job_id} did not finish.")
 
 
 def _tiny_wav_bytes() -> bytes:

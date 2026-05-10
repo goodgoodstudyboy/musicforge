@@ -86,3 +86,44 @@ def test_build_editor_view_from_result_keeps_base_note_ids_after_move() -> None:
 
     moved = next(note for note in view["lanes"][0]["notes"] if note["note_id"] == note_id)
     assert moved["start_beat"] == plan.tracks[0].notes[0].start_beat + 0.5
+
+
+def test_build_editor_view_from_result_keeps_base_section_ids_after_delete() -> None:
+    plan = sample_plan()
+    state = build_editor_state(plan)
+    result = apply_editor_patch(
+        plan,
+        {
+            "schema_version": 1,
+            "base_plan_hash": state["base_plan_hash"],
+            "operations": [{"op": "delete_section", "section_id": "section-001", "note_policy": "shift_left"}],
+        },
+    )
+    view = build_editor_view_from_result(result)
+
+    assert view["sections"][0]["name"] == "verse"
+    assert view["sections"][0]["section_id"] == "section-002"
+    assert all(section["section_id"] != "section-001" for section in view["sections"])
+
+
+def test_build_editor_view_from_result_keeps_base_track_ids_after_delete_duplicate() -> None:
+    plan = sample_plan()
+    state = build_editor_state(plan)
+    result = apply_editor_patch(
+        plan,
+        {
+            "schema_version": 1,
+            "base_plan_hash": state["base_plan_hash"],
+            "operations": [
+                {"op": "duplicate_track", "track_id": "track-001", "name": "melody copy"},
+                {"op": "delete_track", "track_id": "track-001"},
+            ],
+        },
+    )
+    view = build_editor_view_from_result(result)
+
+    assert view["tracks"][0]["name"] == "chords"
+    assert view["tracks"][0]["track_id"] == "track-002"
+    assert view["tracks"][-1]["name"] == "melody copy"
+    assert view["tracks"][-1]["track_id"].startswith("derived-track-")
+    assert view["tracks"][-1]["editable"] is False

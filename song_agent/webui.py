@@ -2975,10 +2975,23 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const target = $("project-editor-state");
       if (!target || !projectEditorState) return;
       const view = currentProjectEditorView();
-      const sectionOptions = projectEditorState.sections.map((section) => `<option value="${escapeHtml(section.section_id)}">${escapeHtml(section.name)} · bar ${escapeHtml(section.start_bar)}</option>`).join("");
-      const afterSectionOptions = `<option value="">start/end</option>${sectionOptions}`;
-      const trackOptions = projectEditorState.tracks.map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.name)} · ${escapeHtml(track.note_count)}</option>`).join("");
-      const selectedTrack = projectEditorState.tracks.find((track) => track.track_id === projectEditorSelectedTrackId) || projectEditorState.tracks[0] || { notes: [] };
+      const viewSections = view.sections || [];
+      const viewTracks = view.tracks || [];
+      if (!viewSections.some((section) => section.section_id === projectEditorSelectedSectionId)) {
+        projectEditorSelectedSectionId = (viewSections[0] || {}).section_id || projectEditorSelectedSectionId;
+      }
+      const sectionOptions = viewSections.map((section) => {
+        const derived = isDerivedSection(section.section_id);
+        const label = `${section.name} · bar ${section.start_bar}${derived ? " · draft" : ""}`;
+        return `<option value="${escapeHtml(section.section_id)}"${derived ? " disabled" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+      const afterSectionOptions = `<option value="">start/end</option>${viewSections.filter((section) => !isDerivedSection(section.section_id)).map((section) => `<option value="${escapeHtml(section.section_id)}">${escapeHtml(section.name)} · bar ${escapeHtml(section.start_bar)}</option>`).join("")}`;
+      const trackOptions = viewTracks.map((track) => {
+        const derived = isDerivedTrack(track.track_id);
+        const label = `${track.name} · ${track.note_count || 0}${derived ? " · draft" : ""}`;
+        return `<option value="${escapeHtml(track.track_id)}"${derived ? " disabled" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+      const selectedTrack = viewTracks.find((track) => track.track_id === projectEditorSelectedTrackId) || viewTracks[0] || { notes: [] };
       projectEditorSelectedTrackId = selectedTrack.track_id || projectEditorSelectedTrackId;
       target.innerHTML = `
         <div class="summary-grid">
@@ -3172,21 +3185,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           renderProjectEditorState();
         });
       });
-      bindAction("project-editor-add-chords", () => addProjectEditorOperation({ op: "set_section_chords", section_id: $("project-editor-section").value, chords: $("project-editor-chords").value.split(",").map((item) => item.trim()).filter(Boolean) }));
-      bindAction("project-editor-add-lyrics", () => addProjectEditorOperation({ op: "set_section_lyrics", section_id: $("project-editor-section").value, lyrics: $("project-editor-lyrics").value }));
-      bindAction("project-editor-add-instrument", () => addProjectEditorOperation({ op: "set_track_instrument", track_id: $("project-editor-track").value, instrument: $("project-editor-instrument").value.trim() }));
+      bindAction("project-editor-add-chords", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "set_section_chords", section_id: $("project-editor-section").value, chords: $("project-editor-chords").value.split(",").map((item) => item.trim()).filter(Boolean) }); });
+      bindAction("project-editor-add-lyrics", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "set_section_lyrics", section_id: $("project-editor-section").value, lyrics: $("project-editor-lyrics").value }); });
+      bindAction("project-editor-add-instrument", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "set_track_instrument", track_id: $("project-editor-track").value, instrument: $("project-editor-instrument").value.trim() }); });
       bindAction("project-editor-add-section-op", () => addProjectEditorOperation({ op: "add_section", after_section_id: $("project-editor-after-section").value, name: $("project-editor-section-name").value.trim(), bars: Number($("project-editor-section-bars").value || 4), chords: chordList("project-editor-section-structure-chords") }));
-      bindAction("project-editor-duplicate-section-op", () => addProjectEditorOperation({ op: "duplicate_section", section_id: $("project-editor-section").value, after_section_id: $("project-editor-after-section").value, name: $("project-editor-section-name").value.trim(), copy_notes: true }));
-      bindAction("project-editor-delete-section-op", () => addProjectEditorOperation({ op: "delete_section", section_id: $("project-editor-section").value, note_policy: $("project-editor-section-note-policy").value === "shift_left" ? "shift_left" : "delete" }));
-      bindAction("project-editor-resize-section-op", () => addProjectEditorOperation({ op: "resize_section", section_id: $("project-editor-section").value, bars: Number($("project-editor-section-bars").value || 4), note_policy: $("project-editor-section-note-policy").value === "crop" ? "crop" : "shift_tail" }));
-      bindAction("project-editor-move-section-op", () => addProjectEditorOperation({ op: "move_section", section_id: $("project-editor-section").value, after_section_id: $("project-editor-after-section").value, move_notes: true }));
+      bindAction("project-editor-duplicate-section-op", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "duplicate_section", section_id: $("project-editor-section").value, after_section_id: $("project-editor-after-section").value, name: $("project-editor-section-name").value.trim(), copy_notes: true }); });
+      bindAction("project-editor-delete-section-op", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "delete_section", section_id: $("project-editor-section").value, note_policy: $("project-editor-section-note-policy").value === "shift_left" ? "shift_left" : "delete" }); });
+      bindAction("project-editor-resize-section-op", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "resize_section", section_id: $("project-editor-section").value, bars: Number($("project-editor-section-bars").value || 4), note_policy: $("project-editor-section-note-policy").value === "crop" ? "crop" : "shift_tail" }); });
+      bindAction("project-editor-move-section-op", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "move_section", section_id: $("project-editor-section").value, after_section_id: $("project-editor-after-section").value, move_notes: true }); });
       bindAction("project-editor-add-track-op", () => addProjectEditorOperation({ op: "add_track", name: $("project-editor-track-name").value.trim(), instrument: $("project-editor-track-structure-instrument").value.trim() }));
-      bindAction("project-editor-duplicate-track-op", () => addProjectEditorOperation({ op: "duplicate_track", track_id: $("project-editor-track").value, name: $("project-editor-track-name").value.trim(), instrument: $("project-editor-track-structure-instrument").value.trim(), transpose: Number($("project-editor-track-transpose").value || 0) }));
-      bindAction("project-editor-delete-track-op", () => addProjectEditorOperation({ op: "delete_track", track_id: $("project-editor-track").value }));
-      bindAction("project-editor-rename-track-op", () => addProjectEditorOperation({ op: "rename_track", track_id: $("project-editor-track").value, name: $("project-editor-track-name").value.trim() }));
-      bindAction("project-editor-add-note", () => addProjectEditorOperation({ op: "add_note", track_id: $("project-editor-track").value, note: parseJsonField("project-editor-add-note-json") }));
-      bindAction("project-editor-update-note", () => addProjectEditorOperation({ op: "update_note", track_id: $("project-editor-track").value, note_id: $("project-editor-note").value, patch: parseJsonField("project-editor-note-patch") }));
-      bindAction("project-editor-delete-note", () => addProjectEditorOperation({ op: "delete_notes", track_id: $("project-editor-track").value, note_ids: [$("project-editor-note").value] }));
+      bindAction("project-editor-duplicate-track-op", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "duplicate_track", track_id: $("project-editor-track").value, name: $("project-editor-track-name").value.trim(), instrument: $("project-editor-track-structure-instrument").value.trim(), transpose: Number($("project-editor-track-transpose").value || 0) }); });
+      bindAction("project-editor-delete-track-op", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "delete_track", track_id: $("project-editor-track").value }); });
+      bindAction("project-editor-rename-track-op", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "rename_track", track_id: $("project-editor-track").value, name: $("project-editor-track-name").value.trim() }); });
+      bindAction("project-editor-add-note", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "add_note", track_id: $("project-editor-track").value, note: parseJsonField("project-editor-add-note-json") }); });
+      bindAction("project-editor-update-note", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "update_note", track_id: $("project-editor-track").value, note_id: $("project-editor-note").value, patch: parseJsonField("project-editor-note-patch") }); });
+      bindAction("project-editor-delete-note", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "delete_notes", track_id: $("project-editor-track").value, note_ids: [$("project-editor-note").value] }); });
       bindAction("project-editor-nudge-left", () => addSelectedProjectEditorNoteOperation({ op: "move_notes", delta_beats: -0.25 }));
       bindAction("project-editor-nudge-right", () => addSelectedProjectEditorNoteOperation({ op: "move_notes", delta_beats: 0.25 }));
       bindAction("project-editor-pitch-up", () => addSelectedProjectEditorNoteOperation({ op: "transpose_notes", semitones: 1 }));
@@ -3195,8 +3208,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("project-editor-section-move-right", () => addProjectEditorSectionMove(1));
       bindAction("project-editor-section-shorten", () => addProjectEditorSectionResize(-1));
       bindAction("project-editor-section-lengthen", () => addProjectEditorSectionResize(1));
-      bindAction("project-editor-transpose-range", () => addProjectEditorOperation({ op: "transpose_notes", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), semitones: Number($("project-editor-transpose").value || 0) }));
-      bindAction("project-editor-velocity-range", () => addProjectEditorOperation({ op: "scale_velocity", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), factor: Number($("project-editor-velocity-factor").value || 1) }));
+      bindAction("project-editor-transpose-range", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "transpose_notes", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), semitones: Number($("project-editor-transpose").value || 0) }); });
+      bindAction("project-editor-velocity-range", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "scale_velocity", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), factor: Number($("project-editor-velocity-factor").value || 1) }); });
       renderProjectEditorDraft();
     }
 
@@ -3222,7 +3235,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     }
 
     function addSelectedProjectEditorNoteOperation(operation) {
-      if (!projectEditorSelectedTrackId || !projectEditorSelectedNoteId) return;
+      if (!projectEditorSelectedTrackId || !projectEditorSelectedNoteId || projectEditorSelectedTrackId.startsWith("derived-track-")) return;
       addProjectEditorOperation({ ...operation, track_id: projectEditorSelectedTrackId, note_ids: [projectEditorSelectedNoteId] });
     }
 
@@ -3230,16 +3243,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const sections = (projectEditorView || projectEditorState || { sections: [] }).sections || [];
       const index = sections.findIndex((section) => section.section_id === projectEditorSelectedSectionId);
       if (index < 0) return;
+      if (String(projectEditorSelectedSectionId || "").startsWith("derived-section-")) return;
       if (delta < 0 && index === 0) return;
       if (delta > 0 && index >= sections.length - 1) return;
       const targetIndex = delta < 0 ? index - 2 : index + 1;
       const after = targetIndex >= 0 ? sections[targetIndex].section_id : "";
+      if (after && isDerivedSection(after)) return;
       addProjectEditorOperation({ op: "move_section", section_id: projectEditorSelectedSectionId, after_section_id: after, move_notes: true });
     }
 
     function addProjectEditorSectionResize(delta) {
       const section = ((projectEditorView || projectEditorState || { sections: [] }).sections || []).find((item) => item.section_id === projectEditorSelectedSectionId);
       if (!section) return;
+      if (String(section.section_id || "").startsWith("derived-section-")) return;
       addProjectEditorOperation({ op: "resize_section", section_id: section.section_id, bars: Math.max(1, Number(section.bars || 1) + delta), note_policy: delta < 0 ? "crop" : "shift_tail" });
     }
 
@@ -3375,6 +3391,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     function setSelectValue(id, value) {
       const select = $(id);
       if (select && value != null) select.value = value;
+    }
+
+    function isDerivedSection(sectionId) {
+      return String(sectionId || "").startsWith("derived-section-");
+    }
+
+    function isDerivedTrack(trackId) {
+      return String(trackId || "").startsWith("derived-track-");
     }
 
     function projectEditorBarRuler(view) {

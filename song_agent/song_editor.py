@@ -705,6 +705,8 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
         "operation_counts": summary_counts,
         "changed_sections": sorted(changed_sections),
         "changed_tracks": sorted(changed_tracks),
+        "section_identity": _identity_by_id(base_section_names_by_id),
+        "track_identity": _identity_by_id(base_track_names_by_id),
         "note_identity": _note_identity_by_track_id(base_note_keys_by_track_id),
     }
     return EditorPatchResult(plan=edited, patch=patch, summary=summary, warnings=warnings)
@@ -1027,6 +1029,10 @@ def _note_index_by_key(notes: list[NoteEvent], target_key: NoteKey, note_id: str
         if _note_key(note) == target_key:
             return index
     raise EditorPatchError(f"Note {note_id} is no longer available in this patch.")
+
+
+def _identity_by_id(names_by_id: dict[str, str | None]) -> dict[str, str | None]:
+    return dict(names_by_id)
 
 
 def _note_identity_by_track_id(note_keys_by_track_id: dict[str, dict[str, NoteKey | None]]) -> dict[str, dict[str, dict[str, float | int]]]:
