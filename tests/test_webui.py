@@ -434,7 +434,7 @@ def test_webui_contains_interactive_editor_controls():
     assert "/editor-draft" in html
     assert "refreshProjectEditorDraft" in html
     assert "projectEditorRedo" in html
-    assert "projectEditorClipInserts" in html
+    assert "projectEditorClipInsertMap" in html
     assert "Clip Browser" in html
     assert 'id="project-editor-clip-browser"' in html
     assert "Draft Insert Clip" in html

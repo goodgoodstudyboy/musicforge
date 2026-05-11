@@ -115,6 +115,7 @@ from song_agent.references import (
     reference_refs_snapshot,
     write_reference_refs_snapshot,
 )
+from song_agent.redaction import sanitize_metadata
 from song_agent.reference_analysis import (
     ReferenceAnalysisError,
     analyze_reference,
@@ -4027,8 +4028,25 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 reference_store=self.reference_store,
                 project_store=self.project_store,
             )
-            patch_data, clip_summary, clip_warnings = build_clip_insert_patch(parent_plan, clip, payload)
-            result = apply_editor_patch(parent_plan, patch_data)
+            existing_patch_data = payload.get("current_patch")
+            existing_result = None
+            draft_plan = None
+            existing_operations: list[dict[str, Any]] = []
+            existing_metadata: dict[str, Any] = {}
+            draft_state = None
+            if isinstance(existing_patch_data, dict):
+                existing_result = apply_editor_patch(parent_plan, existing_patch_data)
+                draft_plan = existing_result.plan
+                existing_operations = list(existing_result.patch.operations)
+                existing_metadata = dict(existing_result.patch.metadata)
+                draft_state = build_editor_view_from_result(existing_result)
+            patch_data, clip_summary, clip_warnings = build_clip_insert_patch(parent_plan, clip, payload, draft_plan=draft_plan, draft_state=draft_state)
+            combined_patch = {
+                **patch_data,
+                "operations": [*existing_operations, *patch_data["operations"]],
+                "metadata": self._merge_editor_patch_metadata(existing_metadata, patch_data.get("metadata")),
+            }
+            result = apply_editor_patch(parent_plan, combined_patch)
             warnings = [*clip_warnings, *result.warnings]
             summary = {
                 "operation_count": len(result.patch.operations),
@@ -4042,8 +4060,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 "project_id": project_id,
                 "version_id": version.version_id,
                 "base_plan_hash": result.patch.base_plan_hash,
-                "operation_count": len(result.patch.operations),
-                "patch": result.patch.to_dict(),
+                "operation_count": len(patch_data["operations"]),
+                "patch": patch_data,
+                "combined_patch": result.patch.to_dict(),
                 "clip_summary": clip_summary,
                 "summary": summary,
                 "warnings": warnings,
@@ -5675,6 +5694,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             raise ValueError("Request body must be a JSON object.")
         return data
 
+    def _merge_editor_patch_metadata(self, left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict[str, Any]:
+        return _merge_editor_patch_metadata(left, right)
+
     def _send_json(self, data: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status.value)
@@ -6158,6 +6180,35 @@ def _match_project_route(path: str) -> tuple[str, str] | None:
         project_id, tail = rest.split("/", 1)
         return unquote(project_id), "/" + tail
     return unquote(rest), ""
+
+
+def _merge_editor_patch_metadata(left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for source in (left, right):
+        if not isinstance(source, dict):
+            continue
+        for key, value in source.items():
+            if key == "clip_inserts":
+                continue
+            merged[key] = value
+    inserts: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for source in (left, right):
+        raw_inserts = source.get("clip_inserts") if isinstance(source, dict) else None
+        if not isinstance(raw_inserts, list):
+            continue
+        for item in raw_inserts:
+            if not isinstance(item, dict):
+                continue
+            group_id = str(item.get("clip_group_id") or "")
+            key = group_id or json.dumps(item, ensure_ascii=False, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            inserts.append(sanitize_metadata(dict(item)))
+    if inserts:
+        merged["clip_inserts"] = inserts[:20]
+    return sanitize_metadata(merged)
 
 
 def _match_edit_preset_route(path: str) -> tuple[str, str] | None:

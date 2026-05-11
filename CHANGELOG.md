@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.3.1 - 2026-05-11
+
+### Fixed
+- Clip `replace_range` drafts can now receive the current Project Editor Patch Queue and compute replacement deletes against the accumulated draft state, avoiding duplicate deletion of base note IDs.
+- Studio clip provenance is now derived from `clip_group_id` on queued operations, so normal manual edits do not clear existing clip insert metadata.
+- Editor clip draft responses now include a `combined_patch` for clients that want to preview/apply the accumulated queue in one request.
+
+### Verified
+- `python -m pytest tests\test_editor_clips.py tests\test_server_editor_clips.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.3.0 - 2026-05-11
 
 ### Added

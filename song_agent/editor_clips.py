@@ -201,7 +201,14 @@ def build_editor_clip_from_ref(
     raise EditorClipError(f"Unsupported clip source_type: {source_type}.")
 
 
-def build_clip_insert_patch(parent_plan: SongPlan, clip: EditorClip, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+def build_clip_insert_patch(
+    parent_plan: SongPlan,
+    clip: EditorClip,
+    payload: dict[str, Any],
+    *,
+    draft_plan: SongPlan | None = None,
+    draft_state: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
     raw = json.dumps(payload, ensure_ascii=False)
     if len(raw.encode("utf-8")) > MAX_EDITOR_CLIP_BODY_BYTES:
         raise EditorClipError(f"clip insert request must be {MAX_EDITOR_CLIP_BODY_BYTES} bytes or fewer.")
@@ -211,7 +218,8 @@ def build_clip_insert_patch(parent_plan: SongPlan, clip: EditorClip, payload: di
         raise EditorClipError("target must be an object.")
     if not isinstance(options, dict):
         raise EditorClipError("options must be an object.")
-    state = build_editor_state(parent_plan)
+    base_state = build_editor_state(parent_plan)
+    state = draft_state if isinstance(draft_state, dict) else build_editor_state(draft_plan or parent_plan)
     track_id = _target_track_id(target, state)
     section = _target_section(target, state)
     start_beat = _target_start_beat(target, section)
@@ -267,8 +275,12 @@ def build_clip_insert_patch(parent_plan: SongPlan, clip: EditorClip, payload: di
         raise EditorClipUnavailableError("Clip insert produced no notes.")
     if len(operations) > MAX_EDITOR_CLIP_OPERATIONS:
         raise EditorClipError(f"clip insert can create at most {MAX_EDITOR_CLIP_OPERATIONS} editor operations.")
+    group_id = _clip_group_id(clip, track_id=track_id, start_beat=start_beat, operations=operations)
+    for operation in operations:
+        operation["clip_group_id"] = group_id
     metadata = _clip_insert_metadata(
         clip,
+        group_id=group_id,
         target={
             "track_id": track_id,
             "section_id": section.get("section_id") if section else None,
@@ -286,7 +298,7 @@ def build_clip_insert_patch(parent_plan: SongPlan, clip: EditorClip, payload: di
     )
     patch = {
         "schema_version": 1,
-        "base_plan_hash": song_plan_hash(parent_plan),
+        "base_plan_hash": str(base_state["base_plan_hash"]),
         "label": f"Insert clip: {clip.title}"[:160],
         "operations": operations,
         "metadata": {"clip_inserts": [metadata]},
@@ -655,8 +667,12 @@ def _target_start_beat(target: dict[str, Any], section: dict[str, Any] | None) -
 
 def _note_ids_in_replace_range(state: dict[str, Any], track_id: str, start: float, end: float) -> list[str]:
     track = _track_by_id(state, track_id)
+    lane = next((item for item in state.get("lanes", []) if item.get("track_id") == track_id), None)
+    raw_notes = lane.get("notes", []) if isinstance(lane, dict) else track.get("notes", [])
     ids = []
-    for note in track.get("notes", []):
+    for note in raw_notes:
+        if bool(note.get("derived", False)) or str(note.get("note_id") or "").startswith("derived-note-"):
+            continue
         note_start = float(note["start_beat"])
         note_end = note_start + float(note["duration_beats"])
         if note_end > start and note_start < end:
@@ -667,6 +683,7 @@ def _note_ids_in_replace_range(state: dict[str, Any], track_id: str, start: floa
 def _clip_insert_metadata(
     clip: EditorClip,
     *,
+    group_id: str,
     target: dict[str, Any],
     options: dict[str, Any],
     inserted_note_count: int,
@@ -674,6 +691,7 @@ def _clip_insert_metadata(
 ) -> dict[str, Any]:
     metadata = {
         "schema_version": EDITOR_CLIP_SCHEMA_VERSION,
+        "clip_group_id": group_id,
         "source_type": clip.source_type,
         "source_id": clip.source_id,
         "source_version_id": clip.source_version_id,
@@ -691,6 +709,25 @@ def _clip_insert_metadata(
         if key in clip.metadata:
             metadata[key] = clip.metadata[key]
     return sanitize_metadata(metadata)
+
+
+def _clip_group_id(clip: EditorClip, *, track_id: str, start_beat: float, operations: list[dict[str, Any]]) -> str:
+    payload = json.dumps(
+        {
+            "source_type": clip.source_type,
+            "source_id": clip.source_id,
+            "source_version_id": clip.source_version_id,
+            "title": clip.title,
+            "track_id": track_id,
+            "start_beat": start_beat,
+            "operation_count": len(operations),
+            "notes": [note.to_dict() for note in clip.notes[:MAX_EDITOR_CLIP_NOTES]],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return f"clip-{hashlib.sha1(payload.encode('utf-8')).hexdigest()[:12]}"
 
 
 def _base_summary(

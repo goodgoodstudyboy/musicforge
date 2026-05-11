@@ -1104,7 +1104,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let projectEditorPreviewHistory = [];
     let projectEditorDraft = null;
     let projectEditorClips = null;
-    let projectEditorClipInserts = [];
+    let projectEditorClipInsertMap = {};
     let projectEditorSelectedClipIndex = 0;
     let projectEditorSelectedSectionId = null;
     let projectEditorSelectedTrackId = null;
@@ -2843,7 +2843,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           projectEditorRedo = [];
           projectEditorDraft = null;
           projectEditorClips = null;
-          projectEditorClipInserts = [];
+          projectEditorClipInsertMap = {};
           projectEditorSelectedClipIndex = 0;
           projectEditorPreview = null;
           await renderProjectEditor(project, versions, target);
@@ -2868,7 +2868,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorRedo = [];
         projectEditorDraft = null;
         projectEditorClips = null;
-        projectEditorClipInserts = [];
+        projectEditorClipInsertMap = {};
         projectEditorSelectedClipIndex = 0;
         projectEditorPreview = null;
         renderProjectEditorDraft();
@@ -2926,7 +2926,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorRedo = [];
         projectEditorDraft = null;
         projectEditorClips = null;
-        projectEditorClipInserts = [];
+        projectEditorClipInsertMap = {};
         projectEditorSelectedClipIndex = 0;
         projectEditorPreview = null;
         activeProjectTab = "versions";
@@ -2983,7 +2983,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       projectEditorRedo = [];
       projectEditorDraft = null;
       projectEditorPreview = null;
-      projectEditorClipInserts = [];
+      projectEditorClipInsertMap = {};
       projectEditorSelectedClipIndex = 0;
       projectEditorSelectedSectionId = (projectEditorState.sections[0] || {}).section_id || null;
       projectEditorSelectedTrackId = (projectEditorState.tracks[0] || {}).track_id || null;
@@ -3293,7 +3293,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     }
 
     function projectEditorPatchMetadata() {
-      return projectEditorClipInserts.length ? { clip_inserts: projectEditorClipInserts } : {};
+      const inserts = [];
+      const seen = new Set();
+      for (const operation of projectEditorPatch) {
+        const groupId = operation && operation.clip_group_id;
+        const insert = groupId ? projectEditorClipInsertMap[groupId] : null;
+        if (!insert || !groupId || seen.has(groupId)) continue;
+        seen.add(groupId);
+        inserts.push(insert);
+      }
+      return inserts.length ? { clip_inserts: inserts } : {};
     }
 
     async function draftInsertProjectEditorClip() {
@@ -3308,6 +3317,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           include_view: true,
           include_diff: true,
           clip_ref: clip.clip_ref,
+          current_patch: projectEditorPatch.length ? {
+            schema_version: 1,
+            base_plan_hash: projectEditorState.base_plan_hash,
+            label: $("project-editor-label").value.trim(),
+            operations: projectEditorPatch,
+            metadata: projectEditorPatchMetadata(),
+          } : null,
           target: {
             track_id: projectEditorSelectedTrackId,
             section_id: projectEditorSelectedSectionId,
@@ -3321,8 +3337,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           },
         }),
       });
+      const clipInsert = ((((data.patch || {}).metadata || {}).clip_inserts) || [])[0] || null;
+      if (clipInsert && clipInsert.clip_group_id) projectEditorClipInsertMap[clipInsert.clip_group_id] = clipInsert;
       projectEditorPatch.push(...((data.patch || {}).operations || []));
-      projectEditorClipInserts.push(...((((data.patch || {}).metadata || {}).clip_inserts) || []));
       projectEditorRedo = [];
       projectEditorPreview = null;
       projectEditorDraft = data;
@@ -3360,7 +3377,6 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       projectEditorRedo = [];
       projectEditorPreview = null;
       projectEditorDraft = null;
-      projectEditorClipInserts = [];
       renderProjectEditorDraft();
     }
 
@@ -3408,7 +3424,6 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           projectEditorPatch.splice(Number(button.dataset.editorRemoveOp), 1);
           projectEditorPreview = null;
           projectEditorDraft = null;
-          projectEditorClipInserts = [];
           renderProjectEditorDraft();
         });
       });
