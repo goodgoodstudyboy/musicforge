@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.4.0 - 2026-05-11
+
+### Added
+- Editor Template Store for reusable section and track templates under `.musicforge/editor-templates/`.
+- MultiTrackClip support for extracting full Project Version sections into role-based lanes.
+- Section Template and Track Template APIs, including source hash summaries and hide/delete routes.
+- Multi-track template mapping and draft insert APIs that reuse the visual editor patch engine and support current Patch Queue state.
+- Studio Editor Templates panel, Project Editor Template Browser, Save Section Template, Save Track Template, and Draft Insert Template controls.
+- Template provenance now flows through editor preview apply, Project Compare, Project Export, Final Export, and release-check.
+- release-check now includes a v2.4 editor template smoke covering save, mapping, draft, preview, apply, compare, project export, and final export.
+
+### Scope
+- v2.4.0 intentionally keeps template reuse local and deterministic; it does not add DAW-style drag editing, realtime playback, audio-to-MIDI, MP3 import, AI arranger solving, or mixing automation.
+
+### Verified
+- `python -m pytest tests\test_editor_templates.py tests\test_server_editor_templates.py tests\test_server_editor_clips.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.3.2 - 2026-05-11
 
 ### Fixed

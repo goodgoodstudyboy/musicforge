@@ -59,6 +59,16 @@ from song_agent.editor_clips import (
     build_editor_clip_from_ref,
     list_editor_clips,
 )
+from song_agent.editor_templates import (
+    EditorTemplateError,
+    EditorTemplateStore,
+    EditorTemplateUnavailableError,
+    build_multitrack_clip_from_ref,
+    build_multitrack_clip_insert_patch,
+    section_template_public_dict,
+    suggest_lane_mappings,
+    track_template_public_dict,
+)
 from song_agent.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.final_export import (
     FinalExportError,
@@ -2086,6 +2096,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.prompt_template_store  # type: ignore[attr-defined]
 
     @property
+    def editor_template_store(self) -> EditorTemplateStore:
+        return self.server.editor_template_store  # type: ignore[attr-defined]
+
+    @property
     def asset_store(self) -> AssetStore:
         return self.server.asset_store  # type: ignore[attr-defined]
 
@@ -2263,6 +2277,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/prompt-templates/reset":
                 self._handle_prompt_templates_reset(method)
+                return
+
+            if path == "/api/editor-templates":
+                self._handle_editor_templates_root(method, parsed.query)
+                return
+
+            editor_template_route = _match_editor_template_route(path)
+            if editor_template_route is not None:
+                template_type, template_id, tail = editor_template_route
+                self._handle_editor_template_route(method, template_type, template_id, tail)
                 return
 
             prompt_template_route = _match_prompt_template_route(path)
@@ -2504,6 +2528,47 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, **self.prompt_template_store.to_response()})
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Prompt template route not found.")
+
+    def _handle_editor_templates_root(self, method: str, query_string: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        query = parse_qs(query_string)
+        include_hidden = _query_value(query, "include_hidden") in {"1", "true", "yes"}
+        self._send_json(self.editor_template_store.to_response(include_hidden=include_hidden, project_store=self.project_store))
+
+    def _handle_editor_template_route(self, method: str, template_type: str, template_id: str, tail: str) -> None:
+        try:
+            if tail == "":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if template_type == "sections":
+                    template = self.editor_template_store.read_section_template(template_id)
+                    self._send_json({"template": section_template_public_dict(template, project_store=self.project_store)})
+                    return
+                template = self.editor_template_store.read_track_template(template_id)
+                self._send_json({"template": track_template_public_dict(template)})
+                return
+            if tail in {"/hide", "/unhide"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                template = self.editor_template_store.hide_template("section" if template_type == "sections" else "track", template_id, hidden=tail == "/hide")
+                self._send_json({"ok": True, "template": template})
+                return
+            if tail == "/delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.editor_template_store.delete_template("section" if template_type == "sections" else "track", template_id)
+                self._send_json({"ok": True, "deleted": True, "template_id": template_id})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor template route not found.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor template not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_projects_root(self, method: str, query_string: str) -> None:
         if method == "GET":
@@ -3141,6 +3206,26 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         editor_clip_draft_match = _match_project_editor_clip_draft_tail(tail)
         if editor_clip_draft_match is not None:
             self._handle_project_editor_clip_draft(method, project_id, editor_clip_draft_match)
+            return
+
+        section_template_match = _match_project_section_template_tail(tail)
+        if section_template_match is not None:
+            self._handle_project_section_template_create(method, project_id, section_template_match)
+            return
+
+        track_template_match = _match_project_track_template_tail(tail)
+        if track_template_match is not None:
+            self._handle_project_track_template_create(method, project_id, track_template_match)
+            return
+
+        template_mapping_match = _match_project_editor_template_mapping_tail(tail)
+        if template_mapping_match is not None:
+            self._handle_project_editor_template_mapping(method, project_id, template_mapping_match)
+            return
+
+        multitrack_draft_match = _match_project_editor_multitrack_clip_draft_tail(tail)
+        if multitrack_draft_match is not None:
+            self._handle_project_editor_multitrack_clip_draft(method, project_id, multitrack_draft_match)
             return
 
         editor_preview_create = _match_project_editor_preview_create_tail(tail)
@@ -4088,6 +4173,161 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json(response)
+
+    def _handle_project_section_template_create(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            self.project_store.get_project(project_id)
+            template = self.editor_template_store.create_section_template_from_project_version(
+                project_store=self.project_store,
+                project_id=project_id,
+                version_id=version_id,
+                section_id=str(payload.get("section_id") or ""),
+                payload=payload,
+                now=_utc_now(),
+            )
+            self.project_store.append_event(project_id, "section_template_created", {"version_id": version_id, "template_id": template.template_id})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except EditorTemplateUnavailableError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except (EditorTemplateError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "template": section_template_public_dict(template, project_store=self.project_store)}, status=HTTPStatus.CREATED)
+
+    def _handle_project_track_template_create(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            self.project_store.get_project(project_id)
+            template = self.editor_template_store.create_track_template_from_project_version(
+                project_store=self.project_store,
+                project_id=project_id,
+                version_id=version_id,
+                track_id=str(payload.get("track_id") or ""),
+                payload=payload,
+                now=_utc_now(),
+            )
+            self.project_store.append_event(project_id, "track_template_created", {"version_id": version_id, "template_id": template.template_id})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except EditorTemplateUnavailableError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except (EditorTemplateError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "template": track_template_public_dict(template)}, status=HTTPStatus.CREATED)
+
+    def _handle_project_editor_template_mapping(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            _document, version, _parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            clip = build_multitrack_clip_from_ref(
+                payload.get("source_ref"),
+                template_store=self.editor_template_store,
+                project_store=self.project_store,
+                default_project_id=project_id,
+            )
+            state = build_editor_state(parent_plan)
+            suggestions = suggest_lane_mappings(clip, state)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Template or version not found.")
+            return
+        except EditorTemplateUnavailableError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except (EditorTemplateError, EditorPatchError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json({"ok": True, "project_id": project_id, "version_id": version.version_id, "clip": clip.summary(), "suggestions": suggestions})
+
+    def _handle_project_editor_multitrack_clip_draft(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            _document, version, _parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            clip = build_multitrack_clip_from_ref(
+                payload.get("source_ref"),
+                template_store=self.editor_template_store,
+                project_store=self.project_store,
+                default_project_id=project_id,
+            )
+            existing_patch_data = payload.get("current_patch")
+            existing_result = None
+            draft_plan = None
+            existing_operations: list[dict[str, Any]] = []
+            existing_metadata: dict[str, Any] = {}
+            draft_state = None
+            if isinstance(existing_patch_data, dict):
+                existing_result = apply_editor_patch(parent_plan, existing_patch_data)
+                draft_plan = existing_result.plan
+                existing_operations = list(existing_result.patch.operations)
+                existing_metadata = dict(existing_result.patch.metadata)
+                draft_state = build_editor_view_from_result(existing_result)
+            patch_data, template_summary, template_warnings = build_multitrack_clip_insert_patch(parent_plan, clip, payload, draft_plan=draft_plan, draft_state=draft_state)
+            combined_patch = {
+                **patch_data,
+                "operations": [*existing_operations, *patch_data["operations"]],
+                "metadata": self._merge_editor_patch_metadata(existing_metadata, patch_data.get("metadata")),
+            }
+            result = apply_editor_patch(parent_plan, combined_patch)
+            warnings = [*template_warnings, *result.warnings]
+            summary = {
+                "operation_count": len(result.patch.operations),
+                "changed_sections": list(result.summary.get("changed_sections") or []),
+                "changed_tracks": list(result.summary.get("changed_tracks") or []),
+                "warnings": warnings,
+                "operation_counts": dict(result.summary.get("operation_counts") or {}),
+            }
+            response = {
+                "ok": True,
+                "project_id": project_id,
+                "version_id": version.version_id,
+                "base_plan_hash": result.patch.base_plan_hash,
+                "operation_count": len(patch_data["operations"]),
+                "patch": patch_data,
+                "combined_patch": result.patch.to_dict(),
+                "template_summary": template_summary,
+                "mapping_suggestions": suggest_lane_mappings(clip, build_editor_state(parent_plan)),
+                "summary": summary,
+                "warnings": warnings,
+                "quality": result.plan.quality.to_dict() if result.plan.quality else {},
+                "validator": {"status": "passed", "checks": ["editor_template_schema", "editor_patch_schema", "song_plan_validation"]},
+            }
+            if bool(payload.get("include_view", True)):
+                draft_view = build_editor_view_from_result(result)
+                response["draft_view"] = draft_view
+                response["view"] = draft_view
+            if bool(payload.get("include_diff", True)):
+                response["diff"] = build_editor_diff(parent_plan, result.plan, result.patch)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Template or version not found.")
+            return
+        except EditorTemplateUnavailableError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except EditorPatchStaleError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except (EditorTemplateError, EditorPatchError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         self._send_json(response)
@@ -5793,6 +6033,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.project_store = ProjectStore()
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
+        self.editor_template_store = EditorTemplateStore()
         self.batch_runner = BatchRunner(self.batch_store, self.job_store, self.project_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
@@ -6188,11 +6429,13 @@ def _merge_editor_patch_metadata(left: dict[str, Any] | None, right: dict[str, A
         if not isinstance(source, dict):
             continue
         for key, value in source.items():
-            if key == "clip_inserts":
+            if key in {"clip_inserts", "template_inserts"}:
                 continue
             merged[key] = value
     inserts: list[dict[str, Any]] = []
+    template_inserts: list[dict[str, Any]] = []
     seen: set[str] = set()
+    seen_templates: set[str] = set()
     for source in (left, right):
         raw_inserts = source.get("clip_inserts") if isinstance(source, dict) else None
         if not isinstance(raw_inserts, list):
@@ -6208,7 +6451,35 @@ def _merge_editor_patch_metadata(left: dict[str, Any] | None, right: dict[str, A
             inserts.append(sanitize_metadata(dict(item)))
     if inserts:
         merged["clip_inserts"] = inserts[:20]
+    for source in (left, right):
+        raw_inserts = source.get("template_inserts") if isinstance(source, dict) else None
+        if not isinstance(raw_inserts, list):
+            continue
+        for item in raw_inserts:
+            if not isinstance(item, dict):
+                continue
+            group_id = str(item.get("template_group_id") or "")
+            key = group_id or json.dumps(item, ensure_ascii=False, sort_keys=True)
+            if key in seen_templates:
+                continue
+            seen_templates.add(key)
+            template_inserts.append(sanitize_metadata(dict(item)))
+    if template_inserts:
+        merged["template_inserts"] = template_inserts[:20]
     return sanitize_metadata(merged)
+
+
+def _match_editor_template_route(path: str) -> tuple[str, str, str] | None:
+    prefix = "/api/editor-templates/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    parts = rest.split("/")
+    if len(parts) < 2 or parts[0] not in {"sections", "tracks"}:
+        return None
+    template_id = unquote(parts[1])
+    tail = "" if len(parts) == 2 else "/" + "/".join(parts[2:])
+    return parts[0], template_id, tail
 
 
 def _match_edit_preset_route(path: str) -> tuple[str, str] | None:
@@ -6314,6 +6585,34 @@ def _match_project_editor_clips_tail(tail: str) -> str | None:
 def _match_project_editor_clip_draft_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-clip-draft":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_section_template_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "section-templates":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_track_template_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "track-templates":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_template_mapping_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-template-mapping":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_multitrack_clip_draft_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-multitrack-clip-draft":
         return unquote(parts[1])
     return None
 

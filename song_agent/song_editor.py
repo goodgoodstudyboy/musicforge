@@ -267,6 +267,7 @@ class EditorPreviewStore:
             "operation_counts": _operation_counts(patch.operations),
             "operations_text": describe_editor_operations(patch.operations),
             "clip_inserts": _clip_inserts_from_metadata(patch.metadata),
+            "template_inserts": _template_inserts_from_metadata(patch.metadata),
             "warnings": list(preview.warnings),
             "applied_version_id": preview.applied_version_id,
             "updated_at": preview.updated_at,
@@ -794,6 +795,17 @@ def _clip_inserts_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]
     return cleaned
 
 
+def _template_inserts_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    inserts = metadata.get("template_inserts") if isinstance(metadata, dict) else None
+    if not isinstance(inserts, list):
+        return []
+    cleaned = []
+    for item in inserts[:20]:
+        if isinstance(item, dict):
+            cleaned.append(sanitize_metadata(dict(item)))
+    return cleaned
+
+
 def _structure_edit_summary(operations: list[dict[str, Any]]) -> dict[str, Any]:
     section_ops = {"add_section", "duplicate_section", "delete_section", "resize_section", "move_section"}
     track_ops = {"add_track", "duplicate_track", "delete_track", "rename_track"}
@@ -824,7 +836,8 @@ def editor_edit_metadata(
     summary = summarize_editor_patch(result)
     structure = _structure_edit_summary(patch.operations)
     clip_inserts = _clip_inserts_from_metadata(patch.metadata)
-    edit_type = "visual_editor_clip_insert" if clip_inserts else "manual_editor_edit"
+    template_inserts = _template_inserts_from_metadata(patch.metadata)
+    edit_type = "visual_editor_template_insert" if template_inserts else "visual_editor_clip_insert" if clip_inserts else "manual_editor_edit"
     return sanitize_metadata(
         {
             "schema_version": 2,
@@ -841,11 +854,13 @@ def editor_edit_metadata(
             "changed_sections": summary["changed_sections"],
             "changed_tracks": summary["changed_tracks"],
             "clip_inserts": clip_inserts,
+            "template_inserts": template_inserts,
             "summary": {
                 **summary["operation_counts"],
                 "changed_sections": summary["changed_sections"],
                 "changed_tracks": summary["changed_tracks"],
                 "clip_insert_count": len(clip_inserts),
+                "template_insert_count": len(template_inserts),
             },
             "structure": structure,
             "warnings": summary["warnings"],

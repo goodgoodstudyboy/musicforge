@@ -367,6 +367,11 @@ def test_webui_calls_project_apis():
     assert "/editor-state" in html
     assert "/editor-clips" in html
     assert "/editor-clip-draft" in html
+    assert "/api/editor-templates" in html
+    assert "/section-templates" in html
+    assert "/track-templates" in html
+    assert "/editor-template-mapping" in html
+    assert "/editor-multitrack-clip-draft" in html
     assert "/editor-preview" in html
     assert "/editor-previews/" in html
     assert "Open Editor" in html
@@ -438,6 +443,13 @@ def test_webui_contains_interactive_editor_controls():
     assert "Clip Browser" in html
     assert 'id="project-editor-clip-browser"' in html
     assert "Draft Insert Clip" in html
+    assert "Editor Templates" in html
+    assert "Template Browser" in html
+    assert 'id="project-editor-template-browser"' in html
+    assert "Draft Insert Template" in html
+    assert "Save Section Template" in html
+    assert "Save Track Template" in html
+    assert "projectEditorTemplateInsertMap" in html
 
 
 def test_webui_compare_layout_is_responsive():

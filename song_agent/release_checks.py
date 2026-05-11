@@ -26,6 +26,7 @@ from song_agent.candidate_groups import CandidateGroupStore, candidate_audio_pat
 from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
+from song_agent.editor_templates import EditorTemplateStore
 from song_agent.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
 from song_agent.context_packs import ContextPackStore, context_pack_snapshot, write_context_pack_snapshot
@@ -178,6 +179,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v2.1 structure editor smoke", *_v21_structure_editor_smoke(root))
     report.add("v2.2 interactive editor smoke", *_v22_interactive_editor_smoke(root))
     report.add("v2.3 editor clip insert smoke", *_v23_editor_clip_insert_smoke(root))
+    report.add("v2.4 editor template smoke", *_v24_editor_template_smoke(root))
     return report
 
 
@@ -1783,6 +1785,137 @@ def _v23_editor_clip_insert_smoke(root: Path) -> tuple[bool, str]:
                 and "sk-release-secret" not in serialized
             )
             return ok, f"asset={asset.asset_id}, version={child_version}, clip_ops={len(patch['operations'])}, derived_notes={len(derived_notes)}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _v24_editor_template_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v2.4 Template Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v2.4 Template Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "template insert",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
+                },
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            section_status, section_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/section-templates",
+                {"section_id": "section-001", "name": "Release Chorus Lift", "tags": ["release", "template"]},
+            )
+            template = section_data["template"]
+            list_status, templates = _release_http_json(server, "GET", "/api/editor-templates")
+            mapping_status, mapping = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-template-mapping",
+                {"source_ref": {"source_type": "section_template", "template_id": template["template_id"]}},
+            )
+            lane_mappings = [
+                {"lane_id": item["lane_id"], "target_track_id": item["suggested_track_id"], "mode": "overlay"}
+                for item in mapping["suggestions"]
+                if item.get("suggested_track_id")
+            ][:2]
+            draft_status, draft = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-multitrack-clip-draft",
+                {
+                    "source_ref": {"source_type": "section_template", "template_id": template["template_id"]},
+                    "target": {"section_id": "section-002", "start_beat": 16},
+                    "lane_mappings": lane_mappings,
+                    "options": {"mode": "overlay", "transpose": 1, "velocity_scale": 1, "quantize_grid": "1/16"},
+                    "include_view": True,
+                    "include_diff": True,
+                },
+            )
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {"patch": draft["combined_patch"], "render_midi": True},
+            )
+            preview = preview_data["preview"]
+            apply_status, applied = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/apply",
+                {"version_name": "Template Child", "version_note": "template smoke"},
+            )
+            child_version = applied["version"]["version_id"]
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            final_status, final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
+            final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"force": True})
+            metadata_path = Path(applied["job"]["output_dir"]) / "data" / "edit-metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            derived_notes = [
+                note
+                for lane in draft["draft_view"]["lanes"]
+                for note in lane["notes"]
+                if str(note.get("note_id", "")).startswith("derived-note-")
+            ]
+            add_tracks = {operation["track_id"] for operation in draft["patch"]["operations"] if operation.get("op") == "add_note"}
+            serialized = json.dumps({"metadata": metadata, "export": project_export, "compare": compare, "final_export": final_export}, ensure_ascii=False)
+            ok = (
+                created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and section_status == 201
+                and template["template_id"] == "section-template-001"
+                and list_status == 200
+                and templates["section_templates"]
+                and mapping_status == 200
+                and len(lane_mappings) >= 2
+                and draft_status == 200
+                and draft["template_summary"]["source_type"] == "section_template"
+                and len(add_tracks) >= 2
+                and len(derived_notes) >= 2
+                and draft["combined_patch"]["metadata"]["template_inserts"][0]["source_id"] == template["template_id"]
+                and preview_status == 201
+                and apply_status == 201
+                and metadata["edit_type"] == "visual_editor_template_insert"
+                and metadata["template_inserts"][0]["source_id"] == template["template_id"]
+                and compare_status == 200
+                and compare["right"]["edit"]["template_inserts"][0]["source_id"] == template["template_id"]
+                and export_status == 200
+                and project_export["versions"][1]["edit"]["template_inserts"][0]["source_id"] == template["template_id"]
+                and final_status == 200
+                and final_data["project"]["final_version_id"] == child_version
+                and final_export_status == 200
+                and final_export["final_export"]["edit"]["template_inserts"][0]["source_id"] == template["template_id"]
+                and "sk-release-secret" not in serialized
+                and str(base) not in serialized
+            )
+            return ok, f"template={template['template_id']}, version={child_version}, lanes={len(lane_mappings)}, tracks={len(add_tracks)}, derived_notes={len(derived_notes)}"
         except Exception as exc:
             return False, str(exc)
         finally:

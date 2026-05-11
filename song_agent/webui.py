@@ -656,6 +656,18 @@ def panel_html() -> str:
       </section>
       <section>
         <div class="panel-title">
+          <span>Editor Templates</span>
+          <span id="editor-template-status" class="status">0 templates</span>
+        </div>
+        <div class="panel-body">
+          <div class="actions">
+            <button class="secondary" id="editor-template-refresh" type="button">Refresh Templates</button>
+          </div>
+          <div id="editor-template-list" class="table-wrap"><div class="empty">No editor templates saved yet.</div></div>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
           <span>Renderer Settings</span>
           <span id="renderer-status" class="status">missing</span>
         </div>
@@ -1104,7 +1116,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let projectEditorPreviewHistory = [];
     let projectEditorDraft = null;
     let projectEditorClips = null;
+    let editorTemplates = null;
+    let projectEditorTemplateMapping = null;
+    let projectEditorSelectedTemplateIndex = 0;
     let projectEditorClipInsertMap = {};
+    let projectEditorTemplateInsertMap = {};
     let projectEditorSelectedClipIndex = 0;
     let projectEditorSelectedSectionId = null;
     let projectEditorSelectedTrackId = null;
@@ -1164,6 +1180,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       fillForm(template.defaults);
       await loadProvider();
       await loadPromptTemplates();
+      await loadEditorTemplates();
       await loadRenderer();
       await loadEditPresets();
       await loadAssets();
@@ -1178,6 +1195,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadAssets();
         loadReferences();
         loadContextPacks();
+        loadEditorTemplates();
         loadBatches();
       }, 2000);
       $("poll").textContent = "polling 2s";
@@ -1357,6 +1375,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     $("context-pack-select").addEventListener("change", () => {
       $("song-context-pack").value = $("context-pack-select").value;
     });
+    $("editor-template-refresh").addEventListener("click", loadEditorTemplates);
     $("reference-import-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       try {
@@ -1557,6 +1576,28 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (!template) return;
       $("prompt-template-system").value = template.system_prompt || "";
       $("prompt-template-user").value = template.user_prompt || "";
+    }
+
+    async function loadEditorTemplates() {
+      editorTemplates = await api("/api/editor-templates");
+      const sections = (editorTemplates.section_templates || []).filter((template) => !template.hidden);
+      const tracks = (editorTemplates.track_templates || []).filter((template) => !template.hidden);
+      const total = sections.length + tracks.length;
+      $("editor-template-status").textContent = `${total} templates`;
+      const target = $("editor-template-list");
+      if (!total) {
+        target.innerHTML = `<div class="empty">No editor templates saved yet.</div>`;
+        return;
+      }
+      target.innerHTML = `
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Lanes</th><th>Notes</th><th>Updated</th></tr></thead>
+          <tbody>
+            ${sections.map((template) => `<tr><td>${escapeHtml(template.name)}</td><td>section</td><td>${escapeHtml(((template.clip || {}).lane_count) || 0)}</td><td>${escapeHtml(((template.clip || {}).note_count) || 0)}</td><td>${escapeHtml(template.updated_at || "-")}</td></tr>`).join("")}
+            ${tracks.map((template) => `<tr><td>${escapeHtml(template.name)}</td><td>track</td><td>1</td><td>${escapeHtml(template.default_note_count || 0)}</td><td>${escapeHtml(template.updated_at || "-")}</td></tr>`).join("")}
+          </tbody>
+        </table>
+      `;
     }
 
     function applyRenderer(data) {
@@ -2844,7 +2885,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           projectEditorDraft = null;
           projectEditorClips = null;
           projectEditorClipInsertMap = {};
+          projectEditorTemplateInsertMap = {};
+          projectEditorTemplateMapping = null;
           projectEditorSelectedClipIndex = 0;
+          projectEditorSelectedTemplateIndex = 0;
           projectEditorPreview = null;
           await renderProjectEditor(project, versions, target);
         });
@@ -2869,7 +2913,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorDraft = null;
         projectEditorClips = null;
         projectEditorClipInsertMap = {};
+        projectEditorTemplateInsertMap = {};
+        projectEditorTemplateMapping = null;
         projectEditorSelectedClipIndex = 0;
+        projectEditorSelectedTemplateIndex = 0;
         projectEditorPreview = null;
         renderProjectEditorDraft();
         renderProjectEditorState();
@@ -2927,7 +2974,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorDraft = null;
         projectEditorClips = null;
         projectEditorClipInsertMap = {};
+        projectEditorTemplateInsertMap = {};
+        projectEditorTemplateMapping = null;
         projectEditorSelectedClipIndex = 0;
+        projectEditorSelectedTemplateIndex = 0;
         projectEditorPreview = null;
         activeProjectTab = "versions";
         await loadJobs();
@@ -2984,7 +3034,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       projectEditorDraft = null;
       projectEditorPreview = null;
       projectEditorClipInsertMap = {};
+      projectEditorTemplateInsertMap = {};
+      projectEditorTemplateMapping = null;
       projectEditorSelectedClipIndex = 0;
+      projectEditorSelectedTemplateIndex = 0;
       projectEditorSelectedSectionId = (projectEditorState.sections[0] || {}).section_id || null;
       projectEditorSelectedTrackId = (projectEditorState.tracks[0] || {}).track_id || null;
       projectEditorSelectedNoteId = firstProjectEditorNoteId(projectEditorSelectedTrackId);
@@ -3015,6 +3068,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const selectedTrack = viewTracks.find((track) => track.track_id === projectEditorSelectedTrackId) || viewTracks[0] || { notes: [] };
       projectEditorSelectedTrackId = selectedTrack.track_id || projectEditorSelectedTrackId;
       const clipOptions = projectEditorClipOptions();
+      const templateOptions = projectEditorTemplateOptions();
       target.innerHTML = `
         <div class="summary-grid">
           ${metric("Title", projectEditorState.song.title)}
@@ -3102,6 +3156,40 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </div>
           <div class="empty small">${escapeHtml(projectEditorClipSummaryText())}</div>
         </section>
+        <section id="project-editor-template-browser">
+          <h3>Template Browser</h3>
+          <div class="grid2">
+            <label>Section Template
+              <select id="project-editor-template-select">${templateOptions}</select>
+            </label>
+            <label>Start Beat <input id="project-editor-template-start" type="number" step="0.125" value="${escapeHtml((viewSections.find((section) => section.section_id === projectEditorSelectedSectionId) || {}).start_beat ?? 0)}"></label>
+          </div>
+          <div class="grid2">
+            <label>Insert Mode
+              <select id="project-editor-template-mode">
+                <option value="overlay">overlay</option>
+                <option value="replace_range">replace_range</option>
+              </select>
+            </label>
+            <label>Transpose <input id="project-editor-template-transpose" type="number" min="-24" max="24" value="0"></label>
+          </div>
+          <div class="grid2">
+            <label>Velocity Scale <input id="project-editor-template-velocity" type="number" min="0.25" max="2" step="0.05" value="1"></label>
+            <label>Quantize
+              <select id="project-editor-template-quantize">
+                <option value="">none</option>
+                <option value="1/16">1/16</option>
+                <option value="1/8">1/8</option>
+                <option value="1/4">1/4</option>
+              </select>
+            </label>
+          </div>
+          <div id="project-editor-template-mapping" class="table-wrap"><div class="empty small">${escapeHtml(projectEditorTemplateSummaryText())}</div></div>
+          <div class="actions">
+            <button class="secondary" id="project-editor-template-map" type="button" ${templateOptions ? "" : "disabled"}>Suggest Mapping</button>
+            <button class="secondary" id="project-editor-template-draft" type="button" ${templateOptions ? "" : "disabled"}>Draft Insert Template</button>
+          </div>
+        </section>
         <div class="grid2">
           <section>
             <h3>Sections</h3>
@@ -3131,6 +3219,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <div class="actions">
               <button class="secondary" id="project-editor-add-chords" type="button">Set Chords</button>
               <button class="secondary" id="project-editor-add-lyrics" type="button">Set Lyrics</button>
+              <button class="secondary" id="project-editor-save-section-template" type="button">Save Section Template</button>
             </div>
           </section>
           <section>
@@ -3139,6 +3228,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <label>Instrument <input id="project-editor-instrument" placeholder="warm lead synth"></label>
             <div class="actions">
               <button class="secondary" id="project-editor-add-instrument" type="button">Set Instrument</button>
+              <button class="secondary" id="project-editor-save-track-template" type="button">Save Track Template</button>
             </div>
           </section>
         </div>
@@ -3227,6 +3317,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           renderProjectEditorState();
         });
       }
+      const templateSelect = $("project-editor-template-select");
+      if (templateSelect) {
+        templateSelect.value = String(projectEditorSelectedTemplateIndex || 0);
+        templateSelect.addEventListener("change", async () => {
+          projectEditorSelectedTemplateIndex = Number(templateSelect.value || 0);
+          projectEditorTemplateMapping = null;
+          renderProjectEditorTemplateMapping();
+        });
+      }
       target.querySelectorAll("[data-editor-section-id]").forEach((button) => {
         button.addEventListener("click", () => {
           projectEditorSelectedSectionId = button.dataset.editorSectionId;
@@ -3251,6 +3350,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("project-editor-add-chords", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "set_section_chords", section_id: $("project-editor-section").value, chords: $("project-editor-chords").value.split(",").map((item) => item.trim()).filter(Boolean) }); });
       bindAction("project-editor-add-lyrics", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "set_section_lyrics", section_id: $("project-editor-section").value, lyrics: $("project-editor-lyrics").value }); });
       bindAction("project-editor-add-instrument", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "set_track_instrument", track_id: $("project-editor-track").value, instrument: $("project-editor-instrument").value.trim() }); });
+      bindAction("project-editor-save-section-template", () => saveProjectEditorSectionTemplate());
+      bindAction("project-editor-save-track-template", () => saveProjectEditorTrackTemplate());
       bindAction("project-editor-add-section-op", () => addProjectEditorOperation({ op: "add_section", after_section_id: $("project-editor-after-section").value, name: $("project-editor-section-name").value.trim(), bars: Number($("project-editor-section-bars").value || 4), chords: chordList("project-editor-section-structure-chords") }));
       bindAction("project-editor-duplicate-section-op", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "duplicate_section", section_id: $("project-editor-section").value, after_section_id: $("project-editor-after-section").value, name: $("project-editor-section-name").value.trim(), copy_notes: true }); });
       bindAction("project-editor-delete-section-op", () => { if (!isDerivedSection($("project-editor-section").value)) addProjectEditorOperation({ op: "delete_section", section_id: $("project-editor-section").value, note_policy: $("project-editor-section-note-policy").value === "shift_left" ? "shift_left" : "delete" }); });
@@ -3274,6 +3375,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("project-editor-transpose-range", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "transpose_notes", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), semitones: Number($("project-editor-transpose").value || 0) }); });
       bindAction("project-editor-velocity-range", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "scale_velocity", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), factor: Number($("project-editor-velocity-factor").value || 1) }); });
       bindAction("project-editor-clip-draft", () => draftInsertProjectEditorClip());
+      bindAction("project-editor-template-map", () => loadProjectEditorTemplateMapping());
+      bindAction("project-editor-template-draft", () => draftInsertProjectEditorTemplate());
+      renderProjectEditorTemplateMapping();
       renderProjectEditorDraft();
     }
 
@@ -3281,9 +3385,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       return (((projectEditorClips || {}).clips) || []).filter((clip) => clip && clip.clip_ref);
     }
 
+    function projectEditorSectionTemplates() {
+      return (((editorTemplates || {}).section_templates) || []).filter((template) => template && !template.hidden && template.template_id);
+    }
+
     function projectEditorClipOptions() {
       const clips = projectEditorFlattenedClips();
       return clips.map((clip, index) => `<option value="${escapeHtml(index)}">${escapeHtml(clip.title || clip.source_id)} · ${escapeHtml(clip.source_type)} · ${escapeHtml(clip.note_count || 0)} notes</option>`).join("");
+    }
+
+    function projectEditorTemplateOptions() {
+      const templates = projectEditorSectionTemplates();
+      return templates.map((template, index) => `<option value="${escapeHtml(index)}">${escapeHtml(template.name || template.template_id)} · ${escapeHtml(((template.clip || {}).lane_count) || 0)} lanes · ${escapeHtml(((template.clip || {}).note_count) || 0)} notes</option>`).join("");
     }
 
     function projectEditorClipSummaryText() {
@@ -3292,9 +3405,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       return `${clip.source_type} · ${clip.kind || "clip"} · ${clip.duration_beats || 0} beats · ${clip.note_count || 0} notes`;
     }
 
+    function projectEditorTemplateSummaryText() {
+      const template = projectEditorSectionTemplates()[projectEditorSelectedTemplateIndex || 0];
+      if (!template) return "No section templates are available yet.";
+      const clip = template.clip || {};
+      return `${template.template_id} · ${clip.lane_count || 0} lanes · ${clip.note_count || 0} notes`;
+    }
+
     function projectEditorPatchMetadata() {
       const inserts = [];
+      const templateInserts = [];
       const seen = new Set();
+      const seenTemplates = new Set();
       for (const operation of projectEditorPatch) {
         const groupId = operation && operation.clip_group_id;
         const insert = groupId ? projectEditorClipInsertMap[groupId] : null;
@@ -3302,7 +3424,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         seen.add(groupId);
         inserts.push(insert);
       }
-      return inserts.length ? { clip_inserts: inserts } : {};
+      for (const operation of projectEditorPatch) {
+        const groupId = operation && operation.template_group_id;
+        const insert = groupId ? projectEditorTemplateInsertMap[groupId] : null;
+        if (!insert || !groupId || seenTemplates.has(groupId)) continue;
+        seenTemplates.add(groupId);
+        templateInserts.push(insert);
+      }
+      const metadata = {};
+      if (inserts.length) metadata.clip_inserts = inserts;
+      if (templateInserts.length) metadata.template_inserts = templateInserts;
+      return metadata;
     }
 
     async function draftInsertProjectEditorClip() {
@@ -3355,6 +3487,175 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${metric("Validator", (data.validator || {}).status || "-")}
           </div>
           <pre>${escapeHtml(JSON.stringify({ clip_summary: data.clip_summary, warnings: data.warnings, diff: data.diff }, null, 2))}</pre>
+        `;
+      }
+    }
+
+    async function saveProjectEditorSectionTemplate() {
+      if (!projectEditorState || !projectEditorSelectedSectionId || isDerivedSection(projectEditorSelectedSectionId)) return;
+      try {
+        const section = (currentProjectEditorView().sections || []).find((item) => item.section_id === projectEditorSelectedSectionId) || {};
+        const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/versions/${encodeURIComponent(projectEditorState.version_id)}/section-templates`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section_id: projectEditorSelectedSectionId,
+            name: `${section.name || projectEditorSelectedSectionId} Template`,
+            tags: ["editor", "section"],
+          }),
+        });
+        $("project-editor-message").textContent = `saved ${data.template.template_id}`;
+        await loadEditorTemplates();
+        renderProjectEditorState();
+      } catch (err) {
+        $("project-editor-message").textContent = err.message;
+      }
+    }
+
+    async function saveProjectEditorTrackTemplate() {
+      if (!projectEditorState || !projectEditorSelectedTrackId || isDerivedTrack(projectEditorSelectedTrackId)) return;
+      try {
+        const track = (currentProjectEditorView().tracks || []).find((item) => item.track_id === projectEditorSelectedTrackId) || {};
+        const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/versions/${encodeURIComponent(projectEditorState.version_id)}/track-templates`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            track_id: projectEditorSelectedTrackId,
+            name: `${track.name || projectEditorSelectedTrackId} Template`,
+            tags: ["editor", "track"],
+          }),
+        });
+        $("project-editor-message").textContent = `saved ${data.template.template_id}`;
+        await loadEditorTemplates();
+        renderProjectEditorState();
+      } catch (err) {
+        $("project-editor-message").textContent = err.message;
+      }
+    }
+
+    async function loadProjectEditorTemplateMapping() {
+      if (!projectEditorState) return;
+      const template = projectEditorSectionTemplates()[projectEditorSelectedTemplateIndex || 0];
+      if (!template) return;
+      try {
+        projectEditorTemplateMapping = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/versions/${encodeURIComponent(projectEditorState.version_id)}/editor-template-mapping`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source_ref: { source_type: "section_template", template_id: template.template_id } }),
+        });
+        renderProjectEditorTemplateMapping();
+      } catch (err) {
+        $("project-editor-message").textContent = err.message;
+      }
+    }
+
+    function renderProjectEditorTemplateMapping() {
+      const target = $("project-editor-template-mapping");
+      if (!target) return;
+      const template = projectEditorSectionTemplates()[projectEditorSelectedTemplateIndex || 0];
+      if (!template) {
+        target.innerHTML = `<div class="empty small">No section templates are available yet.</div>`;
+        return;
+      }
+      const suggestions = (projectEditorTemplateMapping || {}).suggestions || [];
+      if (!suggestions.length) {
+        target.innerHTML = `<div class="empty small">${escapeHtml(projectEditorTemplateSummaryText())}</div>`;
+        return;
+      }
+      const trackOptions = (currentProjectEditorView().tracks || []).filter((track) => !isDerivedTrack(track.track_id)).map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.name)} · ${escapeHtml(track.track_id)}</option>`).join("");
+      target.innerHTML = `
+        <table>
+          <thead><tr><th>Lane</th><th>Role</th><th>Notes</th><th>Target Track</th><th>Mode</th></tr></thead>
+          <tbody>
+            ${suggestions.map((item) => `
+              <tr data-template-lane-id="${escapeHtml(item.lane_id)}">
+                <td>${escapeHtml(item.lane_name || item.lane_id)}</td>
+                <td>${escapeHtml(item.lane_role || "-")}</td>
+                <td>${escapeHtml(item.note_count || 0)}</td>
+                <td><select data-template-target-track>${trackOptions}</select></td>
+                <td>
+                  <select data-template-mode>
+                    <option value="overlay">overlay</option>
+                    <option value="replace_range">replace_range</option>
+                    <option value="skip">skip</option>
+                  </select>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      target.querySelectorAll("[data-template-lane-id]").forEach((row) => {
+        const item = suggestions.find((suggestion) => suggestion.lane_id === row.dataset.templateLaneId) || {};
+        const select = row.querySelector("[data-template-target-track]");
+        const mode = row.querySelector("[data-template-mode]");
+        if (select && item.suggested_track_id) select.value = item.suggested_track_id;
+        if (mode && !item.suggested_track_id) mode.value = "skip";
+      });
+    }
+
+    function projectEditorTemplateLaneMappings() {
+      const table = $("project-editor-template-mapping");
+      if (!table) return [];
+      return Array.from(table.querySelectorAll("[data-template-lane-id]")).map((row) => ({
+        lane_id: row.dataset.templateLaneId,
+        target_track_id: (row.querySelector("[data-template-target-track]") || {}).value || "",
+        mode: (row.querySelector("[data-template-mode]") || {}).value || "overlay",
+      }));
+    }
+
+    async function draftInsertProjectEditorTemplate() {
+      if (!projectEditorState) return;
+      const template = projectEditorSectionTemplates()[projectEditorSelectedTemplateIndex || 0];
+      if (!template) return;
+      if (!projectEditorTemplateMapping) {
+        await loadProjectEditorTemplateMapping();
+      }
+      const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/versions/${encodeURIComponent(projectEditorState.version_id)}/editor-multitrack-clip-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          include_view: true,
+          include_diff: true,
+          source_ref: { source_type: "section_template", template_id: template.template_id },
+          current_patch: projectEditorPatch.length ? {
+            schema_version: 1,
+            base_plan_hash: projectEditorState.base_plan_hash,
+            label: $("project-editor-label").value.trim(),
+            operations: projectEditorPatch,
+            metadata: projectEditorPatchMetadata(),
+          } : null,
+          target: {
+            section_id: projectEditorSelectedSectionId,
+            start_beat: Number($("project-editor-template-start").value || 0),
+          },
+          lane_mappings: projectEditorTemplateLaneMappings(),
+          options: {
+            mode: $("project-editor-template-mode").value,
+            transpose: Number($("project-editor-template-transpose").value || 0),
+            velocity_scale: Number($("project-editor-template-velocity").value || 1),
+            quantize_grid: $("project-editor-template-quantize").value || null,
+          },
+        }),
+      });
+      const templateInsert = ((((data.patch || {}).metadata || {}).template_inserts) || [])[0] || null;
+      if (templateInsert && templateInsert.template_group_id) projectEditorTemplateInsertMap[templateInsert.template_group_id] = templateInsert;
+      projectEditorPatch.push(...((data.patch || {}).operations || []));
+      projectEditorRedo = [];
+      projectEditorPreview = null;
+      projectEditorDraft = data;
+      projectEditorView = data.draft_view || data.view || projectEditorView;
+      renderProjectEditorState();
+      const result = $("project-editor-preview-result");
+      if (result) {
+        result.innerHTML = `
+          <div class="summary-grid">
+            ${metric("Template", (data.template_summary || {}).title || "-")}
+            ${metric("Ops Added", ((data.patch || {}).operations || []).length)}
+            ${metric("Lanes", (data.template_summary || {}).lane_count ?? "-")}
+            ${metric("Validator", (data.validator || {}).status || "-")}
+          </div>
+          <pre>${escapeHtml(JSON.stringify({ template_summary: data.template_summary, warnings: data.warnings, diff: data.diff }, null, 2))}</pre>
         `;
       }
     }
@@ -3658,6 +3959,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
 
     function describeProjectEditorOperation(operation) {
       const op = operation.op || "operation";
+      if (operation.template_group_id) return `template ${operation.template_group_id}: ${op} ${operation.track_id || operation.section_id || ""}`.trim();
+      if (operation.clip_group_id) return `clip ${operation.clip_group_id}: ${op} ${operation.track_id || operation.section_id || ""}`.trim();
       if (op === "add_section") return `add_section: ${operation.name || "section"} after ${operation.after_section_id || "end"}`;
       if (op === "duplicate_section") return `duplicate_section: ${operation.section_id || "section"} -> ${operation.name || "copy"}`;
       if (op === "delete_section") return `delete_section: ${operation.section_id || "section"}`;
