@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.6.0 - 2026-05-12
+
+### Added
+- Audition Review Board for editor auditions with rating, status, favorite, notes, tags, marker metadata, filtering, and summary counts.
+- Review marker APIs with beat bounds, supported kinds/severity, event logging, and sensitive text redaction.
+- API to save an audition slice as a Creative Asset by rebuilding asset content from the audition SongPlan rather than copying cached audio or arbitrary paths.
+- Studio review controls for scoring auditions, adding markers, filtering favorites, and saving audition motifs into the asset library.
+- Audition review summary now flows into editor apply metadata, Project Compare, Project Export, Final Export summaries, and release-check.
+- release-check now includes a v2.6 audition review smoke covering review redaction, markers, asset creation, apply metadata, compare, and project export.
+
+### Scope
+- v2.6.0 keeps review as metadata only; it does not modify preview patches, parent versions, or generated music content, and it does not include realtime waveform editing or automatic AI review.
+
+### Verified
+- `python -m pytest tests\test_editor_review.py tests\test_server_editor_review.py tests\test_server_editor_audition.py tests\test_webui.py -q`
+
 ## v2.5.1 - 2026-05-12
 
 ### Fixed

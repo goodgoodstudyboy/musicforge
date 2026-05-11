@@ -3780,7 +3780,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </section>
         </div>
         <section id="project-editor-audition-panel">
-          <h3>Audition</h3>
+          <h3>Audition Review Board</h3>
           <div class="grid2">
             <label>Source
               <select id="project-editor-audition-source">
@@ -3816,6 +3816,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <div class="actions">
             <button class="secondary" id="project-editor-create-audition" type="button">Create Audition</button>
             <button class="secondary" id="project-editor-refresh-auditions" type="button">Refresh Auditions</button>
+            <button class="secondary" id="project-editor-filter-favorites" type="button">Favorites</button>
           </div>
           <div id="project-editor-audition-list">${projectEditorAuditionListHtml()}</div>
         </section>
@@ -3837,7 +3838,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       return `
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Audition</th><th>Source</th><th>Range</th><th>Track mode</th><th>Notes</th><th>WAV</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Audition</th><th>Source</th><th>Range</th><th>Track mode</th><th>Notes</th><th>Review</th><th>WAV</th><th>Actions</th></tr></thead>
             <tbody>${projectEditorAuditions.map((audition) => `
               <tr>
                 <td>${escapeHtml(audition.audition_id)}</td>
@@ -3845,11 +3846,33 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
                 <td>${escapeHtml((audition.range || {}).mode || "-")}</td>
                 <td>${escapeHtml(audition.track_mode)}</td>
                 <td>${escapeHtml(audition.note_count || 0)}</td>
+                <td>
+                  <div class="compact-form">
+                    <input data-editor-audition-rating="${escapeHtml(audition.audition_id)}" type="number" min="0" max="5" value="${escapeHtml(((audition.review || {}).rating) || 0)}">
+                    <select data-editor-audition-status="${escapeHtml(audition.audition_id)}">
+                      ${["unreviewed", "keep", "maybe", "needs_fix", "reject"].map((status) => `<option value="${status}" ${((audition.review || {}).status || "unreviewed") === status ? "selected" : ""}>${status}</option>`).join("")}
+                    </select>
+                    <label class="inline-check"><input data-editor-audition-favorite="${escapeHtml(audition.audition_id)}" type="checkbox" ${((audition.review || {}).favorite) ? "checked" : ""}> Fav</label>
+                    <input data-editor-audition-notes="${escapeHtml(audition.audition_id)}" value="${escapeHtml((audition.review || {}).notes || "")}" placeholder="review notes">
+                    <input data-editor-audition-tags="${escapeHtml(audition.audition_id)}" value="${escapeHtml(((audition.review || {}).tags || []).join(", "))}" placeholder="tags">
+                    <button class="secondary" data-editor-audition-review="${escapeHtml(audition.audition_id)}" type="button">Save Review</button>
+                    <div class="actions">
+                      <input data-editor-audition-marker-beat="${escapeHtml(audition.audition_id)}" type="number" step="0.125" value="0" title="Marker beat">
+                      <select data-editor-audition-marker-kind="${escapeHtml(audition.audition_id)}">
+                        ${["hook", "drop", "issue", "keep", "fix", "note"].map((kind) => `<option value="${kind}">${kind}</option>`).join("")}
+                      </select>
+                      <input data-editor-audition-marker-label="${escapeHtml(audition.audition_id)}" placeholder="marker label">
+                      <button class="secondary" data-editor-audition-marker-add="${escapeHtml(audition.audition_id)}" type="button">Add Marker</button>
+                    </div>
+                    <div class="empty small">${escapeHtml(((audition.review || {}).markers || []).map((marker) => `${marker.kind}@${marker.beat}`).join(" · ") || "No markers")}</div>
+                  </div>
+                </td>
                 <td>${escapeHtml(((audition.audio || {}).status) || "not_started")}</td>
                 <td>
                   ${(audition.midi || {}).url ? `<a class="button-link secondary" href="${escapeHtml(audition.midi.url)}">MIDI</a>` : ""}
                   <button class="secondary" data-editor-audition-render="${escapeHtml(audition.audition_id)}" type="button">Render Audition WAV</button>
                   ${(audition.audio || {}).status === "completed" && (audition.audio || {}).url ? `<audio class="inline-audio" controls src="${escapeHtml(audition.audio.url)}"></audio>` : ""}
+                  <button class="secondary" data-editor-audition-create-asset="${escapeHtml(audition.audition_id)}" type="button">Save Audition Asset</button>
                   <button class="secondary" data-editor-audition-delete="${escapeHtml(audition.audition_id)}" type="button">Delete</button>
                 </td>
               </tr>
@@ -3883,6 +3906,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadProjectEditorAuditions();
         renderProjectEditorPreview();
       });
+      bindAction("project-editor-filter-favorites", async () => {
+        await loadProjectEditorAuditions({ favorite: true, sort: "rating" });
+        renderProjectEditorPreview();
+      });
       bindAction("project-editor-create-audition", async () => {
         const rangeMode = $("project-editor-audition-range").value;
         const range = { mode: rangeMode };
@@ -3913,6 +3940,53 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           renderProjectEditorPreview();
         });
       });
+      document.querySelectorAll("[data-editor-audition-review]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionReview;
+          const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/review`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rating: Number((document.querySelector(`[data-editor-audition-rating="${CSS.escape(id)}"]`) || {}).value || 0),
+              status: (document.querySelector(`[data-editor-audition-status="${CSS.escape(id)}"]`) || {}).value || "unreviewed",
+              favorite: Boolean((document.querySelector(`[data-editor-audition-favorite="${CSS.escape(id)}"]`) || {}).checked),
+              notes: (document.querySelector(`[data-editor-audition-notes="${CSS.escape(id)}"]`) || {}).value || "",
+              tags: ((document.querySelector(`[data-editor-audition-tags="${CSS.escape(id)}"]`) || {}).value || "").split(",").map((item) => item.trim()).filter(Boolean),
+            }),
+          });
+          projectEditorAuditions = projectEditorAuditions.map((item) => item.audition_id === id ? data.audition : item);
+          renderProjectEditorPreview();
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-marker-add]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionMarkerAdd;
+          const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/markers`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              beat: Number((document.querySelector(`[data-editor-audition-marker-beat="${CSS.escape(id)}"]`) || {}).value || 0),
+              kind: (document.querySelector(`[data-editor-audition-marker-kind="${CSS.escape(id)}"]`) || {}).value || "note",
+              label: (document.querySelector(`[data-editor-audition-marker-label="${CSS.escape(id)}"]`) || {}).value || "",
+            }),
+          });
+          projectEditorAuditions = projectEditorAuditions.map((item) => item.audition_id === id ? data.audition : item);
+          renderProjectEditorPreview();
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-create-asset]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionCreateAsset;
+          await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/create-asset`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ asset_type: "motif", name: `${id} motif`, tags: ["audition"] }),
+          });
+          await loadAssets();
+          await loadProjectEditorAuditions();
+          renderProjectEditorPreview();
+        });
+      });
       document.querySelectorAll("[data-editor-audition-delete]").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(button.dataset.editorAuditionDelete)}/delete`, { method: "POST" });
@@ -3922,9 +3996,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
     }
 
-    async function loadProjectEditorAuditions() {
+    async function loadProjectEditorAuditions(filters = {}) {
       if (!projectEditorPreview || !projectEditorState) return;
-      const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions`);
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => params.set(key, value));
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/audition-reviews${suffix}`);
       projectEditorAuditions = data.auditions || [];
     }
 

@@ -456,10 +456,15 @@ def test_webui_contains_interactive_editor_controls():
     assert "Render Parent Audio" in html
     assert "A/B Parent" in html
     assert "A/B Preview" in html
-    assert "Audition" in html
+    assert "Audition Review Board" in html
     assert "Track mode" in html
     assert "Create Audition" in html
     assert "Render Audition WAV" in html
+    assert "Save Review" in html
+    assert "Add Marker" in html
+    assert "Save Audition Asset" in html
+    assert "/audition-reviews" in html
+    assert "/create-asset" in html
 
 
 def test_webui_compare_layout_is_responsive():

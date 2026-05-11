@@ -17,6 +17,18 @@ from song_agent.renderers.audio import RendererConfig, RendererError, render_aud
 from song_agent.renderers.midi import PROGRAMS_BY_ROLE, _header_chunk, _meta_track, _music_track, _track_role
 from song_agent.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
 from song_agent.song_editor import EditorPreview, build_editor_state, song_plan_hash, validate_editor_preview_id
+from song_agent.editor_review import (
+    add_marker,
+    apply_review_patch,
+    audition_review_row,
+    default_review,
+    delete_marker,
+    normalize_review,
+    record_asset_created,
+    review_board,
+    review_summary as audition_review_summary,
+    update_marker,
+)
 
 
 EDITOR_AUDITION_SCHEMA_VERSION = 1
@@ -60,6 +72,7 @@ class EditorAuditionManifest:
     duration_beats: float = 0.0
     midi: dict[str, Any] = field(default_factory=dict)
     audio: dict[str, Any] = field(default_factory=dict)
+    review: dict[str, Any] = field(default_factory=default_review)
     warnings: list[str] = field(default_factory=list)
 
     @classmethod
@@ -94,6 +107,7 @@ class EditorAuditionManifest:
             duration_beats=max(0.0, float(data.get("duration_beats") or 0.0)),
             midi=_artifact_status(data.get("midi"), status_key="completed"),
             audio=_artifact_status(data.get("audio"), status_key="not_started"),
+            review=normalize_review(data.get("review"), duration_beats=max(0.0, float(data.get("duration_beats") or 0.0))),
             warnings=[sanitize_sensitive_text(str(item)) for item in data.get("warnings", [])],
         )
 
@@ -167,6 +181,7 @@ class EditorAuditionStore:
                 duration_beats=float(summary["duration_beats"]),
                 midi={"status": "completed", "exists": False, "size_bytes": 0, "url": midi_url},
                 audio={"status": "not_started", "exists": False, "size_bytes": 0, "url": audio_url},
+                review=default_review(),
                 warnings=list(summary["warnings"]),
             )
             try:
@@ -266,6 +281,68 @@ class EditorAuditionStore:
                     continue
             return sorted(auditions, key=lambda item: (item.updated_at or item.created_at, item.audition_id), reverse=True)
 
+    def list_all_auditions(self) -> list[EditorAuditionManifest]:
+        with self.lock:
+            if not self.preview_root.exists():
+                return []
+            auditions: list[EditorAuditionManifest] = []
+            for manifest_path in self.preview_root.glob("preview-*/auditions/audition-*/audition.json"):
+                try:
+                    auditions.append(EditorAuditionManifest.from_dict(read_json(manifest_path)))
+                except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                    continue
+            return sorted(auditions, key=lambda item: (item.updated_at or item.created_at, item.audition_id), reverse=True)
+
+    def review_board(self, preview_id: str | None = None, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        auditions = self.list_auditions(preview_id) if preview_id else self.list_all_auditions()
+        return review_board(auditions, filters=filters)
+
+    def update_review(self, preview_id: str, audition_id: str, patch: dict[str, Any], now: str | None = None) -> EditorAuditionManifest:
+        now = now or now_iso()
+        with self.lock:
+            manifest = self.read_audition(preview_id, audition_id)
+            review = apply_review_patch(manifest.review, patch, duration_beats=manifest.duration_beats, now=now)
+            updated = self._write_manifest(EditorAuditionManifest.from_dict({**manifest.to_dict(), "review": review, "updated_at": now}))
+            _append_audition_event(self.audition_dir(preview_id, audition_id), "editor_audition_review_updated", _review_event_payload(updated), now)
+            return updated
+
+    def add_marker(self, preview_id: str, audition_id: str, payload: dict[str, Any], now: str | None = None) -> EditorAuditionManifest:
+        now = now or now_iso()
+        with self.lock:
+            manifest = self.read_audition(preview_id, audition_id)
+            review = add_marker(manifest.review, payload, duration_beats=manifest.duration_beats, now=now)
+            updated = self._write_manifest(EditorAuditionManifest.from_dict({**manifest.to_dict(), "review": review, "updated_at": now}))
+            marker = (updated.review.get("markers") or [])[-1]
+            _append_audition_event(self.audition_dir(preview_id, audition_id), "editor_audition_marker_added", {"marker_id": marker.get("marker_id"), "kind": marker.get("kind")}, now)
+            return updated
+
+    def update_marker(self, preview_id: str, audition_id: str, marker_id: str, patch: dict[str, Any], now: str | None = None) -> EditorAuditionManifest:
+        now = now or now_iso()
+        with self.lock:
+            manifest = self.read_audition(preview_id, audition_id)
+            review = update_marker(manifest.review, marker_id, patch, duration_beats=manifest.duration_beats, now=now)
+            updated = self._write_manifest(EditorAuditionManifest.from_dict({**manifest.to_dict(), "review": review, "updated_at": now}))
+            _append_audition_event(self.audition_dir(preview_id, audition_id), "editor_audition_marker_updated", {"marker_id": marker_id}, now)
+            return updated
+
+    def delete_marker(self, preview_id: str, audition_id: str, marker_id: str, now: str | None = None) -> EditorAuditionManifest:
+        now = now or now_iso()
+        with self.lock:
+            manifest = self.read_audition(preview_id, audition_id)
+            review = delete_marker(manifest.review, marker_id, duration_beats=manifest.duration_beats, now=now)
+            updated = self._write_manifest(EditorAuditionManifest.from_dict({**manifest.to_dict(), "review": review, "updated_at": now}))
+            _append_audition_event(self.audition_dir(preview_id, audition_id), "editor_audition_marker_deleted", {"marker_id": marker_id}, now)
+            return updated
+
+    def record_asset_created(self, preview_id: str, audition_id: str, asset_id: str, now: str | None = None) -> EditorAuditionManifest:
+        now = now or now_iso()
+        with self.lock:
+            manifest = self.read_audition(preview_id, audition_id)
+            review = record_asset_created(manifest.review, asset_id, duration_beats=manifest.duration_beats, now=now)
+            updated = self._write_manifest(EditorAuditionManifest.from_dict({**manifest.to_dict(), "review": review, "updated_at": now}))
+            _append_audition_event(self.audition_dir(preview_id, audition_id), "editor_audition_asset_created", {"asset_id": asset_id}, now)
+            return updated
+
     def delete_audition(self, preview_id: str, audition_id: str) -> None:
         with self.lock:
             raw_dir = self.auditions_root(preview_id) / validate_editor_audition_id(audition_id)
@@ -277,6 +354,10 @@ class EditorAuditionStore:
             if audition_dir.resolve().is_symlink():
                 raise ValueError("Refusing to delete symlink editor audition.")
             shutil.rmtree(audition_dir)
+
+    def _write_manifest(self, manifest: EditorAuditionManifest) -> EditorAuditionManifest:
+        write_json(self.audition_dir(manifest.preview_id, manifest.audition_id) / "audition.json", manifest.to_dict())
+        return manifest
 
     def auditions_root(self, preview_id: str) -> Path:
         preview_id = validate_editor_preview_id(preview_id)
@@ -397,6 +478,7 @@ def audition_summary(auditions: list[EditorAuditionManifest]) -> dict[str, Any]:
     sources = sorted({item.source for item in auditions})
     track_modes = sorted({item.track_mode for item in auditions})
     ranges = sorted({str(item.range.get("mode") or "") for item in auditions if isinstance(item.range, dict)})
+    review = audition_review_summary(auditions)
     return sanitize_metadata(
         {
             "preview_audio_rendered": any(item.source == "preview" and item.audio.get("status") == "completed" for item in auditions),
@@ -404,6 +486,13 @@ def audition_summary(auditions: list[EditorAuditionManifest]) -> dict[str, Any]:
             "sources": sources,
             "track_modes": track_modes,
             "ranges": ranges,
+            "reviewed_count": review.get("reviewed_count", 0),
+            "favorite_count": review.get("favorite_count", 0),
+            "best_rating": review.get("best_rating", 0),
+            "average_rating": review.get("average_rating", 0),
+            "status_counts": review.get("status_counts", {}),
+            "marker_count": review.get("marker_count", 0),
+            "asset_count": review.get("asset_count", 0),
         }
     )
 
@@ -595,3 +684,14 @@ def _append_audition_event(audition_dir: Path, event_type: str, payload: dict[st
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def _review_event_payload(manifest: EditorAuditionManifest) -> dict[str, Any]:
+    row = audition_review_row(manifest)
+    review = row.get("review") if isinstance(row.get("review"), dict) else {}
+    return {
+        "rating": review.get("rating", 0),
+        "status": review.get("status", "unreviewed"),
+        "favorite": bool(review.get("favorite", False)),
+        "marker_count": len(review.get("markers") or []),
+    }

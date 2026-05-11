@@ -75,6 +75,7 @@ from song_agent.editor_audition import (
     EditorAuditionUnavailableError,
     audition_summary_for_preview,
 )
+from song_agent.editor_review import EditorReviewError, audition_asset_payload
 from song_agent.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.final_export import (
     FinalExportError,
@@ -3250,10 +3251,25 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_editor_preview_root(method, project_id, editor_preview_root)
             return
 
+        if tail == "/audition-reviews":
+            self._handle_project_audition_reviews(method, project_id, None, query_string)
+            return
+
+        editor_review_root = _match_project_editor_audition_reviews_tail(tail)
+        if editor_review_root is not None:
+            self._handle_project_audition_reviews(method, project_id, editor_review_root, query_string)
+            return
+
         editor_auditions_root = _match_project_editor_auditions_root_tail(tail)
         if editor_auditions_root is not None:
             preview_id = editor_auditions_root
             self._handle_project_editor_auditions_root(method, project_id, preview_id)
+            return
+
+        editor_audition_marker_match = _match_project_editor_audition_marker_tail(tail)
+        if editor_audition_marker_match is not None:
+            preview_id, audition_id, marker_id, action = editor_audition_marker_match
+            self._handle_project_editor_audition_marker_route(method, project_id, preview_id, audition_id, marker_id, action)
             return
 
         editor_audition_match = _match_project_editor_audition_tail(tail)
@@ -4574,6 +4590,35 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self.project_store.append_event(project_id, "editor_audition_audio_rendered", {"preview_id": preview_id, "audition_id": audition_id})
                 self._send_json({"ok": True, "audition": audition.to_dict()})
                 return
+            if action == "review":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                audition = audition_store.update_review(preview_id, audition_id, self._read_json_body(), now=_utc_now())
+                self.project_store.append_event(project_id, "editor_audition_review_updated", {"preview_id": preview_id, "audition_id": audition_id})
+                self._send_json({"ok": True, "audition": audition.to_dict(), "review": audition.review})
+                return
+            if action == "markers":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                audition = audition_store.add_marker(preview_id, audition_id, self._read_json_body(), now=_utc_now())
+                marker = (audition.review.get("markers") or [])[-1]
+                self.project_store.append_event(project_id, "editor_audition_marker_added", {"preview_id": preview_id, "audition_id": audition_id, "marker_id": marker.get("marker_id")})
+                self._send_json({"ok": True, "audition": audition.to_dict(), "marker": marker}, status=HTTPStatus.CREATED)
+                return
+            if action == "create-asset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = audition_store.read_audition(preview_id, audition_id)
+                plan = audition_store.read_plan(preview_id, audition_id)
+                asset_payload = audition_asset_payload(plan, manifest, self._read_json_body())
+                asset = self.asset_store.create_asset(asset_payload, now=_utc_now())
+                audition = audition_store.record_asset_created(preview_id, audition_id, asset.asset_id, now=_utc_now())
+                self.project_store.append_event(project_id, "editor_audition_asset_created", {"preview_id": preview_id, "audition_id": audition_id, "asset_id": asset.asset_id})
+                self._send_json({"ok": True, "asset": asset_public_dict(asset), "audition": audition.to_dict()}, status=HTTPStatus.CREATED)
+                return
             if action == "delete":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -4587,7 +4632,59 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Editor audition not found.")
         except RendererError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(sanitize_metadata({"error": str(exc)}).get("error") or "Audio render failed."))
+        except EditorReviewError as exc:
+            status = HTTPStatus.CONFLICT if "no notes" in str(exc).lower() else HTTPStatus.BAD_REQUEST
+            self._send_error(status, str(exc))
         except (EditorAuditionError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_editor_audition_marker_route(self, method: str, project_id: str, preview_id: str, audition_id: str, marker_id: str, action: str) -> None:
+        project_dir = self.project_store.project_dir(project_id)
+        preview_store = EditorPreviewStore(project_dir)
+        audition_store = EditorAuditionStore(project_dir)
+        try:
+            self.project_store.get_project(project_id)
+            preview_store.read_preview(preview_id)
+            audition_store.read_audition(preview_id, audition_id)
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if action == "update":
+                audition = audition_store.update_marker(preview_id, audition_id, marker_id, self._read_json_body(), now=_utc_now())
+                marker = next((item for item in audition.review.get("markers", []) if item.get("marker_id") == marker_id), None)
+                self.project_store.append_event(project_id, "editor_audition_marker_updated", {"preview_id": preview_id, "audition_id": audition_id, "marker_id": marker_id})
+                self._send_json({"ok": True, "audition": audition.to_dict(), "marker": marker})
+                return
+            if action == "delete":
+                audition = audition_store.delete_marker(preview_id, audition_id, marker_id, now=_utc_now())
+                self.project_store.append_event(project_id, "editor_audition_marker_deleted", {"preview_id": preview_id, "audition_id": audition_id, "marker_id": marker_id})
+                self._send_json({"ok": True, "audition": audition.to_dict(), "deleted": True, "marker_id": marker_id})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor audition marker route not found.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor audition marker not found.")
+        except (EditorReviewError, EditorAuditionError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_audition_reviews(self, method: str, project_id: str, preview_id: str | None, query_string: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            if preview_id is not None:
+                EditorPreviewStore(self.project_store.project_dir(project_id)).read_preview(preview_id)
+            query = parse_qs(query_string)
+            filters = {
+                key: _query_value(query, key)
+                for key in ("source", "status", "favorite", "min_rating", "track_mode", "range_mode", "sort", "order", "limit")
+                if _query_value(query, key)
+            }
+            board = EditorAuditionStore(self.project_store.project_dir(project_id)).review_board(preview_id=preview_id, filters=filters)
+            self._send_json({"ok": True, "project_id": project_id, "preview_id": preview_id, **board})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project or editor preview not found.")
+        except (EditorReviewError, EditorAuditionError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_project_editor_preview_route(self, method: str, project_id: str, preview_id: str, action: str) -> None:
@@ -6865,12 +6962,28 @@ def _match_project_editor_auditions_root_tail(tail: str) -> str | None:
     return None
 
 
+def _match_project_editor_audition_reviews_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "editor-previews" and parts[2] == "audition-reviews":
+        return unquote(parts[1])
+    return None
+
+
 def _match_project_editor_audition_tail(tail: str) -> tuple[str, str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 4 and parts[0] == "editor-previews" and parts[2] == "auditions":
         return unquote(parts[1]), unquote(parts[3]), "detail"
-    if len(parts) == 5 and parts[0] == "editor-previews" and parts[2] == "auditions" and parts[4] in {"midi", "audio", "render-audio", "delete"}:
+    if len(parts) == 5 and parts[0] == "editor-previews" and parts[2] == "auditions" and parts[4] in {"midi", "audio", "render-audio", "review", "markers", "create-asset", "delete"}:
         return unquote(parts[1]), unquote(parts[3]), parts[4]
+    return None
+
+
+def _match_project_editor_audition_marker_tail(tail: str) -> tuple[str, str, str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 6 and parts[0] == "editor-previews" and parts[2] == "auditions" and parts[4] == "markers":
+        return unquote(parts[1]), unquote(parts[3]), unquote(parts[5]), "update"
+    if len(parts) == 7 and parts[0] == "editor-previews" and parts[2] == "auditions" and parts[4] == "markers" and parts[6] == "delete":
+        return unquote(parts[1]), unquote(parts[3]), unquote(parts[5]), "delete"
     return None
 
 

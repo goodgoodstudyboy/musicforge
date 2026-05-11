@@ -297,6 +297,12 @@ without creating preview directories, runs, MIDI files, or project events.
 Preview still creates an auditable editor preview, and Apply as Version still
 creates a child Project Version without modifying the parent.
 
+v2.6.0 adds an Audition Review Board. Editor auditions can be rated, marked as
+keep/maybe/reject/needs_fix, favorited, tagged, annotated with beat markers, and
+saved into the Creative Asset library. Review text is redacted before storage
+and export, and saving an audition as an asset rebuilds note/chord content from
+the audition SongPlan instead of copying temporary MIDI or WAV files.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored
@@ -564,6 +570,14 @@ GET  /api/projects/<project-id>/editor-previews/<preview-id>/patch
 GET  /api/projects/<project-id>/editor-previews/<preview-id>/song-plan
 GET  /api/projects/<project-id>/editor-previews/<preview-id>/midi
 POST /api/projects/<project-id>/editor-previews/<preview-id>/apply
+GET  /api/projects/<project-id>/audition-reviews
+GET  /api/projects/<project-id>/editor-previews/<preview-id>/audition-reviews
+POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions
+POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/review
+POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/markers
+POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/markers/<marker-id>
+POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/markers/<marker-id>/delete
+POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/create-asset
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/apply
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/delete

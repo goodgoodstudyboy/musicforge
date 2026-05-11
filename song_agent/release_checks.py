@@ -181,6 +181,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v2.3 editor clip insert smoke", *_v23_editor_clip_insert_smoke(root))
     report.add("v2.4 editor template smoke", *_v24_editor_template_smoke(root))
     report.add("v2.5 editor audition smoke", *_v25_editor_audition_smoke(root))
+    report.add("v2.6 audition review smoke", *_v26_audition_review_smoke(root))
     return report
 
 
@@ -2043,6 +2044,128 @@ def _v25_editor_audition_smoke(root: Path) -> tuple[bool, str]:
                 and "soundfont" not in serialized.lower()
             )
             return ok, f"preview={preview['preview_id']}, version={child_version}, auditions={len(listing['auditions'])}, audio_status={render_audio_status}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _v26_audition_review_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v2.6 Review Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v2.6 Review Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "audition review",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
+                },
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {
+                    "patch": {
+                        "schema_version": 1,
+                        "base_plan_hash": state["base_plan_hash"],
+                        "label": "Review release patch",
+                        "operations": [{"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 95}}],
+                    },
+                    "render_midi": True,
+                },
+            )
+            preview = preview_data["preview"]
+            audition_status, audition_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions",
+                {"source": "preview", "range": {"mode": "section", "section_id": "section-001"}, "track_mode": "solo", "track_ids": ["track-001"]},
+            )
+            audition_id = audition_data["audition"]["audition_id"]
+            review_status, review = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/review",
+                {"rating": 5, "status": "keep", "favorite": True, "notes": r"release hook api_key=sk-secret-value C:\Users\demo\hook.wav", "tags": ["hook"]},
+            )
+            marker_status, marker = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/markers",
+                {"beat": 1, "kind": "hook", "label": "release marker sk-secret-value"},
+            )
+            asset_status, asset = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/create-asset",
+                {"asset_type": "motif", "track_id": "track-001", "name": "Release audition motif", "tags": ["audition"]},
+            )
+            board_status, board = _release_http_json(server, "GET", f"/api/projects/{project_id}/audition-reviews?favorite=true&min_rating=4&sort=rating")
+            apply_status, applied = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/apply",
+                {"version_name": "Review Child", "version_note": "review smoke"},
+            )
+            child_version = applied["version"]["version_id"]
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            metadata_path = Path(applied["job"]["output_dir"]) / "data" / "edit-metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            serialized = json.dumps({"review": review, "marker": marker, "asset": asset, "board": board, "metadata": metadata, "compare": compare, "export": project_export}, ensure_ascii=False)
+            ok = (
+                created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and state_status == 200
+                and preview_status == 201
+                and audition_status == 201
+                and review_status == 200
+                and marker_status == 201
+                and asset_status == 201
+                and board_status == 200
+                and board["summary"]["favorite_count"] == 1
+                and board["summary"]["best_rating"] == 5
+                and board["summary"]["marker_count"] == 1
+                and board["summary"]["asset_count"] == 1
+                and apply_status == 201
+                and metadata["audition_summary"]["best_rating"] == 5
+                and metadata["audition_summary"]["asset_count"] == 1
+                and compare_status == 200
+                and compare["right"]["edit"]["audition_summary"]["best_rating"] == 5
+                and export_status == 200
+                and project_export["versions"][1]["edit"]["audition_summary"]["asset_count"] == 1
+                and asset["asset"]["source"]["source_type"] == "editor_audition"
+                and "sk-secret-value" not in serialized
+                and "C:\\Users" not in serialized
+            )
+            return ok, f"preview={preview['preview_id']}, audition={audition_id}, asset={asset.get('asset', {}).get('asset_id')}, rating={board['summary'].get('best_rating')}"
         except Exception as exc:
             return False, str(exc)
         finally:
