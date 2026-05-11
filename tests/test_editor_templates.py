@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from song_agent.editor_templates import (
+    EditorTemplateError,
     EditorTemplateStore,
     build_multitrack_clip_from_project_section,
     build_multitrack_clip_insert_patch,
@@ -172,3 +173,29 @@ def test_multitrack_replace_range_uses_current_patch_and_ignores_derived_notes(t
     deleted_ids = [note_id for operation in second_patch["operations"] for note_id in operation.get("note_ids", [])]
     assert deleted_ids
     assert all(not str(note_id).startswith("derived-note-") for note_id in deleted_ids)
+
+
+def test_multitrack_insert_rejects_unknown_lane_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, _parent_job = create_project_version(server)
+        clip = build_multitrack_clip_from_project_section(
+            project_store=server.project_store,
+            project_id=project_id,
+            version_id="v001",
+            section_id="section-001",
+            include_roles=["melody"],
+        )
+        parent = SongPlan.from_dict(read_json(Path(server.project_store.get_project(project_id).versions[0].output_dir) / "data" / "song-plan.json"))
+        with pytest.raises(EditorTemplateError, match="Unknown template lane_id: lane-missing"):
+            build_multitrack_clip_insert_patch(
+                parent,
+                clip,
+                {
+                    "target": {"section_id": "section-001", "start_beat": 0},
+                    "lane_mappings": [{"lane_id": "lane-missing", "target_track_id": "track-001", "mode": "overlay"}],
+                },
+            )
+    finally:
+        stop_test_server(server)

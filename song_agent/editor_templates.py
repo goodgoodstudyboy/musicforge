@@ -685,7 +685,7 @@ def build_multitrack_clip_insert_patch(
     trim_to_section = bool(options.get("trim_to_section", section is not None or options.get("fit") == "trim"))
     total_beats = float(state["song"]["total_bars"]) * float(state["song"]["beats_per_bar"])
     section_end = float(section["end_beat"]) if section and trim_to_section else None
-    mapping_by_lane = _clean_lane_mappings(mappings)
+    mapping_by_lane = _clean_lane_mappings(mappings, valid_lane_ids={lane.lane_id for lane in clip.lanes})
     operations: list[dict[str, Any]] = []
     warnings: list[str] = []
     lane_summaries: list[dict[str, Any]] = []
@@ -819,12 +819,15 @@ def _target_start_beat(target: dict[str, Any], section: dict[str, Any] | None) -
     raise EditorTemplateError("target.start_beat is required when section_id is not provided.")
 
 
-def _clean_lane_mappings(value: list[Any]) -> dict[str, dict[str, str]]:
+def _clean_lane_mappings(value: list[Any], *, valid_lane_ids: set[str] | None = None) -> dict[str, dict[str, str]]:
     mappings: dict[str, dict[str, str]] = {}
+    valid_lane_ids = valid_lane_ids or set()
     for item in value:
         if not isinstance(item, dict):
             raise EditorTemplateError("lane_mappings items must be objects.")
         lane_id = _safe_id(item.get("lane_id"), "lane_id")
+        if valid_lane_ids and lane_id not in valid_lane_ids:
+            raise EditorTemplateError(f"Unknown template lane_id: {lane_id}.")
         mode = _choice(item.get("mode") or "overlay", "mode", INSERT_MODES)
         track_id = str(item.get("target_track_id") or "").strip()
         if mode != "skip" and not re.match(r"^track-[0-9]{3}$", track_id):

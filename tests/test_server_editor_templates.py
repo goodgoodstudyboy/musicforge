@@ -157,3 +157,31 @@ def test_editor_template_api_rejects_hidden_template(tmp_path, monkeypatch):
     assert hide_status == 200
     assert draft_status == 409
     assert "hidden" in draft["error"].lower()
+
+
+def test_editor_multitrack_template_rejects_unknown_lane_id_with_clear_400(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, _parent_job = create_project_version(server)
+        _status, created = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/section-templates",
+            {"section_id": "section-001", "name": "Lane Guard"},
+        )
+        draft_status, draft = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-multitrack-clip-draft",
+            {
+                "source_ref": {"source_type": "section_template", "template_id": created["template"]["template_id"]},
+                "target": {"section_id": "section-001", "start_beat": 0},
+                "lane_mappings": [{"lane_id": "lane-missing", "target_track_id": "track-001", "mode": "overlay"}],
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    assert draft_status == 400
+    assert draft["error"] == "Unknown template lane_id: lane-missing."

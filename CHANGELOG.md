@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.1 - 2026-05-12
+
+### Fixed
+- Multi-track template draft insert now validates `lane_mappings[].lane_id` against the selected template before generating operations.
+- Unknown template lane IDs now return a clear `400 Unknown template lane_id: ...` instead of the generic no-notes conflict.
+
+### Verified
+- `python -m pytest tests\test_editor_templates.py tests\test_server_editor_templates.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.4.0 - 2026-05-11
 
 ### Added
