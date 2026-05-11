@@ -177,6 +177,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v2.0 visual editor smoke", *_v20_visual_editor_smoke(root))
     report.add("v2.1 structure editor smoke", *_v21_structure_editor_smoke(root))
     report.add("v2.2 interactive editor smoke", *_v22_interactive_editor_smoke(root))
+    report.add("v2.3 editor clip insert smoke", *_v23_editor_clip_insert_smoke(root))
     return report
 
 
@@ -191,9 +192,11 @@ def print_release_check_report(report: ReleaseCheckReport) -> None:
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     return subprocess.run(
         command,
         cwd=cwd,
+        env=env,
         capture_output=True,
         text=True,
         shell=False,
@@ -1662,6 +1665,124 @@ def _v22_interactive_editor_smoke(root: Path) -> tuple[bool, str]:
                 and child_midi_path.exists()
             )
             return ok, f"preview={preview['preview_id']}, version={child_version}, visible_section={visible_section['section_id']}, draft_notes={len(second['view']['lanes'][0]['notes'])}, derived_notes={len(derived_notes)}, operations={second['operation_count']}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _v23_editor_clip_insert_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            _created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v2.3 Clip Smoke"})
+            project_id = created["project"]["project_id"]
+            _version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v2.3 Clip Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "clip insert",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
+                },
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            asset = server.asset_store.create_asset(
+                {
+                    "asset_type": "motif",
+                    "name": "Release Clip Motif",
+                    "key": "C",
+                    "tempo_bpm": 120,
+                    "duration_beats": 2,
+                    "content": {
+                        "kind": "motif",
+                        "notes": [
+                            {"pitch": 72, "start_beat": 0, "duration_beats": 0.5, "velocity": 90},
+                            {"pitch": 74, "start_beat": 0.5, "duration_beats": 0.5, "velocity": 88},
+                        ],
+                    },
+                },
+                now="2026-05-11T00:00:00+00:00",
+            )
+            _state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            clips_status, clips = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-clips")
+            clip = next(item for item in clips["clips"] if item["source_type"] == "asset" and item["source_id"] == asset.asset_id)
+            draft_status, draft = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-clip-draft",
+                {
+                    "clip_ref": clip["clip_ref"],
+                    "target": {"track_id": "track-001", "section_id": "section-001", "start_beat": 0},
+                    "options": {"mode": "overlay", "transpose": 1, "velocity_scale": 1, "quantize_grid": "1/16"},
+                    "include_view": True,
+                    "include_diff": True,
+                },
+            )
+            patch = draft["patch"]
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {"patch": patch, "render_midi": True},
+            )
+            preview = preview_data["preview"]
+            apply_status, applied = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/apply",
+                {"version_name": "Clip Child", "version_note": "clip smoke"},
+            )
+            child_version = applied["version"]["version_id"]
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            edit_metadata = Path(applied["job"]["output_dir"]) / "data" / "edit-metadata.json"
+            metadata = json.loads(edit_metadata.read_text(encoding="utf-8"))
+            derived_notes = [
+                note
+                for lane in draft["draft_view"]["lanes"]
+                for note in lane["notes"]
+                if str(note.get("note_id", "")).startswith("derived-note-")
+            ]
+            serialized = json.dumps({"metadata": metadata, "export": project_export, "compare": compare}, ensure_ascii=False)
+            ok = (
+                parent_job["status"] == "completed"
+                and clips_status == 200
+                and draft_status == 200
+                and draft["clip_summary"]["source_type"] == "asset"
+                and len(patch["operations"]) == 2
+                and len(patch["metadata"]["clip_inserts"]) == 1
+                and len(derived_notes) >= 2
+                and preview_status == 201
+                and apply_status == 201
+                and applied["version"]["variant_type"] == "manual_editor_edit"
+                and metadata["edit_type"] == "visual_editor_clip_insert"
+                and metadata["clip_inserts"][0]["source_id"] == asset.asset_id
+                and compare_status == 200
+                and compare["right"]["edit"]["clip_inserts"][0]["source_id"] == asset.asset_id
+                and export_status == 200
+                and project_export["versions"][1]["edit"]["clip_inserts"][0]["source_id"] == asset.asset_id
+                and "sk-release-secret" not in serialized
+            )
+            return ok, f"asset={asset.asset_id}, version={child_version}, clip_ops={len(patch['operations'])}, derived_notes={len(derived_notes)}"
         except Exception as exc:
             return False, str(exc)
         finally:

@@ -365,6 +365,8 @@ def test_webui_calls_project_apis():
     assert "/versions/${encodeURIComponent(parent)}/edit" in html
     assert "/edit-preview" in html
     assert "/editor-state" in html
+    assert "/editor-clips" in html
+    assert "/editor-clip-draft" in html
     assert "/editor-preview" in html
     assert "/editor-previews/" in html
     assert "Open Editor" in html
@@ -432,6 +434,10 @@ def test_webui_contains_interactive_editor_controls():
     assert "/editor-draft" in html
     assert "refreshProjectEditorDraft" in html
     assert "projectEditorRedo" in html
+    assert "projectEditorClipInserts" in html
+    assert "Clip Browser" in html
+    assert 'id="project-editor-clip-browser"' in html
+    assert "Draft Insert Clip" in html
 
 
 def test_webui_compare_layout_is_responsive():

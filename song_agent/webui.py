@@ -1103,6 +1103,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let projectEditorPreview = null;
     let projectEditorPreviewHistory = [];
     let projectEditorDraft = null;
+    let projectEditorClips = null;
+    let projectEditorClipInserts = [];
+    let projectEditorSelectedClipIndex = 0;
     let projectEditorSelectedSectionId = null;
     let projectEditorSelectedTrackId = null;
     let projectEditorSelectedNoteId = null;
@@ -2839,6 +2842,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           projectEditorPatch = [];
           projectEditorRedo = [];
           projectEditorDraft = null;
+          projectEditorClips = null;
+          projectEditorClipInserts = [];
+          projectEditorSelectedClipIndex = 0;
           projectEditorPreview = null;
           await renderProjectEditor(project, versions, target);
         });
@@ -2861,6 +2867,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorPatch = [];
         projectEditorRedo = [];
         projectEditorDraft = null;
+        projectEditorClips = null;
+        projectEditorClipInserts = [];
+        projectEditorSelectedClipIndex = 0;
         projectEditorPreview = null;
         renderProjectEditorDraft();
         renderProjectEditorState();
@@ -2891,6 +2900,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               base_plan_hash: projectEditorState.base_plan_hash,
               label: $("project-editor-label").value.trim(),
               operations: projectEditorPatch,
+              metadata: projectEditorPatchMetadata(),
             },
             render_midi: true,
           }),
@@ -2915,6 +2925,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorPatch = [];
         projectEditorRedo = [];
         projectEditorDraft = null;
+        projectEditorClips = null;
+        projectEditorClipInserts = [];
+        projectEditorSelectedClipIndex = 0;
         projectEditorPreview = null;
         activeProjectTab = "versions";
         await loadJobs();
@@ -2964,11 +2977,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       if (!versionId) return;
       projectEditorState = await api(`/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/editor-state`);
       const viewData = await api(`/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/editor-view`);
+      projectEditorClips = await api(`/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/editor-clips`);
       projectEditorView = viewData.view;
       projectEditorPatch = [];
       projectEditorRedo = [];
       projectEditorDraft = null;
       projectEditorPreview = null;
+      projectEditorClipInserts = [];
+      projectEditorSelectedClipIndex = 0;
       projectEditorSelectedSectionId = (projectEditorState.sections[0] || {}).section_id || null;
       projectEditorSelectedTrackId = (projectEditorState.tracks[0] || {}).track_id || null;
       projectEditorSelectedNoteId = firstProjectEditorNoteId(projectEditorSelectedTrackId);
@@ -2998,6 +3014,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }).join("");
       const selectedTrack = viewTracks.find((track) => track.track_id === projectEditorSelectedTrackId) || viewTracks[0] || { notes: [] };
       projectEditorSelectedTrackId = selectedTrack.track_id || projectEditorSelectedTrackId;
+      const clipOptions = projectEditorClipOptions();
       target.innerHTML = `
         <div class="summary-grid">
           ${metric("Title", projectEditorState.song.title)}
@@ -3052,6 +3069,39 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             </div>
           </section>
         </div>
+        <section id="project-editor-clip-browser">
+          <h3>Clip Browser</h3>
+          <div class="grid2">
+            <label>Clip
+              <select id="project-editor-clip-select">${clipOptions}</select>
+            </label>
+            <label>Insert Mode
+              <select id="project-editor-clip-mode">
+                <option value="overlay">overlay</option>
+                <option value="replace_range">replace_range</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Start Beat <input id="project-editor-clip-start" type="number" step="0.125" value="${escapeHtml((viewSections.find((section) => section.section_id === projectEditorSelectedSectionId) || {}).start_beat ?? 0)}"></label>
+            <label>Transpose <input id="project-editor-clip-transpose" type="number" min="-24" max="24" value="0"></label>
+          </div>
+          <div class="grid2">
+            <label>Velocity Scale <input id="project-editor-clip-velocity" type="number" min="0.25" max="2" step="0.05" value="1"></label>
+            <label>Quantize
+              <select id="project-editor-clip-quantize">
+                <option value="">none</option>
+                <option value="1/16">1/16</option>
+                <option value="1/8">1/8</option>
+                <option value="1/4">1/4</option>
+              </select>
+            </label>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="project-editor-clip-draft" type="button" ${clipOptions ? "" : "disabled"}>Draft Insert Clip</button>
+          </div>
+          <div class="empty small">${escapeHtml(projectEditorClipSummaryText())}</div>
+        </section>
         <div class="grid2">
           <section>
             <h3>Sections</h3>
@@ -3169,6 +3219,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         renderProjectEditorState();
       });
       $("project-editor-note").addEventListener("change", () => { projectEditorSelectedNoteId = $("project-editor-note").value; fillSelectedProjectEditorNotePatch(); });
+      const clipSelect = $("project-editor-clip-select");
+      if (clipSelect) {
+        clipSelect.value = String(projectEditorSelectedClipIndex || 0);
+        clipSelect.addEventListener("change", () => {
+          projectEditorSelectedClipIndex = Number(clipSelect.value || 0);
+          renderProjectEditorState();
+        });
+      }
       target.querySelectorAll("[data-editor-section-id]").forEach((button) => {
         button.addEventListener("click", () => {
           projectEditorSelectedSectionId = button.dataset.editorSectionId;
@@ -3215,7 +3273,73 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("project-editor-section-lengthen", () => addProjectEditorSectionResize(1));
       bindAction("project-editor-transpose-range", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "transpose_notes", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), semitones: Number($("project-editor-transpose").value || 0) }); });
       bindAction("project-editor-velocity-range", () => { if (!isDerivedTrack($("project-editor-track").value)) addProjectEditorOperation({ op: "scale_velocity", track_id: $("project-editor-track").value, range: parseJsonField("project-editor-range-json"), factor: Number($("project-editor-velocity-factor").value || 1) }); });
+      bindAction("project-editor-clip-draft", () => draftInsertProjectEditorClip());
       renderProjectEditorDraft();
+    }
+
+    function projectEditorFlattenedClips() {
+      return (((projectEditorClips || {}).clips) || []).filter((clip) => clip && clip.clip_ref);
+    }
+
+    function projectEditorClipOptions() {
+      const clips = projectEditorFlattenedClips();
+      return clips.map((clip, index) => `<option value="${escapeHtml(index)}">${escapeHtml(clip.title || clip.source_id)} · ${escapeHtml(clip.source_type)} · ${escapeHtml(clip.note_count || 0)} notes</option>`).join("");
+    }
+
+    function projectEditorClipSummaryText() {
+      const clip = projectEditorFlattenedClips()[projectEditorSelectedClipIndex || 0];
+      if (!clip) return "No reusable clips are available yet.";
+      return `${clip.source_type} · ${clip.kind || "clip"} · ${clip.duration_beats || 0} beats · ${clip.note_count || 0} notes`;
+    }
+
+    function projectEditorPatchMetadata() {
+      return projectEditorClipInserts.length ? { clip_inserts: projectEditorClipInserts } : {};
+    }
+
+    async function draftInsertProjectEditorClip() {
+      if (!projectEditorState || !projectEditorSelectedTrackId || isDerivedTrack(projectEditorSelectedTrackId)) return;
+      const clips = projectEditorFlattenedClips();
+      const clip = clips[projectEditorSelectedClipIndex || 0];
+      if (!clip) return;
+      const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/versions/${encodeURIComponent(projectEditorState.version_id)}/editor-clip-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          include_view: true,
+          include_diff: true,
+          clip_ref: clip.clip_ref,
+          target: {
+            track_id: projectEditorSelectedTrackId,
+            section_id: projectEditorSelectedSectionId,
+            start_beat: Number($("project-editor-clip-start").value || 0),
+          },
+          options: {
+            mode: $("project-editor-clip-mode").value,
+            transpose: Number($("project-editor-clip-transpose").value || 0),
+            velocity_scale: Number($("project-editor-clip-velocity").value || 1),
+            quantize_grid: $("project-editor-clip-quantize").value || null,
+          },
+        }),
+      });
+      projectEditorPatch.push(...((data.patch || {}).operations || []));
+      projectEditorClipInserts.push(...((((data.patch || {}).metadata || {}).clip_inserts) || []));
+      projectEditorRedo = [];
+      projectEditorPreview = null;
+      projectEditorDraft = data;
+      projectEditorView = data.draft_view || data.view || projectEditorView;
+      renderProjectEditorState();
+      const result = $("project-editor-preview-result");
+      if (result) {
+        result.innerHTML = `
+          <div class="summary-grid">
+            ${metric("Clip", (data.clip_summary || {}).title || "-")}
+            ${metric("Ops Added", ((data.patch || {}).operations || []).length)}
+            ${metric("Notes", (data.clip_summary || {}).note_count ?? "-")}
+            ${metric("Validator", (data.validator || {}).status || "-")}
+          </div>
+          <pre>${escapeHtml(JSON.stringify({ clip_summary: data.clip_summary, warnings: data.warnings, diff: data.diff }, null, 2))}</pre>
+        `;
+      }
     }
 
     function renderProjectEditorNoteOptions() {
@@ -3236,6 +3360,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       projectEditorRedo = [];
       projectEditorPreview = null;
       projectEditorDraft = null;
+      projectEditorClipInserts = [];
       renderProjectEditorDraft();
     }
 
@@ -3283,6 +3408,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           projectEditorPatch.splice(Number(button.dataset.editorRemoveOp), 1);
           projectEditorPreview = null;
           projectEditorDraft = null;
+          projectEditorClipInserts = [];
           renderProjectEditorDraft();
         });
       });
@@ -3332,6 +3458,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             base_plan_hash: projectEditorState.base_plan_hash,
             label: $("project-editor-label").value.trim(),
             operations: projectEditorPatch,
+            metadata: projectEditorPatchMetadata(),
           },
         }),
       });

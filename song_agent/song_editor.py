@@ -75,6 +75,7 @@ class EditorPatch:
     base_plan_hash: str
     label: str = ""
     operations: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EditorPatch":
@@ -104,6 +105,7 @@ class EditorPatch:
             base_plan_hash=str(data.get("base_plan_hash") or "").strip(),
             label=_bounded_text(data.get("label"), 160),
             operations=cleaned_ops,
+            metadata=_patch_metadata(data.get("metadata")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -264,6 +266,7 @@ class EditorPreviewStore:
             "changed_tracks": list(preview.changed_tracks),
             "operation_counts": _operation_counts(patch.operations),
             "operations_text": describe_editor_operations(patch.operations),
+            "clip_inserts": _clip_inserts_from_metadata(patch.metadata),
             "warnings": list(preview.warnings),
             "applied_version_id": preview.applied_version_id,
             "updated_at": preview.updated_at,
@@ -770,6 +773,27 @@ def _operation_name(operation: dict[str, Any], field_name: str, fallback: str) -
     return value[:80] if value else fallback
 
 
+def _patch_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    metadata = sanitize_metadata(dict(value))
+    raw = json.dumps(metadata, ensure_ascii=False)
+    if len(raw.encode("utf-8")) > 32_000:
+        raise EditorPatchError("editor patch metadata must be 32000 bytes or fewer.")
+    return metadata
+
+
+def _clip_inserts_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    inserts = metadata.get("clip_inserts") if isinstance(metadata, dict) else None
+    if not isinstance(inserts, list):
+        return []
+    cleaned = []
+    for item in inserts[:20]:
+        if isinstance(item, dict):
+            cleaned.append(sanitize_metadata(dict(item)))
+    return cleaned
+
+
 def _structure_edit_summary(operations: list[dict[str, Any]]) -> dict[str, Any]:
     section_ops = {"add_section", "duplicate_section", "delete_section", "resize_section", "move_section"}
     track_ops = {"add_track", "duplicate_track", "delete_track", "rename_track"}
@@ -799,11 +823,13 @@ def editor_edit_metadata(
 ) -> dict[str, Any]:
     summary = summarize_editor_patch(result)
     structure = _structure_edit_summary(patch.operations)
+    clip_inserts = _clip_inserts_from_metadata(patch.metadata)
+    edit_type = "visual_editor_clip_insert" if clip_inserts else "manual_editor_edit"
     return sanitize_metadata(
         {
             "schema_version": 2,
             "edit_source": "visual_editor",
-            "edit_type": "manual_editor_edit",
+            "edit_type": edit_type,
             "provider_mode": "local",
             "project_id": project_id,
             "parent_version_id": parent_version_id,
@@ -814,10 +840,12 @@ def editor_edit_metadata(
             "operation_count": summary["operation_count"],
             "changed_sections": summary["changed_sections"],
             "changed_tracks": summary["changed_tracks"],
+            "clip_inserts": clip_inserts,
             "summary": {
                 **summary["operation_counts"],
                 "changed_sections": summary["changed_sections"],
                 "changed_tracks": summary["changed_tracks"],
+                "clip_insert_count": len(clip_inserts),
             },
             "structure": structure,
             "warnings": summary["warnings"],

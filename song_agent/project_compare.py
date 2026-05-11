@@ -107,6 +107,7 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         "operation_count": metadata.get("operation_count"),
         "changed_sections": metadata.get("changed_sections") or [],
         "changed_tracks": metadata.get("changed_tracks") or [],
+        "clip_inserts": metadata.get("clip_inserts") or [],
         "provider_patch": _provider_patch_view(metadata.get("provider_patch")),
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,

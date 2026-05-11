@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.3.0 - 2026-05-11
+
+### Added
+- EditorClip layer for reusable note fragments from Assets, Reference MIDI slices, and Project Version sections/ranges.
+- Project Editor APIs for listing reusable clips and creating nonpersistent clip insert drafts.
+- Studio Clip Browser with overlay/replace insert modes, transpose, velocity scaling, and quantize controls.
+- Clip insert metadata now flows through Editor Preview apply, Project Compare, Project Export, and Final Export summaries.
+- release-check now includes a v2.3 editor clip insert smoke covering draft, preview, apply, compare, and export metadata.
+
+### Scope
+- v2.3.0 intentionally keeps clip insertion to a single target track and does not add audio-to-MIDI, MP3 import, automatic BPM/key detection, or a full DAW arranger.
+
+### Verified
+- `python -m pytest tests\test_editor_clips.py tests\test_server_editor_clips.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.2.2 - 2026-05-10
 
 ### Fixed

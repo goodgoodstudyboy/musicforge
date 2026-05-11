@@ -727,6 +727,7 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "operation_count": metadata.get("operation_count"),
         "changed_sections": metadata.get("changed_sections") or [],
         "changed_tracks": metadata.get("changed_tracks") or [],
+        "clip_inserts": metadata.get("clip_inserts") or [],
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
         "warnings": metadata.get("warnings") or [],

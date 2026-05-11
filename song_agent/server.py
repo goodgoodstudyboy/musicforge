@@ -52,6 +52,13 @@ from song_agent.edits import (
     validate_edit_intent,
 )
 from song_agent.edit_presets import EditPresetStore, merge_preset_intent
+from song_agent.editor_clips import (
+    EditorClipError,
+    EditorClipUnavailableError,
+    build_clip_insert_patch,
+    build_editor_clip_from_ref,
+    list_editor_clips,
+)
 from song_agent.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.final_export import (
     FinalExportError,
@@ -3125,6 +3132,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_editor_draft(method, project_id, editor_draft_match)
             return
 
+        editor_clips_match = _match_project_editor_clips_tail(tail)
+        if editor_clips_match is not None:
+            self._handle_project_editor_clips(method, project_id, editor_clips_match)
+            return
+
+        editor_clip_draft_match = _match_project_editor_clip_draft_tail(tail)
+        if editor_clip_draft_match is not None:
+            self._handle_project_editor_clip_draft(method, project_id, editor_clip_draft_match)
+            return
+
         editor_preview_create = _match_project_editor_preview_create_tail(tail)
         if editor_preview_create is not None:
             self._handle_project_editor_preview_create(method, project_id, editor_preview_create)
@@ -3965,6 +3982,90 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.CONFLICT, str(exc))
             return
         except EditorPatchError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_json(response)
+
+    def _handle_project_editor_clips(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            _document, version, _parent_job, _parent_plan = self._project_edit_parent(project_id, version_id)
+            catalog = list_editor_clips(
+                project_id=project_id,
+                version_id=version.version_id,
+                asset_store=self.asset_store,
+                reference_store=self.reference_store,
+                project_store=self.project_store,
+            )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except EditorClipError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._send_json(catalog)
+
+    def _handle_project_editor_clip_draft(self, method: str, project_id: str, version_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            _document, version, _parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            clip = build_editor_clip_from_ref(
+                payload.get("clip_ref"),
+                default_project_id=project_id,
+                asset_store=self.asset_store,
+                reference_store=self.reference_store,
+                project_store=self.project_store,
+            )
+            patch_data, clip_summary, clip_warnings = build_clip_insert_patch(parent_plan, clip, payload)
+            result = apply_editor_patch(parent_plan, patch_data)
+            warnings = [*clip_warnings, *result.warnings]
+            summary = {
+                "operation_count": len(result.patch.operations),
+                "changed_sections": list(result.summary.get("changed_sections") or []),
+                "changed_tracks": list(result.summary.get("changed_tracks") or []),
+                "warnings": warnings,
+                "operation_counts": dict(result.summary.get("operation_counts") or {}),
+            }
+            response = {
+                "ok": True,
+                "project_id": project_id,
+                "version_id": version.version_id,
+                "base_plan_hash": result.patch.base_plan_hash,
+                "operation_count": len(result.patch.operations),
+                "patch": result.patch.to_dict(),
+                "clip_summary": clip_summary,
+                "summary": summary,
+                "warnings": warnings,
+                "quality": result.plan.quality.to_dict() if result.plan.quality else {},
+                "validator": {"status": "passed", "checks": ["editor_clip_schema", "editor_patch_schema", "song_plan_validation"]},
+            }
+            if bool(payload.get("include_view", True)):
+                draft_view = build_editor_view_from_result(result)
+                response["draft_view"] = draft_view
+                response["view"] = draft_view
+            if bool(payload.get("include_diff", True)):
+                response["diff"] = build_editor_diff(parent_plan, result.plan, result.patch)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Clip or version not found.")
+            return
+        except EditorClipUnavailableError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except EditorPatchStaleError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except (EditorClipError, EditorPatchError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         except ValueError as exc:
@@ -6148,6 +6249,20 @@ def _match_project_editor_view_tail(tail: str) -> str | None:
 def _match_project_editor_draft_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-draft":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_clips_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-clips":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_clip_draft_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "editor-clip-draft":
         return unquote(parts[1])
     return None
 
