@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.5.1 - 2026-05-12
+
+### Fixed
+- Preview WAV rendering now recomputes the preview plan from the parent version SongPlan and stored editor patch before regenerating MIDI and WAV.
+- Preview audio no longer trusts cached `editor-previews/<preview-id>/song.mid` or `song-plan.json`, keeping A/B playback aligned with the version that Apply would create.
+
+### Verified
+- `python -m pytest tests\test_server_editor_audition.py tests\test_editor_audition.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.5.0 - 2026-05-12
 
 ### Added

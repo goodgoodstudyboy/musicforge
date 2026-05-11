@@ -74,6 +74,20 @@ def wait_for_batch_stems(server, batch_id):
     raise AssertionError("batch stem render did not finish")
 
 
+def wait_for_batch_stem_audio(server, batch_id):
+    for _ in range(240):
+        status, batch = request_json(server, "GET", f"/api/batches/{batch_id}")
+        assert status == 200
+        statuses = {item.get("stem_status", "not_started") for item in batch["items"]}
+        if statuses & {"queued", "running"}:
+            time.sleep(0.05)
+            continue
+        if all(item.get("stem_audio_completed_count", 0) >= item.get("stem_count", 0) > 0 for item in batch["items"]):
+            return batch
+        time.sleep(0.05)
+    raise AssertionError("batch stem audio render did not finish")
+
+
 def configure_renderer(tmp_path, server):
     soundfont = tmp_path / "test.sf2"
     soundfont.write_bytes(b"sf2")
@@ -124,7 +138,7 @@ def test_render_batch_stem_audio_completes_items(tmp_path, monkeypatch):
         request_json(server, "POST", f"/api/batches/{batch_id}/render-stems")
         wait_for_batch_stems(server, batch_id)
         status_render, render_data = request_json(server, "POST", f"/api/batches/{batch_id}/render-stem-audio")
-        final = wait_for_batch_stems(server, batch_id)
+        final = wait_for_batch_stem_audio(server, batch_id)
     finally:
         stop_test_server(server)
 

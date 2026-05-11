@@ -4672,9 +4672,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         preview = store.read_preview(preview_id)
         preview_dir = store.preview_dir(preview_id)
         midi_path = preview_dir / "song.mid"
-        if not midi_path.exists():
-            plan = store.read_plan(preview_id)
-            render_midi(plan, midi_path)
+        try:
+            _document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, preview.parent_version_id)
+        except FileNotFoundError as exc:
+            raise FileNotFoundError("Parent version not found.") from exc
+        if preview.parent_job_id != parent_job.job_id:
+            raise EditorPatchStaleError("Editor preview parent job does not match the current version.")
+        if editor_song_plan_hash(parent_plan) != preview.base_plan_hash:
+            raise EditorPatchStaleError("Editor preview is stale because the parent song-plan.json has changed.")
+        patch = store.read_patch(preview_id)
+        result = apply_editor_patch(parent_plan, patch)
+        result.plan.validate()
+        write_json(preview_dir / "song-plan.json", result.plan.to_dict())
+        render_midi(result.plan, midi_path)
+        report_path = preview_dir / "validator-report.json"
+        report = read_json(report_path) if report_path.exists() else {}
+        report.update(_build_validator_report(preview_dir / "song-plan.json", midi_path))
         try:
             config, _sources = load_renderer_config()
             config.validate_ready_for_render()
@@ -4695,8 +4708,6 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             audio_size_bytes=wav_path.stat().st_size,
             now=_utc_now(),
         )
-        report_path = preview_dir / "validator-report.json"
-        report = read_json(report_path) if report_path.exists() else {}
         report["audio"] = _audio_report(wav_path)
         write_json(report_path, report)
         self.project_store.append_event(project_id, "editor_preview_audio_rendered", {"preview_id": preview_id, "size_bytes": wav_path.stat().st_size})

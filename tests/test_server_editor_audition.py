@@ -193,6 +193,42 @@ def test_preview_and_parent_audio_routes(tmp_path, monkeypatch):
     assert parent_audio.startswith(b"RIFF")
 
 
+def test_preview_audio_recomputes_plan_and_midi_before_render(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    sf2 = tmp_path / "font.sf2"
+    sf2.write_bytes(b"sf2")
+    save_renderer_config_from_dict({"soundfont_path": str(sf2)})
+    seen = {}
+
+    def fake_server_render_audio(midi_path, wav_path, config, **kwargs):
+        data = midi_path.read_bytes()
+        seen["midi"] = data
+        wav_path.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
+        return wav_path
+
+    monkeypatch.setattr(server_module, "render_audio", fake_server_render_audio)
+    server = start_test_server()
+    try:
+        project_id, preview_id = _create_preview(server)
+        preview_dir = Path(".musicforge") / "projects" / project_id / "editor-previews" / preview_id
+        polluted_plan = json.loads((preview_dir / "song-plan.json").read_text(encoding="utf-8"))
+        polluted_plan["tracks"][0]["instrument"] = "polluted preview instrument"
+        polluted_plan["tracks"][0]["notes"] = []
+        (preview_dir / "song-plan.json").write_text(json.dumps(polluted_plan), encoding="utf-8")
+        (preview_dir / "song.mid").write_bytes(b"MThd polluted midi")
+        render_status, rendered = request_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/render-audio")
+        recomputed_plan = json.loads((preview_dir / "song-plan.json").read_text(encoding="utf-8"))
+    finally:
+        stop_test_server(server)
+
+    assert render_status == 200
+    assert rendered["preview"]["audio_status"] == "completed"
+    assert seen["midi"].startswith(b"MThd")
+    assert seen["midi"] != b"MThd polluted midi"
+    assert recomputed_plan["tracks"][0]["instrument"] != "polluted preview instrument"
+    assert recomputed_plan["tracks"][0]["notes"]
+
+
 def test_preview_audio_failure_records_sanitized_status(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     sf2 = tmp_path / "font.sf2"
