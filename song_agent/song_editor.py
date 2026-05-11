@@ -139,6 +139,10 @@ class EditorPreview:
     warnings: list[str] = field(default_factory=list)
     midi_url: str | None = None
     audio_url: str | None = None
+    audio_status: str = "not_started"
+    audio_error: str | None = None
+    audio_size_bytes: int = 0
+    audio_updated_at: str | None = None
     applied_version_id: str | None = None
     applied_job_id: str | None = None
 
@@ -162,6 +166,10 @@ class EditorPreview:
             warnings=[sanitize_sensitive_text(str(item)) for item in data.get("warnings", [])],
             midi_url=_optional_str(data.get("midi_url")),
             audio_url=_optional_str(data.get("audio_url")),
+            audio_status=_preview_audio_status(data.get("audio_status")),
+            audio_error=_optional_str(sanitize_sensitive_text(str(data.get("audio_error") or ""))),
+            audio_size_bytes=max(0, int(data.get("audio_size_bytes") or 0)),
+            audio_updated_at=_optional_str(data.get("audio_updated_at")),
             applied_version_id=_optional_str(data.get("applied_version_id")),
             applied_job_id=_optional_str(data.get("applied_job_id")),
         )
@@ -317,6 +325,39 @@ class EditorPreviewStore:
             updated = EditorPreview.from_dict({**preview.to_dict(), "status": "applied", "applied_version_id": version_id, "applied_job_id": job_id, "updated_at": now or now_iso()})
             write_json(self.preview_dir(preview_id) / "preview.json", updated.to_dict())
             _append_preview_event(self.preview_dir(preview_id), "editor_preview_applied", {"version_id": version_id, "job_id": job_id}, updated.updated_at)
+            return updated
+
+    def update_preview_audio(
+        self,
+        preview_id: str,
+        *,
+        status: str,
+        audio_url: str | None = None,
+        audio_error: str | None = None,
+        audio_size_bytes: int = 0,
+        now: str | None = None,
+    ) -> EditorPreview:
+        with self.lock:
+            preview = self.read_preview(preview_id)
+            updated_at = now or now_iso()
+            updated = EditorPreview.from_dict(
+                {
+                    **preview.to_dict(),
+                    "audio_status": _preview_audio_status(status),
+                    "audio_url": audio_url if audio_url is not None else preview.audio_url,
+                    "audio_error": sanitize_sensitive_text(str(audio_error or "")) if audio_error else None,
+                    "audio_size_bytes": max(0, int(audio_size_bytes or 0)),
+                    "audio_updated_at": updated_at,
+                    "updated_at": updated_at,
+                }
+            )
+            write_json(self.preview_dir(preview_id) / "preview.json", updated.to_dict())
+            _append_preview_event(
+                self.preview_dir(preview_id),
+                "editor_preview_audio_updated",
+                {"status": updated.audio_status, "size_bytes": updated.audio_size_bytes},
+                updated_at,
+            )
             return updated
 
     def delete_preview(self, preview_id: str) -> None:
@@ -878,6 +919,13 @@ def validate_editor_preview_id(preview_id: str) -> str:
     if not re.match(r"^preview-[0-9]{3,6}$", preview_id):
         raise ValueError("Invalid editor preview id.")
     return preview_id
+
+
+def _preview_audio_status(value: Any) -> str:
+    status = str(value or "not_started").strip()
+    if status not in {"not_started", "running", "completed", "failed"}:
+        return "not_started"
+    return status
 
 
 def section_id_for_index(index: int) -> str:

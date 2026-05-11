@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.5.0 - 2026-05-12
+
+### Added
+- Editor Preview audio status and render/download support for Preview WAV.
+- Project Version parent WAV render/download routes for A/B listening in Studio.
+- Editor Audition cache under Project editor previews with parent/preview sources, full song/section/changed/custom ranges, and all/solo/mute track modes.
+- Audition MIDI download and optional WAV rendering using the existing local renderer configuration.
+- Studio Project Editor A/B audio controls and Audition panel.
+- Audition summary now flows into visual editor apply metadata, Project Compare, Project Export, Final Export summaries, and release-check.
+- release-check now includes a v2.5 editor audition smoke covering parent/preview auditions, solo MIDI, renderer-missing audio error, apply metadata, compare, and project export.
+
+### Scope
+- v2.5.0 keeps audition artifacts as local editor-preview cache only; it does not copy temporary audition WAVs into Final Export and does not add realtime browser mixing.
+
+### Verified
+- `python -m pytest tests\test_webui.py tests\test_editor_audition.py tests\test_server_editor_audition.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.4.1 - 2026-05-12
 
 ### Fixed

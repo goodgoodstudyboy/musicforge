@@ -109,6 +109,7 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         "changed_tracks": metadata.get("changed_tracks") or [],
         "clip_inserts": metadata.get("clip_inserts") or [],
         "template_inserts": metadata.get("template_inserts") or [],
+        "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
         "provider_patch": _provider_patch_view(metadata.get("provider_patch")),
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,

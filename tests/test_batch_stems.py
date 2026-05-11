@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -53,21 +54,23 @@ def import_batch(server):
 
 
 def wait_for_batch(server, batch_id):
-    for _ in range(120):
+    for _ in range(240):
         status, batch = request_json(server, "GET", f"/api/batches/{batch_id}")
         assert status == 200
         if batch["batch"]["status"] in {"completed", "completed_with_errors", "failed", "paused"}:
             return batch
+        time.sleep(0.05)
     raise AssertionError("batch did not finish")
 
 
 def wait_for_batch_stems(server, batch_id):
-    for _ in range(120):
+    for _ in range(240):
         status, batch = request_json(server, "GET", f"/api/batches/{batch_id}")
         assert status == 200
         statuses = {item.get("stem_status", "not_started") for item in batch["items"]}
         if not statuses & {"queued", "running"}:
             return batch
+        time.sleep(0.05)
     raise AssertionError("batch stem render did not finish")
 
 

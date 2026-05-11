@@ -180,6 +180,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v2.2 interactive editor smoke", *_v22_interactive_editor_smoke(root))
     report.add("v2.3 editor clip insert smoke", *_v23_editor_clip_insert_smoke(root))
     report.add("v2.4 editor template smoke", *_v24_editor_template_smoke(root))
+    report.add("v2.5 editor audition smoke", *_v25_editor_audition_smoke(root))
     return report
 
 
@@ -1916,6 +1917,132 @@ def _v24_editor_template_smoke(root: Path) -> tuple[bool, str]:
                 and str(base) not in serialized
             )
             return ok, f"template={template['template_id']}, version={child_version}, lanes={len(lane_mappings)}, tracks={len(add_tracks)}, derived_notes={len(derived_notes)}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _v25_editor_audition_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v2.5 Audition Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v2.5 Audition Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "audition",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
+                },
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {
+                    "patch": {
+                        "schema_version": 1,
+                        "base_plan_hash": state["base_plan_hash"],
+                        "label": "Audition release patch",
+                        "operations": [
+                            {"op": "set_section_lyrics", "section_id": "section-002", "lyrics": "release audition changed section"},
+                            {"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 97}},
+                        ],
+                    },
+                    "render_midi": True,
+                },
+            )
+            preview = preview_data["preview"]
+            parent_audition_status, parent_audition = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions",
+                {"source": "parent", "range": {"mode": "full_song"}, "track_mode": "all"},
+            )
+            changed_audition_status, changed_audition = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions",
+                {"source": "preview", "range": {"mode": "changed_sections"}, "track_mode": "all"},
+            )
+            solo_audition_status, solo_audition = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions",
+                {"source": "preview", "range": {"mode": "section", "section_id": "section-001"}, "track_mode": "solo", "track_ids": ["track-001"]},
+            )
+            listing_status, listing = _release_http_json(server, "GET", f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions")
+            midi_status, midi = _release_http_bytes(
+                server,
+                "GET",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{solo_audition['audition']['audition_id']}/midi",
+            )
+            render_audio_status, render_audio_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{solo_audition['audition']['audition_id']}/render-audio",
+            )
+            apply_status, applied = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/apply",
+                {"version_name": "Audition Child", "version_note": "audition smoke"},
+            )
+            child_version = applied["version"]["version_id"]
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            metadata_path = Path(applied["job"]["output_dir"]) / "data" / "edit-metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            serialized = json.dumps({"metadata": metadata, "compare": compare, "export": project_export}, ensure_ascii=False)
+            ok = (
+                created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and state_status == 200
+                and preview_status == 201
+                and parent_audition_status == 201
+                and changed_audition_status == 201
+                and solo_audition_status == 201
+                and listing_status == 200
+                and len(listing["auditions"]) == 3
+                and midi_status == 200
+                and midi.startswith(b"MThd")
+                and render_audio_status == 400
+                and "soundfont_path is required" in render_audio_data.get("error", "")
+                and apply_status == 201
+                and metadata["audition_summary"]["audition_count"] == 3
+                and compare_status == 200
+                and compare["right"]["edit"]["audition_summary"]["audition_count"] == 3
+                and export_status == 200
+                and project_export["versions"][1]["edit"]["audition_summary"]["audition_count"] == 3
+                and str(base) not in serialized
+                and "soundfont" not in serialized.lower()
+            )
+            return ok, f"preview={preview['preview_id']}, version={child_version}, auditions={len(listing['auditions'])}, audio_status={render_audio_status}"
         except Exception as exc:
             return False, str(exc)
         finally:

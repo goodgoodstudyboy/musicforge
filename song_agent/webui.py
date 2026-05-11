@@ -1114,6 +1114,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let projectEditorRedo = [];
     let projectEditorPreview = null;
     let projectEditorPreviewHistory = [];
+    let projectEditorAuditions = [];
     let projectEditorDraft = null;
     let projectEditorClips = null;
     let editorTemplates = null;
@@ -2890,6 +2891,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           projectEditorSelectedClipIndex = 0;
           projectEditorSelectedTemplateIndex = 0;
           projectEditorPreview = null;
+          projectEditorAuditions = [];
           await renderProjectEditor(project, versions, target);
         });
       }
@@ -2918,6 +2920,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorSelectedClipIndex = 0;
         projectEditorSelectedTemplateIndex = 0;
         projectEditorPreview = null;
+        projectEditorAuditions = [];
         renderProjectEditorDraft();
         renderProjectEditorState();
       });
@@ -2979,6 +2982,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         projectEditorSelectedClipIndex = 0;
         projectEditorSelectedTemplateIndex = 0;
         projectEditorPreview = null;
+        projectEditorAuditions = [];
         activeProjectTab = "versions";
         await loadJobs();
         await loadProjects();
@@ -3041,6 +3045,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       projectEditorSelectedSectionId = (projectEditorState.sections[0] || {}).section_id || null;
       projectEditorSelectedTrackId = (projectEditorState.tracks[0] || {}).track_id || null;
       projectEditorSelectedNoteId = firstProjectEditorNoteId(projectEditorSelectedTrackId);
+      projectEditorAuditions = [];
       renderProjectEditorState();
       renderProjectEditorDraft();
     }
@@ -3745,20 +3750,182 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     function renderProjectEditorPreview() {
       const target = $("project-editor-preview-result");
       if (!target || !projectEditorPreview) return;
+      const parentVersion = $("project-editor-parent") ? $("project-editor-parent").value : (projectEditorParentId || "");
+      const previewAudioUrl = projectEditorPreview.audio_url || `/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/audio`;
+      const parentAudioUrl = parentVersion ? `/api/projects/${encodeURIComponent(projectEditorState.project_id)}/versions/${encodeURIComponent(parentVersion)}/audio` : "";
       target.innerHTML = `
         <div class="summary-grid">
           ${metric("Preview", projectEditorPreview.preview_id)}
           ${metric("Ops", projectEditorPreview.operation_count)}
           ${metric("Quality", (projectEditorPreview.quality || {}).overall ?? "-")}
           ${metric("Status", projectEditorPreview.status)}
+          ${metric("Preview WAV", projectEditorPreview.audio_status || "not_started")}
+          ${metric("Auditions", projectEditorAuditions.length)}
         </div>
         <div class="actions">
           ${projectEditorPreview.midi_url ? `<a class="button-link secondary" href="${escapeHtml(projectEditorPreview.midi_url)}">MIDI</a>` : ""}
+          <button class="secondary" id="project-editor-render-preview-audio" type="button">Render Preview Audio</button>
+          <button class="secondary" id="project-editor-render-parent-audio" type="button">Render Parent Audio</button>
+          ${projectEditorPreview.audio_status === "completed" ? `<a class="button-link secondary" href="${escapeHtml(previewAudioUrl)}">Preview WAV</a>` : ""}
+          ${parentVersion ? `<a class="button-link secondary" href="${escapeHtml(parentAudioUrl)}">Parent WAV</a>` : ""}
         </div>
+        <div class="grid2">
+          <section>
+            <h3>A/B Parent</h3>
+            <audio id="project-editor-audio-parent" controls src="${escapeHtml(parentAudioUrl)}"></audio>
+          </section>
+          <section>
+            <h3>A/B Preview</h3>
+            <audio id="project-editor-audio-preview" controls src="${escapeHtml(previewAudioUrl)}"></audio>
+          </section>
+        </div>
+        <section id="project-editor-audition-panel">
+          <h3>Audition</h3>
+          <div class="grid2">
+            <label>Source
+              <select id="project-editor-audition-source">
+                <option value="preview">Preview</option>
+                <option value="parent">Parent</option>
+              </select>
+            </label>
+            <label>Range
+              <select id="project-editor-audition-range">
+                <option value="full_song">Full song</option>
+                <option value="section">Current section</option>
+                <option value="changed_sections">Changed sections</option>
+                <option value="custom">Custom beat range</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Track mode
+              <select id="project-editor-audition-track-mode">
+                <option value="all">All</option>
+                <option value="solo">Solo</option>
+                <option value="mute">Mute</option>
+              </select>
+            </label>
+            <label>Track selector
+              <select id="project-editor-audition-track">${projectEditorAuditionTrackOptions()}</select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Start Beat <input id="project-editor-audition-start" type="number" step="0.125" value="0"></label>
+            <label>End Beat <input id="project-editor-audition-end" type="number" step="0.125" value="${escapeHtml((currentProjectEditorView().song || {}).total_beats || 4)}"></label>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="project-editor-create-audition" type="button">Create Audition</button>
+            <button class="secondary" id="project-editor-refresh-auditions" type="button">Refresh Auditions</button>
+          </div>
+          <div id="project-editor-audition-list">${projectEditorAuditionListHtml()}</div>
+        </section>
         <pre>${escapeHtml(JSON.stringify(projectEditorPreview, null, 2))}</pre>
       `;
+      bindProjectEditorPreviewAudioControls();
+      bindProjectEditorAuditionControls();
       const apply = $("project-editor-apply");
       if (apply) apply.disabled = false;
+    }
+
+    function projectEditorAuditionTrackOptions() {
+      const view = currentProjectEditorView();
+      return (view.tracks || []).filter((track) => !isDerivedTrack(track.track_id)).map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.name)} · ${escapeHtml(track.track_id)}</option>`).join("");
+    }
+
+    function projectEditorAuditionListHtml() {
+      if (!projectEditorAuditions.length) return "<div class='empty small'>No auditions.</div>";
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Audition</th><th>Source</th><th>Range</th><th>Track mode</th><th>Notes</th><th>WAV</th><th>Actions</th></tr></thead>
+            <tbody>${projectEditorAuditions.map((audition) => `
+              <tr>
+                <td>${escapeHtml(audition.audition_id)}</td>
+                <td>${escapeHtml(audition.source)}</td>
+                <td>${escapeHtml((audition.range || {}).mode || "-")}</td>
+                <td>${escapeHtml(audition.track_mode)}</td>
+                <td>${escapeHtml(audition.note_count || 0)}</td>
+                <td>${escapeHtml(((audition.audio || {}).status) || "not_started")}</td>
+                <td>
+                  ${(audition.midi || {}).url ? `<a class="button-link secondary" href="${escapeHtml(audition.midi.url)}">MIDI</a>` : ""}
+                  <button class="secondary" data-editor-audition-render="${escapeHtml(audition.audition_id)}" type="button">Render Audition WAV</button>
+                  ${(audition.audio || {}).status === "completed" && (audition.audio || {}).url ? `<audio class="inline-audio" controls src="${escapeHtml(audition.audio.url)}"></audio>` : ""}
+                  <button class="secondary" data-editor-audition-delete="${escapeHtml(audition.audition_id)}" type="button">Delete</button>
+                </td>
+              </tr>
+            `).join("")}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function bindProjectEditorPreviewAudioControls() {
+      bindAction("project-editor-render-preview-audio", async () => {
+        const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/render-audio`, { method: "POST" });
+        projectEditorPreview = data.preview;
+        renderProjectEditorPreview();
+      });
+      bindAction("project-editor-render-parent-audio", async () => {
+        const parentVersion = $("project-editor-parent") ? $("project-editor-parent").value : projectEditorParentId;
+        await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/versions/${encodeURIComponent(parentVersion)}/render-audio`, { method: "POST" });
+        renderProjectEditorPreview();
+      });
+      const parentAudio = $("project-editor-audio-parent");
+      const previewAudio = $("project-editor-audio-preview");
+      if (parentAudio && previewAudio) {
+        parentAudio.addEventListener("play", () => previewAudio.pause());
+        previewAudio.addEventListener("play", () => parentAudio.pause());
+      }
+    }
+
+    function bindProjectEditorAuditionControls() {
+      bindAction("project-editor-refresh-auditions", async () => {
+        await loadProjectEditorAuditions();
+        renderProjectEditorPreview();
+      });
+      bindAction("project-editor-create-audition", async () => {
+        const rangeMode = $("project-editor-audition-range").value;
+        const range = { mode: rangeMode };
+        if (rangeMode === "section") range.section_id = projectEditorSelectedSectionId;
+        if (rangeMode === "custom") {
+          range.start_beat = Number($("project-editor-audition-start").value || 0);
+          range.end_beat = Number($("project-editor-audition-end").value || 0);
+        }
+        const trackMode = $("project-editor-audition-track-mode").value;
+        const trackIds = trackMode === "all" ? [] : [$("project-editor-audition-track").value];
+        const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: $("project-editor-audition-source").value,
+            range,
+            track_mode: trackMode,
+            track_ids: trackIds,
+          }),
+        });
+        projectEditorAuditions = [data.audition, ...projectEditorAuditions.filter((item) => item.audition_id !== data.audition.audition_id)];
+        renderProjectEditorPreview();
+      });
+      document.querySelectorAll("[data-editor-audition-render]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(button.dataset.editorAuditionRender)}/render-audio`, { method: "POST" });
+          await loadProjectEditorAuditions();
+          renderProjectEditorPreview();
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-delete]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(button.dataset.editorAuditionDelete)}/delete`, { method: "POST" });
+          projectEditorAuditions = projectEditorAuditions.filter((item) => item.audition_id !== button.dataset.editorAuditionDelete);
+          renderProjectEditorPreview();
+        });
+      });
+    }
+
+    async function loadProjectEditorAuditions() {
+      if (!projectEditorPreview || !projectEditorState) return;
+      const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions`);
+      projectEditorAuditions = data.auditions || [];
     }
 
     async function refreshProjectEditorDraft(projectId, versionId) {
@@ -3932,13 +4099,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
                 <tbody>${projectEditorPreviewHistory.map((preview) => `
                   <tr>
                     <td>${escapeHtml(preview.preview_id)}</td>
-                    <td>${escapeHtml(preview.status)}</td>
+                    <td>${escapeHtml(preview.status)} / ${escapeHtml(preview.audio_status || "not_started")}</td>
                     <td>${escapeHtml(preview.operation_count)}</td>
                     <td>${escapeHtml((preview.changed_sections || []).join(", ") || "-")}</td>
                     <td>${escapeHtml((preview.changed_tracks || []).join(", ") || "-")}</td>
                     <td>
                       <button class="secondary" data-editor-history-preview="${escapeHtml(preview.preview_id)}" type="button">Open Summary</button>
                       ${preview.midi_url ? `<a class="button-link secondary" href="${escapeHtml(preview.midi_url)}">MIDI</a>` : ""}
+                      ${preview.audio_status === "completed" ? `<a class="button-link secondary" href="/api/projects/${encodeURIComponent(projectId)}/editor-previews/${encodeURIComponent(preview.preview_id)}/audio">WAV</a>` : ""}
+                      <button class="secondary" data-editor-history-auditions="${escapeHtml(preview.preview_id)}" type="button">Open Auditions</button>
                     </td>
                   </tr>
                 `).join("")}</tbody>
@@ -3952,7 +4121,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           const detail = await api(`/api/projects/${encodeURIComponent(projectId)}/editor-previews/${encodeURIComponent(button.dataset.editorHistoryPreview)}/patch`);
           $("project-editor-history-detail").innerHTML = `<pre>${escapeHtml(JSON.stringify(detail.patch, null, 2))}</pre>`;
           projectEditorPreview = projectEditorPreviewHistory.find((item) => item.preview_id === button.dataset.editorHistoryPreview) || null;
+          projectEditorAuditions = [];
           renderProjectEditorPreview();
+        });
+      });
+      target.querySelectorAll("[data-editor-history-auditions]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const data = await api(`/api/projects/${encodeURIComponent(projectId)}/editor-previews/${encodeURIComponent(button.dataset.editorHistoryAuditions)}/auditions`);
+          $("project-editor-history-detail").innerHTML = `<pre>${escapeHtml(JSON.stringify(data.auditions || [], null, 2))}</pre>`;
         });
       });
     }

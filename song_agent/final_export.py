@@ -463,6 +463,7 @@ def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
         "changed_tracks": metadata.get("changed_tracks") or [],
         "clip_inserts": metadata.get("clip_inserts") or [],
         "template_inserts": metadata.get("template_inserts") or [],
+        "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
         "summary": metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {},
         "structure": metadata.get("structure") if isinstance(metadata.get("structure"), dict) else {},
         "warnings": metadata.get("warnings") or [],

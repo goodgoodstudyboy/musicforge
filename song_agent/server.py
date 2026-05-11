@@ -69,6 +69,12 @@ from song_agent.editor_templates import (
     suggest_lane_mappings,
     track_template_public_dict,
 )
+from song_agent.editor_audition import (
+    EditorAuditionError,
+    EditorAuditionStore,
+    EditorAuditionUnavailableError,
+    audition_summary_for_preview,
+)
 from song_agent.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.final_export import (
     FinalExportError,
@@ -3233,9 +3239,27 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_editor_preview_create(method, project_id, editor_preview_create)
             return
 
+        version_audio_match = _match_project_version_audio_tail(tail)
+        if version_audio_match is not None:
+            version_id, action = version_audio_match
+            self._handle_project_version_audio_route(method, project_id, version_id, action)
+            return
+
         editor_preview_root = _match_project_editor_preview_root_tail(tail)
         if editor_preview_root is not None:
             self._handle_project_editor_preview_root(method, project_id, editor_preview_root)
+            return
+
+        editor_auditions_root = _match_project_editor_auditions_root_tail(tail)
+        if editor_auditions_root is not None:
+            preview_id = editor_auditions_root
+            self._handle_project_editor_auditions_root(method, project_id, preview_id)
+            return
+
+        editor_audition_match = _match_project_editor_audition_tail(tail)
+        if editor_audition_match is not None:
+            preview_id, audition_id, action = editor_audition_match
+            self._handle_project_editor_audition_route(method, project_id, preview_id, audition_id, action)
             return
 
         editor_preview_match = _match_project_editor_preview_tail(tail)
@@ -4378,6 +4402,55 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_json({"ok": True, "preview": preview.to_dict()}, status=HTTPStatus.CREATED)
 
+    def _handle_project_version_audio_route(self, method: str, project_id: str, version_id: str, action: str) -> None:
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+            version = next((item for item in document.versions if item.version_id == version_id), None)
+            if version is None:
+                raise FileNotFoundError(version_id)
+            job = self.store.get_job(version.job_id)
+            if job is None:
+                raise FileNotFoundError(version.job_id)
+            audio_path = Path(job.output_dir) / "renders" / "song.wav"
+            if action == "audio":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if not audio_path.exists():
+                    self._send_error(HTTPStatus.NOT_FOUND, "Audio render is not available for this version.")
+                    return
+                self._send_file(audio_path, "audio/wav", filename=f"{project_id}-{version_id}.wav")
+                return
+            if action == "render-audio":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                audio, status, error = self.store.render_job_audio(job.job_id)
+                if error is not None:
+                    self._send_error(status, str(sanitize_metadata({"error": error}).get("error") or "Audio render failed."))
+                    return
+                self.project_store.append_event(project_id, "project_version_audio_rendered", {"version_id": version_id, "job_id": job.job_id})
+                wav_path = Path(job.output_dir) / "renders" / "song.wav"
+                self._send_json(
+                    {
+                        "ok": True,
+                        "version_id": version_id,
+                        "job_id": job.job_id,
+                        "audio_status": "completed",
+                        "audio_url": f"/api/projects/{project_id}/versions/{version_id}/audio",
+                        "audio": {"exists": wav_path.exists(), "size_bytes": wav_path.stat().st_size if wav_path.exists() else 0, **audio},
+                    },
+                    status=status,
+                )
+                return
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Project version audio route not found.")
+
     def _handle_project_editor_preview_root(self, method: str, project_id: str, action: str) -> None:
         store = EditorPreviewStore(self.project_store.project_dir(project_id))
         try:
@@ -4408,6 +4481,114 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Editor preview route not found.")
+
+    def _handle_project_editor_auditions_root(self, method: str, project_id: str, preview_id: str) -> None:
+        project_dir = self.project_store.project_dir(project_id)
+        preview_store = EditorPreviewStore(project_dir)
+        audition_store = EditorAuditionStore(project_dir)
+        try:
+            self.project_store.get_project(project_id)
+            preview = preview_store.read_preview(preview_id)
+            if method == "GET":
+                auditions = audition_store.list_auditions(preview_id)
+                self._send_json({"ok": True, "project_id": project_id, "preview_id": preview_id, "auditions": [item.to_dict() for item in auditions]})
+                return
+            if method == "POST":
+                payload = self._read_json_body()
+                source = str(payload.get("source") or "preview").strip()
+                if source not in {"preview", "parent"}:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "source must be parent or preview.")
+                    return
+                _document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, preview.parent_version_id)
+                if preview.parent_job_id != parent_job.job_id:
+                    self._send_error(HTTPStatus.CONFLICT, "Editor preview parent job does not match the current version.")
+                    return
+                if editor_song_plan_hash(parent_plan) != preview.base_plan_hash:
+                    self._send_error(HTTPStatus.CONFLICT, "Editor preview is stale because the parent song-plan.json has changed.")
+                    return
+                if source == "parent":
+                    source_plan = parent_plan
+                    source_state = None
+                else:
+                    patch = preview_store.read_patch(preview_id)
+                    result = apply_editor_patch(parent_plan, patch)
+                    source_plan = result.plan
+                    source_state = build_editor_view_from_result(result)
+                payload = {**payload, "source": source}
+                audition = audition_store.create_audition(project_id=project_id, preview=preview, source_plan=source_plan, editor_state=source_state, payload=payload, now=_utc_now())
+                if bool(payload.get("render_audio", False)):
+                    config, _sources = load_renderer_config()
+                    config.validate_ready_for_render()
+                    audition = audition_store.render_audition_audio(project_id=project_id, preview_id=preview_id, audition_id=audition.audition_id, config=config, now=_utc_now())
+                self.project_store.append_event(
+                    project_id,
+                    "editor_audition_created",
+                    {"parent_version_id": parent.version_id, "preview_id": preview_id, "audition_id": audition.audition_id, "source": audition.source},
+                )
+                self._send_json({"ok": True, "audition": audition.to_dict()}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor preview not found.")
+        except EditorAuditionUnavailableError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(sanitize_metadata({"error": str(exc)}).get("error") or "Audio render failed."))
+        except (EditorAuditionError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_editor_audition_route(self, method: str, project_id: str, preview_id: str, audition_id: str, action: str) -> None:
+        project_dir = self.project_store.project_dir(project_id)
+        preview_store = EditorPreviewStore(project_dir)
+        audition_store = EditorAuditionStore(project_dir)
+        try:
+            self.project_store.get_project(project_id)
+            preview_store.read_preview(preview_id)
+            if action == "detail":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "audition": audition_store.read_audition(preview_id, audition_id).to_dict()})
+                return
+            if action == "midi":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                audition_store.read_audition(preview_id, audition_id)
+                self._send_file(audition_store.midi_path(preview_id, audition_id), "audio/midi", filename=f"{project_id}-{preview_id}-{audition_id}.mid")
+                return
+            if action == "audio":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                audition_store.read_audition(preview_id, audition_id)
+                self._send_file(audition_store.audio_path(preview_id, audition_id), "audio/wav", filename=f"{project_id}-{preview_id}-{audition_id}.wav")
+                return
+            if action == "render-audio":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                config, _sources = load_renderer_config()
+                config.validate_ready_for_render()
+                audition = audition_store.render_audition_audio(project_id=project_id, preview_id=preview_id, audition_id=audition_id, config=config, now=_utc_now())
+                self.project_store.append_event(project_id, "editor_audition_audio_rendered", {"preview_id": preview_id, "audition_id": audition_id})
+                self._send_json({"ok": True, "audition": audition.to_dict()})
+                return
+            if action == "delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                audition_store.delete_audition(preview_id, audition_id)
+                self.project_store.append_event(project_id, "editor_audition_deleted", {"preview_id": preview_id, "audition_id": audition_id})
+                self._send_json({"ok": True, "deleted": True, "audition_id": audition_id})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor audition route not found.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Editor audition not found.")
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(sanitize_metadata({"error": str(exc)}).get("error") or "Audio render failed."))
+        except (EditorAuditionError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_project_editor_preview_route(self, method: str, project_id: str, preview_id: str, action: str) -> None:
         store = EditorPreviewStore(self.project_store.project_dir(project_id))
@@ -4445,7 +4626,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 store.read_preview(preview_id)
-                self._send_file(store.preview_dir(preview_id) / "song.wav", "audio/wav", filename=f"{project_id}-{preview_id}.wav")
+                audio_path = store.preview_dir(preview_id) / "song.wav"
+                if not audio_path.exists():
+                    self._send_error(HTTPStatus.NOT_FOUND, "Preview audio render is not available.")
+                    return
+                self._send_file(audio_path, "audio/wav", filename=f"{project_id}-{preview_id}.wav")
                 return
             if action == "render-audio":
                 if method != "POST":
@@ -4475,7 +4660,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.CONFLICT, str(exc))
             return
         except RendererError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            self._send_error(HTTPStatus.BAD_REQUEST, str(sanitize_metadata({"error": str(exc)}).get("error") or "Audio render failed."))
             return
         except ValueError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -4490,15 +4675,31 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if not midi_path.exists():
             plan = store.read_plan(preview_id)
             render_midi(plan, midi_path)
-        config, _sources = load_renderer_config()
-        config.validate_ready_for_render()
-        wav_path = render_audio(midi_path, preview_dir / "song.wav", config)
-        updated = type(preview).from_dict({**preview.to_dict(), "audio_url": f"/api/projects/{project_id}/editor-previews/{preview_id}/audio", "updated_at": _utc_now()})
-        write_json(preview_dir / "preview.json", updated.to_dict())
+        try:
+            config, _sources = load_renderer_config()
+            config.validate_ready_for_render()
+            wav_path = render_audio(midi_path, preview_dir / "song.wav", config)
+        except RendererError as exc:
+            updated = store.update_preview_audio(
+                preview_id,
+                status="failed",
+                audio_error=str(sanitize_metadata({"error": str(exc)}).get("error") or "Audio render failed."),
+                now=_utc_now(),
+            )
+            self.project_store.append_event(project_id, "editor_preview_audio_failed", {"preview_id": preview_id, "error": updated.audio_error})
+            raise
+        updated = store.update_preview_audio(
+            preview_id,
+            status="completed",
+            audio_url=f"/api/projects/{project_id}/editor-previews/{preview_id}/audio",
+            audio_size_bytes=wav_path.stat().st_size,
+            now=_utc_now(),
+        )
         report_path = preview_dir / "validator-report.json"
         report = read_json(report_path) if report_path.exists() else {}
         report["audio"] = _audio_report(wav_path)
         write_json(report_path, report)
+        self.project_store.append_event(project_id, "editor_preview_audio_rendered", {"preview_id": preview_id, "size_bytes": wav_path.stat().st_size})
         return updated
 
     def _handle_project_editor_preview_apply(self, project_id: str, preview_id: str, payload: dict[str, Any]) -> None:
@@ -4541,6 +4742,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 result=result,
                 created_at=now,
             )
+            audition_summary = audition_summary_for_preview(self.project_store.project_dir(project_id), preview.preview_id)
+            if audition_summary.get("audition_count"):
+                metadata["audition_summary"] = audition_summary
+                if isinstance(metadata.get("summary"), dict):
+                    metadata["summary"]["audition_count"] = audition_summary.get("audition_count", 0)
+                    metadata["summary"]["audition_sources"] = audition_summary.get("sources", [])
             if preview_plan_mismatch:
                 metadata["warnings"] = [
                     *metadata.get("warnings", []),
@@ -6624,12 +6831,35 @@ def _match_project_editor_preview_create_tail(tail: str) -> str | None:
     return None
 
 
+def _match_project_version_audio_tail(tail: str) -> tuple[str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] in {"audio", "render-audio"}:
+        return unquote(parts[1]), parts[2]
+    return None
+
+
 def _match_project_editor_preview_root_tail(tail: str) -> str | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 1 and parts[0] == "editor-previews":
         return "list"
     if len(parts) == 2 and parts[0] == "editor-previews" and parts[1] == "cleanup":
         return "cleanup"
+    return None
+
+
+def _match_project_editor_auditions_root_tail(tail: str) -> str | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "editor-previews" and parts[2] == "auditions":
+        return unquote(parts[1])
+    return None
+
+
+def _match_project_editor_audition_tail(tail: str) -> tuple[str, str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 4 and parts[0] == "editor-previews" and parts[2] == "auditions":
+        return unquote(parts[1]), unquote(parts[3]), "detail"
+    if len(parts) == 5 and parts[0] == "editor-previews" and parts[2] == "auditions" and parts[4] in {"midi", "audio", "render-audio", "delete"}:
+        return unquote(parts[1]), unquote(parts[3]), parts[4]
     return None
 
 

@@ -374,6 +374,8 @@ def test_webui_calls_project_apis():
     assert "/editor-multitrack-clip-draft" in html
     assert "/editor-preview" in html
     assert "/editor-previews/" in html
+    assert "/auditions" in html
+    assert "/versions/${encodeURIComponent(parentVersion)}/render-audio" in html
     assert "Open Editor" in html
     assert "project-editor-preview" in html
     assert "Add Section" in html
@@ -450,6 +452,14 @@ def test_webui_contains_interactive_editor_controls():
     assert "Save Section Template" in html
     assert "Save Track Template" in html
     assert "projectEditorTemplateInsertMap" in html
+    assert "Render Preview Audio" in html
+    assert "Render Parent Audio" in html
+    assert "A/B Parent" in html
+    assert "A/B Preview" in html
+    assert "Audition" in html
+    assert "Track mode" in html
+    assert "Create Audition" in html
+    assert "Render Audition WAV" in html
 
 
 def test_webui_compare_layout_is_responsive():
