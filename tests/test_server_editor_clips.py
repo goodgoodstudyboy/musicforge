@@ -284,3 +284,45 @@ def test_editor_preview_keeps_clip_metadata_after_manual_operation(tmp_path, mon
     assert edit_metadata["edit_type"] == "visual_editor_clip_insert"
     assert edit_metadata["clip_inserts"][0]["source_id"] == asset.asset_id
     assert edit_metadata["summary"]["set_track_instrument"] == 1
+
+
+def test_same_clip_same_position_different_transpose_keeps_two_provenance_groups(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, _parent_job = create_project_version(server)
+        asset = create_clip_asset(server)
+        clips_status, clips = request_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-clips")
+        clip = next(item for item in clips["clips"] if item["source_type"] == "asset" and item["source_id"] == asset.asset_id)
+        first_status, first = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-clip-draft",
+            {
+                "clip_ref": clip["clip_ref"],
+                "target": {"track_id": "track-001", "section_id": "section-001", "start_beat": 0},
+                "options": {"mode": "overlay", "transpose": 0},
+            },
+        )
+        second_status, second = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-clip-draft",
+            {
+                "clip_ref": clip["clip_ref"],
+                "current_patch": first["combined_patch"],
+                "target": {"track_id": "track-001", "section_id": "section-001", "start_beat": 0},
+                "options": {"mode": "overlay", "transpose": 5},
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    assert clips_status == 200
+    assert first_status == 200
+    assert second_status == 200
+    first_group = first["patch"]["metadata"]["clip_inserts"][0]["clip_group_id"]
+    second_group = second["patch"]["metadata"]["clip_inserts"][0]["clip_group_id"]
+    inserts = second["combined_patch"]["metadata"]["clip_inserts"]
+    assert first_group != second_group
+    assert [item["options"]["transpose"] for item in inserts] == [0, 5]

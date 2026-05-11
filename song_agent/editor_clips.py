@@ -712,6 +712,14 @@ def _clip_insert_metadata(
 
 
 def _clip_group_id(clip: EditorClip, *, track_id: str, start_beat: float, operations: list[dict[str, Any]]) -> str:
+    operation_fingerprint = [
+        {
+            key: value
+            for key, value in operation.items()
+            if key not in {"clip_group_id", "clipInsert"}
+        }
+        for operation in operations
+    ]
     payload = json.dumps(
         {
             "source_type": clip.source_type,
@@ -722,6 +730,7 @@ def _clip_group_id(clip: EditorClip, *, track_id: str, start_beat: float, operat
             "start_beat": start_beat,
             "operation_count": len(operations),
             "notes": [note.to_dict() for note in clip.notes[:MAX_EDITOR_CLIP_NOTES]],
+            "operations": operation_fingerprint,
         },
         ensure_ascii=False,
         sort_keys=True,

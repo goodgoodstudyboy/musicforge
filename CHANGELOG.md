@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.3.2 - 2026-05-11
+
+### Fixed
+- Clip provenance group IDs now include the actual generated insert operations, so repeated inserts of the same clip at the same position but with different transpose/velocity/replace options remain separate audit records.
+
+### Verified
+- `python -m pytest tests\test_server_editor_clips.py tests\test_editor_clips.py tests\test_webui.py -q`
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v2.3.1 - 2026-05-11
 
 ### Fixed
