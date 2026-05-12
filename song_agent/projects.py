@@ -730,6 +730,8 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "clip_inserts": metadata.get("clip_inserts") or [],
         "template_inserts": metadata.get("template_inserts") or [],
         "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
+        "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
+        "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
         "warnings": metadata.get("warnings") or [],

@@ -3873,12 +3873,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
                   <button class="secondary" data-editor-audition-render="${escapeHtml(audition.audition_id)}" type="button">Render Audition WAV</button>
                   ${(audition.audio || {}).status === "completed" && (audition.audio || {}).url ? `<audio class="inline-audio" controls src="${escapeHtml(audition.audio.url)}"></audio>` : ""}
                   <button class="secondary" data-editor-audition-create-asset="${escapeHtml(audition.audition_id)}" type="button">Save Audition Asset</button>
+                  <button class="secondary" data-editor-audition-preview-edit="${escapeHtml(audition.audition_id)}" type="button">Preview Edit</button>
+                  <button class="secondary" data-editor-audition-create-edit="${escapeHtml(audition.audition_id)}" type="button">Create Local Edit</button>
+                  <button class="secondary" data-editor-audition-provider-preview="${escapeHtml(audition.audition_id)}" type="button">Provider Preview</button>
+                  <button class="secondary" data-editor-audition-create-context="${escapeHtml(audition.audition_id)}" type="button">Create Context Pack</button>
                   <button class="secondary" data-editor-audition-delete="${escapeHtml(audition.audition_id)}" type="button">Delete</button>
                 </td>
               </tr>
             `).join("")}</tbody>
           </table>
         </div>
+        <div id="project-editor-review-edit-result"><div class="empty small">Review Edit result will appear here.</div></div>
       `;
     }
 
@@ -3985,6 +3990,45 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await loadAssets();
           await loadProjectEditorAuditions();
           renderProjectEditorPreview();
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-preview-edit]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionPreviewEdit;
+          const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/review-edit-preview`, { method: "POST" });
+          const result = $("project-editor-review-edit-result");
+          if (result) result.innerHTML = `<pre>${escapeHtml(JSON.stringify({ review_edit: data.review_edit, summary: data.summary, validator: data.validator }, null, 2))}</pre>`;
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-create-edit]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionCreateEdit;
+          const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/review-edit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ version_name: `${id} Review Edit`, version_note: "Created from audition review" }),
+          });
+          const result = $("project-editor-review-edit-result");
+          if (result) result.innerHTML = `<pre>${escapeHtml(JSON.stringify({ version: data.version, job: data.job, review_edit: data.review_edit }, null, 2))}</pre>`;
+          await loadProjects();
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-provider-preview]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionProviderPreview;
+          const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/provider-review-edit-preview`, { method: "POST" });
+          providerEditPreview = data.preview;
+          const result = $("project-editor-review-edit-result");
+          if (result) result.innerHTML = `<pre>${escapeHtml(JSON.stringify({ preview: data.preview, patch: data.patch, review_edit: data.review_edit }, null, 2))}</pre>`;
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-create-context]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionCreateContext;
+          const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/create-context-pack`, { method: "POST" });
+          await loadContextPacks();
+          const result = $("project-editor-review-edit-result");
+          if (result) result.innerHTML = `<pre>${escapeHtml(JSON.stringify({ context_pack: data.context_pack }, null, 2))}</pre>`;
         });
       });
       document.querySelectorAll("[data-editor-audition-delete]").forEach((button) => {

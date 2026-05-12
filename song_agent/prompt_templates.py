@@ -326,6 +326,26 @@ BUILT_IN_TEMPLATES = [
     ),
     PromptTemplate.from_dict(
         {
+            "template_id": "provider-review-edit-intent",
+            "name": "Provider review edit patch",
+            "description": "Convert sanitized audition review feedback into a constrained MusicForge edit patch.",
+            "task": "provider_review_edit_patch",
+            "system_prompt": (
+                "You are a MusicForge review-feedback edit planner. Return one JSON object only. "
+                "Use only supported operations and chord names from the context. "
+                "Do not include file paths, URLs, secrets, credentials, or free-form code."
+            ),
+            "user_prompt": (
+                "Create a concise edit patch from this audition review context. "
+                "Treat hook/keep markers as preserve signals unless the instruction explicitly asks to alter them.\n"
+                "{{context_json}}"
+            ),
+            "output_schema": PROVIDER_EDIT_PATCH_SCHEMA,
+        },
+        built_in=True,
+    ),
+    PromptTemplate.from_dict(
+        {
             "template_id": "provider-edit-critic",
             "name": "Provider edit critic",
             "description": "Review a provider edit patch for obvious musical and schema risks.",

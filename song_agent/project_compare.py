@@ -110,6 +110,8 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         "clip_inserts": metadata.get("clip_inserts") or [],
         "template_inserts": metadata.get("template_inserts") or [],
         "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
+        "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
+        "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
         "provider_patch": _provider_patch_view(metadata.get("provider_patch")),
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,

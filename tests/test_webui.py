@@ -463,7 +463,15 @@ def test_webui_contains_interactive_editor_controls():
     assert "Save Review" in html
     assert "Add Marker" in html
     assert "Save Audition Asset" in html
+    assert "Preview Edit" in html
+    assert "Create Local Edit" in html
+    assert "Provider Preview" in html
+    assert "Create Context Pack" in html
+    assert "Review Edit result" in html
     assert "/audition-reviews" in html
+    assert "/review-edit-preview" in html
+    assert "/provider-review-edit-preview" in html
+    assert "/create-context-pack" in html
     assert "/create-asset" in html
 
 

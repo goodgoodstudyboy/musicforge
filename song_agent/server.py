@@ -115,6 +115,16 @@ from song_agent.provider_edits import (
     read_provider_edit_preview,
     song_plan_hash,
 )
+from song_agent.review_edits import (
+    ReviewEditError,
+    ReviewEditStore,
+    ReviewEditUnavailableError,
+    apply_review_edit,
+    build_review_edit,
+    review_edit_instruction_for_provider,
+    review_edit_metadata,
+    review_edit_summary,
+)
 from song_agent.provider_usage import (
     build_provider_usage_report,
     collect_candidate_group_provider_usage_records,
@@ -999,6 +1009,14 @@ class JobStore:
             if asset_snapshot["asset_refs"]:
                 result_plan = apply_asset_refs_to_plan(result.plan, self.asset_store, asset_snapshot["asset_refs"])
                 result = EditedSongPlanResult(plan=result_plan, summary=result.summary, warnings=result.warnings)
+            if metadata.get("edit_source") == "audition_review" and isinstance(metadata.get("review_edit"), dict):
+                from song_agent.review_edits import ReviewEditIntent
+
+                review_edit_result = apply_review_edit(parent_plan, ReviewEditIntent.from_dict(metadata["review_edit"]))
+                result = review_edit_result
+                if asset_snapshot["asset_refs"]:
+                    result_plan = apply_asset_refs_to_plan(result.plan, self.asset_store, asset_snapshot["asset_refs"])
+                    result = EditedSongPlanResult(plan=result_plan, summary=result.summary, warnings=result.warnings)
             if job.cancel_requested:
                 raise JobCancelled()
             plan_path = paths.data / "song-plan.json"
@@ -1034,6 +1052,14 @@ class JobStore:
                 edit_metadata["reference_refs"] = list(reference_snapshot["reference_refs"])
             if context_snapshot:
                 edit_metadata["context_pack"] = context_snapshot
+            if metadata.get("edit_source") == "audition_review":
+                edit_metadata.update(
+                    {
+                        "edit_source": "audition_review",
+                        "review_edit": metadata.get("review_edit"),
+                        "review_summary": metadata.get("review_summary") or {},
+                    }
+                )
             write_json(paths.data / "edit-metadata.json", edit_metadata)
             if asset_snapshot["asset_refs"]:
                 write_asset_refs_snapshot(run_dir, asset_snapshot)
@@ -4619,6 +4645,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self.project_store.append_event(project_id, "editor_audition_asset_created", {"preview_id": preview_id, "audition_id": audition_id, "asset_id": asset.asset_id})
                 self._send_json({"ok": True, "asset": asset_public_dict(asset), "audition": audition.to_dict()}, status=HTTPStatus.CREATED)
                 return
+            if action in {"review-edit-preview", "review-edit", "provider-review-edit-preview", "create-context-pack"}:
+                self._handle_project_editor_audition_next_action(method, project_id, preview_id, audition_id, action)
+                return
             if action == "delete":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -4637,6 +4666,218 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(status, str(exc))
         except (EditorAuditionError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_editor_audition_next_action(self, method: str, project_id: str, preview_id: str, audition_id: str, action: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._optional_json_body()
+        try:
+            if action == "create-context-pack":
+                self._handle_audition_context_pack(project_id, preview_id, audition_id, payload)
+                return
+            document, parent, parent_job, parent_plan, preview, audition, audition_plan = self._review_edit_context(project_id, preview_id, audition_id)
+            review_edit = build_review_edit(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_plan=parent_plan,
+                audition=audition,
+                audition_plan=audition_plan,
+                payload=payload,
+                now=_utc_now(),
+            )
+            result = apply_review_edit(parent_plan, review_edit)
+            validator = {"status": "passed", "checks": ["review_edit_intent", "edit_intent_validation", "song_plan_validation"], "checked_at": _utc_now()}
+            if action == "review-edit-preview":
+                stored = ReviewEditStore(self.project_store.project_dir(project_id)).create_preview(
+                    review_edit=review_edit,
+                    parent_plan=parent_plan,
+                    result=result,
+                    validator=validator,
+                    now=_utc_now(),
+                )
+                self.project_store.append_event(project_id, "audition_review_edit_preview_created", {"preview_id": preview_id, "audition_id": audition_id, "review_edit_id": stored.review_edit_id})
+                self._send_json(
+                    {
+                        "ok": True,
+                        "review_edit": stored.to_dict(),
+                        "summary": review_edit_summary(stored, result),
+                        "quality": result.plan.quality.to_dict() if result.plan.quality else {},
+                        "validator": validator,
+                    },
+                    status=HTTPStatus.CREATED,
+                )
+                return
+            if action == "provider-review-edit-preview":
+                self._handle_provider_review_edit_preview(project_id, parent, parent_job, parent_plan, review_edit, payload)
+                return
+            job = self._create_review_edit_job(
+                project_id=project_id,
+                parent=parent,
+                parent_job=parent_job,
+                parent_plan=parent_plan,
+                review_edit=review_edit,
+                result=result,
+                payload=payload,
+            )
+            document = self.project_store.add_version_from_job(
+                project_id,
+                job,
+                name=str(payload.get("version_name") or payload.get("name") or "Review Edit"),
+                note=str(payload.get("version_note") or payload.get("note") or ""),
+                parent_version_id=parent.version_id,
+                variant_type=edit_variant_type(EditIntent.from_dict(review_edit.intents[0]).edit_type),
+                change_summary=str(payload.get("change_summary") or f"Review edit from {audition.audition_id}"),
+            )
+            version = next(version for version in document.versions if version.job_id == job.job_id)
+            self.project_store.append_event(project_id, "audition_review_edit_created", {"preview_id": preview_id, "audition_id": audition_id, "version_id": version.version_id, "job_id": job.job_id})
+            self._send_json({"ok": True, **document.to_dict(), "version": version.to_dict(), "job": job.to_dict(), "review_edit": review_edit.to_dict(), "summary": review_edit_summary(review_edit, result)}, status=HTTPStatus.ACCEPTED)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Review edit resource not found.")
+        except ReviewEditUnavailableError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ReviewEditError, EditorAuditionError, EditorPatchStaleError, ValueError) as exc:
+            status = HTTPStatus.CONFLICT if "stale" in str(exc).lower() else HTTPStatus.BAD_REQUEST
+            self._send_error(status, str(exc))
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _review_edit_context(self, project_id: str, preview_id: str, audition_id: str) -> tuple[Any, Any, JobState, SongPlan, Any, Any, SongPlan]:
+        project_dir = self.project_store.project_dir(project_id)
+        self.project_store.get_project(project_id)
+        preview_store = EditorPreviewStore(project_dir)
+        audition_store = EditorAuditionStore(project_dir)
+        preview = preview_store.read_preview(preview_id)
+        audition = audition_store.read_audition(preview_id, audition_id)
+        audition_plan = audition_store.read_plan(preview_id, audition_id)
+        document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, preview.parent_version_id)
+        if preview.parent_job_id != parent_job.job_id:
+            raise EditorPatchStaleError("Editor preview parent job does not match the current version.")
+        if editor_song_plan_hash(parent_plan) != preview.base_plan_hash:
+            raise EditorPatchStaleError("Editor preview is stale because the parent song-plan.json has changed.")
+        return document, parent, parent_job, parent_plan, preview, audition, audition_plan
+
+    def _create_review_edit_job(
+        self,
+        *,
+        project_id: str,
+        parent: Any,
+        parent_job: JobState,
+        parent_plan: SongPlan,
+        review_edit: Any,
+        result: Any,
+        payload: dict[str, Any],
+    ) -> JobState:
+        primary_intent = EditIntent.from_dict(review_edit.intents[0])
+        job = self.store.create_edit_job(
+            project_id=project_id,
+            parent_version_id=parent.version_id,
+            parent_job=parent_job,
+            parent_plan=parent_plan,
+            intent=primary_intent,
+            name=str(payload.get("version_name") or payload.get("name") or "Review Edit"),
+            start_immediately=False,
+            asset_refs=payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else None,
+            reference_refs=payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else None,
+            context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
+        )
+        metadata = {
+            **job.edit_metadata,
+            **review_edit_metadata(review_edit, result),
+            "edit_type": primary_intent.edit_type,
+            "target": primary_intent.target.to_dict(),
+            "instruction": primary_intent.instruction,
+            "preserve": list(primary_intent.preserve),
+            "strength": primary_intent.strength,
+        }
+        job.edit_metadata = metadata
+        job.input_payload["review_edit_id"] = review_edit.review_edit_id
+        job.input_payload["review_edit"] = review_edit_summary(review_edit, result)
+        self.store._write_job(job)
+        write_json(ProjectPaths.create(Path(job.output_dir)).data / "edit-metadata.json", metadata)
+        self.store.start_job(job.job_id)
+        return job
+
+    def _handle_provider_review_edit_preview(self, project_id: str, parent: Any, parent_job: JobState, parent_plan: SongPlan, review_edit: Any, payload: dict[str, Any]) -> None:
+        template_id = str(payload.get("template_id") or "provider-review-edit-intent").strip()
+        template = self.prompt_template_store.get_template(template_id)
+        if not template.enabled:
+            self._send_error(HTTPStatus.CONFLICT, "Prompt template is disabled.")
+            return
+        config, _sources = load_provider_config()
+        instruction = review_edit_instruction_for_provider(review_edit)
+        patch, provider_snapshot = generate_provider_edit_patch(
+            parent_plan=parent_plan,
+            instruction=instruction,
+            template=template,
+            config=config,
+            asset_references=[],
+            reference_references=[],
+        )
+        provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+        preview = create_provider_edit_preview(
+            project_dir=self.project_store.project_dir(project_id),
+            project_id=project_id,
+            parent_version_id=parent.version_id,
+            parent_job_id=parent_job.job_id,
+            parent_plan=parent_plan,
+            instruction=instruction,
+            template=template,
+            patch=patch,
+            now=_utc_now(),
+            provider_usage=provider_usage,
+            provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
+        )
+        preview_dir = self.project_store.project_dir(project_id) / "edit-previews" / preview.preview_id
+        data = preview.to_dict()
+        data["source"] = {**data.get("source", {}), "review_edit": review_edit.to_dict()}
+        write_json(preview_dir / "preview.json", data)
+        usage = _provider_usage_record(
+            config_snapshot=provider_snapshot,
+            operation="provider_review_edit_preview",
+            template_id=template.template_id,
+            started_at=preview.created_at,
+            status="completed",
+            provider_usage=provider_usage,
+            request_id=provider_snapshot.get("request_id"),
+        )
+        write_json(preview_dir / "provider-usage.json", usage)
+        self.project_store.append_event(project_id, "provider_review_edit_preview_created", {"parent_version_id": parent.version_id, "preview_id": preview.preview_id, "template_id": template.template_id})
+        self._send_json({"ok": True, "preview": read_provider_edit_preview(self.project_store.project_dir(project_id), preview.preview_id).to_dict(), "patch": patch.to_dict(), "review_edit": review_edit.to_dict()}, status=HTTPStatus.CREATED)
+
+    def _handle_audition_context_pack(self, project_id: str, preview_id: str, audition_id: str, payload: dict[str, Any]) -> None:
+        project_dir = self.project_store.project_dir(project_id)
+        self.project_store.get_project(project_id)
+        audition = EditorAuditionStore(project_dir).read_audition(preview_id, audition_id)
+        review = audition.review if isinstance(audition.review, dict) else {}
+        asset_id = str(payload.get("asset_id") or review.get("last_asset_id") or "").strip()
+        if not asset_id:
+            raise ReviewEditUnavailableError("No audition asset is available for context pack creation.")
+        pack = self.context_pack_store.create_pack(
+            {
+                "name": payload.get("name") or f"Context from {audition_id}",
+                "description": payload.get("description") or "Created from audition review.",
+                "created_from": {
+                    "source_type": "audition_review",
+                    "project_id": project_id,
+                    "preview_id": preview_id,
+                    "audition_id": audition_id,
+                    "rating": review.get("rating", 0),
+                    "status": review.get("status", "unreviewed"),
+                },
+                "asset_refs": [{"asset_id": asset_id, "role": "audition_review_favorite", "strength": 0.9}],
+                "selection": {
+                    "mode": "audition_review",
+                    "selected_by": "user",
+                    "score_summary": [{"asset_id": asset_id, "rating": review.get("rating", 0), "favorite": bool(review.get("favorite", False))}],
+                },
+            },
+            asset_store=self.asset_store,
+            reference_store=self.reference_store,
+            now=_utc_now(),
+        )
+        self.project_store.append_event(project_id, "audition_review_context_pack_created", {"preview_id": preview_id, "audition_id": audition_id, "pack_id": pack.pack_id, "asset_id": asset_id})
+        self._send_json({"ok": True, "context_pack": context_pack_public_dict(pack)}, status=HTTPStatus.CREATED)
 
     def _handle_project_editor_audition_marker_route(self, method: str, project_id: str, preview_id: str, audition_id: str, marker_id: str, action: str) -> None:
         project_dir = self.project_store.project_dir(project_id)
@@ -6973,7 +7214,19 @@ def _match_project_editor_audition_tail(tail: str) -> tuple[str, str, str] | Non
     parts = tail.strip("/").split("/")
     if len(parts) == 4 and parts[0] == "editor-previews" and parts[2] == "auditions":
         return unquote(parts[1]), unquote(parts[3]), "detail"
-    if len(parts) == 5 and parts[0] == "editor-previews" and parts[2] == "auditions" and parts[4] in {"midi", "audio", "render-audio", "review", "markers", "create-asset", "delete"}:
+    if len(parts) == 5 and parts[0] == "editor-previews" and parts[2] == "auditions" and parts[4] in {
+        "midi",
+        "audio",
+        "render-audio",
+        "review",
+        "markers",
+        "create-asset",
+        "review-edit-preview",
+        "review-edit",
+        "provider-review-edit-preview",
+        "create-context-pack",
+        "delete",
+    }:
         return unquote(parts[1]), unquote(parts[3]), parts[4]
     return None
 

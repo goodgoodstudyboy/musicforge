@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.7.0 - 2026-05-12
+
+### Added
+- Review-driven edit planning that maps sanitized audition review notes, status, rating, tags, and markers into safe local `EditIntent` objects.
+- Review edit preview API that stores `review-edits/<review-edit-id>/review-edit.json`, candidate SongPlan, validator report, and summary.
+- Review edit create API that produces a non-destructive child Project Version and records review provenance in edit metadata.
+- Optional provider review edit preview route using a dedicated `provider-review-edit-intent` template and existing ProviderEditPatch validation.
+- Audition review to Context Pack API for turning favorite/high-value audition assets into reusable context.
+- Studio Review Board Next Actions: Preview Edit, Create Local Edit, Provider Preview, and Create Context Pack.
+- Project Compare, Project Export, Final Export, and release-check now include review edit provenance summaries.
+
+### Scope
+- v2.7.0 is user-triggered only. Reviews do not automatically modify versions, and review text is never executed as arbitrary patch operations.
+
+### Verified
+- `python -m pytest tests\test_review_edits.py tests\test_server_review_edits.py tests\test_webui.py -q`
+
 ## v2.6.0 - 2026-05-12
 
 ### Added
