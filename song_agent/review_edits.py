@@ -476,7 +476,7 @@ def _target_section(parent_plan: SongPlan, audition: EditorAuditionManifest, mar
     if markers:
         beat = _float_or_none(markers[0].get("beat"))
         if beat is not None:
-            section = _section_for_beat(parent_plan, beat)
+            section = _section_for_beat(parent_plan, _global_marker_beat(range_data, beat))
             if section is not None:
                 return section
     for section in parent_plan.sections:
@@ -533,6 +533,13 @@ def _section_for_beat(plan: SongPlan, beat: float) -> SongSection | None:
         if start <= beat < end:
             return section
     return None
+
+
+def _global_marker_beat(range_data: dict[str, Any], marker_beat: float) -> float:
+    start = _float_or_none(range_data.get("start_beat"))
+    if start is None:
+        return marker_beat
+    return start + marker_beat
 
 
 def _intent(

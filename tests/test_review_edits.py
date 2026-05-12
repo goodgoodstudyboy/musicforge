@@ -53,7 +53,34 @@ def test_review_edit_sanitizes_source_and_applies() -> None:
     assert "C:\\Users" not in serialized
 
 
-def _audition(plan, review: dict) -> EditorAuditionManifest:
+def test_custom_range_marker_targets_parent_section_by_global_beat() -> None:
+    plan = demo_song_plan()
+    audition = _audition(
+        plan,
+        review={"rating": 4, "status": "needs_fix", "notes": "fix this range", "markers": [{"marker_id": "marker-001", "beat": 1, "kind": "fix", "label": "local fix"}]},
+        range_data={"mode": "custom", "start_beat": 16.0, "end_beat": 24.0},
+    )
+
+    review_edit = build_review_edit(project_id="project-001", parent_version_id="v001", parent_plan=plan, audition=audition, audition_plan=plan)
+
+    assert review_edit.intents[0]["target"]["section_name"] == "verse"
+
+
+def test_changed_sections_marker_targets_parent_section_by_global_beat() -> None:
+    plan = demo_song_plan()
+    audition = _audition(
+        plan,
+        review={"rating": 4, "status": "needs_fix", "notes": "fix changed part", "markers": [{"marker_id": "marker-001", "beat": 1, "kind": "fix", "label": "local fix"}]},
+        range_data={"mode": "changed_sections", "section_names": ["verse"], "start_beat": 16.0, "end_beat": 48.0},
+    )
+
+    review_edit = build_review_edit(project_id="project-001", parent_version_id="v001", parent_plan=plan, audition=audition, audition_plan=plan)
+
+    assert review_edit.intents[0]["target"]["section_name"] == "verse"
+
+
+def _audition(plan, review: dict, range_data: dict | None = None) -> EditorAuditionManifest:
+    range_data = range_data or {"mode": "section", "section_name": plan.sections[0].name, "start_beat": 0, "end_beat": plan.sections[0].bars * 4}
     return EditorAuditionManifest.from_dict(
         {
             "schema_version": 1,
@@ -68,7 +95,7 @@ def _audition(plan, review: dict) -> EditorAuditionManifest:
             "status": "completed",
             "created_at": "2026-05-12T00:00:00+00:00",
             "updated_at": "2026-05-12T00:00:00+00:00",
-            "range": {"mode": "section", "section_name": plan.sections[0].name, "start_beat": 0, "end_beat": plan.sections[0].bars * 4},
+            "range": range_data,
             "track_mode": "solo",
             "track_ids": ["track-003"],
             "track_count": 1,

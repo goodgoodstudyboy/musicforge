@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.7.1 - 2026-05-12
+
+### Fixed
+- Review Edit now interprets audition review marker beats relative to the audition range start, so custom and changed_sections audition markers target the correct parent SongPlan section.
+
+### Verified
+- `python -m pytest tests\test_review_edits.py tests\test_server_review_edits.py -q`
+
 ## v2.7.0 - 2026-05-12
 
 ### Added
