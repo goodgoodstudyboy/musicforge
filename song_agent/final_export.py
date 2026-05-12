@@ -466,6 +466,8 @@ def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
         "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
         "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
         "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
+        "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
+        "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
         "summary": metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {},
         "structure": metadata.get("structure") if isinstance(metadata.get("structure"), dict) else {},
         "warnings": metadata.get("warnings") or [],

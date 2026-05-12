@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.8.0 - 2026-05-13
+
+### Added
+- Review Workbench for turning audition reviews into persistent Review Tasks with status, target, marker-coordinate, and follow-up provenance.
+- Local review candidates with conservative, balanced, and bold strategies, ranking, validator/quality summaries, MIDI download, and optional WAV rendering through the local renderer.
+- Candidate apply creates one official child Project Version from parent + candidate intents, not from cached candidate SongPlan files.
+- ReviewTask lifecycle APIs for generate candidates, apply one candidate, resolve, mark needs_more_work with a linked follow-up task, and archive.
+- Studio Review Workbench tab plus Review Board actions to create Review Tasks from audition reviews.
+- Project Compare, Project Export, Final Export, and release-check now include review task and selected candidate provenance.
+
+### Scope
+- v2.8.0 keeps provider review candidates deferred. The completed workflow is local-first and deterministic.
+
+### Verified
+- `python -m pytest tests\test_review_tasks.py tests\test_server_review_tasks.py tests\test_server_review_edits.py tests\test_webui.py -q`
+
 ## v2.7.1 - 2026-05-12
 
 ### Fixed

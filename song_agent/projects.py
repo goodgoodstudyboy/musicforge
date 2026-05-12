@@ -521,6 +521,7 @@ class ProjectStore:
             "asset_refs": _collect_project_asset_refs(self.project_dir(project_id), document),
             "reference_refs": _collect_project_reference_refs(self.project_dir(project_id), document),
             "context_packs": _collect_project_context_packs(self.project_dir(project_id), document),
+            "review_tasks": _collect_project_review_tasks(self.project_dir(project_id)),
             "generated_at": now_iso(),
         }
         write_json(self.project_dir(project_id) / "export.json", export)
@@ -732,6 +733,9 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
         "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
         "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
+        "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
+        "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
+        "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
         "warnings": metadata.get("warnings") or [],
@@ -1059,6 +1063,27 @@ def _collect_project_context_packs(project_dir: Path, document: ProjectDocument)
                 add_pack(context_pack, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
 
     return sorted((_sanitize_asset_metadata(record) for record in packs.values()), key=lambda item: item["pack_id"])
+
+
+def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
+    from song_agent.review_tasks import ReviewTaskStore, review_task_summary
+
+    store = ReviewTaskStore(project_dir)
+    tasks = store.list_tasks(include_archived=True)
+    summaries: list[dict[str, Any]] = []
+    for task in tasks:
+        selected = None
+        if task.selected_candidate_id:
+            try:
+                selected = store.read_candidate(task.task_id, task.selected_candidate_id)
+            except (OSError, ValueError, TypeError, FileNotFoundError):
+                selected = None
+        summary = review_task_summary(task, selected)
+        summary["candidate_count"] = int(task.counts.get("candidate_count") or 0)
+        summary["ready_candidate_count"] = int(task.counts.get("ready_candidate_count") or 0)
+        summary["priority"] = task.priority
+        summaries.append(_sanitize_asset_metadata(summary))
+    return sorted(summaries, key=lambda item: str(item.get("task_id") or ""))
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:

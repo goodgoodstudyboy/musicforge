@@ -467,10 +467,24 @@ def test_webui_contains_interactive_editor_controls():
     assert "Create Local Edit" in html
     assert "Provider Preview" in html
     assert "Create Context Pack" in html
+    assert "Create Review Task" in html
+    assert "Review Workbench" in html
+    assert "Generate Local Candidates" in html
+    assert "Refresh Review Tasks" in html
+    assert "Resolve Task" in html
+    assert "Needs More Work" in html
+    assert "Archive Task" in html
     assert "Review Edit result" in html
     assert "/audition-reviews" in html
     assert "/review-edit-preview" in html
     assert "/provider-review-edit-preview" in html
+    assert "/review-task" in html
+    assert "/review-tasks?include_archived=1" in html
+    assert "/review-tasks/${encodeURIComponent(task.task_id)}" in html
+    assert "/candidates/${encodeURIComponent(button.dataset.candidateId)}/apply" in html
+    assert "/needs-more-work" in html
+    assert "/resolve" in html
+    assert "/archive" in html
     assert "/create-context-pack" in html
     assert "/create-asset" in html
 

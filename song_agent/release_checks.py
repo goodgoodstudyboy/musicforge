@@ -183,6 +183,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v2.5 editor audition smoke", *_v25_editor_audition_smoke(root))
     report.add("v2.6 audition review smoke", *_v26_audition_review_smoke(root))
     report.add("v2.7 review edit smoke", *_v27_review_edit_smoke(root))
+    report.add("v2.8 review task smoke", *_v28_review_task_smoke(root))
     return report
 
 
@@ -2298,6 +2299,187 @@ def _v27_review_edit_smoke(root: Path) -> tuple[bool, str]:
                 and "C:\\Users" not in serialized
             )
             return ok, f"preview={preview['preview_id']}, audition={audition_id}, version={child_version}, intents={len(preview_edit['review_edit']['intents'])}, pack={context.get('context_pack', {}).get('pack_id')}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _v28_review_task_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v2.8 Review Task Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v2.8 Review Task Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "review task",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
+                },
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {
+                    "patch": {
+                        "schema_version": 1,
+                        "base_plan_hash": state["base_plan_hash"],
+                        "label": "Review task patch",
+                        "operations": [{"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 94}}],
+                    },
+                    "render_midi": True,
+                },
+            )
+            preview = preview_data["preview"]
+            audition_status, audition = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions",
+                {"source": "preview", "range": {"mode": "custom", "start_beat": 16.0, "end_beat": 48.0}, "track_mode": "solo", "track_ids": ["track-003"]},
+            )
+            audition_id = audition["audition"]["audition_id"]
+            review_status, _review = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/review",
+                {"rating": 4, "status": "needs_fix", "favorite": True, "notes": r"bass 太满, chorus 更强 api_key=sk-secret-value C:\Users\demo\song.wav", "tags": ["review"]},
+            )
+            keep_status, _keep = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/markers",
+                {"beat": 0, "kind": "keep", "label": "keep hook"},
+            )
+            marker_status, _marker = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/markers",
+                {"beat": 1, "kind": "fix", "label": "fix density"},
+            )
+            task_status, task_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/review-task",
+                {},
+            )
+            task = task_data["task"]
+            task_id = task["task_id"]
+            list_status, listing = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks")
+            candidates_status, candidates_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/review-tasks/{task_id}/candidates",
+                {"render_midi": True},
+            )
+            candidate = candidates_data["candidates"][0]
+            candidate_id = candidate["candidate_id"]
+            midi_status, midi = _release_http_bytes(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{candidate_id}/midi")
+            audio_status, audio_error = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{candidate_id}/render-audio")
+            candidate_json = base / ".musicforge" / "projects" / project_id / "review-tasks" / task_id / "candidates" / candidate_id / "candidate.json"
+            original_candidate_data = json.loads(candidate_json.read_text(encoding="utf-8"))
+            polluted_candidate_data = json.loads(candidate_json.read_text(encoding="utf-8"))
+            polluted_candidate_data["artifacts"]["midi_path"] = f"review-tasks/{task_id}/candidates/revcand-999/renders/song.mid"
+            candidate_json.write_text(json.dumps(polluted_candidate_data), encoding="utf-8")
+            polluted_midi_status, polluted_midi = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{candidate_id}/midi")
+            candidate_json.write_text(json.dumps(original_candidate_data), encoding="utf-8")
+            apply_status, applied = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{candidate_id}/apply",
+                {"version_name": "Review Task Child", "version_note": "review task smoke"},
+            )
+            edit_job = _release_wait_http_job(server, applied["job"]["job_id"])
+            child_version = applied["version"]["version_id"]
+            duplicate_status, duplicate = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{candidate_id}/apply", {})
+            detail_status, detail = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_id}")
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            final_status, final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
+            final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
+            needs_status, needs = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/needs-more-work", {"note": "still too dense"})
+            follow_up_id = (needs.get("follow_up_task") or {}).get("task_id")
+            follow_status, follow = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{follow_up_id}")
+            metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            serialized = json.dumps({"task": task_data, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export, "needs": needs}, ensure_ascii=False)
+            ok = (
+                created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and state_status == 200
+                and preview_status == 201
+                and audition_status == 201
+                and review_status == 200
+                and keep_status == 201
+                and marker_status == 201
+                and task_status == 201
+                and task["target"]["marker_kind"] == "fix"
+                and task["target"]["section_name"] == "verse"
+                and task["target"]["global_marker_beat"] == 17.0
+                and list_status == 200
+                and listing["summary"]["total"] == 1
+                and candidates_status == 201
+                and len(candidates_data["candidates"]) >= 2
+                and candidates_data["task"]["status"] == "candidate_ready"
+                and midi_status == 200
+                and midi.startswith(b"MThd")
+                and audio_status == 400
+                and "soundfont_path is required" in audio_error.get("error", "")
+                and polluted_midi_status == 409
+                and "unsafe" in polluted_midi.get("error", "")
+                and apply_status == 202
+                and edit_job["status"] == "completed"
+                and applied["task"]["status"] == "applied"
+                and duplicate_status == 409
+                and "already applied" in duplicate.get("error", "")
+                and detail_status == 200
+                and detail["task"]["selected_candidate_id"] == candidate_id
+                and compare_status == 200
+                and compare["right"]["edit"]["review_task"]["task_id"] == task_id
+                and export_status == 200
+                and project_export["review_tasks"][0]["task_id"] == task_id
+                and project_export["versions"][1]["edit"]["review_task"]["task_id"] == task_id
+                and final_status == 200
+                and final_data["project"]["final_version_id"] == child_version
+                and final_export_status == 200
+                and final_export["final_export"]["edit"]["review_task"]["task_id"] == task_id
+                and metadata["edit_source"] == "review_task_candidate"
+                and metadata["review_task"]["audition_id"] == audition_id
+                and needs_status == 201
+                and needs["task"]["status"] == "needs_more_work"
+                and needs["follow_up_task"]["parent_version_id"] == child_version
+                and follow_status == 200
+                and follow["task"]["source"]["previous_task_id"] == task_id
+                and "sk-secret-value" not in serialized
+                and "C:\\Users" not in serialized
+                and str(base) not in serialized
+            )
+            return ok, f"task={task_id}, candidate={candidate_id}, version={child_version}, candidates={len(candidates_data['candidates'])}, follow_up={follow_up_id}"
         except Exception as exc:
             return False, str(exc)
         finally:

@@ -311,6 +311,18 @@ review edits map sanitized notes, status, rating, tags, and markers into
 whitelisted `EditIntent` objects; review text is never executed as arbitrary
 patch operations, and no version changes until the user triggers an action.
 
+v2.8.0 adds the Review Workbench. A reviewed audition can become a persistent
+Review Task, then generate local conservative, balanced, and bold candidates.
+Each ReviewCandidate stores sanitized source metadata, strategy intents,
+validator and quality summaries, ranking scores, MIDI previews, and optional WAV
+previews. Applying a candidate creates one official child Project Version by
+recomputing from the parent version plus candidate intents; cached candidate
+SongPlan files are used for listening and inspection only. A task can then be
+resolved, archived, or marked needs_more_work, which creates a linked follow-up
+task with the applied child version as its parent. Project Compare, Project
+Export, Final Export, and release-check include review task and selected
+candidate provenance without copying candidate audio into deliverables.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored
@@ -590,6 +602,18 @@ POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition
 POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/review-edit
 POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/provider-review-edit-preview
 POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/create-context-pack
+POST /api/projects/<project-id>/editor-previews/<preview-id>/auditions/<audition-id>/review-task
+GET  /api/projects/<project-id>/review-tasks
+GET  /api/projects/<project-id>/review-tasks/<task-id>
+POST /api/projects/<project-id>/review-tasks/<task-id>/candidates
+POST /api/projects/<project-id>/review-tasks/<task-id>/resolve
+POST /api/projects/<project-id>/review-tasks/<task-id>/needs-more-work
+POST /api/projects/<project-id>/review-tasks/<task-id>/archive
+GET  /api/projects/<project-id>/review-tasks/<task-id>/candidates/<candidate-id>/midi
+GET  /api/projects/<project-id>/review-tasks/<task-id>/candidates/<candidate-id>/audio
+POST /api/projects/<project-id>/review-tasks/<task-id>/candidates/<candidate-id>/render-midi
+POST /api/projects/<project-id>/review-tasks/<task-id>/candidates/<candidate-id>/render-audio
+POST /api/projects/<project-id>/review-tasks/<task-id>/candidates/<candidate-id>/apply
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/apply
 POST /api/projects/<project-id>/versions/<version-id>/edit-preview/<preview-id>/delete

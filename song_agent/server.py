@@ -125,6 +125,22 @@ from song_agent.review_edits import (
     review_edit_metadata,
     review_edit_summary,
 )
+from song_agent.review_tasks import (
+    ReviewTaskError,
+    ReviewTaskStateError,
+    ReviewTaskStore,
+    apply_candidate_intents,
+    build_local_review_candidates,
+    candidate_apply_metadata,
+    ensure_candidate_current,
+    _ensure_task_open_for_apply,
+    ensure_task_current,
+    mark_task_archived,
+    mark_task_resolved,
+    review_candidate_summary,
+    review_task_summary,
+    task_list_summary,
+)
 from song_agent.provider_usage import (
     build_provider_usage_report,
     collect_candidate_group_provider_usage_records,
@@ -1017,6 +1033,12 @@ class JobStore:
                 if asset_snapshot["asset_refs"]:
                     result_plan = apply_asset_refs_to_plan(result.plan, self.asset_store, asset_snapshot["asset_refs"])
                     result = EditedSongPlanResult(plan=result_plan, summary=result.summary, warnings=result.warnings)
+            if metadata.get("edit_source") == "review_task_candidate" and isinstance(metadata.get("review_candidate_intents"), list):
+                intents = [EditIntent.from_dict(dict(item)) for item in metadata["review_candidate_intents"] if isinstance(item, dict)]
+                result = apply_candidate_intents(parent_plan, intents)
+                if asset_snapshot["asset_refs"]:
+                    result_plan = apply_asset_refs_to_plan(result.plan, self.asset_store, asset_snapshot["asset_refs"])
+                    result = EditedSongPlanResult(plan=result_plan, summary=result.summary, warnings=result.warnings)
             if job.cancel_requested:
                 raise JobCancelled()
             plan_path = paths.data / "song-plan.json"
@@ -1058,6 +1080,17 @@ class JobStore:
                         "edit_source": "audition_review",
                         "review_edit": metadata.get("review_edit"),
                         "review_summary": metadata.get("review_summary") or {},
+                    }
+                )
+            if metadata.get("edit_source") == "review_task_candidate":
+                edit_metadata.update(
+                    {
+                        "edit_source": "review_task_candidate",
+                        "operation_count": len(metadata.get("review_candidate_intents") or []),
+                        "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
+                        "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
+                        "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
+                        "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
                     }
                 )
             write_json(paths.data / "edit-metadata.json", edit_metadata)
@@ -3304,6 +3337,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_editor_audition_route(method, project_id, preview_id, audition_id, action)
             return
 
+        review_task_candidate_match = _match_project_review_task_candidate_tail(tail)
+        if review_task_candidate_match is not None:
+            task_id, candidate_id, action = review_task_candidate_match
+            self._handle_project_review_task_candidate_route(method, project_id, task_id, candidate_id, action)
+            return
+
+        review_task_match = _match_project_review_task_tail(tail)
+        if review_task_match is not None:
+            task_id, action = review_task_match
+            self._handle_project_review_task_route(method, project_id, task_id, action)
+            return
+
+        if tail == "/review-tasks":
+            self._handle_project_review_tasks_root(method, project_id, query_string)
+            return
+
         editor_preview_match = _match_project_editor_preview_tail(tail)
         if editor_preview_match is not None:
             preview_id, action = editor_preview_match
@@ -4645,6 +4694,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self.project_store.append_event(project_id, "editor_audition_asset_created", {"preview_id": preview_id, "audition_id": audition_id, "asset_id": asset.asset_id})
                 self._send_json({"ok": True, "asset": asset_public_dict(asset), "audition": audition.to_dict()}, status=HTTPStatus.CREATED)
                 return
+            if action == "review-task":
+                self._handle_project_review_task_create(method, project_id, preview_id, audition_id)
+                return
             if action in {"review-edit-preview", "review-edit", "provider-review-edit-preview", "create-context-pack"}:
                 self._handle_project_editor_audition_next_action(method, project_id, preview_id, audition_id, action)
                 return
@@ -4756,6 +4808,292 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if editor_song_plan_hash(parent_plan) != preview.base_plan_hash:
             raise EditorPatchStaleError("Editor preview is stale because the parent song-plan.json has changed.")
         return document, parent, parent_job, parent_plan, preview, audition, audition_plan
+
+    def _handle_project_review_task_create(self, method: str, project_id: str, preview_id: str, audition_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._optional_json_body()
+        try:
+            _document, parent, _parent_job, parent_plan, preview, audition, audition_plan = self._review_edit_context(project_id, preview_id, audition_id)
+            task_store = ReviewTaskStore(self.project_store.project_dir(project_id))
+            task = task_store.create_task(
+                project_id=project_id,
+                parent_version_id=parent.version_id,
+                parent_plan=parent_plan,
+                preview=preview,
+                audition=audition,
+                audition_plan=audition_plan,
+                payload=payload,
+                now=_utc_now(),
+            )
+            self.project_store.append_event(project_id, "review_task_created", {"task_id": task.task_id, "preview_id": preview_id, "audition_id": audition_id})
+            self._send_json({"ok": True, "task": task.to_dict(), "candidates": [], "events": task_store.read_events(task.task_id)}, status=HTTPStatus.CREATED)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Review task source not found.")
+        except ReviewTaskStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ReviewTaskError, EditorAuditionError, EditorPatchStaleError, ValueError) as exc:
+            status = HTTPStatus.CONFLICT if "stale" in str(exc).lower() else HTTPStatus.BAD_REQUEST
+            self._send_error(status, str(exc))
+
+    def _handle_project_review_tasks_root(self, method: str, project_id: str, query_string: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            query = parse_qs(query_string)
+            include_archived = _query_value(query, "include_archived").lower() in {"1", "true", "yes"}
+            status = _query_value(query, "status") or None
+            task_store = ReviewTaskStore(self.project_store.project_dir(project_id))
+            tasks = task_store.list_tasks(include_archived=include_archived, status=status)
+            self._send_json({"ok": True, "project_id": project_id, "summary": task_list_summary(tasks), "tasks": [task.to_dict() for task in tasks]})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_review_task_route(self, method: str, project_id: str, task_id: str, action: str) -> None:
+        try:
+            self.project_store.get_project(project_id)
+            task_store = ReviewTaskStore(self.project_store.project_dir(project_id))
+            task = task_store.read_task(task_id)
+            if task.project_id != project_id:
+                raise FileNotFoundError(task_id)
+            if action == "detail":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                candidates = task_store.list_candidates(task.task_id)
+                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in candidates], "events": task_store.read_events(task.task_id)})
+                return
+            if action == "candidates":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                _document, parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+                ensure_task_current(task, parent_plan)
+                strategies = payload.get("strategies") if isinstance(payload.get("strategies"), list) else None
+                generated = []
+                for candidate, candidate_plan, validator, summary in build_local_review_candidates(task, parent_plan, strategies=strategies):
+                    stored = task_store.create_candidate(
+                        task=task,
+                        candidate=candidate,
+                        candidate_plan=candidate_plan,
+                        validator=validator,
+                        summary=summary,
+                        render_midi_file=bool(payload.get("render_midi", True)),
+                        now=_utc_now(),
+                    )
+                    generated.append(stored)
+                ranked = task_store.rank_candidates(task)
+                task = task_store.update_counts(task, now=_utc_now())
+                self.project_store.append_event(project_id, "review_task_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated)})
+                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in ranked], "created": [candidate.to_dict() for candidate in generated]}, status=HTTPStatus.CREATED)
+                return
+            if action == "resolve":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                task = task_store.update_task(mark_task_resolved(task, str(payload.get("note") or ""), now=_utc_now()), event="review_task_resolved", payload={"note": payload.get("note") or ""}, now=_utc_now())
+                self.project_store.append_event(project_id, "review_task_resolved", {"task_id": task.task_id, "candidate_id": task.selected_candidate_id, "version_id": task.applied_version_id})
+                self._send_json({"ok": True, "task": task.to_dict()})
+                return
+            if action == "needs-more-work":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                task, follow_up = self._create_review_task_follow_up(project_id, task_store, task, payload)
+                self._send_json({"ok": True, "task": task.to_dict(), "follow_up_task": follow_up.to_dict()}, status=HTTPStatus.CREATED)
+                return
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                task = task_store.update_task(mark_task_archived(task), event="review_task_archived", payload={}, now=_utc_now())
+                self.project_store.append_event(project_id, "review_task_archived", {"task_id": task.task_id})
+                self._send_json({"ok": True, "task": task.to_dict()})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Review task route not found.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Review task not found.")
+        except ReviewTaskStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ReviewTaskError, EditorAuditionError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_review_task_candidate_route(self, method: str, project_id: str, task_id: str, candidate_id: str, action: str) -> None:
+        try:
+            self.project_store.get_project(project_id)
+            task_store = ReviewTaskStore(self.project_store.project_dir(project_id))
+            task = task_store.read_task(task_id)
+            candidate = task_store.read_candidate(task_id, candidate_id)
+            if task.project_id != project_id or candidate.project_id != project_id:
+                raise FileNotFoundError(candidate_id)
+            _document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+            ensure_candidate_current(task, candidate, parent_plan)
+            if action == "render-midi":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                candidate = task_store.render_candidate_midi(task, candidate, now=_utc_now())
+                self._send_json({"ok": True, "task": task_store.read_task(task.task_id).to_dict(), "candidate": candidate.to_dict()})
+                return
+            if action == "render-audio":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                config, _sources = load_renderer_config()
+                config.validate_ready_for_render()
+                candidate = task_store.render_candidate_audio(task, candidate, config, now=_utc_now())
+                self._send_json({"ok": True, "task": task_store.read_task(task.task_id).to_dict(), "candidate": candidate.to_dict()})
+                return
+            if action in {"midi", "audio"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                path = task_store.candidate_midi_path(task_id, candidate_id) if action == "midi" else task_store.candidate_audio_path(task_id, candidate_id)
+                if not path.exists():
+                    self._send_error(HTTPStatus.NOT_FOUND, "Review candidate artifact not found.")
+                    return
+                self._send_file(path, "audio/midi" if action == "midi" else "audio/wav", filename=f"{project_id}-{task_id}-{candidate_id}.{ 'mid' if action == 'midi' else 'wav' }")
+                return
+            if action == "apply":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                task, candidate, version, job, result = self._apply_review_task_candidate(project_id, task_store, task, candidate, parent, parent_job, parent_plan, payload)
+                self._send_json({"ok": True, "task": task.to_dict(), "candidate": candidate.to_dict(), "version": version.to_dict(), "job": job.to_dict(), "summary": result.summary}, status=HTTPStatus.ACCEPTED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Review candidate route not found.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Review candidate not found.")
+        except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReviewTaskStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ReviewTaskError, ValueError) as exc:
+            status = HTTPStatus.CONFLICT if "unsafe" in str(exc).lower() or "stale" in str(exc).lower() else HTTPStatus.BAD_REQUEST
+            self._send_error(status, str(exc))
+
+    def _apply_review_task_candidate(
+        self,
+        project_id: str,
+        task_store: ReviewTaskStore,
+        task: Any,
+        candidate: Any,
+        parent: Any,
+        parent_job: JobState,
+        parent_plan: SongPlan,
+        payload: dict[str, Any],
+    ) -> tuple[Any, Any, Any, JobState, Any]:
+        _ensure_task_open_for_apply(task)
+        if candidate.status != "ready":
+            raise ReviewTaskStateError("Candidate is not ready.")
+        result = apply_candidate_intents(parent_plan, [EditIntent.from_dict(item) for item in candidate.intents])
+        primary = EditIntent.from_dict(candidate.intents[0])
+        name = str(payload.get("name") or payload.get("version_name") or f"Review Candidate {candidate.candidate_id}")
+        job = self.store.create_edit_job(
+            project_id=project_id,
+            parent_version_id=parent.version_id,
+            parent_job=parent_job,
+            parent_plan=parent_plan,
+            intent=primary,
+            name=name,
+            start_immediately=False,
+            asset_refs=payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else None,
+            reference_refs=payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else None,
+            context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
+        )
+        metadata = {
+            **job.edit_metadata,
+            **candidate_apply_metadata(task, candidate, result),
+            "edit_type": primary.edit_type,
+            "target": primary.target.to_dict(),
+            "instruction": primary.instruction,
+            "preserve": list(primary.preserve),
+            "strength": primary.strength,
+        }
+        job.edit_metadata = metadata
+        job.input_payload["review_task_id"] = task.task_id
+        job.input_payload["review_candidate_id"] = candidate.candidate_id
+        job.input_payload["review_task"] = review_task_summary(task, candidate)
+        job.input_payload["review_candidate"] = review_candidate_summary(candidate)
+        self.store._write_job(job)
+        write_json(ProjectPaths.create(Path(job.output_dir)).data / "edit-metadata.json", metadata)
+        self.store.start_job(job.job_id)
+        document = self.project_store.add_version_from_job(
+            project_id,
+            job,
+            name=name,
+            note=str(payload.get("note") or payload.get("version_note") or ""),
+            parent_version_id=parent.version_id,
+            variant_type=edit_variant_type(primary.edit_type),
+            change_summary=str(payload.get("change_summary") or f"Review task {task.task_id} candidate {candidate.candidate_id}"),
+        )
+        version = next(version for version in document.versions if version.job_id == job.job_id)
+        candidate = task_store.update_candidate(
+            type(candidate).from_dict({**candidate.to_dict(), "status": "applied"}),
+            event="review_candidate_applied",
+            payload={"version_id": version.version_id, "job_id": job.job_id},
+            now=_utc_now(),
+        )
+        task = task_store.update_task(
+            type(task).from_dict(
+                {
+                    **task.to_dict(),
+                    "status": "applied",
+                    "selected_candidate_id": candidate.candidate_id,
+                    "applied_version_id": version.version_id,
+                    "applied_job_id": job.job_id,
+                }
+            ),
+            event="review_task_candidate_applied",
+            payload={"candidate_id": candidate.candidate_id, "version_id": version.version_id, "job_id": job.job_id},
+            now=_utc_now(),
+        )
+        self.project_store.append_event(project_id, "review_task_candidate_applied", {"task_id": task.task_id, "candidate_id": candidate.candidate_id, "version_id": version.version_id, "job_id": job.job_id})
+        return task, candidate, version, job, result
+
+    def _create_review_task_follow_up(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> tuple[Any, Any]:
+        if task.status != "applied" or not task.applied_version_id:
+            raise ReviewTaskStateError("Only applied review tasks can be marked needs_more_work.")
+        candidate = task_store.read_candidate(task.task_id, task.selected_candidate_id or "")
+        _document, parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.applied_version_id)
+        preview = EditorPreviewStore(self.project_store.project_dir(project_id)).read_preview(task.preview_id)
+        audition_store = EditorAuditionStore(self.project_store.project_dir(project_id))
+        audition = audition_store.read_audition(task.preview_id, task.audition_id)
+        audition_plan = audition_store.read_plan(task.preview_id, task.audition_id)
+        follow_up = task_store.create_task(
+            project_id=project_id,
+            parent_version_id=parent.version_id,
+            parent_plan=parent_plan,
+            preview=preview,
+            audition=audition,
+            audition_plan=audition_plan,
+            payload={
+                "title": payload.get("title") or f"Follow-up for {task.task_id}",
+            },
+            previous={
+                "previous_task_id": task.task_id,
+                "previous_candidate_id": candidate.candidate_id,
+                "previous_applied_version_id": task.applied_version_id,
+            },
+            now=_utc_now(),
+        )
+        task = task_store.update_task(
+            type(task).from_dict({**task.to_dict(), "status": "needs_more_work", "follow_up_task_id": follow_up.task_id, "resolution_note": str(payload.get("note") or "")}),
+            event="review_task_needs_more_work",
+            payload={"follow_up_task_id": follow_up.task_id, "note": payload.get("note") or ""},
+            now=_utc_now(),
+        )
+        self.project_store.append_event(project_id, "review_task_needs_more_work", {"task_id": task.task_id, "follow_up_task_id": follow_up.task_id, "version_id": task.applied_version_id})
+        return task, follow_up
 
     def _create_review_edit_job(
         self,
@@ -7225,6 +7563,7 @@ def _match_project_editor_audition_tail(tail: str) -> tuple[str, str, str] | Non
         "review-edit",
         "provider-review-edit-preview",
         "create-context-pack",
+        "review-task",
         "delete",
     }:
         return unquote(parts[1]), unquote(parts[3]), parts[4]
@@ -7290,6 +7629,22 @@ def _match_project_candidate_group_tail(tail: str) -> tuple[str, str] | None:
 def _match_project_candidate_artifact_tail(tail: str) -> tuple[str, str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 5 and parts[0] == "candidate-groups" and parts[2] == "candidates" and parts[4] in {"midi", "audio", "render-midi", "render-audio"}:
+        return unquote(parts[1]), unquote(parts[3]), parts[4]
+    return None
+
+
+def _match_project_review_task_tail(tail: str) -> tuple[str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 2 and parts[0] == "review-tasks":
+        return unquote(parts[1]), "detail"
+    if len(parts) == 3 and parts[0] == "review-tasks" and parts[2] in {"candidates", "resolve", "needs-more-work", "archive"}:
+        return unquote(parts[1]), parts[2]
+    return None
+
+
+def _match_project_review_task_candidate_tail(tail: str) -> tuple[str, str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 5 and parts[0] == "review-tasks" and parts[2] == "candidates" and parts[4] in {"midi", "audio", "render-midi", "render-audio", "apply"}:
         return unquote(parts[1]), unquote(parts[3]), parts[4]
     return None
 

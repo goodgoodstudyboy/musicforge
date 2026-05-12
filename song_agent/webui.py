@@ -388,6 +388,31 @@ def panel_html() -> str:
       font-size: 14px;
       letter-spacing: 0;
     }
+    .review-task-row {
+      border-top: 1px solid var(--line);
+      padding: 12px 0;
+    }
+    .review-task-row:first-child { border-top: 0; }
+    .review-task-row h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+    .review-candidate-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: white;
+      min-width: 0;
+    }
+    .review-candidate-card .summary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .review-candidate-card h5 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
     .compare-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2464,7 +2489,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "variation", "edit", "editor", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "edit", "editor", "review-workbench", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -2683,6 +2708,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await renderProjectEdit(project, versions, target);
       } else if (activeProjectTab === "editor") {
         await renderProjectEditor(project, versions, target);
+      } else if (activeProjectTab === "review-workbench") {
+        await renderProjectReviewWorkbench(project, versions, target);
       } else if (activeProjectTab === "candidates") {
         await renderProjectCandidates(project, versions, target);
       } else if (activeProjectTab === "quality-gate") {
@@ -3876,6 +3903,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
                   <button class="secondary" data-editor-audition-preview-edit="${escapeHtml(audition.audition_id)}" type="button">Preview Edit</button>
                   <button class="secondary" data-editor-audition-create-edit="${escapeHtml(audition.audition_id)}" type="button">Create Local Edit</button>
                   <button class="secondary" data-editor-audition-provider-preview="${escapeHtml(audition.audition_id)}" type="button">Provider Preview</button>
+                  <button class="secondary" data-editor-audition-create-review-task="${escapeHtml(audition.audition_id)}" type="button">Create Review Task</button>
                   <button class="secondary" data-editor-audition-create-context="${escapeHtml(audition.audition_id)}" type="button">Create Context Pack</button>
                   <button class="secondary" data-editor-audition-delete="${escapeHtml(audition.audition_id)}" type="button">Delete</button>
                 </td>
@@ -4020,6 +4048,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           providerEditPreview = data.preview;
           const result = $("project-editor-review-edit-result");
           if (result) result.innerHTML = `<pre>${escapeHtml(JSON.stringify({ preview: data.preview, patch: data.patch, review_edit: data.review_edit }, null, 2))}</pre>`;
+        });
+      });
+      document.querySelectorAll("[data-editor-audition-create-review-task]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.dataset.editorAuditionCreateReviewTask;
+          const data = await api(`/api/projects/${encodeURIComponent(projectEditorState.project_id)}/editor-previews/${encodeURIComponent(projectEditorPreview.preview_id)}/auditions/${encodeURIComponent(id)}/review-task`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const result = $("project-editor-review-edit-result");
+          if (result) result.innerHTML = `<pre>${escapeHtml(JSON.stringify({ task: data.task }, null, 2))}</pre>`;
+          activeProjectTab = "review-workbench";
+          await loadProjects();
         });
       });
       document.querySelectorAll("[data-editor-audition-create-context]").forEach((button) => {
@@ -4510,6 +4552,186 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Operations", ((patch || {}).operations || []).length)}
         </div>
         <pre>${escapeHtml(JSON.stringify({ preview, patch }, null, 2))}</pre>
+      `;
+    }
+
+    async function renderProjectReviewWorkbench(project, versions, target) {
+      let tasks = [];
+      let summary = {};
+      try {
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks?include_archived=1`);
+        summary = data.summary || {};
+        tasks = await Promise.all((data.tasks || []).map(async (task) => {
+          try {
+            const detail = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(task.task_id)}`);
+            return { ...(detail.task || task), candidates: detail.candidates || [], events: detail.events || [] };
+          } catch (_err) {
+            return task;
+          }
+        }));
+      } catch (err) {
+        target.innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+        return;
+      }
+      target.innerHTML = projectReviewWorkbenchHtml(project, tasks, summary);
+      bindAction("project-review-task-refresh", async () => {
+        await renderProjectReviewWorkbench(project, versions, target);
+      });
+      target.querySelectorAll("[data-review-task-generate]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.reviewTaskGenerate)}/candidates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ render_midi: true }),
+          });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-candidate-render-midi]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.taskId)}/candidates/${encodeURIComponent(button.dataset.candidateId)}/render-midi`, { method: "POST" });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-candidate-render-audio]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.taskId)}/candidates/${encodeURIComponent(button.dataset.candidateId)}/render-audio`, { method: "POST" });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-candidate-apply]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.taskId)}/candidates/${encodeURIComponent(button.dataset.candidateId)}/apply`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              version_name: `${button.dataset.taskId} ${button.dataset.candidateId}`,
+              version_note: "Created from Review Workbench",
+            }),
+          });
+          await loadJobs();
+          await loadProjects();
+        });
+      });
+      target.querySelectorAll("[data-review-task-resolve]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.reviewTaskResolve)}/resolve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ note: "Resolved in Review Workbench" }),
+          });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-task-needs-work]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.reviewTaskNeedsWork)}/needs-more-work`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ note: "Needs another Review Workbench pass" }),
+          });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-task-archive]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.reviewTaskArchive)}/archive`, { method: "POST" });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+    }
+
+    function projectReviewWorkbenchHtml(project, tasks, summary) {
+      return `
+        <div class="summary-grid">
+          ${metric("Review Tasks", summary.total ?? tasks.length)}
+          ${metric("Open", summary.open ?? 0)}
+          ${metric("Candidate Ready", summary.candidate_ready ?? 0)}
+          ${metric("Applied", summary.applied ?? 0)}
+          ${metric("Needs More Work", summary.needs_more_work ?? 0)}
+          ${metric("Resolved", summary.resolved ?? 0)}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="project-review-task-refresh" type="button">Refresh Review Tasks</button>
+        </div>
+        ${tasks.length ? tasks.map((task) => reviewTaskWorkbenchRowHtml(project, task)).join("") : `<div class="empty">Review tasks will appear here after you create one from an audition review.</div>`}
+      `;
+    }
+
+    function reviewTaskWorkbenchRowHtml(project, task) {
+      const target = task.target || {};
+      const snapshot = task.review_snapshot || {};
+      const source = task.source || {};
+      const candidates = task.candidates || [];
+      return `
+        <div class="review-task-row">
+          <h4>${escapeHtml(task.title || task.task_id)}</h4>
+          <div class="summary-grid">
+            ${metric("Task", task.task_id)}
+            ${metric("Status", task.status || "-")}
+            ${metric("Priority", task.priority ?? "-")}
+            ${metric("Rating", snapshot.rating ?? "-")}
+            ${metric("Review", snapshot.status || "-")}
+            ${metric("Parent", task.parent_version_id || "-")}
+            ${metric("Section", target.section_name || "-")}
+            ${metric("Track", target.track_name || "-")}
+            ${metric("Global Beat", target.global_marker_beat ?? "-")}
+            ${metric("Candidates", (task.counts || {}).candidate_count ?? candidates.length)}
+            ${metric("Selected", task.selected_candidate_id || "-")}
+            ${metric("Applied Version", task.applied_version_id || "-")}
+          </div>
+          <p>${escapeHtml(task.summary || "-")}</p>
+          <div class="empty small">
+            ${escapeHtml([snapshot.notes_excerpt || "", `tags: ${(snapshot.tags || []).join(", ") || "-"}`, `source: ${task.preview_id}/${task.audition_id}`, `range: ${((source.audition_range || {}).mode) || "-"}`, `track mode: ${source.track_mode || "-"}`].filter(Boolean).join(" · "))}
+          </div>
+          <div class="actions">
+            <button class="secondary" data-review-task-generate="${escapeHtml(task.task_id)}" type="button" ${["resolved", "archived", "stale", "needs_more_work"].includes(task.status) ? "disabled" : ""}>Generate Local Candidates</button>
+            <button class="secondary" data-review-task-resolve="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Resolve Task</button>
+            <button class="secondary" data-review-task-needs-work="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Needs More Work</button>
+            <button class="danger" data-review-task-archive="${escapeHtml(task.task_id)}" type="button" ${["resolved", "archived", "stale"].includes(task.status) ? "disabled" : ""}>Archive Task</button>
+          </div>
+          <div class="candidate-grid">
+            ${candidates.length ? candidates.map((candidate) => reviewCandidateWorkbenchCardHtml(project, task, candidate)).join("") : `<div class="empty small">Generate local candidates to compare options.</div>`}
+          </div>
+        </div>
+      `;
+    }
+
+    function reviewCandidateWorkbenchCardHtml(project, task, candidate) {
+      const scores = candidate.scores || {};
+      const warnings = candidate.warnings || [];
+      const applyDisabled = task.status === "applied" || candidate.status !== "ready";
+      const midiUrl = candidate.midi_url || `/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(task.task_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/midi`;
+      const audioUrl = candidate.audio_url || `/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(task.task_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/audio`;
+      return `
+        <div class="review-candidate-card">
+          <h5>${escapeHtml(candidate.rank ? `#${candidate.rank} ` : "")}${escapeHtml(candidate.candidate_id)}</h5>
+          <div class="summary-grid">
+            ${metric("Strategy", candidate.strategy || "-")}
+            ${metric("Type", candidate.candidate_type || "-")}
+            ${metric("Status", candidate.status || "-")}
+            ${metric("Combined", scores.combined ?? "-")}
+            ${metric("Review Fit", scores.review_fit ?? "-")}
+            ${metric("Precision", scores.target_precision ?? "-")}
+            ${metric("Quality", scores.quality_overall ?? "-")}
+            ${metric("MIDI", candidate.midi_status || "not_started")}
+            ${metric("WAV", candidate.audio_status || "not_started")}
+          </div>
+          <p>${escapeHtml(candidate.summary || "-")}</p>
+          ${warnings.length ? `<div class="empty small">${escapeHtml(warnings.join(" "))}</div>` : ""}
+          <div class="actions">
+            <button class="secondary" data-review-candidate-render-midi data-task-id="${escapeHtml(task.task_id)}" data-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button">Render MIDI</button>
+            ${candidate.midi_status === "completed" ? `<a class="button-link secondary" href="${escapeHtml(midiUrl)}">Download MIDI</a>` : ""}
+            <button class="secondary" data-review-candidate-render-audio data-task-id="${escapeHtml(task.task_id)}" data-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button">Render WAV</button>
+            ${candidate.audio_status === "completed" ? `<a class="button-link secondary" href="${escapeHtml(audioUrl)}">Download WAV</a>` : ""}
+            <button class="secondary" data-review-candidate-apply data-task-id="${escapeHtml(task.task_id)}" data-candidate-id="${escapeHtml(candidate.candidate_id)}" type="button" ${applyDisabled ? "disabled" : ""}>Apply Candidate</button>
+            <button class="secondary" type="button" disabled>Save as Asset</button>
+            <button class="secondary" type="button" disabled>Create Context Pack</button>
+          </div>
+          ${candidate.audio_status === "completed" ? `<audio class="audio-player" controls src="${escapeHtml(audioUrl)}"></audio>` : ""}
+          ${candidate.audio_error ? `<div class="empty error">${escapeHtml(candidate.audio_error)}</div>` : ""}
+          <pre>${escapeHtml(JSON.stringify({ scores, validator: candidate.validator, intents: candidate.intents }, null, 2))}</pre>
+        </div>
       `;
     }
 
@@ -5181,6 +5403,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         variation: "Variation",
         edit: "Edit",
         editor: "Editor",
+        "review-workbench": "Review Workbench",
         candidates: "Candidates",
         "quality-gate": "Quality Gate",
         "final-export": "Final Export",
