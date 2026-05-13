@@ -183,3 +183,79 @@ def test_review_task_stale_parent_rejects_candidate_actions(tmp_path, monkeypatc
     assert "stale" in midi["error"]
     assert apply_status == 409
     assert "stale" in apply["error"]
+
+
+def test_review_task_provider_candidates_decision_report_apply_and_export(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        provider_status, provider = request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-review", "api_key": "sk-secret-value"})
+        project_id, _preview_id, _audition_id, task_id, _task_data = _create_review_task(server)
+        local_status, local = request_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates", {"strategies": ["balanced"]})
+        provider_candidate_status, provider_candidates = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/review-tasks/{task_id}/provider-candidates",
+            {"candidate_count": 3, "render_midi": True},
+        )
+        provider_ids = [candidate["candidate_id"] for candidate in provider_candidates["candidates"] if candidate["candidate_type"] == "provider_review_patch"]
+        provider_candidate_id = provider_ids[0]
+        midi_status, midi = request_bytes(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{provider_candidate_id}/midi")
+        report_status, report = request_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_id}/decision-report")
+        refresh_status, refreshed = request_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/decision-report/refresh", {"note": "manual review"})
+        candidate_path = Path(".musicforge") / "projects" / project_id / "review-tasks" / task_id / "candidates" / provider_candidate_id / "candidate.json"
+        candidate_data = json.loads(candidate_path.read_text(encoding="utf-8"))
+        original_midi_path = candidate_data["artifacts"]["midi_path"]
+        candidate_data["artifacts"]["midi_path"] = f"review-tasks/{task_id}/candidates/revcand-999/renders/song.mid"
+        candidate_path.write_text(json.dumps(candidate_data), encoding="utf-8")
+        polluted_status, polluted = request_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{provider_candidate_id}/midi")
+        candidate_data["artifacts"]["midi_path"] = original_midi_path
+        candidate_path.write_text(json.dumps(candidate_data), encoding="utf-8")
+        apply_status, applied = request_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{provider_candidate_id}/apply",
+            {"version_name": "Provider Review Candidate Child"},
+        )
+        job = wait_for_job(server, applied["job"]["job_id"])
+        compare_status, compare = request_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={applied['version']['version_id']}")
+        export_status, project_export = request_json(server, "GET", f"/api/projects/{project_id}/export")
+        usage_status, usage = request_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+        metadata = json.loads((Path(job["output_dir"]) / "data" / "edit-metadata.json").read_text(encoding="utf-8"))
+        serialized = json.dumps({"provider_candidates": provider_candidates, "report": report, "metadata": metadata, "export": project_export}, ensure_ascii=False)
+    finally:
+        stop_test_server(server)
+
+    assert provider_status == 200
+    assert provider["config"]["api_key_set"] is True
+    assert local_status == 201
+    assert provider_candidate_status == 201
+    assert provider_candidates["provider_summary"]["provider_candidate_count"] >= 2
+    assert provider_candidates["decision_report"]["requires_manual_apply"] is True
+    assert provider_candidate_id
+    assert midi_status == 200
+    assert midi.startswith(b"MThd")
+    assert report_status == 200
+    assert report["decision_report"]["source_breakdown"]["local_candidate_count"] >= 1
+    assert report["decision_report"]["source_breakdown"]["provider_candidate_count"] >= 2
+    assert refresh_status == 200
+    assert refreshed["decision_report"]["notes"] == "manual review"
+    assert polluted_status == 409
+    assert "unsafe" in polluted["error"]
+    assert apply_status == 202
+    assert applied["candidate"]["candidate_type"] == "provider_review_patch"
+    assert job["status"] == "completed"
+    assert metadata["review_candidate"]["candidate_type"] == "provider_review_patch"
+    assert metadata["review_candidate_source"]["provider"] is True
+    assert metadata["review_provider_patch"]["operation_count"] >= 1
+    assert metadata["review_decision"]["requires_manual_apply"] is True
+    assert compare_status == 200
+    assert compare["right"]["edit"]["review_candidate"]["candidate_type"] == "provider_review_patch"
+    assert compare["right"]["edit"]["review_decision"]["requires_manual_apply"] is True
+    assert export_status == 200
+    assert project_export["review_tasks"][0]["provider_summary"]["provider_candidate_count"] >= 2
+    assert project_export["versions"][1]["edit"]["review_provider_patch"]["operation_count"] >= 1
+    assert usage_status == 200
+    assert any(item["operation"] == "provider_review_candidates" for item in usage["records"])
+    assert "sk-secret-value" not in serialized
+    assert "api_key" not in serialized

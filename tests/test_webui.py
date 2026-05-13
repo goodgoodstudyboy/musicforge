@@ -470,6 +470,10 @@ def test_webui_contains_interactive_editor_controls():
     assert "Create Review Task" in html
     assert "Review Workbench" in html
     assert "Generate Local Candidates" in html
+    assert "Generate Provider Candidates" in html
+    assert "Decision Report" in html
+    assert "Refresh Decision Report" in html
+    assert "provider-review-candidates" in html
     assert "Refresh Review Tasks" in html
     assert "Resolve Task" in html
     assert "Needs More Work" in html
@@ -481,6 +485,8 @@ def test_webui_contains_interactive_editor_controls():
     assert "/review-task" in html
     assert "/review-tasks?include_archived=1" in html
     assert "/review-tasks/${encodeURIComponent(task.task_id)}" in html
+    assert "/provider-candidates" in html
+    assert "/decision-report/refresh" in html
     assert "/candidates/${encodeURIComponent(button.dataset.candidateId)}/apply" in html
     assert "/needs-more-work" in html
     assert "/resolve" in html

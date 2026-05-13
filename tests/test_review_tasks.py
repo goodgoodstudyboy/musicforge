@@ -6,16 +6,22 @@ import pytest
 
 from song_agent.editor_audition import EditorAuditionManifest
 from song_agent.edits import EditIntent
+from song_agent.provider import ProviderConfig
+from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.review_tasks import (
     ReviewCandidate,
     ReviewTaskStateError,
     ReviewTaskStore,
     apply_candidate_intents,
     build_local_review_candidates,
+    build_provider_review_candidates,
+    build_review_decision_report,
     candidate_intents_for_strategy,
     ensure_candidate_current,
     ensure_task_current,
     mark_task_resolved,
+    review_candidate_source_breakdown,
+    review_decision_summary,
     review_task_target,
 )
 from song_agent.song_editor import song_plan_hash
@@ -99,6 +105,65 @@ def test_local_review_candidates_generate_rank_and_render_midi(tmp_path):
     assert task.counts["ready_candidate_count"] >= 2
     assert ranked[0].rank == 1
     assert store.candidate_midi_path(task.task_id, ranked[0].candidate_id).read_bytes().startswith(b"MThd")
+
+
+def test_provider_review_candidates_generate_decision_report_and_sanitize(tmp_path):
+    plan = demo_song_plan()
+    store = ReviewTaskStore(tmp_path / "project")
+    task = _task(store, plan)
+    template = PromptTemplateStore(tmp_path / "templates").get_template("provider-review-candidates")
+    generated_specs, provider_snapshot, instruction = build_provider_review_candidates(
+        task=task,
+        parent_plan=plan,
+        template=template,
+        config=ProviderConfig(wire_api="mock", model="mock-review", api_key="sk-secret-value"),
+        candidate_count=3,
+    )
+    stored = [
+        store.create_candidate(task=task, candidate=candidate, candidate_plan=candidate_plan, validator=validator, summary=summary)
+        for candidate, candidate_plan, validator, summary in generated_specs
+    ]
+    ranked = store.rank_candidates(task)
+    report = build_review_decision_report(task=task, candidates=ranked, parent_plan=plan, now="2026-05-13T00:00:00+00:00")
+    written = store.write_decision_report(task, report, now="2026-05-13T00:00:00+00:00")
+    serialized = json.dumps({"candidates": [candidate.to_dict() for candidate in stored], "report": written, "instruction": instruction}, ensure_ascii=False)
+
+    assert provider_snapshot["operation"] == "provider_review_candidates"
+    assert len(stored) >= 2
+    assert all(candidate.candidate_type == "provider_review_patch" for candidate in stored)
+    assert all(candidate.strategy == "provider" for candidate in stored)
+    assert all(candidate.patch and candidate.intents for candidate in stored)
+    assert ranked[0].rank == 1
+    assert written["requires_manual_apply"] is True
+    assert written["recommended_candidate_id"] == ranked[0].candidate_id
+    assert written["source_breakdown"]["provider_candidate_count"] == len(stored)
+    assert review_decision_summary(written)["recommended_candidate_id"] == ranked[0].candidate_id
+    assert "api_key" not in serialized
+    assert "sk-secret-value" not in serialized
+    assert "raw_prompt" not in serialized
+
+
+def test_provider_source_breakdown_deduplicates_usage_tokens(tmp_path):
+    plan = demo_song_plan()
+    store = ReviewTaskStore(tmp_path / "project")
+    task = _task(store, plan)
+    template = PromptTemplateStore(tmp_path / "templates").get_template("provider-review-candidates")
+    generated_specs, _provider_snapshot, _instruction = build_provider_review_candidates(
+        task=task,
+        parent_plan=plan,
+        template=template,
+        config=ProviderConfig(wire_api="mock", model="mock-review"),
+        candidate_count=3,
+    )
+    candidates = [
+        store.create_candidate(task=task, candidate=candidate, candidate_plan=candidate_plan, validator=validator, summary=summary)
+        for candidate, candidate_plan, validator, summary in generated_specs
+    ]
+
+    breakdown = review_candidate_source_breakdown(candidates)
+
+    assert breakdown["provider_candidate_count"] == len(candidates)
+    assert breakdown["provider_usage"]["total_tokens"] == candidates[0].source["usage"]["total_tokens"]
 
 
 def test_keep_marker_preserves_melody_variation(tmp_path):

@@ -346,6 +346,27 @@ BUILT_IN_TEMPLATES = [
     ),
     PromptTemplate.from_dict(
         {
+            "template_id": "provider-review-candidates",
+            "name": "Provider review candidates",
+            "description": "Generate constrained provider patch candidates for a persistent Review Task.",
+            "task": "provider_review_candidates",
+            "system_prompt": (
+                "You are a MusicForge review workbench candidate planner. Return one JSON object only with a candidates array. "
+                "Each candidate must be a constrained ProviderEditPatch that can be locally validated and scored. "
+                "Do not apply changes automatically. Do not include file paths, URLs, secrets, credentials, raw prompts, or free-form code."
+            ),
+            "user_prompt": (
+                "Create the requested number of review candidate edit patches for this sanitized Review Task context. "
+                "Use local candidate context only to understand tradeoffs, not to copy invalid operations. "
+                "Treat keep/hook markers as preserve signals and keep edits targeted to the review task target.\n"
+                "{{context_json}}"
+            ),
+            "output_schema": PROVIDER_EDIT_CANDIDATES_SCHEMA,
+        },
+        built_in=True,
+    ),
+    PromptTemplate.from_dict(
+        {
             "template_id": "provider-edit-critic",
             "name": "Provider edit critic",
             "description": "Review a provider edit patch for obvious musical and schema risks.",

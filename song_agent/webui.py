@@ -413,6 +413,33 @@ def panel_html() -> str:
       font-size: 14px;
       letter-spacing: 0;
     }
+    .review-candidate-source {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+    .review-candidate-source.provider {
+      color: #064e3b;
+      border-color: #a7f3d0;
+      background: #ecfdf5;
+    }
+    .decision-report-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #f8fafc;
+      margin: 10px 0;
+    }
+    .decision-report-panel h5 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
     .compare-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4587,6 +4614,30 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await renderProjectReviewWorkbench(project, versions, target);
         });
       });
+      target.querySelectorAll("[data-review-provider]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.reviewProvider)}/provider-candidates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              candidate_count: Number(button.dataset.candidateCount || 3),
+              template_id: "provider-review-candidates",
+              render_midi: true,
+            }),
+          });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-report-refresh]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.reviewReportRefresh)}/decision-report/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ note: "Refreshed in Review Workbench" }),
+          });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
       target.querySelectorAll("[data-review-candidate-render-midi]").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.taskId)}/candidates/${encodeURIComponent(button.dataset.candidateId)}/render-midi`, { method: "POST" });
@@ -4663,6 +4714,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const snapshot = task.review_snapshot || {};
       const source = task.source || {};
       const candidates = task.candidates || [];
+      const decision = task.decision_report || {};
+      const providerSummary = task.provider_summary || {};
       return `
         <div class="review-task-row">
           <h4>${escapeHtml(task.title || task.task_id)}</h4>
@@ -4677,6 +4730,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${metric("Track", target.track_name || "-")}
             ${metric("Global Beat", target.global_marker_beat ?? "-")}
             ${metric("Candidates", (task.counts || {}).candidate_count ?? candidates.length)}
+            ${metric("Provider Candidates", providerSummary.provider_candidate_count ?? 0)}
             ${metric("Selected", task.selected_candidate_id || "-")}
             ${metric("Applied Version", task.applied_version_id || "-")}
           </div>
@@ -4684,8 +4738,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <div class="empty small">
             ${escapeHtml([snapshot.notes_excerpt || "", `tags: ${(snapshot.tags || []).join(", ") || "-"}`, `source: ${task.preview_id}/${task.audition_id}`, `range: ${((source.audition_range || {}).mode) || "-"}`, `track mode: ${source.track_mode || "-"}`].filter(Boolean).join(" · "))}
           </div>
+          ${decision && decision.schema_version ? reviewDecisionReportHtml(decision, providerSummary) : ""}
           <div class="actions">
             <button class="secondary" data-review-task-generate="${escapeHtml(task.task_id)}" type="button" ${["resolved", "archived", "stale", "needs_more_work"].includes(task.status) ? "disabled" : ""}>Generate Local Candidates</button>
+            <button class="secondary" data-review-provider="${escapeHtml(task.task_id)}" data-candidate-count="3" type="button" ${["resolved", "archived", "stale", "needs_more_work"].includes(task.status) ? "disabled" : ""}>Generate Provider Candidates</button>
+            <button class="secondary" data-review-report-refresh="${escapeHtml(task.task_id)}" type="button" ${["stale"].includes(task.status) ? "disabled" : ""}>Refresh Decision Report</button>
             <button class="secondary" data-review-task-resolve="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Resolve Task</button>
             <button class="secondary" data-review-task-needs-work="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Needs More Work</button>
             <button class="danger" data-review-task-archive="${escapeHtml(task.task_id)}" type="button" ${["resolved", "archived", "stale"].includes(task.status) ? "disabled" : ""}>Archive Task</button>
@@ -4697,22 +4754,47 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function reviewDecisionReportHtml(report, providerSummary) {
+      const ranking = Array.isArray(report.ranking) ? report.ranking : [];
+      const top = ranking[0] || {};
+      const source = report.source_breakdown || providerSummary || {};
+      return `
+        <div class="decision-report-panel">
+          <h5>Decision Report</h5>
+          <div class="summary-grid">
+            ${metric("Recommended", report.recommended_candidate_id || "-")}
+            ${metric("Manual Apply", report.requires_manual_apply ? "required" : "-")}
+            ${metric("Provider", source.provider_candidate_count ?? 0)}
+            ${metric("Local", source.local_candidate_count ?? 0)}
+            ${metric("Top Score", top.combined ?? "-")}
+            ${metric("Risk Flags", (report.risk_flags || []).length)}
+          </div>
+          ${report.recommendation_reason ? `<p>${escapeHtml(report.recommendation_reason)}</p>` : ""}
+          ${ranking.length ? `<pre>${escapeHtml(JSON.stringify(ranking.slice(0, 5), null, 2))}</pre>` : ""}
+        </div>
+      `;
+    }
+
     function reviewCandidateWorkbenchCardHtml(project, task, candidate) {
       const scores = candidate.scores || {};
       const warnings = candidate.warnings || [];
+      const source = candidate.source || {};
+      const sourceLabel = source.provider ? "provider" : "local";
       const applyDisabled = task.status === "applied" || candidate.status !== "ready";
       const midiUrl = candidate.midi_url || `/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(task.task_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/midi`;
       const audioUrl = candidate.audio_url || `/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(task.task_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/audio`;
       return `
         <div class="review-candidate-card">
-          <h5>${escapeHtml(candidate.rank ? `#${candidate.rank} ` : "")}${escapeHtml(candidate.candidate_id)}</h5>
+          <h5>${escapeHtml(candidate.rank ? `#${candidate.rank} ` : "")}${escapeHtml(candidate.candidate_id)}<span class="review-candidate-source ${source.provider ? "provider" : "local"}">${escapeHtml(sourceLabel)}</span></h5>
           <div class="summary-grid">
             ${metric("Strategy", candidate.strategy || "-")}
             ${metric("Type", candidate.candidate_type || "-")}
             ${metric("Status", candidate.status || "-")}
+            ${metric("Model", source.model || "-")}
             ${metric("Combined", scores.combined ?? "-")}
             ${metric("Review Fit", scores.review_fit ?? "-")}
             ${metric("Precision", scores.target_precision ?? "-")}
+            ${metric("Risk", scores.risk ?? "-")}
             ${metric("Quality", scores.quality_overall ?? "-")}
             ${metric("MIDI", candidate.midi_status || "not_started")}
             ${metric("WAV", candidate.audio_status || "not_started")}

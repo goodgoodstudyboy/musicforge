@@ -735,6 +735,9 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
         "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
         "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
+        "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
+        "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
+        "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
@@ -1066,7 +1069,7 @@ def _collect_project_context_packs(project_dir: Path, document: ProjectDocument)
 
 
 def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
-    from song_agent.review_tasks import ReviewTaskStore, review_task_summary
+    from song_agent.review_tasks import ReviewTaskStore, review_candidate_source_breakdown, review_decision_summary, review_task_summary
 
     store = ReviewTaskStore(project_dir)
     tasks = store.list_tasks(include_archived=True)
@@ -1079,8 +1082,15 @@ def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
             except (OSError, ValueError, TypeError, FileNotFoundError):
                 selected = None
         summary = review_task_summary(task, selected)
+        candidates = store.list_candidates(task.task_id)
+        try:
+            decision_report = store.read_decision_report(task.task_id)
+        except (OSError, ValueError, TypeError, FileNotFoundError):
+            decision_report = {}
         summary["candidate_count"] = int(task.counts.get("candidate_count") or 0)
         summary["ready_candidate_count"] = int(task.counts.get("ready_candidate_count") or 0)
+        summary["provider_summary"] = review_candidate_source_breakdown(candidates)
+        summary["decision_report"] = review_decision_summary(decision_report)
         summary["priority"] = task.priority
         summaries.append(_sanitize_asset_metadata(summary))
     return sorted(summaries, key=lambda item: str(item.get("task_id") or ""))

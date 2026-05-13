@@ -323,6 +323,16 @@ task with the applied child version as its parent. Project Compare, Project
 Export, Final Export, and release-check include review task and selected
 candidate provenance without copying candidate audio into deliverables.
 
+v2.9.0 connects providers to the Review Workbench as candidate sources only.
+Generate Provider Candidates asks the configured provider for constrained
+ProviderEditPatch options with `provider-review-candidates`, then MusicForge
+converts, validates, scores, ranks, and renders them locally just like other
+ReviewCandidates. The Decision Report compares local and provider candidates,
+records source/usage breakdowns and risk flags, and always requires a manual
+Apply Candidate action. Provider candidates cannot auto-apply, cannot bypass
+the stale/artifact guards, and cannot modify a Review Task that already applied
+one candidate.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

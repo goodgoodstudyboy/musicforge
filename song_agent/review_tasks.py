@@ -8,10 +8,14 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.edits import EditIntent, EditedSongPlanResult, apply_edit_intent, validate_edit_intent
 from song_agent.editor_audition import EditorAuditionManifest
 from song_agent.music_quality import attach_quality
 from song_agent.projectio import read_json, write_json
+from song_agent.provider import ProviderConfig
+from song_agent.provider_edits import ProviderEditPatch, apply_provider_edit_patch, generate_provider_edit_candidates, provider_patch_to_intents
+from song_agent.prompt_templates import PromptTemplate
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.renderers.audio import RendererConfig, RendererError, render_audio
@@ -23,11 +27,13 @@ from song_agent.song_editor import song_plan_hash
 
 REVIEW_TASK_SCHEMA_VERSION = 1
 REVIEW_CANDIDATE_SCHEMA_VERSION = 1
+REVIEW_DECISION_REPORT_SCHEMA_VERSION = 1
 TASK_ID_PATTERN = re.compile(r"^review-task-[0-9]{3,6}$")
 CANDIDATE_ID_PATTERN = re.compile(r"^revcand-[0-9]{3,6}$")
 TASK_STATUSES = {"open", "candidate_ready", "applied", "resolved", "needs_more_work", "archived", "stale"}
 CANDIDATE_STATUSES = {"queued", "ready", "failed", "applied", "stale", "deleted"}
 STRATEGIES = ("conservative", "balanced", "bold")
+PROVIDER_STRATEGY = "provider"
 TERMINAL_TASK_STATUSES = {"resolved", "archived", "stale", "needs_more_work"}
 FIX_MARKERS = {"fix", "issue", "drop"}
 PRESERVE_MARKERS = {"keep", "hook"}
@@ -303,6 +309,26 @@ class ReviewTaskStore:
                 continue
         return events
 
+    def decision_report_path(self, task_id: str) -> Path:
+        return self.task_dir(task_id) / "decision-report.json"
+
+    def read_decision_report(self, task_id: str) -> dict[str, Any]:
+        path = self.decision_report_path(task_id)
+        if not path.exists():
+            raise FileNotFoundError(task_id)
+        data = read_json(path)
+        if not isinstance(data, dict):
+            raise ReviewTaskError("Review decision report must be an object.")
+        return sanitize_metadata(data)
+
+    def write_decision_report(self, task: ReviewTask, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        now = now or now_iso()
+        data = sanitize_metadata(dict(report or {}))
+        with self.lock:
+            write_json(self.decision_report_path(task.task_id), data)
+            _append_event(self.task_dir(task.task_id), "review_task_decision_report_written", {"candidate_count": data.get("candidate_count"), "recommended_candidate_id": data.get("recommended_candidate_id")}, now)
+        return data
+
     def create_candidate(
         self,
         *,
@@ -510,7 +536,8 @@ class ReviewTaskStore:
 
 def build_local_review_candidates(task: ReviewTask, parent_plan: SongPlan, *, strategies: list[str] | None = None) -> list[tuple[ReviewCandidate, SongPlan | None, dict[str, Any], dict[str, Any]]]:
     _ensure_task_open_for_generation(task)
-    strategies = [_strategy(item) for item in (strategies or list(STRATEGIES))]
+    strategies = [str(item or "").strip() for item in (strategies or list(STRATEGIES))]
+    strategies = [item for item in strategies if item in STRATEGIES]
     if not strategies:
         strategies = list(STRATEGIES)
     result = []
@@ -569,8 +596,381 @@ def build_local_review_candidates(task: ReviewTask, parent_plan: SongPlan, *, st
     return result
 
 
+def build_provider_review_candidates(
+    *,
+    task: ReviewTask,
+    parent_plan: SongPlan,
+    template: PromptTemplate,
+    config: ProviderConfig,
+    candidate_count: int = 3,
+    local_candidates: list[ReviewCandidate] | None = None,
+    asset_references: list[dict[str, Any]] | None = None,
+    reference_references: list[dict[str, Any]] | None = None,
+    client: Any | None = None,
+) -> tuple[list[tuple[ReviewCandidate, SongPlan | None, dict[str, Any], dict[str, Any]]], dict[str, Any], str]:
+    _ensure_task_open_for_generation(task)
+    ensure_task_current(task, parent_plan)
+    instruction = provider_review_candidate_instruction(task, local_candidates or [])
+    patches, provider_snapshot = generate_provider_edit_candidates(
+        parent_plan=parent_plan,
+        instruction=instruction,
+        template=template,
+        config=config,
+        candidate_count=candidate_count,
+        asset_references=asset_references,
+        reference_references=reference_references,
+        client=client,
+    )
+    snapshot = _provider_snapshot_for_candidate(provider_snapshot)
+    snapshot["operation"] = "provider_review_candidates"
+    snapshot["provider_run_id"] = f"{task.task_id}:{template.template_id}:{now_iso()}"
+    generated: list[tuple[ReviewCandidate, SongPlan | None, dict[str, Any], dict[str, Any]]] = []
+    for index, patch in enumerate(patches, start=1):
+        try:
+            result = apply_provider_edit_patch(parent_plan, patch)
+            result.plan.validate()
+            intents = provider_patch_to_intents(patch, parent_plan)
+            validator = _validator(
+                "passed",
+                warnings=[
+                    "Provider candidate was converted to local EditIntent operations before scoring and storage.",
+                    *list(result.warnings),
+                ],
+            )
+            scores = score_provider_review_candidate(
+                task=task,
+                parent_plan=parent_plan,
+                candidate_plan=result.plan,
+                patch=patch,
+                intents=intents,
+                validator_status="passed",
+            )
+            warnings = sorted({str(item) for item in [*patch.warnings, *result.warnings, *scores.get("warnings", [])] if str(item)})
+            candidate = ReviewCandidate.from_dict(
+                {
+                    "schema_version": REVIEW_CANDIDATE_SCHEMA_VERSION,
+                    "candidate_id": "revcand-001",
+                    "task_id": task.task_id,
+                    "project_id": task.project_id,
+                    "parent_version_id": task.parent_version_id,
+                    "candidate_type": "provider_review_patch",
+                    "strategy": PROVIDER_STRATEGY,
+                    "status": "ready",
+                    "summary": sanitize_sensitive_text(patch.summary)[:800],
+                    "source": _provider_candidate_source(task, snapshot, template.template_id, index),
+                    "intents": [intent.to_dict() for intent in intents],
+                    "patch": patch.to_dict(),
+                    "validator": validator,
+                    "scores": scores,
+                    "warnings": warnings,
+                    "hashes": {"parent_plan_hash": task.hashes.get("parent_plan_hash") or song_plan_hash(parent_plan)},
+                }
+            )
+            generated.append((candidate, result.plan, validator, {"scores": scores, "summary": candidate.summary, "provider_snapshot": snapshot}))
+        except Exception as exc:
+            validator = _validator("failed", errors=[str(exc)])
+            scores = {"combined": 0, "review_fit": 0, "target_precision": 0, "quality_delta": 0, "quality_overall": 0, "novelty": 0, "safety": 0, "risk": 100, "warnings": ["provider_candidate_failed"]}
+            candidate = ReviewCandidate.from_dict(
+                {
+                    "schema_version": REVIEW_CANDIDATE_SCHEMA_VERSION,
+                    "candidate_id": "revcand-001",
+                    "task_id": task.task_id,
+                    "project_id": task.project_id,
+                    "parent_version_id": task.parent_version_id,
+                    "candidate_type": "provider_review_patch",
+                    "strategy": PROVIDER_STRATEGY,
+                    "status": "failed",
+                    "summary": sanitize_sensitive_text(patch.summary if isinstance(patch, ProviderEditPatch) else "Provider review candidate failed.")[:800],
+                    "source": _provider_candidate_source(task, snapshot, template.template_id, index),
+                    "patch": patch.to_dict() if isinstance(patch, ProviderEditPatch) else None,
+                    "validator": validator,
+                    "scores": scores,
+                    "warnings": ["Provider candidate failed local validation."],
+                    "error": str(exc),
+                    "hashes": {"parent_plan_hash": task.hashes.get("parent_plan_hash") or song_plan_hash(parent_plan)},
+                }
+            )
+            generated.append((candidate, None, validator, {"error": str(exc), "provider_snapshot": snapshot}))
+    return generated, snapshot, instruction
+
+
+def provider_review_candidate_instruction(task: ReviewTask, local_candidates: list[ReviewCandidate] | None = None) -> str:
+    local_items = []
+    for candidate in (local_candidates or [])[:6]:
+        local_items.append(
+            {
+                "candidate_id": candidate.candidate_id,
+                "strategy": candidate.strategy,
+                "status": candidate.status,
+                "rank": candidate.rank,
+                "score": candidate.scores.get("combined"),
+                "summary": candidate.summary,
+                "warnings": list(candidate.warnings[:4]),
+            }
+        )
+    context = sanitize_metadata(
+        {
+            "review_task": {
+                "task_id": task.task_id,
+                "title": task.title,
+                "summary": task.summary,
+                "priority": task.priority,
+                "target": {
+                    "section_name": task.target.get("section_name"),
+                    "track_name": task.target.get("track_name"),
+                    "role": task.target.get("role"),
+                    "marker_kind": task.target.get("marker_kind"),
+                    "global_marker_beat": task.target.get("global_marker_beat"),
+                },
+                "review_snapshot": {
+                    "status": task.review_snapshot.get("status"),
+                    "rating": task.review_snapshot.get("rating"),
+                    "favorite": task.review_snapshot.get("favorite"),
+                    "notes_excerpt": task.review_snapshot.get("notes_excerpt"),
+                    "tags": task.review_snapshot.get("tags") or [],
+                    "marker_kinds": task.review_snapshot.get("marker_kinds") or [],
+                    "markers": task.review_snapshot.get("markers") or [],
+                },
+            },
+            "local_candidate_context": local_items,
+            "rules": [
+                "Return constrained ProviderEditPatch candidates only.",
+                "Do not apply changes automatically.",
+                "Treat keep and hook markers as preserve signals.",
+                "Prefer targeted edits around the review task target.",
+            ],
+        }
+    )
+    return json.dumps(context, ensure_ascii=False, sort_keys=True)
+
+
+def score_provider_review_candidate(
+    *,
+    task: ReviewTask,
+    parent_plan: SongPlan,
+    candidate_plan: SongPlan,
+    patch: ProviderEditPatch,
+    intents: list[EditIntent],
+    validator_status: str = "passed",
+) -> dict[str, Any]:
+    base = score_provider_edit_candidate(parent_plan=parent_plan, candidate_plan=candidate_plan, patch=patch, validator_status=validator_status).to_dict()
+    target_section = str(task.target.get("section_name") or "")
+    target_track = str(task.target.get("track_name") or "")
+    changed_sections = {intent.target.section_name for intent in intents if intent.target.section_name}
+    changed_tracks = {intent.target.track_name for intent in intents if intent.target.track_name}
+    edit_types = {intent.edit_type for intent in intents}
+    confidence = int(base.get("patch_confidence") or 0)
+    review_fit = 42 + round(confidence * 0.32)
+    if "track_density" in edit_types and (target_track or task.target.get("role") in {"bass", "drums"}):
+        review_fit += 18
+    if "section_energy" in edit_types and target_section:
+        review_fit += 14
+    if {"set_section_chords", "rewrite_section_lyrics"} & {op.op for op in patch.operations}:
+        review_fit += 8
+    target_precision = 38
+    if target_section and target_section in changed_sections:
+        target_precision += 38
+    if target_track and target_track in changed_tracks:
+        target_precision += 28
+    if len(changed_sections) <= 1:
+        target_precision += 8
+    if len(changed_tracks) <= 1:
+        target_precision += 6
+    quality_overall = int(base.get("quality_overall") or 0)
+    parent_quality = parent_plan.quality.scores.overall if parent_plan.quality and parent_plan.quality.scores else 0
+    quality_delta = quality_overall - parent_quality
+    risk = 0
+    if len(patch.operations) > 2:
+        risk += (len(patch.operations) - 2) * 10
+    if patch.warnings:
+        risk += min(30, len(patch.warnings) * 12)
+    if target_precision < 60:
+        risk += 14
+    if quality_overall < 60:
+        risk += 18
+    safety = _clamp(100 - risk, 0, 100)
+    combined = round(
+        0.34 * _clamp(review_fit, 0, 100)
+        + 0.24 * _clamp(target_precision, 0, 100)
+        + 0.18 * _clamp(quality_overall, 0, 100)
+        + 0.12 * _clamp(confidence, 0, 100)
+        + 0.12 * safety
+    )
+    warnings = [str(item) for item in base.get("warnings", []) if str(item)]
+    if risk >= 40:
+        warnings.append("provider_review_risk")
+    return {
+        **base,
+        "combined": _clamp(combined, 0, 100),
+        "review_fit": _clamp(review_fit, 0, 100),
+        "target_precision": _clamp(target_precision, 0, 100),
+        "quality_delta": quality_delta,
+        "quality_overall": quality_overall,
+        "safety": safety,
+        "risk": _clamp(risk, 0, 100),
+        "warnings": sorted(set(warnings)),
+    }
+
+
+def build_review_decision_report(
+    *,
+    task: ReviewTask,
+    candidates: list[ReviewCandidate],
+    parent_plan: SongPlan | None = None,
+    now: str | None = None,
+    notes: str = "",
+) -> dict[str, Any]:
+    if parent_plan is not None:
+        ensure_task_current(task, parent_plan)
+    parent_hash = task.hashes.get("parent_plan_hash") or (song_plan_hash(parent_plan) if parent_plan is not None else "")
+    usable = [candidate for candidate in candidates if candidate.status in {"ready", "applied"}]
+    ranked = sorted(usable, key=lambda item: (item.rank or 9999, -int(item.scores.get("combined") or 0), item.candidate_id))
+    recommended = ranked[0] if ranked else None
+    report = {
+        "schema_version": REVIEW_DECISION_REPORT_SCHEMA_VERSION,
+        "task_id": task.task_id,
+        "project_id": task.project_id,
+        "parent_version_id": task.parent_version_id,
+        "parent_song_plan_hash": parent_hash,
+        "created_at": now or now_iso(),
+        "candidate_count": len(candidates),
+        "recommended_candidate_id": recommended.candidate_id if recommended else None,
+        "recommendation_reason": _recommendation_reason(recommended) if recommended else "No ready candidate is available.",
+        "requires_manual_apply": True,
+        "ranking": [_decision_rank_entry(candidate, index + 1) for index, candidate in enumerate(ranked)],
+        "source_breakdown": review_candidate_source_breakdown(candidates),
+        "risk_flags": _decision_risk_flags(task, candidates, recommended),
+        "notes": sanitize_sensitive_text(notes)[:1000],
+    }
+    return sanitize_metadata(report)
+
+
+def review_decision_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(report, dict):
+        return {}
+    return sanitize_metadata(
+        {
+            "schema_version": report.get("schema_version"),
+            "task_id": report.get("task_id"),
+            "recommended_candidate_id": report.get("recommended_candidate_id"),
+            "candidate_count": report.get("candidate_count"),
+            "requires_manual_apply": bool(report.get("requires_manual_apply", True)),
+            "source_breakdown": report.get("source_breakdown") if isinstance(report.get("source_breakdown"), dict) else {},
+            "risk_flags": report.get("risk_flags") if isinstance(report.get("risk_flags"), list) else [],
+            "created_at": report.get("created_at"),
+        }
+    )
+
+
+def review_candidate_source_breakdown(candidates: list[ReviewCandidate]) -> dict[str, Any]:
+    provider = [candidate for candidate in candidates if candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider")]
+    local = [candidate for candidate in candidates if candidate.candidate_type == "local_review_intents"]
+    usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    models: set[str] = set()
+    templates: set[str] = set()
+    seen_usage_calls: set[tuple[str, str, str, int]] = set()
+    for candidate in provider:
+        source = candidate.source
+        usage_data = source.get("usage") if isinstance(source.get("usage"), dict) else {}
+        usage_key = (
+            str(source.get("provider_run_id") or ""),
+            str(source.get("request_id") or ""),
+            str(source.get("template_id") or ""),
+            str(source.get("model") or ""),
+            _usage_int(usage_data, "total_tokens"),
+        )
+        if usage_key not in seen_usage_calls:
+            seen_usage_calls.add(usage_key)
+            for key in usage:
+                usage[key] += _usage_int(usage_data, key)
+        if source.get("model"):
+            models.add(str(source.get("model")))
+        if source.get("template_id"):
+            templates.add(str(source.get("template_id")))
+    return sanitize_metadata(
+        {
+            "local_candidate_count": len(local),
+            "provider_candidate_count": len(provider),
+            "ready_provider_candidate_count": len([candidate for candidate in provider if candidate.status == "ready"]),
+            "failed_provider_candidate_count": len([candidate for candidate in provider if candidate.status == "failed"]),
+            "provider_models": sorted(models),
+            "provider_template_ids": sorted(templates),
+            "provider_usage": usage,
+        }
+    )
+
+
+def _decision_rank_entry(candidate: ReviewCandidate, rank: int) -> dict[str, Any]:
+    scores = candidate.scores if isinstance(candidate.scores, dict) else {}
+    return sanitize_metadata(
+        {
+            "candidate_id": candidate.candidate_id,
+            "candidate_type": candidate.candidate_type,
+            "strategy": candidate.strategy,
+            "source_type": candidate.source.get("source_type") if isinstance(candidate.source, dict) else "",
+            "provider": bool(candidate.source.get("provider")) if isinstance(candidate.source, dict) else False,
+            "rank": rank,
+            "combined": int(scores.get("combined") or 0),
+            "review_fit": int(scores.get("review_fit") or 0),
+            "quality_overall": int(scores.get("quality_overall") or 0),
+            "target_precision": int(scores.get("target_precision") or 0),
+            "risk": int(scores.get("risk") or (100 - int(scores.get("safety") or 100))),
+            "warnings": list(candidate.warnings[:8]),
+            "summary": candidate.summary,
+        }
+    )
+
+
+def _recommendation_reason(candidate: ReviewCandidate | None) -> str:
+    if candidate is None:
+        return "No ready candidate is available."
+    score = int(candidate.scores.get("combined") or 0)
+    source = "provider" if candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider") else candidate.strategy
+    return sanitize_sensitive_text(f"Ranked first by combined review score ({score}) from {source} candidate {candidate.candidate_id}.")[:500]
+
+
+def _decision_risk_flags(task: ReviewTask, candidates: list[ReviewCandidate], recommended: ReviewCandidate | None) -> list[str]:
+    flags: list[str] = []
+    if recommended is None:
+        flags.append("no_ready_candidate")
+    if recommended and recommended.candidate_type == "provider_review_patch":
+        flags.append("provider_candidate_requires_manual_apply")
+    if any(int(candidate.scores.get("risk") or 0) >= 40 for candidate in candidates):
+        flags.append("high_risk_candidate_present")
+    if any(candidate.status == "failed" for candidate in candidates):
+        flags.append("failed_candidate_present")
+    if task.status in TERMINAL_TASK_STATUSES or task.status == "applied":
+        flags.append(f"task_status_{task.status}")
+    return sorted(set(flags))
+
+
+def _provider_patch_summary(patch: dict[str, Any]) -> dict[str, Any]:
+    operations = patch.get("operations") if isinstance(patch.get("operations"), list) else []
+    return sanitize_metadata(
+        {
+            "schema_version": patch.get("schema_version"),
+            "summary": patch.get("summary"),
+            "operation_count": len(operations),
+            "operations": [
+                {
+                    "op": operation.get("op"),
+                    "section_name": operation.get("section_name"),
+                    "track_name": operation.get("track_name"),
+                    "preserve": operation.get("preserve") if isinstance(operation.get("preserve"), list) else [],
+                }
+                for operation in operations
+                if isinstance(operation, dict)
+            ],
+            "warnings": patch.get("warnings") if isinstance(patch.get("warnings"), list) else [],
+            "confidence": patch.get("confidence"),
+        }
+    )
+
+
 def candidate_intents_for_strategy(task: ReviewTask, strategy: str) -> list[EditIntent]:
     strategy = _strategy(strategy)
+    if strategy not in STRATEGIES:
+        raise ReviewTaskError("Invalid local review candidate strategy.")
     target = task.target
     section_name = str(target.get("section_name") or "")
     track_name = str(target.get("track_name") or "")
@@ -740,7 +1140,7 @@ def mark_task_archived(task: ReviewTask) -> ReviewTask:
     return ReviewTask.from_dict({**task.to_dict(), "status": "archived"})
 
 
-def candidate_apply_metadata(task: ReviewTask, candidate: ReviewCandidate, result: EditedSongPlanResult) -> dict[str, Any]:
+def candidate_apply_metadata(task: ReviewTask, candidate: ReviewCandidate, result: EditedSongPlanResult, *, decision_report: dict[str, Any] | None = None) -> dict[str, Any]:
     primary = EditIntent.from_dict(candidate.intents[0])
     metadata = {
         "schema_version": 1,
@@ -760,6 +1160,12 @@ def candidate_apply_metadata(task: ReviewTask, candidate: ReviewCandidate, resul
         },
         "review_candidate_intents": [dict(intent) for intent in candidate.intents],
     }
+    if candidate.source:
+        metadata["review_candidate_source"] = candidate.source
+    if candidate.patch:
+        metadata["review_provider_patch"] = _provider_patch_summary(candidate.patch)
+    if isinstance(decision_report, dict):
+        metadata["review_decision"] = review_decision_summary(decision_report)
     return sanitize_metadata(metadata)
 
 
@@ -815,7 +1221,7 @@ def _candidate_type(value: Any) -> str:
 
 def _strategy(value: Any) -> str:
     strategy = str(value or "balanced").strip()
-    if strategy not in STRATEGIES:
+    if strategy not in {*STRATEGIES, PROVIDER_STRATEGY}:
         raise ReviewTaskError("Invalid review candidate strategy.")
     return strategy
 
@@ -827,6 +1233,39 @@ def _candidate_source(task: ReviewTask) -> dict[str, Any]:
         "preview_id": task.preview_id,
         "source_type": "audition_review",
     }
+
+
+def _provider_candidate_source(task: ReviewTask, provider_snapshot: dict[str, Any], template_id: str, candidate_index: int) -> dict[str, Any]:
+    usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+    return sanitize_metadata(
+        {
+            "review_task_id": task.task_id,
+            "audition_id": task.audition_id,
+            "preview_id": task.preview_id,
+            "source_type": "provider_review_candidate",
+            "provider": True,
+            "template_id": template_id,
+            "wire_api": provider_snapshot.get("wire_api"),
+            "model": provider_snapshot.get("model"),
+            "request_id": provider_snapshot.get("request_id"),
+            "usage": {
+                "prompt_tokens": _usage_int(usage, "prompt_tokens"),
+                "completion_tokens": _usage_int(usage, "completion_tokens"),
+                "total_tokens": _usage_int(usage, "total_tokens"),
+            },
+            "candidate_index": candidate_index,
+            "provider_run_id": provider_snapshot.get("provider_run_id"),
+            "provider_snapshot": provider_snapshot,
+        }
+    )
+
+
+def _provider_snapshot_for_candidate(snapshot: dict[str, Any]) -> dict[str, Any]:
+    data = sanitize_metadata(dict(snapshot or {}))
+    data.pop("api_key", None)
+    data.pop("api_key_set", None)
+    data.pop("api_key_masked", None)
+    return data
 
 
 def _candidate_artifacts(task_id: str, candidate_id: str) -> dict[str, str]:
@@ -842,6 +1281,13 @@ def _candidate_artifacts(task_id: str, candidate_id: str) -> dict[str, str]:
 
 def _validator(status: str, errors: list[str] | None = None, warnings: list[str] | None = None) -> dict[str, Any]:
     return {"status": status, "errors": errors or [], "warnings": warnings or [], "checked_at": now_iso()}
+
+
+def _usage_int(usage: dict[str, Any], field_name: str) -> int:
+    try:
+        return max(0, int((usage or {}).get(field_name) or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def score_review_candidate(task: ReviewTask, candidate_plan: SongPlan, intents: list[EditIntent], strategy: str, parent_plan: SongPlan) -> dict[str, Any]:

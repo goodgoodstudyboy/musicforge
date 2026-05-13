@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.9.0 - 2026-05-13
+
+### Added
+- Provider review candidates for Review Tasks using the new `provider-review-candidates` prompt template and existing constrained ProviderEditPatch validation.
+- Decision Report storage at `review-tasks/<task-id>/decision-report.json`, with local/provider ranking, source breakdown, risk flags, and manual-apply recommendation.
+- Review Workbench controls for generating provider candidates, refreshing the Decision Report, and seeing provider/local source badges.
+- Project Compare, Project Export, Final Export, and provider usage reports now include provider review candidate provenance and decision summaries.
+- release-check now includes a v2.9 mock-provider smoke covering provider candidates, decision reports, candidate MIDI, artifact path pollution, apply, exports, and usage reporting.
+
+### Scope
+- Provider output is only a candidate source and explanation aid. It cannot auto-apply, cannot bypass local validation/scoring, and cannot replace the one-candidate-per-task apply guard.
+
+### Verified
+- `python -m pytest tests\test_review_tasks.py tests\test_server_review_tasks.py tests\test_webui.py -q`
+
 ## v2.8.0 - 2026-05-13
 
 ### Added

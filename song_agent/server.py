@@ -130,6 +130,8 @@ from song_agent.review_tasks import (
     ReviewTaskStateError,
     ReviewTaskStore,
     apply_candidate_intents,
+    build_provider_review_candidates,
+    build_review_decision_report,
     build_local_review_candidates,
     candidate_apply_metadata,
     ensure_candidate_current,
@@ -138,6 +140,8 @@ from song_agent.review_tasks import (
     mark_task_archived,
     mark_task_resolved,
     review_candidate_summary,
+    review_candidate_source_breakdown,
+    review_decision_summary,
     review_task_summary,
     task_list_summary,
 )
@@ -1089,6 +1093,9 @@ class JobStore:
                         "operation_count": len(metadata.get("review_candidate_intents") or []),
                         "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
                         "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
+                        "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
+                        "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
+                        "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
                         "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
                         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
                     }
@@ -4866,7 +4873,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 candidates = task_store.list_candidates(task.task_id)
-                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in candidates], "events": task_store.read_events(task.task_id)})
+                decision_report = _try_read_review_decision_report(task_store, task.task_id)
+                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in candidates], "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(candidates), "events": task_store.read_events(task.task_id)})
                 return
             if action == "candidates":
                 if method != "POST":
@@ -4890,8 +4898,95 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     generated.append(stored)
                 ranked = task_store.rank_candidates(task)
                 task = task_store.update_counts(task, now=_utc_now())
+                decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now()), now=_utc_now())
                 self.project_store.append_event(project_id, "review_task_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated)})
-                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in ranked], "created": [candidate.to_dict() for candidate in generated]}, status=HTTPStatus.CREATED)
+                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in ranked], "created": [candidate.to_dict() for candidate in generated], "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(ranked)}, status=HTTPStatus.CREATED)
+                return
+            if action == "provider-candidates":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                payload = self._expand_context_pack_payload(payload)
+                _document, parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+                ensure_task_current(task, parent_plan)
+                template_id = str(payload.get("template_id") or "provider-review-candidates").strip()
+                template = self.prompt_template_store.get_template(template_id)
+                if not template.enabled:
+                    self._send_error(HTTPStatus.CONFLICT, "Prompt template is disabled.")
+                    return
+                candidate_count = int(payload.get("candidate_count") or 3)
+                config, _sources = load_provider_config()
+                asset_snapshot = asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_utc_now())
+                asset_prompt_refs = asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
+                reference_snapshot = reference_refs_snapshot(self.reference_store, payload.get("reference_refs"), captured_at=_utc_now())
+                reference_prompt_refs = reference_prompt_summaries(self.reference_store, payload.get("reference_refs"))
+                local_context = task_store.list_candidates(task.task_id) if bool(payload.get("include_local_context", True)) else []
+                generated_specs, provider_snapshot, instruction = build_provider_review_candidates(
+                    task=task,
+                    parent_plan=parent_plan,
+                    template=template,
+                    config=config,
+                    candidate_count=candidate_count,
+                    local_candidates=local_context,
+                    asset_references=asset_prompt_refs,
+                    reference_references=reference_prompt_refs,
+                )
+                generated = []
+                for candidate, candidate_plan, validator, summary in generated_specs:
+                    stored = task_store.create_candidate(
+                        task=task,
+                        candidate=candidate,
+                        candidate_plan=candidate_plan,
+                        validator=validator,
+                        summary=summary,
+                        render_midi_file=bool(payload.get("render_midi", True)),
+                        now=_utc_now(),
+                    )
+                    generated.append(stored)
+                ranked = task_store.rank_candidates(task)
+                task = task_store.update_counts(task, now=_utc_now())
+                provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+                usage_record = _provider_usage_record(
+                    config_snapshot=provider_snapshot,
+                    operation="provider_review_candidates",
+                    template_id=template.template_id,
+                    started_at=_utc_now(),
+                    status="completed",
+                    provider_usage=provider_usage,
+                    request_id=provider_snapshot.get("request_id"),
+                )
+                write_json(task_store.task_dir(task.task_id) / "provider-usage.json", usage_record)
+                decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("decision_note") or "")), now=_utc_now())
+                if asset_snapshot["asset_refs"]:
+                    self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "review_task_provider_candidates", "project_id": project_id, "review_task_id": task.task_id})
+                if reference_snapshot["reference_refs"]:
+                    self.reference_store.mark_used(reference_snapshot["reference_refs"], {"usage_type": "review_task_provider_candidates", "project_id": project_id, "review_task_id": task.task_id})
+                self.project_store.append_event(project_id, "review_task_provider_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated), "template_id": template.template_id})
+                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in ranked], "created": [candidate.to_dict() for candidate in generated], "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(ranked), "provider_snapshot": provider_snapshot, "instruction": instruction}, status=HTTPStatus.CREATED)
+                return
+            if action == "decision-report":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                candidates = task_store.rank_candidates(task)
+                decision_report = _try_read_review_decision_report(task_store, task.task_id)
+                if not decision_report:
+                    _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+                    decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_utc_now()), now=_utc_now())
+                self._send_json({"ok": True, "task": task.to_dict(), "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(candidates)})
+                return
+            if action == "decision-report-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+                ensure_task_current(task, parent_plan)
+                candidates = task_store.rank_candidates(task)
+                decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("note") or "")), now=_utc_now())
+                self.project_store.append_event(project_id, "review_task_decision_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": decision_report.get("recommended_candidate_id")})
+                self._send_json({"ok": True, "task": task.to_dict(), "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(candidates)})
                 return
             if action == "resolve":
                 if method != "POST":
@@ -4923,6 +5018,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Review task not found.")
         except ReviewTaskStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except (ReviewTaskError, EditorAuditionError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -5010,9 +5107,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             reference_refs=payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else None,
             context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
         )
+        decision_report = _try_read_review_decision_report(task_store, task.task_id)
         metadata = {
             **job.edit_metadata,
-            **candidate_apply_metadata(task, candidate, result),
+            **candidate_apply_metadata(task, candidate, result, decision_report=decision_report),
             "edit_type": primary.edit_type,
             "target": primary.target.to_dict(),
             "instruction": primary.instruction,
@@ -5024,6 +5122,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         job.input_payload["review_candidate_id"] = candidate.candidate_id
         job.input_payload["review_task"] = review_task_summary(task, candidate)
         job.input_payload["review_candidate"] = review_candidate_summary(candidate)
+        if decision_report:
+            job.input_payload["review_decision"] = review_decision_summary(decision_report)
         self.store._write_job(job)
         write_json(ProjectPaths.create(Path(job.output_dir)).data / "edit-metadata.json", metadata)
         self.store.start_job(job.job_id)
@@ -7111,6 +7211,13 @@ def _provider_usage_record(
     }
 
 
+def _try_read_review_decision_report(task_store: ReviewTaskStore, task_id: str) -> dict[str, Any]:
+    try:
+        return task_store.read_decision_report(task_id)
+    except (FileNotFoundError, OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {}
+
+
 def _usage_int(usage: dict[str, Any], field_name: str) -> int:
     value = usage.get(field_name)
     if value is None:
@@ -7637,8 +7744,10 @@ def _match_project_review_task_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 2 and parts[0] == "review-tasks":
         return unquote(parts[1]), "detail"
-    if len(parts) == 3 and parts[0] == "review-tasks" and parts[2] in {"candidates", "resolve", "needs-more-work", "archive"}:
+    if len(parts) == 3 and parts[0] == "review-tasks" and parts[2] in {"candidates", "provider-candidates", "decision-report", "resolve", "needs-more-work", "archive"}:
         return unquote(parts[1]), parts[2]
+    if len(parts) == 4 and parts[0] == "review-tasks" and parts[2] == "decision-report" and parts[3] == "refresh":
+        return unquote(parts[1]), "decision-report-refresh"
     return None
 
 
