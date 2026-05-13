@@ -95,6 +95,35 @@ def test_summary_counts_candidates_and_rollup(tmp_path):
     assert rollup["open_task_count"] == 0
 
 
+def test_recommendation_report_round_trip_and_event(tmp_path):
+    plan = demo_song_plan()
+    task_store = ReviewTaskStore(tmp_path / "project")
+    task = _task(task_store, plan)
+    sprint_store = ReviewSprintStore(tmp_path / "project")
+    sprint = sprint_store.create_sprint(project_id="project-001", task_store=task_store, payload={"task_ids": [task.task_id]})
+
+    report = sprint_store.write_recommendation_report(
+        sprint,
+        {
+            "schema_version": 1,
+            "sprint_id": sprint.sprint_id,
+            "recommended_order": [task.task_id],
+            "source_summary": {"context_recommendation_count": 1},
+            "secret": r"api_key=sk-secret-value C:\Users\demo\song.wav",
+        },
+        now="2026-05-14T00:00:00+00:00",
+    )
+    loaded = sprint_store.read_recommendation_report(sprint.sprint_id)
+    serialized = json.dumps(loaded, ensure_ascii=False)
+
+    assert sprint_store.recommendation_report_path(sprint.sprint_id).name == "recommendation-report.json"
+    assert report["recommended_order"] == [task.task_id]
+    assert loaded["sprint_id"] == sprint.sprint_id
+    assert "sk-secret-value" not in serialized
+    assert "C:\\Users" not in serialized
+    assert sprint_store.read_events(sprint.sprint_id)[-1]["event"] == "review_sprint_recommendations_refreshed"
+
+
 def test_conflict_detection_parent_mismatch_stale_and_follow_up(tmp_path):
     plan = demo_song_plan()
     task_store = ReviewTaskStore(tmp_path / "project")

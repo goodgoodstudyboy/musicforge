@@ -95,7 +95,7 @@ from song_agent.context_packs import (
     merge_context_refs,
     write_context_pack_snapshot,
 )
-from song_agent.library_index import LibraryIndexStore, recommend_library_context, search_library
+from song_agent.library_index import LibraryIndexStore, asset_source_hash, recommend_library_context, search_library
 from song_agent.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
 from song_agent.node_store import NodeStore
 from song_agent.prompt_templates import PromptTemplateStore
@@ -150,6 +150,10 @@ from song_agent.review_sprints import (
     ReviewSprintStateError,
     ReviewSprintStore,
     review_sprint_export_summary,
+)
+from song_agent.review_sprint_recommendations import (
+    build_review_sprint_recommendation_report,
+    recommendation_report_summary,
 )
 from song_agent.provider_usage import (
     build_provider_usage_report,
@@ -1103,6 +1107,7 @@ class JobStore:
                         "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
                         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
                         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
+                        "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
                         "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
                         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
                     }
@@ -5002,6 +5007,33 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self.project_store.append_event(project_id, "review_sprint_conflicts_refreshed", {"sprint_id": sprint.sprint_id, "conflict_count": len(report.get("conflicts", []))})
                 self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
                 return
+            if action == "recommendations":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+                if not report:
+                    report = self._refresh_review_sprint_recommendations(project_id, sprint_store, task_store, sprint)
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "recommendation_report": report, "summary": recommendation_report_summary(report)})
+                return
+            if action == "recommendations-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint, _conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+                report = self._refresh_review_sprint_recommendations(project_id, sprint_store, task_store, sprint)
+                self.project_store.append_event(project_id, "review_sprint_recommendations_refreshed", {"sprint_id": sprint.sprint_id, "recommended_count": len(report.get("recommended_order", []))})
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "recommendation_report": report, "summary": recommendation_report_summary(report)})
+                return
+            if action.startswith("recommendation-context-pack:"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                task_id = action.split(":", 1)[1]
+                payload = self._optional_json_body()
+                result = self._save_review_sprint_recommendation_context_pack(project_id, sprint_store, task_store, sprint, task_id, payload)
+                self._send_json(result, status=HTTPStatus.CREATED)
+                return
             if action == "generate-local-candidates":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5038,12 +5070,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     ) -> dict[str, Any]:
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
+        recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
         response = {
             "ok": True,
             "sprint": sprint.to_dict(),
             "summary": summary,
             "conflict_report": conflict_report,
-            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report),
+            "recommendation_report": recommendation_report,
+            "recommendation_summary": recommendation_report_summary(recommendation_report),
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report),
             "tasks": self._review_sprint_task_items(task_store, sprint),
         }
         if include_events:
@@ -5053,11 +5088,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def _review_sprint_public_payload(self, sprint_store: ReviewSprintStore, sprint: Any) -> dict[str, Any]:
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
+        recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
         return {
             **sprint.to_dict(),
             "summary": summary,
             "conflict_report": conflict_report,
-            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report),
+            "recommendation_report": recommendation_report,
+            "recommendation_summary": recommendation_report_summary(recommendation_report),
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report),
         }
 
     def _review_sprint_task_items(self, task_store: ReviewTaskStore, sprint: Any) -> list[dict[str, Any]]:
@@ -5088,6 +5126,76 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = sprint_store.detect_conflicts(sprint, task_store=task_store, parent_plan_hashes=parent_hashes, now=_utc_now())
         sprint = sprint_store.refresh_summary(sprint, task_store=task_store, now=_utc_now())
         return sprint, report
+
+    def _refresh_review_sprint_recommendations(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any) -> dict[str, Any]:
+        try:
+            project_document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            project_document = self.project_store.get_project(project_id)
+        index = self.library_index_store.load_or_build(self.asset_store, self.reference_store)
+        report = build_review_sprint_recommendation_report(
+            project_id=project_id,
+            sprint=sprint,
+            task_store=task_store,
+            sprint_store=sprint_store,
+            library_index=index,
+            project_document=project_document,
+            now=_utc_now(),
+        )
+        return sprint_store.write_recommendation_report(sprint, report, now=report.get("created_at") or _utc_now())
+
+    def _save_review_sprint_recommendation_context_pack(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if task_id not in self._review_sprint_ordered_task_ids(sprint):
+            raise FileNotFoundError(task_id)
+        task = task_store.read_task(task_id)
+        if task.project_id != project_id:
+            raise FileNotFoundError(task_id)
+        report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+        if not report:
+            report = self._refresh_review_sprint_recommendations(project_id, sprint_store, task_store, sprint)
+        action = _recommendation_action_for_task(report, task_id)
+        if not action:
+            raise ReviewSprintStateError("Recommendation for task is missing.")
+        preview = action.get("context_pack_preview") if isinstance(action.get("context_pack_preview"), dict) else {}
+        asset_refs = preview.get("asset_refs") if isinstance(preview.get("asset_refs"), list) else []
+        reference_refs = preview.get("reference_refs") if isinstance(preview.get("reference_refs"), list) else []
+        if not asset_refs and not reference_refs:
+            raise ReviewSprintStateError("Recommendation has no context refs to save.")
+        self._ensure_recommendation_context_refs_current(asset_refs, reference_refs)
+        pack_payload = {
+            "name": str(payload.get("name") or f"{sprint.name} {task_id} Context Pack")[:160],
+            "description": str(payload.get("description") or f"Saved from Review Sprint recommendation {sprint.sprint_id} for {task_id}.")[:1000],
+            "created_from": {
+                "source_type": "review_sprint_recommendation",
+                "project_id": project_id,
+                "sprint_id": sprint.sprint_id,
+                "task_id": task_id,
+                "recommendation_created_at": report.get("created_at"),
+                "recommendation_rank": action.get("rank"),
+                "recommended_action": action.get("action"),
+            },
+            "query": preview.get("query") if isinstance(preview.get("query"), dict) else {},
+            "asset_refs": asset_refs,
+            "reference_refs": reference_refs,
+            "selection": {
+                "mode": "recommendation",
+                "selected_by": str(payload.get("selected_by") or "user")[:80],
+                "score_summary": action.get("score_breakdown") if isinstance(action.get("score_breakdown"), dict) else {},
+            },
+        }
+        pack = self.context_pack_store.create_pack(pack_payload, asset_store=self.asset_store, reference_store=self.reference_store, now=_utc_now())
+        self.project_store.append_event(project_id, "review_sprint_recommendation_context_pack_saved", {"sprint_id": sprint.sprint_id, "task_id": task_id, "pack_id": pack.pack_id})
+        return {"ok": True, "context_pack": context_pack_public_dict(pack), "recommendation": action}
+
+    def _ensure_recommendation_context_refs_current(self, asset_refs: list[dict[str, Any]], reference_refs: list[dict[str, Any]]) -> None:
+        for ref in asset_refs:
+            asset = self.asset_store.read_asset(str(ref.get("asset_id") or ""))
+            if asset.hidden or str(ref.get("source_hash") or "") != asset_source_hash(asset):
+                raise ReviewSprintStateError("Recommendation context asset is stale. Refresh recommendations before saving.")
+        for ref in reference_refs:
+            reference = self.reference_store.read_reference(str(ref.get("reference_id") or ""))
+            if reference.hidden or str(ref.get("source_hash") or "") != reference.sha256:
+                raise ReviewSprintStateError("Recommendation context reference is stale. Refresh recommendations before saving.")
 
     def _review_sprint_parent_plan_hashes(self, project_id: str, task_store: ReviewTaskStore, sprint: Any) -> dict[str, str]:
         hashes: dict[str, str] = {}
@@ -5127,10 +5235,40 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     continue
                 summary = sprint_store.read_summary(sprint.sprint_id, default={})
                 conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
-                matches.append(review_sprint_export_summary(sprint, summary, conflict_report))
+                recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+                matches.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report))
             if not matches:
                 return {}
             return sanitize_metadata({"sprint_ids": [item["sprint_id"] for item in matches], "primary": matches[0], "sprints": matches})
+        except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _review_sprint_recommendation_summary_for_task(self, project_id: str, task_id: str) -> dict[str, Any]:
+        try:
+            project_dir = self.project_store.project_dir(project_id)
+            sprint_store = ReviewSprintStore(project_dir)
+            matches = []
+            for sprint in sprint_store.list_sprints(include_archived=True):
+                if task_id not in self._review_sprint_ordered_task_ids(sprint):
+                    continue
+                report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+                action = _recommendation_action_for_task(report, task_id)
+                if action:
+                    matches.append(
+                        {
+                            "sprint_id": sprint.sprint_id,
+                            "task_id": task_id,
+                            "report_created_at": report.get("created_at"),
+                            "rank": action.get("rank"),
+                            "action": action.get("action"),
+                            "score": action.get("score"),
+                            "reason": action.get("reason"),
+                            "context_ref_count": _context_ref_count(action.get("context_pack_preview")),
+                        }
+                    )
+            if not matches:
+                return {}
+            return sanitize_metadata({"primary": matches[0], "recommendations": matches})
         except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
             return {}
 
@@ -5543,6 +5681,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         sprint_membership = self._review_sprint_membership_summary(project_id, task.task_id)
         if sprint_membership:
             metadata["review_sprint"] = sprint_membership
+        sprint_recommendation = self._review_sprint_recommendation_summary_for_task(project_id, task.task_id)
+        if sprint_recommendation:
+            metadata["review_sprint_recommendation"] = sprint_recommendation
         job.edit_metadata = metadata
         job.input_payload["review_task_id"] = task.task_id
         job.input_payload["review_candidate_id"] = candidate.candidate_id
@@ -5552,6 +5693,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             job.input_payload["review_decision"] = review_decision_summary(decision_report)
         if sprint_membership:
             job.input_payload["review_sprint"] = sprint_membership
+        if sprint_recommendation:
+            job.input_payload["review_sprint_recommendation"] = sprint_recommendation
         self.store._write_job(job)
         write_json(ProjectPaths.create(Path(job.output_dir)).data / "edit-metadata.json", metadata)
         self.store.start_job(job.job_id)
@@ -8204,13 +8347,31 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 2 and parts[0] == "review-sprints":
         return unquote(parts[1]), "detail"
-    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts"}:
+    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts", "recommendations"}:
         return unquote(parts[1]), parts[2]
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "tasks" and parts[3] in {"remove", "reorder"}:
         return unquote(parts[1]), f"tasks-{parts[3]}"
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "conflicts" and parts[3] == "refresh":
         return unquote(parts[1]), "conflicts-refresh"
+    if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "recommendations" and parts[3] == "refresh":
+        return unquote(parts[1]), "recommendations-refresh"
+    if len(parts) == 5 and parts[0] == "review-sprints" and parts[2] == "recommendations" and parts[4] == "context-pack":
+        return unquote(parts[1]), f"recommendation-context-pack:{unquote(parts[3])}"
     return None
+
+
+def _recommendation_action_for_task(report: dict[str, Any], task_id: str) -> dict[str, Any]:
+    actions = report.get("recommended_actions") if isinstance(report, dict) else []
+    for action in actions if isinstance(actions, list) else []:
+        if isinstance(action, dict) and action.get("task_id") == task_id:
+            return action
+    return {}
+
+
+def _context_ref_count(preview: Any) -> int:
+    if not isinstance(preview, dict):
+        return 0
+    return len(preview.get("asset_refs") or []) + len(preview.get("reference_refs") or [])
 
 
 def _match_project_review_task_candidate_tail(tail: str) -> tuple[str, str, str] | None:

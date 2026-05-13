@@ -17,6 +17,7 @@ from song_agent.review_tasks import ReviewTask, ReviewTaskStore, validate_review
 REVIEW_SPRINT_SCHEMA_VERSION = 1
 REVIEW_SPRINT_SUMMARY_SCHEMA_VERSION = 1
 REVIEW_SPRINT_CONFLICT_SCHEMA_VERSION = 1
+REVIEW_SPRINT_RECOMMENDATION_SCHEMA_VERSION = 1
 SPRINT_ID_PATTERN = re.compile(r"^sprint-[0-9]{3,6}$")
 SPRINT_STATUSES = {"open", "in_progress", "blocked", "closed", "archived"}
 MUTABLE_SPRINT_STATUSES = {"open", "in_progress", "blocked"}
@@ -310,6 +311,34 @@ class ReviewSprintStore:
         data = read_json(path)
         return sanitize_metadata(data if isinstance(data, dict) else {})
 
+    def recommendation_report_path(self, sprint_id: str) -> Path:
+        return self.sprint_dir(sprint_id) / "recommendation-report.json"
+
+    def read_recommendation_report(self, sprint_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.recommendation_report_path(sprint_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise FileNotFoundError(sprint_id)
+        data = read_json(path)
+        return sanitize_metadata(data if isinstance(data, dict) else {})
+
+    def write_recommendation_report(self, sprint: ReviewSprint, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        now = now or now_iso()
+        clean_report = sanitize_metadata({**(report if isinstance(report, dict) else {}), "schema_version": REVIEW_SPRINT_RECOMMENDATION_SCHEMA_VERSION})
+        with self.lock:
+            write_json(self.recommendation_report_path(sprint.sprint_id), clean_report)
+            _append_event(
+                self.sprint_dir(sprint.sprint_id),
+                "review_sprint_recommendations_refreshed",
+                {
+                    "recommended_count": len(clean_report.get("recommended_order", [])) if isinstance(clean_report.get("recommended_order"), list) else 0,
+                    "context_recommendation_count": int((clean_report.get("source_summary") or {}).get("context_recommendation_count") or 0) if isinstance(clean_report.get("source_summary"), dict) else 0,
+                },
+                now,
+            )
+        return clean_report
+
     def read_events(self, sprint_id: str) -> list[dict[str, Any]]:
         path = self.sprint_dir(sprint_id) / "events.jsonl"
         if not path.exists():
@@ -362,9 +391,15 @@ def validate_review_sprint_id(sprint_id: str) -> str:
     return sprint_id
 
 
-def review_sprint_export_summary(sprint: ReviewSprint, summary: dict[str, Any] | None = None, conflict_report: dict[str, Any] | None = None) -> dict[str, Any]:
+def review_sprint_export_summary(
+    sprint: ReviewSprint,
+    summary: dict[str, Any] | None = None,
+    conflict_report: dict[str, Any] | None = None,
+    recommendation_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     summary = summary if isinstance(summary, dict) else {}
     conflict_report = conflict_report if isinstance(conflict_report, dict) else {}
+    recommendation_summary = _recommendation_summary_for_export(recommendation_report)
     counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else sprint.counts
     return sanitize_metadata(
         {
@@ -375,6 +410,7 @@ def review_sprint_export_summary(sprint: ReviewSprint, summary: dict[str, Any] |
             "task_count": len([ref for ref in sprint.task_refs if ref.get("included", True)]),
             "summary": summary,
             "conflict_count": len(conflict_report.get("conflicts", [])) if isinstance(conflict_report.get("conflicts"), list) else int(counts.get("conflict_count") or 0),
+            "recommendation_summary": recommendation_summary,
             "task_ids": [str(ref.get("task_id")) for ref in sorted(sprint.task_refs, key=lambda ref: int(ref.get("order") or 0)) if ref.get("included", True)],
         }
     )
@@ -384,6 +420,7 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
     latest = sprints[0] if sprints else {}
     closed = [sprint for sprint in sprints if sprint.get("status") == "closed"]
     counts = [sprint.get("summary", {}).get("counts", {}) for sprint in sprints if isinstance(sprint.get("summary"), dict)]
+    recommendation_summaries = [sprint.get("recommendation_summary", {}) for sprint in sprints if isinstance(sprint.get("recommendation_summary"), dict)]
     return sanitize_metadata(
         {
             "latest_sprint_id": latest.get("sprint_id"),
@@ -391,6 +428,34 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
             "resolved_task_count": sum(int(count.get("resolved") or 0) for count in counts),
             "open_task_count": sum(int(count.get("open") or 0) for count in counts),
             "conflict_count": sum(int(count.get("conflict_count") or 0) for count in counts),
+            "recommendation_count": sum(int(item.get("open_recommendation_count") or 0) for item in recommendation_summaries),
+            "context_recommendation_count": sum(int(item.get("context_recommendation_count") or 0) for item in recommendation_summaries),
+            "next_action": (recommendation_summaries[0].get("next_action") if recommendation_summaries else None),
+        }
+    )
+
+
+def _recommendation_summary_for_export(report: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(report, dict) or not report:
+        return {}
+    actions = [item for item in report.get("recommended_actions", []) if isinstance(item, dict)]
+    sprint_level = report.get("sprint_level_recommendation") if isinstance(report.get("sprint_level_recommendation"), dict) else {}
+    top = actions[0] if actions else {}
+    return sanitize_metadata(
+        {
+            "schema_version": report.get("schema_version"),
+            "created_at": report.get("created_at"),
+            "recommended_order": [str(item) for item in report.get("recommended_order", []) if str(item).strip()][:20] if isinstance(report.get("recommended_order"), list) else [],
+            "next_action": sprint_level.get("next_action"),
+            "ready_to_close": bool(sprint_level.get("ready_to_close", False)),
+            "open_recommendation_count": len([item for item in actions if item.get("action") not in {"no_action", "skip_archived"}]),
+            "context_recommendation_count": int((report.get("source_summary") or {}).get("context_recommendation_count") or 0) if isinstance(report.get("source_summary"), dict) else 0,
+            "top_recommendation": {
+                "task_id": top.get("task_id"),
+                "rank": top.get("rank"),
+                "action": top.get("action"),
+                "score": top.get("score"),
+            },
         }
     )
 

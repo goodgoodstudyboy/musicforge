@@ -477,6 +477,11 @@ def test_webui_contains_interactive_editor_controls():
     assert "Generate Sprint Local" in html
     assert "Generate Sprint Provider" in html
     assert "Refresh Conflicts" in html
+    assert "Recommendations" in html
+    assert "Refresh Recommendations" in html
+    assert "Recommended Action" in html
+    assert "Save Context Pack" in html
+    assert "Applying candidates still requires manual confirmation." in html
     assert "Close Sprint" in html
     assert "Add to Sprint" in html
     assert "Decision Report" in html
@@ -497,6 +502,8 @@ def test_webui_contains_interactive_editor_controls():
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintProvider)}/generate-provider-candidates" in html
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintLocal)}/generate-local-candidates" in html
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintConflicts)}/conflicts/refresh" in html
+    assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintRecommendations)}/recommendations/refresh" in html
+    assert "/recommendations/${encodeURIComponent(button.dataset.taskId)}/context-pack" in html
     assert "/provider-candidates" in html
     assert "/decision-report/refresh" in html
     assert "/candidates/${encodeURIComponent(button.dataset.candidateId)}/apply" in html

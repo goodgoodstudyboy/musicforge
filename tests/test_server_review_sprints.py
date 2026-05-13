@@ -85,6 +85,7 @@ def test_review_sprint_api_batch_candidates_apply_refresh_and_close(tmp_path, mo
             f"/api/projects/{project_id}/review-sprints/{sprint_id}/generate-provider-candidates",
             {"candidate_count": 2, "render_midi": True},
         )
+        recommendations_status, recommendations = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/recommendations/refresh", {})
         provider_candidate_id = next(candidate["candidate_id"] for item in provider_candidates["tasks"] for candidate in item["candidates"] if item["task"]["task_id"] == first_task_id and candidate["candidate_type"] == "provider_review_patch")
         apply_status, applied = request_json(
             server,
@@ -124,6 +125,8 @@ def test_review_sprint_api_batch_candidates_apply_refresh_and_close(tmp_path, mo
     assert provider_candidates_status == 202
     assert provider_candidates["created_count"] >= 4
     assert provider_candidates["summary"]["counts"]["provider_candidate_count"] >= 4
+    assert recommendations_status == 200
+    assert recommendations["summary"]["top_recommendation"]["task_id"]
     assert provider_candidate_id
     assert apply_status == 202
     assert applied["candidate"]["candidate_type"] == "provider_review_patch"
@@ -132,13 +135,18 @@ def test_review_sprint_api_batch_candidates_apply_refresh_and_close(tmp_path, mo
     assert refreshed["summary"]["counts"]["applied"] == 1
     assert compare_status == 200
     assert compare["right"]["edit"]["review_sprint"]["primary"]["sprint_id"] == sprint_id
+    assert compare["right"]["edit"]["review_sprint_recommendation"]["primary"]["task_id"] == first_task_id
     assert export_status == 200
     assert project_export["review_sprints"][0]["sprint_id"] == sprint_id
+    assert project_export["review_sprints"][0]["recommendation_summary"]["top_recommendation"]["task_id"]
     assert project_export["versions"][1]["edit"]["review_sprint"]["primary"]["sprint_id"] == sprint_id
+    assert project_export["versions"][1]["edit"]["review_sprint_recommendation"]["primary"]["task_id"] == first_task_id
     assert final_set_status == 200
     assert final_export_status == 200
     assert final_export["final_export"]["edit"]["review_sprint"]["primary"]["sprint_id"] == sprint_id
+    assert final_export["final_export"]["edit"]["review_sprint_recommendation"]["primary"]["task_id"] == first_task_id
     assert final_export["final_export"]["review_sprint_summary"]["latest_sprint_id"] == sprint_id
+    assert final_export["final_export"]["review_sprint_recommendations"]["latest_sprint_id"] == sprint_id
     assert close_status == 200
     assert closed["sprint"]["status"] == "closed"
     assert closed_local_status == 409

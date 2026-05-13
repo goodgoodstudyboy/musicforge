@@ -130,6 +130,7 @@ def build_final_export_bundle(
     context_pack = _final_version_context_pack(run_dir, version.version_id, project_export)
     edit_metadata = _final_version_edit_metadata(run_dir, version.version_id, project_export)
     review_sprint_summary = _final_review_sprint_summary(project_export)
+    review_sprint_recommendations = _final_review_sprint_recommendations(project_export)
 
     manifest = {
         "project_id": project.project_id,
@@ -145,6 +146,7 @@ def build_final_export_bundle(
         "context_pack": context_pack,
         "edit": edit_metadata,
         "review_sprint_summary": review_sprint_summary,
+        "review_sprint_recommendations": review_sprint_recommendations,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -474,6 +476,7 @@ def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
         "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
+        "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
         "summary": metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {},
         "structure": metadata.get("structure") if isinstance(metadata.get("structure"), dict) else {},
         "warnings": metadata.get("warnings") or [],
@@ -493,6 +496,25 @@ def _final_review_sprint_summary(project_export: dict[str, Any] | None) -> dict[
         return _drop_empty(_sanitize_asset_metadata(review_sprint_project_rollup(sprints)))
     except (OSError, ValueError, TypeError):
         return {}
+
+
+def _final_review_sprint_recommendations(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict):
+        return {}
+    sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
+    summaries = [sprint.get("recommendation_summary", {}) for sprint in sprints if isinstance(sprint.get("recommendation_summary"), dict)]
+    if not summaries:
+        return {}
+    latest = summaries[0]
+    summary = {
+        "latest_sprint_id": sprints[0].get("sprint_id") if sprints else None,
+        "next_action": latest.get("next_action"),
+        "ready_to_close": bool(latest.get("ready_to_close", False)),
+        "open_recommendation_count": sum(int(item.get("open_recommendation_count") or 0) for item in summaries),
+        "context_recommendation_count": sum(int(item.get("context_recommendation_count") or 0) for item in summaries),
+        "top_recommendation": latest.get("top_recommendation") if isinstance(latest.get("top_recommendation"), dict) else {},
+    }
+    return _drop_empty(_sanitize_asset_metadata(summary))
 
 
 def _context_pack_export_summary(pack: dict[str, Any]) -> dict[str, Any]:

@@ -343,6 +343,17 @@ manual action through the existing Review Workbench safeguards. Project Compare,
 Project Export, Final Export, provider usage, and release-check include sprint
 provenance and sprint rollups.
 
+v3.1.0 adds deterministic Review Sprint recommendations. A Sprint
+Recommendation Report ranks included Review Tasks, explains the next action for
+each task, and previews a Context Pack built from local Library assets and
+references. The report is advisory only: recommendation APIs do not generate
+candidates, apply candidates, resolve tasks, or close sprints. Users can
+refresh recommendations, save a recommended Context Pack, and then explicitly
+choose whether to generate local/provider candidates or manually apply a ready
+candidate. Saved context packs reject hidden or stale source assets/references,
+and Project Compare, Project Export, and Final Export include compact
+recommendation summaries.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

@@ -4881,6 +4881,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try {
         const sprintData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints?include_archived=1`);
         sprints = sprintData.sprints || [];
+        sprints = await Promise.all(sprints.map(async (sprint) => {
+          try {
+            const recommendationData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/recommendations`);
+            return { ...sprint, recommendation_report: recommendationData.recommendation_report || {}, recommendation_summary: recommendationData.summary || {} };
+          } catch (err) {
+            return { ...sprint, recommendation_error: err.message };
+          }
+        }));
         summary = sprintData.summary || {};
         const taskData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks?include_archived=1`);
         tasks = taskData.tasks || [];
@@ -4933,6 +4941,23 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       target.querySelectorAll("[data-review-sprint-conflicts]").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintConflicts)}/conflicts/refresh`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-recommendations]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintRecommendations)}/recommendations/refresh`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-save-context]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.sprintId)}/recommendations/${encodeURIComponent(button.dataset.taskId)}/context-pack`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: `${button.dataset.sprintId} ${button.dataset.taskId} Context Pack` }),
+          });
+          await loadContextPacks();
           await renderProjectReviewSprints(project, versions, target);
         });
       });
@@ -5037,6 +5062,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const counts = summary.counts || sprint.counts || {};
       const report = sprint.conflict_report || {};
       const conflicts = Array.isArray(report.conflicts) ? report.conflicts : [];
+      const recommendationReport = sprint.recommendation_report || {};
+      const recommendationSummary = sprint.recommendation_summary || {};
+      const recommendationActions = Array.isArray(recommendationReport.recommended_actions) ? recommendationReport.recommended_actions : [];
       const taskIds = (sprint.task_refs || []).filter((ref) => ref.included !== false).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map((ref) => ref.task_id);
       const mutable = ["open", "in_progress", "blocked"].includes(sprint.status);
       return `
@@ -5055,6 +5083,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </div>
           <div class="empty small">${escapeHtml(taskIds.join(" · ") || "No tasks")}</div>
           ${conflicts.length ? `<div class="review-conflict-list">${conflicts.slice(0, 8).map((conflict) => reviewSprintConflictHtml(conflict)).join("")}</div>` : `<div class="empty small">No conflicts reported.</div>`}
+          ${reviewSprintRecommendationsHtml(sprint, recommendationSummary, recommendationActions)}
           <div class="actions">
             <select id="review-sprint-add-task-${escapeHtml(sprint.sprint_id)}" style="max-width:260px;" ${mutable ? "" : "disabled"}>
               <option value="">Add task</option>
@@ -5063,12 +5092,53 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" data-review-sprint-add-task="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Add Task</button>
             <button class="secondary" data-review-sprint-refresh="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Sprint</button>
             <button class="secondary" data-review-sprint-conflicts="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Conflicts</button>
+            <button class="secondary" data-review-sprint-recommendations="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Recommendations</button>
             <button class="secondary" data-review-sprint-local="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Local</button>
             <button class="secondary" data-review-sprint-provider="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Provider</button>
             <button class="secondary" data-review-sprint-close="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Close Sprint</button>
             <button class="danger" data-review-sprint-archive="${escapeHtml(sprint.sprint_id)}" type="button" ${sprint.status === "archived" ? "disabled" : ""}>Archive Sprint</button>
           </div>
-          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, settings: sprint.settings }, null, 2))}</pre>
+          ${sprint.recommendation_error ? `<div class="empty error">${escapeHtml(sprint.recommendation_error)}</div>` : ""}
+          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, settings: sprint.settings }, null, 2))}</pre>
+        </div>
+      `;
+    }
+
+    function reviewSprintRecommendationsHtml(sprint, summary, actions) {
+      const top = summary.top_recommendation || {};
+      const rows = (actions || []).slice(0, 8).map((action) => {
+        const preview = action.context_pack_preview || {};
+        const assetCount = Array.isArray(preview.asset_refs) ? preview.asset_refs.length : 0;
+        const referenceCount = Array.isArray(preview.reference_refs) ? preview.reference_refs.length : 0;
+        const canSaveContext = assetCount + referenceCount > 0;
+        return `
+          <tr>
+            <td>${escapeHtml(action.rank ?? "-")}</td>
+            <td>${escapeHtml(action.task_id || "-")}</td>
+            <td><span class="status ${escapeHtml(action.action || "")}">${escapeHtml(action.action || "-")}</span></td>
+            <td>${escapeHtml(action.score ?? "-")}</td>
+            <td>${escapeHtml(action.reason || "-")}</td>
+            <td>${escapeHtml(`${assetCount} assets / ${referenceCount} refs`)}</td>
+            <td><button class="secondary" data-review-sprint-save-context data-sprint-id="${escapeHtml(sprint.sprint_id)}" data-task-id="${escapeHtml(action.task_id || "")}" type="button" ${canSaveContext ? "" : "disabled"}>Save Context Pack</button></td>
+          </tr>
+        `;
+      }).join("");
+      return `
+        <div class="review-sprint-recommendations">
+          <h5>Recommendations</h5>
+          <div class="empty small">Recommendations only rank next steps. Applying candidates still requires manual confirmation.</div>
+          <div class="summary-grid">
+            ${metric("Next Action", summary.next_action || top.action || "-")}
+            ${metric("Open Recommendations", summary.open_recommendation_count ?? 0)}
+            ${metric("Context Packs", summary.context_recommendation_count ?? 0)}
+            ${metric("Ready To Close", summary.ready_to_close ? "yes" : "no")}
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Rank</th><th>Task</th><th>Recommended Action</th><th>Score</th><th>Reason</th><th>Context</th><th>Pack</th></tr></thead>
+              <tbody>${rows || `<tr><td colspan="7">Refresh recommendations to build a Sprint Recommendation Report.</td></tr>`}</tbody>
+            </table>
+          </div>
         </div>
       `;
     }

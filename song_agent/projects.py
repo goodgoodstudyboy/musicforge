@@ -740,6 +740,7 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
+        "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
@@ -1107,7 +1108,8 @@ def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
     for sprint in sprints:
         summary = store.read_summary(sprint.sprint_id, default={})
         conflict_report = store.read_conflict_report(sprint.sprint_id, default={})
-        summaries.append(review_sprint_export_summary(sprint, summary, conflict_report))
+        recommendation_report = store.read_recommendation_report(sprint.sprint_id, default={})
+        summaries.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report))
     return sorted((_sanitize_asset_metadata(item) for item in summaries), key=lambda item: str(item.get("sprint_id") or ""))
 
 

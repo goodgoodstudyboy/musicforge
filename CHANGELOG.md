@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.1.0 - 2026-05-14
+
+### Added
+- Review Sprint Recommendation Reports with deterministic task ordering, per-task recommended actions, scoring reasons, conflict awareness, and context pack previews.
+- Review Sprint recommendation APIs for GET, refresh, and manual Context Pack save from a recommendation.
+- Studio Review Sprints recommendations panel with next-action summaries, manual-apply warning, refresh, and Save Context Pack controls.
+- Project Compare, Project Export, Final Export, and edit metadata now include Review Sprint recommendation summaries without exporting full context candidate details.
+- release-check now includes a v3.1 smoke covering recommendation refresh, Context Pack save, stale source rejection, no-op recommendation APIs, provider generation with saved context, apply provenance, export, and final export.
+
+### Scope
+- v3.1.0 does not auto-apply candidates, auto-resolve tasks, or auto-generate candidates. Recommendations are advisory and all execution still requires explicit user action.
+
+### Verified
+- `python -m pytest tests\test_review_sprint_recommendations.py tests\test_review_sprints.py tests\test_server_review_sprint_recommendations.py tests\test_server_review_sprints.py tests\test_webui.py -q`
+
 ## v3.0.0 - 2026-05-13
 
 ### Added
