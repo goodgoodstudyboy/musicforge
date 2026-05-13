@@ -129,6 +129,7 @@ def build_final_export_bundle(
     )
     context_pack = _final_version_context_pack(run_dir, version.version_id, project_export)
     edit_metadata = _final_version_edit_metadata(run_dir, version.version_id, project_export)
+    review_sprint_summary = _final_review_sprint_summary(project_export)
 
     manifest = {
         "project_id": project.project_id,
@@ -143,6 +144,7 @@ def build_final_export_bundle(
         "reference_refs": reference_refs,
         "context_pack": context_pack,
         "edit": edit_metadata,
+        "review_sprint_summary": review_sprint_summary,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -471,11 +473,26 @@ def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
         "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
         "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
+        "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
         "summary": metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {},
         "structure": metadata.get("structure") if isinstance(metadata.get("structure"), dict) else {},
         "warnings": metadata.get("warnings") or [],
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
+
+
+def _final_review_sprint_summary(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict):
+        return {}
+    try:
+        from song_agent.review_sprints import review_sprint_project_rollup
+
+        sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
+        if not sprints:
+            return {}
+        return _drop_empty(_sanitize_asset_metadata(review_sprint_project_rollup(sprints)))
+    except (OSError, ValueError, TypeError):
+        return {}
 
 
 def _context_pack_export_summary(pack: dict[str, Any]) -> dict[str, Any]:

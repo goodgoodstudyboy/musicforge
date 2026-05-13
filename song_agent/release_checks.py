@@ -185,6 +185,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v2.7 review edit smoke", *_v27_review_edit_smoke(root))
     report.add("v2.8 review task smoke", *_v28_review_task_smoke(root))
     report.add("v2.9 provider review candidates smoke", *_v29_provider_review_candidates_smoke(root))
+    report.add("v3.0 review sprint smoke", *_v30_review_sprint_smoke(root))
     return report
 
 
@@ -2653,6 +2654,195 @@ def _v29_provider_review_candidates_smoke(root: Path) -> tuple[bool, str]:
                 and str(base) not in serialized
             )
             return ok, f"task={task_id}, provider_candidate={provider_candidate_id}, version={child_version}, provider_candidates={len(provider_ready)}, recommended={report.get('decision_report', {}).get('recommended_candidate_id')}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _v30_review_sprint_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            provider_status, provider = _release_http_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-review", "api_key": "sk-secret-value"})
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v3.0 Review Sprint Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v3.0 Review Sprint Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "review sprint",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
+                },
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {
+                    "patch": {
+                        "schema_version": 1,
+                        "base_plan_hash": state["base_plan_hash"],
+                        "label": "Review sprint patch",
+                        "operations": [{"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 97}}],
+                    },
+                    "render_midi": True,
+                },
+            )
+            preview = preview_data["preview"]
+            task_ids = []
+            audition_ids = []
+            for index, note in enumerate((r"bass too dense api_key=sk-secret-value C:\Users\demo\song.wav", "bass needs more movement"), start=1):
+                audition_status, audition = _release_http_json(
+                    server,
+                    "POST",
+                    f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions",
+                    {"source": "preview", "range": {"mode": "custom", "start_beat": 16.0, "end_beat": 48.0}, "track_mode": "solo", "track_ids": ["track-003"]},
+                )
+                audition_id = audition["audition"]["audition_id"]
+                audition_ids.append(audition_id)
+                review_status, _review = _release_http_json(
+                    server,
+                    "POST",
+                    f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/review",
+                    {"rating": 4, "status": "needs_fix", "favorite": True, "notes": note, "tags": ["review-sprint"]},
+                )
+                marker_status, _marker = _release_http_json(
+                    server,
+                    "POST",
+                    f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/markers",
+                    {"beat": float(index), "kind": "fix", "label": f"fix sprint target {index}"},
+                )
+                task_status, task_data = _release_http_json(
+                    server,
+                    "POST",
+                    f"/api/projects/{project_id}/editor-previews/{preview['preview_id']}/auditions/{audition_id}/review-task",
+                    {},
+                )
+                if not (audition_status == 201 and review_status == 200 and marker_status == 201 and task_status == 201):
+                    return False, f"task setup failed: audition={audition_status}, review={review_status}, marker={marker_status}, task={task_status}"
+                task_ids.append(task_data["task"]["task_id"])
+            sprint_status, sprint_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/review-sprints",
+                {
+                    "name": r"Release Sprint C:\Users\demo token=sk-secret-value",
+                    "task_ids": task_ids,
+                    "settings": {"local_candidate_strategies": ["balanced"], "provider_candidate_count": 2},
+                },
+            )
+            sprint_id = sprint_data["sprint"]["sprint_id"]
+            detail_status, detail = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-sprints/{sprint_id}")
+            conflict_status, conflicts = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/conflicts/refresh")
+            local_status, local_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/generate-local-candidates", {"strategies": ["balanced"], "render_midi": True})
+            provider_candidates_status, provider_candidates = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/generate-provider-candidates", {"candidate_count": 2, "render_midi": True})
+            provider_ready = [
+                candidate
+                for item in provider_candidates.get("tasks", [])
+                if item.get("task", {}).get("task_id") == task_ids[0]
+                for candidate in item.get("candidates", [])
+                if candidate.get("candidate_type") == "provider_review_patch" and candidate.get("status") == "ready"
+            ]
+            provider_candidate_id = provider_ready[0]["candidate_id"]
+            midi_status, midi = _release_http_bytes(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_ids[0]}/candidates/{provider_candidate_id}/midi")
+            candidate_json = base / ".musicforge" / "projects" / project_id / "review-tasks" / task_ids[0] / "candidates" / provider_candidate_id / "candidate.json"
+            original_candidate_data = json.loads(candidate_json.read_text(encoding="utf-8"))
+            polluted_candidate_data = json.loads(candidate_json.read_text(encoding="utf-8"))
+            polluted_candidate_data["artifacts"]["midi_path"] = f"review-tasks/{task_ids[0]}/candidates/revcand-999/renders/song.mid"
+            candidate_json.write_text(json.dumps(polluted_candidate_data), encoding="utf-8")
+            polluted_midi_status, polluted_midi = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_ids[0]}/candidates/{provider_candidate_id}/midi")
+            candidate_json.write_text(json.dumps(original_candidate_data), encoding="utf-8")
+            apply_status, applied = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/review-tasks/{task_ids[0]}/candidates/{provider_candidate_id}/apply",
+                {"version_name": "Review Sprint Candidate Child", "version_note": "v3.0 review sprint smoke"},
+            )
+            edit_job = _release_wait_http_job(server, applied["job"]["job_id"])
+            child_version = applied["version"]["version_id"]
+            refresh_status, refreshed = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/refresh")
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            final_status, final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
+            final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
+            close_status, closed = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close")
+            usage_status, usage = _release_http_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+            metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            serialized = json.dumps({"sprint": sprint_data, "provider_candidates": provider_candidates, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export}, ensure_ascii=False)
+            conflict_kinds = {item.get("kind") for item in (conflicts.get("conflict_report") or {}).get("conflicts", [])}
+            ok = (
+                provider_status == 200
+                and provider.get("configured") is True
+                and created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and state_status == 200
+                and preview_status == 201
+                and len(task_ids) == 2
+                and sprint_status == 201
+                and detail_status == 200
+                and len(detail.get("tasks", [])) == 2
+                and conflict_status == 200
+                and {"same_section_track", "nearby_markers"} & conflict_kinds
+                and local_status == 202
+                and local_data.get("created_count", 0) >= 2
+                and provider_candidates_status == 202
+                and provider_candidates.get("created_count", 0) >= 4
+                and provider_candidates["summary"]["counts"]["provider_candidate_count"] >= 4
+                and midi_status == 200
+                and midi.startswith(b"MThd")
+                and polluted_midi_status == 409
+                and "unsafe" in polluted_midi.get("error", "")
+                and apply_status == 202
+                and applied["candidate"]["candidate_type"] == "provider_review_patch"
+                and edit_job["status"] == "completed"
+                and refresh_status == 200
+                and refreshed["summary"]["counts"]["applied"] == 1
+                and metadata["review_sprint"]["primary"]["sprint_id"] == sprint_id
+                and compare_status == 200
+                and compare["right"]["edit"]["review_sprint"]["primary"]["sprint_id"] == sprint_id
+                and export_status == 200
+                and project_export["review_sprints"][0]["sprint_id"] == sprint_id
+                and project_export["versions"][1]["edit"]["review_sprint"]["primary"]["sprint_id"] == sprint_id
+                and final_status == 200
+                and final_data["project"]["final_version_id"] == child_version
+                and final_export_status == 200
+                and final_export["final_export"]["edit"]["review_sprint"]["primary"]["sprint_id"] == sprint_id
+                and final_export["final_export"]["review_sprint_summary"]["latest_sprint_id"] == sprint_id
+                and close_status == 200
+                and closed["sprint"]["status"] == "closed"
+                and usage_status == 200
+                and any(item.get("operation") == "review_sprint_provider_candidates" for item in usage.get("records", []))
+                and "sk-secret-value" not in serialized
+                and "api_key" not in serialized
+                and "C:\\Users" not in serialized
+                and str(base) not in serialized
+            )
+            return ok, f"sprint={sprint_id}, tasks={len(task_ids)}, provider_candidate={provider_candidate_id}, version={child_version}, conflicts={sorted(conflict_kinds)}"
         except Exception as exc:
             return False, str(exc)
         finally:

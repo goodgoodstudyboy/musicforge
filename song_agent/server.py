@@ -145,6 +145,12 @@ from song_agent.review_tasks import (
     review_task_summary,
     task_list_summary,
 )
+from song_agent.review_sprints import (
+    ReviewSprintError,
+    ReviewSprintStateError,
+    ReviewSprintStore,
+    review_sprint_export_summary,
+)
 from song_agent.provider_usage import (
     build_provider_usage_report,
     collect_candidate_group_provider_usage_records,
@@ -1096,6 +1102,7 @@ class JobStore:
                         "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
                         "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
                         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
+                        "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
                         "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
                         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
                     }
@@ -3344,6 +3351,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_editor_audition_route(method, project_id, preview_id, audition_id, action)
             return
 
+        review_sprint_match = _match_project_review_sprint_tail(tail)
+        if review_sprint_match is not None:
+            sprint_id, action = review_sprint_match
+            self._handle_project_review_sprint_route(method, project_id, sprint_id, action)
+            return
+
+        if tail == "/review-sprints":
+            self._handle_project_review_sprints_root(method, project_id, query_string)
+            return
+
         review_task_candidate_match = _match_project_review_task_candidate_tail(tail)
         if review_task_candidate_match is not None:
             task_id, candidate_id, action = review_task_candidate_match
@@ -4861,6 +4878,412 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_project_review_sprints_root(self, method: str, project_id: str, query_string: str) -> None:
+        try:
+            self.project_store.get_project(project_id)
+            project_dir = self.project_store.project_dir(project_id)
+            sprint_store = ReviewSprintStore(project_dir)
+            task_store = ReviewTaskStore(project_dir)
+            if method == "GET":
+                query = parse_qs(query_string)
+                include_archived = _query_value(query, "include_archived").lower() in {"1", "true", "yes"}
+                status = _query_value(query, "status") or None
+                sprints = sprint_store.list_sprints(include_archived=include_archived, status=status)
+                payloads = [self._review_sprint_public_payload(sprint_store, sprint) for sprint in sprints]
+                self._send_json({"ok": True, "project_id": project_id, "summary": _review_sprints_list_summary(payloads), "sprints": payloads})
+                return
+            if method == "POST":
+                payload = self._optional_json_body()
+                sprint = sprint_store.create_sprint(project_id=project_id, task_store=task_store, payload=payload, now=_utc_now())
+                self.project_store.append_event(project_id, "review_sprint_created", {"sprint_id": sprint.sprint_id, "task_count": len(sprint.task_refs)})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint), status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+        except ReviewSprintStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ReviewSprintError, ReviewTaskError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_review_sprint_route(self, method: str, project_id: str, sprint_id: str, action: str) -> None:
+        try:
+            self.project_store.get_project(project_id)
+            project_dir = self.project_store.project_dir(project_id)
+            sprint_store = ReviewSprintStore(project_dir)
+            task_store = ReviewTaskStore(project_dir)
+            sprint = sprint_store.read_sprint(sprint_id)
+            if sprint.project_id != project_id:
+                raise FileNotFoundError(sprint_id)
+            if action == "detail":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint, include_events=True))
+                return
+            if action == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint, _report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+                self.project_store.append_event(project_id, "review_sprint_refreshed", {"sprint_id": sprint.sprint_id, "status": sprint.status})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                return
+            if action == "close":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint, _report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+                sprint = sprint_store.close_sprint(sprint, now=_utc_now())
+                sprint = sprint_store.refresh_summary(sprint, task_store=task_store, now=_utc_now())
+                self.project_store.append_event(project_id, "review_sprint_closed", {"sprint_id": sprint.sprint_id})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                return
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint = sprint_store.archive_sprint(sprint, now=_utc_now())
+                self.project_store.append_event(project_id, "review_sprint_archived", {"sprint_id": sprint.sprint_id})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                return
+            if action == "tasks":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                task_ids = payload.get("task_ids") if isinstance(payload.get("task_ids"), list) else ([payload.get("task_id")] if payload.get("task_id") else [])
+                sprint = sprint_store.add_tasks(
+                    sprint,
+                    task_store=task_store,
+                    task_ids=[str(item) for item in task_ids],
+                    lane=str(payload.get("lane") or ""),
+                    notes=str(payload.get("notes") or ""),
+                    now=_utc_now(),
+                )
+                self.project_store.append_event(project_id, "review_sprint_tasks_added", {"sprint_id": sprint.sprint_id, "task_ids": task_ids})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                return
+            if action == "tasks-remove":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                task_ids = payload.get("task_ids") if isinstance(payload.get("task_ids"), list) else ([payload.get("task_id")] if payload.get("task_id") else [])
+                for task_id in task_ids:
+                    sprint = sprint_store.remove_task(sprint, str(task_id), task_store=task_store, now=_utc_now())
+                self.project_store.append_event(project_id, "review_sprint_tasks_removed", {"sprint_id": sprint.sprint_id, "task_ids": task_ids})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                return
+            if action == "tasks-reorder":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                task_ids = payload.get("task_ids") if isinstance(payload.get("task_ids"), list) else []
+                sprint = sprint_store.reorder_tasks(sprint, [str(item) for item in task_ids], task_store=task_store, now=_utc_now())
+                self.project_store.append_event(project_id, "review_sprint_tasks_reordered", {"sprint_id": sprint.sprint_id, "task_ids": task_ids})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                return
+            if action == "conflicts":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
+                if not report:
+                    report = sprint_store.detect_conflicts(sprint, task_store=task_store, parent_plan_hashes=self._review_sprint_parent_plan_hashes(project_id, task_store, sprint), now=_utc_now())
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "conflict_report": report})
+                return
+            if action == "conflicts-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint, report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+                self.project_store.append_event(project_id, "review_sprint_conflicts_refreshed", {"sprint_id": sprint.sprint_id, "conflict_count": len(report.get("conflicts", []))})
+                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                return
+            if action == "generate-local-candidates":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                result = self._generate_review_sprint_local_candidates(project_id, sprint_store, task_store, sprint, payload)
+                self._send_json(result, status=HTTPStatus.ACCEPTED)
+                return
+            if action == "generate-provider-candidates":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._expand_context_pack_payload(self._optional_json_body())
+                result = self._generate_review_sprint_provider_candidates(project_id, sprint_store, task_store, sprint, payload)
+                self._send_json(result, status=HTTPStatus.ACCEPTED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Review sprint route not found.")
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Review sprint not found.")
+        except (ReviewSprintStateError, ReviewTaskStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ProviderError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except (ReviewSprintError, ReviewTaskError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _review_sprint_response(
+        self,
+        sprint_store: ReviewSprintStore,
+        task_store: ReviewTaskStore,
+        sprint: Any,
+        *,
+        include_events: bool = False,
+    ) -> dict[str, Any]:
+        summary = sprint_store.read_summary(sprint.sprint_id, default={})
+        conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
+        response = {
+            "ok": True,
+            "sprint": sprint.to_dict(),
+            "summary": summary,
+            "conflict_report": conflict_report,
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report),
+            "tasks": self._review_sprint_task_items(task_store, sprint),
+        }
+        if include_events:
+            response["events"] = sprint_store.read_events(sprint.sprint_id)
+        return response
+
+    def _review_sprint_public_payload(self, sprint_store: ReviewSprintStore, sprint: Any) -> dict[str, Any]:
+        summary = sprint_store.read_summary(sprint.sprint_id, default={})
+        conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
+        return {
+            **sprint.to_dict(),
+            "summary": summary,
+            "conflict_report": conflict_report,
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report),
+        }
+
+    def _review_sprint_task_items(self, task_store: ReviewTaskStore, sprint: Any) -> list[dict[str, Any]]:
+        items = []
+        for ref in sorted(sprint.task_refs, key=lambda item: int(item.get("order") or 0)):
+            if not ref.get("included", True):
+                continue
+            task_id = str(ref.get("task_id") or "")
+            try:
+                task = task_store.read_task(task_id)
+                candidates = task_store.list_candidates(task.task_id)
+                decision_report = _try_read_review_decision_report(task_store, task.task_id)
+                items.append(
+                    {
+                        "ref": ref,
+                        "task": task.to_dict(),
+                        "candidates": [candidate.to_dict() for candidate in candidates],
+                        "decision_report": decision_report,
+                        "provider_summary": review_candidate_source_breakdown(candidates),
+                    }
+                )
+            except FileNotFoundError:
+                items.append({"ref": ref, "task_id": task_id, "missing": True})
+        return items
+
+    def _refresh_review_sprint_state(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any) -> tuple[Any, dict[str, Any]]:
+        parent_hashes = self._review_sprint_parent_plan_hashes(project_id, task_store, sprint)
+        report = sprint_store.detect_conflicts(sprint, task_store=task_store, parent_plan_hashes=parent_hashes, now=_utc_now())
+        sprint = sprint_store.refresh_summary(sprint, task_store=task_store, now=_utc_now())
+        return sprint, report
+
+    def _review_sprint_parent_plan_hashes(self, project_id: str, task_store: ReviewTaskStore, sprint: Any) -> dict[str, str]:
+        hashes: dict[str, str] = {}
+        version_ids = []
+        for ref in sprint.task_refs:
+            if not ref.get("included", True):
+                continue
+            try:
+                task = task_store.read_task(str(ref.get("task_id") or ""))
+            except FileNotFoundError:
+                continue
+            if task.project_id == project_id and task.parent_version_id not in version_ids:
+                version_ids.append(task.parent_version_id)
+        for version_id in version_ids:
+            try:
+                _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
+            except FileNotFoundError:
+                continue
+            hashes[version_id] = song_plan_hash(parent_plan)
+        return hashes
+
+    def _review_sprint_ordered_task_ids(self, sprint: Any) -> list[str]:
+        task_ids = []
+        for ref in sorted(sprint.task_refs, key=lambda item: int(item.get("order") or 0)):
+            if ref.get("included", True) and ref.get("task_id"):
+                task_ids.append(str(ref.get("task_id")))
+        return task_ids
+
+    def _review_sprint_membership_summary(self, project_id: str, task_id: str) -> dict[str, Any]:
+        try:
+            project_dir = self.project_store.project_dir(project_id)
+            sprint_store = ReviewSprintStore(project_dir)
+            matches = []
+            for sprint in sprint_store.list_sprints(include_archived=True):
+                refs = [ref for ref in sprint.task_refs if ref.get("included", True)]
+                if task_id not in {str(ref.get("task_id") or "") for ref in refs}:
+                    continue
+                summary = sprint_store.read_summary(sprint.sprint_id, default={})
+                conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
+                matches.append(review_sprint_export_summary(sprint, summary, conflict_report))
+            if not matches:
+                return {}
+            return sanitize_metadata({"sprint_ids": [item["sprint_id"] for item in matches], "primary": matches[0], "sprints": matches})
+        except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _generate_review_sprint_local_candidates(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        if sprint.status not in {"open", "in_progress", "blocked"}:
+            raise ReviewSprintStateError(f"Cannot generate candidates for a {sprint.status} review sprint.")
+        sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+        stop_on_conflict = bool(payload.get("stop_on_conflict", sprint.settings.get("stop_on_conflict", False)))
+        if stop_on_conflict and any(item.get("severity") == "blocking" for item in conflict_report.get("conflicts", [])):
+            raise ReviewSprintStateError("Review sprint has blocking conflicts.")
+        strategies = payload.get("strategies") if isinstance(payload.get("strategies"), list) else sprint.settings.get("local_candidate_strategies")
+        render_midi = bool(payload.get("render_midi", sprint.settings.get("render_midi", True)))
+        skip_existing = bool(payload.get("skip_existing_ready", True))
+        results = []
+        created_total = 0
+        for task_id in self._review_sprint_ordered_task_ids(sprint):
+            try:
+                task = task_store.read_task(task_id)
+                candidates = task_store.list_candidates(task.task_id)
+                if skip_existing and any(candidate.candidate_type == "local_review_intents" and candidate.status in {"ready", "applied"} for candidate in candidates):
+                    results.append({"task_id": task.task_id, "status": "skipped", "reason": "ready local candidate exists"})
+                    continue
+                _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+                ensure_task_current(task, parent_plan)
+                generated = []
+                for candidate, candidate_plan, validator, summary in build_local_review_candidates(task, parent_plan, strategies=strategies):
+                    stored = task_store.create_candidate(
+                        task=task,
+                        candidate=candidate,
+                        candidate_plan=candidate_plan,
+                        validator=validator,
+                        summary=summary,
+                        render_midi_file=render_midi,
+                        now=_utc_now(),
+                    )
+                    generated.append(stored)
+                ranked = task_store.rank_candidates(task)
+                task = task_store.update_counts(task, now=_utc_now())
+                decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now()), now=_utc_now())
+                created_total += len(generated)
+                results.append(
+                    {
+                        "task_id": task.task_id,
+                        "status": "generated" if generated else "skipped",
+                        "created_count": len(generated),
+                        "created_candidate_ids": [candidate.candidate_id for candidate in generated],
+                        "decision_report": review_decision_summary(decision_report),
+                        "provider_summary": review_candidate_source_breakdown(ranked),
+                    }
+                )
+            except (FileNotFoundError, ReviewTaskError, ReviewTaskStateError, ValueError) as exc:
+                results.append({"task_id": task_id, "status": "failed", "error": str(exc)})
+        sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+        self.project_store.append_event(project_id, "review_sprint_local_candidates_generated", {"sprint_id": sprint.sprint_id, "created_count": created_total})
+        response = self._review_sprint_response(sprint_store, task_store, sprint)
+        response.update({"results": sanitize_metadata(results), "created_count": created_total})
+        return response
+
+    def _generate_review_sprint_provider_candidates(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        if sprint.status not in {"open", "in_progress", "blocked"}:
+            raise ReviewSprintStateError(f"Cannot generate provider candidates for a {sprint.status} review sprint.")
+        sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+        stop_on_conflict = bool(payload.get("stop_on_conflict", sprint.settings.get("stop_on_conflict", False)))
+        if stop_on_conflict and any(item.get("severity") == "blocking" for item in conflict_report.get("conflicts", [])):
+            raise ReviewSprintStateError("Review sprint has blocking conflicts.")
+        template_id = str(payload.get("template_id") or sprint.settings.get("provider_template_id") or "provider-review-candidates").strip()
+        template = self.prompt_template_store.get_template(template_id)
+        if not template.enabled:
+            raise ReviewSprintStateError("Prompt template is disabled.")
+        candidate_count = max(1, min(5, int(payload.get("candidate_count") or sprint.settings.get("provider_candidate_count") or 2)))
+        render_midi = bool(payload.get("render_midi", sprint.settings.get("render_midi", True)))
+        skip_existing = bool(payload.get("skip_existing_provider", True))
+        include_local_context = bool(payload.get("include_local_context", True))
+        config, _sources = load_provider_config()
+        asset_snapshot = asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_utc_now())
+        asset_prompt_refs = asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
+        reference_snapshot = reference_refs_snapshot(self.reference_store, payload.get("reference_refs"), captured_at=_utc_now())
+        reference_prompt_refs = reference_prompt_summaries(self.reference_store, payload.get("reference_refs"))
+        results = []
+        created_total = 0
+        provider_snapshots = []
+        for task_id in self._review_sprint_ordered_task_ids(sprint):
+            try:
+                task = task_store.read_task(task_id)
+                candidates = task_store.list_candidates(task.task_id)
+                if skip_existing and any((candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider")) and candidate.status in {"ready", "applied"} for candidate in candidates):
+                    results.append({"task_id": task.task_id, "status": "skipped", "reason": "ready provider candidate exists"})
+                    continue
+                _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+                ensure_task_current(task, parent_plan)
+                local_context = candidates if include_local_context else []
+                generated_specs, provider_snapshot, instruction = build_provider_review_candidates(
+                    task=task,
+                    parent_plan=parent_plan,
+                    template=template,
+                    config=config,
+                    candidate_count=candidate_count,
+                    local_candidates=local_context,
+                    asset_references=asset_prompt_refs,
+                    reference_references=reference_prompt_refs,
+                )
+                generated = []
+                for candidate, candidate_plan, validator, summary in generated_specs:
+                    stored = task_store.create_candidate(
+                        task=task,
+                        candidate=candidate,
+                        candidate_plan=candidate_plan,
+                        validator=validator,
+                        summary=summary,
+                        render_midi_file=render_midi,
+                        now=_utc_now(),
+                    )
+                    generated.append(stored)
+                ranked = task_store.rank_candidates(task)
+                task = task_store.update_counts(task, now=_utc_now())
+                provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+                usage_record = _provider_usage_record(
+                    config_snapshot=provider_snapshot,
+                    operation="review_sprint_provider_candidates",
+                    template_id=template.template_id,
+                    started_at=_utc_now(),
+                    status="completed",
+                    provider_usage=provider_usage,
+                    request_id=provider_snapshot.get("request_id"),
+                )
+                write_json(task_store.task_dir(task.task_id) / "provider-usage.json", usage_record)
+                decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("decision_note") or "")), now=_utc_now())
+                created_total += len(generated)
+                provider_snapshots.append(provider_snapshot)
+                results.append(
+                    {
+                        "task_id": task.task_id,
+                        "status": "generated" if generated else "skipped",
+                        "created_count": len(generated),
+                        "created_candidate_ids": [candidate.candidate_id for candidate in generated],
+                        "instruction": instruction,
+                        "decision_report": review_decision_summary(decision_report),
+                        "provider_summary": review_candidate_source_breakdown(ranked),
+                        "provider_snapshot": provider_snapshot,
+                    }
+                )
+            except (FileNotFoundError, ReviewTaskError, ReviewTaskStateError, ProviderError, ValueError) as exc:
+                results.append({"task_id": task_id, "status": "failed", "error": str(exc)})
+        if asset_snapshot["asset_refs"]:
+            self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "review_sprint_provider_candidates", "project_id": project_id, "review_sprint_id": sprint.sprint_id})
+        if reference_snapshot["reference_refs"]:
+            self.reference_store.mark_used(reference_snapshot["reference_refs"], {"usage_type": "review_sprint_provider_candidates", "project_id": project_id, "review_sprint_id": sprint.sprint_id})
+        sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+        self.project_store.append_event(project_id, "review_sprint_provider_candidates_generated", {"sprint_id": sprint.sprint_id, "created_count": created_total, "template_id": template.template_id})
+        response = self._review_sprint_response(sprint_store, task_store, sprint)
+        response.update({"results": sanitize_metadata(results), "created_count": created_total, "provider_snapshots": sanitize_metadata(provider_snapshots)})
+        return response
+
     def _handle_project_review_task_route(self, method: str, project_id: str, task_id: str, action: str) -> None:
         try:
             self.project_store.get_project(project_id)
@@ -5117,6 +5540,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "preserve": list(primary.preserve),
             "strength": primary.strength,
         }
+        sprint_membership = self._review_sprint_membership_summary(project_id, task.task_id)
+        if sprint_membership:
+            metadata["review_sprint"] = sprint_membership
         job.edit_metadata = metadata
         job.input_payload["review_task_id"] = task.task_id
         job.input_payload["review_candidate_id"] = candidate.candidate_id
@@ -5124,6 +5550,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         job.input_payload["review_candidate"] = review_candidate_summary(candidate)
         if decision_report:
             job.input_payload["review_decision"] = review_decision_summary(decision_report)
+        if sprint_membership:
+            job.input_payload["review_sprint"] = sprint_membership
         self.store._write_job(job)
         write_json(ProjectPaths.create(Path(job.output_dir)).data / "edit-metadata.json", metadata)
         self.store.start_job(job.job_id)
@@ -7218,6 +7646,27 @@ def _try_read_review_decision_report(task_store: ReviewTaskStore, task_id: str) 
         return {}
 
 
+def _review_sprints_list_summary(sprints: list[dict[str, Any]]) -> dict[str, Any]:
+    statuses: dict[str, int] = {}
+    total_conflicts = 0
+    blocking_conflicts = 0
+    for sprint in sprints:
+        status = str(sprint.get("status") or "unknown")
+        statuses[status] = statuses.get(status, 0) + 1
+        summary = sprint.get("summary") if isinstance(sprint.get("summary"), dict) else {}
+        counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else {}
+        total_conflicts += int(counts.get("conflict_count") or 0)
+        blocking_conflicts += int(counts.get("blocking_conflict_count") or 0)
+    return sanitize_metadata(
+        {
+            "total": len(sprints),
+            "statuses": statuses,
+            "conflict_count": total_conflicts,
+            "blocking_conflict_count": blocking_conflicts,
+        }
+    )
+
+
 def _usage_int(usage: dict[str, Any], field_name: str) -> int:
     value = usage.get(field_name)
     if value is None:
@@ -7748,6 +8197,19 @@ def _match_project_review_task_tail(tail: str) -> tuple[str, str] | None:
         return unquote(parts[1]), parts[2]
     if len(parts) == 4 and parts[0] == "review-tasks" and parts[2] == "decision-report" and parts[3] == "refresh":
         return unquote(parts[1]), "decision-report-refresh"
+    return None
+
+
+def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 2 and parts[0] == "review-sprints":
+        return unquote(parts[1]), "detail"
+    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts"}:
+        return unquote(parts[1]), parts[2]
+    if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "tasks" and parts[3] in {"remove", "reorder"}:
+        return unquote(parts[1]), f"tasks-{parts[3]}"
+    if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "conflicts" and parts[3] == "refresh":
+        return unquote(parts[1]), "conflicts-refresh"
     return None
 
 

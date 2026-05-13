@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.0.0 - 2026-05-13
+
+### Added
+- Review Sprints for organizing multiple ReviewTasks with ordered task refs, status/count summaries, conflict reports, and event history.
+- Review Sprint APIs for create/list/detail, task add/remove/reorder, refresh/close/archive, conflict refresh, and batch local/provider candidate generation.
+- Studio Review Sprints workspace plus Review Workbench add-to-sprint controls.
+- Project Compare, Project Export, Final Export, and provider usage reports now include Review Sprint provenance and sprint rollups.
+- release-check now includes a v3.0 smoke covering sprint conflicts, batch local/provider candidates, artifact path pollution, single-candidate apply, export, final export, and usage.
+
+### Scope
+- Review Sprints never batch-apply edits. They organize ReviewTasks and create candidates only; every apply still goes through the existing one-task, one-candidate ReviewTask guard.
+
+### Verified
+- `python -m pytest tests\test_review_sprints.py tests\test_server_review_sprints.py tests\test_final_export.py tests\test_project_compare.py tests\test_server_review_tasks.py tests\test_webui.py -q`
+
 ## v2.9.0 - 2026-05-13
 
 ### Added

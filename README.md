@@ -333,6 +333,16 @@ Apply Candidate action. Provider candidates cannot auto-apply, cannot bypass
 the stale/artifact guards, and cannot modify a Review Task that already applied
 one candidate.
 
+v3.0.0 adds Review Sprints for working through multiple Review Tasks together.
+A sprint stores ordered task references, summaries, conflict reports, and event
+history under the project without copying candidate artifacts or SongPlan data.
+Studio's Review Sprints tab can create sprints, add/reorder tasks, refresh
+conflicts, and batch-generate local or provider candidates. Batch generation is
+still candidate creation only: applying changes remains a one-task, one-candidate
+manual action through the existing Review Workbench safeguards. Project Compare,
+Project Export, Final Export, provider usage, and release-check include sprint
+provenance and sprint rollups.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

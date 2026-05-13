@@ -522,6 +522,7 @@ class ProjectStore:
             "reference_refs": _collect_project_reference_refs(self.project_dir(project_id), document),
             "context_packs": _collect_project_context_packs(self.project_dir(project_id), document),
             "review_tasks": _collect_project_review_tasks(self.project_dir(project_id)),
+            "review_sprints": _collect_project_review_sprints(self.project_dir(project_id)),
             "generated_at": now_iso(),
         }
         write_json(self.project_dir(project_id) / "export.json", export)
@@ -738,6 +739,7 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
         "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
+        "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
@@ -1094,6 +1096,19 @@ def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
         summary["priority"] = task.priority
         summaries.append(_sanitize_asset_metadata(summary))
     return sorted(summaries, key=lambda item: str(item.get("task_id") or ""))
+
+
+def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
+    from song_agent.review_sprints import ReviewSprintStore, review_sprint_export_summary
+
+    store = ReviewSprintStore(project_dir)
+    sprints = store.list_sprints(include_archived=True)
+    summaries = []
+    for sprint in sprints:
+        summary = store.read_summary(sprint.sprint_id, default={})
+        conflict_report = store.read_conflict_report(sprint.sprint_id, default={})
+        summaries.append(review_sprint_export_summary(sprint, summary, conflict_report))
+    return sorted((_sanitize_asset_metadata(item) for item in summaries), key=lambda item: str(item.get("sprint_id") or ""))
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:

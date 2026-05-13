@@ -398,6 +398,31 @@ def panel_html() -> str:
       font-size: 14px;
       letter-spacing: 0;
     }
+    .review-sprint-row {
+      border-top: 1px solid var(--line);
+      padding: 12px 0;
+    }
+    .review-sprint-row:first-child { border-top: 0; }
+    .review-sprint-row h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+    .review-conflict-list {
+      display: grid;
+      gap: 6px;
+      margin: 10px 0;
+    }
+    .review-conflict {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: #fbfcfe;
+    }
+    .review-conflict.blocking {
+      border-color: #fecdca;
+      background: #fef3f2;
+    }
     .review-candidate-card {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -2516,7 +2541,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "variation", "edit", "editor", "review-workbench", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "edit", "editor", "review-workbench", "review-sprints", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -2737,6 +2762,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await renderProjectEditor(project, versions, target);
       } else if (activeProjectTab === "review-workbench") {
         await renderProjectReviewWorkbench(project, versions, target);
+      } else if (activeProjectTab === "review-sprints") {
+        await renderProjectReviewSprints(project, versions, target);
       } else if (activeProjectTab === "candidates") {
         await renderProjectCandidates(project, versions, target);
       } else if (activeProjectTab === "quality-gate") {
@@ -4585,6 +4612,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     async function renderProjectReviewWorkbench(project, versions, target) {
       let tasks = [];
       let summary = {};
+      let sprints = [];
       try {
         const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks?include_archived=1`);
         summary = data.summary || {};
@@ -4596,13 +4624,36 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             return task;
           }
         }));
+        try {
+          const sprintData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints?include_archived=1`);
+          sprints = sprintData.sprints || [];
+        } catch (_err) {
+          sprints = [];
+        }
       } catch (err) {
         target.innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
         return;
       }
-      target.innerHTML = projectReviewWorkbenchHtml(project, tasks, summary);
+      target.innerHTML = projectReviewWorkbenchHtml(project, tasks, summary, sprints);
       bindAction("project-review-task-refresh", async () => {
         await renderProjectReviewWorkbench(project, versions, target);
+      });
+      const sprintSelect = $("project-review-add-sprint");
+      target.querySelectorAll("[data-review-add-to-sprint]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          if (!sprintSelect || !sprintSelect.value) {
+            activeProjectTab = "review-sprints";
+            await renderProjectDetail(project.project_id);
+            return;
+          }
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprintSelect.value)}/tasks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task_ids: [button.dataset.reviewAddToSprint] }),
+          });
+          activeProjectTab = "review-sprints";
+          await renderProjectDetail(project.project_id);
+        });
       });
       target.querySelectorAll("[data-review-task-generate]").forEach((button) => {
         button.addEventListener("click", async () => {
@@ -4692,7 +4743,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
     }
 
-    function projectReviewWorkbenchHtml(project, tasks, summary) {
+    function projectReviewWorkbenchHtml(project, tasks, summary, sprints) {
+      const openSprints = (sprints || []).filter((sprint) => ["open", "in_progress", "blocked"].includes(sprint.status));
       return `
         <div class="summary-grid">
           ${metric("Review Tasks", summary.total ?? tasks.length)}
@@ -4704,6 +4756,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         <div class="actions">
           <button class="secondary" id="project-review-task-refresh" type="button">Refresh Review Tasks</button>
+          <select id="project-review-add-sprint" style="max-width:260px;">
+            <option value="">Add to Review Sprint</option>
+            ${openSprints.map((sprint) => `<option value="${escapeHtml(sprint.sprint_id)}">${escapeHtml(sprint.sprint_id)} · ${escapeHtml(sprint.name || "Review Sprint")}</option>`).join("")}
+          </select>
         </div>
         ${tasks.length ? tasks.map((task) => reviewTaskWorkbenchRowHtml(project, task)).join("") : `<div class="empty">Review tasks will appear here after you create one from an audition review.</div>`}
       `;
@@ -4745,6 +4801,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" data-review-report-refresh="${escapeHtml(task.task_id)}" type="button" ${["stale"].includes(task.status) ? "disabled" : ""}>Refresh Decision Report</button>
             <button class="secondary" data-review-task-resolve="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Resolve Task</button>
             <button class="secondary" data-review-task-needs-work="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Needs More Work</button>
+            <button class="secondary" data-review-add-to-sprint="${escapeHtml(task.task_id)}" type="button">Add to Sprint</button>
             <button class="danger" data-review-task-archive="${escapeHtml(task.task_id)}" type="button" ${["resolved", "archived", "stale"].includes(task.status) ? "disabled" : ""}>Archive Task</button>
           </div>
           <div class="candidate-grid">
@@ -4813,6 +4870,216 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${candidate.audio_status === "completed" ? `<audio class="audio-player" controls src="${escapeHtml(audioUrl)}"></audio>` : ""}
           ${candidate.audio_error ? `<div class="empty error">${escapeHtml(candidate.audio_error)}</div>` : ""}
           <pre>${escapeHtml(JSON.stringify({ scores, validator: candidate.validator, intents: candidate.intents }, null, 2))}</pre>
+        </div>
+      `;
+    }
+
+    async function renderProjectReviewSprints(project, versions, target) {
+      let sprints = [];
+      let tasks = [];
+      let summary = {};
+      try {
+        const sprintData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints?include_archived=1`);
+        sprints = sprintData.sprints || [];
+        summary = sprintData.summary || {};
+        const taskData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks?include_archived=1`);
+        tasks = taskData.tasks || [];
+      } catch (err) {
+        target.innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+        return;
+      }
+      target.innerHTML = projectReviewSprintsHtml(project, sprints, tasks, summary);
+      bindAction("project-review-sprint-refresh", async () => {
+        await renderProjectReviewSprints(project, versions, target);
+      });
+      bindAction("project-review-sprint-create", async () => {
+        const taskIds = Array.from(target.querySelectorAll("[data-review-sprint-task]:checked")).map((item) => item.value);
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: $("project-review-sprint-name").value.trim() || "Review Sprint",
+            description: $("project-review-sprint-description").value.trim(),
+            task_ids: taskIds,
+            settings: {
+              local_candidate_strategies: [$("project-review-sprint-local-strategy").value],
+              provider_candidate_count: Number($("project-review-sprint-provider-count").value || 2),
+              provider_template_id: $("project-review-sprint-template").value.trim() || "provider-review-candidates",
+              render_midi: $("project-review-sprint-render-midi").checked,
+              stop_on_conflict: $("project-review-sprint-stop-conflict").checked,
+            },
+          }),
+        });
+        await renderProjectReviewSprints(project, versions, target);
+      });
+      target.querySelectorAll("[data-review-sprint-add-task]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const select = $(`review-sprint-add-task-${button.dataset.reviewSprintAddTask}`);
+          if (!select || !select.value) return;
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintAddTask)}/tasks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task_ids: [select.value] }),
+          });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-refresh]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintRefresh)}/refresh`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-conflicts]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintConflicts)}/conflicts/refresh`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-local]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintLocal)}/generate-local-candidates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ render_midi: true }),
+          });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-provider]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintProvider)}/generate-provider-candidates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template_id: "provider-review-candidates", candidate_count: 2, render_midi: true }),
+          });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-close]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintClose)}/close`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-archive]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintArchive)}/archive`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+    }
+
+    function projectReviewSprintsHtml(project, sprints, tasks, summary) {
+      const taskOptions = (tasks || []).map((task) => `<option value="${escapeHtml(task.task_id)}">${escapeHtml(task.task_id)} · ${escapeHtml(task.title || task.status || "")}</option>`).join("");
+      return `
+        <div class="summary-grid">
+          ${metric("Review Sprints", summary.total ?? sprints.length)}
+          ${metric("Conflicts", summary.conflict_count ?? 0)}
+          ${metric("Blocking", summary.blocking_conflict_count ?? 0)}
+          ${metric("Open", (summary.statuses || {}).open ?? 0)}
+          ${metric("In Progress", (summary.statuses || {}).in_progress ?? 0)}
+          ${metric("Closed", (summary.statuses || {}).closed ?? 0)}
+        </div>
+        <div class="grid2">
+          <label>Sprint Name
+            <input id="project-review-sprint-name" value="Review Sprint ${(sprints.length || 0) + 1}">
+          </label>
+          <label>Provider Template
+            <input id="project-review-sprint-template" value="provider-review-candidates">
+          </label>
+          <label>Local Strategy
+            <select id="project-review-sprint-local-strategy">
+              <option value="balanced">balanced</option>
+              <option value="conservative">conservative</option>
+              <option value="bold">bold</option>
+            </select>
+          </label>
+          <label>Provider Candidate Count
+            <select id="project-review-sprint-provider-count">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+        </div>
+        <label>Description
+          <input id="project-review-sprint-description" placeholder="group feedback for the next review pass">
+        </label>
+        <div class="grid2">
+          <label><input id="project-review-sprint-render-midi" type="checkbox" checked> Render MIDI</label>
+          <label><input id="project-review-sprint-stop-conflict" type="checkbox"> Stop on blocking conflicts</label>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Add</th><th>Task</th><th>Status</th><th>Parent</th><th>Priority</th></tr></thead>
+            <tbody>${tasks.length ? tasks.map((task) => `
+              <tr>
+                <td><input data-review-sprint-task value="${escapeHtml(task.task_id)}" type="checkbox"></td>
+                <td>${escapeHtml(task.title || task.task_id)}</td>
+                <td><span class="status ${escapeHtml(task.status || "")}">${escapeHtml(task.status || "-")}</span></td>
+                <td>${escapeHtml(task.parent_version_id || "-")}</td>
+                <td>${escapeHtml(task.priority ?? "-")}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="5">No ReviewTasks available.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button id="project-review-sprint-create" type="button">Create Review Sprint</button>
+          <button class="secondary" id="project-review-sprint-refresh" type="button">Refresh Review Sprints</button>
+        </div>
+        ${sprints.length ? sprints.map((sprint) => reviewSprintRowHtml(project, sprint, taskOptions)).join("") : `<div class="empty">Review Sprints will appear here after you create one.</div>`}
+      `;
+    }
+
+    function reviewSprintRowHtml(project, sprint, taskOptions) {
+      const summary = sprint.summary || {};
+      const counts = summary.counts || sprint.counts || {};
+      const report = sprint.conflict_report || {};
+      const conflicts = Array.isArray(report.conflicts) ? report.conflicts : [];
+      const taskIds = (sprint.task_refs || []).filter((ref) => ref.included !== false).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map((ref) => ref.task_id);
+      const mutable = ["open", "in_progress", "blocked"].includes(sprint.status);
+      return `
+        <div class="review-sprint-row">
+          <h4>${escapeHtml(sprint.name || sprint.sprint_id)} <span class="status ${escapeHtml(sprint.status || "")}">${escapeHtml(sprint.status || "-")}</span></h4>
+          <div class="summary-grid">
+            ${metric("Sprint", sprint.sprint_id)}
+            ${metric("Parent", sprint.parent_version_id || "-")}
+            ${metric("Tasks", taskIds.length)}
+            ${metric("Ready", counts.ready_candidate_count ?? 0)}
+            ${metric("Local", counts.local_candidate_count ?? 0)}
+            ${metric("Provider", counts.provider_candidate_count ?? 0)}
+            ${metric("Applied", counts.applied ?? 0)}
+            ${metric("Conflicts", counts.conflict_count ?? conflicts.length)}
+            ${metric("Blocking", counts.blocking_conflict_count ?? 0)}
+          </div>
+          <div class="empty small">${escapeHtml(taskIds.join(" · ") || "No tasks")}</div>
+          ${conflicts.length ? `<div class="review-conflict-list">${conflicts.slice(0, 8).map((conflict) => reviewSprintConflictHtml(conflict)).join("")}</div>` : `<div class="empty small">No conflicts reported.</div>`}
+          <div class="actions">
+            <select id="review-sprint-add-task-${escapeHtml(sprint.sprint_id)}" style="max-width:260px;" ${mutable ? "" : "disabled"}>
+              <option value="">Add task</option>
+              ${taskOptions}
+            </select>
+            <button class="secondary" data-review-sprint-add-task="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Add Task</button>
+            <button class="secondary" data-review-sprint-refresh="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Sprint</button>
+            <button class="secondary" data-review-sprint-conflicts="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Conflicts</button>
+            <button class="secondary" data-review-sprint-local="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Local</button>
+            <button class="secondary" data-review-sprint-provider="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Provider</button>
+            <button class="secondary" data-review-sprint-close="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Close Sprint</button>
+            <button class="danger" data-review-sprint-archive="${escapeHtml(sprint.sprint_id)}" type="button" ${sprint.status === "archived" ? "disabled" : ""}>Archive Sprint</button>
+          </div>
+          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, settings: sprint.settings }, null, 2))}</pre>
+        </div>
+      `;
+    }
+
+    function reviewSprintConflictHtml(conflict) {
+      return `
+        <div class="review-conflict ${escapeHtml(conflict.severity || "")}">
+          <strong>${escapeHtml(conflict.kind || "conflict")}</strong>
+          <span class="status ${escapeHtml(conflict.severity || "")}">${escapeHtml(conflict.severity || "-")}</span>
+          <div>${escapeHtml(conflict.message || "")}</div>
+          <div class="empty small">${escapeHtml((conflict.task_ids || []).join(" · "))}</div>
         </div>
       `;
     }
@@ -5486,6 +5753,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         edit: "Edit",
         editor: "Editor",
         "review-workbench": "Review Workbench",
+        "review-sprints": "Review Sprints",
         candidates: "Candidates",
         "quality-gate": "Quality Gate",
         "final-export": "Final Export",

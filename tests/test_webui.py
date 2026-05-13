@@ -469,8 +469,16 @@ def test_webui_contains_interactive_editor_controls():
     assert "Create Context Pack" in html
     assert "Create Review Task" in html
     assert "Review Workbench" in html
+    assert "Review Sprints" in html
     assert "Generate Local Candidates" in html
     assert "Generate Provider Candidates" in html
+    assert "Create Review Sprint" in html
+    assert "Refresh Review Sprints" in html
+    assert "Generate Sprint Local" in html
+    assert "Generate Sprint Provider" in html
+    assert "Refresh Conflicts" in html
+    assert "Close Sprint" in html
+    assert "Add to Sprint" in html
     assert "Decision Report" in html
     assert "Refresh Decision Report" in html
     assert "provider-review-candidates" in html
@@ -485,6 +493,10 @@ def test_webui_contains_interactive_editor_controls():
     assert "/review-task" in html
     assert "/review-tasks?include_archived=1" in html
     assert "/review-tasks/${encodeURIComponent(task.task_id)}" in html
+    assert "/review-sprints?include_archived=1" in html
+    assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintProvider)}/generate-provider-candidates" in html
+    assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintLocal)}/generate-local-candidates" in html
+    assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintConflicts)}/conflicts/refresh" in html
     assert "/provider-candidates" in html
     assert "/decision-report/refresh" in html
     assert "/candidates/${encodeURIComponent(button.dataset.candidateId)}/apply" in html
