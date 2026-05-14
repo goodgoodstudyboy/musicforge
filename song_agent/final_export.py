@@ -547,11 +547,21 @@ def _final_review_metrics(project_export: dict[str, Any] | None) -> dict[str, An
         return {}
     project_summary = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
-    sprint_summaries = [sprint.get("metrics_summary", {}) for sprint in sprints if isinstance(sprint.get("metrics_summary"), dict)]
-    latest = sprint_summaries[0] if sprint_summaries else {}
+    sprint_summaries = []
+    for sprint in sprints:
+        metrics_summary = sprint.get("metrics_summary", {})
+        if not isinstance(metrics_summary, dict):
+            continue
+        if not metrics_summary.get("sprint_id") and sprint.get("sprint_id"):
+            metrics_summary = {**metrics_summary, "sprint_id": sprint.get("sprint_id")}
+        sprint_summaries.append(metrics_summary)
+    latest_sprint_id = str(project_summary.get("latest_sprint_id") or "")
+    latest = next((summary for summary in sprint_summaries if str(summary.get("sprint_id") or "") == latest_sprint_id), None) if latest_sprint_id else None
+    if latest is None:
+        latest = sprint_summaries[0] if sprint_summaries else {}
     summary = {
         "latest_readiness": project_summary.get("latest_readiness") or latest.get("readiness"),
-        "latest_sprint_id": project_summary.get("latest_sprint_id") or latest.get("sprint_id"),
+        "latest_sprint_id": latest_sprint_id or latest.get("sprint_id"),
         "sprint_count": project_summary.get("sprint_count") or len(sprints),
         "active_sprint_count": project_summary.get("active_sprint_count"),
         "completion_rate": latest.get("completion_rate"),

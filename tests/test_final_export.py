@@ -183,6 +183,62 @@ def test_final_export_manifest_includes_context_pack_summary(tmp_path: Path) -> 
     assert "D:\\Music" not in serialized
 
 
+def test_final_export_review_metrics_uses_latest_sprint_summary(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+        project_export={
+            "project": {"project_id": "export-project"},
+            "review_metrics_summary": {
+                "latest_sprint_id": "sprint-002",
+                "latest_readiness": "ready_to_close",
+                "sprint_count": 2,
+                "active_sprint_count": 1,
+                "total_provider_tokens": 77,
+                "total_candidate_count": 9,
+                "total_applied_candidate_count": 2,
+            },
+            "review_sprints": [
+                {
+                    "sprint_id": "sprint-001",
+                    "metrics_summary": {
+                        "sprint_id": "sprint-001",
+                        "readiness": "needs_review",
+                        "completion_rate": 0.1,
+                        "quality_delta": -2,
+                        "warnings": ["old sprint warning"],
+                    },
+                },
+                {
+                    "sprint_id": "sprint-002",
+                    "metrics_summary": {
+                        "sprint_id": "sprint-002",
+                        "readiness": "ready_to_close",
+                        "completion_rate": 1.0,
+                        "quality_delta": 5,
+                        "warnings": ["latest sprint warning"],
+                    },
+                },
+            ],
+        },
+    )
+
+    review_metrics = manifest["review_metrics"]
+    assert review_metrics["latest_sprint_id"] == "sprint-002"
+    assert review_metrics["latest_readiness"] == "ready_to_close"
+    assert review_metrics["completion_rate"] == 1.0
+    assert review_metrics["quality_delta"] == 5
+    assert review_metrics["warnings"] == ["latest sprint warning"]
+
+
 def test_final_export_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, _plan = make_run(tmp_path)

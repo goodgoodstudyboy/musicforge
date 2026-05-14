@@ -377,6 +377,10 @@ candidate, resolves a task, closes a Sprint, creates a final export, or calls a
 provider. Project Export and Final Export include only compact metrics
 summaries, with token and local-path redaction.
 
+v3.3.1 fixes the multi-Sprint Final Export metrics summary so the latest
+Sprint ID/readiness, completion rate, quality delta, and warnings all come from
+the same Sprint metrics snapshot.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

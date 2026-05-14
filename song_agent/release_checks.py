@@ -3391,15 +3391,23 @@ def _v33_review_sprint_dashboard_metrics_smoke(root: Path) -> tuple[bool, str]:
             edit_job = _release_wait_http_job(server, applied["job"]["job_id"])
             child_version = applied["version"]["version_id"]
             sprint_metrics_status, sprint_metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/metrics/refresh")
+            second_sprint_status, second_sprint = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints", {"name": "Release v3.3 Latest Metrics Sprint", "task_ids": [task_ids[1]], "settings": {"local_candidate_strategies": ["balanced"], "provider_candidate_count": 1}})
+            second_sprint_id = second_sprint.get("sprint", {}).get("sprint_id")
+            second_metrics_status, second_metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{second_sprint_id}/metrics/refresh")
             project_metrics_status, project_metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-metrics/refresh")
             export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
             final_status, _final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
             final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
             metrics_report = sprint_metrics.get("metrics_report", {})
+            second_metrics_report = second_metrics.get("metrics_report", {})
             project_report = project_metrics.get("review_metrics", {})
+            final_review_metrics = final_export.get("final_export", {}).get("review_metrics", {})
             serialized = json.dumps({"sprint_metrics": sprint_metrics, "project_metrics": project_metrics, "export": project_export, "final": final_export}, ensure_ascii=False)
             allowed_quality = {"improved", "unchanged", "regressed", "not_available"}
             allowed_readiness = {"ready_to_close", "needs_review", "needs_candidates", "blocked", "stale", "no_data"}
+            expected_completion_rate = second_metrics.get("summary", {}).get("completion_rate")
+            expected_quality_delta = second_metrics.get("summary", {}).get("quality_delta")
+            expected_warnings = second_metrics.get("summary", {}).get("warnings", [])
             ok = (
                 provider_status == 200
                 and provider.get("configured") is True
@@ -3426,6 +3434,8 @@ def _v33_review_sprint_dashboard_metrics_smoke(root: Path) -> tuple[bool, str]:
                 and apply_status == 202
                 and edit_job["status"] == "completed"
                 and sprint_metrics_status == 200
+                and second_sprint_status == 201
+                and second_metrics_status == 200
                 and metrics_report.get("overview", {}).get("task_count", 0) >= 1
                 and metrics_report.get("candidate_funnel", {}).get("candidate_count", 0) >= 1
                 and metrics_report.get("candidate_funnel", {}).get("provider_candidate_count", 0) >= 1
@@ -3434,21 +3444,26 @@ def _v33_review_sprint_dashboard_metrics_smoke(root: Path) -> tuple[bool, str]:
                 and metrics_report.get("manual_decisions", {}).get("manual_apply_count", 0) >= 1
                 and metrics_report.get("quality_delta", {}).get("status") in allowed_quality
                 and metrics_report.get("risk_readiness", {}).get("readiness") in allowed_readiness
+                and second_metrics_report.get("risk_readiness", {}).get("readiness") in allowed_readiness
                 and project_metrics_status == 200
-                and project_report.get("latest_sprint_id") == sprint_id
+                and project_report.get("latest_sprint_id") == second_sprint_id
                 and project_report.get("latest_readiness") in allowed_readiness
                 and export_status == 200
-                and project_export["review_sprints"][0]["metrics_summary"]["sprint_id"] == sprint_id
-                and project_export["review_metrics_summary"]["latest_sprint_id"] == sprint_id
+                and any(item.get("metrics_summary", {}).get("sprint_id") == sprint_id for item in project_export.get("review_sprints", []))
+                and any(item.get("metrics_summary", {}).get("sprint_id") == second_sprint_id for item in project_export.get("review_sprints", []))
+                and project_export["review_metrics_summary"]["latest_sprint_id"] == second_sprint_id
                 and final_status == 200
                 and final_export_status == 200
-                and final_export["final_export"]["review_metrics"]["latest_sprint_id"] == sprint_id
+                and final_review_metrics.get("latest_sprint_id") == second_sprint_id
+                and final_review_metrics.get("completion_rate") == expected_completion_rate
+                and final_review_metrics.get("quality_delta") == expected_quality_delta
+                and final_review_metrics.get("warnings", []) == expected_warnings
                 and "sk-secret-value" not in serialized
                 and "api_key" not in serialized
                 and "C:\\Users" not in serialized
                 and str(base) not in serialized
             )
-            return ok, f"sprint={sprint_id}, readiness={metrics_report.get('risk_readiness', {}).get('readiness')}, version={child_version}"
+            return ok, f"sprint={sprint_id}, latest={second_sprint_id}, readiness={metrics_report.get('risk_readiness', {}).get('readiness')}, version={child_version}"
         except Exception as exc:
             return False, str(exc)
         finally:

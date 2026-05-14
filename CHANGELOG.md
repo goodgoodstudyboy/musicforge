@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.3.1 - 2026-05-14
+
+### Fixed
+- Final Export review metrics now use `review_metrics_summary.latest_sprint_id` to select the matching Sprint metrics summary, so multi-Sprint exports no longer mix the latest Sprint ID/readiness with an older Sprint's completion, quality delta, or warnings.
+
+### Verified
+- `python -m pytest tests\test_final_export.py tests\test_server_review_sprint_metrics.py tests\test_release_check.py -q`
+
 ## v3.3.0 - 2026-05-14
 
 ### Added
