@@ -119,6 +119,7 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
         "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
+        "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
         "provider_patch": _provider_patch_view(metadata.get("provider_patch")),
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,

@@ -8,7 +8,7 @@ import shutil
 import threading
 import time
 import webbrowser
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -154,6 +154,15 @@ from song_agent.review_sprints import (
 from song_agent.review_sprint_recommendations import (
     build_review_sprint_recommendation_report,
     recommendation_report_summary,
+)
+from song_agent.review_sprint_actions import (
+    ReviewSprintActionQueueStore,
+    SprintActionItem,
+    SprintActionQueue,
+    action_queue_collection_summary,
+    action_queue_summary,
+    build_action_queue_from_recommendation_report,
+    queue_report_is_stale,
 )
 from song_agent.provider_usage import (
     build_provider_usage_report,
@@ -1108,6 +1117,7 @@ class JobStore:
                         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
                         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
                         "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
+                        "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
                         "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
                         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
                     }
@@ -5025,6 +5035,68 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self.project_store.append_event(project_id, "review_sprint_recommendations_refreshed", {"sprint_id": sprint.sprint_id, "recommended_count": len(report.get("recommended_order", []))})
                 self._send_json({"ok": True, "sprint": sprint.to_dict(), "recommendation_report": report, "summary": recommendation_report_summary(report)})
                 return
+            if action == "action-queues":
+                queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+                if method == "GET":
+                    queues = queue_store.list_queues(include_archived=True)
+                    self._send_json({"ok": True, "sprint": sprint.to_dict(), "queues": [queue.to_dict() for queue in queues], "latest_queue": queues[0].to_dict() if queues else {}, "summary": action_queue_collection_summary(queues)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    if bool(payload.get("refresh_recommendations", True)):
+                        sprint, _conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+                        report = self._refresh_review_sprint_recommendations(project_id, sprint_store, task_store, sprint)
+                    else:
+                        report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+                        if not report:
+                            report = self._refresh_review_sprint_recommendations(project_id, sprint_store, task_store, sprint)
+                    queue = build_action_queue_from_recommendation_report(
+                        project_id=project_id,
+                        sprint=sprint,
+                        recommendation_report=report,
+                        name=str(payload.get("name") or "") or None,
+                        settings=payload.get("settings") if isinstance(payload.get("settings"), dict) else {},
+                        now=_utc_now(),
+                    )
+                    created = queue_store.create_queue(queue, now=_utc_now())
+                    self.project_store.append_event(project_id, "review_sprint_action_queue_created", {"sprint_id": sprint.sprint_id, "queue_id": created.queue_id, "item_count": len(created.items)})
+                    self._send_json({"ok": True, "sprint": sprint.to_dict(), "queue": created.to_dict(), "summary": action_queue_summary(created)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if action.startswith("action-queue:"):
+                queue_id, queue_action = action.split(":", 2)[1:]
+                queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+                if queue_action == "detail":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    queue = queue_store.read_queue(queue_id)
+                    if queue.project_id != project_id or queue.sprint_id != sprint.sprint_id:
+                        raise FileNotFoundError(queue_id)
+                    self._send_json({"ok": True, "sprint": sprint.to_dict(), "queue": queue.to_dict(), "events": queue_store.read_events(queue.queue_id), "summary": action_queue_summary(queue)})
+                    return
+                if queue_action == "run":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    result = self._run_review_sprint_action_queue(project_id, sprint_store, task_store, sprint, queue_store, queue_id, payload)
+                    self._send_json(result)
+                    return
+                if queue_action == "archive":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    queue = queue_store.read_queue(queue_id)
+                    if queue.project_id != project_id or queue.sprint_id != sprint.sprint_id:
+                        raise FileNotFoundError(queue_id)
+                    archived = queue_store.archive_queue(queue.queue_id, now=_utc_now())
+                    self.project_store.append_event(project_id, "review_sprint_action_queue_archived", {"sprint_id": sprint.sprint_id, "queue_id": archived.queue_id})
+                    self._send_json({"ok": True, "queue": archived.to_dict(), "summary": action_queue_summary(archived)})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Review sprint action queue route not found.")
+                return
             if action.startswith("recommendation-context-pack:"):
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5071,6 +5143,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+        action_queue_summary_data = self._review_sprint_action_queue_summary(sprint_store, sprint)
         response = {
             "ok": True,
             "sprint": sprint.to_dict(),
@@ -5078,7 +5151,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "conflict_report": conflict_report,
             "recommendation_report": recommendation_report,
             "recommendation_summary": recommendation_report_summary(recommendation_report),
-            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report),
+            "action_queue_summary": action_queue_summary_data,
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data),
             "tasks": self._review_sprint_task_items(task_store, sprint),
         }
         if include_events:
@@ -5089,14 +5163,23 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+        action_queue_summary_data = self._review_sprint_action_queue_summary(sprint_store, sprint)
         return {
             **sprint.to_dict(),
             "summary": summary,
             "conflict_report": conflict_report,
             "recommendation_report": recommendation_report,
             "recommendation_summary": recommendation_report_summary(recommendation_report),
-            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report),
+            "action_queue_summary": action_queue_summary_data,
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data),
         }
+
+    def _review_sprint_action_queue_summary(self, sprint_store: ReviewSprintStore, sprint: Any) -> dict[str, Any]:
+        try:
+            queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+            return action_queue_collection_summary(queue_store.list_queues(include_archived=True))
+        except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
+            return {}
 
     def _review_sprint_task_items(self, task_store: ReviewTaskStore, sprint: Any) -> list[dict[str, Any]]:
         items = []
@@ -5236,7 +5319,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 summary = sprint_store.read_summary(sprint.sprint_id, default={})
                 conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
                 recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
-                matches.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report))
+                queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+                queue_summary = action_queue_collection_summary(queue_store.list_queues(include_archived=True))
+                matches.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary))
             if not matches:
                 return {}
             return sanitize_metadata({"sprint_ids": [item["sprint_id"] for item in matches], "primary": matches[0], "sprints": matches})
@@ -5269,6 +5354,38 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if not matches:
                 return {}
             return sanitize_metadata({"primary": matches[0], "recommendations": matches})
+        except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _review_sprint_action_queue_summary_for_task(self, project_id: str, task_id: str) -> dict[str, Any]:
+        try:
+            project_dir = self.project_store.project_dir(project_id)
+            sprint_store = ReviewSprintStore(project_dir)
+            matches = []
+            for sprint in sprint_store.list_sprints(include_archived=True):
+                if task_id not in self._review_sprint_ordered_task_ids(sprint):
+                    continue
+                queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+                for queue in queue_store.list_queues(include_archived=True):
+                    related = [item for item in queue.items if item.task_id == task_id]
+                    if not related:
+                        continue
+                    manual_apply = next((item for item in related if item.action == "manual_apply_candidate"), None)
+                    primary_item = manual_apply or related[0]
+                    matches.append(
+                        {
+                            "sprint_id": sprint.sprint_id,
+                            "queue_id": queue.queue_id,
+                            "task_id": task_id,
+                            "status": queue.status,
+                            "related_action": primary_item.action,
+                            "related_item_id": primary_item.item_id,
+                            "related_item_status": primary_item.status,
+                        }
+                    )
+            if not matches:
+                return {}
+            return sanitize_metadata({"primary": matches[0], "queues": matches})
         except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
             return {}
 
@@ -5421,6 +5538,227 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         response = self._review_sprint_response(sprint_store, task_store, sprint)
         response.update({"results": sanitize_metadata(results), "created_count": created_total, "provider_snapshots": sanitize_metadata(provider_snapshots)})
         return response
+
+    def _run_review_sprint_action_queue(
+        self,
+        project_id: str,
+        sprint_store: ReviewSprintStore,
+        task_store: ReviewTaskStore,
+        sprint: Any,
+        queue_store: ReviewSprintActionQueueStore,
+        queue_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        queue = queue_store.read_queue(queue_id)
+        if queue.project_id != project_id or queue.sprint_id != sprint.sprint_id:
+            raise FileNotFoundError(queue_id)
+        if queue.status == "archived":
+            raise ReviewSprintStateError("Archived action queue cannot be run.")
+        selected_ids = payload.get("item_ids") if isinstance(payload.get("item_ids"), list) else []
+        selected_ids = [str(item) for item in selected_ids if str(item).strip()]
+        include_provider = bool(payload.get("include_provider", queue.settings.get("run_provider_actions", False)))
+        rerun_failed = bool(payload.get("rerun_failed", False))
+        stop_on_failure = bool(payload.get("stop_on_failure", queue.settings.get("stop_on_failure", False)))
+        results: list[dict[str, Any]] = []
+        queue = queue_store.update_queue(replace(queue, status="running"), event="queue_run_started", payload={"selected_item_ids": selected_ids, "include_provider": include_provider}, now=_utc_now())
+        self.project_store.append_event(project_id, "review_sprint_action_queue_started", {"sprint_id": sprint.sprint_id, "queue_id": queue.queue_id})
+        provider_runs = 0
+        max_provider = int(queue.settings.get("max_provider_actions") or 3)
+        for item in _select_action_queue_items(queue, selected_ids, rerun_failed=rerun_failed):
+            if item.safety == "provider_safe" and not include_provider:
+                results.append({"item_id": item.item_id, "status": "skipped", "reason": "provider action requires include_provider=true"})
+                continue
+            if item.safety == "provider_safe":
+                if provider_runs >= max_provider:
+                    item = self._set_action_item(queue_store, queue, item, status="blocked", error="Provider action limit reached for this queue run.", event="item_blocked")
+                    queue = queue_store.read_queue(queue.queue_id)
+                    results.append({"item_id": item.item_id, "status": item.status, "error": item.error})
+                    if stop_on_failure:
+                        break
+                    continue
+                provider_runs += 1
+            item = self._set_action_item(queue_store, queue, item, status="running", event="item_started")
+            queue = queue_store.read_queue(queue.queue_id)
+            try:
+                item = self._execute_review_sprint_action_item(project_id, sprint_store, task_store, sprint, queue, item)
+                event = "item_blocked" if item.status == "blocked" else ("item_skipped" if item.status == "skipped" else "item_completed")
+                item = self._set_action_item(queue_store, queue, item, status=item.status, result=item.result, error=item.error, event=event)
+                self.project_store.append_event(project_id, "review_sprint_action_item_completed", {"sprint_id": sprint.sprint_id, "queue_id": queue.queue_id, "item_id": item.item_id, "status": item.status, "action": item.action})
+                results.append({"item_id": item.item_id, "status": item.status, "result": item.result, "error": item.error})
+            except (ReviewSprintStateError, ReviewTaskStateError, ContextPackStaleError) as exc:
+                item = self._set_action_item(queue_store, queue, item, status="blocked", error=str(exc), event="item_blocked")
+                results.append({"item_id": item.item_id, "status": item.status, "error": item.error})
+                if stop_on_failure:
+                    break
+            except (ProviderError, ReviewTaskError, ValueError, FileNotFoundError) as exc:
+                item = self._set_action_item(queue_store, queue, item, status="failed", error=str(exc), event="item_failed")
+                results.append({"item_id": item.item_id, "status": item.status, "error": item.error})
+                if stop_on_failure:
+                    break
+            finally:
+                queue = queue_store.read_queue(queue.queue_id)
+        queue = queue_store.update_queue(queue, event="queue_run_completed", payload={"result_count": len(results)}, now=_utc_now())
+        self.project_store.append_event(project_id, "review_sprint_action_queue_completed", {"sprint_id": sprint.sprint_id, "queue_id": queue.queue_id, "status": queue.status})
+        refreshed_sprint = sprint_store.read_sprint(sprint.sprint_id)
+        response = self._review_sprint_response(sprint_store, task_store, refreshed_sprint)
+        response.update({"queue": queue.to_dict(), "queue_events": queue_store.read_events(queue.queue_id), "results": sanitize_metadata(results), "action_queue_summary": action_queue_summary(queue)})
+        return response
+
+    def _execute_review_sprint_action_item(
+        self,
+        project_id: str,
+        sprint_store: ReviewSprintStore,
+        task_store: ReviewTaskStore,
+        sprint: Any,
+        queue: SprintActionQueue,
+        item: SprintActionItem,
+    ) -> SprintActionItem:
+        if item.safety in {"manual_required", "informational"}:
+            return replace(item, status="manual_required" if item.safety == "manual_required" else "skipped", completed_at=_utc_now())
+        if item.safety == "blocked":
+            return replace(item, status="blocked", error=item.error or "Action item is blocked.", completed_at=_utc_now())
+        if item.action == "refresh_conflicts":
+            sprint, report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+            return replace(item, status="completed", result={"conflict_count": len(report.get("conflicts", []))}, completed_at=_utc_now())
+        if item.action == "refresh_recommendations":
+            sprint, _report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+            report = self._refresh_review_sprint_recommendations(project_id, sprint_store, task_store, sprint)
+            return replace(item, status="completed", result={"recommended_count": len(report.get("recommended_order", [])), "created_at": report.get("created_at")}, completed_at=_utc_now())
+        report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+        if queue_report_is_stale(queue, report):
+            return replace(item, status="blocked", error="Action queue is stale because the Recommendation Report changed. Recreate the queue.", completed_at=_utc_now())
+        task = self._ensure_action_item_task_current(project_id, task_store, sprint, item)
+        if item.action == "save_recommended_context_pack":
+            result = self._execute_queue_context_pack_action(project_id, sprint_store, task_store, sprint, item)
+        elif item.action == "generate_local_candidates":
+            result = self._generate_review_task_local_candidates_for_queue(project_id, task_store, task, item.input)
+        elif item.action == "generate_provider_candidates":
+            result = self._generate_review_task_provider_candidates_for_queue(project_id, task_store, task, item.input)
+        elif item.action == "refresh_decision_report":
+            result = self._refresh_review_task_decision_report_for_queue(project_id, task_store, task, item.input)
+        else:
+            result = {"message": "Action is not executable from the queue."}
+            return replace(item, status="skipped", result=result, completed_at=_utc_now())
+        self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint_store.read_sprint(sprint.sprint_id))
+        return replace(item, status="completed", result=sanitize_metadata(result), error=None, completed_at=_utc_now())
+
+    def _ensure_action_item_task_current(self, project_id: str, task_store: ReviewTaskStore, sprint: Any, item: SprintActionItem) -> Any:
+        if not item.task_id or item.task_id not in self._review_sprint_ordered_task_ids(sprint):
+            raise ReviewSprintStateError("Action item task is no longer in this sprint.")
+        task = task_store.read_task(item.task_id)
+        if task.project_id != project_id:
+            raise FileNotFoundError(item.task_id)
+        _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+        ensure_task_current(task, parent_plan)
+        return task
+
+    def _execute_queue_context_pack_action(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, item: SprintActionItem) -> dict[str, Any]:
+        context_pack_id = str((item.result or {}).get("context_pack_id") or "")
+        if context_pack_id:
+            pack = self.context_pack_store.read_pack(context_pack_id)
+            return {"status": "skipped", "reason": "context pack already created", "context_pack_id": pack.pack_id}
+        preview = item.input.get("context_pack_preview") if isinstance(item.input.get("context_pack_preview"), dict) else {}
+        asset_refs = preview.get("asset_refs") if isinstance(preview.get("asset_refs"), list) else []
+        reference_refs = preview.get("reference_refs") if isinstance(preview.get("reference_refs"), list) else []
+        if not asset_refs and not reference_refs:
+            return {"status": "skipped", "reason": "recommendation has no context refs"}
+        result = self._save_review_sprint_recommendation_context_pack(project_id, sprint_store, task_store, sprint, str(item.task_id), {"name": item.input.get("name") or ""})
+        return {"status": "created", "context_pack_id": result["context_pack"]["pack_id"], "asset_count": len(result["context_pack"].get("asset_refs") or []), "reference_count": len(result["context_pack"].get("reference_refs") or [])}
+
+    def _generate_review_task_local_candidates_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        candidates = task_store.list_candidates(task.task_id)
+        if bool(payload.get("skip_existing_ready", True)) and any(candidate.candidate_type == "local_review_intents" and candidate.status in {"ready", "applied"} for candidate in candidates):
+            return {"status": "skipped", "reason": "ready local candidate exists", "created_count": 0, "created_candidate_ids": []}
+        _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+        ensure_task_current(task, parent_plan)
+        strategies = payload.get("strategies") if isinstance(payload.get("strategies"), list) else ["balanced"]
+        render_midi = bool(payload.get("render_midi", True))
+        generated = []
+        for candidate, candidate_plan, validator, summary in build_local_review_candidates(task, parent_plan, strategies=strategies):
+            generated.append(task_store.create_candidate(task=task, candidate=candidate, candidate_plan=candidate_plan, validator=validator, summary=summary, render_midi_file=render_midi, now=_utc_now()))
+        ranked = task_store.rank_candidates(task)
+        updated_task = task_store.update_counts(task, now=_utc_now())
+        decision_report = task_store.write_decision_report(updated_task, build_review_decision_report(task=updated_task, candidates=ranked, parent_plan=parent_plan, now=_utc_now()), now=_utc_now())
+        self.project_store.append_event(project_id, "review_sprint_action_local_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated)})
+        return {"status": "generated" if generated else "skipped", "created_count": len(generated), "created_candidate_ids": [candidate.candidate_id for candidate in generated], "decision_report": review_decision_summary(decision_report), "provider_summary": review_candidate_source_breakdown(ranked)}
+
+    def _generate_review_task_provider_candidates_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        payload = self._expand_context_pack_payload(payload)
+        candidates = task_store.list_candidates(task.task_id)
+        if bool(payload.get("skip_existing_provider", True)) and any((candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider")) and candidate.status in {"ready", "applied"} for candidate in candidates):
+            return {"status": "skipped", "reason": "ready provider candidate exists", "created_count": 0, "created_candidate_ids": []}
+        _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+        ensure_task_current(task, parent_plan)
+        template_id = str(payload.get("template_id") or "provider-review-candidates").strip()
+        template = self.prompt_template_store.get_template(template_id)
+        if not template.enabled:
+            raise ReviewSprintStateError("Prompt template is disabled.")
+        candidate_count = max(1, min(5, int(payload.get("candidate_count") or 2)))
+        config, _sources = load_provider_config()
+        asset_snapshot = asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_utc_now())
+        asset_prompt_refs = asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
+        reference_snapshot = reference_refs_snapshot(self.reference_store, payload.get("reference_refs"), captured_at=_utc_now())
+        reference_prompt_refs = reference_prompt_summaries(self.reference_store, payload.get("reference_refs"))
+        local_context = candidates if bool(payload.get("include_local_context", True)) else []
+        generated_specs, provider_snapshot, instruction = build_provider_review_candidates(
+            task=task,
+            parent_plan=parent_plan,
+            template=template,
+            config=config,
+            candidate_count=candidate_count,
+            local_candidates=local_context,
+            asset_references=asset_prompt_refs,
+            reference_references=reference_prompt_refs,
+        )
+        generated = []
+        for candidate, candidate_plan, validator, summary in generated_specs:
+            generated.append(task_store.create_candidate(task=task, candidate=candidate, candidate_plan=candidate_plan, validator=validator, summary=summary, render_midi_file=bool(payload.get("render_midi", True)), now=_utc_now()))
+        ranked = task_store.rank_candidates(task)
+        updated_task = task_store.update_counts(task, now=_utc_now())
+        provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+        usage_record = _provider_usage_record(config_snapshot=provider_snapshot, operation="review_sprint_action_provider_candidates", template_id=template.template_id, started_at=_utc_now(), status="completed", provider_usage=provider_usage, request_id=provider_snapshot.get("request_id"))
+        write_json(task_store.task_dir(task.task_id) / "provider-usage.json", usage_record)
+        decision_report = task_store.write_decision_report(updated_task, build_review_decision_report(task=updated_task, candidates=ranked, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("decision_note") or "")), now=_utc_now())
+        if asset_snapshot["asset_refs"]:
+            self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "review_sprint_action_provider_candidates", "project_id": project_id, "review_task_id": task.task_id})
+        if reference_snapshot["reference_refs"]:
+            self.reference_store.mark_used(reference_snapshot["reference_refs"], {"usage_type": "review_sprint_action_provider_candidates", "project_id": project_id, "review_task_id": task.task_id})
+        self.project_store.append_event(project_id, "review_sprint_action_provider_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated), "template_id": template.template_id})
+        return {"status": "generated" if generated else "skipped", "created_count": len(generated), "created_candidate_ids": [candidate.candidate_id for candidate in generated], "instruction": instruction, "decision_report": review_decision_summary(decision_report), "provider_summary": review_candidate_source_breakdown(ranked), "provider_snapshot": provider_snapshot}
+
+    def _refresh_review_task_decision_report_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+        ensure_task_current(task, parent_plan)
+        ranked = task_store.rank_candidates(task)
+        decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("note") or "")), now=_utc_now())
+        self.project_store.append_event(project_id, "review_sprint_action_decision_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": decision_report.get("recommended_candidate_id")})
+        return {"decision_report": review_decision_summary(decision_report), "provider_summary": review_candidate_source_breakdown(ranked), "candidate_count": len(ranked)}
+
+    def _set_action_item(
+        self,
+        queue_store: ReviewSprintActionQueueStore,
+        queue: SprintActionQueue,
+        item: SprintActionItem,
+        *,
+        status: str,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+        event: str | None = None,
+    ) -> SprintActionItem:
+        now = _utc_now()
+        updated_item = replace(
+            item,
+            status=status,
+            result=sanitize_metadata(result if result is not None else item.result),
+            error=None if error is None else str(sanitize_metadata({"error": error}).get("error") or ""),
+            started_at=now if status == "running" else item.started_at,
+            completed_at=now if status in {"completed", "failed", "skipped", "blocked", "manual_required"} else item.completed_at,
+            attempt=item.attempt + 1 if status == "running" else item.attempt,
+        )
+        items = [updated_item if existing.item_id == item.item_id else existing for existing in queue.items]
+        updated_queue = replace(queue, items=items)
+        queue_store.update_queue(updated_queue, event=event, payload={"item_id": item.item_id, "action": item.action, "status": status}, now=now)
+        return updated_item
 
     def _handle_project_review_task_route(self, method: str, project_id: str, task_id: str, action: str) -> None:
         try:
@@ -5684,6 +6022,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         sprint_recommendation = self._review_sprint_recommendation_summary_for_task(project_id, task.task_id)
         if sprint_recommendation:
             metadata["review_sprint_recommendation"] = sprint_recommendation
+        sprint_action_queue = self._review_sprint_action_queue_summary_for_task(project_id, task.task_id)
+        if sprint_action_queue:
+            metadata["review_sprint_action_queue"] = sprint_action_queue
         job.edit_metadata = metadata
         job.input_payload["review_task_id"] = task.task_id
         job.input_payload["review_candidate_id"] = candidate.candidate_id
@@ -5695,6 +6036,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             job.input_payload["review_sprint"] = sprint_membership
         if sprint_recommendation:
             job.input_payload["review_sprint_recommendation"] = sprint_recommendation
+        if sprint_action_queue:
+            job.input_payload["review_sprint_action_queue"] = sprint_action_queue
         self.store._write_job(job)
         write_json(ProjectPaths.create(Path(job.output_dir)).data / "edit-metadata.json", metadata)
         self.store.start_job(job.job_id)
@@ -7810,6 +8153,29 @@ def _review_sprints_list_summary(sprints: list[dict[str, Any]]) -> dict[str, Any
     )
 
 
+def _select_action_queue_items(queue: SprintActionQueue, selected_ids: list[str], *, rerun_failed: bool = False) -> list[SprintActionItem]:
+    selected = set(selected_ids)
+    items = []
+    for item in queue.items:
+        if selected and item.item_id not in selected:
+            continue
+        if item.status == "pending" or (rerun_failed and item.status == "failed"):
+            items.append(item)
+    return sorted(items, key=_action_queue_run_sort_key)
+
+
+def _action_queue_run_sort_key(item: SprintActionItem) -> tuple[int, int, int, str]:
+    order = {
+        "refresh_conflicts": 0,
+        "refresh_recommendations": 1,
+        "save_recommended_context_pack": 2,
+        "generate_local_candidates": 3,
+        "generate_provider_candidates": 4,
+        "refresh_decision_report": 5,
+    }.get(item.action, 9)
+    return (order, int(item.rank or 9999), -int(item.priority or 0), item.item_id)
+
+
 def _usage_int(usage: dict[str, Any], field_name: str) -> int:
     value = usage.get(field_name)
     if value is None:
@@ -8357,6 +8723,12 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
         return unquote(parts[1]), "recommendations-refresh"
     if len(parts) == 5 and parts[0] == "review-sprints" and parts[2] == "recommendations" and parts[4] == "context-pack":
         return unquote(parts[1]), f"recommendation-context-pack:{unquote(parts[3])}"
+    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] == "action-queues":
+        return unquote(parts[1]), "action-queues"
+    if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "action-queues":
+        return unquote(parts[1]), f"action-queue:{unquote(parts[3])}:detail"
+    if len(parts) == 5 and parts[0] == "review-sprints" and parts[2] == "action-queues" and parts[4] in {"run", "archive"}:
+        return unquote(parts[1]), f"action-queue:{unquote(parts[3])}:{parts[4]}"
     return None
 
 

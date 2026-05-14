@@ -354,6 +354,18 @@ candidate. Saved context packs reject hidden or stale source assets/references,
 and Project Compare, Project Export, and Final Export include compact
 recommendation summaries.
 
+v3.2.0 adds Review Sprint Action Queues. A queue is created from the latest
+Recommendation Report, stores per-task action items with safety labels, and can
+run selected safe actions while recording an event stream. It can save
+recommended Context Packs, generate task-scoped local/provider candidates, and
+refresh Decision Reports, conflicts, or recommendations. Provider actions are
+skipped unless explicitly allowed for that run, and manual actions such as
+candidate apply, task resolve, and follow-up creation stay as `manual_required`
+items. Queue execution rechecks stale tasks, changed Recommendation Reports, and
+hidden/stale Context Pack sources before doing work. Project Compare, Project
+Export, Final Export, and release-check include compact Action Queue summaries
+and apply provenance.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

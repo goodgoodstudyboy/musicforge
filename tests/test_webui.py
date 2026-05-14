@@ -482,6 +482,15 @@ def test_webui_contains_interactive_editor_controls():
     assert "Recommended Action" in html
     assert "Save Context Pack" in html
     assert "Applying candidates still requires manual confirmation." in html
+    assert "Action Queue" in html
+    assert "Create Queue from Recommendations" in html
+    assert "Select Safe Actions" in html
+    assert "Run Selected Safe Actions" in html
+    assert "Allow provider actions" in html
+    assert "manual required" in html
+    assert "/action-queues" in html
+    assert "/action-queues/${encodeURIComponent(button.dataset.queueId)}/run" in html
+    assert "/action-queues/${encodeURIComponent(button.dataset.queueId)}/archive" in html
     assert "Close Sprint" in html
     assert "Add to Sprint" in html
     assert "Decision Report" in html

@@ -4883,8 +4883,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         sprints = sprintData.sprints || [];
         sprints = await Promise.all(sprints.map(async (sprint) => {
           try {
-            const recommendationData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/recommendations`);
-            return { ...sprint, recommendation_report: recommendationData.recommendation_report || {}, recommendation_summary: recommendationData.summary || {} };
+            const [recommendationData, queueData] = await Promise.all([
+              api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/recommendations`),
+              api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/action-queues`),
+            ]);
+            return {
+              ...sprint,
+              recommendation_report: recommendationData.recommendation_report || {},
+              recommendation_summary: recommendationData.summary || {},
+              action_queues: queueData.queues || [],
+              latest_action_queue: queueData.latest_queue || {},
+              action_queue_summary: queueData.summary || sprint.action_queue_summary || {},
+            };
           } catch (err) {
             return { ...sprint, recommendation_error: err.message };
           }
@@ -4947,6 +4957,64 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       target.querySelectorAll("[data-review-sprint-recommendations]").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintRecommendations)}/recommendations/refresh`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-queue]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const sprintId = button.dataset.reviewSprintQueue;
+          const refresh = $(`review-sprint-queue-refresh-${sprintId}`);
+          const includeContext = $(`review-sprint-queue-context-${sprintId}`);
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprintId)}/action-queues`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              refresh_recommendations: !refresh || refresh.checked,
+              settings: {
+                run_context_pack_actions: !includeContext || includeContext.checked,
+                run_provider_actions: false,
+                run_local_actions: true,
+              },
+            }),
+          });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-queue-select-safe]").forEach((button) => {
+        button.addEventListener("click", () => {
+          target.querySelectorAll(`[data-review-sprint-queue-item="${CSS.escape(button.dataset.queueId)}"]`).forEach((checkbox) => {
+            checkbox.checked = checkbox.dataset.safety === "auto_safe";
+          });
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-run-queue]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const itemIds = Array.from(target.querySelectorAll(`[data-review-sprint-queue-item="${CSS.escape(button.dataset.queueId)}"]:checked`)).map((checkbox) => checkbox.value);
+          const providerToggle = $(`review-sprint-queue-provider-${button.dataset.sprintId}-${button.dataset.queueId}`);
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.sprintId)}/action-queues/${encodeURIComponent(button.dataset.queueId)}/run`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item_ids: itemIds, include_provider: !!(providerToggle && providerToggle.checked) }),
+          });
+          await loadContextPacks();
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-run-all-queue]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const providerToggle = $(`review-sprint-queue-provider-${button.dataset.sprintId}-${button.dataset.queueId}`);
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.sprintId)}/action-queues/${encodeURIComponent(button.dataset.queueId)}/run`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ include_provider: !!(providerToggle && providerToggle.checked) }),
+          });
+          await loadContextPacks();
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-archive-queue]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.sprintId)}/action-queues/${encodeURIComponent(button.dataset.queueId)}/archive`, { method: "POST" });
           await renderProjectReviewSprints(project, versions, target);
         });
       });
@@ -5065,6 +5133,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const recommendationReport = sprint.recommendation_report || {};
       const recommendationSummary = sprint.recommendation_summary || {};
       const recommendationActions = Array.isArray(recommendationReport.recommended_actions) ? recommendationReport.recommended_actions : [];
+      const latestQueue = sprint.latest_action_queue || {};
+      const actionQueueSummary = sprint.action_queue_summary || {};
       const taskIds = (sprint.task_refs || []).filter((ref) => ref.included !== false).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map((ref) => ref.task_id);
       const mutable = ["open", "in_progress", "blocked"].includes(sprint.status);
       return `
@@ -5080,10 +5150,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${metric("Applied", counts.applied ?? 0)}
             ${metric("Conflicts", counts.conflict_count ?? conflicts.length)}
             ${metric("Blocking", counts.blocking_conflict_count ?? 0)}
+            ${metric("Queues", actionQueueSummary.queue_count ?? 0)}
+            ${metric("Queue Status", actionQueueSummary.latest_status || "-")}
           </div>
           <div class="empty small">${escapeHtml(taskIds.join(" · ") || "No tasks")}</div>
           ${conflicts.length ? `<div class="review-conflict-list">${conflicts.slice(0, 8).map((conflict) => reviewSprintConflictHtml(conflict)).join("")}</div>` : `<div class="empty small">No conflicts reported.</div>`}
           ${reviewSprintRecommendationsHtml(sprint, recommendationSummary, recommendationActions)}
+          ${reviewSprintActionQueueHtml(sprint, latestQueue, actionQueueSummary)}
           <div class="actions">
             <select id="review-sprint-add-task-${escapeHtml(sprint.sprint_id)}" style="max-width:260px;" ${mutable ? "" : "disabled"}>
               <option value="">Add task</option>
@@ -5099,7 +5172,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="danger" data-review-sprint-archive="${escapeHtml(sprint.sprint_id)}" type="button" ${sprint.status === "archived" ? "disabled" : ""}>Archive Sprint</button>
           </div>
           ${sprint.recommendation_error ? `<div class="empty error">${escapeHtml(sprint.recommendation_error)}</div>` : ""}
-          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, settings: sprint.settings }, null, 2))}</pre>
+          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, action_queue_summary: actionQueueSummary, settings: sprint.settings }, null, 2))}</pre>
         </div>
       `;
     }
@@ -5141,6 +5214,75 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </div>
         </div>
       `;
+    }
+
+    function reviewSprintActionQueueHtml(sprint, queue, summary) {
+      const queueId = queue.queue_id || "";
+      const items = Array.isArray(queue.items) ? queue.items : [];
+      const rows = items.map((item) => {
+        const isRunnable = ["auto_safe", "provider_safe"].includes(item.safety) && ["pending", "failed"].includes(item.status);
+        const result = item.result && Object.keys(item.result).length ? JSON.stringify(item.result) : "";
+        return `
+          <tr>
+            <td><input data-review-sprint-queue-item="${escapeHtml(queueId)}" data-safety="${escapeHtml(item.safety || "")}" value="${escapeHtml(item.item_id || "")}" type="checkbox" ${isRunnable ? "" : "disabled"}></td>
+            <td>${escapeHtml(item.rank ?? "-")}</td>
+            <td>${escapeHtml(item.task_id || "-")}</td>
+            <td><span class="status ${escapeHtml(item.action || "")}">${escapeHtml(actionQueueActionLabel(item.action))}</span></td>
+            <td><span class="status ${escapeHtml(item.safety || "")}">${escapeHtml(item.safety || "-")}</span></td>
+            <td><span class="status ${escapeHtml(item.status || "")}">${escapeHtml(item.status === "manual_required" ? "manual required" : item.status || "-")}</span></td>
+            <td>${escapeHtml(item.reason || "-")}</td>
+            <td>${escapeHtml(result || item.error || "-")}</td>
+          </tr>
+        `;
+      }).join("");
+      return `
+        <div class="review-sprint-action-queue">
+          <h5>Action Queue</h5>
+          <div class="summary-grid">
+            ${metric("Latest Queue", queueId || "-")}
+            ${metric("Status", queue.status || "-")}
+            ${metric("Completed", summary.completed_action_count ?? (queue.summary || {}).completed ?? 0)}
+            ${metric("Manual Required", summary.manual_required_count ?? (queue.summary || {}).manual_required ?? 0)}
+            ${metric("Failed", summary.failed_action_count ?? (queue.summary || {}).failed ?? 0)}
+          </div>
+          <div class="grid2">
+            <label><input id="review-sprint-queue-refresh-${escapeHtml(sprint.sprint_id)}" type="checkbox" checked> Refresh recommendations before creating</label>
+            <label><input id="review-sprint-queue-context-${escapeHtml(sprint.sprint_id)}" type="checkbox" checked> Include context pack save actions</label>
+          </div>
+          <div class="actions">
+            <button class="secondary" data-review-sprint-queue="${escapeHtml(sprint.sprint_id)}" type="button">Create Queue from Recommendations</button>
+            ${queueId ? `<button class="secondary" data-review-sprint-queue-select-safe data-queue-id="${escapeHtml(queueId)}" type="button">Select Safe Actions</button>` : ""}
+            ${queueId ? `<label style="display:inline-flex;align-items:center;gap:6px;"><input id="review-sprint-queue-provider-${escapeHtml(sprint.sprint_id)}-${escapeHtml(queueId)}" type="checkbox"> Allow provider actions</label>` : ""}
+            ${queueId ? `<button class="secondary" data-review-sprint-run-queue data-sprint-id="${escapeHtml(sprint.sprint_id)}" data-queue-id="${escapeHtml(queueId)}" type="button">Run Selected Safe Actions</button>` : ""}
+            ${queueId ? `<button class="secondary" data-review-sprint-run-all-queue data-sprint-id="${escapeHtml(sprint.sprint_id)}" data-queue-id="${escapeHtml(queueId)}" type="button">Run All Safe Actions</button>` : ""}
+            ${queueId ? `<button class="danger" data-review-sprint-archive-queue data-sprint-id="${escapeHtml(sprint.sprint_id)}" data-queue-id="${escapeHtml(queueId)}" type="button">Archive Queue</button>` : ""}
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Select</th><th>Rank</th><th>Task</th><th>Action</th><th>Safety</th><th>Status</th><th>Reason</th><th>Result</th></tr></thead>
+              <tbody>${rows || `<tr><td colspan="8">Create an Action Queue from the latest recommendations.</td></tr>`}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function actionQueueActionLabel(action) {
+      return ({
+        refresh_recommendations: "Recommendations",
+        refresh_conflicts: "Conflicts",
+        save_recommended_context_pack: "Context",
+        generate_local_candidates: "Local",
+        generate_provider_candidates: "Provider",
+        refresh_decision_report: "Decision",
+        inspect_conflict: "Inspect",
+        manual_apply_candidate: "Manual Apply",
+        manual_resolve_task: "Manual Resolve",
+        manual_add_follow_up: "Manual Follow-up",
+        skip_stale_task: "Blocked Stale",
+        skip_archived_task: "Blocked Archived",
+        no_action: "No Action",
+      })[action] || action || "-";
     }
 
     function reviewSprintConflictHtml(conflict) {

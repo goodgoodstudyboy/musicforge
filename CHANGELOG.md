@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.2.0 - 2026-05-14
+
+### Added
+- Review Sprint Action Queues that convert Recommendation Reports into persisted, auditable queue items with statuses, safety classes, event streams, and stale report hashes.
+- Action Queue APIs for create/list/detail/run/archive, including selected-item execution, completed-item idempotency, provider opt-in, and queue-level event history.
+- Safe Action Queue execution for saving recommended Context Packs, generating task-scoped local/provider candidates, refreshing Decision Reports, and refreshing sprint conflicts/recommendations.
+- Studio Review Sprints Action Queue panel with queue creation, safe selection, provider authorization, run controls, manual-required rows, and queue summaries.
+- Project Compare, Project Export, Final Export, and review candidate apply metadata now include compact Review Sprint Action Queue provenance.
+- release-check now includes a v3.2 smoke covering queue creation, safe local/context execution, provider default skip, provider opt-in, Decision Report refresh, manual apply provenance, export/final export, stale recommendation blocking, stale context blocking, usage, and redaction.
+
+### Scope
+- v3.2.0 still does not auto-apply candidates, auto-resolve tasks, auto-close sprints, or create final exports automatically. Provider queue items remain skipped unless explicitly allowed for that run.
+
+### Verified
+- `python -m pytest tests\test_review_sprint_actions.py tests\test_server_review_sprint_actions.py tests\test_release_check.py tests\test_webui.py -q`
+
 ## v3.1.0 - 2026-05-14
 
 ### Added

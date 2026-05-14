@@ -396,9 +396,11 @@ def review_sprint_export_summary(
     summary: dict[str, Any] | None = None,
     conflict_report: dict[str, Any] | None = None,
     recommendation_report: dict[str, Any] | None = None,
+    action_queue_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     summary = summary if isinstance(summary, dict) else {}
     conflict_report = conflict_report if isinstance(conflict_report, dict) else {}
+    action_queue_summary = action_queue_summary if isinstance(action_queue_summary, dict) else {}
     recommendation_summary = _recommendation_summary_for_export(recommendation_report)
     counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else sprint.counts
     return sanitize_metadata(
@@ -411,6 +413,7 @@ def review_sprint_export_summary(
             "summary": summary,
             "conflict_count": len(conflict_report.get("conflicts", [])) if isinstance(conflict_report.get("conflicts"), list) else int(counts.get("conflict_count") or 0),
             "recommendation_summary": recommendation_summary,
+            "action_queue_summary": action_queue_summary,
             "task_ids": [str(ref.get("task_id")) for ref in sorted(sprint.task_refs, key=lambda ref: int(ref.get("order") or 0)) if ref.get("included", True)],
         }
     )
@@ -421,6 +424,7 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
     closed = [sprint for sprint in sprints if sprint.get("status") == "closed"]
     counts = [sprint.get("summary", {}).get("counts", {}) for sprint in sprints if isinstance(sprint.get("summary"), dict)]
     recommendation_summaries = [sprint.get("recommendation_summary", {}) for sprint in sprints if isinstance(sprint.get("recommendation_summary"), dict)]
+    action_queue_summaries = [sprint.get("action_queue_summary", {}) for sprint in sprints if isinstance(sprint.get("action_queue_summary"), dict)]
     return sanitize_metadata(
         {
             "latest_sprint_id": latest.get("sprint_id"),
@@ -431,6 +435,10 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
             "recommendation_count": sum(int(item.get("open_recommendation_count") or 0) for item in recommendation_summaries),
             "context_recommendation_count": sum(int(item.get("context_recommendation_count") or 0) for item in recommendation_summaries),
             "next_action": (recommendation_summaries[0].get("next_action") if recommendation_summaries else None),
+            "action_queue_count": sum(int(item.get("queue_count") or 0) for item in action_queue_summaries),
+            "completed_action_count": sum(int(item.get("completed_action_count") or 0) for item in action_queue_summaries),
+            "failed_action_count": sum(int(item.get("failed_action_count") or 0) for item in action_queue_summaries),
+            "manual_required_action_count": sum(int(item.get("manual_required_count") or 0) for item in action_queue_summaries),
         }
     )
 

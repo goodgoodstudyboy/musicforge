@@ -187,6 +187,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v2.9 provider review candidates smoke", *_v29_provider_review_candidates_smoke(root))
     report.add("v3.0 review sprint smoke", *_v30_review_sprint_smoke(root))
     report.add("v3.1 review sprint recommendations smoke", *_v31_review_sprint_recommendations_smoke(root))
+    report.add("v3.2 review sprint action queue smoke", *_v32_review_sprint_action_queue_smoke(root))
     return report
 
 
@@ -3070,6 +3071,252 @@ def _v31_review_sprint_recommendations_smoke(root: Path) -> tuple[bool, str]:
             os.chdir(old_cwd)
 
 
+def _v32_review_sprint_action_queue_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            provider_status, provider = _release_http_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-review", "api_key": "sk-secret-value"})
+            asset_status, asset = _release_http_json(
+                server,
+                "POST",
+                "/api/assets",
+                {
+                    "asset_type": "bass_pattern",
+                    "name": "Release v3.2 action queue bass",
+                    "tags": ["bass", "arrangement"],
+                    "content": {"notes": [{"pitch": 36, "start_beat": 0, "duration_beats": 1}]},
+                },
+            )
+            reference_status, reference = _release_http_json(
+                server,
+                "POST",
+                "/api/references/import",
+                {
+                    "reference_type": "style_note",
+                    "filename": "bass.md",
+                    "title": "Release v3.2 bass arrangement reference",
+                    "tags": ["bass"],
+                    "content_base64": "YmFzcyBhcnJhbmdlbWVudCBjb250ZXh0",
+                },
+            )
+            index_status, _index = _release_http_json(server, "POST", "/api/library/rebuild", {})
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v3.2 Action Queue Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {
+                    "name": "Parent",
+                    "request": {
+                        "title": "Release v3.2 Action Queue Smoke",
+                        "language": "English",
+                        "style": "synth pop",
+                        "theme": "review sprint action queue",
+                        "tempo_bpm": 120,
+                        "key": "C",
+                    },
+                },
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {
+                    "patch": {
+                        "schema_version": 1,
+                        "base_plan_hash": state["base_plan_hash"],
+                        "label": "v3.2 action queue patch",
+                        "operations": [{"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 97}}],
+                    },
+                    "render_midi": True,
+                },
+            )
+            preview_id = preview_data["preview"]["preview_id"]
+            task_ids: list[str] = []
+            for index, notes in enumerate((r"bass arrangement too dense api_key=sk-secret-value C:\Users\demo\song.wav", "bass arrangement needs lift"), start=1):
+                audition_status, audition = _release_http_json(
+                    server,
+                    "POST",
+                    f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions",
+                    {"source": "preview", "range": {"mode": "custom", "start_beat": 16.0, "end_beat": 48.0}, "track_mode": "solo", "track_ids": ["track-003"]},
+                )
+                audition_id = audition["audition"]["audition_id"]
+                review_status, _review = _release_http_json(
+                    server,
+                    "POST",
+                    f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review",
+                    {"rating": 4, "status": "needs_fix", "favorite": True, "notes": notes, "tags": ["review-sprint-action-queue"]},
+                )
+                marker_status, _marker = _release_http_json(
+                    server,
+                    "POST",
+                    f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/markers",
+                    {"beat": float(index), "kind": "fix", "label": f"queue target {index}"},
+                )
+                task_status, task_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review-task", {})
+                if not (audition_status == 201 and review_status == 200 and marker_status == 201 and task_status == 201):
+                    return False, f"task setup failed: audition={audition_status}, review={review_status}, marker={marker_status}, task={task_status}"
+                task_ids.append(task_data["task"]["task_id"])
+            sprint_status, sprint_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/review-sprints",
+                {"name": "Release v3.2 Action Queue Sprint", "task_ids": task_ids, "settings": {"local_candidate_strategies": ["balanced"], "provider_candidate_count": 2}},
+            )
+            sprint_id = sprint_data["sprint"]["sprint_id"]
+            queue_status, queue_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
+            queue = queue_data["queue"]
+            queue_id = queue["queue_id"]
+            context_item_id = _release_item_id(queue, "save_recommended_context_pack")
+            local_item_id = _release_item_id(queue, "generate_local_candidates")
+            local_run_status, local_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{queue_id}/run", {"item_ids": [context_item_id, local_item_id]})
+            task_after_local_status, task_after_local = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_ids[0]}")
+            recommendation_status, recommendation = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/recommendations/refresh", {})
+            provider_queue_status, provider_queue = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": False})
+            provider_queue_id = provider_queue["queue"]["queue_id"]
+            provider_item_id = _release_item_id(provider_queue["queue"], "generate_provider_candidates")
+            provider_default_status, provider_default = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{provider_queue_id}/run", {"item_ids": [provider_item_id]})
+            provider_run_status, provider_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{provider_queue_id}/run", {"item_ids": [provider_item_id], "include_provider": True})
+            decision_path = base / ".musicforge" / "projects" / project_id / "review-tasks" / task_ids[0] / "decision-report.json"
+            if decision_path.exists():
+                decision_path.unlink()
+            decision_queue_status, decision_queue = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
+            decision_item_id = _release_item_id(decision_queue["queue"], "refresh_decision_report")
+            decision_run_status, decision_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{decision_queue['queue']['queue_id']}/run", {"item_ids": [decision_item_id]})
+            manual_queue_status, manual_queue = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
+            manual_items = [item for item in manual_queue["queue"].get("items", []) if item.get("action") == "manual_apply_candidate"]
+            provider_candidate_id = provider_run["results"][0]["result"]["created_candidate_ids"][0]
+            apply_status, applied = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_ids[0]}/candidates/{provider_candidate_id}/apply", {"version_name": "Action Queue Candidate Child"})
+            edit_job = _release_wait_http_job(server, applied["job"]["job_id"])
+            child_version = applied["version"]["version_id"]
+            compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            final_status, _final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
+            final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
+            stale_queue_status, stale_queue = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
+            stale_local_item_id = _release_item_id(stale_queue["queue"], "generate_local_candidates", required=False)
+            if not stale_local_item_id:
+                stale_local_item_id = stale_queue["queue"]["items"][0]["item_id"]
+            report_path = base / ".musicforge" / "projects" / project_id / "review-sprints" / sprint_id / "recommendation-report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["created_at"] = "2026-05-14T01:00:00+00:00"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            stale_run_status, stale_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{stale_queue['queue']['queue_id']}/run", {"item_ids": [stale_local_item_id]})
+            context_stale_queue_status, context_stale_queue = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
+            context_stale_item_id = _release_item_id(context_stale_queue["queue"], "save_recommended_context_pack")
+            asset_json = base / ".musicforge" / "assets" / asset["asset"]["asset_id"] / "asset.json"
+            original_asset = json.loads(asset_json.read_text(encoding="utf-8"))
+            polluted_asset = dict(original_asset)
+            polluted_asset["hidden"] = True
+            asset_json.write_text(json.dumps(polluted_asset), encoding="utf-8")
+            context_stale_run_status, context_stale_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{context_stale_queue['queue']['queue_id']}/run", {"item_ids": [context_stale_item_id]})
+            asset_json.write_text(json.dumps(original_asset), encoding="utf-8")
+            usage_status, usage = _release_http_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+            metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            serialized = json.dumps(
+                {
+                    "queue": queue_data,
+                    "local": local_run,
+                    "provider": provider_run,
+                    "decision": decision_run,
+                    "manual": manual_queue,
+                    "metadata": metadata,
+                    "compare": compare,
+                    "export": project_export,
+                    "final": final_export,
+                    "stale": stale_run,
+                    "context_stale": context_stale_run,
+                    "usage": usage,
+                },
+                ensure_ascii=False,
+            )
+            ok = (
+                provider_status == 200
+                and provider.get("configured") is True
+                and asset_status == 201
+                and reference_status == 201
+                and index_status == 200
+                and created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and state_status == 200
+                and preview_status == 201
+                and len(task_ids) == 2
+                and sprint_status == 201
+                and queue_status == 201
+                and any(item.get("action") == "save_recommended_context_pack" for item in queue.get("items", []))
+                and any(item.get("action") == "generate_local_candidates" for item in queue.get("items", []))
+                and local_run_status == 200
+                and any(result.get("result", {}).get("context_pack_id") for result in local_run.get("results", []))
+                and any(result.get("result", {}).get("created_count", 0) >= 1 for result in local_run.get("results", []))
+                and task_after_local_status == 200
+                and task_after_local["task"]["status"] == "candidate_ready"
+                and recommendation_status == 200
+                and recommendation["summary"]["top_recommendation"]["action"] in {"generate_provider", "refresh_decision_report", "apply_ready_candidate"}
+                and provider_queue_status == 201
+                and provider_default_status == 200
+                and provider_default["results"][0]["status"] == "skipped"
+                and _release_item(provider_default["queue"], provider_item_id)["status"] == "pending"
+                and provider_run_status == 200
+                and provider_run["results"][0]["status"] == "completed"
+                and provider_run["results"][0]["result"]["created_count"] >= 1
+                and decision_queue_status == 201
+                and decision_run_status == 200
+                and decision_run["results"][0]["status"] == "completed"
+                and decision_run["results"][0]["result"]["decision_report"]["requires_manual_apply"] is True
+                and manual_queue_status == 201
+                and manual_items
+                and manual_items[0]["status"] == "manual_required"
+                and apply_status == 202
+                and edit_job["status"] == "completed"
+                and metadata["review_sprint_action_queue"]["primary"]["sprint_id"] == sprint_id
+                and compare_status == 200
+                and compare["right"]["edit"]["review_sprint_action_queue"]["primary"]["queue_id"]
+                and export_status == 200
+                and project_export["review_sprints"][0]["action_queue_summary"]["queue_count"] >= 1
+                and project_export["versions"][1]["edit"]["review_sprint_action_queue"]["primary"]["sprint_id"] == sprint_id
+                and final_status == 200
+                and final_export_status == 200
+                and final_export["final_export"]["review_sprint_action_queues"]["latest_sprint_id"] == sprint_id
+                and final_export["final_export"]["edit"]["review_sprint_action_queue"]["primary"]["sprint_id"] == sprint_id
+                and stale_queue_status == 201
+                and stale_run_status == 200
+                and stale_run["results"][0]["status"] == "blocked"
+                and "Recommendation Report changed" in stale_run["results"][0]["error"]
+                and context_stale_queue_status == 201
+                and context_stale_run_status == 200
+                and context_stale_run["results"][0]["status"] == "blocked"
+                and "stale" in context_stale_run["results"][0]["error"]
+                and usage_status == 200
+                and any(item.get("operation") == "review_sprint_action_provider_candidates" for item in usage.get("records", []))
+                and "sk-secret-value" not in serialized
+                and "api_key" not in serialized
+                and "C:\\Users" not in serialized
+                and str(base) not in serialized
+            )
+            return ok, f"sprint={sprint_id}, queue={queue_id}, provider_candidate={provider_candidate_id}, version={child_version}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
 def _release_http_json(server: Any, method: str, path: str, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
     status, body = _release_http_request(server, method, path, payload=payload)
     if isinstance(body, dict):
@@ -3100,6 +3347,22 @@ def _release_http_request(server: Any, method: str, path: str, *, payload: dict[
     if content_type.startswith("application/json"):
         return response.status, json.loads(data.decode("utf-8"))
     return response.status, data
+
+
+def _release_item_id(queue: dict[str, Any], action: str, *, required: bool = True) -> str:
+    for item in queue.get("items", []):
+        if isinstance(item, dict) and item.get("action") == action:
+            return str(item.get("item_id") or "")
+    if required:
+        raise KeyError(f"missing action queue item: {action}")
+    return ""
+
+
+def _release_item(queue: dict[str, Any], item_id: str) -> dict[str, Any]:
+    for item in queue.get("items", []):
+        if isinstance(item, dict) and item.get("item_id") == item_id:
+            return item
+    return {}
 
 
 def _release_wait_http_job(server: Any, job_id: str) -> dict[str, Any]:

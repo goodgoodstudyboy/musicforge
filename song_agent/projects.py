@@ -741,6 +741,7 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
         "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
+        "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
@@ -1101,6 +1102,7 @@ def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
 
 def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
     from song_agent.review_sprints import ReviewSprintStore, review_sprint_export_summary
+    from song_agent.review_sprint_actions import ReviewSprintActionQueueStore, action_queue_collection_summary
 
     store = ReviewSprintStore(project_dir)
     sprints = store.list_sprints(include_archived=True)
@@ -1109,7 +1111,9 @@ def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
         summary = store.read_summary(sprint.sprint_id, default={})
         conflict_report = store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = store.read_recommendation_report(sprint.sprint_id, default={})
-        summaries.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report))
+        queue_store = ReviewSprintActionQueueStore(store.sprint_dir(sprint.sprint_id))
+        queue_summary = action_queue_collection_summary(queue_store.list_queues(include_archived=True))
+        summaries.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary))
     return sorted((_sanitize_asset_metadata(item) for item in summaries), key=lambda item: str(item.get("sprint_id") or ""))
 
 
