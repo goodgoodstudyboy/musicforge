@@ -239,6 +239,54 @@ def test_final_export_review_metrics_uses_latest_sprint_summary(tmp_path: Path) 
     assert review_metrics["warnings"] == ["latest sprint warning"]
 
 
+def test_final_export_review_judge_uses_latest_sprint_from_metrics_summary(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+        project_export={
+            "project": {"project_id": "export-project"},
+            "review_metrics_summary": {"latest_sprint_id": "sprint-002"},
+            "review_sprints": [
+                {
+                    "sprint_id": "sprint-001",
+                    "judge_summary": {
+                        "sprint_id": "sprint-001",
+                        "judged_task_count": 1,
+                        "stale_judge_count": 0,
+                        "judge_provider_tokens": 100,
+                        "high_risk_candidate_count": 0,
+                    },
+                },
+                {
+                    "sprint_id": "sprint-002",
+                    "judge_summary": {
+                        "sprint_id": "sprint-002",
+                        "judged_task_count": 2,
+                        "stale_judge_count": 1,
+                        "judge_provider_tokens": 200,
+                        "high_risk_candidate_count": 1,
+                    },
+                },
+            ],
+        },
+    )
+
+    review_judge = manifest["review_judge"]
+    assert review_judge["latest_sprint_id"] == "sprint-002"
+    assert review_judge["judged_task_count"] == 3
+    assert review_judge["stale_judge_count"] == 1
+    assert review_judge["judge_provider_tokens"] == 300
+    assert review_judge["high_risk_candidate_count"] == 1
+
+
 def test_final_export_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, _plan = make_run(tmp_path)

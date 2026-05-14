@@ -392,6 +392,12 @@ Compare, Project Export, Final Export, and release-check now carry compact
 judge summaries. Action Queue `refresh_judge_report` items are `provider_safe`
 and are skipped unless provider actions are explicitly allowed for that run.
 
+v3.4.1 tightens Judge Report audit summaries. Multi-Sprint Final Export now
+selects the latest Sprint judge summary using the Project metrics latest Sprint
+ID, and Project Export / Sprint Metrics re-check Judge Report stale state before
+surfacing summaries. Applying a candidate does not by itself stale a Judge
+Report; candidate content, parent plan, or prompt template changes still do.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

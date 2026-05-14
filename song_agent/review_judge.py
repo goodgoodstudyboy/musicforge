@@ -149,6 +149,7 @@ def build_judge_report(
         "task_id": task.task_id,
         "created_at": now,
         "status": "completed",
+        "source_hash_version": 2,
         "source_hash": judge_source_hash(task=task, candidates=candidates, parent_plan=parent_plan, template=template),
         "parent_version_id": task.parent_version_id,
         "parent_plan_hash": song_plan_hash(parent_plan),
@@ -175,7 +176,6 @@ def judge_source_hash(*, task: ReviewTask, candidates: list[ReviewCandidate], pa
     source = {
         "task": {
             "task_id": task.task_id,
-            "status": task.status,
             "priority": task.priority,
             "title": task.title,
             "summary": task.summary,
@@ -183,7 +183,6 @@ def judge_source_hash(*, task: ReviewTask, candidates: list[ReviewCandidate], pa
             "review_snapshot": task.review_snapshot,
             "target": task.target,
             "hashes": task.hashes,
-            "counts": task.counts,
         },
         "parent_plan_hash": song_plan_hash(parent_plan),
         "template": {
@@ -194,7 +193,6 @@ def judge_source_hash(*, task: ReviewTask, candidates: list[ReviewCandidate], pa
         "candidates": [
             {
                 "candidate_id": candidate.candidate_id,
-                "status": candidate.status,
                 "rank": candidate.rank,
                 "candidate_type": candidate.candidate_type,
                 "strategy": candidate.strategy,
@@ -227,6 +225,26 @@ def judge_report_stale(
     if not expected:
         return True
     return expected != judge_source_hash(task=task, candidates=candidates, parent_plan=parent_plan, template=template)
+
+
+def read_judge_report_with_stale(
+    task_store: Any,
+    task: ReviewTask,
+    *,
+    candidates: list[ReviewCandidate] | None = None,
+    parent_plan: SongPlan | None = None,
+    template: PromptTemplate | None = None,
+) -> dict[str, Any]:
+    report = task_store.read_judge_report(task.task_id, default={})
+    if not report:
+        return {}
+    if parent_plan is None or template is None:
+        return mark_judge_report_stale(report, stale=True)
+    try:
+        stale = judge_report_stale(report, task=task, candidates=candidates or task_store.list_candidates(task.task_id), parent_plan=parent_plan, template=template)
+    except (OSError, ValueError, TypeError):
+        stale = True
+    return mark_judge_report_stale(report, stale=stale)
 
 
 def mark_judge_report_stale(report: dict[str, Any] | None, *, stale: bool) -> dict[str, Any]:

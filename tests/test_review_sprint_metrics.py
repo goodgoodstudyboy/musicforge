@@ -183,6 +183,12 @@ def test_sprint_metrics_candidate_funnel_queue_provider_quality_and_store(tmp_pa
     assert decision["recommended_candidate_id"] == provider_candidate.candidate_id
     assert judge["recommended_candidate_id"] == provider_candidate.candidate_id
 
+    task_store.update_candidate(type(provider_candidate).from_dict({**provider_candidate.to_dict(), "summary": "changed after judge"}))
+    stale_report = build_sprint_metrics_report(project_id="project-001", sprint=sprint, project_document=project_document, task_store=task_store, sprint_store=sprint_store, queue_store=queue_store, provider_usage_records=provider_records, now="2026-05-14T00:04:00+00:00")
+    assert stale_report["judge_metrics"]["judged_task_count"] == 0
+    assert stale_report["judge_metrics"]["stale_judge_count"] == 1
+    assert stale_report["judge_metrics"]["task_summaries"][0]["status"] == "stale"
+
 
 def test_project_review_metrics_summarizes_sprints(tmp_path):
     plan = demo_song_plan()

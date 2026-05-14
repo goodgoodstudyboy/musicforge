@@ -1075,10 +1075,12 @@ def _collect_project_context_packs(project_dir: Path, document: ProjectDocument)
 
 
 def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
-    from song_agent.review_judge import judge_report_summary
+    from song_agent.prompt_templates import PromptTemplateStore
+    from song_agent.review_judge import REVIEW_JUDGE_TEMPLATE_ID, judge_report_summary, mark_judge_report_stale, read_judge_report_with_stale
     from song_agent.review_tasks import ReviewTaskStore, review_candidate_source_breakdown, review_decision_summary, review_task_summary
 
     store = ReviewTaskStore(project_dir)
+    template_store = PromptTemplateStore(project_dir.parent.parent / "prompt-templates.json")
     tasks = store.list_tasks(include_archived=True)
     summaries: list[dict[str, Any]] = []
     for task in tasks:
@@ -1095,9 +1097,16 @@ def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
         except (OSError, ValueError, TypeError, FileNotFoundError):
             decision_report = {}
         try:
-            judge_report = store.read_judge_report(task.task_id, default={})
+            template_id = str((store.read_judge_report(task.task_id, default={}) or {}).get("template_id") or REVIEW_JUDGE_TEMPLATE_ID)
+            template = template_store.get_template(template_id)
+            parent_plan = _project_version_song_plan(project_dir, task.parent_version_id)
+            judge_report = read_judge_report_with_stale(store, task, candidates=candidates, parent_plan=parent_plan, template=template)
         except (OSError, ValueError, TypeError, FileNotFoundError):
-            judge_report = {}
+            try:
+                raw_report = store.read_judge_report(task.task_id, default={})
+            except (OSError, ValueError, TypeError, FileNotFoundError):
+                raw_report = {}
+            judge_report = mark_judge_report_stale(raw_report, stale=True) if raw_report else {}
         summary["candidate_count"] = int(task.counts.get("candidate_count") or 0)
         summary["ready_candidate_count"] = int(task.counts.get("ready_candidate_count") or 0)
         summary["provider_summary"] = review_candidate_source_breakdown(candidates)
@@ -1106,6 +1115,17 @@ def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
         summary["priority"] = task.priority
         summaries.append(_sanitize_asset_metadata(summary))
     return sorted(summaries, key=lambda item: str(item.get("task_id") or ""))
+
+
+def _project_version_song_plan(project_dir: Path, version_id: str) -> Any:
+    from song_agent.schemas.song import SongPlan
+
+    versions_path = project_dir / "versions.json"
+    data = read_json(versions_path)
+    for version in data.get("versions", []) if isinstance(data, dict) else []:
+        if isinstance(version, dict) and version.get("version_id") == version_id:
+            return SongPlan.from_dict(read_json(Path(str(version.get("output_dir") or "")) / "data" / "song-plan.json"))
+    raise FileNotFoundError(version_id)
 
 
 def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:

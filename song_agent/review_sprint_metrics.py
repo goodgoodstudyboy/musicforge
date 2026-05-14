@@ -9,8 +9,9 @@ from song_agent.music_quality import analyze_song_quality
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import ProjectDocument, now_iso
 from song_agent.provider_usage import build_provider_usage_report
+from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.review_judge import judge_report_summary
+from song_agent.review_judge import REVIEW_JUDGE_TEMPLATE_ID, judge_report_summary, mark_judge_report_stale, read_judge_report_with_stale
 from song_agent.review_sprint_actions import ReviewSprintActionQueueStore, SprintActionQueue
 from song_agent.review_sprints import ReviewSprint, ReviewSprintStore
 from song_agent.review_tasks import ReviewCandidate, ReviewTask, ReviewTaskStore
@@ -283,6 +284,7 @@ def _sprint_sources(
     candidates_by_task: dict[str, list[ReviewCandidate]] = {}
     decision_reports: dict[str, dict[str, Any]] = {}
     judge_reports: dict[str, dict[str, Any]] = {}
+    template_store = PromptTemplateStore(task_store.project_dir.parent.parent / "prompt-templates.json")
     for task_id in _included_task_ids(sprint):
         try:
             task = task_store.read_task(task_id)
@@ -296,9 +298,20 @@ def _sprint_sources(
         except (OSError, ValueError, TypeError, FileNotFoundError):
             decision_reports[task.task_id] = {}
         try:
-            judge_reports[task.task_id] = task_store.read_judge_report(task.task_id, default={})
+            raw_report = task_store.read_judge_report(task.task_id, default={})
+            if raw_report:
+                template_id = str(raw_report.get("template_id") or REVIEW_JUDGE_TEMPLATE_ID)
+                template = template_store.get_template(template_id)
+                parent_plan = _version_song_plan(project_document, task.parent_version_id)
+                judge_reports[task.task_id] = read_judge_report_with_stale(task_store, task, candidates=candidates_by_task[task.task_id], parent_plan=parent_plan, template=template)
+            else:
+                judge_reports[task.task_id] = {}
         except (OSError, ValueError, TypeError, FileNotFoundError):
-            judge_reports[task.task_id] = {}
+            try:
+                raw_report = task_store.read_judge_report(task.task_id, default={})
+            except (OSError, ValueError, TypeError, FileNotFoundError):
+                raw_report = {}
+            judge_reports[task.task_id] = mark_judge_report_stale(raw_report, stale=True) if raw_report else {}
     try:
         queues = queue_store.list_queues(include_archived=True)
     except (OSError, ValueError, TypeError, FileNotFoundError):
@@ -798,6 +811,13 @@ def _version_by_id(project_document: Any, version_id: str | None) -> Any | None:
         if version.version_id == version_id:
             return version
     return None
+
+
+def _version_song_plan(project_document: Any, version_id: str | None) -> SongPlan:
+    version = _version_by_id(project_document, version_id)
+    if version is None:
+        raise FileNotFoundError(version_id or "")
+    return SongPlan.from_dict(read_json(Path(getattr(version, "output_dir", "") or "") / "data" / "song-plan.json"))
 
 
 def _version_quality(version: Any | None) -> dict[str, Any] | None:

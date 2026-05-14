@@ -147,10 +147,10 @@ from song_agent.review_tasks import (
 )
 from song_agent.review_judge import (
     REVIEW_JUDGE_TEMPLATE_ID,
-    judge_report_stale,
     judge_report_summary,
     judge_summary_for_apply,
     mark_judge_report_stale,
+    read_judge_report_with_stale,
     run_provider_review_judge,
     sprint_judge_summary,
 )
@@ -5952,8 +5952,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
             template_id = str(report.get("template_id") or REVIEW_JUDGE_TEMPLATE_ID)
             template = self.prompt_template_store.get_template(template_id)
-            stale = judge_report_stale(report, task=task, candidates=candidates or task_store.list_candidates(task.task_id), parent_plan=parent_plan, template=template)
-            return mark_judge_report_stale(report, stale=stale)
+            return read_judge_report_with_stale(task_store, task, candidates=candidates, parent_plan=parent_plan, template=template)
         except (FileNotFoundError, ProviderError, ReviewTaskError, ReviewTaskStateError, ValueError, TypeError):
             return mark_judge_report_stale(report, stale=True)
 

@@ -91,6 +91,8 @@ def test_review_judge_stale_detection_and_provider_output_error(tmp_path):
     changed = store.update_candidate(type(stored).from_dict({**stored.to_dict(), "summary": "changed"}))
 
     assert judge_report_stale(report, task=task, candidates=[stored], parent_plan=plan, template=template) is False
+    applied = type(stored).from_dict({**stored.to_dict(), "status": "applied"})
+    assert judge_report_stale(report, task=task, candidates=[applied], parent_plan=plan, template=template) is False
     assert judge_report_stale(report, task=task, candidates=[changed], parent_plan=plan, template=template) is True
     with pytest.raises(ProviderOutputError):
         run_provider_review_judge(project_id="project-001", task=task, candidates=[stored], parent_plan=plan, template=template, config=ProviderConfig(wire_api="mock", model="mock-review"), client=__import__("song_agent.providers.mock", fromlist=["MockProviderClient"]).MockProviderClient(mode="invalid_schema"))

@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.4.1 - 2026-05-15
+
+### Fixed
+- Final Export review judge summaries now use `review_metrics_summary.latest_sprint_id` to select the matching Sprint judge summary in multi-Sprint projects.
+- Project Export and Sprint Metrics now re-evaluate Judge Report stale state instead of reading raw `judge-report.json` as completed.
+- Judge Report source hashes no longer become stale solely because a candidate was manually applied; content changes still mark the report stale.
+
+### Verified
+- `python -m pytest tests\test_final_export.py tests\test_projects.py tests\test_review_judge.py tests\test_review_sprint_metrics.py -q`
+
 ## v3.4.0 - 2026-05-14
 
 ### Added

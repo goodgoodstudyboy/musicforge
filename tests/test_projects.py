@@ -10,7 +10,11 @@ import pytest
 from song_agent.agent.pipeline import deterministic_compose
 from song_agent.projectio import write_json
 from song_agent.projects import ProjectStore, ProjectVersion
+from song_agent.prompt_templates import PromptTemplateStore
+from song_agent.review_judge import build_judge_report
+from song_agent.review_tasks import ReviewTaskStore, build_local_review_candidates
 from song_agent.schemas.song import SongRequest
+from tests.test_review_tasks import _task as make_review_task
 
 
 @dataclass
@@ -124,6 +128,41 @@ def test_export_project_collects_context_pack_summaries(tmp_path: Path) -> None:
     assert exported["context_packs"][0]["asset_count"] == 1
     assert "sk-secret123456" not in serialized
     assert str(tmp_path) not in serialized
+
+
+def test_export_project_marks_stale_judge_summary(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / ".musicforge" / "projects")
+    document = store.create_project("Judge Export")
+    run_dir = make_run(tmp_path, "judge-parent")
+    document = store.add_version_from_job(document.state.project_id, FakeJob(job_id="judge-parent", title="Parent", output_dir=str(run_dir)))
+    project_dir = store.project_dir(document.state.project_id)
+    plan = deterministic_compose(SongRequest.from_dict(request_payload()))
+    task_store = ReviewTaskStore(project_dir)
+    task = make_review_task(task_store, plan)
+    candidate, candidate_plan, validator, summary = build_local_review_candidates(task, plan, strategies=["balanced"])[0]
+    candidate = task_store.create_candidate(task=task, candidate=candidate, candidate_plan=candidate_plan, validator=validator, summary=summary, render_midi_file=False)
+    template = PromptTemplateStore(tmp_path / ".musicforge" / "prompt-templates.json").get_template("provider-review-judge")
+    report = build_judge_report(
+        project_id=document.state.project_id,
+        task=task,
+        candidates=[candidate],
+        parent_plan=plan,
+        template=template,
+        provider_output={
+            "recommended_candidate_id": candidate.candidate_id,
+            "candidate_scores": [{"candidate_id": candidate.candidate_id, "overall": 80, "review_fit": 80, "target_precision": 80, "musicality": 80, "novelty": 60, "risk": 20, "confidence": 0.8}],
+            "comparison_summary": {"best_candidate_id": candidate.candidate_id},
+            "warnings": [],
+        },
+        provider_snapshot={"wire_api": "mock", "model": "mock-review"},
+    )
+    task_store.write_judge_report(task, report)
+    task_store.update_candidate(type(candidate).from_dict({**candidate.to_dict(), "summary": "changed after judge"}))
+
+    exported = store.export_project(document.state.project_id)
+
+    assert exported["review_tasks"][0]["judge_summary"]["status"] == "stale"
+    assert exported["review_tasks"][0]["judge_summary"]["stale"] is True
 
 
 def test_add_version_rejects_duplicate_job(tmp_path: Path) -> None:

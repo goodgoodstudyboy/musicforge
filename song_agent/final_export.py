@@ -579,11 +579,22 @@ def _final_review_metrics(project_export: dict[str, Any] | None) -> dict[str, An
 
 def _final_review_judge(project_export: dict[str, Any] | None, edit_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     edit_judge = edit_metadata.get("review_judge") if isinstance(edit_metadata, dict) and isinstance(edit_metadata.get("review_judge"), dict) else {}
+    project_summary = project_export.get("review_metrics_summary") if isinstance(project_export, dict) and isinstance(project_export.get("review_metrics_summary"), dict) else {}
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)] if isinstance(project_export, dict) else []
-    judge_summaries = [sprint.get("judge_summary", {}) for sprint in sprints if isinstance(sprint.get("judge_summary"), dict)]
-    latest = judge_summaries[0] if judge_summaries else {}
+    judge_summaries = []
+    for sprint in sprints:
+        judge_summary = sprint.get("judge_summary", {})
+        if not isinstance(judge_summary, dict):
+            continue
+        if not judge_summary.get("sprint_id") and sprint.get("sprint_id"):
+            judge_summary = {**judge_summary, "sprint_id": sprint.get("sprint_id")}
+        judge_summaries.append(judge_summary)
+    latest_sprint_id = str(project_summary.get("latest_sprint_id") or "")
+    latest = next((summary for summary in judge_summaries if str(summary.get("sprint_id") or "") == latest_sprint_id), None) if latest_sprint_id else None
+    if latest is None:
+        latest = judge_summaries[0] if judge_summaries else {}
     summary = {
-        "latest_sprint_id": latest.get("sprint_id") or (sprints[0].get("sprint_id") if sprints else None),
+        "latest_sprint_id": latest_sprint_id or latest.get("sprint_id"),
         "judged_task_count": sum(int(item.get("judged_task_count") or 0) for item in judge_summaries),
         "stale_judge_count": sum(int(item.get("stale_judge_count") or 0) for item in judge_summaries),
         "judge_provider_tokens": sum(int(item.get("judge_provider_tokens") or 0) for item in judge_summaries),
