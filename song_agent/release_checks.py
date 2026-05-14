@@ -191,6 +191,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.2 review sprint action queue smoke", *_v32_review_sprint_action_queue_smoke(root))
     report.add("v3.3 review sprint dashboard metrics smoke", *_v33_review_sprint_dashboard_metrics_smoke(root))
     report.add("v3.4 provider review judge smoke", *_v34_provider_review_judge_smoke(root))
+    report.add("v3.5 review sprint closeout smoke", *_v35_review_sprint_closeout_smoke(root))
     return report
 
 
@@ -2793,7 +2794,8 @@ def _v30_review_sprint_smoke(root: Path) -> tuple[bool, str]:
             export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
             final_status, final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
             final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
-            close_status, closed = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close")
+            close_block_status, close_block = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close")
+            close_status, closed = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close", {"force": True, "override_reason": "release-check v3.0 compatibility force close"})
             usage_status, usage = _release_http_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
             metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -2838,8 +2840,11 @@ def _v30_review_sprint_smoke(root: Path) -> tuple[bool, str]:
                 and final_export_status == 200
                 and final_export["final_export"]["edit"]["review_sprint"]["primary"]["sprint_id"] == sprint_id
                 and final_export["final_export"]["review_sprint_summary"]["latest_sprint_id"] == sprint_id
+                and close_block_status == 409
+                and "closeout gate failed" in close_block.get("error", "")
                 and close_status == 200
                 and closed["sprint"]["status"] == "closed"
+                and closed.get("signoff_summary", {}).get("status") == "signed"
                 and usage_status == 200
                 and any(item.get("operation") == "review_sprint_provider_candidates" for item in usage.get("records", []))
                 and "sk-secret-value" not in serialized
@@ -3614,6 +3619,115 @@ def _v34_provider_review_judge_smoke(root: Path) -> tuple[bool, str]:
             and str(base) not in serialized
         )
         return ok, f"task={task_id}, sprint={sprint_id}, judge={judge_id}, version={child_version}, tokens={metrics.get('metrics_report', {}).get('judge_metrics', {}).get('judge_provider_tokens')}"
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+
+
+def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
+    base = root / ".release-check" / "v35-review-sprint-closeout"
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v3.5 Closeout Smoke"})
+        project_id = created["project"]["project_id"]
+        version_status, version = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"name": "Parent", "request": {"title": "Release v3.5 Closeout Smoke", "language": "English", "style": "synth pop", "theme": "closeout", "tempo_bpm": 118, "key": "C"}},
+        )
+        parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+        state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+        note_id = state["tracks"][0]["notes"][0]["note_id"]
+        preview_status, preview_data = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-preview",
+            {"patch": {"schema_version": 1, "base_plan_hash": state["base_plan_hash"], "label": "v3.5 closeout patch", "operations": [{"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 95}}]}, "render_midi": True},
+        )
+        preview_id = preview_data["preview"]["preview_id"]
+        audition_status, audition = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions", {"source": "preview", "range": {"mode": "custom", "start_beat": 16.0, "end_beat": 48.0}, "track_mode": "solo", "track_ids": ["track-003"]})
+        audition_id = audition["audition"]["audition_id"]
+        review_status, _review = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review", {"rating": 4, "status": "needs_fix", "notes": r"closeout bass check api_key=sk-secret-value C:\Users\demo\song.wav", "tags": ["closeout"]})
+        marker_status, _marker = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/markers", {"beat": 1.0, "kind": "fix", "label": "closeout target"})
+        task_status, task_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review-task", {})
+        task_id = task_data["task"]["task_id"]
+        local_status, local = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates", {"strategies": ["balanced"], "render_midi": True})
+        candidate_id = local["candidates"][0]["candidate_id"]
+        sprint_status, sprint_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints", {"name": "Release v3.5 Closeout Sprint", "task_ids": [task_id]})
+        sprint_id = sprint_data["sprint"]["sprint_id"]
+        closeout_get_status, closeout_get = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-sprints/{sprint_id}/closeout")
+        close_block_status, close_block = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close", {})
+        force_missing_status, force_missing = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close", {"force": True})
+        apply_status, applied = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{candidate_id}/apply", {"version_name": "Closeout Candidate Child"})
+        edit_job = _release_wait_http_job(server, applied["job"]["job_id"])
+        child_version = applied["version"]["version_id"]
+        metrics_status, metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/metrics/refresh")
+        closeout_refresh_status, closeout_refresh = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/closeout/refresh")
+        close_status, closed = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close", {"selected_version_id": child_version, "notes": r"accepted C:\Users\demo"})
+        signoff_status, signoff = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-sprints/{sprint_id}/signoff")
+        export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_status, _final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
+        final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
+        serialized = json.dumps({"closeout": closeout_refresh, "closed": closed, "signoff": signoff, "export": project_export, "final": final_export}, ensure_ascii=False)
+        final_closeout = final_export.get("final_export", {}).get("review_sprint_closeout", {})
+        ok = (
+            created_status == 201
+            and version_status == 202
+            and parent_job["status"] == "completed"
+            and state_status == 200
+            and preview_status == 201
+            and audition_status == 201
+            and review_status == 200
+            and marker_status == 201
+            and task_status == 201
+            and local_status == 201
+            and sprint_status == 201
+            and closeout_get_status == 200
+            and closeout_get.get("summary", {}).get("close_allowed") is False
+            and close_block_status == 409
+            and "closeout gate failed" in close_block.get("error", "")
+            and force_missing_status == 400
+            and "override_reason" in force_missing.get("error", "")
+            and apply_status == 202
+            and edit_job["status"] == "completed"
+            and metrics_status == 200
+            and metrics.get("summary", {}).get("readiness") == "ready_to_close"
+            and closeout_refresh_status == 200
+            and closeout_refresh.get("summary", {}).get("close_allowed") is True
+            and close_status == 200
+            and closed.get("signoff_summary", {}).get("status") == "signed"
+            and closed.get("sprint", {}).get("status") == "closed"
+            and signoff_status == 200
+            and signoff.get("summary", {}).get("selected_version_id") == child_version
+            and export_status == 200
+            and project_export.get("review_sprints", [{}])[0].get("closeout_summary", {}).get("status") in {"passed", "warning"}
+            and project_export.get("review_sprints", [{}])[0].get("signoff_summary", {}).get("status") == "signed"
+            and final_status == 200
+            and final_export_status == 200
+            and final_closeout.get("latest_sprint_id") == sprint_id
+            and final_closeout.get("signed_sprint_count") == 1
+            and final_closeout.get("selected_version_id") == child_version
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, f"sprint={sprint_id}, closeout={closeout_refresh.get('summary', {}).get('status')}, signed={signoff.get('summary', {}).get('status')}, version={child_version}"
     except Exception as exc:
         return False, str(exc)
     finally:

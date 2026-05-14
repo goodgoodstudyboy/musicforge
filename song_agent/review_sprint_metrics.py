@@ -13,6 +13,7 @@ from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.review_judge import REVIEW_JUDGE_TEMPLATE_ID, judge_report_summary, mark_judge_report_stale, read_judge_report_with_stale
 from song_agent.review_sprint_actions import ReviewSprintActionQueueStore, SprintActionQueue
+from song_agent.review_sprint_closeout import closeout_report_summary, signoff_summary
 from song_agent.review_sprints import ReviewSprint, ReviewSprintStore
 from song_agent.review_tasks import ReviewCandidate, ReviewTask, ReviewTaskStore
 from song_agent.schemas.song import SongPlan
@@ -144,6 +145,7 @@ def build_sprint_metrics_report(
         "risk_readiness": risk_readiness,
         "highlights": highlights,
         "warnings": warnings,
+        "closeout": _sprint_closeout_metrics(sprint_store, sprint),
         "source_summary": source_summary,
     }
     return sanitize_metadata(report)
@@ -179,6 +181,7 @@ def build_project_review_metrics(
     latest_report = sprint_reports[0] if sprint_reports else {}
     quality_trend = _project_quality_trend(getattr(project_document, "versions", []))
     summaries = [sprint_metrics_summary(report) for report in sprint_reports]
+    closeout_summary = _project_closeout_summary(sprint_store, sprints)
     report = {
         "schema_version": PROJECT_REVIEW_METRICS_SCHEMA_VERSION,
         "project_id": project_id,
@@ -199,6 +202,7 @@ def build_project_review_metrics(
         "total_provider_tokens": int(provider_report.get("total_tokens") or 0),
         "total_applied_candidate_count": sum(int(summary.get("applied_candidate_count") or 0) for summary in summaries),
         "judge_summary": _project_judge_summary(summaries),
+        "closeout_summary": closeout_summary,
         "latest_sprint_id": latest_report.get("sprint_id"),
         "latest_readiness": (latest_report.get("risk_readiness") or {}).get("readiness") if isinstance(latest_report.get("risk_readiness"), dict) else "no_data",
         "quality_trend": quality_trend,
@@ -242,6 +246,7 @@ def sprint_metrics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "warning_count": len(warnings),
             "warnings": [sanitize_sensitive_text(str(item))[:200] for item in warnings[:8]],
             "judge_metrics": report.get("judge_metrics") if isinstance(report.get("judge_metrics"), dict) else {},
+            "closeout": report.get("closeout") if isinstance(report.get("closeout"), dict) else {},
         }
     )
 
@@ -267,6 +272,7 @@ def project_review_metrics_summary(report: dict[str, Any] | None) -> dict[str, A
             "latest_readiness": report.get("latest_readiness") or "no_data",
             "quality_trend": quality_trend,
             "judge_summary": report.get("judge_summary") if isinstance(report.get("judge_summary"), dict) else {},
+            "closeout_summary": report.get("closeout_summary") if isinstance(report.get("closeout_summary"), dict) else {},
         }
     )
 
@@ -640,6 +646,45 @@ def _project_judge_summary(summaries: list[dict[str, Any]]) -> dict[str, Any]:
             "judge_apply_match_rate": _rate(matched, applied_with_judge),
             "judge_local_disagreement_count": disagreements,
             "high_risk_candidate_count": high_risk,
+        }
+    )
+
+
+def _sprint_closeout_metrics(sprint_store: ReviewSprintStore, sprint: ReviewSprint) -> dict[str, Any]:
+    closeout = closeout_report_summary(sprint_store.read_closeout_report(sprint.sprint_id, default={}))
+    signoff = signoff_summary(sprint_store.read_signoff(sprint.sprint_id, default={}))
+    return sanitize_metadata(
+        {
+            "status": closeout.get("status"),
+            "readiness": closeout.get("readiness"),
+            "close_allowed": bool(closeout.get("close_allowed", False)),
+            "blocker_count": int(closeout.get("blocker_count") or 0),
+            "warning_count": int(closeout.get("warning_count") or 0),
+            "forced": bool(closeout.get("forced", False) or signoff.get("forced", False)),
+            "signed": signoff.get("status") == "signed",
+            "signed_at": signoff.get("signed_at"),
+            "selected_version_id": signoff.get("selected_version_id") or closeout.get("recommended_final_version_id"),
+        }
+    )
+
+
+def _project_closeout_summary(sprint_store: ReviewSprintStore, sprints: list[ReviewSprint]) -> dict[str, Any]:
+    closeouts = []
+    signoffs = []
+    for sprint in sprints:
+        closeouts.append(closeout_report_summary(sprint_store.read_closeout_report(sprint.sprint_id, default={})))
+        signoffs.append(signoff_summary(sprint_store.read_signoff(sprint.sprint_id, default={})))
+    closeouts = [item for item in closeouts if item]
+    signed = [item for item in signoffs if item.get("status") == "signed"]
+    latest = closeouts[0] if closeouts else {}
+    return sanitize_metadata(
+        {
+            "closeout_report_count": len(closeouts),
+            "signed_sprint_count": len(signed),
+            "forced_close_count": len([item for item in closeouts if item.get("forced")]) + len([item for item in signed if item.get("forced")]),
+            "latest_closeout_status": latest.get("status"),
+            "latest_closeout_readiness": latest.get("readiness"),
+            "open_blocker_count": sum(int(item.get("blocker_count") or 0) for item in closeouts if item.get("status") not in {"passed", "warning"}),
         }
     )
 

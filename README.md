@@ -398,6 +398,18 @@ ID, and Project Export / Sprint Metrics re-check Judge Report stale state before
 surfacing summaries. Applying a candidate does not by itself stale a Judge
 Report; candidate content, parent plan, or prompt template changes still do.
 
+v3.5.0 adds Review Sprint Closeout and Signoff. A Closeout Report reads current
+ReviewTasks, candidates, conflicts, recommendations, Action Queues, Judge
+summaries, Metrics, and project version state, then writes a local gate report
+with blockers, warnings, readiness, and a recommended final version. Closing a
+Sprint now passes through this gate by default. Failed gates return 409 unless
+the user explicitly force-closes with an override reason, which writes a
+separate `signoff.json` audit record. Closeout never applies candidates,
+resolves tasks, calls a provider, closes automatically, or creates final export
+artifacts. Studio, Project Export, Final Export, Project Metrics, and
+release-check include compact closeout/signoff summaries with token and path
+redaction.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

@@ -12,6 +12,7 @@ from song_agent.projectio import write_json
 from song_agent.projects import ProjectStore, ProjectVersion
 from song_agent.prompt_templates import PromptTemplateStore
 from song_agent.review_judge import build_judge_report
+from song_agent.review_sprints import ReviewSprintStore
 from song_agent.review_tasks import ReviewTaskStore, build_local_review_candidates
 from song_agent.schemas.song import SongRequest
 from tests.test_review_tasks import _task as make_review_task
@@ -163,6 +164,41 @@ def test_export_project_marks_stale_judge_summary(tmp_path: Path) -> None:
 
     assert exported["review_tasks"][0]["judge_summary"]["status"] == "stale"
     assert exported["review_tasks"][0]["judge_summary"]["stale"] is True
+
+
+def test_export_project_includes_review_sprint_closeout_and_signoff(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / ".musicforge" / "projects")
+    document = store.create_project("Closeout Export")
+    project_dir = store.project_dir(document.state.project_id)
+    sprint_store = ReviewSprintStore(project_dir)
+    sprint_dir = sprint_store.sprint_dir("sprint-001")
+    sprint_dir.mkdir(parents=True)
+    write_json(
+        sprint_dir / "sprint.json",
+        {
+            "schema_version": 1,
+            "sprint_id": "sprint-001",
+            "project_id": document.state.project_id,
+            "name": "Closeout Sprint",
+            "description": "",
+            "status": "closed",
+            "task_refs": [],
+            "settings": {},
+            "counts": {},
+            "created_at": "2026-05-15T00:00:00+00:00",
+            "updated_at": "2026-05-15T00:00:00+00:00",
+        },
+    )
+    sprint = sprint_store.read_sprint("sprint-001")
+    sprint_store.write_closeout_report(sprint, {"schema_version": 1, "sprint_id": "sprint-001", "status": "passed", "readiness": "ready_to_close", "close_allowed": True, "blockers": [], "warnings": [], "recommended_final_version": {"version_id": "v001"}})
+    sprint_store.write_signoff(sprint, {"schema_version": 1, "sprint_id": "sprint-001", "signed_at": "2026-05-15T00:00:00+00:00", "signed_by": "local-user", "decision": "closed", "forced": False, "selected_version_id": "v001"})
+
+    exported = store.export_project(document.state.project_id)
+
+    assert exported["review_sprints"][0]["closeout_summary"]["status"] == "passed"
+    assert exported["review_sprints"][0]["closeout_summary"]["recommended_final_version_id"] == "v001"
+    assert exported["review_sprints"][0]["signoff_summary"]["status"] == "signed"
+    assert exported["review_sprints"][0]["signoff_summary"]["selected_version_id"] == "v001"
 
 
 def test_add_version_rejects_duplicate_job(tmp_path: Path) -> None:

@@ -1132,6 +1132,7 @@ def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
     from song_agent.review_sprints import ReviewSprintStore, review_sprint_export_summary
     from song_agent.review_sprint_actions import ReviewSprintActionQueueStore, action_queue_collection_summary
     from song_agent.review_sprint_metrics import ReviewMetricsStore, sprint_metrics_summary
+    from song_agent.review_sprint_closeout import closeout_report_summary, signoff_summary
 
     store = ReviewSprintStore(project_dir)
     metrics_store = ReviewMetricsStore(project_dir)
@@ -1144,7 +1145,9 @@ def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
         judge_summary = store.read_judge_summary(sprint.sprint_id, default={})
         queue_store = ReviewSprintActionQueueStore(store.sprint_dir(sprint.sprint_id))
         queue_summary = action_queue_collection_summary(queue_store.list_queues(include_archived=True))
-        payload = review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary, judge_summary)
+        closeout_summary = closeout_report_summary(store.read_closeout_report(sprint.sprint_id, default={}))
+        signoff = signoff_summary(store.read_signoff(sprint.sprint_id, default={}))
+        payload = review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary, judge_summary, closeout_summary, signoff)
         metrics_summary = sprint_metrics_summary(metrics_store.read_sprint_metrics(sprint.sprint_id, default={}))
         if metrics_summary:
             payload["metrics_summary"] = metrics_summary

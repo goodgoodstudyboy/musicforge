@@ -197,7 +197,8 @@ def test_project_review_metrics_summarizes_sprints(tmp_path):
     task_store = ReviewTaskStore(project_dir)
     task = _task(task_store, plan)
     sprint_store = ReviewSprintStore(project_dir)
-    sprint_store.create_sprint(project_id="project-001", task_store=task_store, payload={"task_ids": [task.task_id]})
+    sprint = sprint_store.create_sprint(project_id="project-001", task_store=task_store, payload={"task_ids": [task.task_id]})
+    sprint_store.write_closeout_report(sprint, {"schema_version": 1, "sprint_id": sprint.sprint_id, "status": "failed", "readiness": "needs_candidates", "close_allowed": False, "blockers": ["open_tasks"], "warnings": []})
 
     report = build_project_review_metrics(project_id="project-001", project_document=project_document, sprint_store=sprint_store, task_store=task_store, provider_usage_records=[], now="2026-05-14T00:00:00+00:00")
     summary = project_review_metrics_summary(report)
@@ -205,8 +206,11 @@ def test_project_review_metrics_summarizes_sprints(tmp_path):
     assert report["sprint_count"] == 1
     assert report["total_task_count"] == 1
     assert report["latest_readiness"] in {"needs_candidates", "needs_review", "blocked"}
+    assert report["closeout_summary"]["closeout_report_count"] == 1
+    assert report["closeout_summary"]["open_blocker_count"] == 1
     assert summary["latest_sprint_id"] == "sprint-001"
     assert summary["total_provider_tokens"] == 0
+    assert summary["closeout_summary"]["latest_closeout_status"] == "failed"
 
 
 def _project_with_versions(tmp_path: Path, project_id: str):

@@ -364,6 +364,56 @@ class ReviewSprintStore:
             )
         return clean_summary
 
+    def closeout_report_path(self, sprint_id: str) -> Path:
+        return self.sprint_dir(sprint_id) / "closeout-report.json"
+
+    def read_closeout_report(self, sprint_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.closeout_report_path(sprint_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise FileNotFoundError(sprint_id)
+        data = read_json(path)
+        return sanitize_metadata(data if isinstance(data, dict) else {})
+
+    def write_closeout_report(self, sprint: ReviewSprint, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        now = now or now_iso()
+        clean_report = sanitize_metadata(report if isinstance(report, dict) else {})
+        with self.lock:
+            write_json(self.closeout_report_path(sprint.sprint_id), clean_report)
+            _append_event(
+                self.sprint_dir(sprint.sprint_id),
+                "review_sprint_closeout_refreshed",
+                {"status": clean_report.get("status"), "readiness": clean_report.get("readiness"), "close_allowed": bool(clean_report.get("close_allowed", False))},
+                now,
+            )
+        return clean_report
+
+    def signoff_path(self, sprint_id: str) -> Path:
+        return self.sprint_dir(sprint_id) / "signoff.json"
+
+    def read_signoff(self, sprint_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.signoff_path(sprint_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise FileNotFoundError(sprint_id)
+        data = read_json(path)
+        return sanitize_metadata(data if isinstance(data, dict) else {})
+
+    def write_signoff(self, sprint: ReviewSprint, record: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        now = now or now_iso()
+        clean_record = sanitize_metadata(record if isinstance(record, dict) else {})
+        with self.lock:
+            write_json(self.signoff_path(sprint.sprint_id), clean_record)
+            _append_event(
+                self.sprint_dir(sprint.sprint_id),
+                "review_sprint_signoff_written",
+                {"forced": bool(clean_record.get("forced", False)), "closeout_status": clean_record.get("closeout_status"), "selected_version_id": clean_record.get("selected_version_id")},
+                now,
+            )
+        return clean_record
+
     def read_events(self, sprint_id: str) -> list[dict[str, Any]]:
         path = self.sprint_dir(sprint_id) / "events.jsonl"
         if not path.exists():
@@ -386,6 +436,8 @@ class ReviewSprintStore:
     def close_sprint(self, sprint: ReviewSprint, *, now: str | None = None) -> ReviewSprint:
         if sprint.status == "archived":
             raise ReviewSprintStateError("Archived sprint cannot be closed.")
+        if sprint.status == "closed":
+            return sprint
         now = now or now_iso()
         return self.update_sprint(ReviewSprint.from_dict({**sprint.to_dict(), "status": "closed", "closed_at": now}), event="review_sprint_closed", payload={}, now=now)
 
@@ -428,11 +480,15 @@ def review_sprint_export_summary(
     recommendation_report: dict[str, Any] | None = None,
     action_queue_summary: dict[str, Any] | None = None,
     judge_summary: dict[str, Any] | None = None,
+    closeout_summary: dict[str, Any] | None = None,
+    signoff_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     summary = summary if isinstance(summary, dict) else {}
     conflict_report = conflict_report if isinstance(conflict_report, dict) else {}
     action_queue_summary = action_queue_summary if isinstance(action_queue_summary, dict) else {}
     judge_summary = judge_summary if isinstance(judge_summary, dict) else {}
+    closeout_summary = closeout_summary if isinstance(closeout_summary, dict) else {}
+    signoff_summary = signoff_summary if isinstance(signoff_summary, dict) else {}
     recommendation_summary = _recommendation_summary_for_export(recommendation_report)
     counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else sprint.counts
     return sanitize_metadata(
@@ -447,6 +503,8 @@ def review_sprint_export_summary(
             "recommendation_summary": recommendation_summary,
             "action_queue_summary": action_queue_summary,
             "judge_summary": _judge_summary_for_export(judge_summary),
+            "closeout_summary": closeout_summary,
+            "signoff_summary": signoff_summary,
             "task_ids": [str(ref.get("task_id")) for ref in sorted(sprint.task_refs, key=lambda ref: int(ref.get("order") or 0)) if ref.get("included", True)],
         }
     )
@@ -459,6 +517,8 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
     recommendation_summaries = [sprint.get("recommendation_summary", {}) for sprint in sprints if isinstance(sprint.get("recommendation_summary"), dict)]
     action_queue_summaries = [sprint.get("action_queue_summary", {}) for sprint in sprints if isinstance(sprint.get("action_queue_summary"), dict)]
     judge_summaries = [sprint.get("judge_summary", {}) for sprint in sprints if isinstance(sprint.get("judge_summary"), dict)]
+    closeout_summaries = [sprint.get("closeout_summary", {}) for sprint in sprints if isinstance(sprint.get("closeout_summary"), dict)]
+    signoff_summaries = [sprint.get("signoff_summary", {}) for sprint in sprints if isinstance(sprint.get("signoff_summary"), dict)]
     return sanitize_metadata(
         {
             "latest_sprint_id": latest.get("sprint_id"),
@@ -476,6 +536,12 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
             "judged_task_count": sum(int(item.get("judged_task_count") or 0) for item in judge_summaries),
             "stale_judge_count": sum(int(item.get("stale_judge_count") or 0) for item in judge_summaries),
             "judge_provider_tokens": sum(int(item.get("judge_provider_tokens") or 0) for item in judge_summaries),
+            "closeout_report_count": len([item for item in closeout_summaries if item]),
+            "signed_sprint_count": len([item for item in signoff_summaries if item.get("status") == "signed"]),
+            "forced_close_count": len([item for item in closeout_summaries if item.get("forced")]) + len([item for item in signoff_summaries if item.get("forced")]),
+            "open_blocker_count": sum(int(item.get("blocker_count") or 0) for item in closeout_summaries if item.get("status") not in {"passed", "warning"}),
+            "latest_closeout_status": (closeout_summaries[0].get("status") if closeout_summaries else None),
+            "latest_closeout_readiness": (closeout_summaries[0].get("readiness") if closeout_summaries else None),
         }
     )
 

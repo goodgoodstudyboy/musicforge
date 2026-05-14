@@ -124,6 +124,35 @@ def test_recommendation_report_round_trip_and_event(tmp_path):
     assert sprint_store.read_events(sprint.sprint_id)[-1]["event"] == "review_sprint_recommendations_refreshed"
 
 
+def test_closeout_and_signoff_round_trip(tmp_path):
+    plan = demo_song_plan()
+    task_store = ReviewTaskStore(tmp_path / "project")
+    task = _task(task_store, plan)
+    sprint_store = ReviewSprintStore(tmp_path / "project")
+    sprint = sprint_store.create_sprint(project_id="project-001", task_store=task_store, payload={"task_ids": [task.task_id]})
+
+    closeout = sprint_store.write_closeout_report(
+        sprint,
+        {"schema_version": 1, "sprint_id": sprint.sprint_id, "status": "failed", "readiness": "blocked", "close_allowed": False, "secret": r"api_key=sk-secret-value C:\Users\demo"},
+        now="2026-05-15T00:00:00+00:00",
+    )
+    signoff = sprint_store.write_signoff(
+        sprint,
+        {"schema_version": 1, "sprint_id": sprint.sprint_id, "forced": True, "override_reason": r"manual C:\Users\demo", "selected_version_id": "v002"},
+        now="2026-05-15T00:00:00+00:00",
+    )
+    closeout_again = sprint_store.write_closeout_report(sprint, {**closeout, "status": "passed"}, now="2026-05-15T00:01:00+00:00")
+    serialized = json.dumps({"closeout": closeout_again, "signoff": sprint_store.read_signoff(sprint.sprint_id)}, ensure_ascii=False)
+
+    assert sprint_store.closeout_report_path(sprint.sprint_id).name == "closeout-report.json"
+    assert sprint_store.signoff_path(sprint.sprint_id).name == "signoff.json"
+    assert sprint_store.read_closeout_report(sprint.sprint_id)["status"] == "passed"
+    assert signoff["forced"] is True
+    assert sprint_store.read_signoff(sprint.sprint_id)["selected_version_id"] == "v002"
+    assert "sk-secret-value" not in serialized
+    assert "C:\\Users" not in serialized
+
+
 def test_conflict_detection_parent_mismatch_stale_and_follow_up(tmp_path):
     plan = demo_song_plan()
     task_store = ReviewTaskStore(tmp_path / "project")

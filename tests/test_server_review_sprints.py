@@ -99,7 +99,8 @@ def test_review_sprint_api_batch_candidates_apply_refresh_and_close(tmp_path, mo
         export_status, project_export = request_json(server, "GET", f"/api/projects/{project_id}/export")
         final_set_status, _final_set = request_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": applied["version"]["version_id"]})
         final_export_status, final_export = request_json(server, "POST", f"/api/projects/{project_id}/final-export")
-        close_status, closed = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close")
+        close_block_status, close_block = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close")
+        close_status, closed = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close", {"force": True, "override_reason": "legacy sprint API test force close"})
         closed_local_status, closed_local = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/generate-local-candidates", {})
         usage_status, usage = request_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
         metadata = json.loads((Path(job["output_dir"]) / "data" / "edit-metadata.json").read_text(encoding="utf-8"))
@@ -147,8 +148,11 @@ def test_review_sprint_api_batch_candidates_apply_refresh_and_close(tmp_path, mo
     assert final_export["final_export"]["edit"]["review_sprint_recommendation"]["primary"]["task_id"] == first_task_id
     assert final_export["final_export"]["review_sprint_summary"]["latest_sprint_id"] == sprint_id
     assert final_export["final_export"]["review_sprint_recommendations"]["latest_sprint_id"] == sprint_id
+    assert close_block_status == 409
+    assert "closeout gate failed" in close_block["error"]
     assert close_status == 200
     assert closed["sprint"]["status"] == "closed"
+    assert closed["signoff_summary"]["status"] == "signed"
     assert closed_local_status == 409
     assert "closed" in closed_local["error"]
     assert usage_status == 200

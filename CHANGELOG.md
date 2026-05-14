@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.5.0 - 2026-05-15
+
+### Added
+- Review Sprint Closeout Reports with gate checks for open/stale tasks, blocking conflicts, pending/failed Action Queue items, stale recommendations or Judge Reports, metrics readiness, and missing applied/selected versions.
+- Sprint Signoff Records written separately from closeout reports, including forced-close audit metadata, selected version, closeout hash, acknowledged blockers, and acknowledged warnings.
+- Close Sprint now refreshes closeout and returns 409 when the gate fails unless `force=true` is supplied with a non-empty `override_reason`.
+- Closeout and Signoff APIs plus Studio Review Sprints controls for refreshing closeout, normal close, force close, and signoff display.
+- Project Export, Final Export, Sprint Metrics, Project Review Metrics, and release-check now include compact closeout/signoff summaries.
+
+### Scope
+- Closeout is a local gate and audit layer only. It does not apply candidates, resolve tasks, call providers, auto-close Sprints, create final exports, or publish anything.
+
+### Verified
+- `python -m pytest tests\test_review_sprint_closeout.py tests\test_server_review_sprint_closeout.py tests\test_review_sprints.py tests\test_projects.py tests\test_final_export.py tests\test_review_sprint_metrics.py tests\test_webui.py -q`
+
 ## v3.4.1 - 2026-05-15
 
 ### Fixed

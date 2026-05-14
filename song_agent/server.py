@@ -180,6 +180,16 @@ from song_agent.review_sprint_metrics import (
     project_review_metrics_summary,
     sprint_metrics_summary,
 )
+from song_agent.review_sprint_closeout import (
+    build_closeout_report,
+    build_signoff_record,
+    closeout_allows_close,
+    closeout_report_summary,
+    closeout_source_hash,
+    mark_closeout_report_forced,
+    mark_closeout_report_stale,
+    signoff_summary,
+)
 from song_agent.provider_usage import (
     build_provider_usage_report,
     collect_candidate_group_provider_usage_records,
@@ -4973,11 +4983,30 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
+                payload = self._optional_json_body()
                 sprint, _report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
+                closeout_report = self._get_or_refresh_sprint_closeout(project_id, sprint_store, task_store, sprint, refresh=True)
+                force = bool(payload.get("force", False))
+                if not closeout_allows_close(closeout_report) and not force:
+                    self._send_error(HTTPStatus.CONFLICT, "Review Sprint closeout gate failed. Refresh closeout report or pass force=true with override_reason.")
+                    return
+                if force and not str(payload.get("override_reason") or "").strip():
+                    self._send_error(HTTPStatus.BAD_REQUEST, "override_reason is required when force=true.")
+                    return
+                if force:
+                    closeout_report = sprint_store.write_closeout_report(sprint, mark_closeout_report_forced(closeout_report), now=_utc_now())
+                signoff = sprint_store.read_signoff(sprint.sprint_id, default={})
+                if not signoff:
+                    signoff = sprint_store.write_signoff(sprint, build_signoff_record(project_id=project_id, sprint=sprint, closeout_report=closeout_report, payload={**payload, "force": force}, now=_utc_now()), now=_utc_now())
+                elif force and not bool(signoff.get("forced", False)):
+                    raise ReviewSprintStateError("Review Sprint is already signed off.")
+                event_name = "review_sprint_force_closed" if force else "review_sprint_closed"
                 sprint = sprint_store.close_sprint(sprint, now=_utc_now())
                 sprint = sprint_store.refresh_summary(sprint, task_store=task_store, now=_utc_now())
-                self.project_store.append_event(project_id, "review_sprint_closed", {"sprint_id": sprint.sprint_id})
-                self._send_json(self._review_sprint_response(sprint_store, task_store, sprint))
+                self.project_store.append_event(project_id, event_name, {"sprint_id": sprint.sprint_id, "forced": force, "closeout_status": closeout_report.get("status")})
+                response = self._review_sprint_response(sprint_store, task_store, sprint)
+                response.update({"closeout_report": closeout_report, "closeout_summary": closeout_report_summary(closeout_report), "signoff": signoff, "signoff_summary": signoff_summary(signoff)})
+                self._send_json(response)
                 return
             if action == "archive":
                 if method != "POST":
@@ -5091,6 +5120,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 summary = self._refresh_review_sprint_judge_reports(project_id, sprint_store, task_store, sprint, payload)
                 self._send_json({"ok": True, "sprint": sprint.to_dict(), "judge_summary": summary})
                 return
+            if action == "closeout":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_sprint_closeout(project_id, sprint_store, task_store, sprint, refresh=False)
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "closeout_report": report, "summary": closeout_report_summary(report)})
+                return
+            if action == "closeout-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_sprint_closeout(project_id, sprint_store, task_store, sprint, refresh=True)
+                self.project_store.append_event(project_id, "review_sprint_closeout_refreshed", {"sprint_id": sprint.sprint_id, "status": report.get("status"), "readiness": report.get("readiness")})
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "closeout_report": report, "summary": closeout_report_summary(report)})
+                return
+            if action == "signoff":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                record = sprint_store.read_signoff(sprint.sprint_id, default={})
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "signoff": record, "summary": signoff_summary(record)})
+                return
             if action == "action-queues":
                 queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
                 if method == "GET":
@@ -5201,6 +5252,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
         judge_summary_data = sprint_store.read_judge_summary(sprint.sprint_id, default={})
         action_queue_summary_data = self._review_sprint_action_queue_summary(sprint_store, sprint)
+        closeout_report = sprint_store.read_closeout_report(sprint.sprint_id, default={})
+        signoff = sprint_store.read_signoff(sprint.sprint_id, default={})
         response = {
             "ok": True,
             "sprint": sprint.to_dict(),
@@ -5211,6 +5264,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "judge_summary": judge_summary_data,
             "action_queue_summary": action_queue_summary_data,
             "metrics_summary": self._review_sprint_metrics_summary(sprint_store, sprint),
+            "closeout_report": closeout_report,
+            "closeout_summary": closeout_report_summary(closeout_report),
+            "signoff": signoff,
+            "signoff_summary": signoff_summary(signoff),
             "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data),
             "tasks": self._review_sprint_task_items(task_store, sprint),
         }
@@ -5224,6 +5281,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
         judge_summary_data = sprint_store.read_judge_summary(sprint.sprint_id, default={})
         action_queue_summary_data = self._review_sprint_action_queue_summary(sprint_store, sprint)
+        closeout_report = sprint_store.read_closeout_report(sprint.sprint_id, default={})
+        signoff = sprint_store.read_signoff(sprint.sprint_id, default={})
         return {
             **sprint.to_dict(),
             "summary": summary,
@@ -5233,6 +5292,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "judge_summary": judge_summary_data,
             "action_queue_summary": action_queue_summary_data,
             "metrics_summary": self._review_sprint_metrics_summary(sprint_store, sprint),
+            "closeout_summary": closeout_report_summary(closeout_report),
+            "signoff_summary": signoff_summary(signoff),
             "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data),
         }
 
@@ -5249,6 +5310,59 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return action_queue_collection_summary(queue_store.list_queues(include_archived=True))
         except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
             return {}
+
+    def _get_or_refresh_sprint_closeout(
+        self,
+        project_id: str,
+        sprint_store: ReviewSprintStore,
+        task_store: ReviewTaskStore,
+        sprint: Any,
+        *,
+        refresh: bool,
+    ) -> dict[str, Any]:
+        project_dir = self.project_store.project_dir(project_id)
+        if not refresh:
+            existing = sprint_store.read_closeout_report(sprint.sprint_id, default={})
+            if existing:
+                try:
+                    project_document = self.project_store.sync_project(project_id, self.store.get_job)
+                except FileNotFoundError:
+                    project_document = self.project_store.get_project(project_id)
+                queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+                metrics_store = ReviewMetricsStore(project_dir)
+                current_hash = closeout_source_hash(
+                    sprint=sprint,
+                    project_document=project_document,
+                    task_store=task_store,
+                    sprint_store=sprint_store,
+                    queue_store=queue_store,
+                    metrics_report=metrics_store.read_sprint_metrics(sprint.sprint_id, default={}),
+                    judge_summary=sprint_store.read_judge_summary(sprint.sprint_id, default={}),
+                    recommendation_report=sprint_store.read_recommendation_report(sprint.sprint_id, default={}),
+                    conflict_report=sprint_store.read_conflict_report(sprint.sprint_id, default={}),
+                )
+                if str(existing.get("source_hash") or "") != current_hash:
+                    return mark_closeout_report_stale(existing, current_source_hash=current_hash)
+                return existing
+        try:
+            project_document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            project_document = self.project_store.get_project(project_id)
+        metrics_report = self._get_or_refresh_sprint_metrics(project_id, sprint_store, task_store, sprint, refresh=refresh)
+        report = build_closeout_report(
+            project_id=project_id,
+            sprint=sprint,
+            project_document=project_document,
+            task_store=task_store,
+            sprint_store=sprint_store,
+            queue_store=ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id)),
+            metrics_report=metrics_report,
+            judge_summary=sprint_store.read_judge_summary(sprint.sprint_id, default={}),
+            recommendation_report=sprint_store.read_recommendation_report(sprint.sprint_id, default={}),
+            conflict_report=sprint_store.read_conflict_report(sprint.sprint_id, default={}),
+            now=_utc_now(),
+        )
+        return sprint_store.write_closeout_report(sprint, report, now=_utc_now())
 
     def _get_or_refresh_sprint_metrics(
         self,
@@ -9034,7 +9148,7 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 2 and parts[0] == "review-sprints":
         return unquote(parts[1]), "detail"
-    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts", "recommendations", "metrics", "judge-summary"}:
+    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts", "recommendations", "metrics", "judge-summary", "closeout", "signoff"}:
         return unquote(parts[1]), parts[2]
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "tasks" and parts[3] in {"remove", "reorder"}:
         return unquote(parts[1]), f"tasks-{parts[3]}"
@@ -9046,6 +9160,8 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
         return unquote(parts[1]), "metrics-refresh"
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "judge-summary" and parts[3] == "refresh":
         return unquote(parts[1]), "judge-summary-refresh"
+    if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "closeout" and parts[3] == "refresh":
+        return unquote(parts[1]), "closeout-refresh"
     if len(parts) == 5 and parts[0] == "review-sprints" and parts[2] == "recommendations" and parts[4] == "context-pack":
         return unquote(parts[1]), f"recommendation-context-pack:{unquote(parts[3])}"
     if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] == "action-queues":

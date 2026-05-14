@@ -287,6 +287,48 @@ def test_final_export_review_judge_uses_latest_sprint_from_metrics_summary(tmp_p
     assert review_judge["high_risk_candidate_count"] == 1
 
 
+def test_final_export_review_closeout_uses_latest_sprint_from_metrics_summary(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+        project_export={
+            "project": {"project_id": "export-project"},
+            "review_metrics_summary": {"latest_sprint_id": "sprint-002"},
+            "review_sprints": [
+                {
+                    "sprint_id": "sprint-001",
+                    "status": "closed",
+                    "closeout_summary": {"status": "failed", "readiness": "blocked", "blocker_count": 3, "warning_count": 1, "recommended_final_version_id": "v001"},
+                    "signoff_summary": {"status": "signed", "forced": True, "selected_version_id": "v001"},
+                },
+                {
+                    "sprint_id": "sprint-002",
+                    "status": "closed",
+                    "closeout_summary": {"status": "passed", "readiness": "ready_to_close", "blocker_count": 0, "warning_count": 2, "recommended_final_version_id": "v004"},
+                    "signoff_summary": {"status": "signed", "forced": False, "selected_version_id": "v004"},
+                },
+            ],
+        },
+    )
+
+    closeout = manifest["review_sprint_closeout"]
+    assert closeout["latest_sprint_id"] == "sprint-002"
+    assert closeout["latest_closeout_status"] == "passed"
+    assert closeout["latest_closeout_readiness"] == "ready_to_close"
+    assert closeout["blocker_count"] == 0
+    assert closeout["warning_count"] == 2
+    assert closeout["selected_version_id"] == "v004"
+    assert closeout["forced_close_count"] == 1
+
+
 def test_final_export_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, _plan = make_run(tmp_path)

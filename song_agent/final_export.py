@@ -134,6 +134,7 @@ def build_final_export_bundle(
     review_sprint_action_queues = _final_review_sprint_action_queues(project_export)
     review_metrics = _final_review_metrics(project_export)
     review_judge = _final_review_judge(project_export, edit_metadata)
+    review_sprint_closeout = _final_review_sprint_closeout(project_export)
 
     manifest = {
         "project_id": project.project_id,
@@ -153,6 +154,7 @@ def build_final_export_bundle(
         "review_sprint_action_queues": review_sprint_action_queues,
         "review_metrics": review_metrics,
         "review_judge": review_judge,
+        "review_sprint_closeout": review_sprint_closeout,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -605,6 +607,36 @@ def _final_review_judge(project_export: dict[str, Any] | None, edit_metadata: di
         "top_overall": edit_judge.get("top_overall"),
         "confidence": edit_judge.get("confidence"),
         "judge_stale_at_apply": edit_judge.get("judge_stale_at_apply"),
+    }
+    return _drop_empty(_sanitize_asset_metadata(summary))
+
+
+def _final_review_sprint_closeout(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict):
+        return {}
+    project_summary = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
+    sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
+    if not sprints:
+        return {}
+    latest_sprint_id = str(project_summary.get("latest_sprint_id") or "")
+    latest_sprint = next((sprint for sprint in sprints if str(sprint.get("sprint_id") or "") == latest_sprint_id), None) if latest_sprint_id else None
+    if latest_sprint is None:
+        latest_sprint = sprints[0]
+        latest_sprint_id = str(latest_sprint.get("sprint_id") or "")
+    closeout_summaries = [sprint.get("closeout_summary", {}) for sprint in sprints if isinstance(sprint.get("closeout_summary"), dict)]
+    signoff_summaries = [sprint.get("signoff_summary", {}) for sprint in sprints if isinstance(sprint.get("signoff_summary"), dict)]
+    latest_closeout = latest_sprint.get("closeout_summary") if isinstance(latest_sprint.get("closeout_summary"), dict) else {}
+    latest_signoff = latest_sprint.get("signoff_summary") if isinstance(latest_sprint.get("signoff_summary"), dict) else {}
+    summary = {
+        "latest_sprint_id": latest_sprint_id or None,
+        "closed_sprint_count": len([sprint for sprint in sprints if sprint.get("status") == "closed"]),
+        "signed_sprint_count": len([item for item in signoff_summaries if item.get("status") == "signed"]),
+        "forced_close_count": len([item for item in signoff_summaries if item.get("forced")]) or len([item for item in closeout_summaries if item.get("forced")]),
+        "latest_closeout_status": latest_closeout.get("status"),
+        "latest_closeout_readiness": latest_closeout.get("readiness"),
+        "blocker_count": latest_closeout.get("blocker_count"),
+        "warning_count": latest_closeout.get("warning_count"),
+        "selected_version_id": latest_signoff.get("selected_version_id") or latest_closeout.get("recommended_final_version_id"),
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
 

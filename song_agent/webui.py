@@ -4959,11 +4959,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         sprints = sprintData.sprints || [];
         sprints = await Promise.all(sprints.map(async (sprint) => {
           try {
-            const [recommendationData, queueData, metricsData, judgeData] = await Promise.all([
+            const [recommendationData, queueData, metricsData, judgeData, closeoutData, signoffData] = await Promise.all([
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/recommendations`),
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/action-queues`),
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/metrics`),
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/judge-summary`),
+              api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/closeout`),
+              api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/signoff`),
             ]);
             return {
               ...sprint,
@@ -4975,6 +4977,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               metrics_report: metricsData.metrics_report || {},
               metrics_summary: metricsData.summary || sprint.metrics_summary || {},
               judge_summary: judgeData.judge_summary || sprint.judge_summary || {},
+              closeout_report: closeoutData.closeout_report || {},
+              closeout_summary: closeoutData.summary || sprint.closeout_summary || {},
+              signoff: signoffData.signoff || {},
+              signoff_summary: signoffData.summary || sprint.signoff_summary || {},
             };
           } catch (err) {
             return { ...sprint, recommendation_error: err.message };
@@ -4988,7 +4994,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         return;
       }
       const metricsHtml = await projectReviewMetricsSummaryHtml(project);
-      target.innerHTML = metricsHtml + projectReviewSprintsHtml(project, sprints, tasks, summary);
+      target.innerHTML = metricsHtml + projectReviewSprintsHtml(project, sprints, tasks, summary, versions);
       bindAction("project-review-sprint-refresh", async () => {
         await renderProjectReviewSprints(project, versions, target);
       });
@@ -5055,6 +5061,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ template_id: "provider-review-judge", skip_existing_current: true, max_tasks: 5 }),
           });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-closeout]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintCloseout)}/closeout/refresh`, { method: "POST" });
           await renderProjectReviewSprints(project, versions, target);
         });
       });
@@ -5153,6 +5165,25 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await renderProjectReviewSprints(project, versions, target);
         });
       });
+      target.querySelectorAll("[data-review-sprint-force-close]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const sprintId = button.dataset.reviewSprintForceClose;
+          const reason = $(`review-sprint-force-reason-${sprintId}`);
+          const selected = $(`review-sprint-selected-version-${sprintId}`);
+          const notes = $(`review-sprint-close-notes-${sprintId}`);
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprintId)}/close`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              force: true,
+              override_reason: reason ? reason.value : "",
+              selected_version_id: selected ? selected.value : "",
+              notes: notes ? notes.value : "",
+            }),
+          });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
       target.querySelectorAll("[data-review-sprint-archive]").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintArchive)}/archive`, { method: "POST" });
@@ -5161,7 +5192,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
     }
 
-    function projectReviewSprintsHtml(project, sprints, tasks, summary) {
+    function projectReviewSprintsHtml(project, sprints, tasks, summary, versions) {
       const taskOptions = (tasks || []).map((task) => `<option value="${escapeHtml(task.task_id)}">${escapeHtml(task.task_id)} · ${escapeHtml(task.title || task.status || "")}</option>`).join("");
       return `
         <div class="summary-grid">
@@ -5219,11 +5250,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button id="project-review-sprint-create" type="button">Create Review Sprint</button>
           <button class="secondary" id="project-review-sprint-refresh" type="button">Refresh Review Sprints</button>
         </div>
-        ${sprints.length ? sprints.map((sprint) => reviewSprintRowHtml(project, sprint, taskOptions)).join("") : `<div class="empty">Review Sprints will appear here after you create one.</div>`}
+        ${sprints.length ? sprints.map((sprint) => reviewSprintRowHtml(project, sprint, taskOptions, versions)).join("") : `<div class="empty">Review Sprints will appear here after you create one.</div>`}
       `;
     }
 
-    function reviewSprintRowHtml(project, sprint, taskOptions) {
+    function reviewSprintRowHtml(project, sprint, taskOptions, versions) {
       const summary = sprint.summary || {};
       const counts = summary.counts || sprint.counts || {};
       const report = sprint.conflict_report || {};
@@ -5236,6 +5267,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const metricsReport = sprint.metrics_report || {};
       const metricsSummary = sprint.metrics_summary || {};
       const judgeSummary = sprint.judge_summary || {};
+      const closeoutReport = sprint.closeout_report || {};
+      const closeoutSummary = sprint.closeout_summary || {};
+      const signoff = sprint.signoff || {};
+      const signoffSummary = sprint.signoff_summary || {};
       const taskIds = (sprint.task_refs || []).filter((ref) => ref.included !== false).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map((ref) => ref.task_id);
       const mutable = ["open", "in_progress", "blocked"].includes(sprint.status);
       return `
@@ -5260,6 +5295,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${reviewSprintActionQueueHtml(sprint, latestQueue, actionQueueSummary)}
           ${reviewSprintJudgeSummaryHtml(sprint, judgeSummary)}
           ${reviewSprintDashboardHtml(sprint, metricsSummary, metricsReport)}
+          ${reviewSprintCloseoutHtml(sprint, closeoutReport, closeoutSummary, signoff, signoffSummary, versions || [])}
           <div class="actions">
             <select id="review-sprint-add-task-${escapeHtml(sprint.sprint_id)}" style="max-width:260px;" ${mutable ? "" : "disabled"}>
               <option value="">Add task</option>
@@ -5271,13 +5307,79 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" data-review-sprint-recommendations="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Recommendations</button>
             <button class="secondary" data-review-sprint-judge="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Sprint Judge</button>
             <button class="secondary" data-review-sprint-metrics="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Metrics</button>
+            <button class="secondary" data-review-sprint-closeout="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Closeout</button>
             <button class="secondary" data-review-sprint-local="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Local</button>
             <button class="secondary" data-review-sprint-provider="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Provider</button>
             <button class="secondary" data-review-sprint-close="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Close Sprint</button>
             <button class="danger" data-review-sprint-archive="${escapeHtml(sprint.sprint_id)}" type="button" ${sprint.status === "archived" ? "disabled" : ""}>Archive Sprint</button>
           </div>
           ${sprint.recommendation_error ? `<div class="empty error">${escapeHtml(sprint.recommendation_error)}</div>` : ""}
-          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, judge_summary: judgeSummary, action_queue_summary: actionQueueSummary, metrics_summary: metricsSummary, settings: sprint.settings }, null, 2))}</pre>
+          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, judge_summary: judgeSummary, action_queue_summary: actionQueueSummary, metrics_summary: metricsSummary, closeout_summary: closeoutSummary, signoff_summary: signoffSummary, settings: sprint.settings }, null, 2))}</pre>
+        </div>
+      `;
+    }
+
+    function reviewSprintCloseoutHtml(sprint, report, summary, signoff, signoffSummary, versions) {
+      const checks = Array.isArray(report.checks) ? report.checks : [];
+      const blockers = Array.isArray(report.blockers) ? report.blockers : [];
+      const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+      const versionOptions = (versions || []).map((version) => `<option value="${escapeHtml(version.version_id || "")}">${escapeHtml(version.version_id || "")} · ${escapeHtml(version.name || version.status || "")}</option>`).join("");
+      const forceVisible = !summary.close_allowed && sprint.status !== "closed" && sprint.status !== "archived";
+      const checkRows = checks.slice(0, 12).map((check) => `
+        <tr>
+          <td><span class="status ${escapeHtml(check.severity || "")}">${escapeHtml(check.severity || "-")}</span></td>
+          <td>${escapeHtml(check.check_id || "-")}</td>
+          <td><span class="status ${escapeHtml(check.status || "")}">${escapeHtml(check.status || "-")}</span></td>
+          <td>${escapeHtml(check.count ?? "-")}</td>
+          <td>${escapeHtml(check.message || "-")}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="review-sprint-dashboard">
+          <h5>Closeout</h5>
+          <div class="summary-grid">
+            ${metric("Status", summary.status || report.status || "-")}
+            ${metric("Readiness", summary.readiness || report.readiness || "-")}
+            ${metric("Close Allowed", summary.close_allowed ? "yes" : "no")}
+            ${metric("Blockers", summary.blocker_count ?? blockers.length)}
+            ${metric("Warnings", summary.warning_count ?? warnings.length)}
+            ${metric("Recommended Final", summary.recommended_final_version_id || ((report.recommended_final_version || {}).version_id) || "-")}
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Severity</th><th>Check</th><th>Status</th><th>Count</th><th>Message</th></tr></thead>
+              <tbody>${checkRows || `<tr><td colspan="5">Refresh Closeout to build gate checks.</td></tr>`}</tbody>
+            </table>
+          </div>
+          ${forceVisible ? `
+            <div class="grid2">
+              <label>Override reason
+                <textarea id="review-sprint-force-reason-${escapeHtml(sprint.sprint_id)}" placeholder="Required for force close"></textarea>
+              </label>
+              <label>Signoff notes
+                <textarea id="review-sprint-close-notes-${escapeHtml(sprint.sprint_id)}" placeholder="Accepted after local playback"></textarea>
+              </label>
+              <label>Selected version
+                <select id="review-sprint-selected-version-${escapeHtml(sprint.sprint_id)}">
+                  <option value="">Recommended / current</option>
+                  ${versionOptions}
+                </select>
+              </label>
+            </div>
+            <div class="actions">
+              <button class="danger" data-review-sprint-force-close="${escapeHtml(sprint.sprint_id)}" type="button">Force Close</button>
+            </div>
+          ` : ""}
+          <h5>Signoff</h5>
+          <div class="summary-grid">
+            ${metric("Signoff", signoffSummary.status || "not_signed")}
+            ${metric("Signed At", signoffSummary.signed_at || "-")}
+            ${metric("Signed By", signoffSummary.signed_by || "-")}
+            ${metric("Forced", signoffSummary.forced ? "yes" : "no")}
+            ${metric("Selected Version", signoffSummary.selected_version_id || "-")}
+            ${metric("Closeout Status", signoffSummary.closeout_status || "-")}
+          </div>
+          ${signoff && Object.keys(signoff).length ? `<pre>${escapeHtml(JSON.stringify({ signoff_summary: signoffSummary, acknowledged_blockers: signoff.acknowledged_blockers || [], acknowledged_warnings: signoff.acknowledged_warnings || [] }, null, 2))}</pre>` : `<div class="empty small">No Sprint Signoff yet.</div>`}
         </div>
       `;
     }

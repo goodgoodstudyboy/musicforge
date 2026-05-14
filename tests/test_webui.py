@@ -508,6 +508,11 @@ def test_webui_contains_interactive_editor_controls():
     assert "Refresh Sprint Judge" in html
     assert "Judged Tasks" in html
     assert "Judge Tokens" in html
+    assert "Closeout" in html
+    assert "Refresh Closeout" in html
+    assert "Force Close" in html
+    assert "Signoff" in html
+    assert "Close Allowed" in html
     assert "refresh_judge_report" in html
     assert "provider-review-judge" in html
     assert "provider-review-candidates" in html
@@ -532,6 +537,9 @@ def test_webui_contains_interactive_editor_controls():
     assert "/review-tasks/${encodeURIComponent(button.dataset.reviewJudgeRefresh)}/judge-report/refresh" in html
     assert "/review-sprints/${encodeURIComponent(sprint.sprint_id)}/judge-summary" in html
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintJudge)}/judge-summary/refresh" in html
+    assert "/review-sprints/${encodeURIComponent(sprint.sprint_id)}/closeout" in html
+    assert "/review-sprints/${encodeURIComponent(sprint.sprint_id)}/signoff" in html
+    assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintCloseout)}/closeout/refresh" in html
     assert "/review-metrics" in html
     assert "/recommendations/${encodeURIComponent(button.dataset.taskId)}/context-pack" in html
     assert "/provider-candidates" in html
