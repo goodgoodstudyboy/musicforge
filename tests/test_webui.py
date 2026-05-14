@@ -487,6 +487,11 @@ def test_webui_contains_interactive_editor_controls():
     assert "Select Safe Actions" in html
     assert "Run Selected Safe Actions" in html
     assert "Allow provider actions" in html
+    assert "Dashboard" in html
+    assert "Refresh Metrics" in html
+    assert "Readiness" in html
+    assert "Provider Tokens" in html
+    assert "Quality Delta" in html
     assert "manual required" in html
     assert "/action-queues" in html
     assert "/action-queues/${encodeURIComponent(button.dataset.queueId)}/run" in html
@@ -512,6 +517,9 @@ def test_webui_contains_interactive_editor_controls():
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintLocal)}/generate-local-candidates" in html
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintConflicts)}/conflicts/refresh" in html
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintRecommendations)}/recommendations/refresh" in html
+    assert "/review-sprints/${encodeURIComponent(sprint.sprint_id)}/metrics" in html
+    assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintMetrics)}/metrics/refresh" in html
+    assert "/review-metrics" in html
     assert "/recommendations/${encodeURIComponent(button.dataset.taskId)}/context-pack" in html
     assert "/provider-candidates" in html
     assert "/decision-report/refresh" in html

@@ -366,6 +366,17 @@ hidden/stale Context Pack sources before doing work. Project Compare, Project
 Export, Final Export, and release-check include compact Action Queue summaries
 and apply provenance.
 
+v3.3.0 adds Review Sprint Dashboard metrics. Sprint metrics are derived reports,
+not business state: refreshing them reads existing ReviewTasks, candidates,
+Decision Reports, Recommendation Reports, Action Queues, provider usage, and
+version quality metadata, then writes `metrics-report.json` and
+`review-metrics.json` summaries. The Dashboard shows readiness, task status,
+candidate funnel, recommendation adoption, queue execution, provider tokens,
+manual decisions, quality delta, and warnings. Metrics refresh never applies a
+candidate, resolves a task, closes a Sprint, creates a final export, or calls a
+provider. Project Export and Final Export include only compact metrics
+summaries, with token and local-path redaction.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

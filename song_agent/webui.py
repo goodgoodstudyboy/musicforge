@@ -2793,6 +2793,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     }
 
+    async function projectReviewMetricsSummaryHtml(project) {
+      try {
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-metrics`);
+        const summary = data.summary || {};
+        return `
+          <div class="review-metrics-summary">
+            <h4>Review Metrics</h4>
+            <div class="summary-grid">
+              ${metric("Active Sprints", summary.active_sprint_count ?? 0)}
+              ${metric("Latest Readiness", summary.latest_readiness || "-")}
+              ${metric("Provider Tokens", summary.total_provider_tokens ?? 0)}
+              ${metric("Applied Candidates", summary.total_applied_candidate_count ?? 0)}
+              ${metric("Quality Trend", (summary.quality_trend || {}).overall_delta ?? (summary.quality_trend || {}).status ?? "-")}
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        return `<div class="empty small">Review Metrics unavailable: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
     function projectVersionsTable(project, versions) {
       const rows = versions.map((version) => `
         <tr>
@@ -4883,9 +4904,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         sprints = sprintData.sprints || [];
         sprints = await Promise.all(sprints.map(async (sprint) => {
           try {
-            const [recommendationData, queueData] = await Promise.all([
+            const [recommendationData, queueData, metricsData] = await Promise.all([
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/recommendations`),
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/action-queues`),
+              api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/metrics`),
             ]);
             return {
               ...sprint,
@@ -4894,6 +4916,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               action_queues: queueData.queues || [],
               latest_action_queue: queueData.latest_queue || {},
               action_queue_summary: queueData.summary || sprint.action_queue_summary || {},
+              metrics_report: metricsData.metrics_report || {},
+              metrics_summary: metricsData.summary || sprint.metrics_summary || {},
             };
           } catch (err) {
             return { ...sprint, recommendation_error: err.message };
@@ -4906,7 +4930,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         target.innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
         return;
       }
-      target.innerHTML = projectReviewSprintsHtml(project, sprints, tasks, summary);
+      const metricsHtml = await projectReviewMetricsSummaryHtml(project);
+      target.innerHTML = metricsHtml + projectReviewSprintsHtml(project, sprints, tasks, summary);
       bindAction("project-review-sprint-refresh", async () => {
         await renderProjectReviewSprints(project, versions, target);
       });
@@ -4957,6 +4982,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       target.querySelectorAll("[data-review-sprint-recommendations]").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintRecommendations)}/recommendations/refresh`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-metrics]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintMetrics)}/metrics/refresh`, { method: "POST" });
           await renderProjectReviewSprints(project, versions, target);
         });
       });
@@ -5135,6 +5166,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const recommendationActions = Array.isArray(recommendationReport.recommended_actions) ? recommendationReport.recommended_actions : [];
       const latestQueue = sprint.latest_action_queue || {};
       const actionQueueSummary = sprint.action_queue_summary || {};
+      const metricsReport = sprint.metrics_report || {};
+      const metricsSummary = sprint.metrics_summary || {};
       const taskIds = (sprint.task_refs || []).filter((ref) => ref.included !== false).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map((ref) => ref.task_id);
       const mutable = ["open", "in_progress", "blocked"].includes(sprint.status);
       return `
@@ -5157,6 +5190,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${conflicts.length ? `<div class="review-conflict-list">${conflicts.slice(0, 8).map((conflict) => reviewSprintConflictHtml(conflict)).join("")}</div>` : `<div class="empty small">No conflicts reported.</div>`}
           ${reviewSprintRecommendationsHtml(sprint, recommendationSummary, recommendationActions)}
           ${reviewSprintActionQueueHtml(sprint, latestQueue, actionQueueSummary)}
+          ${reviewSprintDashboardHtml(sprint, metricsSummary, metricsReport)}
           <div class="actions">
             <select id="review-sprint-add-task-${escapeHtml(sprint.sprint_id)}" style="max-width:260px;" ${mutable ? "" : "disabled"}>
               <option value="">Add task</option>
@@ -5166,13 +5200,59 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" data-review-sprint-refresh="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Sprint</button>
             <button class="secondary" data-review-sprint-conflicts="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Conflicts</button>
             <button class="secondary" data-review-sprint-recommendations="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Recommendations</button>
+            <button class="secondary" data-review-sprint-metrics="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Metrics</button>
             <button class="secondary" data-review-sprint-local="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Local</button>
             <button class="secondary" data-review-sprint-provider="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Provider</button>
             <button class="secondary" data-review-sprint-close="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Close Sprint</button>
             <button class="danger" data-review-sprint-archive="${escapeHtml(sprint.sprint_id)}" type="button" ${sprint.status === "archived" ? "disabled" : ""}>Archive Sprint</button>
           </div>
           ${sprint.recommendation_error ? `<div class="empty error">${escapeHtml(sprint.recommendation_error)}</div>` : ""}
-          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, action_queue_summary: actionQueueSummary, settings: sprint.settings }, null, 2))}</pre>
+          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, action_queue_summary: actionQueueSummary, metrics_summary: metricsSummary, settings: sprint.settings }, null, 2))}</pre>
+        </div>
+      `;
+    }
+
+    function reviewSprintDashboardHtml(sprint, summary, report) {
+      const candidate = report.candidate_funnel || {};
+      const queue = report.action_queue_execution || {};
+      const provider = report.provider_usage || {};
+      const quality = report.quality_delta || {};
+      const risk = report.risk_readiness || {};
+      const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+      const statusRows = Object.entries((report.task_throughput || {}).task_status_counts || {}).map(([status, count]) => `<tr><td>${escapeHtml(status)}</td><td>${escapeHtml(count)}</td></tr>`).join("");
+      const sourceRows = Object.entries(candidate.candidate_source_counts || {}).map(([source, count]) => `<tr><td>${escapeHtml(source)}</td><td>${escapeHtml(count)}</td></tr>`).join("");
+      return `
+        <div class="review-sprint-dashboard">
+          <h5>Dashboard</h5>
+          <div class="summary-grid">
+            ${metric("Readiness", summary.readiness || risk.readiness || "-")}
+            ${metric("Completion", summary.completion_rate == null ? "-" : `${Math.round(Number(summary.completion_rate) * 100)}%`)}
+            ${metric("Candidates", summary.candidate_count ?? candidate.candidate_count ?? 0)}
+            ${metric("Provider Tokens", summary.provider_tokens ?? provider.total_tokens ?? 0)}
+            ${metric("Quality Delta", summary.quality_delta ?? quality.overall_delta ?? quality.status ?? "-")}
+            ${metric("Warnings", summary.warning_count ?? warnings.length)}
+          </div>
+          <div class="grid2">
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Task Status</th><th>Count</th></tr></thead>
+                <tbody>${statusRows || `<tr><td colspan="2">No task metrics.</td></tr>`}</tbody>
+              </table>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Candidate Source</th><th>Count</th></tr></thead>
+                <tbody>${sourceRows || `<tr><td colspan="2">No candidate metrics.</td></tr>`}</tbody>
+              </table>
+            </div>
+          </div>
+          <div class="summary-grid">
+            ${metric("Queue Completed", queue.completed_action_count ?? 0)}
+            ${metric("Queue Failed", queue.failed_action_count ?? 0)}
+            ${metric("Manual Decisions", (report.manual_decisions || {}).manual_apply_count ?? 0)}
+            ${metric("Provider Calls", provider.provider_call_count ?? 0)}
+          </div>
+          ${warnings.length ? `<div class="review-conflict-list">${warnings.slice(0, 8).map((warning) => `<div class="review-conflict warning">${escapeHtml(warning)}</div>`).join("")}</div>` : `<div class="empty small">No dashboard warnings.</div>`}
         </div>
       `;
     }

@@ -132,6 +132,7 @@ def build_final_export_bundle(
     review_sprint_summary = _final_review_sprint_summary(project_export)
     review_sprint_recommendations = _final_review_sprint_recommendations(project_export)
     review_sprint_action_queues = _final_review_sprint_action_queues(project_export)
+    review_metrics = _final_review_metrics(project_export)
 
     manifest = {
         "project_id": project.project_id,
@@ -149,6 +150,7 @@ def build_final_export_bundle(
         "review_sprint_summary": review_sprint_summary,
         "review_sprint_recommendations": review_sprint_recommendations,
         "review_sprint_action_queues": review_sprint_action_queues,
+        "review_metrics": review_metrics,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -536,6 +538,28 @@ def _final_review_sprint_action_queues(project_export: dict[str, Any] | None) ->
         "manual_required_count": sum(int(item.get("manual_required_count") or 0) for item in summaries),
         "failed_action_count": sum(int(item.get("failed_action_count") or 0) for item in summaries),
         "latest_status": latest.get("latest_status"),
+    }
+    return _drop_empty(_sanitize_asset_metadata(summary))
+
+
+def _final_review_metrics(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict):
+        return {}
+    project_summary = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
+    sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
+    sprint_summaries = [sprint.get("metrics_summary", {}) for sprint in sprints if isinstance(sprint.get("metrics_summary"), dict)]
+    latest = sprint_summaries[0] if sprint_summaries else {}
+    summary = {
+        "latest_readiness": project_summary.get("latest_readiness") or latest.get("readiness"),
+        "latest_sprint_id": project_summary.get("latest_sprint_id") or latest.get("sprint_id"),
+        "sprint_count": project_summary.get("sprint_count") or len(sprints),
+        "active_sprint_count": project_summary.get("active_sprint_count"),
+        "completion_rate": latest.get("completion_rate"),
+        "quality_delta": latest.get("quality_delta"),
+        "provider_tokens": project_summary.get("total_provider_tokens") if project_summary else latest.get("provider_tokens"),
+        "total_candidate_count": project_summary.get("total_candidate_count"),
+        "total_applied_candidate_count": project_summary.get("total_applied_candidate_count"),
+        "warnings": latest.get("warnings") if isinstance(latest.get("warnings"), list) else [],
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
 

@@ -523,6 +523,7 @@ class ProjectStore:
             "context_packs": _collect_project_context_packs(self.project_dir(project_id), document),
             "review_tasks": _collect_project_review_tasks(self.project_dir(project_id)),
             "review_sprints": _collect_project_review_sprints(self.project_dir(project_id)),
+            "review_metrics_summary": _collect_project_review_metrics_summary(self.project_dir(project_id)),
             "generated_at": now_iso(),
         }
         write_json(self.project_dir(project_id) / "export.json", export)
@@ -1103,8 +1104,10 @@ def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
 def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
     from song_agent.review_sprints import ReviewSprintStore, review_sprint_export_summary
     from song_agent.review_sprint_actions import ReviewSprintActionQueueStore, action_queue_collection_summary
+    from song_agent.review_sprint_metrics import ReviewMetricsStore, sprint_metrics_summary
 
     store = ReviewSprintStore(project_dir)
+    metrics_store = ReviewMetricsStore(project_dir)
     sprints = store.list_sprints(include_archived=True)
     summaries = []
     for sprint in sprints:
@@ -1113,8 +1116,22 @@ def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
         recommendation_report = store.read_recommendation_report(sprint.sprint_id, default={})
         queue_store = ReviewSprintActionQueueStore(store.sprint_dir(sprint.sprint_id))
         queue_summary = action_queue_collection_summary(queue_store.list_queues(include_archived=True))
-        summaries.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary))
+        payload = review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary)
+        metrics_summary = sprint_metrics_summary(metrics_store.read_sprint_metrics(sprint.sprint_id, default={}))
+        if metrics_summary:
+            payload["metrics_summary"] = metrics_summary
+        summaries.append(payload)
     return sorted((_sanitize_asset_metadata(item) for item in summaries), key=lambda item: str(item.get("sprint_id") or ""))
+
+
+def _collect_project_review_metrics_summary(project_dir: Path) -> dict[str, Any]:
+    from song_agent.review_sprint_metrics import ReviewMetricsStore, project_review_metrics_summary
+
+    try:
+        store = ReviewMetricsStore(project_dir)
+        return _sanitize_asset_metadata(project_review_metrics_summary(store.read_project_metrics(default={})))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {}
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:

@@ -188,6 +188,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.0 review sprint smoke", *_v30_review_sprint_smoke(root))
     report.add("v3.1 review sprint recommendations smoke", *_v31_review_sprint_recommendations_smoke(root))
     report.add("v3.2 review sprint action queue smoke", *_v32_review_sprint_action_queue_smoke(root))
+    report.add("v3.3 review sprint dashboard metrics smoke", *_v33_review_sprint_dashboard_metrics_smoke(root))
     return report
 
 
@@ -3309,6 +3310,145 @@ def _v32_review_sprint_action_queue_smoke(root: Path) -> tuple[bool, str]:
                 and str(base) not in serialized
             )
             return ok, f"sprint={sprint_id}, queue={queue_id}, provider_candidate={provider_candidate_id}, version={child_version}"
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            os.chdir(old_cwd)
+
+
+def _v33_review_sprint_dashboard_metrics_smoke(root: Path) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        old_cwd = Path.cwd()
+        server = None
+        try:
+            os.chdir(base)
+            from song_agent.server import create_server
+
+            server = create_server("127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            provider_status, provider = _release_http_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-review", "api_key": "sk-secret-value"})
+            asset_status, _asset = _release_http_json(
+                server,
+                "POST",
+                "/api/assets",
+                {"asset_type": "bass_pattern", "name": "Release v3.3 dashboard bass", "tags": ["bass"], "content": {"notes": [{"pitch": 36, "start_beat": 0, "duration_beats": 1}]}},
+            )
+            reference_status, _reference = _release_http_json(
+                server,
+                "POST",
+                "/api/references/import",
+                {"reference_type": "style_note", "filename": "metrics.md", "title": "Release v3.3 metrics reference", "tags": ["metrics"], "content_base64": "bWV0cmljcyByZWZlcmVuY2U="},
+            )
+            index_status, _index = _release_http_json(server, "POST", "/api/library/rebuild", {})
+            created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v3.3 Metrics Smoke"})
+            project_id = created["project"]["project_id"]
+            version_status, version = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions",
+                {"name": "Parent", "request": {"title": "Release v3.3 Metrics Smoke", "language": "English", "style": "synth pop", "theme": "dashboard metrics", "tempo_bpm": 118, "key": "C"}},
+            )
+            parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+            state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+            note_id = state["tracks"][0]["notes"][0]["note_id"]
+            preview_status, preview_data = _release_http_json(
+                server,
+                "POST",
+                f"/api/projects/{project_id}/versions/v001/editor-preview",
+                {"patch": {"schema_version": 1, "base_plan_hash": state["base_plan_hash"], "label": "v3.3 metrics patch", "operations": [{"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 96}}]}, "render_midi": True},
+            )
+            preview_id = preview_data["preview"]["preview_id"]
+            task_ids: list[str] = []
+            for index, notes in enumerate((r"metrics bass too dense api_key=sk-secret-value C:\Users\demo\song.wav", "metrics chorus needs lift"), start=1):
+                audition_status, audition = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions", {"source": "preview", "range": {"mode": "custom", "start_beat": 16.0, "end_beat": 48.0}, "track_mode": "solo", "track_ids": ["track-003"]})
+                audition_id = audition["audition"]["audition_id"]
+                review_status, _review = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review", {"rating": 4, "status": "needs_fix", "notes": notes, "tags": ["metrics"]})
+                marker_status, _marker = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/markers", {"beat": float(index), "kind": "fix", "label": f"metrics target {index}"})
+                task_status, task_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review-task", {})
+                if not (audition_status == 201 and review_status == 200 and marker_status == 201 and task_status == 201):
+                    return False, f"task setup failed: audition={audition_status}, review={review_status}, marker={marker_status}, task={task_status}"
+                task_ids.append(task_data["task"]["task_id"])
+            sprint_status, sprint_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints", {"name": "Release v3.3 Metrics Sprint", "task_ids": task_ids, "settings": {"local_candidate_strategies": ["balanced"], "provider_candidate_count": 2}})
+            sprint_id = sprint_data["sprint"]["sprint_id"]
+            recommendation_status, _recommendation = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/recommendations/refresh", {})
+            queue_status, queue_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": False})
+            queue_id = queue_data["queue"]["queue_id"]
+            context_item_id = _release_item_id(queue_data["queue"], "save_recommended_context_pack")
+            local_item_id = _release_item_id(queue_data["queue"], "generate_local_candidates")
+            local_run_status, local_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{queue_id}/run", {"item_ids": [context_item_id, local_item_id]})
+            provider_queue_status, provider_queue = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
+            provider_queue_id = provider_queue["queue"]["queue_id"]
+            provider_item_id = _release_item_id(provider_queue["queue"], "generate_provider_candidates")
+            provider_run_status, provider_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{provider_queue_id}/run", {"item_ids": [provider_item_id], "include_provider": True})
+            provider_candidate_id = provider_run["results"][0]["result"]["created_candidate_ids"][0]
+            decision_status, decision = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_ids[0]}/decision-report/refresh", {})
+            apply_status, applied = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_ids[0]}/candidates/{provider_candidate_id}/apply", {"version_name": "Metrics Candidate Child"})
+            edit_job = _release_wait_http_job(server, applied["job"]["job_id"])
+            child_version = applied["version"]["version_id"]
+            sprint_metrics_status, sprint_metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/metrics/refresh")
+            project_metrics_status, project_metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-metrics/refresh")
+            export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+            final_status, _final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
+            final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
+            metrics_report = sprint_metrics.get("metrics_report", {})
+            project_report = project_metrics.get("review_metrics", {})
+            serialized = json.dumps({"sprint_metrics": sprint_metrics, "project_metrics": project_metrics, "export": project_export, "final": final_export}, ensure_ascii=False)
+            allowed_quality = {"improved", "unchanged", "regressed", "not_available"}
+            allowed_readiness = {"ready_to_close", "needs_review", "needs_candidates", "blocked", "stale", "no_data"}
+            ok = (
+                provider_status == 200
+                and provider.get("configured") is True
+                and asset_status == 201
+                and reference_status == 201
+                and index_status == 200
+                and created_status == 201
+                and version_status == 202
+                and parent_job["status"] == "completed"
+                and state_status == 200
+                and preview_status == 201
+                and len(task_ids) == 2
+                and sprint_status == 201
+                and recommendation_status == 200
+                and queue_status == 201
+                and local_run_status == 200
+                and any(result.get("result", {}).get("context_pack_id") for result in local_run.get("results", []))
+                and any(result.get("result", {}).get("created_count", 0) >= 1 for result in local_run.get("results", []))
+                and provider_queue_status == 201
+                and provider_run_status == 200
+                and provider_run["results"][0]["result"]["created_count"] >= 1
+                and decision_status == 200
+                and decision["decision_report"]["requires_manual_apply"] is True
+                and apply_status == 202
+                and edit_job["status"] == "completed"
+                and sprint_metrics_status == 200
+                and metrics_report.get("overview", {}).get("task_count", 0) >= 1
+                and metrics_report.get("candidate_funnel", {}).get("candidate_count", 0) >= 1
+                and metrics_report.get("candidate_funnel", {}).get("provider_candidate_count", 0) >= 1
+                and metrics_report.get("action_queue_execution", {}).get("completed_action_count", 0) >= 1
+                and metrics_report.get("provider_usage", {}).get("provider_call_count", 0) >= 1
+                and metrics_report.get("manual_decisions", {}).get("manual_apply_count", 0) >= 1
+                and metrics_report.get("quality_delta", {}).get("status") in allowed_quality
+                and metrics_report.get("risk_readiness", {}).get("readiness") in allowed_readiness
+                and project_metrics_status == 200
+                and project_report.get("latest_sprint_id") == sprint_id
+                and project_report.get("latest_readiness") in allowed_readiness
+                and export_status == 200
+                and project_export["review_sprints"][0]["metrics_summary"]["sprint_id"] == sprint_id
+                and project_export["review_metrics_summary"]["latest_sprint_id"] == sprint_id
+                and final_status == 200
+                and final_export_status == 200
+                and final_export["final_export"]["review_metrics"]["latest_sprint_id"] == sprint_id
+                and "sk-secret-value" not in serialized
+                and "api_key" not in serialized
+                and "C:\\Users" not in serialized
+                and str(base) not in serialized
+            )
+            return ok, f"sprint={sprint_id}, readiness={metrics_report.get('risk_readiness', {}).get('readiness')}, version={child_version}"
         except Exception as exc:
             return False, str(exc)
         finally:

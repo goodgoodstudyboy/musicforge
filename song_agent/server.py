@@ -164,6 +164,13 @@ from song_agent.review_sprint_actions import (
     build_action_queue_from_recommendation_report,
     queue_report_is_stale,
 )
+from song_agent.review_sprint_metrics import (
+    ReviewMetricsStore,
+    build_project_review_metrics,
+    build_sprint_metrics_report,
+    project_review_metrics_summary,
+    sprint_metrics_summary,
+)
 from song_agent.provider_usage import (
     build_provider_usage_report,
     collect_candidate_group_provider_usage_records,
@@ -3661,6 +3668,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_provider_usage_report(method, project_id)
             return
 
+        if tail == "/review-metrics":
+            self._handle_project_review_metrics(method, project_id, refresh=False)
+            return
+
+        if tail == "/review-metrics/refresh":
+            self._handle_project_review_metrics(method, project_id, refresh=True)
+            return
+
         if tail == "/export":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5035,6 +5050,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self.project_store.append_event(project_id, "review_sprint_recommendations_refreshed", {"sprint_id": sprint.sprint_id, "recommended_count": len(report.get("recommended_order", []))})
                 self._send_json({"ok": True, "sprint": sprint.to_dict(), "recommendation_report": report, "summary": recommendation_report_summary(report)})
                 return
+            if action == "metrics":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_sprint_metrics(project_id, sprint_store, task_store, sprint, refresh=False)
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "metrics_report": report, "summary": sprint_metrics_summary(report)})
+                return
+            if action == "metrics-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_sprint_metrics(project_id, sprint_store, task_store, sprint, refresh=True)
+                sprint_store.append_event(sprint.sprint_id, "review_sprint_metrics_refreshed", {"readiness": (report.get("risk_readiness") or {}).get("readiness") if isinstance(report.get("risk_readiness"), dict) else None}, now=_utc_now())
+                self.project_store.append_event(project_id, "review_sprint_metrics_refreshed", {"sprint_id": sprint.sprint_id, "readiness": (report.get("risk_readiness") or {}).get("readiness") if isinstance(report.get("risk_readiness"), dict) else None})
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "metrics_report": report, "summary": sprint_metrics_summary(report)})
+                return
             if action == "action-queues":
                 queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
                 if method == "GET":
@@ -5152,6 +5183,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "recommendation_report": recommendation_report,
             "recommendation_summary": recommendation_report_summary(recommendation_report),
             "action_queue_summary": action_queue_summary_data,
+            "metrics_summary": self._review_sprint_metrics_summary(sprint_store, sprint),
             "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data),
             "tasks": self._review_sprint_task_items(task_store, sprint),
         }
@@ -5171,8 +5203,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "recommendation_report": recommendation_report,
             "recommendation_summary": recommendation_report_summary(recommendation_report),
             "action_queue_summary": action_queue_summary_data,
+            "metrics_summary": self._review_sprint_metrics_summary(sprint_store, sprint),
             "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data),
         }
+
+    def _review_sprint_metrics_summary(self, sprint_store: ReviewSprintStore, sprint: Any) -> dict[str, Any]:
+        try:
+            metrics_store = ReviewMetricsStore(sprint_store.project_dir)
+            return sprint_metrics_summary(metrics_store.read_sprint_metrics(sprint.sprint_id, default={}))
+        except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
+            return {}
 
     def _review_sprint_action_queue_summary(self, sprint_store: ReviewSprintStore, sprint: Any) -> dict[str, Any]:
         try:
@@ -5180,6 +5220,82 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return action_queue_collection_summary(queue_store.list_queues(include_archived=True))
         except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
             return {}
+
+    def _get_or_refresh_sprint_metrics(
+        self,
+        project_id: str,
+        sprint_store: ReviewSprintStore,
+        task_store: ReviewTaskStore,
+        sprint: Any,
+        *,
+        refresh: bool,
+    ) -> dict[str, Any]:
+        project_dir = self.project_store.project_dir(project_id)
+        metrics_store = ReviewMetricsStore(project_dir)
+        if not refresh:
+            existing = metrics_store.read_sprint_metrics(sprint.sprint_id, default={})
+            if existing:
+                return existing
+        try:
+            project_document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            project_document = self.project_store.get_project(project_id)
+        provider_records = collect_project_provider_usage_records(project_id, project_document.versions, project_dir)
+        queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+        report = build_sprint_metrics_report(
+            project_id=project_id,
+            sprint=sprint,
+            project_document=project_document,
+            task_store=task_store,
+            sprint_store=sprint_store,
+            queue_store=queue_store,
+            provider_usage_records=provider_records,
+            now=_utc_now(),
+        )
+        return metrics_store.write_sprint_metrics(sprint.sprint_id, report)
+
+    def _get_or_refresh_project_review_metrics(self, project_id: str, *, refresh: bool) -> dict[str, Any]:
+        project_dir = self.project_store.project_dir(project_id)
+        metrics_store = ReviewMetricsStore(project_dir)
+        if not refresh:
+            existing = metrics_store.read_project_metrics(default={})
+            if existing:
+                return existing
+        try:
+            project_document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            project_document = self.project_store.get_project(project_id)
+        sprint_store = ReviewSprintStore(project_dir)
+        task_store = ReviewTaskStore(project_dir)
+        provider_records = collect_project_provider_usage_records(project_id, project_document.versions, project_dir)
+        report = build_project_review_metrics(
+            project_id=project_id,
+            project_document=project_document,
+            sprint_store=sprint_store,
+            task_store=task_store,
+            provider_usage_records=provider_records,
+            now=_utc_now(),
+        )
+        saved = metrics_store.write_project_metrics(report)
+        for summary in saved.get("sprint_summaries", []) if isinstance(saved.get("sprint_summaries"), list) else []:
+            sprint_id = str(summary.get("sprint_id") or "")
+            if sprint_id:
+                try:
+                    sprint = sprint_store.read_sprint(sprint_id)
+                    sprint_report = build_sprint_metrics_report(
+                        project_id=project_id,
+                        sprint=sprint,
+                        project_document=project_document,
+                        task_store=task_store,
+                        sprint_store=sprint_store,
+                        queue_store=ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id)),
+                        provider_usage_records=provider_records,
+                        now=saved.get("created_at") or _utc_now(),
+                    )
+                    metrics_store.write_sprint_metrics(sprint.sprint_id, sprint_report)
+                except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
+                    continue
+        return saved
 
     def _review_sprint_task_items(self, task_store: ReviewTaskStore, sprint: Any) -> list[dict[str, Any]]:
         items = []
@@ -7343,6 +7459,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return
         self._send_json(build_provider_usage_report(scope="project", project_id=project_id, records=records))
 
+    def _handle_project_review_metrics(self, method: str, project_id: str, *, refresh: bool) -> None:
+        expected = "POST" if refresh else "GET"
+        if method != expected:
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            report = self._get_or_refresh_project_review_metrics(project_id, refresh=refresh)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        if refresh:
+            self.project_store.append_event(project_id, "project_review_metrics_refreshed", {"latest_readiness": report.get("latest_readiness"), "sprint_count": report.get("sprint_count")})
+        self._send_json({"ok": True, "project_id": project_id, "review_metrics": report, "summary": project_review_metrics_summary(report)})
+
     def _project_edit_parent(self, project_id: str, version_id: str) -> tuple[Any, Any, JobState, SongPlan]:
         document = self.project_store.sync_project(project_id, self.store.get_job)
         parent = next((version for version in document.versions if version.version_id == version_id), None)
@@ -8714,7 +8844,7 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 2 and parts[0] == "review-sprints":
         return unquote(parts[1]), "detail"
-    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts", "recommendations"}:
+    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts", "recommendations", "metrics"}:
         return unquote(parts[1]), parts[2]
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "tasks" and parts[3] in {"remove", "reorder"}:
         return unquote(parts[1]), f"tasks-{parts[3]}"
@@ -8722,6 +8852,8 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
         return unquote(parts[1]), "conflicts-refresh"
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "recommendations" and parts[3] == "refresh":
         return unquote(parts[1]), "recommendations-refresh"
+    if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "metrics" and parts[3] == "refresh":
+        return unquote(parts[1]), "metrics-refresh"
     if len(parts) == 5 and parts[0] == "review-sprints" and parts[2] == "recommendations" and parts[4] == "context-pack":
         return unquote(parts[1]), f"recommendation-context-pack:{unquote(parts[3])}"
     if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] == "action-queues":

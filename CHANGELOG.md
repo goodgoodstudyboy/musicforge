@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.3.0 - 2026-05-14
+
+### Added
+- Review Sprint Metrics Reports with task status, candidate funnel, recommendation adoption, Action Queue execution, provider usage, manual decision, quality delta, and readiness summaries.
+- Project Review Metrics with project-level sprint totals, provider tokens, applied candidate counts, latest readiness, and quality trend.
+- Metrics APIs for Sprint get/refresh and Project get/refresh, with cached derived JSON files and refresh events.
+- Studio Review Sprints Dashboard panel plus Project Review Metrics summary.
+- Project Export and Final Export now include compact review metrics summaries without exporting raw provider prompts, local paths, or full metrics reports.
+- release-check now includes a v3.3 smoke covering dashboard metrics, project metrics, export/final export summaries, provider usage, manual apply metrics, quality delta, readiness, and redaction.
+
+### Scope
+- v3.3.0 only reads existing Review Sprint/Task/Candidate/Queue/provider/quality data and writes derived metrics reports. It does not auto-apply, auto-resolve, auto-close, or call provider judgment.
+
+### Verified
+- `python -m pytest tests\test_review_sprint_metrics.py tests\test_server_review_sprint_metrics.py tests\test_webui.py -q`
+
 ## v3.2.1 - 2026-05-14
 
 ### Fixed

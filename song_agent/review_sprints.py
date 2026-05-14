@@ -353,6 +353,11 @@ class ReviewSprintStore:
                 continue
         return events
 
+    def append_event(self, sprint_id: str, event: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> None:
+        now = now or now_iso()
+        with self.lock:
+            _append_event(self.sprint_dir(sprint_id), event, payload or {}, now)
+
     def close_sprint(self, sprint: ReviewSprint, *, now: str | None = None) -> ReviewSprint:
         if sprint.status == "archived":
             raise ReviewSprintStateError("Archived sprint cannot be closed.")
