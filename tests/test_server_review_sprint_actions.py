@@ -92,6 +92,7 @@ def test_review_sprint_action_queue_api_runs_safe_items_and_blocks_provider_by_d
     assert detail["events"][0]["event"] == "queue_created"
     assert provider_default_status == 200
     assert provider_default["results"][0]["status"] == "skipped"
+    assert provider_default["queue"]["status"] == "pending"
     assert _queue_item(provider_default["queue"], provider_item_id)["status"] == "pending"
     assert local_run_status == 200
     assert any(result["status"] == "completed" for result in local_run["results"])

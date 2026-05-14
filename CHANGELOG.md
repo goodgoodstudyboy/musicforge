@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.2.1 - 2026-05-14
+
+### Fixed
+- Review Sprint Action Queue runs no longer leave a queue stuck in `running` when provider-safe items are skipped because `include_provider=true` was not supplied.
+
+### Verified
+- `python -m pytest tests\test_review_sprint_actions.py tests\test_server_review_sprint_actions.py tests\test_release_check.py -q`
+
 ## v3.2.0 - 2026-05-14
 
 ### Added

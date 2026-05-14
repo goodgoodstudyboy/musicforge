@@ -3269,6 +3269,7 @@ def _v32_review_sprint_action_queue_smoke(root: Path) -> tuple[bool, str]:
                 and provider_queue_status == 201
                 and provider_default_status == 200
                 and provider_default["results"][0]["status"] == "skipped"
+                and provider_default["queue"]["status"] == "pending"
                 and _release_item(provider_default["queue"], provider_item_id)["status"] == "pending"
                 and provider_run_status == 200
                 and provider_run["results"][0]["status"] == "completed"

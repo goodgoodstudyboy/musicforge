@@ -5597,7 +5597,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     break
             finally:
                 queue = queue_store.read_queue(queue.queue_id)
-        queue = queue_store.update_queue(queue, event="queue_run_completed", payload={"result_count": len(results)}, now=_utc_now())
+        completed_status = "pending" if queue.status == "running" else queue.status
+        queue = queue_store.update_queue(replace(queue, status=completed_status), event="queue_run_completed", payload={"result_count": len(results)}, now=_utc_now())
         self.project_store.append_event(project_id, "review_sprint_action_queue_completed", {"sprint_id": sprint.sprint_id, "queue_id": queue.queue_id, "status": queue.status})
         refreshed_sprint = sprint_store.read_sprint(sprint.sprint_id)
         response = self._review_sprint_response(sprint_store, task_store, refreshed_sprint)
