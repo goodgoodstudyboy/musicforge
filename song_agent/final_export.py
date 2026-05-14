@@ -135,6 +135,8 @@ def build_final_export_bundle(
     review_metrics = _final_review_metrics(project_export)
     review_judge = _final_review_judge(project_export, edit_metadata)
     review_sprint_closeout = _final_review_sprint_closeout(project_export)
+    delivery_qa = _final_delivery_qa(project_export)
+    delivery_signoff = _final_delivery_signoff(project_export)
 
     manifest = {
         "project_id": project.project_id,
@@ -155,6 +157,8 @@ def build_final_export_bundle(
         "review_metrics": review_metrics,
         "review_judge": review_judge,
         "review_sprint_closeout": review_sprint_closeout,
+        "delivery_qa": delivery_qa,
+        "delivery_signoff": delivery_signoff,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -639,6 +643,46 @@ def _final_review_sprint_closeout(project_export: dict[str, Any] | None) -> dict
         "selected_version_id": latest_signoff.get("selected_version_id") or latest_closeout.get("recommended_final_version_id"),
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
+
+
+def _final_delivery_qa(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("delivery_qa_summary"), dict):
+        return {}
+    summary = project_export["delivery_qa_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "readiness": summary.get("readiness"),
+                "handoff_allowed": summary.get("handoff_allowed"),
+                "artifact_count": summary.get("artifact_count"),
+                "blocker_count": summary.get("blocker_count"),
+                "warning_count": summary.get("warning_count"),
+                "final_version_id": summary.get("final_version_id"),
+                "zip_sha256": summary.get("zip_sha256"),
+                "zip_matches_manifest": summary.get("zip_matches_manifest"),
+            }
+        )
+    )
+
+
+def _final_delivery_signoff(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("delivery_signoff_summary"), dict):
+        return {}
+    summary = project_export["delivery_signoff_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "signed_at": summary.get("signed_at"),
+                "signed_by": summary.get("signed_by"),
+                "forced": summary.get("forced"),
+                "delivery_qa_status": summary.get("delivery_qa_status"),
+                "final_version_id": summary.get("final_version_id"),
+                "zip_sha256": summary.get("zip_sha256"),
+            }
+        )
+    )
 
 
 def _context_pack_export_summary(pack: dict[str, Any]) -> dict[str, Any]:

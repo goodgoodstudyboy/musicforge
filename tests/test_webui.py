@@ -236,6 +236,11 @@ def test_webui_contains_project_workspace_controls():
     assert "Generate Final Export" in html
     assert "Build ZIP" in html
     assert "Download ZIP" in html
+    assert "Delivery QA" in html
+    assert "Refresh Delivery QA" in html
+    assert "Sign Delivery" in html
+    assert "Force Sign" in html
+    assert "Reset Signoff" in html
     assert 'id="project-search"' in html
     assert 'id="project-status-filter"' in html
     assert 'id="project-variant-filter"' in html
@@ -410,6 +415,10 @@ def test_webui_calls_project_apis():
     assert "/api/projects/${encodeURIComponent(project.project_id)}/final-export" in html
     assert "/api/projects/${encodeURIComponent(project.project_id)}/final-export/zip" in html
     assert "/final-export.zip" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/delivery-qa" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/delivery-qa/refresh" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff/reset" in html
     assert "/api/projects/${id}/selected" in html
     assert "/api/projects/${id}/final" in html
     assert "/api/projects/${encodeURIComponent(project.project_id)}/compare" in html

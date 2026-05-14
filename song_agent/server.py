@@ -86,6 +86,16 @@ from song_agent.final_export import (
     final_export_zip_path,
     read_final_export_manifest,
 )
+from song_agent.delivery_qa import (
+    build_delivery_qa_report,
+    build_delivery_signoff_record,
+    delivery_qa_allows_signoff,
+    delivery_qa_source_hash,
+    delivery_qa_summary,
+    delivery_signoff_summary,
+    mark_delivery_qa_stale,
+    signoff_history_event,
+)
 from song_agent.context_packs import (
     ContextPackStaleError,
     ContextPackStore,
@@ -3645,6 +3655,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_final_export_zip_download(method, project_id)
             return
 
+        if tail == "/delivery-qa":
+            self._handle_project_delivery_qa(method, project_id, refresh=False)
+            return
+
+        if tail == "/delivery-qa/refresh":
+            self._handle_project_delivery_qa(method, project_id, refresh=True)
+            return
+
+        if tail == "/delivery-signoff":
+            self._handle_project_delivery_signoff(method, project_id, action="get")
+            return
+
+        if tail == "/delivery-signoff/reset":
+            self._handle_project_delivery_signoff(method, project_id, action="reset")
+            return
+
         if tail == "/diff":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -3950,6 +3976,116 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
             return
         self._send_file(zip_path, "application/zip", filename=f"musicforge-{project_id}-final-export.zip")
+
+    def _handle_project_delivery_qa(self, method: str, project_id: str, *, refresh: bool) -> None:
+        if refresh and method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        if not refresh and method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            report = self._get_or_refresh_delivery_qa(project_id, refresh=refresh)
+            if refresh:
+                self.project_store.append_event(project_id, "delivery_qa_refreshed", {"status": report.get("status"), "readiness": report.get("readiness")})
+            self._send_json({"ok": True, "project_id": project_id, "delivery_qa": report, "summary": delivery_qa_summary(report)})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+
+    def _handle_project_delivery_signoff(self, method: str, project_id: str, *, action: str) -> None:
+        try:
+            self.project_store.get_project(project_id)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        if action == "get":
+            if method == "GET":
+                signoff = self.project_store.read_delivery_signoff(project_id, default={})
+                self._send_json({"ok": True, "project_id": project_id, "signoff": signoff, "summary": delivery_signoff_summary(signoff)})
+                return
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            existing = self.project_store.read_delivery_signoff(project_id, default={})
+            if existing:
+                self._send_error(HTTPStatus.CONFLICT, "Delivery is already signed off. Reset signoff before signing again.")
+                return
+            report = self._get_or_refresh_delivery_qa(project_id, refresh=True)
+            force = bool(payload.get("force", False))
+            if not delivery_qa_allows_signoff(report) and not force:
+                self._send_error(HTTPStatus.CONFLICT, "Delivery QA gate failed. Refresh QA or pass force=true with override_reason.")
+                return
+            if force and not str(payload.get("override_reason") or "").strip():
+                self._send_error(HTTPStatus.BAD_REQUEST, "override_reason is required when force=true.")
+                return
+            try:
+                record = build_delivery_signoff_record(project_id=project_id, report=report, payload={**payload, "force": force}, now=_utc_now())
+            except ValueError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            signoff = self.project_store.write_delivery_signoff(project_id, record, now=_utc_now())
+            self.project_store.append_event(project_id, "delivery_force_signed" if force else "delivery_signed", {"status": report.get("status"), "final_version_id": signoff.get("final_version_id"), "forced": force})
+            self._send_json({"ok": True, "project_id": project_id, "signoff": signoff, "summary": delivery_signoff_summary(signoff)})
+            return
+        if action == "reset":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            reason = str(payload.get("reason") or "").strip()
+            if not reason:
+                self._send_error(HTTPStatus.BAD_REQUEST, "reason is required to reset delivery signoff.")
+                return
+            existing = self.project_store.read_delivery_signoff(project_id, default={})
+            if not existing:
+                self._send_error(HTTPStatus.CONFLICT, "Delivery signoff does not exist.")
+                return
+            event = signoff_history_event("delivery_signoff_reset", existing, reason, now=_utc_now())
+            self.project_store.reset_delivery_signoff(project_id, event)
+            self.project_store.append_event(project_id, "delivery_signoff_reset", {"reason": event.get("reason"), "previous_status": delivery_signoff_summary(existing).get("status")})
+            self._send_json({"ok": True, "project_id": project_id, "summary": {"status": "reset"}, "history_event": event})
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Delivery signoff route not found.")
+
+    def _get_or_refresh_delivery_qa(self, project_id: str, *, refresh: bool) -> dict[str, Any]:
+        project_dir = self.project_store.project_dir(project_id)
+        if not refresh:
+            existing = self.project_store.read_delivery_qa(project_id, default={})
+            if existing:
+                try:
+                    document = self.project_store.sync_project(project_id, self.store.get_job)
+                except FileNotFoundError:
+                    document = self.project_store.get_project(project_id)
+                project_export = self.project_store.project_export_snapshot(project_id)
+                try:
+                    manifest = read_final_export_manifest(project_dir)
+                except FileNotFoundError:
+                    manifest = {}
+                current_hash = delivery_qa_source_hash(project_id=project_id, project_document=document, project_dir=project_dir, project_export=project_export, final_export_manifest=manifest)
+                if str(existing.get("source_hash") or "") != current_hash:
+                    return mark_delivery_qa_stale(existing, current_source_hash=current_hash)
+                return existing
+        try:
+            document = self.project_store.sync_project(project_id, self.store.get_job)
+        except FileNotFoundError:
+            document = self.project_store.get_project(project_id)
+        project_export = self.project_store.project_export_snapshot(project_id)
+        try:
+            manifest = read_final_export_manifest(project_dir)
+        except FileNotFoundError:
+            manifest = {}
+        report = build_delivery_qa_report(
+            project_id=project_id,
+            project_document=document,
+            project_dir=project_dir,
+            project_export=project_export,
+            final_export_manifest=manifest,
+            now=_utc_now(),
+        )
+        return self.project_store.write_delivery_qa(project_id, report, now=_utc_now())
 
     def _set_final_version_with_gate(self, project_id: str, version_id: str, *, force: bool) -> tuple[Any, Any]:
         document = self.project_store.get_project(project_id)

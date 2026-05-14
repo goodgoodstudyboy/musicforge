@@ -5986,12 +5986,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
 
     async function renderProjectFinalExport(project, versions, target) {
       let manifest = null;
+      let deliveryQa = null;
+      let deliverySignoff = { summary: { status: "not_signed" } };
       let message = "No final export yet.";
       try {
         const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/final-export`);
         manifest = data.final_export;
       } catch (err) {
         message = err.message;
+      }
+      try {
+        deliveryQa = await api(`/api/projects/${encodeURIComponent(project.project_id)}/delivery-qa`);
+      } catch (err) {
+        deliveryQa = { summary: { status: "not_ready", readiness: "needs_export", handoff_allowed: false }, delivery_qa: { checks: [], artifact_integrity: { files: [] }, zip: {} }, error: err.message };
+      }
+      try {
+        deliverySignoff = await api(`/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff`);
+      } catch (err) {
+        deliverySignoff = { summary: { status: "not_signed" }, signoff: {}, error: err.message };
       }
       const selectedId = project.final_version_id || project.selected_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
       const selected = versions.find((version) => version.version_id === selectedId) || versions[0] || {};
@@ -6034,6 +6046,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <span id="project-final-export-message" class="message"></span>
         </div>
         ${manifest ? finalExportManifestHtml(manifest) : `<div class="empty">${escapeHtml(message)}</div>`}
+        ${deliveryQaHtml(deliveryQa, deliverySignoff)}
       `;
       bindAction("project-generate-final-export", async () => {
         await api(`/api/projects/${encodeURIComponent(project.project_id)}/final-export`, {
@@ -6048,6 +6061,34 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       bindAction("project-build-final-export-zip", async () => {
         await api(`/api/projects/${encodeURIComponent(project.project_id)}/final-export/zip`, { method: "POST" });
+        await renderProjectFinalExport(project, versions, target);
+      });
+      bindAction("project-refresh-delivery-qa", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/delivery-qa/refresh`, { method: "POST" });
+        await renderProjectFinalExport(project, versions, target);
+      });
+      bindAction("project-sign-delivery", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(deliverySignoffPayload(false)),
+        });
+        await renderProjectFinalExport(project, versions, target);
+      });
+      bindAction("project-force-sign-delivery", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(deliverySignoffPayload(true)),
+        });
+        await renderProjectFinalExport(project, versions, target);
+      });
+      bindAction("project-reset-delivery-signoff", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: $("project-delivery-reset-reason").value.trim() }),
+        });
         await renderProjectFinalExport(project, versions, target);
       });
     }
@@ -6088,6 +6129,117 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <table>
           <thead><tr><th>Kind</th><th>Path</th><th>Exists</th><th>Info</th></tr></thead>
           <tbody>${rows || "<tr><td colspan='4'>No files.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function deliverySignoffPayload(force) {
+      return {
+        force,
+        override_reason: $("project-delivery-override-reason").value.trim(),
+        signed_by: $("project-delivery-signed-by").value.trim() || "local-user",
+        notes: $("project-delivery-notes").value.trim(),
+      };
+    }
+
+    function deliveryQaHtml(qaData, signoffData) {
+      const summary = (qaData && qaData.summary) || {};
+      const report = (qaData && qaData.delivery_qa) || {};
+      const signoffSummary = (signoffData && signoffData.summary) || { status: "not_signed" };
+      const signoff = (signoffData && signoffData.signoff) || {};
+      const zip = report.zip || {};
+      const artifact = report.artifact_integrity || {};
+      const checks = report.checks || [];
+      const files = artifact.files || [];
+      const signed = signoffSummary.status === "signed" || signoffSummary.status === "force_signed";
+      const canSign = summary.handoff_allowed && !signed;
+      const canForce = !signed;
+      return `
+        <div class="panel">
+          <div class="panel-title">Delivery QA</div>
+          <div class="summary-grid">
+            ${metric("Status", summary.status || "-")}
+            ${metric("Readiness", summary.readiness || "-")}
+            ${metric("Handoff", summary.handoff_allowed ? "yes" : "-")}
+            ${metric("Final Version", summary.final_version_id || "-")}
+          </div>
+          <div class="summary-grid">
+            ${metric("Blockers", summary.blocker_count || 0)}
+            ${metric("Warnings", summary.warning_count || 0)}
+            ${metric("Artifacts", artifact.checked_count || summary.artifact_count || 0)}
+            ${metric("Missing", artifact.missing_count || summary.missing_artifact_count || 0)}
+          </div>
+          <div class="summary-grid">
+            ${metric("ZIP", zip.exists ? "ok" : "-")}
+            ${metric("ZIP Entries", zip.entry_count || 0)}
+            ${metric("ZIP Match", zip.matches_manifest ? "yes" : "-")}
+            ${metric("ZIP SHA", (zip.sha256 || "").slice(0, 12) || "-")}
+          </div>
+          <div class="grid2">
+            <label>Signed By
+              <input id="project-delivery-signed-by" value="${escapeHtml(signoff.signed_by || "local-user")}">
+            </label>
+            <label>Reset Reason
+              <input id="project-delivery-reset-reason" placeholder="Reason required before reset">
+            </label>
+          </div>
+          <label>Notes
+            <textarea id="project-delivery-notes" rows="2">${escapeHtml(signoff.notes || "")}</textarea>
+          </label>
+          <label>Override Reason
+            <textarea id="project-delivery-override-reason" rows="2" placeholder="Required for force sign"></textarea>
+          </label>
+          <div class="actions">
+            <button class="secondary" id="project-refresh-delivery-qa" type="button">Refresh Delivery QA</button>
+            <button id="project-sign-delivery" type="button" ${canSign ? "" : "disabled"}>Sign Delivery</button>
+            <button class="secondary" id="project-force-sign-delivery" type="button" ${canForce ? "" : "disabled"}>Force Sign</button>
+            <button class="danger" id="project-reset-delivery-signoff" type="button" ${signed ? "" : "disabled"}>Reset Signoff</button>
+          </div>
+          <div class="summary-grid">
+            ${metric("Signoff", signoffSummary.status || "not_signed")}
+            ${metric("Signed At", signoffSummary.signed_at || "-")}
+            ${metric("Forced", signoffSummary.forced ? "yes" : "-")}
+            ${metric("Signoff Version", signoffSummary.final_version_id || "-")}
+          </div>
+          ${deliveryChecksHtml(checks)}
+          ${deliveryArtifactsHtml(files)}
+        </div>
+      `;
+    }
+
+    function deliveryChecksHtml(checks) {
+      const rows = checks.map((check) => `
+        <tr>
+          <td>${escapeHtml(check.severity || "-")}</td>
+          <td>${escapeHtml(check.check_id || "-")}</td>
+          <td><span class="status ${escapeHtml(check.status || "")}">${escapeHtml(check.status || "-")}</span></td>
+          <td>${escapeHtml(check.count ?? "-")}</td>
+          <td>${escapeHtml(check.message || "-")}</td>
+        </tr>
+      `).join("");
+      return `
+        <table>
+          <thead><tr><th>Severity</th><th>Check</th><th>Status</th><th>Count</th><th>Message</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='5'>No checks yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function deliveryArtifactsHtml(files) {
+      const rows = files.slice(0, 80).map((file) => `
+        <tr>
+          <td>${escapeHtml(file.kind || "-")}</td>
+          <td>${escapeHtml(file.path || "-")}</td>
+          <td>${file.required ? "yes" : "-"}</td>
+          <td>${file.exists ? "yes" : "-"}</td>
+          <td>${escapeHtml(file.size_bytes ?? "-")}</td>
+          <td>${escapeHtml((file.sha256 || "").slice(0, 12) || "-")}</td>
+        </tr>
+      `).join("");
+      return `
+        <table>
+          <thead><tr><th>Kind</th><th>Path</th><th>Required</th><th>Exists</th><th>Size</th><th>SHA</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='6'>No artifacts.</td></tr>"}</tbody>
         </table>
       `;
     }

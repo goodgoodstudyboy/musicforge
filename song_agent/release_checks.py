@@ -13,6 +13,7 @@ import struct
 import threading
 import time
 import wave
+import zipfile
 from http.client import HTTPConnection
 from io import BytesIO
 from dataclasses import dataclass, field
@@ -192,6 +193,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.3 review sprint dashboard metrics smoke", *_v33_review_sprint_dashboard_metrics_smoke(root))
     report.add("v3.4 provider review judge smoke", *_v34_provider_review_judge_smoke(root))
     report.add("v3.5 review sprint closeout smoke", *_v35_review_sprint_closeout_smoke(root))
+    report.add("v3.6 delivery qa handoff smoke", *_v36_delivery_qa_handoff_smoke(root))
     return report
 
 
@@ -3779,6 +3781,107 @@ def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
             and str(base) not in serialized
         )
         return ok, f"sprint={sprint_id}, closeout={closeout_refresh.get('summary', {}).get('status')}, missing_delivery={unresolved_missing_check.get('status')}, signed={signoff.get('summary', {}).get('status')}, version={child_version}"
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+
+
+def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
+    base = root / ".release-check" / "v36-delivery-qa-handoff"
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v3.6 Delivery QA Smoke"})
+        project_id = created["project"]["project_id"]
+        version_status, version = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"name": "Delivery QA Parent", "request": {"title": "Release v3.6 Delivery QA Smoke", "language": "English", "style": "synth pop", "theme": "handoff", "tempo_bpm": 118, "key": "C"}},
+        )
+        parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+        final_status, final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": "v001"})
+        export_status, exported = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        missing_zip_status, missing_zip = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        sign_block_status, sign_block = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {})
+        force_missing_status, force_missing = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {"force": True})
+        zip_status, zipped = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+        qa_status, qa = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        sign_status, signed = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {"signed_by": "release-check", "notes": r"accepted C:\Users\demo api_key=sk-secret-value"})
+        duplicate_status, duplicate = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {})
+        export_after_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_after_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        zip_after_status, zipped_after = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+        qa_after_status, qa_after = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        reset_status, reset = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff/reset", {"reason": r"release rebuild C:\Users\demo"})
+        zip_path = base / ".musicforge" / "projects" / project_id / "final-export.zip"
+        with zipfile.ZipFile(zip_path, "a") as archive:
+            archive.writestr("extra.txt", "extra")
+        stale_status, stale = _release_http_json(server, "GET", f"/api/projects/{project_id}/delivery-qa")
+        polluted_status, polluted = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        polluted_zip_check = next((check for check in polluted.get("delivery_qa", {}).get("checks", []) if isinstance(check, dict) and check.get("check_id") == "zip_manifest_match"), {})
+        history_path = base / ".musicforge" / "projects" / project_id / "delivery-signoff-history.jsonl"
+        serialized = json.dumps({"signed": signed, "project_export": project_export, "final_export": final_export, "qa_after": qa_after, "reset": reset}, ensure_ascii=False)
+        ok = (
+            created_status == 201
+            and version_status == 202
+            and parent_job["status"] == "completed"
+            and final_status == 200
+            and final_data.get("project", {}).get("final_version_id") == "v001"
+            and export_status == 200
+            and exported.get("final_export", {}).get("version_id") == "v001"
+            and missing_zip_status == 200
+            and missing_zip.get("summary", {}).get("handoff_allowed") is False
+            and missing_zip.get("summary", {}).get("readiness") == "needs_zip"
+            and sign_block_status == 409
+            and "Delivery QA gate failed" in sign_block.get("error", "")
+            and force_missing_status == 400
+            and "override_reason" in force_missing.get("error", "")
+            and zip_status == 200
+            and zipped.get("zip", {}).get("sha256")
+            and qa_status == 200
+            and qa.get("summary", {}).get("handoff_allowed") is True
+            and sign_status == 200
+            and signed.get("summary", {}).get("status") == "signed"
+            and duplicate_status == 409
+            and "already signed off" in duplicate.get("error", "")
+            and export_after_status == 200
+            and project_export.get("delivery_qa_summary", {}).get("status") in {"passed", "warning"}
+            and project_export.get("delivery_signoff_summary", {}).get("status") == "signed"
+            and final_after_status == 200
+            and final_export.get("final_export", {}).get("delivery_qa", {}).get("status") in {"passed", "warning"}
+            and final_export.get("final_export", {}).get("delivery_signoff", {}).get("status") == "signed"
+            and zip_after_status == 200
+            and zipped_after.get("zip", {}).get("sha256")
+            and qa_after_status == 200
+            and qa_after.get("summary", {}).get("handoff_allowed") is True
+            and reset_status == 200
+            and reset.get("summary", {}).get("status") == "reset"
+            and history_path.exists()
+            and stale_status == 200
+            and stale.get("delivery_qa", {}).get("status") == "stale"
+            and polluted_status == 200
+            and polluted.get("summary", {}).get("handoff_allowed") is False
+            and polluted_zip_check.get("status") == "failed"
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, f"project={project_id}, qa={qa_after.get('summary', {}).get('status')}, sign={signed.get('summary', {}).get('status')}, polluted_zip={polluted_zip_check.get('status')}"
     except Exception as exc:
         return False, str(exc)
     finally:

@@ -512,8 +512,14 @@ class ProjectStore:
         shutil.rmtree(project_dir)
 
     def export_project(self, project_id: str) -> dict[str, Any]:
+        export = self.project_export_snapshot(project_id)
+        write_json(self.project_dir(project_id) / "export.json", export)
+        self.append_event(project_id, "project_exported", {"version_count": len(export.get("versions", []))})
+        return export
+
+    def project_export_snapshot(self, project_id: str) -> dict[str, Any]:
         document = self.get_project(project_id)
-        export = {
+        return {
             "project": document.state.to_dict(),
             "versions": [self._export_version(version) for version in document.versions],
             "selected_version": _version_or_none(document, document.state.selected_version_id),
@@ -524,11 +530,10 @@ class ProjectStore:
             "review_tasks": _collect_project_review_tasks(self.project_dir(project_id)),
             "review_sprints": _collect_project_review_sprints(self.project_dir(project_id)),
             "review_metrics_summary": _collect_project_review_metrics_summary(self.project_dir(project_id)),
+            "delivery_qa_summary": _collect_project_delivery_qa_summary(self.project_dir(project_id)),
+            "delivery_signoff_summary": _collect_project_delivery_signoff_summary(self.project_dir(project_id)),
             "generated_at": now_iso(),
         }
-        write_json(self.project_dir(project_id) / "export.json", export)
-        self.append_event(project_id, "project_exported", {"version_count": len(document.versions)})
-        return export
 
     def diff_versions(self, project_id: str, left_id: str, right_id: str) -> dict[str, Any]:
         document = self.get_project(project_id)
@@ -582,6 +587,63 @@ class ProjectStore:
             except json.JSONDecodeError:
                 continue
         return events
+
+    def delivery_qa_path(self, project_id: str) -> Path:
+        return self.project_dir(project_id) / "delivery-qa.json"
+
+    def read_delivery_qa(self, project_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.delivery_qa_path(project_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise FileNotFoundError(path)
+        data = read_json(path)
+        return _sanitize_asset_metadata(data if isinstance(data, dict) else {})
+
+    def write_delivery_qa(self, project_id: str, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        self.get_project(project_id)
+        clean = _sanitize_asset_metadata(report if isinstance(report, dict) else {})
+        if now:
+            clean["created_at"] = clean.get("created_at") or now
+        write_json(self.delivery_qa_path(project_id), clean)
+        return clean
+
+    def delivery_signoff_path(self, project_id: str) -> Path:
+        return self.project_dir(project_id) / "delivery-signoff.json"
+
+    def delivery_signoff_history_path(self, project_id: str) -> Path:
+        return self.project_dir(project_id) / "delivery-signoff-history.jsonl"
+
+    def read_delivery_signoff(self, project_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.delivery_signoff_path(project_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise FileNotFoundError(path)
+        data = read_json(path)
+        return _sanitize_asset_metadata(data if isinstance(data, dict) else {})
+
+    def write_delivery_signoff(self, project_id: str, record: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        self.get_project(project_id)
+        clean = _sanitize_asset_metadata(record if isinstance(record, dict) else {})
+        if now:
+            clean["signed_at"] = clean.get("signed_at") or now
+        write_json(self.delivery_signoff_path(project_id), clean)
+        return clean
+
+    def reset_delivery_signoff(self, project_id: str, history_event: dict[str, Any]) -> dict[str, Any]:
+        existing = self.read_delivery_signoff(project_id, default={})
+        if not existing:
+            raise FileNotFoundError("Delivery signoff does not exist.")
+        event = _sanitize_asset_metadata(history_event if isinstance(history_event, dict) else {})
+        history_path = self.delivery_signoff_history_path(project_id)
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        with history_path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+        signoff_path = self.delivery_signoff_path(project_id)
+        if signoff_path.exists():
+            signoff_path.unlink()
+        return event
 
     def project_dir(self, project_id: str) -> Path:
         return self.root / _validate_project_id(project_id)
@@ -1163,6 +1225,24 @@ def _collect_project_review_metrics_summary(project_dir: Path) -> dict[str, Any]
         return _sanitize_asset_metadata(project_review_metrics_summary(store.read_project_metrics(default={})))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
+
+
+def _collect_project_delivery_qa_summary(project_dir: Path) -> dict[str, Any]:
+    from song_agent.delivery_qa import delivery_qa_summary
+
+    try:
+        return _sanitize_asset_metadata(delivery_qa_summary(read_json(project_dir / "delivery-qa.json")))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _collect_project_delivery_signoff_summary(project_dir: Path) -> dict[str, Any]:
+    from song_agent.delivery_qa import delivery_signoff_summary
+
+    try:
+        return _sanitize_asset_metadata(delivery_signoff_summary(read_json(project_dir / "delivery-signoff.json")))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {"status": "not_signed"}
 
 
 def _sanitize_asset_metadata(value: Any) -> Any:

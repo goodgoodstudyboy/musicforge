@@ -416,6 +416,17 @@ explicit selected version. The project `latest_version_id` is not enough to
 prove delivery readiness, so resolved tasks without applied/selected/final
 version evidence still fail normal close.
 
+v3.6.0 adds a project-level Delivery QA and Handoff layer. Delivery QA reads the
+current project final version, Final Export manifest, actual final-export files,
+the built ZIP, Review Sprint closeout/signoff summaries, and quality gate
+metadata, then writes `delivery-qa.json` with blocking checks, warnings,
+artifact hashes, ZIP integrity, and handoff readiness. Delivery Signoff writes a
+separate `delivery-signoff.json`; failed QA cannot be signed normally, force
+sign requires an override reason, duplicate signing is rejected until reset, and
+reset writes `delivery-signoff-history.jsonl`. Delivery QA never rebuilds export
+artifacts, calls providers, changes project final version, uploads files, or
+auto-signs anything.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

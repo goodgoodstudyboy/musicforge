@@ -329,6 +329,50 @@ def test_final_export_review_closeout_uses_latest_sprint_from_metrics_summary(tm
     assert closeout["forced_close_count"] == 1
 
 
+def test_final_export_manifest_includes_delivery_summaries(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+
+    manifest = build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-15T00:00:00Z",
+        project_export={
+            "project": {"project_id": "export-project"},
+            "delivery_qa_summary": {
+                "status": "passed",
+                "readiness": "ready_to_handoff",
+                "handoff_allowed": True,
+                "artifact_count": 9,
+                "blocker_count": 0,
+                "warning_count": 1,
+                "final_version_id": "v001",
+                "zip_sha256": "abc123",
+                "zip_matches_manifest": True,
+            },
+            "delivery_signoff_summary": {
+                "status": "signed",
+                "signed_at": "2026-05-15T00:00:00+00:00",
+                "signed_by": "local-user",
+                "forced": False,
+                "delivery_qa_status": "passed",
+                "final_version_id": "v001",
+                "zip_sha256": "abc123",
+            },
+        },
+    )
+
+    assert manifest["delivery_qa"]["status"] == "passed"
+    assert manifest["delivery_qa"]["handoff_allowed"] is True
+    assert manifest["delivery_qa"]["zip_sha256"] == "abc123"
+    assert manifest["delivery_signoff"]["status"] == "signed"
+    assert manifest["delivery_signoff"]["final_version_id"] == "v001"
+
+
 def test_final_export_redacts_polluted_asset_ref_metadata(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, _plan = make_run(tmp_path)

@@ -201,6 +201,50 @@ def test_export_project_includes_review_sprint_closeout_and_signoff(tmp_path: Pa
     assert exported["review_sprints"][0]["signoff_summary"]["selected_version_id"] == "v001"
 
 
+def test_export_project_includes_delivery_qa_and_signoff_summaries(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / ".musicforge" / "projects")
+    document = store.create_project("Delivery Export")
+    store.write_delivery_qa(
+        document.state.project_id,
+        {
+            "schema_version": 1,
+            "project_id": document.state.project_id,
+            "created_at": "2026-05-15T00:00:00+00:00",
+            "source_hash": "hash",
+            "status": "passed",
+            "readiness": "ready_to_handoff",
+            "handoff_allowed": True,
+            "stale": False,
+            "blockers": [],
+            "warnings": ["warn"],
+            "final_version": {"version_id": "v001"},
+            "zip": {"sha256": "abc123", "matches_manifest": True},
+            "artifact_integrity": {"checked_count": 4, "missing_count": 0},
+        },
+    )
+    store.write_delivery_signoff(
+        document.state.project_id,
+        {
+            "schema_version": 1,
+            "project_id": document.state.project_id,
+            "signed_at": "2026-05-15T00:01:00+00:00",
+            "signed_by": "local-user",
+            "decision": "approved_for_handoff",
+            "force": False,
+            "delivery_qa_status": "passed",
+            "final_version_id": "v001",
+            "zip_sha256": "abc123",
+        },
+    )
+
+    exported = store.export_project(document.state.project_id)
+
+    assert exported["delivery_qa_summary"]["status"] == "passed"
+    assert exported["delivery_qa_summary"]["final_version_id"] == "v001"
+    assert exported["delivery_signoff_summary"]["status"] == "signed"
+    assert exported["delivery_signoff_summary"]["zip_sha256"] == "abc123"
+
+
 def test_add_version_rejects_duplicate_job(tmp_path: Path) -> None:
     store = ProjectStore(tmp_path / "projects")
     document = store.create_project("Duplicate Song")

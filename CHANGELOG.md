@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.6.0 - 2026-05-15
+
+### Added
+- Project-level Delivery QA Reports that verify final version selection, Final Export manifest consistency, required artifact presence, artifact path safety, ZIP integrity, review sprint closeout/signoff alignment, and delivery payload redaction.
+- Delivery Signoff records with normal/force signoff, required override reasons, duplicate-sign protection, reset history, and project events.
+- Delivery QA and Signoff APIs plus Studio Final Export Delivery QA controls for refresh, sign, force sign, reset, checks, artifacts, and ZIP state.
+- Project Export and Final Export manifest summaries for delivery QA and delivery signoff.
+- release-check v3.6 smoke covering failed QA before ZIP, successful QA/signoff, duplicate signoff rejection, reset history, stale ZIP detection, polluted ZIP failure, export summaries, final export summaries, and redaction.
+
+### Scope
+- Delivery QA is a local verification and audit layer only. It does not rebuild Final Export, rebuild ZIPs, call providers, apply candidates, change project final version, or upload anything.
+
+### Verified
+- `python -m pytest tests\test_delivery_qa.py tests\test_server_delivery_qa.py tests\test_final_export.py tests\test_projects.py tests\test_webui.py tests\test_server_auth.py tests\test_release_check.py -q`
+
 ## v3.5.1 - 2026-05-15
 
 ### Fixed
