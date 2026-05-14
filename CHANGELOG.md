@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.4.0 - 2026-05-14
+
+### Added
+- Provider Judge reports for ReviewTask candidates with strict JSON validation, source hashing, stale detection, per-candidate fit/precision/musicality/novelty/risk/confidence scores, and sanitized provider usage.
+- ReviewTask Judge Report APIs plus Sprint Judge Summary get/refresh APIs.
+- Decision Reports, manual apply metadata, Project Compare, Project Export, Final Export, and provider usage now include compact judge summaries.
+- Review Sprint Action Queues can include `refresh_judge_report` provider-safe items; they remain skipped unless `include_provider=true` is supplied.
+- Sprint Metrics and Project Review Metrics now include judge task counts, stale judge counts, judge tokens, local/judge disagreement, high-risk candidate counts, and judge apply match rate.
+- Studio Review Workbench and Review Sprints now expose Judge Report, Judge Summary, provider-safe queue rows, and advisory/manual-apply wording.
+- release-check now includes a v3.4 smoke covering task judge, sprint judge, queue default skip/provider opt-in, manual apply provenance, metrics, export/final export, usage, and redaction.
+
+### Scope
+- Provider Judge is advisory only. It does not generate candidates, apply candidates, resolve ReviewTasks, close ReviewSprints, or override manual decisions.
+
+### Verified
+- `python -m pytest tests\test_review_judge.py tests\test_server_review_judge.py tests\test_review_sprint_actions.py tests\test_server_review_sprint_actions.py tests\test_review_sprint_metrics.py tests\test_server_review_sprint_metrics.py tests\test_webui.py tests\test_release_check.py -q`
+
 ## v3.3.1 - 2026-05-14
 
 ### Fixed

@@ -500,6 +500,16 @@ def test_webui_contains_interactive_editor_controls():
     assert "Add to Sprint" in html
     assert "Decision Report" in html
     assert "Refresh Decision Report" in html
+    assert "Judge Report" in html
+    assert "Refresh Judge Report" in html
+    assert "Judge reports are advisory. Applying a candidate remains manual." in html
+    assert "Candidate</th><th>Overall</th><th>Fit</th><th>Precision</th><th>Musicality</th><th>Novelty</th><th>Risk</th><th>Confidence" in html
+    assert "Judge Summary" in html
+    assert "Refresh Sprint Judge" in html
+    assert "Judged Tasks" in html
+    assert "Judge Tokens" in html
+    assert "refresh_judge_report" in html
+    assert "provider-review-judge" in html
     assert "provider-review-candidates" in html
     assert "Refresh Review Tasks" in html
     assert "Resolve Task" in html
@@ -519,6 +529,9 @@ def test_webui_contains_interactive_editor_controls():
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintRecommendations)}/recommendations/refresh" in html
     assert "/review-sprints/${encodeURIComponent(sprint.sprint_id)}/metrics" in html
     assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintMetrics)}/metrics/refresh" in html
+    assert "/review-tasks/${encodeURIComponent(button.dataset.reviewJudgeRefresh)}/judge-report/refresh" in html
+    assert "/review-sprints/${encodeURIComponent(sprint.sprint_id)}/judge-summary" in html
+    assert "/review-sprints/${encodeURIComponent(button.dataset.reviewSprintJudge)}/judge-summary/refresh" in html
     assert "/review-metrics" in html
     assert "/recommendations/${encodeURIComponent(button.dataset.taskId)}/context-pack" in html
     assert "/provider-candidates" in html

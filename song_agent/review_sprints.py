@@ -339,6 +339,31 @@ class ReviewSprintStore:
             )
         return clean_report
 
+    def judge_summary_path(self, sprint_id: str) -> Path:
+        return self.sprint_dir(sprint_id) / "judge-summary.json"
+
+    def read_judge_summary(self, sprint_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.judge_summary_path(sprint_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise FileNotFoundError(sprint_id)
+        data = read_json(path)
+        return sanitize_metadata(data if isinstance(data, dict) else {})
+
+    def write_judge_summary(self, sprint: ReviewSprint, summary: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        now = now or now_iso()
+        clean_summary = sanitize_metadata(summary if isinstance(summary, dict) else {})
+        with self.lock:
+            write_json(self.judge_summary_path(sprint.sprint_id), clean_summary)
+            _append_event(
+                self.sprint_dir(sprint.sprint_id),
+                "review_sprint_judge_summary_refreshed",
+                {"judged_task_count": clean_summary.get("judged_task_count"), "stale_judge_count": clean_summary.get("stale_judge_count")},
+                now,
+            )
+        return clean_summary
+
     def read_events(self, sprint_id: str) -> list[dict[str, Any]]:
         path = self.sprint_dir(sprint_id) / "events.jsonl"
         if not path.exists():
@@ -402,10 +427,12 @@ def review_sprint_export_summary(
     conflict_report: dict[str, Any] | None = None,
     recommendation_report: dict[str, Any] | None = None,
     action_queue_summary: dict[str, Any] | None = None,
+    judge_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     summary = summary if isinstance(summary, dict) else {}
     conflict_report = conflict_report if isinstance(conflict_report, dict) else {}
     action_queue_summary = action_queue_summary if isinstance(action_queue_summary, dict) else {}
+    judge_summary = judge_summary if isinstance(judge_summary, dict) else {}
     recommendation_summary = _recommendation_summary_for_export(recommendation_report)
     counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else sprint.counts
     return sanitize_metadata(
@@ -419,6 +446,7 @@ def review_sprint_export_summary(
             "conflict_count": len(conflict_report.get("conflicts", [])) if isinstance(conflict_report.get("conflicts"), list) else int(counts.get("conflict_count") or 0),
             "recommendation_summary": recommendation_summary,
             "action_queue_summary": action_queue_summary,
+            "judge_summary": _judge_summary_for_export(judge_summary),
             "task_ids": [str(ref.get("task_id")) for ref in sorted(sprint.task_refs, key=lambda ref: int(ref.get("order") or 0)) if ref.get("included", True)],
         }
     )
@@ -430,6 +458,7 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
     counts = [sprint.get("summary", {}).get("counts", {}) for sprint in sprints if isinstance(sprint.get("summary"), dict)]
     recommendation_summaries = [sprint.get("recommendation_summary", {}) for sprint in sprints if isinstance(sprint.get("recommendation_summary"), dict)]
     action_queue_summaries = [sprint.get("action_queue_summary", {}) for sprint in sprints if isinstance(sprint.get("action_queue_summary"), dict)]
+    judge_summaries = [sprint.get("judge_summary", {}) for sprint in sprints if isinstance(sprint.get("judge_summary"), dict)]
     return sanitize_metadata(
         {
             "latest_sprint_id": latest.get("sprint_id"),
@@ -444,6 +473,9 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
             "completed_action_count": sum(int(item.get("completed_action_count") or 0) for item in action_queue_summaries),
             "failed_action_count": sum(int(item.get("failed_action_count") or 0) for item in action_queue_summaries),
             "manual_required_action_count": sum(int(item.get("manual_required_count") or 0) for item in action_queue_summaries),
+            "judged_task_count": sum(int(item.get("judged_task_count") or 0) for item in judge_summaries),
+            "stale_judge_count": sum(int(item.get("stale_judge_count") or 0) for item in judge_summaries),
+            "judge_provider_tokens": sum(int(item.get("judge_provider_tokens") or 0) for item in judge_summaries),
         }
     )
 
@@ -469,6 +501,24 @@ def _recommendation_summary_for_export(report: dict[str, Any] | None) -> dict[st
                 "action": top.get("action"),
                 "score": top.get("score"),
             },
+        }
+    )
+
+
+def _judge_summary_for_export(summary: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(summary, dict) or not summary:
+        return {}
+    return sanitize_metadata(
+        {
+            "schema_version": summary.get("schema_version"),
+            "sprint_id": summary.get("sprint_id"),
+            "created_at": summary.get("created_at"),
+            "judged_task_count": summary.get("judged_task_count", 0),
+            "stale_judge_count": summary.get("stale_judge_count", 0),
+            "recommended_candidate_count": summary.get("recommended_candidate_count", 0),
+            "judge_provider_tokens": summary.get("judge_provider_tokens", 0),
+            "high_risk_candidate_count": summary.get("high_risk_candidate_count", 0),
+            "risk_flags": summary.get("risk_flags") if isinstance(summary.get("risk_flags"), list) else [],
         }
     )
 

@@ -161,6 +161,74 @@ class MockProviderClient:
             ],
         }
 
+    def generate_review_judge_json(
+        self,
+        parent_plan: SongPlan,
+        judge_payload: dict[str, Any],
+        config: Any,
+        prompt: str = "",
+    ) -> dict[str, Any]:
+        if self.mode == "request_error":
+            raise ProviderRequestError("Mock provider request failed.")
+        candidates = [item for item in judge_payload.get("candidates", []) if isinstance(item, dict)]
+        if self.mode == "invalid_schema":
+            return {
+                "recommended_candidate_id": "../../provider.json",
+                "candidate_scores": [],
+                "comparison_summary": {},
+                "manual_review_required": True,
+            }
+        if not candidates:
+            return {
+                "recommended_candidate_id": "",
+                "candidate_scores": [],
+                "comparison_summary": {},
+                "manual_review_required": True,
+                "warnings": ["no ready candidates"],
+            }
+        scores = []
+        for index, candidate in enumerate(candidates):
+            candidate_id = str(candidate.get("candidate_id") or "")
+            local_scores = candidate.get("scores") if isinstance(candidate.get("scores"), dict) else {}
+            combined = int(local_scores.get("combined") or max(60, 86 - index * 6))
+            provider_bonus = 3 if candidate.get("source") == "provider" else 0
+            overall = max(0, min(100, combined + provider_bonus - index))
+            risk = max(5, min(95, int(local_scores.get("risk") or (18 + index * 7))))
+            scores.append(
+                {
+                    "candidate_id": candidate_id,
+                    "overall": overall,
+                    "review_fit": max(0, min(100, overall + 2)),
+                    "target_precision": max(0, min(100, overall - 1)),
+                    "musicality": max(0, min(100, overall)),
+                    "novelty": max(0, min(100, 58 + index * 6)),
+                    "risk": risk,
+                    "confidence": round(max(0.35, min(0.92, 0.86 - index * 0.05)), 2),
+                    "reason": f"Mock judge finds {candidate_id} balances the review target with manageable risk.",
+                    "risks": ["higher_arrangement_risk"] if risk >= 70 else [],
+                }
+            )
+        recommended = sorted(scores, key=lambda item: (-int(item["overall"]), int(item["risk"]), str(item["candidate_id"])))[0]
+        return {
+            "data": {
+                "recommended_candidate_id": recommended["candidate_id"],
+                "candidate_scores": scores,
+                "comparison_summary": {
+                    "best_candidate_id": recommended["candidate_id"],
+                    "reason": "Best balance of review fit, target precision, and manageable risk.",
+                    "tradeoffs": [],
+                },
+                "manual_review_required": True,
+                "warnings": [],
+            },
+            "usage": {
+                "prompt_tokens": 88 + 12 * len(candidates),
+                "completion_tokens": 46 + 10 * len(candidates),
+                "total_tokens": 134 + 22 * len(candidates),
+            },
+            "request_id": "mock-review-judge",
+        }
+
     def generate_node_json(
         self,
         node_name: str,

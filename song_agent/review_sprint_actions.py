@@ -28,6 +28,7 @@ ACTION_TYPES = {
     "save_recommended_context_pack",
     "generate_local_candidates",
     "generate_provider_candidates",
+    "refresh_judge_report",
     "refresh_decision_report",
     "inspect_conflict",
     "manual_apply_candidate",
@@ -300,6 +301,10 @@ def build_action_queue_from_recommendation_report(
     for action in _recommendation_actions(recommendation_report):
         queue_action = RECOMMENDATION_ACTION_MAP.get(str(action.get("action") or ""), "no_action")
         items.append(_queue_item_from_recommendation(action, queue_action, report_hash, report_created_at, sprint))
+        if clean_settings.get("include_judge_actions", True) and queue_action in {"manual_apply_candidate", "refresh_decision_report"}:
+            candidate_summary = action.get("candidate_summary") if isinstance(action.get("candidate_summary"), dict) else {}
+            if int(candidate_summary.get("ready_candidate_count") or 0) > 0:
+                items.append(_queue_item_from_recommendation(action, "refresh_judge_report", report_hash, report_created_at, sprint))
         preview = action.get("context_pack_preview") if isinstance(action.get("context_pack_preview"), dict) else {}
         if clean_settings.get("run_context_pack_actions", True) and _context_ref_count(preview) > 0:
             items.append(_context_pack_queue_item(action, report_hash, report_created_at, preview))
@@ -394,7 +399,7 @@ def validate_action_item_id(item_id: str) -> str:
 
 
 def action_safety(action: str) -> str:
-    if action in {"generate_provider_candidates"}:
+    if action in {"generate_provider_candidates", "refresh_judge_report"}:
         return "provider_safe"
     if action in {"manual_apply_candidate", "manual_resolve_task", "manual_add_follow_up"}:
         return "manual_required"
@@ -481,6 +486,9 @@ def _input_for_action(queue_action: str, action: dict[str, Any], sprint: ReviewS
         count = int((sprint.settings or {}).get("provider_candidate_count") or 2) if sprint is not None else 2
         template_id = str((sprint.settings or {}).get("provider_template_id") or "provider-review-candidates") if sprint is not None else "provider-review-candidates"
         return {"candidate_count": max(1, min(5, count)), "template_id": template_id, "render_midi": True, "skip_existing_provider": True, "include_local_context": True}
+    if queue_action == "refresh_judge_report":
+        template_id = str((sprint.settings or {}).get("judge_template_id") or "provider-review-judge") if sprint is not None else "provider-review-judge"
+        return {"template_id": template_id, "note": "review sprint action queue"}
     if queue_action == "refresh_decision_report":
         return {"note": "review sprint action queue"}
     if queue_action == "manual_apply_candidate":
@@ -514,6 +522,7 @@ def _queue_settings(data: dict[str, Any]) -> dict[str, Any]:
             "run_provider_actions": bool(data.get("run_provider_actions", False)),
             "run_context_pack_actions": bool(data.get("run_context_pack_actions", True)),
             "run_local_actions": bool(data.get("run_local_actions", True)),
+            "include_judge_actions": bool(data.get("include_judge_actions", True)),
             "max_provider_actions": _clamp_int(data.get("max_provider_actions"), 0, 20, 3),
             "max_concurrency": 1,
         }
@@ -554,7 +563,8 @@ def _item_sort_key(item: SprintActionItem) -> tuple[int, int, int, str]:
         "save_recommended_context_pack": 2,
         "generate_local_candidates": 3,
         "generate_provider_candidates": 4,
-        "refresh_decision_report": 5,
+        "refresh_judge_report": 5,
+        "refresh_decision_report": 6,
     }.get(item.action, 9)
     return (action_order, item.rank or 9999, -int(item.priority or 0), item.task_id or item.action)
 

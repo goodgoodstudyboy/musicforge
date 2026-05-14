@@ -169,6 +169,35 @@ class OpenAICompatibleClient:
             request_id=_request_id(response),
         )
 
+    def generate_review_judge_json(
+        self,
+        parent_plan: SongPlan,
+        judge_payload: dict[str, Any],
+        config: ProviderConfig,
+        prompt: str,
+    ) -> ProviderEditResponse:
+        config.validate_ready_for_provider()
+        response = self._request(
+            config,
+            [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps(judge_payload, ensure_ascii=False)},
+            ],
+            max_tokens=min(config.max_output_tokens, 5000),
+        )
+        content = _extract_content(response)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ProviderResponseError("Provider judge response content was not valid JSON.") from exc
+        if not isinstance(data, dict):
+            raise ProviderResponseError("Provider judge response content must be a JSON object.")
+        return ProviderEditResponse(
+            data=data,
+            usage=_usage_dict(response.get("usage")),
+            request_id=_request_id(response),
+        )
+
     def _request(
         self,
         config: ProviderConfig,

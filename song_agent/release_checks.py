@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -189,6 +190,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.1 review sprint recommendations smoke", *_v31_review_sprint_recommendations_smoke(root))
     report.add("v3.2 review sprint action queue smoke", *_v32_review_sprint_action_queue_smoke(root))
     report.add("v3.3 review sprint dashboard metrics smoke", *_v33_review_sprint_dashboard_metrics_smoke(root))
+    report.add("v3.4 provider review judge smoke", *_v34_provider_review_judge_smoke(root))
     return report
 
 
@@ -3471,6 +3473,154 @@ def _v33_review_sprint_dashboard_metrics_smoke(root: Path) -> tuple[bool, str]:
                 server.shutdown()
                 server.server_close()
             os.chdir(old_cwd)
+
+
+def _v34_provider_review_judge_smoke(root: Path) -> tuple[bool, str]:
+    base = root / ".release-check" / "v34-provider-review-judge"
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        provider_status, provider = _release_http_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-review", "api_key": "sk-secret-value"})
+        created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": "Release v3.4 Judge Smoke"})
+        project_id = created["project"]["project_id"]
+        version_status, version = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions",
+            {"name": "Parent", "request": {"title": "Release v3.4 Judge Smoke", "language": "English", "style": "synth pop", "theme": "provider judge", "tempo_bpm": 118, "key": "C"}},
+        )
+        parent_job = _release_wait_http_job(server, version["job"]["job_id"])
+        state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/editor-state")
+        note_id = state["tracks"][0]["notes"][0]["note_id"]
+        preview_status, preview_data = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/editor-preview",
+            {"patch": {"schema_version": 1, "base_plan_hash": state["base_plan_hash"], "label": "v3.4 judge patch", "operations": [{"op": "update_note", "track_id": "track-001", "note_id": note_id, "patch": {"velocity": 94}}]}, "render_midi": True},
+        )
+        preview_id = preview_data["preview"]["preview_id"]
+        audition_status, audition = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions", {"source": "preview", "range": {"mode": "custom", "start_beat": 16.0, "end_beat": 48.0}, "track_mode": "solo", "track_ids": ["track-003"]})
+        audition_id = audition["audition"]["audition_id"]
+        review_status, _review = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review", {"rating": 4, "status": "needs_fix", "notes": r"judge bass needs lift api_key=sk-secret-value C:\Users\demo\song.wav", "tags": ["judge"]})
+        marker_status, _marker = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/markers", {"beat": 18.0, "kind": "fix", "label": "judge target"})
+        task_status, task_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/editor-previews/{preview_id}/auditions/{audition_id}/review-task", {})
+        task_id = task_data["task"]["task_id"]
+        local_status, local = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates", {"strategies": ["balanced", "bold"], "render_midi": True})
+        provider_candidates_status, provider_candidates = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/provider-candidates", {"candidate_count": 2, "template_id": "provider-review-candidates", "render_midi": True})
+        ready_ids = [candidate.get("candidate_id") for candidate in provider_candidates.get("candidates", []) + local.get("candidates", []) if candidate.get("status") == "ready"]
+        judge_get_status, judge_get = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{task_id}/judge-report")
+        judge_status, judge = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/judge-report/refresh", {"template_id": "provider-review-judge", "note": r"release judge C:\Users\demo"})
+        judge_id = judge.get("judge_report", {}).get("recommended_candidate_id")
+        decision_status, decision = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/decision-report/refresh", {})
+        sprint_status, sprint_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints", {"name": "Release v3.4 Judge Sprint", "task_ids": [task_id], "settings": {"local_candidate_strategies": ["balanced"], "provider_candidate_count": 2}})
+        sprint_id = sprint_data["sprint"]["sprint_id"]
+        sprint_judge_status, sprint_judge = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/judge-summary/refresh", {"skip_existing_current": True, "max_tasks": 5})
+        queue_status, queue_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
+        queue_id = queue_data["queue"]["queue_id"]
+        judge_item_id = _release_item_id(queue_data["queue"], "refresh_judge_report")
+        queue_default_status, queue_default = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{queue_id}/run", {"item_ids": [judge_item_id]})
+        queue_run_status, queue_run = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{queue_id}/run", {"item_ids": [judge_item_id], "include_provider": True})
+        apply_status, applied = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates/{judge_id}/apply", {"version_name": "Judge Candidate Child"})
+        edit_job = _release_wait_http_job(server, applied["job"]["job_id"])
+        child_version = applied["version"]["version_id"]
+        metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        compare_status, compare = _release_http_json(server, "GET", f"/api/projects/{project_id}/compare?left=v001&right={child_version}")
+        metrics_status, metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/metrics/refresh")
+        project_metrics_status, project_metrics = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-metrics/refresh")
+        export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_status, _final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
+        final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
+        usage_status, usage = _release_http_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
+        serialized = json.dumps(
+            {
+                "judge": judge,
+                "sprint_judge": sprint_judge,
+                "queue": queue_run,
+                "metadata": metadata,
+                "compare": compare,
+                "metrics": metrics,
+                "project_metrics": project_metrics,
+                "export": project_export,
+                "final": final_export,
+                "usage": usage,
+            },
+            ensure_ascii=False,
+        )
+        ok = (
+            provider_status == 200
+            and provider.get("configured") is True
+            and created_status == 201
+            and version_status == 202
+            and parent_job["status"] == "completed"
+            and state_status == 200
+            and preview_status == 201
+            and audition_status == 201
+            and review_status == 200
+            and marker_status == 201
+            and task_status == 201
+            and local_status == 201
+            and provider_candidates_status == 201
+            and len(ready_ids) >= 2
+            and judge_get_status == 200
+            and judge_get.get("summary", {}).get("status") == "not_started"
+            and judge_status == 200
+            and judge_id in ready_ids
+            and len(judge.get("judge_report", {}).get("candidate_scores", [])) >= 2
+            and decision_status == 200
+            and decision.get("decision_report", {}).get("judge_summary", {}).get("recommended_candidate_id") == judge_id
+            and decision.get("decision_report", {}).get("requires_manual_apply") is True
+            and sprint_status == 201
+            and sprint_judge_status == 200
+            and sprint_judge.get("judge_summary", {}).get("judged_task_count", 0) >= 1
+            and queue_status == 201
+            and _release_item(queue_data["queue"], judge_item_id).get("safety") == "provider_safe"
+            and queue_default_status == 200
+            and queue_default.get("results", [{}])[0].get("status") == "skipped"
+            and queue_default.get("queue", {}).get("status") == "pending"
+            and queue_run_status == 200
+            and queue_run.get("results", [{}])[0].get("status") == "completed"
+            and apply_status == 202
+            and edit_job["status"] == "completed"
+            and metadata.get("review_judge", {}).get("judge_recommended_candidate_id") == judge_id
+            and metadata.get("review_judge", {}).get("applied_matches_judge") is True
+            and compare_status == 200
+            and compare.get("right", {}).get("edit", {}).get("review_judge", {}).get("applied_matches_judge") is True
+            and metrics_status == 200
+            and metrics.get("metrics_report", {}).get("judge_metrics", {}).get("judged_task_count", 0) >= 1
+            and metrics.get("metrics_report", {}).get("judge_metrics", {}).get("judge_provider_tokens", 0) >= 1
+            and project_metrics_status == 200
+            and project_metrics.get("summary", {}).get("judge_summary", {}).get("judged_task_count", 0) >= 1
+            and export_status == 200
+            and project_export.get("review_tasks", [{}])[0].get("judge_summary", {}).get("recommended_candidate_id") == judge_id
+            and project_export.get("review_sprints", [{}])[0].get("judge_summary", {}).get("judged_task_count", 0) >= 1
+            and final_status == 200
+            and final_export_status == 200
+            and final_export.get("final_export", {}).get("review_judge", {}).get("applied_matches_judge") is True
+            and usage_status == 200
+            and any(record.get("operation") == "provider_review_judge" for record in usage.get("records", []))
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, f"task={task_id}, sprint={sprint_id}, judge={judge_id}, version={child_version}, tokens={metrics.get('metrics_report', {}).get('judge_metrics', {}).get('judge_provider_tokens')}"
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
 
 
 def _release_http_json(server: Any, method: str, path: str, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:

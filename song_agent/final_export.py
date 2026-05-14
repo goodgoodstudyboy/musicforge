@@ -133,6 +133,7 @@ def build_final_export_bundle(
     review_sprint_recommendations = _final_review_sprint_recommendations(project_export)
     review_sprint_action_queues = _final_review_sprint_action_queues(project_export)
     review_metrics = _final_review_metrics(project_export)
+    review_judge = _final_review_judge(project_export, edit_metadata)
 
     manifest = {
         "project_id": project.project_id,
@@ -151,6 +152,7 @@ def build_final_export_bundle(
         "review_sprint_recommendations": review_sprint_recommendations,
         "review_sprint_action_queues": review_sprint_action_queues,
         "review_metrics": review_metrics,
+        "review_judge": review_judge,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -482,6 +484,7 @@ def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
         "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
         "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
+        "review_judge": metadata.get("review_judge") if isinstance(metadata.get("review_judge"), dict) else {},
         "summary": metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {},
         "structure": metadata.get("structure") if isinstance(metadata.get("structure"), dict) else {},
         "warnings": metadata.get("warnings") or [],
@@ -570,6 +573,27 @@ def _final_review_metrics(project_export: dict[str, Any] | None) -> dict[str, An
         "total_candidate_count": project_summary.get("total_candidate_count"),
         "total_applied_candidate_count": project_summary.get("total_applied_candidate_count"),
         "warnings": latest.get("warnings") if isinstance(latest.get("warnings"), list) else [],
+    }
+    return _drop_empty(_sanitize_asset_metadata(summary))
+
+
+def _final_review_judge(project_export: dict[str, Any] | None, edit_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    edit_judge = edit_metadata.get("review_judge") if isinstance(edit_metadata, dict) and isinstance(edit_metadata.get("review_judge"), dict) else {}
+    sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)] if isinstance(project_export, dict) else []
+    judge_summaries = [sprint.get("judge_summary", {}) for sprint in sprints if isinstance(sprint.get("judge_summary"), dict)]
+    latest = judge_summaries[0] if judge_summaries else {}
+    summary = {
+        "latest_sprint_id": latest.get("sprint_id") or (sprints[0].get("sprint_id") if sprints else None),
+        "judged_task_count": sum(int(item.get("judged_task_count") or 0) for item in judge_summaries),
+        "stale_judge_count": sum(int(item.get("stale_judge_count") or 0) for item in judge_summaries),
+        "judge_provider_tokens": sum(int(item.get("judge_provider_tokens") or 0) for item in judge_summaries),
+        "high_risk_candidate_count": sum(int(item.get("high_risk_candidate_count") or 0) for item in judge_summaries),
+        "applied_matches_judge": edit_judge.get("applied_matches_judge"),
+        "manual_review_required": True if judge_summaries or edit_judge else None,
+        "judge_recommended_candidate_id": edit_judge.get("judge_recommended_candidate_id"),
+        "top_overall": edit_judge.get("top_overall"),
+        "confidence": edit_judge.get("confidence"),
+        "judge_stale_at_apply": edit_judge.get("judge_stale_at_apply"),
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
 

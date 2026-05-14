@@ -4640,7 +4640,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         tasks = await Promise.all((data.tasks || []).map(async (task) => {
           try {
             const detail = await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(task.task_id)}`);
-            return { ...(detail.task || task), candidates: detail.candidates || [], events: detail.events || [] };
+            return { ...(detail.task || task), candidates: detail.candidates || [], decision_report: detail.decision_report || {}, judge_report: detail.judge_report || {}, judge_summary: detail.judge_summary || {}, events: detail.events || [] };
           } catch (_err) {
             return task;
           }
@@ -4706,6 +4706,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ note: "Refreshed in Review Workbench" }),
+          });
+          await renderProjectReviewWorkbench(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-judge-refresh]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-tasks/${encodeURIComponent(button.dataset.reviewJudgeRefresh)}/judge-report/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template_id: "provider-review-judge", note: "Refreshed in Review Workbench" }),
           });
           await renderProjectReviewWorkbench(project, versions, target);
         });
@@ -4792,6 +4802,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const source = task.source || {};
       const candidates = task.candidates || [];
       const decision = task.decision_report || {};
+      const judge = task.judge_report || {};
       const providerSummary = task.provider_summary || {};
       return `
         <div class="review-task-row">
@@ -4816,9 +4827,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${escapeHtml([snapshot.notes_excerpt || "", `tags: ${(snapshot.tags || []).join(", ") || "-"}`, `source: ${task.preview_id}/${task.audition_id}`, `range: ${((source.audition_range || {}).mode) || "-"}`, `track mode: ${source.track_mode || "-"}`].filter(Boolean).join(" · "))}
           </div>
           ${decision && decision.schema_version ? reviewDecisionReportHtml(decision, providerSummary) : ""}
+          ${reviewJudgeReportHtml(task, judge)}
           <div class="actions">
             <button class="secondary" data-review-task-generate="${escapeHtml(task.task_id)}" type="button" ${["resolved", "archived", "stale", "needs_more_work"].includes(task.status) ? "disabled" : ""}>Generate Local Candidates</button>
             <button class="secondary" data-review-provider="${escapeHtml(task.task_id)}" data-candidate-count="3" type="button" ${["resolved", "archived", "stale", "needs_more_work"].includes(task.status) ? "disabled" : ""}>Generate Provider Candidates</button>
+            <button class="secondary" data-review-judge-refresh="${escapeHtml(task.task_id)}" type="button" ${["resolved", "archived", "stale", "needs_more_work"].includes(task.status) ? "disabled" : ""}>Refresh Judge Report</button>
             <button class="secondary" data-review-report-refresh="${escapeHtml(task.task_id)}" type="button" ${["stale"].includes(task.status) ? "disabled" : ""}>Refresh Decision Report</button>
             <button class="secondary" data-review-task-resolve="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Resolve Task</button>
             <button class="secondary" data-review-task-needs-work="${escapeHtml(task.task_id)}" type="button" ${task.status === "applied" ? "" : "disabled"}>Needs More Work</button>
@@ -4836,19 +4849,61 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const ranking = Array.isArray(report.ranking) ? report.ranking : [];
       const top = ranking[0] || {};
       const source = report.source_breakdown || providerSummary || {};
+      const judge = report.judge_summary || {};
       return `
         <div class="decision-report-panel">
           <h5>Decision Report</h5>
           <div class="summary-grid">
             ${metric("Recommended", report.recommended_candidate_id || "-")}
+            ${metric("Local", report.local_recommended_candidate_id || source.local_candidate_count || 0)}
+            ${metric("Judge", report.judge_recommended_candidate_id || judge.recommended_candidate_id || "-")}
             ${metric("Manual Apply", report.requires_manual_apply ? "required" : "-")}
             ${metric("Provider", source.provider_candidate_count ?? 0)}
-            ${metric("Local", source.local_candidate_count ?? 0)}
             ${metric("Top Score", top.combined ?? "-")}
             ${metric("Risk Flags", (report.risk_flags || []).length)}
           </div>
           ${report.recommendation_reason ? `<p>${escapeHtml(report.recommendation_reason)}</p>` : ""}
           ${ranking.length ? `<pre>${escapeHtml(JSON.stringify(ranking.slice(0, 5), null, 2))}</pre>` : ""}
+        </div>
+      `;
+    }
+
+    function reviewJudgeReportHtml(task, report) {
+      const scores = Array.isArray(report.candidate_scores) ? report.candidate_scores : [];
+      const summary = task.judge_summary || {};
+      const comparison = report.comparison_summary || {};
+      const rows = scores.slice(0, 8).map((score) => `
+        <tr>
+          <td>${escapeHtml(score.candidate_id || "-")}</td>
+          <td>${escapeHtml(score.overall ?? "-")}</td>
+          <td>${escapeHtml(score.review_fit ?? "-")}</td>
+          <td>${escapeHtml(score.target_precision ?? "-")}</td>
+          <td>${escapeHtml(score.musicality ?? "-")}</td>
+          <td>${escapeHtml(score.novelty ?? "-")}</td>
+          <td>${escapeHtml(score.risk ?? "-")}</td>
+          <td>${escapeHtml(score.confidence ?? "-")}</td>
+          <td>${escapeHtml(score.reason || "-")}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="decision-report-panel">
+          <h5>Judge Report</h5>
+          <div class="empty small">Judge reports are advisory. Applying a candidate remains manual.</div>
+          <div class="summary-grid">
+            ${metric("Status", summary.status || report.status || "not_started")}
+            ${metric("Recommended", report.recommended_candidate_id || summary.recommended_candidate_id || "-")}
+            ${metric("Top Overall", summary.top_overall ?? "-")}
+            ${metric("Risk", summary.top_risk ?? "-")}
+            ${metric("Confidence", summary.top_confidence ?? "-")}
+            ${metric("Stale", report.stale ? "yes" : "no")}
+          </div>
+          ${comparison.reason ? `<p>${escapeHtml(comparison.reason)}</p>` : ""}
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Candidate</th><th>Overall</th><th>Fit</th><th>Precision</th><th>Musicality</th><th>Novelty</th><th>Risk</th><th>Confidence</th><th>Reason</th></tr></thead>
+              <tbody>${rows || `<tr><td colspan="9">Refresh Judge Report after candidates are ready.</td></tr>`}</tbody>
+            </table>
+          </div>
         </div>
       `;
     }
@@ -4904,10 +4959,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         sprints = sprintData.sprints || [];
         sprints = await Promise.all(sprints.map(async (sprint) => {
           try {
-            const [recommendationData, queueData, metricsData] = await Promise.all([
+            const [recommendationData, queueData, metricsData, judgeData] = await Promise.all([
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/recommendations`),
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/action-queues`),
               api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/metrics`),
+              api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(sprint.sprint_id)}/judge-summary`),
             ]);
             return {
               ...sprint,
@@ -4918,6 +4974,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               action_queue_summary: queueData.summary || sprint.action_queue_summary || {},
               metrics_report: metricsData.metrics_report || {},
               metrics_summary: metricsData.summary || sprint.metrics_summary || {},
+              judge_summary: judgeData.judge_summary || sprint.judge_summary || {},
             };
           } catch (err) {
             return { ...sprint, recommendation_error: err.message };
@@ -4988,6 +5045,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       target.querySelectorAll("[data-review-sprint-metrics]").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintMetrics)}/metrics/refresh`, { method: "POST" });
+          await renderProjectReviewSprints(project, versions, target);
+        });
+      });
+      target.querySelectorAll("[data-review-sprint-judge]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/projects/${encodeURIComponent(project.project_id)}/review-sprints/${encodeURIComponent(button.dataset.reviewSprintJudge)}/judge-summary/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template_id: "provider-review-judge", skip_existing_current: true, max_tasks: 5 }),
+          });
           await renderProjectReviewSprints(project, versions, target);
         });
       });
@@ -5168,6 +5235,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const actionQueueSummary = sprint.action_queue_summary || {};
       const metricsReport = sprint.metrics_report || {};
       const metricsSummary = sprint.metrics_summary || {};
+      const judgeSummary = sprint.judge_summary || {};
       const taskIds = (sprint.task_refs || []).filter((ref) => ref.included !== false).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map((ref) => ref.task_id);
       const mutable = ["open", "in_progress", "blocked"].includes(sprint.status);
       return `
@@ -5190,6 +5258,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${conflicts.length ? `<div class="review-conflict-list">${conflicts.slice(0, 8).map((conflict) => reviewSprintConflictHtml(conflict)).join("")}</div>` : `<div class="empty small">No conflicts reported.</div>`}
           ${reviewSprintRecommendationsHtml(sprint, recommendationSummary, recommendationActions)}
           ${reviewSprintActionQueueHtml(sprint, latestQueue, actionQueueSummary)}
+          ${reviewSprintJudgeSummaryHtml(sprint, judgeSummary)}
           ${reviewSprintDashboardHtml(sprint, metricsSummary, metricsReport)}
           <div class="actions">
             <select id="review-sprint-add-task-${escapeHtml(sprint.sprint_id)}" style="max-width:260px;" ${mutable ? "" : "disabled"}>
@@ -5200,6 +5269,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" data-review-sprint-refresh="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Sprint</button>
             <button class="secondary" data-review-sprint-conflicts="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Conflicts</button>
             <button class="secondary" data-review-sprint-recommendations="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Recommendations</button>
+            <button class="secondary" data-review-sprint-judge="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Sprint Judge</button>
             <button class="secondary" data-review-sprint-metrics="${escapeHtml(sprint.sprint_id)}" type="button">Refresh Metrics</button>
             <button class="secondary" data-review-sprint-local="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Local</button>
             <button class="secondary" data-review-sprint-provider="${escapeHtml(sprint.sprint_id)}" type="button" ${mutable ? "" : "disabled"}>Generate Sprint Provider</button>
@@ -5207,7 +5277,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="danger" data-review-sprint-archive="${escapeHtml(sprint.sprint_id)}" type="button" ${sprint.status === "archived" ? "disabled" : ""}>Archive Sprint</button>
           </div>
           ${sprint.recommendation_error ? `<div class="empty error">${escapeHtml(sprint.recommendation_error)}</div>` : ""}
-          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, action_queue_summary: actionQueueSummary, metrics_summary: metricsSummary, settings: sprint.settings }, null, 2))}</pre>
+          <pre>${escapeHtml(JSON.stringify({ summary, conflict_report: report, recommendation_summary: recommendationSummary, judge_summary: judgeSummary, action_queue_summary: actionQueueSummary, metrics_summary: metricsSummary, settings: sprint.settings }, null, 2))}</pre>
+        </div>
+      `;
+    }
+
+    function reviewSprintJudgeSummaryHtml(sprint, summary) {
+      const top = summary.top_judge_recommendation || {};
+      return `
+        <div class="review-sprint-dashboard">
+          <h5>Judge Summary</h5>
+          <div class="empty small">Judge summaries are advisory and provider-safe actions require explicit provider approval.</div>
+          <div class="summary-grid">
+            ${metric("Judged Tasks", summary.judged_task_count ?? 0)}
+            ${metric("Stale Judge", summary.stale_judge_count ?? 0)}
+            ${metric("Judge Tokens", summary.judge_provider_tokens ?? 0)}
+            ${metric("High Risk", summary.high_risk_candidate_count ?? 0)}
+            ${metric("Top Judge", top.task_id ? `${top.task_id} / ${top.recommended_candidate_id || "-"}` : "-")}
+          </div>
         </div>
       `;
     }
@@ -5218,6 +5305,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const provider = report.provider_usage || {};
       const quality = report.quality_delta || {};
       const risk = report.risk_readiness || {};
+      const judge = report.judge_metrics || {};
       const warnings = Array.isArray(report.warnings) ? report.warnings : [];
       const statusRows = Object.entries((report.task_throughput || {}).task_status_counts || {}).map(([status, count]) => `<tr><td>${escapeHtml(status)}</td><td>${escapeHtml(count)}</td></tr>`).join("");
       const sourceRows = Object.entries(candidate.candidate_source_counts || {}).map(([source, count]) => `<tr><td>${escapeHtml(source)}</td><td>${escapeHtml(count)}</td></tr>`).join("");
@@ -5229,6 +5317,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             ${metric("Completion", summary.completion_rate == null ? "-" : `${Math.round(Number(summary.completion_rate) * 100)}%`)}
             ${metric("Candidates", summary.candidate_count ?? candidate.candidate_count ?? 0)}
             ${metric("Provider Tokens", summary.provider_tokens ?? provider.total_tokens ?? 0)}
+            ${metric("Judged Tasks", (summary.judge_metrics || {}).judged_task_count ?? judge.judged_task_count ?? 0)}
+            ${metric("Judge Tokens", (summary.judge_metrics || {}).judge_provider_tokens ?? judge.judge_provider_tokens ?? 0)}
             ${metric("Quality Delta", summary.quality_delta ?? quality.overall_delta ?? quality.status ?? "-")}
             ${metric("Warnings", summary.warning_count ?? warnings.length)}
           </div>
@@ -5354,6 +5444,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         save_recommended_context_pack: "Context",
         generate_local_candidates: "Local",
         generate_provider_candidates: "Provider",
+        refresh_judge_report: "Judge",
         refresh_decision_report: "Decision",
         inspect_conflict: "Inspect",
         manual_apply_candidate: "Manual Apply",

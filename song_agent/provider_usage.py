@@ -91,6 +91,17 @@ def collect_project_provider_usage_records(project_id: str, versions: list[Any],
             )
             if record is not None:
                 records.append(record)
+        for usage_path in sorted(review_tasks_dir.glob("review-task-*/judge-provider-usage.json")):
+            task_id = usage_path.parent.name
+            record = usage_record_from_file(
+                usage_path,
+                source_type="review_task_judge",
+                source_id=task_id,
+                project_id=project_id,
+                group_id=task_id,
+            )
+            if record is not None:
+                records.append(record)
     return records
 
 

@@ -145,6 +145,15 @@ from song_agent.review_tasks import (
     review_task_summary,
     task_list_summary,
 )
+from song_agent.review_judge import (
+    REVIEW_JUDGE_TEMPLATE_ID,
+    judge_report_stale,
+    judge_report_summary,
+    judge_summary_for_apply,
+    mark_judge_report_stale,
+    run_provider_review_judge,
+    sprint_judge_summary,
+)
 from song_agent.review_sprints import (
     ReviewSprintError,
     ReviewSprintStateError,
@@ -1122,6 +1131,7 @@ class JobStore:
                         "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
                         "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
                         "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
+                        "review_judge": metadata.get("review_judge") if isinstance(metadata.get("review_judge"), dict) else {},
                         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
                         "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
                         "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
@@ -5066,6 +5076,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self.project_store.append_event(project_id, "review_sprint_metrics_refreshed", {"sprint_id": sprint.sprint_id, "readiness": (report.get("risk_readiness") or {}).get("readiness") if isinstance(report.get("risk_readiness"), dict) else None})
                 self._send_json({"ok": True, "sprint": sprint.to_dict(), "metrics_report": report, "summary": sprint_metrics_summary(report)})
                 return
+            if action == "judge-summary":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                summary = self._get_or_refresh_sprint_judge_summary(project_id, sprint_store, task_store, sprint, refresh=False)
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "judge_summary": summary})
+                return
+            if action == "judge-summary-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                summary = self._refresh_review_sprint_judge_reports(project_id, sprint_store, task_store, sprint, payload)
+                self._send_json({"ok": True, "sprint": sprint.to_dict(), "judge_summary": summary})
+                return
             if action == "action-queues":
                 queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
                 if method == "GET":
@@ -5174,6 +5199,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+        judge_summary_data = sprint_store.read_judge_summary(sprint.sprint_id, default={})
         action_queue_summary_data = self._review_sprint_action_queue_summary(sprint_store, sprint)
         response = {
             "ok": True,
@@ -5182,9 +5208,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "conflict_report": conflict_report,
             "recommendation_report": recommendation_report,
             "recommendation_summary": recommendation_report_summary(recommendation_report),
+            "judge_summary": judge_summary_data,
             "action_queue_summary": action_queue_summary_data,
             "metrics_summary": self._review_sprint_metrics_summary(sprint_store, sprint),
-            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data),
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data),
             "tasks": self._review_sprint_task_items(task_store, sprint),
         }
         if include_events:
@@ -5195,6 +5222,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
+        judge_summary_data = sprint_store.read_judge_summary(sprint.sprint_id, default={})
         action_queue_summary_data = self._review_sprint_action_queue_summary(sprint_store, sprint)
         return {
             **sprint.to_dict(),
@@ -5202,9 +5230,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "conflict_report": conflict_report,
             "recommendation_report": recommendation_report,
             "recommendation_summary": recommendation_report_summary(recommendation_report),
+            "judge_summary": judge_summary_data,
             "action_queue_summary": action_queue_summary_data,
             "metrics_summary": self._review_sprint_metrics_summary(sprint_store, sprint),
-            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data),
+            "export_summary": review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data),
         }
 
     def _review_sprint_metrics_summary(self, sprint_store: ReviewSprintStore, sprint: Any) -> dict[str, Any]:
@@ -5297,6 +5326,70 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     continue
         return saved
 
+    def _get_or_refresh_sprint_judge_summary(
+        self,
+        project_id: str,
+        sprint_store: ReviewSprintStore,
+        task_store: ReviewTaskStore,
+        sprint: Any,
+        *,
+        refresh: bool,
+    ) -> dict[str, Any]:
+        if not refresh:
+            existing = sprint_store.read_judge_summary(sprint.sprint_id, default={})
+            if existing:
+                return existing
+        reports = []
+        for task_id in self._review_sprint_ordered_task_ids(sprint):
+            try:
+                task = task_store.read_task(task_id)
+                candidates = task_store.list_candidates(task.task_id)
+                reports.append(self._read_review_task_judge_report(project_id, task_store, task, candidates))
+            except (OSError, ValueError, TypeError, FileNotFoundError, json.JSONDecodeError):
+                continue
+        summary = sprint_judge_summary(sprint_id=sprint.sprint_id, task_reports=[report for report in reports if report], now=_utc_now())
+        return sprint_store.write_judge_summary(sprint, summary, now=_utc_now())
+
+    def _refresh_review_sprint_judge_reports(
+        self,
+        project_id: str,
+        sprint_store: ReviewSprintStore,
+        task_store: ReviewTaskStore,
+        sprint: Any,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = payload if isinstance(payload, dict) else {}
+        requested = [str(item) for item in payload.get("task_ids", []) if str(item).strip()] if isinstance(payload.get("task_ids"), list) else []
+        sprint_task_ids = self._review_sprint_ordered_task_ids(sprint)
+        task_ids = [task_id for task_id in sprint_task_ids if not requested or task_id in requested]
+        max_tasks = max(1, min(20, int(payload.get("max_tasks") or len(task_ids) or 1)))
+        skip_existing = bool(payload.get("skip_existing_current", False))
+        results = []
+        processed = 0
+        for task_id in task_ids:
+            if processed >= max_tasks:
+                results.append({"task_id": task_id, "status": "skipped", "reason": "max_tasks reached"})
+                continue
+            try:
+                task = task_store.read_task(task_id)
+                candidates = task_store.list_candidates(task.task_id)
+                ready = [candidate for candidate in candidates if candidate.status == "ready"]
+                if not ready:
+                    results.append({"task_id": task_id, "status": "skipped", "reason": "no ready candidates"})
+                    continue
+                existing = self._read_review_task_judge_report(project_id, task_store, task, candidates)
+                if skip_existing and existing and existing.get("status") == "completed" and not existing.get("stale"):
+                    results.append({"task_id": task_id, "status": "skipped", "reason": "current judge report exists", "summary": judge_report_summary(existing)})
+                    continue
+                result = self._refresh_review_task_judge_report(project_id, task_store, task, payload)
+                results.append({"task_id": task_id, "status": "completed", "summary": result.get("summary", {})})
+                processed += 1
+            except (ReviewTaskStateError, ReviewTaskError, ProviderError, ValueError, FileNotFoundError) as exc:
+                results.append({"task_id": task_id, "status": "failed", "error": str(exc)})
+        summary = self._get_or_refresh_sprint_judge_summary(project_id, sprint_store, task_store, sprint, refresh=True)
+        self.project_store.append_event(project_id, "review_sprint_judge_summary_refreshed", {"sprint_id": sprint.sprint_id, "judged_task_count": summary.get("judged_task_count")})
+        return sanitize_metadata({**summary, "results": results})
+
     def _review_sprint_task_items(self, task_store: ReviewTaskStore, sprint: Any) -> list[dict[str, Any]]:
         items = []
         for ref in sorted(sprint.task_refs, key=lambda item: int(item.get("order") or 0)):
@@ -5307,12 +5400,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 task = task_store.read_task(task_id)
                 candidates = task_store.list_candidates(task.task_id)
                 decision_report = _try_read_review_decision_report(task_store, task.task_id)
+                judge_report = self._read_review_task_judge_report(sprint.project_id, task_store, task, candidates)
                 items.append(
                     {
                         "ref": ref,
                         "task": task.to_dict(),
                         "candidates": [candidate.to_dict() for candidate in candidates],
                         "decision_report": decision_report,
+                        "judge_report": judge_report,
+                        "judge_summary": judge_report_summary(judge_report),
                         "provider_summary": review_candidate_source_breakdown(candidates),
                     }
                 )
@@ -5437,7 +5533,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
                 queue_store = ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
                 queue_summary = action_queue_collection_summary(queue_store.list_queues(include_archived=True))
-                matches.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary))
+                judge_summary_data = sprint_store.read_judge_summary(sprint.sprint_id, default={})
+                matches.append(review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary, judge_summary_data))
             if not matches:
                 return {}
             return sanitize_metadata({"sprint_ids": [item["sprint_id"] for item in matches], "primary": matches[0], "sprints": matches})
@@ -5751,6 +5848,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             result = self._generate_review_task_local_candidates_for_queue(project_id, task_store, task, item.input)
         elif item.action == "generate_provider_candidates":
             result = self._generate_review_task_provider_candidates_for_queue(project_id, task_store, task, item.input)
+        elif item.action == "refresh_judge_report":
+            result = self._refresh_review_task_judge_report(project_id, task_store, task, item.input)
+            result["sprint_judge_summary"] = self._get_or_refresh_sprint_judge_summary(project_id, sprint_store, task_store, sprint, refresh=True)
         elif item.action == "refresh_decision_report":
             result = self._refresh_review_task_decision_report_for_queue(project_id, task_store, task, item.input)
         else:
@@ -5843,11 +5943,75 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         self.project_store.append_event(project_id, "review_sprint_action_provider_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated), "template_id": template.template_id})
         return {"status": "generated" if generated else "skipped", "created_count": len(generated), "created_candidate_ids": [candidate.candidate_id for candidate in generated], "instruction": instruction, "decision_report": review_decision_summary(decision_report), "provider_summary": review_candidate_source_breakdown(ranked), "provider_snapshot": provider_snapshot}
 
+    def _read_review_task_judge_report(self, project_id: str, task_store: ReviewTaskStore, task: Any, candidates: list[Any] | None = None, *, parent_plan: SongPlan | None = None) -> dict[str, Any]:
+        report = task_store.read_judge_report(task.task_id, default={})
+        if not report:
+            return {}
+        try:
+            if parent_plan is None:
+                _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+            template_id = str(report.get("template_id") or REVIEW_JUDGE_TEMPLATE_ID)
+            template = self.prompt_template_store.get_template(template_id)
+            stale = judge_report_stale(report, task=task, candidates=candidates or task_store.list_candidates(task.task_id), parent_plan=parent_plan, template=template)
+            return mark_judge_report_stale(report, stale=stale)
+        except (FileNotFoundError, ProviderError, ReviewTaskError, ReviewTaskStateError, ValueError, TypeError):
+            return mark_judge_report_stale(report, stale=True)
+
+    def _refresh_review_task_judge_report(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = payload if isinstance(payload, dict) else {}
+        _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
+        ensure_task_current(task, parent_plan)
+        template_id = str(payload.get("template_id") or REVIEW_JUDGE_TEMPLATE_ID).strip()
+        template = self.prompt_template_store.get_template(template_id)
+        if not template.enabled:
+            raise ReviewTaskStateError("Prompt template is disabled.")
+        all_candidates = task_store.rank_candidates(task)
+        requested_ids = [str(item) for item in payload.get("candidate_ids", []) if str(item).strip()] if isinstance(payload.get("candidate_ids"), list) else []
+        candidates = [candidate for candidate in all_candidates if not requested_ids or candidate.candidate_id in requested_ids]
+        candidates = [candidate for candidate in candidates if candidate.status == "ready"]
+        if not candidates:
+            raise ReviewTaskStateError("Review judge requires at least one ready candidate.")
+        decision_report = _try_read_review_decision_report(task_store, task.task_id)
+        config, _sources = load_provider_config()
+        started_at = _utc_now()
+        report, provider_snapshot = run_provider_review_judge(
+            project_id=project_id,
+            task=task,
+            candidates=candidates,
+            parent_plan=parent_plan,
+            template=template,
+            config=config,
+            decision_report=decision_report,
+            note=str(payload.get("note") or ""),
+            now=_utc_now(),
+        )
+        saved = task_store.write_judge_report(task, report, now=_utc_now())
+        provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+        usage_record = _provider_usage_record(
+            config_snapshot=provider_snapshot,
+            operation="provider_review_judge",
+            template_id=template.template_id,
+            started_at=started_at,
+            status="completed",
+            provider_usage=provider_usage,
+            request_id=provider_snapshot.get("request_id"),
+        )
+        write_json(task_store.judge_provider_usage_path(task.task_id), usage_record)
+        ranked = task_store.rank_candidates(task)
+        refreshed_decision = task_store.write_decision_report(
+            task,
+            build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("decision_note") or ""), judge_report=saved),
+            now=_utc_now(),
+        )
+        self.project_store.append_event(project_id, "review_task_judge_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": saved.get("recommended_candidate_id"), "template_id": template.template_id})
+        return {"ok": True, "task": task.to_dict(), "judge_report": saved, "summary": judge_report_summary(saved), "decision_report": refreshed_decision, "provider_snapshot": provider_snapshot}
+
     def _refresh_review_task_decision_report_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> dict[str, Any]:
         _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
         ensure_task_current(task, parent_plan)
         ranked = task_store.rank_candidates(task)
-        decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("note") or "")), now=_utc_now())
+        judge_report = self._read_review_task_judge_report(project_id, task_store, task, ranked, parent_plan=parent_plan)
+        decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("note") or ""), judge_report=judge_report), now=_utc_now())
         self.project_store.append_event(project_id, "review_sprint_action_decision_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": decision_report.get("recommended_candidate_id")})
         return {"decision_report": review_decision_summary(decision_report), "provider_summary": review_candidate_source_breakdown(ranked), "candidate_count": len(ranked)}
 
@@ -5890,7 +6054,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 candidates = task_store.list_candidates(task.task_id)
                 decision_report = _try_read_review_decision_report(task_store, task.task_id)
-                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in candidates], "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(candidates), "events": task_store.read_events(task.task_id)})
+                judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates)
+                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in candidates], "decision_report": decision_report, "judge_report": judge_report, "judge_summary": judge_report_summary(judge_report), "provider_summary": review_candidate_source_breakdown(candidates), "events": task_store.read_events(task.task_id)})
                 return
             if action == "candidates":
                 if method != "POST":
@@ -5989,7 +6154,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 decision_report = _try_read_review_decision_report(task_store, task.task_id)
                 if not decision_report:
                     _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
-                    decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_utc_now()), now=_utc_now())
+                    judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates, parent_plan=parent_plan)
+                    decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_utc_now(), judge_report=judge_report), now=_utc_now())
                 self._send_json({"ok": True, "task": task.to_dict(), "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(candidates)})
                 return
             if action == "decision-report-refresh":
@@ -6000,9 +6166,26 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
                 ensure_task_current(task, parent_plan)
                 candidates = task_store.rank_candidates(task)
-                decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("note") or "")), now=_utc_now())
+                judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates, parent_plan=parent_plan)
+                decision_report = task_store.write_decision_report(task, build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_utc_now(), notes=str(payload.get("note") or ""), judge_report=judge_report), now=_utc_now())
                 self.project_store.append_event(project_id, "review_task_decision_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": decision_report.get("recommended_candidate_id")})
                 self._send_json({"ok": True, "task": task.to_dict(), "decision_report": decision_report, "provider_summary": review_candidate_source_breakdown(candidates)})
+                return
+            if action == "judge-report":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                candidates = task_store.rank_candidates(task)
+                judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates)
+                self._send_json({"ok": True, "task": task.to_dict(), "judge_report": judge_report, "summary": judge_report_summary(judge_report), "provider_summary": review_candidate_source_breakdown(candidates)})
+                return
+            if action == "judge-report-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                result = self._refresh_review_task_judge_report(project_id, task_store, task, payload)
+                self._send_json(result)
                 return
             if action == "resolve":
                 if method != "POST":
@@ -6124,6 +6307,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
         )
         decision_report = _try_read_review_decision_report(task_store, task.task_id)
+        judge_report = self._read_review_task_judge_report(project_id, task_store, task, task_store.list_candidates(task.task_id), parent_plan=parent_plan)
         metadata = {
             **job.edit_metadata,
             **candidate_apply_metadata(task, candidate, result, decision_report=decision_report),
@@ -6133,6 +6317,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "preserve": list(primary.preserve),
             "strength": primary.strength,
         }
+        judge_apply_summary = judge_summary_for_apply(judge_report, candidate_id=candidate.candidate_id, stale=bool(judge_report.get("stale"))) if judge_report else {}
+        if judge_apply_summary:
+            metadata["review_judge"] = judge_apply_summary
         sprint_membership = self._review_sprint_membership_summary(project_id, task.task_id)
         if sprint_membership:
             metadata["review_sprint"] = sprint_membership
@@ -6149,6 +6336,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         job.input_payload["review_candidate"] = review_candidate_summary(candidate)
         if decision_report:
             job.input_payload["review_decision"] = review_decision_summary(decision_report)
+        if judge_apply_summary:
+            job.input_payload["review_judge"] = judge_apply_summary
         if sprint_membership:
             job.input_payload["review_sprint"] = sprint_membership
         if sprint_recommendation:
@@ -8833,10 +9022,12 @@ def _match_project_review_task_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 2 and parts[0] == "review-tasks":
         return unquote(parts[1]), "detail"
-    if len(parts) == 3 and parts[0] == "review-tasks" and parts[2] in {"candidates", "provider-candidates", "decision-report", "resolve", "needs-more-work", "archive"}:
+    if len(parts) == 3 and parts[0] == "review-tasks" and parts[2] in {"candidates", "provider-candidates", "decision-report", "judge-report", "resolve", "needs-more-work", "archive"}:
         return unquote(parts[1]), parts[2]
     if len(parts) == 4 and parts[0] == "review-tasks" and parts[2] == "decision-report" and parts[3] == "refresh":
         return unquote(parts[1]), "decision-report-refresh"
+    if len(parts) == 4 and parts[0] == "review-tasks" and parts[2] == "judge-report" and parts[3] == "refresh":
+        return unquote(parts[1]), "judge-report-refresh"
     return None
 
 
@@ -8844,7 +9035,7 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 2 and parts[0] == "review-sprints":
         return unquote(parts[1]), "detail"
-    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts", "recommendations", "metrics"}:
+    if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] in {"refresh", "close", "archive", "tasks", "generate-local-candidates", "generate-provider-candidates", "conflicts", "recommendations", "metrics", "judge-summary"}:
         return unquote(parts[1]), parts[2]
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "tasks" and parts[3] in {"remove", "reorder"}:
         return unquote(parts[1]), f"tasks-{parts[3]}"
@@ -8854,6 +9045,8 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
         return unquote(parts[1]), "recommendations-refresh"
     if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "metrics" and parts[3] == "refresh":
         return unquote(parts[1]), "metrics-refresh"
+    if len(parts) == 4 and parts[0] == "review-sprints" and parts[2] == "judge-summary" and parts[3] == "refresh":
+        return unquote(parts[1]), "judge-summary-refresh"
     if len(parts) == 5 and parts[0] == "review-sprints" and parts[2] == "recommendations" and parts[4] == "context-pack":
         return unquote(parts[1]), f"recommendation-context-pack:{unquote(parts[3])}"
     if len(parts) == 3 and parts[0] == "review-sprints" and parts[2] == "action-queues":

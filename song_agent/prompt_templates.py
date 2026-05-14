@@ -271,6 +271,44 @@ PROVIDER_EDIT_CANDIDATES_SCHEMA = {
 }
 
 
+PROVIDER_REVIEW_JUDGE_SCHEMA = {
+    "type": "object",
+    "required": ["recommended_candidate_id", "candidate_scores", "comparison_summary", "manual_review_required"],
+    "properties": {
+        "recommended_candidate_id": {"type": "string"},
+        "candidate_scores": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["candidate_id", "overall", "review_fit", "target_precision", "musicality", "novelty", "risk", "confidence", "reason"],
+                "properties": {
+                    "candidate_id": {"type": "string"},
+                    "overall": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "review_fit": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "target_precision": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "musicality": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "novelty": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "risk": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "reason": {"type": "string"},
+                    "risks": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
+        "comparison_summary": {
+            "type": "object",
+            "properties": {
+                "best_candidate_id": {"type": "string"},
+                "reason": {"type": "string"},
+                "tradeoffs": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "manual_review_required": {"type": "boolean"},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
 BUILT_IN_TEMPLATES = [
     PromptTemplate.from_dict(
         {
@@ -362,6 +400,27 @@ BUILT_IN_TEMPLATES = [
                 "{{context_json}}"
             ),
             "output_schema": PROVIDER_EDIT_CANDIDATES_SCHEMA,
+        },
+        built_in=True,
+    ),
+    PromptTemplate.from_dict(
+        {
+            "template_id": "provider-review-judge",
+            "name": "Provider review judge",
+            "description": "Score ready ReviewTask candidates across fit, precision, musicality, novelty, risk, and confidence.",
+            "task": "provider_review_judge",
+            "system_prompt": (
+                "You are a MusicForge candidate judge. Return one JSON object only. "
+                "Judge the provided ready candidates without creating edits, applying candidates, resolving tasks, or changing project state. "
+                "Do not include file paths, URLs, secrets, credentials, raw prompts, or free-form code."
+            ),
+            "user_prompt": (
+                "Score each ready candidate for this sanitized ReviewTask context. "
+                "Risk is danger, so higher risk means more manual caution. "
+                "Return JSON that follows the schema exactly and keep explanations concise.\n"
+                "{{context_json}}"
+            ),
+            "output_schema": PROVIDER_REVIEW_JUDGE_SCHEMA,
         },
         built_in=True,
     ),

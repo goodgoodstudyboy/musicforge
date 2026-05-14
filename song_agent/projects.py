@@ -743,6 +743,7 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
         "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
         "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
+        "review_judge": metadata.get("review_judge") if isinstance(metadata.get("review_judge"), dict) else {},
         "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
@@ -1074,6 +1075,7 @@ def _collect_project_context_packs(project_dir: Path, document: ProjectDocument)
 
 
 def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
+    from song_agent.review_judge import judge_report_summary
     from song_agent.review_tasks import ReviewTaskStore, review_candidate_source_breakdown, review_decision_summary, review_task_summary
 
     store = ReviewTaskStore(project_dir)
@@ -1092,10 +1094,15 @@ def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
             decision_report = store.read_decision_report(task.task_id)
         except (OSError, ValueError, TypeError, FileNotFoundError):
             decision_report = {}
+        try:
+            judge_report = store.read_judge_report(task.task_id, default={})
+        except (OSError, ValueError, TypeError, FileNotFoundError):
+            judge_report = {}
         summary["candidate_count"] = int(task.counts.get("candidate_count") or 0)
         summary["ready_candidate_count"] = int(task.counts.get("ready_candidate_count") or 0)
         summary["provider_summary"] = review_candidate_source_breakdown(candidates)
         summary["decision_report"] = review_decision_summary(decision_report)
+        summary["judge_summary"] = judge_report_summary(judge_report)
         summary["priority"] = task.priority
         summaries.append(_sanitize_asset_metadata(summary))
     return sorted(summaries, key=lambda item: str(item.get("task_id") or ""))
@@ -1114,9 +1121,10 @@ def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
         summary = store.read_summary(sprint.sprint_id, default={})
         conflict_report = store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = store.read_recommendation_report(sprint.sprint_id, default={})
+        judge_summary = store.read_judge_summary(sprint.sprint_id, default={})
         queue_store = ReviewSprintActionQueueStore(store.sprint_dir(sprint.sprint_id))
         queue_summary = action_queue_collection_summary(queue_store.list_queues(include_archived=True))
-        payload = review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary)
+        payload = review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary, judge_summary)
         metrics_summary = sprint_metrics_summary(metrics_store.read_sprint_metrics(sprint.sprint_id, default={}))
         if metrics_summary:
             payload["metrics_summary"] = metrics_summary

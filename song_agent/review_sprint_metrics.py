@@ -10,6 +10,7 @@ from song_agent.projectio import read_json, write_json
 from song_agent.projects import ProjectDocument, now_iso
 from song_agent.provider_usage import build_provider_usage_report
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
+from song_agent.review_judge import judge_report_summary
 from song_agent.review_sprint_actions import ReviewSprintActionQueueStore, SprintActionQueue
 from song_agent.review_sprints import ReviewSprint, ReviewSprintStore
 from song_agent.review_tasks import ReviewCandidate, ReviewTask, ReviewTaskStore
@@ -82,6 +83,7 @@ def build_sprint_metrics_report(
     recommendation_report = source["recommendation_report"]
     conflict_report = source["conflict_report"]
     decision_reports = source["decision_reports"]
+    judge_reports = source["judge_reports"]
     sprint_provider_records = _provider_records_for_tasks(provider_usage_records or [], [task.task_id for task in tasks])
     provider_report = build_provider_usage_report(scope="project", project_id=project_id, records=sprint_provider_records)
     provider_usage = _provider_usage_metrics(provider_report, tasks, candidates_by_task)
@@ -91,6 +93,7 @@ def build_sprint_metrics_report(
     action_queue_execution = _action_queue_metrics(queues)
     recommendation_adoption = _recommendation_adoption_metrics(recommendation_report, queues)
     manual_decisions = _manual_decision_metrics(tasks, candidates_by_task, decision_reports)
+    judge_metrics = _judge_metrics(judge_reports, tasks, decision_reports, provider_report)
     quality_delta = _quality_delta_metrics(sprint=sprint, tasks=tasks, project_document=project_document)
     risk_readiness = _risk_readiness_metrics(
         overview=overview,
@@ -122,6 +125,7 @@ def build_sprint_metrics_report(
                 "conflict_report": conflict_report,
                 "recommendation_report": recommendation_report,
                 "tasks": [_task_source_summary(task, candidates_by_task.get(task.task_id, []), decision_reports.get(task.task_id, {})) for task in tasks],
+                "judge_reports": {task_id: judge_report_summary(report) for task_id, report in judge_reports.items()},
                 "queues": [_queue_source_summary(queue) for queue in queues],
                 "versions": [_version_source_summary(version) for version in getattr(project_document, "versions", [])],
                 "provider_usage": provider_usage,
@@ -135,6 +139,7 @@ def build_sprint_metrics_report(
         "provider_usage": provider_usage,
         "quality_delta": quality_delta,
         "manual_decisions": manual_decisions,
+        "judge_metrics": judge_metrics,
         "risk_readiness": risk_readiness,
         "highlights": highlights,
         "warnings": warnings,
@@ -192,6 +197,7 @@ def build_project_review_metrics(
         "total_candidate_count": sum(int(summary.get("candidate_count") or 0) for summary in summaries),
         "total_provider_tokens": int(provider_report.get("total_tokens") or 0),
         "total_applied_candidate_count": sum(int(summary.get("applied_candidate_count") or 0) for summary in summaries),
+        "judge_summary": _project_judge_summary(summaries),
         "latest_sprint_id": latest_report.get("sprint_id"),
         "latest_readiness": (latest_report.get("risk_readiness") or {}).get("readiness") if isinstance(latest_report.get("risk_readiness"), dict) else "no_data",
         "quality_trend": quality_trend,
@@ -234,6 +240,7 @@ def sprint_metrics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "quality_status": quality.get("status"),
             "warning_count": len(warnings),
             "warnings": [sanitize_sensitive_text(str(item))[:200] for item in warnings[:8]],
+            "judge_metrics": report.get("judge_metrics") if isinstance(report.get("judge_metrics"), dict) else {},
         }
     )
 
@@ -258,6 +265,7 @@ def project_review_metrics_summary(report: dict[str, Any] | None) -> dict[str, A
             "latest_sprint_id": report.get("latest_sprint_id"),
             "latest_readiness": report.get("latest_readiness") or "no_data",
             "quality_trend": quality_trend,
+            "judge_summary": report.get("judge_summary") if isinstance(report.get("judge_summary"), dict) else {},
         }
     )
 
@@ -274,6 +282,7 @@ def _sprint_sources(
     missing: list[str] = []
     candidates_by_task: dict[str, list[ReviewCandidate]] = {}
     decision_reports: dict[str, dict[str, Any]] = {}
+    judge_reports: dict[str, dict[str, Any]] = {}
     for task_id in _included_task_ids(sprint):
         try:
             task = task_store.read_task(task_id)
@@ -286,6 +295,10 @@ def _sprint_sources(
             decision_reports[task.task_id] = task_store.read_decision_report(task.task_id)
         except (OSError, ValueError, TypeError, FileNotFoundError):
             decision_reports[task.task_id] = {}
+        try:
+            judge_reports[task.task_id] = task_store.read_judge_report(task.task_id, default={})
+        except (OSError, ValueError, TypeError, FileNotFoundError):
+            judge_reports[task.task_id] = {}
     try:
         queues = queue_store.list_queues(include_archived=True)
     except (OSError, ValueError, TypeError, FileNotFoundError):
@@ -298,6 +311,7 @@ def _sprint_sources(
         "missing_task_ids": sorted(missing),
         "candidates_by_task": candidates_by_task,
         "decision_reports": decision_reports,
+        "judge_reports": judge_reports,
         "queues": queues,
         "project_version_ids": [getattr(version, "version_id", "") for version in getattr(project_document, "versions", [])],
     }
@@ -405,7 +419,8 @@ def _action_queue_metrics(queues: list[SprintActionQueue]) -> dict[str, Any]:
     latest = sorted(queues, key=lambda queue: queue.updated_at or queue.created_at, reverse=True)[0] if queues else None
     counts = _item_status_counts(items)
     denominator = counts.get("completed", 0) + counts.get("failed", 0) + counts.get("blocked", 0)
-    provider_skipped = len([item for item in items if item.action == "generate_provider_candidates" and item.status == "skipped"])
+    provider_safe_actions = {"generate_provider_candidates", "refresh_judge_report"}
+    provider_skipped = len([item for item in items if item.action in provider_safe_actions and item.status == "skipped"])
     blocked_reasons = _reason_counts([item.error or item.result.get("reason") for item in items if item.status in {"blocked", "failed"}])
     return sanitize_metadata(
         {
@@ -420,7 +435,7 @@ def _action_queue_metrics(queues: list[SprintActionQueue]) -> dict[str, Any]:
             "pending_action_count": counts.get("pending", 0),
             "running_action_count": counts.get("running", 0),
             "provider_skipped_count": provider_skipped,
-            "pending_provider_action_count": len([item for item in items if item.action == "generate_provider_candidates" and item.status == "pending"]),
+            "pending_provider_action_count": len([item for item in items if item.action in provider_safe_actions and item.status == "pending"]),
             "execution_success_rate": _rate(counts.get("completed", 0), denominator),
             "blocked_reasons": blocked_reasons,
         }
@@ -521,6 +536,97 @@ def _manual_decision_metrics(tasks: list[ReviewTask], candidates_by_task: dict[s
             "applied_from_local_count": local,
             "manual_override_count": overrides,
             "unknown_decision_count": unknown,
+        }
+    )
+
+
+def _judge_metrics(
+    judge_reports: dict[str, dict[str, Any]],
+    tasks: list[ReviewTask],
+    decision_reports: dict[str, dict[str, Any]],
+    provider_report: dict[str, Any],
+) -> dict[str, Any]:
+    reports = {task_id: report for task_id, report in judge_reports.items() if isinstance(report, dict) and report}
+    completed = {task_id: report for task_id, report in reports.items() if report.get("status") == "completed"}
+    stale = {task_id: report for task_id, report in reports.items() if report.get("status") == "stale" or report.get("stale")}
+    matched_apply = 0
+    apply_with_judge = 0
+    disagreements = 0
+    high_risk = 0
+    for task in tasks:
+        report = reports.get(task.task_id, {})
+        decision = decision_reports.get(task.task_id, {})
+        judge_id = report.get("recommended_candidate_id")
+        local_id = decision.get("local_recommended_candidate_id") or decision.get("recommended_candidate_id")
+        if judge_id and local_id and judge_id != local_id:
+            disagreements += 1
+        if task.selected_candidate_id and judge_id:
+            apply_with_judge += 1
+            if task.selected_candidate_id == judge_id:
+                matched_apply += 1
+        for score in report.get("candidate_scores", []) if isinstance(report.get("candidate_scores"), list) else []:
+            if isinstance(score, dict) and int(score.get("risk") or 0) >= 70:
+                high_risk += 1
+    judge_tokens = 0
+    judge_calls = 0
+    for row in provider_report.get("by_operation", []) if isinstance(provider_report.get("by_operation"), list) else []:
+        if isinstance(row, dict) and str(row.get("operation") or "") == "provider_review_judge":
+            judge_calls += int(row.get("total_calls") or 0)
+            judge_tokens += int(row.get("total_tokens") or 0)
+    if judge_tokens <= 0:
+        judge_tokens = sum(int((report.get("provider_usage") or {}).get("total_tokens") or 0) for report in reports.values() if isinstance(report.get("provider_usage"), dict))
+    return sanitize_metadata(
+        {
+            "judged_task_count": len(completed),
+            "stale_judge_count": len(stale),
+            "judge_provider_call_count": judge_calls,
+            "judge_provider_tokens": judge_tokens,
+            "judge_recommendation_match_apply_count": matched_apply,
+            "judge_apply_match_rate": _rate(matched_apply, apply_with_judge),
+            "judge_local_disagreement_count": disagreements,
+            "high_risk_candidate_count": high_risk,
+            "task_summaries": [judge_report_summary(report) for report in reports.values()],
+        }
+    )
+
+
+def _project_judge_summary(summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    judged = 0
+    stale = 0
+    tokens = 0
+    matched = 0
+    applied_with_judge = 0
+    disagreements = 0
+    high_risk = 0
+    judged_sprint_count = 0
+    for summary in summaries:
+        metrics = summary.get("judge_metrics") if isinstance(summary.get("judge_metrics"), dict) else {}
+        if not metrics:
+            continue
+        if int(metrics.get("judged_task_count") or 0) > 0:
+            judged_sprint_count += 1
+        judged += int(metrics.get("judged_task_count") or 0)
+        stale += int(metrics.get("stale_judge_count") or 0)
+        tokens += int(metrics.get("judge_provider_tokens") or 0)
+        matched += int(metrics.get("judge_recommendation_match_apply_count") or 0)
+        disagreements += int(metrics.get("judge_local_disagreement_count") or 0)
+        high_risk += int(metrics.get("high_risk_candidate_count") or 0)
+        rate = metrics.get("judge_apply_match_rate")
+        if rate is not None:
+            try:
+                denominator = round(int(metrics.get("judge_recommendation_match_apply_count") or 0) / float(rate))
+            except (TypeError, ValueError, ZeroDivisionError):
+                denominator = 0
+            applied_with_judge += max(denominator, int(metrics.get("judge_recommendation_match_apply_count") or 0))
+    return sanitize_metadata(
+        {
+            "judged_sprint_count": judged_sprint_count,
+            "judged_task_count": judged,
+            "stale_judge_count": stale,
+            "judge_provider_tokens": tokens,
+            "judge_apply_match_rate": _rate(matched, applied_with_judge),
+            "judge_local_disagreement_count": disagreements,
+            "high_risk_candidate_count": high_risk,
         }
     )
 

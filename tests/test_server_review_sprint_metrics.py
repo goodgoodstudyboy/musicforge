@@ -32,6 +32,7 @@ def test_review_sprint_metrics_api_refresh_project_export_and_final_export(tmp_p
         provider_item_ids = [item["item_id"] for item in provider_queue["queue"]["items"] if item["action"] == "generate_provider_candidates"]
         provider_run_status, provider_run = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{provider_queue_id}/run", {"item_ids": provider_item_ids[:1], "include_provider": True})
         provider_candidate_id = provider_run["results"][0]["result"]["created_candidate_ids"][0]
+        judge_status, judge = request_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{first_task_id}/judge-report/refresh", {"note": r"metrics judge C:\Users\demo"})
         decision_queue_status, decision_queue = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
         decision_item_ids = [item["item_id"] for item in decision_queue["queue"]["items"] if item["action"] == "refresh_decision_report"]
         decision_run_status, _decision_run = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{decision_queue['queue']['queue_id']}/run", {"item_ids": decision_item_ids[:1]})
@@ -62,6 +63,8 @@ def test_review_sprint_metrics_api_refresh_project_export_and_final_export(tmp_p
     assert local_run_status == 200
     assert provider_queue_status == 201
     assert provider_run_status == 200
+    assert judge_status == 200
+    assert judge["summary"]["status"] == "completed"
     assert decision_queue_status == 201
     assert decision_run_status == 200
     assert task_before_status == 200
@@ -84,11 +87,16 @@ def test_review_sprint_metrics_api_refresh_project_export_and_final_export(tmp_p
     assert metrics_after_apply["metrics_report"]["candidate_funnel"]["provider_candidate_count"] >= 1
     assert metrics_after_apply["metrics_report"]["manual_decisions"]["manual_apply_count"] >= 1
     assert metrics_after_apply["metrics_report"]["provider_usage"]["provider_call_count"] >= 1
+    assert metrics_after_apply["metrics_report"]["judge_metrics"]["judged_task_count"] >= 1
+    assert metrics_after_apply["metrics_report"]["judge_metrics"]["judge_provider_tokens"] >= 1
+    assert metrics_after_apply["metrics_report"]["judge_metrics"]["judge_recommendation_match_apply_count"] >= 1
     assert metrics_after_apply["metrics_report"]["quality_delta"]["status"] in {"improved", "unchanged", "regressed", "not_available"}
     assert project_after_apply_status == 200
     assert project_after_apply["summary"]["latest_sprint_id"] == sprint_id
+    assert project_after_apply["summary"]["judge_summary"]["judged_task_count"] >= 1
     assert export_status == 200
     assert project_export["review_sprints"][0]["metrics_summary"]["sprint_id"] == sprint_id
+    assert project_export["review_sprints"][0]["metrics_summary"]["judge_metrics"]["judged_task_count"] >= 1
     assert project_export["review_metrics_summary"]["latest_sprint_id"] == sprint_id
     assert final_set_status == 200
     assert final_export_status == 200

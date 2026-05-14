@@ -329,6 +329,36 @@ class ReviewTaskStore:
             _append_event(self.task_dir(task.task_id), "review_task_decision_report_written", {"candidate_count": data.get("candidate_count"), "recommended_candidate_id": data.get("recommended_candidate_id")}, now)
         return data
 
+    def judge_report_path(self, task_id: str) -> Path:
+        return self.task_dir(task_id) / "judge-report.json"
+
+    def read_judge_report(self, task_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.judge_report_path(task_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise FileNotFoundError(task_id)
+        data = read_json(path)
+        if not isinstance(data, dict):
+            raise ReviewTaskError("Review judge report must be an object.")
+        return sanitize_metadata(data)
+
+    def write_judge_report(self, task: ReviewTask, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+        now = now or now_iso()
+        data = sanitize_metadata(dict(report or {}))
+        with self.lock:
+            write_json(self.judge_report_path(task.task_id), data)
+            _append_event(
+                self.task_dir(task.task_id),
+                "review_task_judge_report_written",
+                {"recommended_candidate_id": data.get("recommended_candidate_id"), "status": data.get("status")},
+                now,
+            )
+        return data
+
+    def judge_provider_usage_path(self, task_id: str) -> Path:
+        return self.task_dir(task_id) / "judge-provider-usage.json"
+
     def create_candidate(
         self,
         *,
@@ -819,6 +849,7 @@ def build_review_decision_report(
     parent_plan: SongPlan | None = None,
     now: str | None = None,
     notes: str = "",
+    judge_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if parent_plan is not None:
         ensure_task_current(task, parent_plan)
@@ -826,6 +857,20 @@ def build_review_decision_report(
     usable = [candidate for candidate in candidates if candidate.status in {"ready", "applied"}]
     ranked = sorted(usable, key=lambda item: (item.rank or 9999, -int(item.scores.get("combined") or 0), item.candidate_id))
     recommended = ranked[0] if ranked else None
+    judge_summary = _judge_summary_for_decision(judge_report)
+    local_recommended_id = recommended.candidate_id if recommended else None
+    judge_recommended_id = judge_summary.get("recommended_candidate_id")
+    risk_flags = _decision_risk_flags(task, candidates, recommended)
+    warnings: list[str] = []
+    if judge_summary:
+        if judge_recommended_id:
+            warnings.append("Provider judge report is advisory; applying still requires manual confirmation.")
+        if judge_recommended_id and local_recommended_id and judge_recommended_id != local_recommended_id:
+            warnings.append("Provider judge recommendation differs from local ranking.")
+            risk_flags.append("judge_local_recommendation_disagreement")
+        if judge_summary.get("stale"):
+            warnings.append("Provider judge report is stale.")
+            risk_flags.append("stale_judge_report")
     report = {
         "schema_version": REVIEW_DECISION_REPORT_SCHEMA_VERSION,
         "task_id": task.task_id,
@@ -834,12 +879,16 @@ def build_review_decision_report(
         "parent_song_plan_hash": parent_hash,
         "created_at": now or now_iso(),
         "candidate_count": len(candidates),
-        "recommended_candidate_id": recommended.candidate_id if recommended else None,
-        "recommendation_reason": _recommendation_reason(recommended) if recommended else "No ready candidate is available.",
+        "recommended_candidate_id": local_recommended_id,
+        "local_recommended_candidate_id": local_recommended_id,
+        "judge_recommended_candidate_id": judge_recommended_id,
+        "recommendation_reason": _recommendation_reason(recommended, judge_summary=judge_summary) if recommended else "No ready candidate is available.",
         "requires_manual_apply": True,
         "ranking": [_decision_rank_entry(candidate, index + 1) for index, candidate in enumerate(ranked)],
         "source_breakdown": review_candidate_source_breakdown(candidates),
-        "risk_flags": _decision_risk_flags(task, candidates, recommended),
+        "risk_flags": sorted(set(risk_flags)),
+        "judge_summary": judge_summary,
+        "warnings": warnings,
         "notes": sanitize_sensitive_text(notes)[:1000],
     }
     return sanitize_metadata(report)
@@ -853,10 +902,14 @@ def review_decision_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "schema_version": report.get("schema_version"),
             "task_id": report.get("task_id"),
             "recommended_candidate_id": report.get("recommended_candidate_id"),
+            "local_recommended_candidate_id": report.get("local_recommended_candidate_id"),
+            "judge_recommended_candidate_id": report.get("judge_recommended_candidate_id"),
             "candidate_count": report.get("candidate_count"),
             "requires_manual_apply": bool(report.get("requires_manual_apply", True)),
             "source_breakdown": report.get("source_breakdown") if isinstance(report.get("source_breakdown"), dict) else {},
             "risk_flags": report.get("risk_flags") if isinstance(report.get("risk_flags"), list) else [],
+            "judge_summary": report.get("judge_summary") if isinstance(report.get("judge_summary"), dict) else {},
+            "warnings": report.get("warnings") if isinstance(report.get("warnings"), list) else [],
             "created_at": report.get("created_at"),
         }
     )
@@ -921,12 +974,15 @@ def _decision_rank_entry(candidate: ReviewCandidate, rank: int) -> dict[str, Any
     )
 
 
-def _recommendation_reason(candidate: ReviewCandidate | None) -> str:
+def _recommendation_reason(candidate: ReviewCandidate | None, *, judge_summary: dict[str, Any] | None = None) -> str:
     if candidate is None:
         return "No ready candidate is available."
     score = int(candidate.scores.get("combined") or 0)
     source = "provider" if candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider") else candidate.strategy
-    return sanitize_sensitive_text(f"Ranked first by combined review score ({score}) from {source} candidate {candidate.candidate_id}.")[:500]
+    reason = f"Ranked first by combined review score ({score}) from {source} candidate {candidate.candidate_id}."
+    if isinstance(judge_summary, dict) and judge_summary.get("recommended_candidate_id"):
+        reason += f" Provider judge recommends {judge_summary.get('recommended_candidate_id')} as advisory context."
+    return sanitize_sensitive_text(reason)[:500]
 
 
 def _decision_risk_flags(task: ReviewTask, candidates: list[ReviewCandidate], recommended: ReviewCandidate | None) -> list[str]:
@@ -942,6 +998,29 @@ def _decision_risk_flags(task: ReviewTask, candidates: list[ReviewCandidate], re
     if task.status in TERMINAL_TASK_STATUSES or task.status == "applied":
         flags.append(f"task_status_{task.status}")
     return sorted(set(flags))
+
+
+def _judge_summary_for_decision(report: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(report, dict) or not report:
+        return {}
+    scores = report.get("candidate_scores") if isinstance(report.get("candidate_scores"), list) else []
+    recommended_id = report.get("recommended_candidate_id")
+    top = next((score for score in scores if isinstance(score, dict) and score.get("candidate_id") == recommended_id), {})
+    if not isinstance(top, dict):
+        top = {}
+    return sanitize_metadata(
+        {
+            "status": report.get("status") or "not_started",
+            "stale": bool(report.get("stale", False)),
+            "created_at": report.get("created_at"),
+            "recommended_candidate_id": recommended_id,
+            "top_overall": top.get("overall"),
+            "top_confidence": top.get("confidence"),
+            "top_risk": top.get("risk"),
+            "manual_review_required": bool(report.get("manual_review_required", True)),
+            "risk_flags": report.get("risk_flags") if isinstance(report.get("risk_flags"), list) else [],
+        }
+    )
 
 
 def _provider_patch_summary(patch: dict[str, Any]) -> dict[str, Any]:

@@ -381,6 +381,17 @@ v3.3.1 fixes the multi-Sprint Final Export metrics summary so the latest
 Sprint ID/readiness, completion rate, quality delta, and warnings all come from
 the same Sprint metrics snapshot.
 
+v3.4.0 adds Provider Judge reports for ReviewTask candidates. A Judge Report
+asks the configured provider to score existing ready candidates across review
+fit, target precision, musicality, novelty, risk, and confidence, then stores a
+strictly validated `judge-report.json` plus provider usage. Judge is advisory:
+it does not create candidates, apply candidates, resolve tasks, close sprints,
+or override the local Decision Report recommendation. Decision Reports,
+candidate apply metadata, Sprint judge summaries, Metrics Dashboard, Project
+Compare, Project Export, Final Export, and release-check now carry compact
+judge summaries. Action Queue `refresh_judge_report` items are `provider_safe`
+and are skipped unless provider actions are explicitly allowed for that run.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

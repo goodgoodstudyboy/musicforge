@@ -66,6 +66,9 @@ def test_review_sprint_action_queue_api_runs_safe_items_and_blocks_provider_by_d
         decision_queue_status, decision_queue = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
         decision_queue_id = decision_queue["queue"]["queue_id"]
         decision_item_id = _item_id(decision_queue["queue"], "refresh_decision_report")
+        judge_item_id = _item_id(decision_queue["queue"], "refresh_judge_report")
+        judge_default_status, judge_default = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{decision_queue_id}/run", {"item_ids": [judge_item_id]})
+        judge_run_status, judge_run = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{decision_queue_id}/run", {"item_ids": [judge_item_id], "include_provider": True})
         decision_run_status, decision_run = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues/{decision_queue_id}/run", {"item_ids": [decision_item_id]})
         manual_queue_status, manual_queue = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/action-queues", {"refresh_recommendations": True})
         manual_items = [item for item in manual_queue["queue"]["items"] if item["action"] == "manual_apply_candidate"]
@@ -105,6 +108,15 @@ def test_review_sprint_action_queue_api_runs_safe_items_and_blocks_provider_by_d
     assert provider_run["results"][0]["status"] == "completed"
     assert provider_run["results"][0]["result"]["created_count"] >= 1
     assert decision_queue_status == 201
+    assert _queue_item(decision_queue["queue"], judge_item_id)["safety"] == "provider_safe"
+    assert judge_default_status == 200
+    assert judge_default["results"][0]["status"] == "skipped"
+    assert judge_default["queue"]["status"] == "pending"
+    assert _queue_item(judge_default["queue"], judge_item_id)["status"] == "pending"
+    assert judge_run_status == 200
+    assert judge_run["results"][0]["status"] == "completed"
+    assert judge_run["results"][0]["result"]["summary"]["status"] == "completed"
+    assert judge_run["results"][0]["result"]["sprint_judge_summary"]["judged_task_count"] >= 1
     assert decision_run_status == 200
     assert decision_run["results"][0]["status"] == "completed"
     assert decision_run["results"][0]["result"]["decision_report"]["requires_manual_apply"] is True
@@ -123,6 +135,7 @@ def test_review_sprint_action_queue_api_runs_safe_items_and_blocks_provider_by_d
     assert project_export["versions"][1]["edit"]["review_sprint_action_queue"]["primary"]["sprint_id"] == sprint_id
     assert usage_status == 200
     assert any(record["operation"] == "review_sprint_action_provider_candidates" for record in usage["records"])
+    assert any(record["operation"] == "provider_review_judge" for record in usage["records"])
     assert "sk-secret-value" not in serialized
     assert "api_key" not in serialized
     assert "C:\\Users" not in serialized

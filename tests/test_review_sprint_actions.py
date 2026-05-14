@@ -66,6 +66,24 @@ def test_manual_and_blocked_actions_are_not_executable(tmp_path):
     assert queue.summary["manual_required"] == 1
 
 
+def test_action_queue_adds_provider_safe_judge_item_for_ready_decision(tmp_path):
+    plan = demo_song_plan()
+    task_store = ReviewTaskStore(tmp_path / "project")
+    task = _task(task_store, plan)
+    sprint_store = ReviewSprintStore(tmp_path / "project")
+    sprint = sprint_store.create_sprint(project_id="project-001", task_store=task_store, payload={"task_ids": [task.task_id]})
+    report = _report(sprint.sprint_id, task.task_id, action="refresh_decision_report", recommended_candidate_id="revcand-001")
+    report["recommended_actions"][0]["candidate_summary"]["ready_candidate_count"] = 2
+
+    queue = build_action_queue_from_recommendation_report(project_id="project-001", sprint=sprint, recommendation_report=report)
+    by_action = {item.action: item for item in queue.items}
+
+    assert [item.action for item in queue.items] == ["refresh_judge_report", "refresh_decision_report"]
+    assert by_action["refresh_judge_report"].safety == "provider_safe"
+    assert by_action["refresh_judge_report"].status == "pending"
+    assert by_action["refresh_judge_report"].input["template_id"] == "provider-review-judge"
+
+
 def test_report_hash_stale_detection(tmp_path):
     plan = demo_song_plan()
     task_store = ReviewTaskStore(tmp_path / "project")
