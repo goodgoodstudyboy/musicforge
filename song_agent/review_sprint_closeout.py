@@ -460,14 +460,14 @@ def _recommended_final_version(tasks: list[ReviewTask], project_document: Any) -
         if version_id in applied_ids:
             latest_applied = version_id
     state = getattr(project_document, "state", None)
-    selected = latest_applied or getattr(state, "final_version_id", None) or getattr(state, "selected_version_id", None) or getattr(state, "latest_version_id", None)
+    selected = latest_applied or getattr(state, "final_version_id", None) or getattr(state, "selected_version_id", None)
     if not selected:
         return {}
     version = _version_by_id(project_document, selected)
     return sanitize_metadata(
         {
             "version_id": selected,
-            "source": "latest_applied_sprint_candidate" if latest_applied else ("final_version" if getattr(state, "final_version_id", None) == selected else ("selected_version" if getattr(state, "selected_version_id", None) == selected else "latest_version")),
+            "source": "latest_applied_sprint_candidate" if latest_applied else ("final_version" if getattr(state, "final_version_id", None) == selected else "selected_version"),
             "quality_score": getattr(version, "quality_score", None),
         }
     )

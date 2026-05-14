@@ -79,6 +79,34 @@ def test_closeout_passes_resolved_applied_sprint_and_stale_hash_changes(tmp_path
     assert first_hash != changed_hash
 
 
+def test_closeout_blocks_resolved_task_without_applied_selected_or_final_version(tmp_path):
+    plan = demo_song_plan()
+    project_dir = tmp_path / "project"
+    task_store = ReviewTaskStore(project_dir)
+    task = _task(task_store, plan)
+    task = task_store.update_task(ReviewTask.from_dict({**task.to_dict(), "status": "resolved"}))
+    sprint_store = ReviewSprintStore(project_dir)
+    sprint = sprint_store.create_sprint(project_id="project-001", task_store=task_store, payload={"task_ids": [task.task_id]})
+    sprint = sprint_store.refresh_summary(sprint, task_store=task_store)
+
+    report = build_closeout_report(
+        project_id="project-001",
+        sprint=sprint,
+        project_document=_document(version_ids=["v001"]),
+        task_store=task_store,
+        sprint_store=sprint_store,
+        queue_store=ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id)),
+        metrics_report={"risk_readiness": {"readiness": "ready_to_close"}, "overview": {"completion_rate": 1.0}, "quality_delta": {"overall_delta": 2}},
+        now="2026-05-15T00:00:00+00:00",
+    )
+    missing_check = next(check for check in report["checks"] if check["check_id"] == "missing_applied_version")
+
+    assert report["recommended_final_version"] == {}
+    assert missing_check["status"] == "failed"
+    assert report["status"] == "failed"
+    assert report["close_allowed"] is False
+
+
 def test_closeout_warnings_and_sanitized_signoff(tmp_path):
     plan = demo_song_plan()
     project_dir = tmp_path / "project"

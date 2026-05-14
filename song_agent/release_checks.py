@@ -3668,6 +3668,41 @@ def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
         task_id = task_data["task"]["task_id"]
         local_status, local = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-tasks/{task_id}/candidates", {"strategies": ["balanced"], "render_midi": True})
         candidate_id = local["candidates"][0]["candidate_id"]
+        unresolved_project_status, unresolved_project = _release_http_json(server, "POST", "/api/projects", {"name": "Release v3.5 Missing Delivery Smoke"})
+        unresolved_project_id = unresolved_project.get("project", {}).get("project_id")
+        unresolved_version_status, unresolved_version = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{unresolved_project_id}/versions",
+            {"name": "Parent", "request": {"title": "Release v3.5 Missing Delivery Smoke", "language": "English", "style": "synth pop", "theme": "closeout", "tempo_bpm": 118, "key": "C"}},
+        )
+        unresolved_parent_job = _release_wait_http_job(server, unresolved_version["job"]["job_id"])
+        unresolved_state_status, unresolved_state = _release_http_json(server, "GET", f"/api/projects/{unresolved_project_id}/versions/v001/editor-state")
+        unresolved_note_id = unresolved_state["tracks"][0]["notes"][0]["note_id"]
+        unresolved_preview_status, unresolved_preview = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{unresolved_project_id}/versions/v001/editor-preview",
+            {"patch": {"schema_version": 1, "base_plan_hash": unresolved_state["base_plan_hash"], "label": "v3.5 unresolved patch", "operations": [{"op": "update_note", "track_id": "track-001", "note_id": unresolved_note_id, "patch": {"velocity": 92}}]}, "render_midi": False},
+        )
+        unresolved_preview_id = unresolved_preview["preview"]["preview_id"]
+        unresolved_audition_status, unresolved_audition = _release_http_json(server, "POST", f"/api/projects/{unresolved_project_id}/editor-previews/{unresolved_preview_id}/auditions", {"source": "preview", "range": {"mode": "custom", "start_beat": 16.0, "end_beat": 48.0}, "track_mode": "solo", "track_ids": ["track-003"]})
+        unresolved_audition_id = unresolved_audition["audition"]["audition_id"]
+        unresolved_review_status, _unresolved_review = _release_http_json(server, "POST", f"/api/projects/{unresolved_project_id}/editor-previews/{unresolved_preview_id}/auditions/{unresolved_audition_id}/review", {"rating": 4, "status": "needs_fix", "notes": "resolved without delivery version", "tags": ["closeout"]})
+        unresolved_marker_status, _unresolved_marker = _release_http_json(server, "POST", f"/api/projects/{unresolved_project_id}/editor-previews/{unresolved_preview_id}/auditions/{unresolved_audition_id}/markers", {"beat": 1.0, "kind": "fix", "label": "closeout target"})
+        unresolved_task_status, unresolved_task_data = _release_http_json(server, "POST", f"/api/projects/{unresolved_project_id}/editor-previews/{unresolved_preview_id}/auditions/{unresolved_audition_id}/review-task", {})
+        unresolved_task_id = unresolved_task_data["task"]["task_id"]
+        unresolved_project_path = base / ".musicforge" / "projects" / unresolved_project_id / "project.json"
+        unresolved_project_data = read_json(unresolved_project_path)
+        write_json(unresolved_project_path, {**unresolved_project_data, "selected_version_id": None, "final_version_id": None, "latest_version_id": "v001"})
+        unresolved_task_path = base / ".musicforge" / "projects" / unresolved_project_id / "review-tasks" / unresolved_task_id / "task.json"
+        unresolved_task_data_disk = read_json(unresolved_task_path)
+        write_json(unresolved_task_path, {**unresolved_task_data_disk, "status": "resolved", "selected_candidate_id": None, "applied_version_id": None})
+        unresolved_sprint_status, unresolved_sprint = _release_http_json(server, "POST", f"/api/projects/{unresolved_project_id}/review-sprints", {"name": "Release v3.5 Missing Delivery Sprint", "task_ids": [unresolved_task_id]})
+        unresolved_sprint_id = unresolved_sprint.get("sprint", {}).get("sprint_id")
+        unresolved_closeout_status, unresolved_closeout = _release_http_json(server, "POST", f"/api/projects/{unresolved_project_id}/review-sprints/{unresolved_sprint_id}/closeout/refresh")
+        unresolved_close_status, unresolved_close = _release_http_json(server, "POST", f"/api/projects/{unresolved_project_id}/review-sprints/{unresolved_sprint_id}/close", {})
+        unresolved_missing_check = next((check for check in unresolved_closeout.get("closeout_report", {}).get("checks", []) if isinstance(check, dict) and check.get("check_id") == "missing_applied_version"), {})
         sprint_status, sprint_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/review-sprints", {"name": "Release v3.5 Closeout Sprint", "task_ids": [task_id]})
         sprint_id = sprint_data["sprint"]["sprint_id"]
         closeout_get_status, closeout_get = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-sprints/{sprint_id}/closeout")
@@ -3696,6 +3731,22 @@ def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
             and marker_status == 201
             and task_status == 201
             and local_status == 201
+            and unresolved_project_status == 201
+            and unresolved_version_status == 202
+            and unresolved_parent_job["status"] == "completed"
+            and unresolved_state_status == 200
+            and unresolved_preview_status == 201
+            and unresolved_audition_status == 201
+            and unresolved_review_status == 200
+            and unresolved_marker_status == 201
+            and unresolved_task_status == 201
+            and unresolved_sprint_status == 201
+            and unresolved_closeout_status == 200
+            and unresolved_closeout.get("closeout_report", {}).get("recommended_final_version") == {}
+            and unresolved_missing_check.get("status") == "failed"
+            and unresolved_closeout.get("summary", {}).get("close_allowed") is False
+            and unresolved_close_status == 409
+            and "closeout gate failed" in unresolved_close.get("error", "")
             and sprint_status == 201
             and closeout_get_status == 200
             and closeout_get.get("summary", {}).get("close_allowed") is False
@@ -3727,7 +3778,7 @@ def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
             and "C:\\Users" not in serialized
             and str(base) not in serialized
         )
-        return ok, f"sprint={sprint_id}, closeout={closeout_refresh.get('summary', {}).get('status')}, signed={signoff.get('summary', {}).get('status')}, version={child_version}"
+        return ok, f"sprint={sprint_id}, closeout={closeout_refresh.get('summary', {}).get('status')}, missing_delivery={unresolved_missing_check.get('status')}, signed={signoff.get('summary', {}).get('status')}, version={child_version}"
     except Exception as exc:
         return False, str(exc)
     finally:

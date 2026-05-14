@@ -98,6 +98,34 @@ def test_review_sprint_closeout_gate_passes_after_apply_and_auth(tmp_path, monke
     assert closed["signoff"]["selected_version_id"] == applied["version"]["version_id"]
 
 
+def test_review_sprint_closeout_does_not_treat_latest_version_as_delivery_confirmation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id, first_task_id, _second_task_id = _create_two_review_tasks(server)
+        project_path = Path(".musicforge") / "projects" / project_id / "project.json"
+        project_data = read_json(project_path)
+        write_json(project_path, {**project_data, "selected_version_id": None, "final_version_id": None, "latest_version_id": "v001"})
+        task_path = Path(".musicforge") / "projects" / project_id / "review-tasks" / first_task_id / "task.json"
+        task_data = read_json(task_path)
+        write_json(task_path, {**task_data, "status": "resolved", "selected_candidate_id": None, "applied_version_id": None})
+        sprint_status, sprint_data = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints", {"task_ids": [first_task_id]})
+        sprint_id = sprint_data["sprint"]["sprint_id"]
+        refresh_status, refreshed = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/closeout/refresh")
+        close_status, close_error = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/close", {})
+        missing_check = next(check for check in refreshed["closeout_report"]["checks"] if check["check_id"] == "missing_applied_version")
+    finally:
+        stop_test_server(server)
+
+    assert sprint_status == 201
+    assert refresh_status == 200
+    assert refreshed["closeout_report"]["recommended_final_version"] == {}
+    assert missing_check["status"] == "failed"
+    assert refreshed["summary"]["close_allowed"] is False
+    assert close_status == 409
+    assert "closeout gate failed" in close_error["error"]
+
+
 def test_review_sprint_closeout_get_marks_stale_without_refresh(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

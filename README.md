@@ -410,6 +410,12 @@ artifacts. Studio, Project Export, Final Export, Project Metrics, and
 release-check include compact closeout/signoff summaries with token and path
 redaction.
 
+v3.5.1 tightens the Closeout delivery gate. The recommended final version can
+come only from a Sprint-applied candidate, an explicit final version, or an
+explicit selected version. The project `latest_version_id` is not enough to
+prove delivery readiness, so resolved tasks without applied/selected/final
+version evidence still fail normal close.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

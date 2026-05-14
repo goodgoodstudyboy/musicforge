@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.5.1 - 2026-05-15
+
+### Fixed
+- Closeout no longer treats the project `latest_version_id` as a delivery-confirmed final version. A Sprint with resolved tasks but no applied candidate version, selected version, or final version now fails the `missing_applied_version` gate and normal close returns 409.
+
+### Verified
+- `python -m pytest tests\test_review_sprint_closeout.py tests\test_server_review_sprint_closeout.py tests\test_release_check.py -q`
+
 ## v3.5.0 - 2026-05-15
 
 ### Added
