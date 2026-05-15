@@ -66,7 +66,7 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v3.8.0 adds a local Release Workspace for assembling multiple Project Delivery
+v3.8.1 adds a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
@@ -82,7 +82,9 @@ python -m song_agent.cli verify-release path\to\release-export.zip --json --repo
 
 The verifier reads only the ZIP, checks entry safety, duplicate entries,
 manifest file hashes, signoff hash binding, track core artifacts, redaction, and
-optional audio/stem requirements.
+optional audio/stem requirements. Release signoff sidecar payloads are also
+hash-bound so displayed signer and signed-at fields cannot be changed without
+failing verification.
 
 v0.6.0 adds local access control for Studio. Loopback hosts can still run without
 a token:

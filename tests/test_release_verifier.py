@@ -32,6 +32,8 @@ def test_verify_release_zip_valid_portable_sidecar_and_report_out(tmp_path, monk
         manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
         signoff = json.loads(archive.read("release-signoff.json").decode("utf-8"))
     assert "release-signoff.json" not in {item["path"] for item in manifest["files"]}
+    assert manifest["sidecars"]["release_signoff"]["path"] == "release-signoff.json"
+    assert manifest["sidecars"]["release_signoff"]["payload_hash"]
     assert stable_hash({key: value for key, value in manifest.items() if key != "zip"}) == signoff["export_manifest_hash"]
 
 
@@ -49,6 +51,7 @@ def test_verify_release_zip_dangerous_duplicate_and_zip_bomb_guards(tmp_path, mo
     zip_path = _build_release_zip(tmp_path, monkeypatch)
 
     dangerous = _rewrite_zip(zip_path, tmp_path / "dangerous.zip", {"../evil.txt": b"x"})
+    backslash = _backslash_entry_zip(tmp_path / "backslash.zip")
     duplicate = tmp_path / "duplicate.zip"
     shutil.copy2(zip_path, duplicate)
     with zipfile.ZipFile(duplicate, "a") as archive:
@@ -58,11 +61,14 @@ def test_verify_release_zip_dangerous_duplicate_and_zip_bomb_guards(tmp_path, mo
         archive.writestr("manifest.json", b"0" * (1024 * 1024 + 1))
 
     dangerous_report = verify_release_zip(dangerous)
+    backslash_report = verify_release_zip(backslash)
     duplicate_report = verify_release_zip(duplicate)
     bomb_report = verify_release_zip(bomb, max_uncompressed_size_mb=1)
 
     assert dangerous_report["status"] == "failed"
     assert _check(dangerous_report, "zip_entry_path_safe")["status"] == "failed"
+    assert backslash_report["status"] == "failed"
+    assert _check(backslash_report, "zip_entry_path_safe")["status"] == "failed"
     assert duplicate_report["status"] == "failed"
     assert _check(duplicate_report, "zip_duplicate_entries")["status"] == "failed"
     assert bomb_report["status"] == "failed"
@@ -122,6 +128,24 @@ def test_verify_release_zip_detects_redaction_and_signoff_hash_mismatch(tmp_path
     assert _check(polluted_report, "redaction_scan")["status"] == "failed"
     assert mismatched_report["status"] == "failed"
     assert _check(mismatched_report, "signoff_manifest_hash")["status"] == "failed"
+
+
+def test_verify_release_zip_detects_tampered_signoff_display_fields(tmp_path, monkeypatch):
+    zip_path = _build_release_zip(tmp_path, monkeypatch)
+
+    def tamper_signoff(data: bytes) -> bytes:
+        signoff = json.loads(data.decode("utf-8"))
+        signoff["signed_by"] = "tampered-reviewer"
+        signoff["signed_at"] = "2099-01-01T00:00:00+00:00"
+        return json.dumps(signoff, ensure_ascii=False, indent=2).encode("utf-8")
+
+    tampered = _rewrite_zip(zip_path, tmp_path / "tampered-signoff.zip", transforms={"release-signoff.json": tamper_signoff})
+
+    report = verify_release_zip(tampered)
+
+    assert report["status"] == "failed"
+    assert _check(report, "signoff_manifest_hash")["status"] == "passed"
+    assert _check(report, "signoff_sidecar_payload_hash")["status"] == "failed"
 
 
 def test_verify_release_zip_track_core_and_optional_requirements(tmp_path, monkeypatch):
@@ -206,6 +230,14 @@ def _rewrite_zip(source: Path, target: Path, additions: dict[str, bytes] | None 
             dst.writestr(info.filename, data)
         for name, data in additions.items():
             dst.writestr(name, data)
+    return target
+
+
+def _backslash_entry_zip(target: Path) -> Path:
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("extra/name.txt", b"x")
+    data = target.read_bytes().replace(b"extra/name.txt", b"extra\\name.txt")
+    target.write_bytes(data)
     return target
 
 

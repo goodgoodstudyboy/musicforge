@@ -4118,6 +4118,7 @@ def _v38_release_zip_verifier_smoke(root: Path) -> tuple[bool, str]:
 
         hash_mismatch_zip = _v38_rewrite_zip(zip_path, base / "hash-mismatch.zip", additions={"tracks/01-release-verifier-track-one/song.mid": b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xe0MTrk\x00\x00\x00\x04\x00\xff/\x00"})
         dangerous_zip = _v38_rewrite_zip(zip_path, base / "dangerous.zip", additions={"../evil.txt": b"x"})
+        backslash_zip = _v38_backslash_entry_zip(base / "backslash.zip")
         duplicate_zip = base / "duplicate.zip"
         shutil.copy2(zip_path, duplicate_zip)
         with zipfile.ZipFile(duplicate_zip, "a") as archive:
@@ -4136,15 +4137,25 @@ def _v38_release_zip_verifier_smoke(root: Path) -> tuple[bool, str]:
             return json.dumps(release, ensure_ascii=False, indent=2).encode("utf-8")
 
         polluted_zip = _v38_rewrite_zip(zip_path, base / "polluted.zip", transforms={"release.json": pollute_release})
+
+        def tamper_signoff(data: bytes) -> bytes:
+            signoff = json.loads(data.decode("utf-8"))
+            signoff["signed_by"] = "tampered-reviewer"
+            signoff["signed_at"] = "2099-01-01T00:00:00+00:00"
+            return json.dumps(signoff, ensure_ascii=False, indent=2).encode("utf-8")
+
+        tampered_signoff_zip = _v38_rewrite_zip(zip_path, base / "tampered-signoff.zip", transforms={"release-signoff.json": tamper_signoff})
         bomb_zip = base / "bomb.zip"
         with zipfile.ZipFile(bomb_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("manifest.json", b"0" * (1024 * 1024 + 1))
 
         hash_report = verify_release_zip(hash_mismatch_zip)
         dangerous_report = verify_release_zip(dangerous_zip)
+        backslash_report = verify_release_zip(backslash_zip)
         duplicate_report = verify_release_zip(duplicate_zip)
         spoof_report = verify_release_zip(spoof_zip, strict=True)
         polluted_report = verify_release_zip(polluted_zip)
+        tampered_signoff_report = verify_release_zip(tampered_signoff_zip)
         bomb_report = verify_release_zip(bomb_zip, max_uncompressed_size_mb=1)
 
         ok = (
@@ -4162,16 +4173,19 @@ def _v38_release_zip_verifier_smoke(root: Path) -> tuple[bool, str]:
             and external_report.get("status") == "passed"
             and _v38_check_status(hash_report, "manifest_file_hash_match") == "failed"
             and _v38_check_status(dangerous_report, "zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "zip_entry_path_safe") == "failed"
             and _v38_check_status(duplicate_report, "zip_duplicate_entries") == "failed"
             and _v38_check_status(spoof_report, "manifest_extra_entries") == "failed"
             and _v38_check_status(polluted_report, "redaction_scan") == "failed"
+            and _v38_check_status(tampered_signoff_report, "signoff_sidecar_payload_hash") == "failed"
             and _v38_check_status(bomb_report, "zip_uncompressed_size_limit") == "failed"
         )
         return ok, (
             f"release={release_id}, verify={report.get('status')}, external={external_report.get('status')}, "
             f"hash={_v38_check_status(hash_report, 'manifest_file_hash_match')}, dangerous={_v38_check_status(dangerous_report, 'zip_entry_path_safe')}, "
-            f"duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}, spoof={_v38_check_status(spoof_report, 'manifest_extra_entries')}, "
-            f"redaction={_v38_check_status(polluted_report, 'redaction_scan')}, bomb={_v38_check_status(bomb_report, 'zip_uncompressed_size_limit')}"
+            f"backslash={_v38_check_status(backslash_report, 'zip_entry_path_safe')}, duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}, "
+            f"spoof={_v38_check_status(spoof_report, 'manifest_extra_entries')}, redaction={_v38_check_status(polluted_report, 'redaction_scan')}, "
+            f"tampered_signoff={_v38_check_status(tampered_signoff_report, 'signoff_sidecar_payload_hash')}, bomb={_v38_check_status(bomb_report, 'zip_uncompressed_size_limit')}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -4199,6 +4213,14 @@ def _v38_rewrite_zip(source: Path, target: Path, *, additions: dict[str, bytes] 
             dst.writestr(info.filename, data)
         for name, data in additions.items():
             dst.writestr(name, data)
+    return target
+
+
+def _v38_backslash_entry_zip(target: Path) -> Path:
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("extra/name.txt", b"x")
+    data = target.read_bytes().replace(b"extra/name.txt", b"extra\\name.txt")
+    target.write_bytes(data)
     return target
 
 

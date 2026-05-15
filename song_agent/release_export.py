@@ -22,6 +22,7 @@ CORE_COPY_FILES = {"manifest.json", "README.txt", "project-export.json", "song-p
 OPTIONAL_COPY_FILES = {"song.wav", "quality-report.json", "validator-report.json", "run-summary.json"}
 OPTIONAL_COPY_PREFIXES = ("stems/", "assets/", "references/")
 RELEASE_EXPORT_BLOCKED_KEYS = BLOCKED_RELEASE_KEYS - {"path"}
+SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS = {"export_manifest_hash"}
 
 
 class ReleaseExportError(ValueError):
@@ -92,6 +93,9 @@ def build_release_export_bundle(
         "source_hash": current_source_hash,
         "qa_source_hash": qa_report.get("source_hash"),
         "tracks": tracklist,
+        "sidecars": {
+            "release_signoff": _release_signoff_sidecar_record(signoff_public),
+        },
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -160,6 +164,9 @@ def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_
     summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
     summary["signoff_status"] = signoff_public.get("status")
     manifest["summary"] = summary
+    sidecars = manifest.get("sidecars") if isinstance(manifest.get("sidecars"), dict) else {}
+    sidecars["release_signoff"] = _release_signoff_sidecar_record(signoff_public)
+    manifest["sidecars"] = sidecars
     files = [item for item in manifest.get("files", []) if isinstance(item, dict) and item.get("path") != "release-signoff.json"]
     manifest["files"] = sorted(files, key=lambda item: item["path"])
     write_json(manifest_path, sanitize_metadata(manifest, blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS))
@@ -332,6 +339,18 @@ def _release_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
         },
         blocked_keys=BLOCKED_RELEASE_KEYS,
     )
+
+
+def _release_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": "release-signoff.json",
+        "payload_hash": stable_hash(_release_signoff_hash_payload(signoff_public)),
+        "payload_hash_excludes": sorted(SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS),
+    }
+
+
+def _release_signoff_hash_payload(signoff_public: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in signoff_public.items() if key not in SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
 
 
 def _validate_relative_path(path: str) -> str:

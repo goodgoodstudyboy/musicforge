@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import struct
 import sys
 import zipfile
 from datetime import datetime, timezone
@@ -31,6 +32,7 @@ REQUIRED_TOP_LEVEL_ENTRIES = {
 LEGAL_SIDECAR_ENTRIES = {"manifest.json", "release-signoff.json"}
 TRACK_CORE_FILES = ("manifest.json", "README.txt", "project-export.json", "song-plan.json", "song.mid")
 HEX_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
+SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS = {"export_manifest_hash"}
 LOCAL_PATH_VALUE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?i)\b[A-Z]:[\\/][^\"'\s,;]*"), "windows_path"),
     (re.compile(r"(?<![\\/\w])(?:\\\\|(?<!:)//)[^\\/\s,;]+[\\/][^\"'\s,;]*"), "unc_path"),
@@ -163,6 +165,7 @@ class _ReleaseZipVerifier:
         self.signoff: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
+        self.raw_entry_names: list[str] = []
         self.entry_map: dict[str, zipfile.ZipInfo] = {}
         self.zip_sha256: str | None = None
         self.zip_size_bytes: int = 0
@@ -216,6 +219,7 @@ class _ReleaseZipVerifier:
     def _verify_zip_structure(self, archive: zipfile.ZipFile) -> None:
         self.entry_infos = archive.infolist()
         self.entry_names = [info.filename for info in self.entry_infos]
+        self.raw_entry_names = _raw_zip_entry_names(self.zip_path)
         self.total_uncompressed_size = sum(max(0, int(info.file_size or 0)) for info in self.entry_infos)
         max_uncompressed = self.max_uncompressed_size_mb * 1024 * 1024
         self._add_check(
@@ -234,7 +238,7 @@ class _ReleaseZipVerifier:
             f"ZIP has {len(self.entry_infos)} entries; limit is {self.max_entry_count}.",
             count=len(self.entry_infos),
         )
-        unsafe = [name for name in self.entry_names if not _is_safe_zip_entry(name)]
+        unsafe = [name for name in [*self.entry_names, *self.raw_entry_names] if not _is_safe_zip_entry(name)]
         self._add_check(
             "zip",
             "zip_entry_path_safe",
@@ -482,6 +486,17 @@ class _ReleaseZipVerifier:
             "blocking",
             "Signoff export_manifest_hash matches manifest without zip." if signoff_hash == manifest_hash else "Signoff export_manifest_hash does not match manifest without zip.",
         )
+        sidecars = self.manifest.get("sidecars") if isinstance(self.manifest.get("sidecars"), dict) else {}
+        release_signoff = sidecars.get("release_signoff") if isinstance(sidecars.get("release_signoff"), dict) else {}
+        expected_payload_hash = release_signoff.get("payload_hash")
+        payload_hash = stable_hash(_release_signoff_hash_payload(self.signoff))
+        self._add_check(
+            "signoff",
+            "signoff_sidecar_payload_hash",
+            "passed" if expected_payload_hash == payload_hash else "failed",
+            "blocking",
+            "release-signoff.json payload hash matches manifest sidecar record." if expected_payload_hash == payload_hash else "release-signoff.json payload hash does not match manifest sidecar record.",
+        )
         qa_source = self.signoff.get("qa_source_hash")
         manifest_qa_source = self.manifest.get("qa_source_hash")
         self._add_check(
@@ -651,7 +666,10 @@ class _ReleaseZipVerifier:
 
 
 def _is_safe_zip_entry(name: str) -> bool:
-    normalized = str(name or "").replace("\\", "/")
+    raw = str(name or "")
+    if "\\" in raw:
+        return False
+    normalized = raw
     if not normalized or normalized.endswith("/"):
         return False
     if normalized.startswith("/") or normalized.startswith("\\") or normalized.startswith("//"):
@@ -662,6 +680,42 @@ def _is_safe_zip_entry(name: str) -> bool:
     if ":" in parts[0]:
         return False
     return PurePosixPath(*parts).as_posix() == normalized
+
+
+def _raw_zip_entry_names(path: Path) -> list[str]:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return []
+    names: list[str] = []
+    offset = 0
+    signature = b"PK\x01\x02"
+    while True:
+        index = data.find(signature, offset)
+        if index < 0:
+            break
+        if index + 46 > len(data):
+            break
+        flags = struct.unpack_from("<H", data, index + 8)[0]
+        name_len = struct.unpack_from("<H", data, index + 28)[0]
+        extra_len = struct.unpack_from("<H", data, index + 30)[0]
+        comment_len = struct.unpack_from("<H", data, index + 32)[0]
+        name_start = index + 46
+        name_end = name_start + name_len
+        if name_end > len(data):
+            break
+        raw = data[name_start:name_end]
+        encoding = "utf-8" if flags & 0x800 else "cp437"
+        try:
+            names.append(raw.decode(encoding))
+        except UnicodeDecodeError:
+            names.append(raw.decode("utf-8", errors="replace"))
+        offset = name_end + extra_len + comment_len
+    return names
+
+
+def _release_signoff_hash_payload(signoff: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in signoff.items() if key not in SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
 
 
 def _counts(values: list[str]) -> dict[str, int]:

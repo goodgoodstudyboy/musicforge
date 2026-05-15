@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.8.1 - 2026-05-16
+
+### Fixed
+- Release Export now records a signed sidecar payload hash for `release-signoff.json`, and `verify-release` fails if signed display fields such as `signed_by` or `signed_at` are tampered after ZIP creation.
+- `verify-release` now inspects raw ZIP central-directory names and treats backslash entries as blocking path-safety failures instead of normalizing them to POSIX paths.
+
+### Verified
+- `python -m pytest tests\test_release_verifier.py tests\test_server_releases.py tests\test_release_check.py::test_v38_release_zip_verifier_smoke -q`
+
 ## v3.8.0 - 2026-05-15
 
 ### Added
