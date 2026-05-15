@@ -121,6 +121,7 @@ from song_agent.releases import (
     ReleaseStore,
     ReleaseValidationError,
     release_summary,
+    stable_hash,
 )
 from song_agent.context_packs import (
     ContextPackStaleError,
@@ -2116,7 +2117,7 @@ class BatchRunner:
                     stems = manifest.get("stems", [])
                     item.stem_manifest_path = str(Path(job.output_dir) / "stems" / "manifest.json") if job else item.stem_manifest_path
                     item.stem_count = len(stems)
-                    item.stem_audio_completed_count = sum(1 for stem in stems if stem.get("audio_status") == "completed")
+                    item.stem_audio_completed_count = sum(1 for stem in stems if stem.get("audio_status") in {"completed", "skipped"})
                     item.stem_status = data.get("status", "completed")
                     item.stem_error = (
                         "One or more stems failed."
@@ -4375,20 +4376,27 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if export_manifest.get("source_hash") != report.get("source_hash"):
                 self._send_error(HTTPStatus.CONFLICT, "Release Export is stale. Rebuild export before signoff.")
                 return
-            if bool(payload.get("require_zip", True)) and not (isinstance(export_manifest.get("zip"), dict) and export_manifest["zip"].get("sha256")):
+            zip_summary = export_manifest.get("zip") if isinstance(export_manifest.get("zip"), dict) else {}
+            zip_path = self.release_store.zip_path(release_id)
+            if bool(payload.get("require_zip", True)) and not (zip_path.exists() and zip_path.is_file() and not zip_path.is_symlink() and zip_summary.get("entry_count")):
                 self._send_error(HTTPStatus.CONFLICT, "Release ZIP has not been generated.")
                 return
         try:
-            signoff = build_release_signoff_record(release=document, report=report, payload={**payload, "force": force}, export_manifest=export_manifest, now=_utc_now())
+            pending_signoff = build_release_signoff_record(release=document, report=report, payload={**payload, "force": force}, export_manifest={}, now=_utc_now())
         except ValueError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
-        signoff = self.release_store.write_signoff(release_id, signoff)
+        self.release_store.write_signoff(release_id, {**pending_signoff, "export_manifest_hash": None})
         try:
+            final_manifest = refresh_release_export_signoff_summary(self.release_store, release_id)
+            final_manifest.pop("zip", None)
+            final_hash = stable_hash(final_manifest)
+            signoff = {**pending_signoff, "export_manifest_hash": final_hash}
+            signoff = self.release_store.write_signoff(release_id, signoff)
             refresh_release_export_signoff_summary(self.release_store, release_id)
             build_release_export_zip(self.release_store, release_id, now=_utc_now())
         except FileNotFoundError:
-            pass
+            signoff = self.release_store.write_signoff(release_id, pending_signoff)
         document = self.release_store.update_signoff_summary(release_id, release_signoff_summary(signoff))
         self.release_store.append_event(release_id, "release_force_signed" if force else "release_signed", {"status": report.get("status"), "forced": force})
         self._send_json({"ok": True, "release": document.to_dict(), "signoff": signoff, "summary": release_signoff_summary(signoff)})

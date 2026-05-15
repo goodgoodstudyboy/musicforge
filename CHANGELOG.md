@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.7.1 - 2026-05-15
+
+### Fixed
+- Release Signoff now binds to the final Release Export manifest after `release-signoff.json` has been written and the Release ZIP has been rebuilt, so the signoff record, disk manifest, and ZIP-contained manifest agree on `export_manifest_hash`.
+- Release Export manifest ZIP metadata no longer writes the ZIP's own SHA back into `manifest.json`, avoiding self-referential manifest/ZIP hash drift.
+- Batch stem audio completion now counts `skipped` stems as terminal when updating batch item stem audio progress, reducing release-check flakiness around stem audio waits.
+
+### Verified
+- `python -m pytest tests\test_server_releases.py tests\test_release_export.py tests\test_release_check.py tests\test_batch_stems.py -q`
+
 ## v3.7.0 - 2026-05-15
 
 ### Added

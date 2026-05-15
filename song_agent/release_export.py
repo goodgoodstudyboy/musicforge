@@ -82,7 +82,7 @@ def build_release_export_bundle(
     write_json(export_dir / "release-qa.json", qa_public)
     write_json(export_dir / "release-signoff.json", signoff_public)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
-    copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "release-signoff.json", export_dir / "README.txt"])
+    copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -91,7 +91,6 @@ def build_release_export_bundle(
         "generated_at": now,
         "source_hash": current_source_hash,
         "qa_source_hash": qa_report.get("source_hash"),
-        "signoff_hash": stable_hash(signoff) if signoff else None,
         "tracks": tracklist,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
@@ -118,18 +117,21 @@ def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, no
     _ensure_within(release_dir, zip_path)
     if not export_dir.exists() or not export_dir.is_dir():
         raise FileNotFoundError("Release export has not been generated.")
+    entries = _zip_entries(export_dir)
+    manifest = read_release_export_manifest(release_store, release_id)
+    manifest["zip"] = {
+        "created_at": now,
+        "filename": zip_path.name,
+        "entry_count": len(entries),
+        "entries": [entry for _path, entry in entries],
+    }
+    write_json(export_dir / "manifest.json", sanitize_metadata(manifest, blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS))
+    entries = _zip_entries(export_dir)
     tmp_path = zip_path.with_name(f".{zip_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    entries: list[str] = []
     try:
         with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for file in sorted(export_dir.rglob("*")):
-                if not file.is_file() or file.is_symlink():
-                    continue
-                resolved = file.resolve()
-                _ensure_within(export_dir, resolved)
-                entry = _validate_relative_path(resolved.relative_to(export_dir).as_posix())
+            for resolved, entry in entries:
                 archive.write(resolved, entry)
-                entries.append(entry)
         tmp_path.replace(zip_path)
     except Exception:
         if tmp_path.exists():
@@ -141,11 +143,8 @@ def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, no
         "size_bytes": zip_path.stat().st_size,
         "sha256": _sha256(zip_path),
         "entry_count": len(entries),
-        "entries": entries,
+        "entries": [entry for _path, entry in entries],
     }
-    manifest = read_release_export_manifest(release_store, release_id)
-    manifest["zip"] = zip_info
-    write_json(export_dir / "manifest.json", sanitize_metadata(manifest, blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS))
     return sanitize_metadata(zip_info, blocked_keys=BLOCKED_RELEASE_KEYS)
 
 
@@ -158,12 +157,10 @@ def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_
     signoff_public = _release_signoff_export_summary(signoff)
     write_json(export_dir / "release-signoff.json", signoff_public)
     manifest = read_release_export_manifest(release_store, release_id)
-    manifest["signoff_hash"] = stable_hash(signoff) if signoff else None
     summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
     summary["signoff_status"] = signoff_public.get("status")
     manifest["summary"] = summary
     files = [item for item in manifest.get("files", []) if isinstance(item, dict) and item.get("path") != "release-signoff.json"]
-    files.append(_file_record(export_dir, export_dir / "release-signoff.json"))
     manifest["files"] = sorted(files, key=lambda item: item["path"])
     write_json(manifest_path, sanitize_metadata(manifest, blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS))
     return read_release_export_manifest(release_store, release_id)
@@ -229,6 +226,22 @@ def _copy_allowed(rel: str) -> bool:
     return any(rel.startswith(prefix) for prefix in OPTIONAL_COPY_PREFIXES)
 
 
+def _zip_entries(export_dir: Path) -> list[tuple[Path, str]]:
+    entries: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+    for file in sorted(export_dir.rglob("*")):
+        if not file.is_file() or file.is_symlink():
+            continue
+        resolved = file.resolve()
+        _ensure_within(export_dir, resolved)
+        entry = _validate_relative_path(resolved.relative_to(export_dir).as_posix())
+        if entry in seen:
+            raise ReleaseExportError(f"Duplicate ZIP entry: {entry}.")
+        seen.add(entry)
+        entries.append((resolved, entry))
+    return entries
+
+
 def _track_dir_name(disc_number: int, track_number: int, title: str, used: set[str]) -> str:
     prefix = f"{track_number:02d}" if disc_number <= 1 else f"{disc_number:02d}-{track_number:02d}"
     base_slug = slugify(title)[:60].strip("-") or "track"
@@ -290,6 +303,7 @@ def _release_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
             "signed_by": signoff.get("signed_by"),
             "forced": bool(signoff.get("forced", False)),
             "qa_source_hash": signoff.get("qa_source_hash"),
+            "export_manifest_hash": signoff.get("export_manifest_hash"),
         },
         blocked_keys=BLOCKED_RELEASE_KEYS,
     )

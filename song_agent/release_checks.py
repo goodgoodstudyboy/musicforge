@@ -55,6 +55,7 @@ from song_agent.references import ReferenceStore, reference_refs_snapshot, write
 from song_agent.reference_analysis import analyze_reference, create_asset_from_slice, generate_slices, render_reference_slice_midi
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
+from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
 
@@ -3975,7 +3976,9 @@ def _v37_release_workspace_smoke(root: Path) -> tuple[bool, str]:
         export_manifest = read_json(release_dir / "release-export" / "manifest.json")
         with zipfile.ZipFile(release_dir / "release-export.zip", "r") as archive:
             zipped_manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+            zipped_signoff = json.loads(archive.read("release-signoff.json").decode("utf-8"))
             zip_names = archive.namelist()
+        manifest_hash = stable_hash({key: value for key, value in export_manifest.items() if key != "zip"})
         export_serialized = json.dumps({"exported": exported, "zipped": zipped, "manifest": export_manifest, "zip_manifest": zipped_manifest}, ensure_ascii=False)
         zip_safe = (
             "path" not in zipped.get("zip", {})
@@ -4027,6 +4030,9 @@ def _v37_release_workspace_smoke(root: Path) -> tuple[bool, str]:
             and zip_bytes.startswith(b"PK")
             and sign_status == 200
             and signed.get("summary", {}).get("status") == "signed"
+            and signed.get("signoff", {}).get("export_manifest_hash") == manifest_hash
+            and zipped_signoff.get("export_manifest_hash") == manifest_hash
+            and stable_hash({key: value for key, value in zipped_manifest.items() if key != "zip"}) == manifest_hash
             and blocked_add_status == 409
             and "signed" in blocked_add.get("error", "").lower()
             and reset_missing_status == 400

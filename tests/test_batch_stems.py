@@ -82,10 +82,16 @@ def wait_for_batch_stem_audio(server, batch_id):
         if statuses & {"queued", "running"}:
             time.sleep(0.05)
             continue
-        if all(item.get("stem_audio_completed_count", 0) >= item.get("stem_count", 0) > 0 for item in batch["items"]):
+        if all(
+            item.get("stem_count", 0) > 0
+            and item.get("stem_audio_completed_count", 0) >= item.get("stem_count", 0)
+            for item in batch["items"]
+        ):
             return batch
         time.sleep(0.05)
-    raise AssertionError("batch stem audio render did not finish")
+    status, batch = request_json(server, "GET", f"/api/batches/{batch_id}")
+    assert status == 200
+    raise AssertionError(f"batch stem audio render did not finish: {batch}")
 
 
 def configure_renderer(tmp_path, server):

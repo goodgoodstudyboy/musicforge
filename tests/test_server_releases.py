@@ -6,6 +6,7 @@ from pathlib import Path
 
 from song_agent.auth import AuthConfig
 from song_agent.projectio import read_json, write_json
+from song_agent.releases import stable_hash
 from tests.test_server_auth import TOKEN, request_json as auth_request_json, start_test_server as start_auth_server, stop_test_server as stop_auth_server
 from tests.test_server_edits import request_bytes, request_json, request_payload, start_test_server, stop_test_server, wait_for_job
 
@@ -35,6 +36,9 @@ def test_release_workspace_api_qa_export_zip_signoff_and_reset(tmp_path, monkeyp
         export_after_sign_status, export_after_sign = request_json(server, "GET", f"/api/releases/{release_id}/export")
         with zipfile.ZipFile(Path(".musicforge") / "releases" / release_id / "release-export.zip") as archive:
             zipped_signoff = json.loads(archive.read("release-signoff.json").decode("utf-8"))
+            zipped_manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        disk_manifest = read_json(Path(".musicforge") / "releases" / release_id / "release-export" / "manifest.json")
+        expected_manifest_hash = stable_hash({key: value for key, value in disk_manifest.items() if key != "zip"})
         blocked_track_status, blocked_track = request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": first_project})
         reset_missing_status, reset_missing = request_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {})
         reset_status, reset = request_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": r"rebuild release C:\Users\demo"})
@@ -75,6 +79,11 @@ def test_release_workspace_api_qa_export_zip_signoff_and_reset(tmp_path, monkeyp
     assert export_after_sign_status == 200
     assert export_after_sign["manifest"]["summary"]["signoff_status"] == "signed"
     assert zipped_signoff["status"] == "signed"
+    assert signed["signoff"]["export_manifest_hash"] == expected_manifest_hash
+    assert zipped_signoff["export_manifest_hash"] == expected_manifest_hash
+    assert stable_hash({key: value for key, value in zipped_manifest.items() if key != "zip"}) == expected_manifest_hash
+    assert disk_manifest["zip"]["entry_count"] == len(zipped_manifest["zip"]["entries"])
+    assert "sha256" not in disk_manifest["zip"]
     assert blocked_track_status == 409
     assert "signed" in blocked_track["error"].lower()
     assert reset_missing_status == 400
