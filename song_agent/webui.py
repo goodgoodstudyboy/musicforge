@@ -306,16 +306,16 @@ def panel_html() -> str:
       color: var(--muted);
       font-size: 13px;
     }
-    .batch-layout, .project-layout {
+    .batch-layout, .project-layout, .release-layout {
       display: grid;
       grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
       gap: 14px;
       align-items: start;
     }
-    .batch-list, .batch-detail, .project-list, .project-detail {
+    .batch-list, .batch-detail, .project-list, .project-detail, .release-list, .release-detail {
       overflow: auto;
     }
-    .batch-detail, .project-detail {
+    .batch-detail, .project-detail, .release-detail {
       margin-top: 14px;
     }
     .audio-player {
@@ -1112,6 +1112,59 @@ def panel_html() -> str:
     </section>
     <section style="grid-column: 1 / -1;">
       <div class="panel-title">
+        <span>Releases</span>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-hidden-releases" type="checkbox" style="width:auto;margin:0;">
+            Hidden
+          </label>
+          <button class="secondary" id="refresh-releases" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="release-layout">
+          <form id="release-form">
+            <label>Release Name
+              <input id="release-name" placeholder="EP, album, client pack">
+            </label>
+            <div class="grid2">
+              <label>Release Type
+                <select id="release-type">
+                  <option value="demo_pack">demo_pack</option>
+                  <option value="single_pack">single_pack</option>
+                  <option value="ep">ep</option>
+                  <option value="album">album</option>
+                </select>
+              </label>
+              <label>Primary Artist
+                <input id="release-primary-artist" placeholder="Artist">
+              </label>
+            </div>
+            <div class="grid2">
+              <label>Catalog ID
+                <input id="release-catalog-id" placeholder="optional">
+              </label>
+              <label>Language
+                <input id="release-language" placeholder="English">
+              </label>
+            </div>
+            <label>Notes
+              <textarea id="release-notes" rows="2"></textarea>
+            </label>
+            <div class="actions">
+              <button type="submit">New Release</button>
+              <span id="release-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div id="release-list" class="release-list"><div class="empty">No releases yet.</div></div>
+          </div>
+        </div>
+        <div id="release-detail" class="release-detail"><div class="empty">Select or create a release.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
         <span>Batch</span>
         <div class="actions" style="margin-top:0;">
           <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
@@ -1178,6 +1231,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let batches = [];
     let selectedBatchId = null;
     let includeHiddenBatches = false;
+    let releases = [];
+    let selectedReleaseId = null;
+    let includeHiddenReleases = false;
     let projects = [];
     let selectedProjectId = null;
     let includeHiddenProjects = false;
@@ -1266,10 +1322,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadContextPacks();
       await loadJobs();
       await loadProjects();
+      await loadReleases();
       await loadBatches();
       setInterval(() => {
         loadJobs();
         loadProjects();
+        loadReleases();
         loadAssets();
         loadReferences();
         loadContextPacks();
@@ -1420,6 +1478,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadProjects();
       } catch (err) {
         $("project-message").textContent = err.message;
+      }
+    });
+    $("refresh-releases").addEventListener("click", loadReleases);
+    $("include-hidden-releases").addEventListener("change", async () => {
+      includeHiddenReleases = $("include-hidden-releases").checked;
+      await loadReleases();
+    });
+    $("release-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await api("/api/releases", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(releasePayload()),
+        });
+        selectedReleaseId = data.release.release_id;
+        $("release-message").textContent = "created";
+        await loadReleases();
+      } catch (err) {
+        $("release-message").textContent = err.message;
       }
     });
     $("refresh-assets").addEventListener("click", loadAssets);
@@ -1956,6 +2034,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         if (selectedProjectId) await renderProjectDetail(selectedProjectId);
       } catch (err) {
         $("project-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function loadReleases() {
+      try {
+        const data = await api(includeHiddenReleases ? "/api/releases?include_hidden=1" : "/api/releases");
+        releases = data.releases || [];
+        if (selectedReleaseId && !releases.some((release) => release.release_id === selectedReleaseId)) {
+          selectedReleaseId = null;
+          $("release-detail").innerHTML = "<div class='empty'>Select or create a release.</div>";
+        }
+        renderReleases();
+        if (selectedReleaseId) await renderReleaseDetail(selectedReleaseId);
+      } catch (err) {
+        $("release-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
       }
     }
 
@@ -2533,6 +2626,281 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           activeProjectTab = "versions";
           renderProjects();
           await renderProjectDetail(selectedProjectId);
+        });
+      });
+    }
+
+    function releasePayload() {
+      return {
+        name: $("release-name").value.trim() || "Untitled Release",
+        release_type: $("release-type").value || "demo_pack",
+        primary_artist: $("release-primary-artist").value.trim(),
+        catalog_id: $("release-catalog-id").value.trim(),
+        language: $("release-language").value.trim(),
+        notes: $("release-notes").value.trim(),
+      };
+    }
+
+    function renderReleases() {
+      const list = $("release-list");
+      if (!releases.length) {
+        list.innerHTML = "<div class='empty'>No releases yet.</div>";
+        return;
+      }
+      const rows = releases.map((release) => `
+        <tr class="${release.release_id === selectedReleaseId ? "active" : ""}">
+          <td><button class="secondary release-open" data-release-id="${escapeHtml(release.release_id)}" type="button">Open</button></td>
+          <td>${escapeHtml(release.name || release.release_id)}</td>
+          <td>${escapeHtml(release.release_type || "-")}</td>
+          <td><span class="status ${escapeHtml(release.status || "")}">${escapeHtml(release.status || "-")}</span></td>
+          <td>${escapeHtml(release.track_count || 0)}</td>
+          <td>${escapeHtml((release.qa_summary || {}).status || "missing")}</td>
+          <td>${escapeHtml((release.signoff_summary || {}).status || "not_signed")}</td>
+        </tr>
+      `).join("");
+      list.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Name</th><th>Type</th><th>Status</th><th>Tracks</th><th>QA</th><th>Signoff</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      list.querySelectorAll(".release-open").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedReleaseId = button.dataset.releaseId;
+          renderReleases();
+          await renderReleaseDetail(selectedReleaseId);
+        });
+      });
+    }
+
+    async function renderReleaseDetail(releaseId) {
+      const data = await api(`/api/releases/${encodeURIComponent(releaseId)}`);
+      const release = data.release;
+      const summary = data.summary || {};
+      let qaData = { summary: release.qa_summary || {}, release_qa: { checks: [], track_checks: [] } };
+      let exportData = { summary: release.export_summary || {}, manifest: {} };
+      let signoffData = { summary: release.signoff_summary || {}, signoff: {} };
+      try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
+      try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
+      try { signoffData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`); } catch (err) {}
+      const target = $("release-detail");
+      target.innerHTML = `
+        <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
+          <span>Release Workspace · ${escapeHtml(release.name || release.release_id)}</span>
+          <span class="status ${escapeHtml(release.status || "")}">${escapeHtml(release.status || "-")}</span>
+        </div>
+        <div class="summary-grid">
+          ${metric("Release", release.release_id)}
+          ${metric("Type", release.release_type || "-")}
+          ${metric("Tracks", summary.track_count || 0)}
+          ${metric("Artist", release.primary_artist || "-")}
+        </div>
+        <div class="summary-grid">
+          ${metric("Release QA", (qaData.summary || {}).status || "missing")}
+          ${metric("Release Export", (exportData.summary || {}).status || ((exportData.manifest || {}).schema_version ? "built" : "missing"))}
+          ${metric("Release ZIP", ((exportData.manifest || {}).zip || {}).filename || "-")}
+          ${metric("Release Signoff", (signoffData.summary || {}).status || "not_signed")}
+        </div>
+        <div class="grid2">
+          <label>Add Project
+            <select id="release-add-project">${releaseProjectOptions()}</select>
+          </label>
+          <label>Track Title
+            <input id="release-add-title" placeholder="optional title override">
+          </label>
+        </div>
+        <div class="actions">
+          ${releaseActionButtons(release, signoffData.summary || {})}
+          <span id="release-action-message" class="message"></span>
+        </div>
+        ${releaseTrackTable(release)}
+        ${releaseQaHtml(qaData)}
+        ${releaseExportHtml(exportData, release)}
+        ${releaseSignoffHtml(signoffData)}
+      `;
+      wireReleaseActions(release);
+    }
+
+    function releaseProjectOptions() {
+      return projects.map((project) => `<option value="${escapeHtml(project.project_id)}">${escapeHtml(project.name)} · ${escapeHtml(project.final_version_id || "-")}</option>`).join("");
+    }
+
+    function releaseActionButtons(release, signoffSummary) {
+      const signed = ["signed", "force_signed"].includes(signoffSummary.status);
+      return `
+        <button id="release-add-track" type="button" ${signed || !projects.length ? "disabled" : ""}>Add Track</button>
+        <button class="secondary" id="release-refresh-qa" type="button">Refresh Release QA</button>
+        <button class="secondary" id="release-build-export" type="button" ${signed ? "disabled" : ""}>Build Release Export</button>
+        <button class="secondary" id="release-build-zip" type="button">Build Release ZIP</button>
+        <button id="release-signoff" type="button" ${signed ? "disabled" : ""}>Sign Release</button>
+        <button class="danger" id="release-force-signoff" type="button" ${signed ? "disabled" : ""}>Force Sign</button>
+        <button class="danger" id="release-reset-signoff" type="button" ${signed ? "" : "disabled"}>Reset Signoff</button>
+        <button class="secondary" id="release-hide" type="button">${release.hidden ? "Unhide" : "Hide"}</button>
+        <button class="secondary" id="release-archive" type="button">Archive</button>
+        ${release.export_summary && release.export_summary.zip_filename ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/export.zip">Download Release ZIP</a>` : ""}
+      `;
+    }
+
+    function releaseTrackTable(release) {
+      const rows = (release.tracks || []).map((track) => `
+        <tr>
+          <td>${escapeHtml(track.disc_number || 1)}.${escapeHtml(track.track_number || 0)}</td>
+          <td>${escapeHtml(track.title || "-")}</td>
+          <td>${escapeHtml(track.project_id)}</td>
+          <td>${escapeHtml(track.version_id || "-")}</td>
+          <td>${escapeHtml(track.delivery_qa_status || "-")}</td>
+          <td>${escapeHtml(track.delivery_signoff_status || "-")}</td>
+          <td>
+            <button class="secondary release-track-refresh" data-track-id="${escapeHtml(track.track_id)}" type="button">Refresh</button>
+            <button class="danger release-track-remove" data-track-id="${escapeHtml(track.track_id)}" type="button">Remove</button>
+          </td>
+        </tr>
+      `).join("");
+      return `
+        <div class="panel-title subhead"><span>Tracklist</span></div>
+        <table>
+          <thead><tr><th>#</th><th>Title</th><th>Project</th><th>Version</th><th>Delivery QA</th><th>Signoff</th><th>Actions</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='7'>No tracks yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function releaseQaHtml(qaData) {
+      const summary = (qaData && qaData.summary) || {};
+      const report = (qaData && qaData.release_qa) || {};
+      return `
+        <div class="panel-title subhead"><span>Release QA</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.status || "-")}
+          ${metric("Blockers", summary.blocker_count || 0)}
+          ${metric("Warnings", summary.warning_count || 0)}
+          ${metric("Tracks", summary.track_count || 0)}
+        </div>
+        ${deliveryChecksHtml([...(report.checks || []), ...(report.track_checks || [])])}
+      `;
+    }
+
+    function releaseExportHtml(exportData, release) {
+      const manifest = (exportData && exportData.manifest) || {};
+      const zip = manifest.zip || {};
+      const rows = (manifest.files || []).slice(0, 80).map((file) => `
+        <tr><td>${escapeHtml(file.kind || "-")}</td><td>${escapeHtml(file.path || "-")}</td><td>${escapeHtml(file.size_bytes || 0)}</td></tr>
+      `).join("");
+      return `
+        <div class="panel-title subhead"><span>Release Export</span></div>
+        <div class="summary-grid">
+          ${metric("Status", (exportData.summary || {}).status || (manifest.schema_version ? "built" : "missing"))}
+          ${metric("Files", (manifest.summary || {}).file_count || 0)}
+          ${metric("Tracks", (manifest.summary || {}).track_count || (release.tracks || []).length)}
+          ${metric("ZIP", zip.filename || "-")}
+        </div>
+        <table>
+          <thead><tr><th>Kind</th><th>Path</th><th>Size</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='3'>No release export yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function releaseSignoffHtml(signoffData) {
+      const summary = (signoffData && signoffData.summary) || {};
+      const signoff = (signoffData && signoffData.signoff) || {};
+      return `
+        <div class="panel-title subhead"><span>Release Signoff</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.status || "not_signed")}
+          ${metric("Signed At", summary.signed_at || "-")}
+          ${metric("Signed By", summary.signed_by || "-")}
+          ${metric("Forced", summary.forced ? "yes" : "-")}
+        </div>
+        <div class="grid2">
+          <label>Signed By
+            <input id="release-signed-by" value="${escapeHtml(signoff.signed_by || "local-user")}">
+          </label>
+          <label>Reset Reason
+            <input id="release-reset-reason" placeholder="Reason required before reset">
+          </label>
+        </div>
+        <label>Notes
+          <textarea id="release-signoff-notes" rows="2">${escapeHtml(signoff.notes || "")}</textarea>
+        </label>
+        <label>Override Reason
+          <textarea id="release-override-reason" rows="2" placeholder="Required for force sign"></textarea>
+        </label>
+      `;
+    }
+
+    function releaseSignoffPayload(force) {
+      return {
+        force,
+        signed_by: $("release-signed-by").value.trim() || "local-user",
+        notes: $("release-signoff-notes").value.trim(),
+        override_reason: $("release-override-reason").value.trim(),
+      };
+    }
+
+    function wireReleaseActions(release) {
+      bindAction("release-add-track", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/tracks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project_id: $("release-add-project").value, title: $("release-add-title").value.trim() }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-refresh-qa", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-build-export", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-build-zip", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/export/zip`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-signoff", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(releaseSignoffPayload(false)),
+        });
+        await loadReleases();
+      });
+      bindAction("release-force-signoff", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(releaseSignoffPayload(true)),
+        });
+        await loadReleases();
+      });
+      bindAction("release-reset-signoff", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: $("release-reset-reason").value.trim() }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-hide", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/${release.hidden ? "unhide" : "hide"}`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-archive", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/archive`, { method: "POST" });
+        await loadReleases();
+      });
+      document.querySelectorAll(".release-track-refresh").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/releases/${encodeURIComponent(release.release_id)}/tracks/${encodeURIComponent(button.dataset.trackId)}/refresh`, { method: "POST" });
+          await loadReleases();
+        });
+      });
+      document.querySelectorAll(".release-track-remove").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/releases/${encodeURIComponent(release.release_id)}/tracks/${encodeURIComponent(button.dataset.trackId)}/remove`, { method: "POST" });
+          await loadReleases();
         });
       });
     }
@@ -6005,6 +6373,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } catch (err) {
         deliverySignoff = { summary: { status: "not_signed" }, signoff: {}, error: err.message };
       }
+      let releaseTargets = { releases: [] };
+      try {
+        releaseTargets = await api(`/api/projects/${encodeURIComponent(project.project_id)}/release-targets`);
+      } catch (err) {
+        releaseTargets = { releases: [], error: err.message };
+      }
       const selectedId = project.final_version_id || project.selected_version_id || project.latest_version_id || (versions[0] && versions[0].version_id) || "";
       const selected = versions.find((version) => version.version_id === selectedId) || versions[0] || {};
       target.innerHTML = `
@@ -6047,6 +6421,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         ${manifest ? finalExportManifestHtml(manifest) : `<div class="empty">${escapeHtml(message)}</div>`}
         ${deliveryQaHtml(deliveryQa, deliverySignoff)}
+        ${projectAddToReleaseHtml(releaseTargets)}
       `;
       bindAction("project-generate-final-export", async () => {
         await api(`/api/projects/${encodeURIComponent(project.project_id)}/final-export`, {
@@ -6089,6 +6464,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: $("project-delivery-reset-reason").value.trim() }),
         });
+        await renderProjectFinalExport(project, versions, target);
+      });
+      bindAction("project-add-to-release", async () => {
+        await api(`/api/projects/${encodeURIComponent(project.project_id)}/add-to-release`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            release_id: $("project-release-target").value,
+            title: $("project-release-track-title").value.trim(),
+          }),
+        });
+        await loadReleases();
         await renderProjectFinalExport(project, versions, target);
       });
     }
@@ -6203,6 +6590,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </div>
           ${deliveryChecksHtml(checks)}
           ${deliveryArtifactsHtml(files)}
+        </div>
+      `;
+    }
+
+    function projectAddToReleaseHtml(targets) {
+      const releases = targets.releases || [];
+      const options = releases.map((release) => `<option value="${escapeHtml(release.release_id)}">${escapeHtml(release.name || release.release_id)} · ${escapeHtml(release.status || "-")}</option>`).join("");
+      return `
+        <div class="panel-title subhead"><span>Add to Release</span></div>
+        <div class="grid2">
+          <label>Release
+            <select id="project-release-target">${options}</select>
+          </label>
+          <label>Track Title
+            <input id="project-release-track-title" placeholder="optional title override">
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="project-add-to-release" type="button" ${releases.length ? "" : "disabled"}>Add to Release</button>
+          <span class="message">${escapeHtml(targets.error || "")}</span>
         </div>
       `;
     }

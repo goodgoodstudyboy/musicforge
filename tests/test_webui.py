@@ -419,6 +419,8 @@ def test_webui_calls_project_apis():
     assert "/api/projects/${encodeURIComponent(project.project_id)}/delivery-qa/refresh" in html
     assert "/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff" in html
     assert "/api/projects/${encodeURIComponent(project.project_id)}/delivery-signoff/reset" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/release-targets" in html
+    assert "/api/projects/${encodeURIComponent(project.project_id)}/add-to-release" in html
     assert "/api/projects/${id}/selected" in html
     assert "/api/projects/${id}/final" in html
     assert "/api/projects/${encodeURIComponent(project.project_id)}/compare" in html
@@ -427,6 +429,31 @@ def test_webui_calls_project_apis():
     assert "/api/projects/${id}/hide" in html
     assert "/api/projects/${id}/unhide" in html
     assert "/api/projects/${id}/delete" in html
+
+
+def test_webui_contains_release_workspace_controls():
+    html = panel_html()
+
+    assert "Release Workspace" in html
+    assert "Release QA" in html
+    assert "Release Export" in html
+    assert "Release Signoff" in html
+    assert "Tracklist" in html
+    assert "Add to Release" in html
+    assert "/api/releases" in html
+    assert "/api/releases?include_hidden=1" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/tracks" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/tracks/${encodeURIComponent(button.dataset.trackId)}/refresh" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/tracks/${encodeURIComponent(button.dataset.trackId)}/remove" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/qa" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/qa/refresh" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/export" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/export/zip" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/export.zip" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/signoff" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/signoff/reset" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/${release.hidden ? \"unhide\" : \"hide\"}" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/archive" in html
 
 
 def test_webui_contains_interactive_editor_controls():

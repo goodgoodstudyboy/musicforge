@@ -96,6 +96,32 @@ from song_agent.delivery_qa import (
     mark_delivery_qa_stale,
     signoff_history_event,
 )
+from song_agent.release_export import (
+    ReleaseExportError,
+    build_release_export_bundle,
+    build_release_export_zip,
+    read_release_export_manifest,
+    refresh_release_export_signoff_summary,
+    release_export_summary,
+)
+from song_agent.release_qa import (
+    build_release_qa_report,
+    build_release_signoff_record,
+    mark_release_qa_stale,
+    release_qa_allows_signoff,
+    release_qa_summary,
+    release_signoff_summary,
+    release_source_hash,
+    signoff_history_event as release_signoff_history_event,
+)
+from song_agent.releases import (
+    ReleaseConflictError,
+    ReleaseNotFoundError,
+    ReleaseStateError,
+    ReleaseStore,
+    ReleaseValidationError,
+    release_summary,
+)
 from song_agent.context_packs import (
     ContextPackStaleError,
     ContextPackStore,
@@ -2200,6 +2226,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         self._handle_request("POST")
 
+    def do_PATCH(self) -> None:
+        self._handle_request("PATCH")
+
     def log_message(self, format: str, *args: Any) -> None:
         return
 
@@ -2218,6 +2247,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def project_store(self) -> ProjectStore:
         return self.server.project_store  # type: ignore[attr-defined]
+
+    @property
+    def release_store(self) -> ReleaseStore:
+        return self.server.release_store  # type: ignore[attr-defined]
 
     @property
     def edit_preset_store(self) -> EditPresetStore:
@@ -2347,6 +2380,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_projects_root(method, parsed.query)
                 return
 
+            if path == "/api/releases":
+                self._handle_releases_root(method, parsed.query)
+                return
+
             if path == "/api/usage/provider":
                 self._handle_provider_usage_root(method)
                 return
@@ -2455,6 +2492,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if project_route is not None:
                 project_id, tail = project_route
                 self._handle_project_route(method, project_id, tail, parsed.query)
+                return
+
+            release_route = _match_release_route(path)
+            if release_route is not None:
+                release_id, tail = release_route
+                self._handle_release_route(method, release_id, tail, parsed.query)
                 return
 
             batch_route = _match_batch_route(path)
@@ -2773,6 +2816,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 },
                 status=HTTPStatus.CREATED,
             )
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_releases_root(self, method: str, query_string: str) -> None:
+        if method == "GET":
+            query = parse_qs(query_string)
+            include_hidden = query.get("include_hidden", ["0"])[0] in {"1", "true", "yes"}
+            documents = self.release_store.list_releases(include_hidden=include_hidden)
+            self._send_json({"releases": [release_summary(document) for document in documents]})
+            return
+        if method == "POST":
+            payload = self._read_json_body()
+            try:
+                document = self.release_store.create_release(payload)
+            except ReleaseValidationError as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)}, status=HTTPStatus.CREATED)
             return
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
 
@@ -3671,6 +3732,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_delivery_signoff(method, project_id, action="reset")
             return
 
+        if tail == "/release-targets":
+            self._handle_project_release_targets(method, project_id)
+            return
+
+        if tail == "/add-to-release":
+            self._handle_project_add_to_release(method, project_id)
+            return
+
         if tail == "/diff":
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -4049,6 +4118,298 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "project_id": project_id, "summary": {"status": "reset"}, "history_event": event})
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Delivery signoff route not found.")
+
+    def _handle_project_release_targets(self, method: str, project_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        releases = [
+            release_summary(document)
+            for document in self.release_store.list_releases(include_hidden=False)
+            if document.status not in {"signed", "archived"}
+        ]
+        self._send_json({"ok": True, "project_id": project_id, "releases": releases})
+
+    def _handle_project_add_to_release(self, method: str, project_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._read_json_body()
+        try:
+            self.project_store.get_project(project_id)
+            release_id = str(payload.get("release_id") or "").strip()
+            if not release_id:
+                release = self.release_store.create_release(
+                    {
+                        "name": str(payload.get("release_name") or "Untitled Release"),
+                        "release_type": str(payload.get("release_type") or "demo_pack"),
+                        "primary_artist": str(payload.get("primary_artist") or ""),
+                        "language": payload.get("language"),
+                        "notes": payload.get("notes"),
+                    }
+                )
+                release_id = release.release_id
+            document = self.release_store.add_track(
+                release_id,
+                {
+                    **payload,
+                    "project_id": project_id,
+                },
+            )
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+            return
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+            return
+        except (ReleaseValidationError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except (ReleaseConflictError, ReleaseStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)})
+
+    def _handle_release_route(self, method: str, release_id: str, tail: str, query_string: str) -> None:
+        try:
+            if tail == "":
+                if method == "GET":
+                    document = self.release_store.get_release(release_id)
+                    self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document), "events": self.release_store.read_events(release_id)})
+                    return
+                if method == "PATCH":
+                    payload = self._read_json_body()
+                    document = self.release_store.update_release(release_id, payload)
+                    self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if tail in {"/hide", "/unhide"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                document = self.release_store.hide_release(release_id, hidden=tail == "/hide")
+                self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)})
+                return
+
+            if tail == "/archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                document = self.release_store.archive_release(release_id)
+                self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)})
+                return
+
+            if tail == "/delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.release_store.delete_release(release_id)})
+                return
+
+            if tail == "/tracks":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._read_json_body()
+                document = self.release_store.add_track(release_id, payload)
+                self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)})
+                return
+
+            if tail == "/tracks/reorder":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                document = self.release_store.reorder_tracks(release_id, self._read_json_body())
+                self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)})
+                return
+
+            track_route = _match_release_track_tail(tail)
+            if track_route is not None:
+                track_id, action = track_route
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if action == "remove":
+                    document = self.release_store.remove_track(release_id, track_id)
+                elif action == "refresh":
+                    document = self.release_store.refresh_track(release_id, track_id)
+                else:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Release track route not found.")
+                    return
+                self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)})
+                return
+
+            if tail == "/qa":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_release_qa(release_id, refresh=False, options={})
+                self._send_json({"ok": True, "release_id": release_id, "release_qa": report, "summary": release_qa_summary(report)})
+                return
+
+            if tail == "/qa/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_release_qa(release_id, refresh=True, options=self._optional_json_body())
+                self.release_store.append_event(release_id, "release_qa_refreshed", {"status": report.get("status")})
+                self._send_json({"ok": True, "release_id": release_id, "release_qa": report, "summary": release_qa_summary(report)})
+                return
+
+            if tail == "/export":
+                if method == "GET":
+                    try:
+                        manifest = read_release_export_manifest(self.release_store, release_id)
+                    except FileNotFoundError:
+                        self._send_json({"ok": True, "release_id": release_id, "manifest": {}, "summary": release_export_summary({})})
+                        return
+                    self._send_json({"ok": True, "release_id": release_id, "manifest": manifest, "summary": release_export_summary(manifest)})
+                    return
+                if method == "POST":
+                    document = self.release_store.get_release(release_id)
+                    report = self._get_or_refresh_release_qa(release_id, refresh=False, options={})
+                    manifest = build_release_export_bundle(release=document, release_store=self.release_store, project_store=self.project_store, qa_report=report, now=_utc_now())
+                    document = self.release_store.update_export_summary(release_id, release_export_summary(manifest))
+                    self.release_store.append_event(release_id, "release_export_created", {"file_count": manifest.get("summary", {}).get("file_count")})
+                    self._send_json({"ok": True, "release": document.to_dict(), "manifest": manifest, "summary": release_export_summary(manifest)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if tail == "/export/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = build_release_export_zip(self.release_store, release_id, now=_utc_now())
+                manifest = read_release_export_manifest(self.release_store, release_id)
+                document = self.release_store.update_export_summary(release_id, release_export_summary(manifest))
+                self.release_store.append_event(release_id, "release_export_zip_created", {"sha256": zip_info.get("sha256")})
+                self._send_json({"ok": True, "release": document.to_dict(), "zip": zip_info, "summary": release_export_summary(manifest)})
+                return
+
+            if tail == "/export.zip":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_store.get_release(release_id)
+                self._send_file(self.release_store.zip_path(release_id), "application/zip", filename=f"musicforge-{release_id}-release-export.zip")
+                return
+
+            if tail == "/signoff":
+                self._handle_release_signoff(method, release_id)
+                return
+
+            if tail == "/signoff/reset":
+                self._handle_release_signoff_reset(method, release_id)
+                return
+
+            if tail == "/events":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_store.get_release(release_id)
+                self._send_json({"events": self.release_store.read_events(release_id)})
+                return
+
+            self._send_error(HTTPStatus.NOT_FOUND, "Release route not found.")
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (ReleaseValidationError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except (ReleaseConflictError, ReleaseStateError, ReleaseExportError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: dict[str, Any]) -> dict[str, Any]:
+        document = self.release_store.get_release(release_id)
+        if not refresh:
+            existing = self.release_store.read_qa(release_id, default={})
+            if existing:
+                current_hash = release_source_hash(document, project_store=self.project_store, release_store=self.release_store)
+                if str(existing.get("source_hash") or "") != current_hash:
+                    return mark_release_qa_stale(existing, current_source_hash=current_hash)
+                return existing
+        report = build_release_qa_report(release=document, release_store=self.release_store, project_store=self.project_store, options=options, now=_utc_now())
+        report = self.release_store.write_qa(release_id, report)
+        self.release_store.update_qa_summary(release_id, release_qa_summary(report))
+        return report
+
+    def _handle_release_signoff(self, method: str, release_id: str) -> None:
+        if method == "GET":
+            signoff = self.release_store.read_signoff(release_id, default={})
+            self._send_json({"ok": True, "release_id": release_id, "signoff": signoff, "summary": release_signoff_summary(signoff)})
+            return
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._optional_json_body()
+        existing = self.release_store.read_signoff(release_id, default={})
+        if existing:
+            self._send_error(HTTPStatus.CONFLICT, "Release is already signed off. Reset signoff before signing again.")
+            return
+        document = self.release_store.get_release(release_id)
+        report = self._get_or_refresh_release_qa(release_id, refresh=True, options={})
+        force = bool(payload.get("force", False))
+        if not release_qa_allows_signoff(report) and not force:
+            self._send_error(HTTPStatus.CONFLICT, "Release QA gate failed. Refresh QA or pass force=true with override_reason.")
+            return
+        if force and not str(payload.get("override_reason") or "").strip():
+            self._send_error(HTTPStatus.BAD_REQUEST, "override_reason is required when force=true.")
+            return
+        try:
+            export_manifest = read_release_export_manifest(self.release_store, release_id)
+        except FileNotFoundError:
+            export_manifest = {}
+        if not export_manifest and not force:
+            self._send_error(HTTPStatus.CONFLICT, "Release Export has not been generated.")
+            return
+        if export_manifest and not force:
+            if export_manifest.get("source_hash") != report.get("source_hash"):
+                self._send_error(HTTPStatus.CONFLICT, "Release Export is stale. Rebuild export before signoff.")
+                return
+            if bool(payload.get("require_zip", True)) and not (isinstance(export_manifest.get("zip"), dict) and export_manifest["zip"].get("sha256")):
+                self._send_error(HTTPStatus.CONFLICT, "Release ZIP has not been generated.")
+                return
+        try:
+            signoff = build_release_signoff_record(release=document, report=report, payload={**payload, "force": force}, export_manifest=export_manifest, now=_utc_now())
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        signoff = self.release_store.write_signoff(release_id, signoff)
+        try:
+            refresh_release_export_signoff_summary(self.release_store, release_id)
+            build_release_export_zip(self.release_store, release_id, now=_utc_now())
+        except FileNotFoundError:
+            pass
+        document = self.release_store.update_signoff_summary(release_id, release_signoff_summary(signoff))
+        self.release_store.append_event(release_id, "release_force_signed" if force else "release_signed", {"status": report.get("status"), "forced": force})
+        self._send_json({"ok": True, "release": document.to_dict(), "signoff": signoff, "summary": release_signoff_summary(signoff)})
+
+    def _handle_release_signoff_reset(self, method: str, release_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        payload = self._optional_json_body()
+        reason = str(payload.get("reason") or "").strip()
+        if not reason:
+            self._send_error(HTTPStatus.BAD_REQUEST, "reason is required.")
+            return
+        existing = self.release_store.read_signoff(release_id, default={})
+        if not existing:
+            self._send_json({"ok": True, "release_id": release_id, "summary": {"status": "not_signed"}})
+            return
+        event = release_signoff_history_event(existing, reason=reason, now=_utc_now())
+        self.release_store.reset_signoff(release_id, event)
+        self.release_store.append_event(release_id, "release_signoff_reset", {"reason": event.get("reason"), "previous_status": release_signoff_summary(existing).get("status")})
+        self._send_json({"ok": True, "release_id": release_id, "summary": {"status": "reset"}, "history_event": event})
 
     def _get_or_refresh_delivery_qa(self, project_id: str, *, refresh: bool) -> dict[str, Any]:
         project_dir = self.project_store.project_dir(project_id)
@@ -8508,6 +8869,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.job_store = JobStore(asset_store=self.asset_store, reference_store=self.reference_store, context_pack_store=self.context_pack_store)
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
+        self.release_store = ReleaseStore(project_store=self.project_store)
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
         self.editor_template_store = EditorTemplateStore()
@@ -8949,6 +9311,29 @@ def _match_project_route(path: str) -> tuple[str, str] | None:
         project_id, tail = rest.split("/", 1)
         return unquote(project_id), "/" + tail
     return unquote(rest), ""
+
+
+def _match_release_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/releases/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest:
+        return None
+    if "/" in rest:
+        release_id, tail = rest.split("/", 1)
+        return unquote(release_id), "/" + tail
+    return unquote(rest), ""
+
+
+def _match_release_track_tail(tail: str) -> tuple[str, str] | None:
+    parts = [part for part in tail.strip("/").split("/") if part]
+    if len(parts) != 3 or parts[0] != "tracks":
+        return None
+    action = parts[2]
+    if action not in {"refresh", "remove"}:
+        return None
+    return unquote(parts[1]), action
 
 
 def _merge_editor_patch_metadata(left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict[str, Any]:

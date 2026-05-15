@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.7.0 - 2026-05-15
+
+### Added
+- Release Workspace persistence under `.musicforge/releases/<release-id>/` for multi-track EP/album/demo-pack assembly from Project Delivery QA and Signoff-approved Final Exports.
+- Release Store, Release QA, Release Export, Release ZIP, and Release Signoff flows with track ordering, project snapshot refresh, stale guards, signed-release mutation blocking, reset history, and path-safe ZIP creation.
+- Release APIs plus Project `release-targets` and `add-to-release` endpoints.
+- Studio top-level Releases workspace and Project Final Export `Add to Release` controls.
+- release-check v3.7 smoke covering multi-project release assembly, QA, export, ZIP download, signoff, signed mutation blocking, stale Project artifact detection, raw Release JSON redaction, and ZIP metadata/path safety.
+
+### Scope
+- Release Workspace is a local packaging and audit layer only. It does not rebuild Project Final Exports, change Project final versions, upload releases, call providers, auto-sign, or publish to external stores.
+
+### Verified
+- `python -m pytest tests\test_releases.py tests\test_release_qa.py tests\test_release_export.py tests\test_server_releases.py tests\test_webui.py -q`
+
 ## v3.6.1 - 2026-05-15
 
 ### Fixed

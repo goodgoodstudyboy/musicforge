@@ -194,6 +194,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.4 provider review judge smoke", *_v34_provider_review_judge_smoke(root))
     report.add("v3.5 review sprint closeout smoke", *_v35_review_sprint_closeout_smoke(root))
     report.add("v3.6 delivery qa handoff smoke", *_v36_delivery_qa_handoff_smoke(root))
+    report.add("v3.7 release workspace smoke", *_v37_release_workspace_smoke(root))
     return report
 
 
@@ -3932,6 +3933,154 @@ def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
             server.shutdown()
             server.server_close()
         os.chdir(old_cwd)
+
+
+def _v37_release_workspace_smoke(root: Path) -> tuple[bool, str]:
+    base = root / ".release-check" / "v37-release-workspace"
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        first_project = _v37_signed_project(server, "Release Workspace Track One")
+        second_project = _v37_signed_project(server, "Release Workspace Track Two")
+        created_status, created = _release_http_json(
+            server,
+            "POST",
+            "/api/releases",
+            {"name": "Release Workspace EP", "release_type": "ep", "primary_artist": "MusicForge", "catalog_id": "MF-370"},
+        )
+        release_id = created.get("release", {}).get("release_id")
+        add_first_status, add_first = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": first_project})
+        project_targets_status, project_targets = _release_http_json(server, "GET", f"/api/projects/{second_project}/release-targets")
+        add_second_status, add_second = _release_http_json(server, "POST", f"/api/projects/{second_project}/add-to-release", {"release_id": release_id})
+        qa_status, qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        sign_before_export_status, sign_before_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {})
+        export_status, exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, zipped = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        zip_download_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/export.zip")
+        sign_status, signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "notes": r"accepted C:\Users\demo api_key=sk-secret-value"})
+        blocked_add_status, blocked_add = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": first_project})
+        reset_missing_status, reset_missing = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {})
+        reset_status, reset = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": r"release rebuild C:\Users\demo"})
+        release_dir = base / ".musicforge" / "releases" / release_id
+        export_manifest = read_json(release_dir / "release-export" / "manifest.json")
+        with zipfile.ZipFile(release_dir / "release-export.zip", "r") as archive:
+            zipped_manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+            zip_names = archive.namelist()
+        export_serialized = json.dumps({"exported": exported, "zipped": zipped, "manifest": export_manifest, "zip_manifest": zipped_manifest}, ensure_ascii=False)
+        zip_safe = (
+            "path" not in zipped.get("zip", {})
+            and "path" not in export_manifest.get("zip", {})
+            and "path" not in zipped_manifest.get("zip", {})
+            and str(base) not in export_serialized
+            and "C:\\Users" not in export_serialized
+            and all(not name.startswith("/") and ".." not in Path(name).parts for name in zip_names)
+        )
+
+        project_dir = base / ".musicforge" / "projects" / first_project
+        manifest_path = project_dir / "final-export" / "manifest.json"
+        hidden_manifest = read_json(manifest_path)
+        song_mid = project_dir / "final-export" / "song.mid"
+        if song_mid.exists():
+            song_mid.unlink()
+        hidden_manifest["files"] = [item for item in hidden_manifest.get("files", []) if not (isinstance(item, dict) and item.get("path") == "song.mid")]
+        write_json(manifest_path, hidden_manifest)
+        build_final_export_zip(project_dir, now="2026-05-15T00:05:00+00:00")
+        stale_status, stale = _release_http_json(server, "GET", f"/api/releases/{release_id}/qa")
+        missing_status, missing = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        missing_core_check = next((check for check in missing.get("release_qa", {}).get("track_checks", []) if isinstance(check, dict) and check.get("check_id") == "final_export_core_files"), {})
+
+        release_json_path = release_dir / "release.json"
+        polluted_release = read_json(release_json_path)
+        polluted_release.setdefault("metadata", {})["local_path"] = r"C:\Users\demo\release\secret.zip"
+        write_json(release_json_path, polluted_release)
+        redaction_status, redaction = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        redaction_check = next((check for check in redaction.get("release_qa", {}).get("checks", []) if isinstance(check, dict) and check.get("check_id") == "redaction_scan"), {})
+        serialized = json.dumps({"signed": signed, "reset": reset, "project_targets": project_targets}, ensure_ascii=False)
+        ok = (
+            created_status == 201
+            and release_id
+            and add_first_status == 200
+            and add_first.get("summary", {}).get("track_count") == 1
+            and project_targets_status == 200
+            and any(item.get("release_id") == release_id for item in project_targets.get("releases", []))
+            and add_second_status == 200
+            and add_second.get("summary", {}).get("track_count") == 2
+            and qa_status == 200
+            and qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and sign_before_export_status == 409
+            and "Release Export" in sign_before_export.get("error", "")
+            and export_status == 200
+            and exported.get("summary", {}).get("track_count") == 2
+            and zip_status == 200
+            and zipped.get("zip", {}).get("sha256")
+            and zip_download_status == 200
+            and zip_bytes.startswith(b"PK")
+            and sign_status == 200
+            and signed.get("summary", {}).get("status") == "signed"
+            and blocked_add_status == 409
+            and "signed" in blocked_add.get("error", "").lower()
+            and reset_missing_status == 400
+            and "reason" in reset_missing.get("error", "")
+            and reset_status == 200
+            and reset.get("summary", {}).get("status") == "reset"
+            and zip_safe
+            and stale_status == 200
+            and stale.get("release_qa", {}).get("status") == "stale"
+            and missing_status == 200
+            and missing.get("summary", {}).get("status") == "failed"
+            and missing_core_check.get("status") == "failed"
+            and redaction_status == 200
+            and redaction.get("summary", {}).get("status") == "failed"
+            and redaction_check.get("status") == "failed"
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, f"release={release_id}, qa={qa.get('summary', {}).get('status')}, sign={signed.get('summary', {}).get('status')}, missing_core={missing_core_check.get('status')}, raw_redaction={redaction_check.get('status')}"
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+
+
+def _v37_signed_project(server: Any, title: str) -> str:
+    created_status, created = _release_http_json(server, "POST", "/api/projects", {"name": title})
+    if created_status != 201:
+        raise RuntimeError(f"create project failed: {created_status} {created}")
+    project_id = created["project"]["project_id"]
+    version_status, version = _release_http_json(
+        server,
+        "POST",
+        f"/api/projects/{project_id}/versions",
+        {"name": title, "request": {"title": title, "language": "English", "style": "synth pop", "theme": "release workspace", "tempo_bpm": 120, "key": "C"}},
+    )
+    if version_status != 202:
+        raise RuntimeError(f"create version failed: {version_status} {version}")
+    job = _release_wait_http_job(server, version["job"]["job_id"])
+    if job.get("status") != "completed":
+        raise RuntimeError(f"job failed: {job}")
+    final_status, _final = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": "v001"})
+    export_status, _exported = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+    zip_status, _zipped = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+    qa_status, qa = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+    sign_status, signoff = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {"signed_by": "release-check"})
+    if not (final_status == 200 and export_status == 200 and zip_status == 200 and qa_status == 200 and sign_status == 200 and qa.get("summary", {}).get("handoff_allowed") is True and signoff.get("summary", {}).get("status") == "signed"):
+        raise RuntimeError(f"project signoff chain failed: final={final_status} export={export_status} zip={zip_status} qa={qa_status} sign={sign_status}")
+    return project_id
 
 
 def _release_http_json(server: Any, method: str, path: str, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
