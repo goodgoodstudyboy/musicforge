@@ -691,6 +691,34 @@ def test_final_export_zip_contains_only_safe_relative_entries(tmp_path: Path) ->
     assert read_final_export_manifest(project_dir)["zip"]["entry_count"] == zip_info["entry_count"]
 
 
+def test_final_export_zip_metadata_never_writes_absolute_path(tmp_path: Path) -> None:
+    project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
+    run_dir, _plan = make_run(tmp_path)
+    build_final_export_bundle(
+        project=Project(),
+        version=Version(),
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=passed_gate(run_dir),
+        options=FinalExportOptions(),
+        now="2026-05-06T00:00:00Z",
+        project_export={"project": {"project_id": "export-project"}},
+    )
+
+    build_final_export_zip(project_dir, now="2026-05-06T00:00:00Z")
+    zip_info = build_final_export_zip(project_dir, now="2026-05-06T00:01:00Z")
+    disk_manifest = read_final_export_manifest(project_dir)
+    with zipfile.ZipFile(project_dir / "final-export.zip") as archive:
+        zipped_manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+    serialized_zip_metadata = json.dumps({"zip_info": zip_info, "disk": disk_manifest["zip"], "zipped": zipped_manifest["zip"]}, ensure_ascii=False)
+
+    assert "path" not in zip_info
+    assert "path" not in disk_manifest["zip"]
+    assert "path" not in zipped_manifest["zip"]
+    assert str(project_dir) not in serialized_zip_metadata
+    assert str(project_dir).replace("\\", "/") not in serialized_zip_metadata
+
+
 def test_final_export_zip_requires_existing_export_dir(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="Final export"):
         build_final_export_zip(tmp_path / ".musicforge" / "projects" / "missing", now="2026-05-06T00:00:00Z")

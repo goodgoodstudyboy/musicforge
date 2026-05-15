@@ -427,6 +427,12 @@ reset writes `delivery-signoff-history.jsonl`. Delivery QA never rebuilds export
 artifacts, calls providers, changes project final version, uploads files, or
 auto-signs anything.
 
+v3.6.1 hardens Delivery QA against polluted Final Export manifests. Required
+handoff artifacts are checked from a built-in baseline, so removing `song.mid`
+or `song-plan.json` from `manifest.files` cannot hide a missing file. Final
+Export ZIP metadata also omits local absolute paths, and Delivery QA scans the
+raw manifest before sanitizing its report.
+
 Edit presets can be applied from Studio's Project Edit tab. Built-in presets
 cover common edits such as lifting the final chorus, simplifying verse bass,
 brightening chorus harmony, and rewriting a chorus hook. User presets are stored

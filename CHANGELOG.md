@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.6.1 - 2026-05-15
+
+### Fixed
+- Delivery QA now enforces a built-in required Final Export baseline instead of trusting `manifest.files` alone. `manifest.json`, `README.txt`, `project-export.json`, `song-plan.json`, and `song.mid` must exist even if a polluted manifest removes those entries.
+- Delivery QA now scans the raw Final Export manifest for sensitive values before returning a sanitized report, so polluted fields such as `zip.path = C:\...` fail `redaction_scan`.
+- Final Export ZIP metadata no longer writes a local absolute `zip.path` into `manifest.json` or the ZIP-contained manifest.
+
+### Verified
+- `python -m pytest tests\test_delivery_qa.py tests\test_server_delivery_qa.py tests\test_final_export.py tests\test_release_check.py -q`
+
 ## v3.6.0 - 2026-05-15
 
 ### Added

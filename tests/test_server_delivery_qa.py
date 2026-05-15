@@ -92,6 +92,35 @@ def test_delivery_qa_get_marks_stale_after_zip_changes_and_blocks_normal_sign(tm
     assert "Delivery QA gate failed" in sign_error["error"]
 
 
+def test_delivery_qa_blocks_signoff_when_manifest_hides_missing_core_artifact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _final_project_with_export(server)
+        project_dir = Path(".musicforge") / "projects" / project_id
+        request_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+        manifest_path = project_dir / "final-export" / "manifest.json"
+        manifest = read_json(manifest_path)
+        (project_dir / "final-export" / "song.mid").unlink()
+        manifest["files"] = [file for file in manifest["files"] if file.get("path") != "song.mid"]
+        from song_agent.final_export import build_final_export_zip
+        from song_agent.projectio import write_json
+
+        write_json(manifest_path, manifest)
+        build_final_export_zip(project_dir, now="2026-05-15T00:02:00+00:00")
+        qa_status, qa = request_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        sign_status, sign_error = request_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {})
+    finally:
+        stop_test_server(server)
+
+    required = next(check for check in qa["delivery_qa"]["checks"] if check["check_id"] == "required_artifacts_exist")
+    assert qa_status == 200
+    assert qa["summary"]["handoff_allowed"] is False
+    assert required["status"] == "failed"
+    assert sign_status == 409
+    assert "Delivery QA gate failed" in sign_error["error"]
+
+
 def test_delivery_qa_auth_protected(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_auth_server(AuthConfig(enabled=True, token=TOKEN))

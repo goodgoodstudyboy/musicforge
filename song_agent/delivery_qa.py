@@ -45,6 +45,13 @@ SENSITIVE_VALUE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?<!\S)/home/[^/\s,;]+(?:/[^\s,;]+)*"), "local path"),
 )
 ZIP_SIZE_WARNING_BYTES = 500 * 1024 * 1024
+CORE_REQUIRED_EXPORT_FILES: tuple[tuple[str, str], ...] = (
+    ("manifest", "manifest.json"),
+    ("readme", "README.txt"),
+    ("project_export", "project-export.json"),
+    ("song_plan", "song-plan.json"),
+    ("midi", "song.mid"),
+)
 
 
 def build_delivery_qa_report(
@@ -79,6 +86,7 @@ def build_delivery_qa_report(
         review_sprint=review_sprint,
         artifact_integrity=artifact_integrity,
         manifest=source["manifest"],
+        raw_manifest=source["raw_manifest"],
         project_export=project_export,
         report_probe={
             "final_version": final_version,
@@ -294,7 +302,7 @@ def _delivery_sources(
     project_export: dict[str, Any] | None,
     final_export_manifest: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    manifest, manifest_exists, manifest_error = _read_manifest(project_dir, final_export_manifest)
+    manifest, raw_manifest, manifest_exists, manifest_error = _read_manifest(project_dir, final_export_manifest)
     expected_files = _expected_files(project_dir, manifest, manifest_exists)
     actual_files = _actual_export_files(project_dir)
     zip_info = _actual_zip_info(project_dir, actual_files)
@@ -303,6 +311,8 @@ def _delivery_sources(
         "project": _project_source(project_id, project_document),
         "versions": _version_sources(project_document),
         "manifest": _manifest_source(manifest if manifest_exists else {}),
+        "raw_manifest": raw_manifest if manifest_exists else {},
+        "raw_manifest_sha256": _raw_stable_hash(raw_manifest) if manifest_exists else None,
         "manifest_exists": manifest_exists,
         "manifest_error": manifest_error,
         "expected_files": expected_files,
@@ -312,17 +322,18 @@ def _delivery_sources(
     }
 
 
-def _read_manifest(project_dir: Path, provided: dict[str, Any] | None) -> tuple[dict[str, Any], bool, str]:
+def _read_manifest(project_dir: Path, provided: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any], bool, str]:
     if isinstance(provided, dict) and provided:
-        return sanitize_metadata(provided, blocked_keys=BLOCKED_DELIVERY_KEYS), True, ""
+        return sanitize_metadata(provided, blocked_keys=BLOCKED_DELIVERY_KEYS), dict(provided), True, ""
     path = final_export_dir(project_dir) / "manifest.json"
     if not path.exists():
-        return {}, False, ""
+        return {}, {}, False, ""
     try:
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {}, blocked_keys=BLOCKED_DELIVERY_KEYS), True, ""
+        raw = data if isinstance(data, dict) else {}
+        return sanitize_metadata(raw, blocked_keys=BLOCKED_DELIVERY_KEYS), dict(raw), True, ""
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        return {}, False, f"Final Export manifest is invalid. Rebuild final export. {exc}"
+        return {}, {}, False, f"Final Export manifest is invalid. Rebuild final export. {exc}"
 
 
 def _project_source(project_id: str, project_document: ProjectDocument | Any) -> dict[str, Any]:
@@ -392,70 +403,134 @@ def _strip_delivery_summaries(manifest: dict[str, Any]) -> dict[str, Any]:
 
 
 def _expected_files(project_dir: Path, manifest: dict[str, Any], manifest_exists: bool) -> list[dict[str, Any]]:
-    if not manifest_exists:
-        return []
     export_dir = final_export_dir(project_dir).resolve()
-    rows = []
+    rows_by_path: dict[str, dict[str, Any]] = {}
+    manifest_items = [item for item in manifest.get("files", []) if isinstance(item, dict)] if isinstance(manifest.get("files"), list) else []
+    manifest_by_path = {str(item.get("path") or "").strip(): item for item in manifest_items if str(item.get("path") or "").strip()}
+
+    for kind, path in CORE_REQUIRED_EXPORT_FILES:
+        item = manifest_by_path.get(path, {})
+        rows_by_path[path] = _expected_file_row(
+            export_dir,
+            path,
+            kind=kind,
+            required=True,
+            manifest_exists=bool(item.get("exists", False)) if item else path == "manifest.json" and manifest_exists,
+            skipped=item.get("skipped") if isinstance(item, dict) else None,
+        )
+
+    if _quality_gate_requires_stems(manifest):
+        item = manifest_by_path.get("stems/manifest.json", {})
+        rows_by_path["stems/manifest.json"] = _expected_file_row(
+            export_dir,
+            "stems/manifest.json",
+            kind="stem_manifest",
+            required=True,
+            manifest_exists=bool(item.get("exists", False)) if item else False,
+            skipped=item.get("skipped") if isinstance(item, dict) else None,
+        )
+        for path in _required_stem_midi_paths(export_dir):
+            item = manifest_by_path.get(path, {})
+            rows_by_path[path] = _expected_file_row(
+                export_dir,
+                path,
+                kind="stem_midi",
+                required=True,
+                manifest_exists=bool(item.get("exists", False)) if item else False,
+                skipped=item.get("skipped") if isinstance(item, dict) else None,
+            )
+
     for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
         if not isinstance(item, dict):
             continue
         raw_path = str(item.get("path") or "").strip()
-        row = {
-            "kind": str(item.get("kind") or ""),
-            "path": raw_path,
-            "required": bool(item.get("required", False)),
-            "manifest_exists": bool(item.get("exists", False)),
-            "safe": False,
-            "exists": False,
-            "size_bytes": None,
-            "sha256": None,
-            "error": "",
-        }
-        try:
-            target = _safe_export_path(export_dir, raw_path)
-            row["safe"] = True
-            if target.exists() and target.is_file() and not target.is_symlink():
-                row["exists"] = True
-                row["size_bytes"] = target.stat().st_size
-                row["sha256"] = _sha256(target)
-            elif target.is_symlink():
-                row["error"] = "Artifact path is a symlink."
-            elif row["manifest_exists"] or row["required"]:
-                row["error"] = "Artifact file is missing."
-        except ValueError as exc:
-            row["error"] = str(exc)
-        rows.append(row)
-    manifest_path = export_dir / "manifest.json"
-    if manifest_path.exists() and "manifest.json" not in {row["path"] for row in rows}:
-        rows.append(
-            {
-                "kind": "manifest",
-                "path": "manifest.json",
-                "required": True,
-                "manifest_exists": True,
-                "safe": True,
-                "exists": True,
-                "size_bytes": manifest_path.stat().st_size,
-                "sha256": _sha256(manifest_path),
-                "error": "",
-            }
+        if not raw_path:
+            continue
+        manifest_row = _expected_file_row(
+            export_dir,
+            raw_path,
+            kind=str(item.get("kind") or ""),
+            required=bool(item.get("required", False)),
+            manifest_exists=bool(item.get("exists", False)),
+            skipped=item.get("skipped"),
         )
-    readme_path = export_dir / "README.txt"
-    if readme_path.exists() and "README.txt" not in {row["path"] for row in rows}:
-        rows.append(
-            {
-                "kind": "readme",
-                "path": "README.txt",
-                "required": False,
-                "manifest_exists": True,
-                "safe": True,
-                "exists": True,
-                "size_bytes": readme_path.stat().st_size,
-                "sha256": _sha256(readme_path),
-                "error": "",
-            }
-        )
-    return sanitize_metadata(rows, blocked_keys=BLOCKED_DELIVERY_KEYS)
+        existing = rows_by_path.get(raw_path)
+        if existing:
+            existing["kind"] = existing.get("kind") or manifest_row.get("kind")
+            existing["required"] = bool(existing.get("required") or manifest_row.get("required"))
+            existing["manifest_exists"] = bool(manifest_row.get("manifest_exists"))
+            if manifest_row.get("skipped") is not None:
+                existing["skipped"] = manifest_row.get("skipped")
+            if not existing.get("error") and manifest_row.get("error"):
+                existing["error"] = manifest_row.get("error")
+        else:
+            rows_by_path[raw_path] = manifest_row
+    return sanitize_metadata(list(rows_by_path.values()), blocked_keys=BLOCKED_DELIVERY_KEYS)
+
+
+def _expected_file_row(
+    export_dir: Path,
+    raw_path: str,
+    *,
+    kind: str,
+    required: bool,
+    manifest_exists: bool,
+    skipped: Any = None,
+) -> dict[str, Any]:
+    row = {
+        "kind": kind,
+        "path": raw_path,
+        "required": bool(required),
+        "manifest_exists": bool(manifest_exists),
+        "safe": False,
+        "exists": False,
+        "size_bytes": None,
+        "sha256": None,
+        "error": "",
+    }
+    if skipped is not None:
+        row["skipped"] = skipped
+    try:
+        target = _safe_export_path(export_dir, raw_path)
+        row["safe"] = True
+        if target.exists() and target.is_file() and not target.is_symlink():
+            row["exists"] = True
+            row["size_bytes"] = target.stat().st_size
+            row["sha256"] = _sha256(target)
+        elif target.is_symlink():
+            row["error"] = "Artifact path is a symlink."
+        elif row["manifest_exists"] or row["required"]:
+            row["error"] = "Artifact file is missing."
+    except ValueError as exc:
+        row["error"] = str(exc)
+    return row
+
+
+def _quality_gate_requires_stems(manifest: dict[str, Any]) -> bool:
+    gate = manifest.get("quality_gate") if isinstance(manifest.get("quality_gate"), dict) else {}
+    config = gate.get("config") if isinstance(gate.get("config"), dict) else {}
+    if config.get("require_stems"):
+        return True
+    checks = gate.get("checks") if isinstance(gate.get("checks"), list) else []
+    return any(isinstance(check, dict) and check.get("name") == "stems" for check in checks)
+
+
+def _required_stem_midi_paths(export_dir: Path) -> list[str]:
+    manifest_path = export_dir / "stems" / "manifest.json"
+    if not manifest_path.exists() or manifest_path.is_symlink():
+        return []
+    try:
+        data = read_json(manifest_path)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return []
+    paths: list[str] = []
+    for stem in data.get("stems", []) if isinstance(data, dict) else []:
+        if not isinstance(stem, dict) or int(stem.get("note_count") or 0) <= 0:
+            continue
+        raw_path = str(stem.get("midi_path") or "").strip()
+        if raw_path and raw_path not in paths:
+            paths.append(raw_path)
+    return paths
 
 
 def _actual_export_files(project_dir: Path) -> list[dict[str, Any]]:
@@ -647,7 +722,7 @@ def _quality_gate_summary(manifest: dict[str, Any], final_version: dict[str, Any
         {
             "status": gate.get("status") or final_version.get("quality_gate_status"),
             "overall_score": gate.get("score", final_version.get("quality_gate_score") or final_version.get("quality_score")),
-            "require_stems": bool((gate.get("config") or {}).get("require_stems")) if isinstance(gate.get("config"), dict) else False,
+            "require_stems": _quality_gate_requires_stems(manifest),
             "warnings": gate.get("warnings") if isinstance(gate.get("warnings"), list) else [],
         },
         blocked_keys=BLOCKED_DELIVERY_KEYS,
@@ -728,6 +803,7 @@ def _build_checks(
     review_sprint: dict[str, Any],
     artifact_integrity: dict[str, Any],
     manifest: dict[str, Any],
+    raw_manifest: dict[str, Any],
     project_export: dict[str, Any] | None,
     report_probe: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -739,7 +815,7 @@ def _build_checks(
     unsafe_files = int(final_export.get("unsafe_file_count") or 0)
     zip_hash_mismatch = bool(zip_summary.get("manifest_sha256") and zip_summary.get("manifest_sha256") != zip_summary.get("sha256"))
     zip_count_mismatch = bool(zip_summary.get("manifest_entry_count") and int(zip_summary.get("manifest_entry_count") or 0) != int(zip_summary.get("entry_count") or 0))
-    redaction_findings = scan_delivery_payload_for_sensitive_values({"manifest": manifest, "project_export_delivery": _project_export_delivery_probe(project_export), "report": report_probe})
+    redaction_findings = scan_delivery_payload_for_sensitive_values({"manifest": raw_manifest, "project_export_delivery": _project_export_delivery_probe(project_export), "report": report_probe})
     checks = [
         _check("project_final_version", not final_id or not final_version.get("exists"), "blocking", "Project has no final_version_id.", 1 if not final_id else 0),
         _check("final_export_exists", not final_export.get("exists"), "blocking", "Final Export manifest is missing or invalid.", 1 if not final_export.get("exists") else 0),
@@ -872,10 +948,15 @@ def _sha256(path: Path) -> str:
 
 
 def _source_hash(source: dict[str, Any]) -> str:
-    return _stable_hash(source)
+    return _stable_hash({key: value for key, value in source.items() if key != "raw_manifest"})
 
 
 def _stable_hash(value: Any) -> str:
     clean = sanitize_metadata(value, blocked_keys=BLOCKED_DELIVERY_KEYS)
     payload = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _raw_stable_hash(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()

@@ -225,7 +225,6 @@ def build_final_export_zip(project_dir: Path, *, now: str) -> dict[str, Any]:
     zip_info = {
         "created_at": now,
         "filename": zip_path.name,
-        "path": str(zip_path),
         "size_bytes": zip_path.stat().st_size,
         "sha256": _sha256(zip_path),
         "entry_count": len(entries),

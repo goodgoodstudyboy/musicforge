@@ -3828,6 +3828,36 @@ def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
         qa_after_status, qa_after = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
         reset_status, reset = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff/reset", {"reason": r"release rebuild C:\Users\demo"})
         zip_path = base / ".musicforge" / "projects" / project_id / "final-export.zip"
+        project_dir = base / ".musicforge" / "projects" / project_id
+        manifest_path = project_dir / "final-export" / "manifest.json"
+        manifest_after_zip = read_json(manifest_path)
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            zipped_manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        zip_path_clean = (
+            "path" not in zipped_after.get("zip", {})
+            and "path" not in manifest_after_zip.get("zip", {})
+            and "path" not in zipped_manifest.get("zip", {})
+            and str(project_dir) not in json.dumps({"response": zipped_after, "manifest": manifest_after_zip, "zip_manifest": zipped_manifest}, ensure_ascii=False)
+        )
+        hidden_manifest = read_json(manifest_path)
+        song_mid = project_dir / "final-export" / "song.mid"
+        if song_mid.exists():
+            song_mid.unlink()
+        hidden_manifest["files"] = [item for item in hidden_manifest.get("files", []) if not (isinstance(item, dict) and item.get("path") == "song.mid")]
+        write_json(manifest_path, hidden_manifest)
+        build_final_export_zip(project_dir, now="2026-05-15T00:02:00+00:00")
+        hidden_status, hidden = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        hidden_required_check = next((check for check in hidden.get("delivery_qa", {}).get("checks", []) if isinstance(check, dict) and check.get("check_id") == "required_artifacts_exist"), {})
+        hidden_sign_status, hidden_sign = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {})
+        final_after_hidden_status, _final_after_hidden = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        zip_rebuilt_status, _zip_rebuilt = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+        polluted_manifest = read_json(manifest_path)
+        polluted_manifest.setdefault("zip", {})["path"] = r"C:\Users\demo\Documents\musicforge\final-export.zip"
+        write_json(manifest_path, polluted_manifest)
+        polluted_manifest_status, polluted_manifest_qa = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        redaction_check = next((check for check in polluted_manifest_qa.get("delivery_qa", {}).get("checks", []) if isinstance(check, dict) and check.get("check_id") == "redaction_scan"), {})
+        final_after_redaction_status, _final_after_redaction = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        zip_clean_rebuilt_status, _zip_clean_rebuilt = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
         with zipfile.ZipFile(zip_path, "a") as archive:
             archive.writestr("extra.txt", "extra")
         stale_status, stale = _release_http_json(server, "GET", f"/api/projects/{project_id}/delivery-qa")
@@ -3871,6 +3901,19 @@ def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
             and reset_status == 200
             and reset.get("summary", {}).get("status") == "reset"
             and history_path.exists()
+            and zip_path_clean
+            and hidden_status == 200
+            and hidden.get("summary", {}).get("handoff_allowed") is False
+            and hidden_required_check.get("status") == "failed"
+            and hidden_sign_status == 409
+            and "Delivery QA gate failed" in hidden_sign.get("error", "")
+            and final_after_hidden_status == 200
+            and zip_rebuilt_status == 200
+            and polluted_manifest_status == 200
+            and polluted_manifest_qa.get("summary", {}).get("handoff_allowed") is False
+            and redaction_check.get("status") == "failed"
+            and final_after_redaction_status == 200
+            and zip_clean_rebuilt_status == 200
             and stale_status == 200
             and stale.get("delivery_qa", {}).get("status") == "stale"
             and polluted_status == 200
@@ -3881,7 +3924,7 @@ def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
             and "C:\\Users" not in serialized
             and str(base) not in serialized
         )
-        return ok, f"project={project_id}, qa={qa_after.get('summary', {}).get('status')}, sign={signed.get('summary', {}).get('status')}, polluted_zip={polluted_zip_check.get('status')}"
+        return ok, f"project={project_id}, qa={qa_after.get('summary', {}).get('status')}, sign={signed.get('summary', {}).get('status')}, hidden_core={hidden_required_check.get('status')}, raw_redaction={redaction_check.get('status')}, polluted_zip={polluted_zip_check.get('status')}"
     except Exception as exc:
         return False, str(exc)
     finally:
