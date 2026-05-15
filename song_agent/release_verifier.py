@@ -1,0 +1,722 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sys
+import zipfile
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+from song_agent import __version__
+from song_agent.projectio import write_json
+from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
+from song_agent.releases import stable_hash
+
+
+REPORT_SCHEMA_VERSION = 1
+DEFAULT_MAX_ZIP_SIZE_MB = 512
+DEFAULT_MAX_UNCOMPRESSED_SIZE_MB = 2048
+DEFAULT_MAX_ENTRY_COUNT = 5000
+MAX_TEXT_SCAN_BYTES = 2 * 1024 * 1024
+REQUIRED_TOP_LEVEL_ENTRIES = {
+    "manifest.json",
+    "release.json",
+    "tracklist.json",
+    "release-qa.json",
+    "release-signoff.json",
+    "README.txt",
+}
+LEGAL_SIDECAR_ENTRIES = {"manifest.json", "release-signoff.json"}
+TRACK_CORE_FILES = ("manifest.json", "README.txt", "project-export.json", "song-plan.json", "song.mid")
+HEX_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
+LOCAL_PATH_VALUE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(?i)\b[A-Z]:[\\/][^\"'\s,;]*"), "windows_path"),
+    (re.compile(r"(?<![\\/\w])(?:\\\\|(?<!:)//)[^\\/\s,;]+[\\/][^\"'\s,;]*"), "unc_path"),
+    (re.compile(r"(?<!\S)/(?:Users|home)/[^\"'\s,;]+"), "posix_user_path"),
+)
+VERIFIER_REPORT_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path"}
+REDACTION_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path"}
+
+
+class ReleaseVerificationError(ValueError):
+    pass
+
+
+class ReleaseZipOpenError(ReleaseVerificationError):
+    pass
+
+
+class ReleaseZipSafetyError(ReleaseVerificationError):
+    pass
+
+
+class ReleaseManifestError(ReleaseVerificationError):
+    pass
+
+
+def verify_release_zip(
+    zip_path: Path | str,
+    *,
+    strict: bool = False,
+    require_audio: bool = False,
+    require_stems: bool = False,
+    max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
+    max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
+    max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
+    now: str | None = None,
+) -> dict[str, Any]:
+    verifier = _ReleaseZipVerifier(
+        Path(zip_path),
+        strict=strict,
+        require_audio=require_audio,
+        require_stems=require_stems,
+        max_zip_size_mb=max_zip_size_mb,
+        max_uncompressed_size_mb=max_uncompressed_size_mb,
+        max_entry_count=max_entry_count,
+        now=now,
+    )
+    return verifier.run()
+
+
+def verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    return sanitize_metadata(
+        {
+            "status": report.get("status"),
+            "release_id": summary.get("release_id"),
+            "release_name": summary.get("release_name"),
+            "track_count": summary.get("track_count", 0),
+            "entry_count": summary.get("entry_count", 0),
+            "checked_file_count": summary.get("checked_file_count", 0),
+            "blocker_count": summary.get("blocker_count", 0),
+            "warning_count": summary.get("warning_count", 0),
+        },
+        blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS,
+    )
+
+
+def write_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+    target = Path(path)
+    return write_json(target, sanitize_metadata(report, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS))
+
+
+def print_verification_report(report: dict[str, Any]) -> None:
+    summary = verification_summary(report)
+    print("MusicForge release verification")
+    print(f"status: {summary.get('status')}")
+    release_id = summary.get("release_id") or "unknown"
+    release_name = summary.get("release_name") or "unknown"
+    print(f"release: {release_id} - {release_name}")
+    print(f"tracks: {summary.get('track_count', 0)}")
+    print(f"entries: {summary.get('entry_count', 0)}")
+    print(f"checked files: {summary.get('checked_file_count', 0)}")
+    print(f"blockers: {summary.get('blocker_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
+    for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
+        items = report.get(key) if isinstance(report.get(key), list) else []
+        if not items:
+            continue
+        print(f"{label}:")
+        for item in items[:10]:
+            check_id = item.get("check_id", "unknown") if isinstance(item, dict) else "unknown"
+            message = item.get("message", str(item)) if isinstance(item, dict) else str(item)
+            print(f"  [{check_id}] {message}")
+        if len(items) > 10:
+            print(f"  ... {len(items) - 10} more")
+
+
+def release_verification_exit_code(report: dict[str, Any]) -> int:
+    return 1 if report.get("status") == "failed" else 0
+
+
+class _ReleaseZipVerifier:
+    def __init__(
+        self,
+        zip_path: Path,
+        *,
+        strict: bool,
+        require_audio: bool,
+        require_stems: bool,
+        max_zip_size_mb: int,
+        max_uncompressed_size_mb: int,
+        max_entry_count: int,
+        now: str | None,
+    ) -> None:
+        self.zip_path = zip_path
+        self.strict = strict
+        self.require_audio = require_audio
+        self.require_stems = require_stems
+        self.max_zip_size_mb = max(1, int(max_zip_size_mb))
+        self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
+        self.max_entry_count = max(1, int(max_entry_count))
+        self.generated_at = now or datetime.now(timezone.utc).isoformat()
+        self.checks: list[dict[str, Any]] = []
+        self.track_checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
+        self.redaction_findings: list[dict[str, Any]] = []
+        self.manifest: dict[str, Any] = {}
+        self.release: dict[str, Any] = {}
+        self.tracklist: dict[str, Any] = {}
+        self.release_qa: dict[str, Any] = {}
+        self.signoff: dict[str, Any] = {}
+        self.entry_infos: list[zipfile.ZipInfo] = []
+        self.entry_names: list[str] = []
+        self.entry_map: dict[str, zipfile.ZipInfo] = {}
+        self.zip_sha256: str | None = None
+        self.zip_size_bytes: int = 0
+        self.total_uncompressed_size: int = 0
+
+    def run(self) -> dict[str, Any]:
+        archive: zipfile.ZipFile | None = None
+        try:
+            archive = self._open_zip()
+            if archive is not None:
+                self._verify_zip_structure(archive)
+                if "manifest.json" in self.entry_map:
+                    self.manifest = self._read_json_entry(archive, "manifest.json", "manifest", "manifest_parse")
+                self._verify_manifest(archive)
+                self._read_top_level_json(archive)
+                self._verify_release_tracklist()
+                self._verify_tracks(archive)
+                self._verify_signoff()
+                self._verify_redaction(archive)
+        finally:
+            if archive is not None:
+                archive.close()
+        return self._build_report()
+
+    def _open_zip(self) -> zipfile.ZipFile | None:
+        if not self.zip_path.exists():
+            self._add_check("zip", "zip_open", "failed", "blocking", "ZIP file does not exist.")
+            return None
+        if not self.zip_path.is_file() or self.zip_path.is_symlink():
+            self._add_check("zip", "zip_open", "failed", "blocking", "ZIP path is not a regular file.")
+            return None
+        self.zip_size_bytes = self.zip_path.stat().st_size
+        max_size = self.max_zip_size_mb * 1024 * 1024
+        self._add_check(
+            "zip",
+            "zip_size_limit",
+            "passed" if self.zip_size_bytes <= max_size else "failed",
+            "blocking",
+            f"ZIP size is {self.zip_size_bytes} bytes; limit is {max_size} bytes.",
+            count=self.zip_size_bytes,
+        )
+        self.zip_sha256 = _sha256_file(self.zip_path)
+        try:
+            archive = zipfile.ZipFile(self.zip_path, "r")
+            self._add_check("zip", "zip_open", "passed", "blocking", "ZIP can be opened.")
+            return archive
+        except (zipfile.BadZipFile, OSError) as exc:
+            self._add_check("zip", "zip_open", "failed", "blocking", f"ZIP cannot be opened: {exc}")
+            return None
+
+    def _verify_zip_structure(self, archive: zipfile.ZipFile) -> None:
+        self.entry_infos = archive.infolist()
+        self.entry_names = [info.filename for info in self.entry_infos]
+        self.total_uncompressed_size = sum(max(0, int(info.file_size or 0)) for info in self.entry_infos)
+        max_uncompressed = self.max_uncompressed_size_mb * 1024 * 1024
+        self._add_check(
+            "zip",
+            "zip_uncompressed_size_limit",
+            "passed" if self.total_uncompressed_size <= max_uncompressed else "failed",
+            "blocking",
+            f"Total uncompressed size is {self.total_uncompressed_size} bytes; limit is {max_uncompressed} bytes.",
+            count=self.total_uncompressed_size,
+        )
+        self._add_check(
+            "zip",
+            "zip_entry_count_limit",
+            "passed" if len(self.entry_infos) <= self.max_entry_count else "failed",
+            "blocking",
+            f"ZIP has {len(self.entry_infos)} entries; limit is {self.max_entry_count}.",
+            count=len(self.entry_infos),
+        )
+        unsafe = [name for name in self.entry_names if not _is_safe_zip_entry(name)]
+        self._add_check(
+            "zip",
+            "zip_entry_path_safe",
+            "failed" if unsafe else "passed",
+            "blocking",
+            "Unsafe ZIP entries: " + ", ".join(unsafe[:5]) if unsafe else "All ZIP entry paths are safe.",
+            count=len(unsafe),
+        )
+        duplicates = sorted(name for name, count in _counts(self.entry_names).items() if count > 1)
+        self._add_check(
+            "zip",
+            "zip_duplicate_entries",
+            "failed" if duplicates else "passed",
+            "blocking",
+            "Duplicate ZIP entries: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate ZIP entries.",
+            count=len(duplicates),
+        )
+        self.entry_map = {}
+        for info in self.entry_infos:
+            if info.filename not in self.entry_map:
+                self.entry_map[info.filename] = info
+        missing = sorted(REQUIRED_TOP_LEVEL_ENTRIES - set(self.entry_names))
+        self._add_check(
+            "zip",
+            "zip_required_entries",
+            "failed" if missing else "passed",
+            "blocking",
+            "Missing required entries: " + ", ".join(missing) if missing else "All required top-level entries exist.",
+            count=len(missing),
+        )
+
+    def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
+        if not self.manifest:
+            self._add_check("manifest", "manifest_exists", "failed", "blocking", "manifest.json is missing or invalid.")
+            return
+        self._add_check("manifest", "manifest_exists", "passed", "blocking", "manifest.json exists.")
+        missing_fields = [
+            field
+            for field in ("schema_version", "release_id", "release_name", "source_hash", "qa_source_hash")
+            if self.manifest.get(field) in (None, "")
+        ]
+        if not isinstance(self.manifest.get("tracks"), list):
+            missing_fields.append("tracks")
+        if not isinstance(self.manifest.get("files"), list):
+            missing_fields.append("files")
+        if not isinstance(self.manifest.get("summary"), dict):
+            missing_fields.append("summary")
+        self._add_check(
+            "manifest",
+            "manifest_schema",
+            "failed" if missing_fields else "passed",
+            "blocking",
+            "Invalid or missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Manifest schema has required fields.",
+            count=len(missing_fields),
+        )
+        manifest_files = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        valid_file_rows: list[dict[str, Any]] = []
+        shape_errors: list[str] = []
+        for index, item in enumerate(manifest_files):
+            if not isinstance(item, dict):
+                shape_errors.append(f"files[{index}] is not an object")
+                continue
+            path = str(item.get("path") or "")
+            size = item.get("size_bytes")
+            sha = str(item.get("sha256") or "")
+            if not _is_safe_zip_entry(path):
+                shape_errors.append(f"{path or f'files[{index}]'} has unsafe path")
+            if not isinstance(size, int) or size < 0:
+                shape_errors.append(f"{path or f'files[{index}]'} has invalid size")
+            if not HEX_SHA256.fullmatch(sha):
+                shape_errors.append(f"{path or f'files[{index}]'} has invalid sha256")
+            if _is_safe_zip_entry(path) and isinstance(size, int) and size >= 0 and HEX_SHA256.fullmatch(sha):
+                valid_file_rows.append(item)
+        self._add_check(
+            "manifest",
+            "manifest_files_shape",
+            "failed" if shape_errors else "passed",
+            "blocking",
+            "Invalid manifest file rows: " + "; ".join(shape_errors[:5]) if shape_errors else "Manifest file rows are valid.",
+            count=len(shape_errors),
+        )
+        mismatches: list[str] = []
+        for item in valid_file_rows:
+            path = str(item["path"])
+            info = self.entry_map.get(path)
+            if info is None:
+                mismatches.append(f"{path} missing from ZIP")
+                continue
+            actual_size = int(info.file_size or 0)
+            actual_sha = _sha256_entry(archive, info)
+            expected_size = int(item["size_bytes"])
+            expected_sha = str(item["sha256"])
+            self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if actual_size == expected_size and actual_sha == expected_sha else "failed"})
+            if actual_size != expected_size:
+                mismatches.append(f"{path} size mismatch")
+            if actual_sha != expected_sha:
+                mismatches.append(f"{path} hash mismatch")
+        self._add_check(
+            "manifest",
+            "manifest_file_hash_match",
+            "failed" if mismatches else "passed",
+            "blocking",
+            "Manifest file mismatches: " + "; ".join(mismatches[:5]) if mismatches else "Manifest files match ZIP bytes.",
+            count=len(mismatches),
+        )
+        allowed = {str(item.get("path")) for item in valid_file_rows}
+        allowed.update(LEGAL_SIDECAR_ENTRIES)
+        extra = sorted(set(self.entry_names) - allowed)
+        status = "failed" if extra and self.strict else "warning" if extra else "passed"
+        self._add_check(
+            "manifest",
+            "manifest_extra_entries",
+            status,
+            "blocking" if status == "failed" else "warning",
+            "Extra ZIP entries not declared in manifest.files: " + ", ".join(extra[:5]) if extra else "No extra ZIP entries outside legal sidecars.",
+            count=len(extra),
+        )
+        zip_entries = self.manifest.get("zip", {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else None
+        if isinstance(zip_entries, list):
+            spoofed = sorted((set(str(item) for item in zip_entries) - allowed) & set(self.entry_names))
+            self._add_check(
+                "manifest",
+                "manifest_zip_entries_reference_only",
+                "warning" if spoofed else "passed",
+                "warning",
+                "manifest.zip.entries contains entries that are not allowed by manifest.files: " + ", ".join(spoofed[:5]) if spoofed else "manifest.zip.entries does not expand the allowed file set.",
+                count=len(spoofed),
+            )
+
+    def _read_top_level_json(self, archive: zipfile.ZipFile) -> None:
+        if "release.json" in self.entry_map:
+            self.release = self._read_json_entry(archive, "release.json", "release", "release_json_parse")
+        if "tracklist.json" in self.entry_map:
+            self.tracklist = self._read_json_entry(archive, "tracklist.json", "tracklist", "tracklist_json_parse")
+        if "release-qa.json" in self.entry_map:
+            self.release_qa = self._read_json_entry(archive, "release-qa.json", "release", "release_qa_parse")
+        if "release-signoff.json" in self.entry_map:
+            self.signoff = self._read_json_entry(archive, "release-signoff.json", "signoff", "release_signoff_parse")
+
+    def _verify_release_tracklist(self) -> None:
+        release_errors: list[str] = []
+        manifest_release_id = self.manifest.get("release_id")
+        if not self.release:
+            release_errors.append("release.json is missing or invalid")
+        else:
+            if self.release.get("release_id") != manifest_release_id:
+                release_errors.append("release_id does not match manifest")
+            if not self.release.get("release_type"):
+                release_errors.append("release_type is missing")
+        self._add_check("release", "release_json", "failed" if release_errors else "passed", "blocking", "; ".join(release_errors) if release_errors else "release.json is consistent.")
+
+        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        tracklist_errors: list[str] = []
+        if not self.tracklist:
+            tracklist_errors.append("tracklist.json is missing or invalid")
+        for index, item in enumerate(tracks):
+            if not isinstance(item, dict):
+                tracklist_errors.append(f"tracks[{index}] is not an object")
+                continue
+            for field in ("track_id", "disc_number", "track_number", "title", "project_id", "version_id", "directory", "file_count"):
+                if item.get(field) in (None, ""):
+                    tracklist_errors.append(f"tracks[{index}].{field} is missing")
+        self._add_check("tracklist", "tracklist_json", "failed" if tracklist_errors else "passed", "blocking", "; ".join(tracklist_errors[:5]) if tracklist_errors else "tracklist.json is valid.", count=len(tracklist_errors))
+
+        order_warnings: list[str] = []
+        keys = [(item.get("disc_number"), item.get("track_number")) for item in tracks if isinstance(item, dict)]
+        if len(keys) != len(set(keys)):
+            order_warnings.append("duplicate disc/track numbers")
+        directories = [item.get("directory") for item in tracks if isinstance(item, dict)]
+        if len(directories) != len(set(directories)):
+            order_warnings.append("duplicate track directories")
+        ids = [item.get("track_id") for item in tracks if isinstance(item, dict)]
+        if len(ids) != len(set(ids)):
+            order_warnings.append("duplicate track ids")
+        status = "failed" if order_warnings and self.strict else "warning" if order_warnings else "passed"
+        self._add_check("tracklist", "track_order", status, "blocking" if status == "failed" else "warning", "; ".join(order_warnings) if order_warnings else "Track ordering identifiers are unique.", count=len(order_warnings))
+
+        manifest_tracks = self.manifest.get("tracks") if isinstance(self.manifest.get("tracks"), list) else []
+        summary = self.manifest.get("summary") if isinstance(self.manifest.get("summary"), dict) else {}
+        expected_counts = {
+            "manifest.summary.track_count": summary.get("track_count"),
+            "manifest.tracks": len(manifest_tracks),
+            "tracklist.tracks": len(tracks),
+            "release.track_count": self.release.get("track_count"),
+        }
+        values = {value for value in expected_counts.values() if isinstance(value, int)}
+        bad_count = len(values) != 1 or any(not isinstance(value, int) for value in expected_counts.values())
+        self._add_check("tracklist", "track_count_consistency", "failed" if bad_count else "passed", "blocking", f"Track count values: {expected_counts}.")
+
+    def _verify_tracks(self, archive: zipfile.ZipFile) -> None:
+        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        for item in tracks:
+            if not isinstance(item, dict):
+                continue
+            directory = str(item.get("directory") or "").strip("/")
+            track_id = str(item.get("track_id") or directory or "unknown")
+            missing = [f"{directory}/{name}" for name in TRACK_CORE_FILES if f"{directory}/{name}" not in self.entry_map]
+            self._add_track_check(track_id, "track_core_files", "failed" if missing else "passed", "blocking", "Missing core files: " + ", ".join(missing) if missing else "Track core files exist.", path=directory, count=len(missing))
+            plan_path = f"{directory}/song-plan.json"
+            plan = self._read_json_entry(archive, plan_path, "track", "track_song_plan_parse", track_id=track_id) if plan_path in self.entry_map else {}
+            if plan:
+                shape_warnings = []
+                if not isinstance(plan.get("sections"), list):
+                    shape_warnings.append("sections is not a list")
+                if not isinstance(plan.get("tracks"), list):
+                    shape_warnings.append("tracks is not a list")
+                self._add_track_check(track_id, "track_song_plan_shape", "warning" if shape_warnings else "passed", "warning", "; ".join(shape_warnings) if shape_warnings else "song-plan.json has expected shape.", path=plan_path, count=len(shape_warnings))
+            midi_path = f"{directory}/song.mid"
+            if midi_path in self.entry_map:
+                ok, message = self._check_midi_header(archive, self.entry_map[midi_path])
+                self._add_track_check(track_id, "track_midi_header", "passed" if ok else "failed", "blocking", message, path=midi_path)
+            if self.require_audio:
+                wav_path = f"{directory}/song.wav"
+                if wav_path not in self.entry_map:
+                    self._add_track_check(track_id, "track_optional_audio", "failed", "blocking", "song.wav is required but missing.", path=wav_path)
+                else:
+                    ok, message = self._check_wav_header(archive, self.entry_map[wav_path])
+                    self._add_track_check(track_id, "track_optional_audio", "passed" if ok else "failed", "blocking", message, path=wav_path)
+            if self.require_stems:
+                stems_manifest_path = f"{directory}/stems/manifest.json"
+                if stems_manifest_path not in self.entry_map:
+                    self._add_track_check(track_id, "track_optional_stems", "failed", "blocking", "stems/manifest.json is required but missing.", path=stems_manifest_path)
+                else:
+                    self._verify_stems_manifest(archive, track_id, stems_manifest_path, directory)
+
+    def _verify_signoff(self) -> None:
+        if not self.signoff:
+            self._add_check("signoff", "release_signoff_exists", "failed", "blocking", "release-signoff.json is missing or invalid.")
+            return
+        self._add_check("signoff", "release_signoff_exists", "passed", "blocking", "release-signoff.json exists.")
+        signoff_status = self.signoff.get("status")
+        self._add_check(
+            "signoff",
+            "signoff_status",
+            "passed" if signoff_status in {"signed", "force_signed"} else "failed",
+            "blocking",
+            f"Release signoff status is {signoff_status!r}.",
+        )
+        manifest_hash = stable_hash({key: value for key, value in self.manifest.items() if key != "zip"})
+        signoff_hash = self.signoff.get("export_manifest_hash")
+        self._add_check(
+            "signoff",
+            "signoff_manifest_hash",
+            "passed" if signoff_hash == manifest_hash else "failed",
+            "blocking",
+            "Signoff export_manifest_hash matches manifest without zip." if signoff_hash == manifest_hash else "Signoff export_manifest_hash does not match manifest without zip.",
+        )
+        qa_source = self.signoff.get("qa_source_hash")
+        manifest_qa_source = self.manifest.get("qa_source_hash")
+        self._add_check(
+            "signoff",
+            "signoff_qa_source",
+            "passed" if qa_source and qa_source == manifest_qa_source else "failed",
+            "blocking",
+            "Signoff qa_source_hash matches manifest." if qa_source and qa_source == manifest_qa_source else "Signoff qa_source_hash is missing or does not match manifest.",
+        )
+
+    def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
+        scan_names = [
+            name
+            for name in self.entry_names
+            if name in {"manifest.json", "release.json", "tracklist.json", "release-qa.json", "release-signoff.json", "README.txt"}
+            or name.endswith(("/project-export.json", "/song-plan.json", "/manifest.json", "/README.txt"))
+        ]
+        for name in scan_names:
+            info = self.entry_map.get(name)
+            if info is None or info.file_size > MAX_TEXT_SCAN_BYTES:
+                continue
+            try:
+                text = archive.read(info).decode("utf-8")
+            except (OSError, UnicodeDecodeError, RuntimeError):
+                continue
+            self.redaction_findings.extend(_redaction_findings(name, text))
+            if name.endswith(".json"):
+                try:
+                    value = json.loads(text)
+                except json.JSONDecodeError:
+                    continue
+                self.redaction_findings.extend(_blocked_key_findings(name, value))
+        self._add_check(
+            "redaction",
+            "redaction_scan",
+            "failed" if self.redaction_findings else "passed",
+            "blocking",
+            f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned text entries.",
+            count=len(self.redaction_findings),
+        )
+
+    def _verify_stems_manifest(self, archive: zipfile.ZipFile, track_id: str, path: str, directory: str) -> None:
+        manifest = self._read_json_entry(archive, path, "track", "track_stems_manifest_parse", track_id=track_id)
+        stems = manifest.get("stems") if isinstance(manifest.get("stems"), list) else []
+        missing: list[str] = []
+        for stem in stems:
+            if not isinstance(stem, dict):
+                continue
+            rel = stem.get("midi") or stem.get("midi_path") or stem.get("path")
+            if not rel:
+                continue
+            stem_path = str(rel).replace("\\", "/")
+            full = stem_path if stem_path.startswith(f"{directory}/") else f"{directory}/stems/{stem_path}"
+            if full not in self.entry_map:
+                missing.append(full)
+        self._add_track_check(track_id, "track_optional_stems", "failed" if missing else "passed", "blocking", "Missing stem files: " + ", ".join(missing[:5]) if missing else "Stem manifest files exist.", path=path, count=len(missing))
+
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str, *, track_id: str | None = None) -> dict[str, Any]:
+        info = self.entry_map.get(name)
+        if info is None:
+            if track_id:
+                self._add_track_check(track_id, check_id, "failed", "blocking", f"{name} is missing.", path=name)
+            else:
+                self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
+            return {}
+        try:
+            data = archive.read(info).decode("utf-8")
+            value = json.loads(data)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, RuntimeError) as exc:
+            if track_id:
+                self._add_track_check(track_id, check_id, "failed", "blocking", f"{name} is not valid UTF-8 JSON: {exc}", path=name)
+            else:
+                self._add_check(scope, check_id, "failed", "blocking", f"{name} is not valid UTF-8 JSON: {exc}")
+            return {}
+        if not isinstance(value, dict):
+            if track_id:
+                self._add_track_check(track_id, check_id, "failed", "blocking", f"{name} is not a JSON object.", path=name)
+            else:
+                self._add_check(scope, check_id, "failed", "blocking", f"{name} is not a JSON object.")
+            return {}
+        if track_id:
+            self._add_track_check(track_id, check_id, "passed", "blocking", f"{name} is valid JSON.", path=name)
+        else:
+            self._add_check(scope, check_id, "passed", "blocking", f"{name} is valid JSON.")
+        return value
+
+    def _check_midi_header(self, archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[bool, str]:
+        data = archive.read(info)[:14]
+        if len(data) < 14 or not data.startswith(b"MThd"):
+            return False, "MIDI file does not start with a valid MThd header."
+        header_len = int.from_bytes(data[4:8], "big")
+        track_count = int.from_bytes(data[10:12], "big")
+        ppq = int.from_bytes(data[12:14], "big")
+        if header_len < 6 or track_count <= 0 or ppq <= 0:
+            return False, "MIDI header has invalid length, track count, or PPQ."
+        return True, "MIDI header is valid."
+
+    def _check_wav_header(self, archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[bool, str]:
+        data = archive.read(info)[:12]
+        if len(data) < 12 or not data.startswith(b"RIFF") or data[8:12] != b"WAVE":
+            return False, "WAV file does not start with RIFF/WAVE."
+        return True, "WAV header is valid."
+
+    def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str, *, count: int | None = None) -> None:
+        item: dict[str, Any] = {
+            "scope": scope,
+            "check_id": check_id,
+            "status": status,
+            "severity": severity,
+            "message": message,
+        }
+        if count is not None:
+            item["count"] = count
+        self.checks.append(sanitize_metadata(item, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS))
+
+    def _add_track_check(self, track_id: str, check_id: str, status: str, severity: str, message: str, *, path: str | None = None, count: int | None = None) -> None:
+        item: dict[str, Any] = {
+            "scope": "track",
+            "track_id": track_id,
+            "check_id": check_id,
+            "status": status,
+            "severity": severity,
+            "message": message,
+        }
+        if path is not None:
+            item["path"] = path
+        if count is not None:
+            item["count"] = count
+        self.track_checks.append(sanitize_metadata(item, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS))
+
+    def _build_report(self) -> dict[str, Any]:
+        blockers = [item for item in [*self.checks, *self.track_checks] if item.get("status") == "failed" and item.get("severity") == "blocking"]
+        warnings = [item for item in [*self.checks, *self.track_checks] if item.get("status") == "warning"]
+        status = "failed" if blockers else "warning" if warnings else "passed"
+        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        report = {
+            "schema_version": REPORT_SCHEMA_VERSION,
+            "generated_at": self.generated_at,
+            "tool": {"name": "MusicForge Release Verifier", "version": __version__},
+            "input": {
+                "filename": self.zip_path.name,
+                "size_bytes": self.zip_size_bytes,
+                "sha256": self.zip_sha256,
+            },
+            "status": status,
+            "strict": self.strict,
+            "require_audio": self.require_audio,
+            "require_stems": self.require_stems,
+            "summary": {
+                "release_id": self.manifest.get("release_id"),
+                "release_name": self.manifest.get("release_name"),
+                "track_count": len(tracks),
+                "entry_count": len(self.entry_infos),
+                "checked_file_count": len(self.files),
+                "blocker_count": len(blockers),
+                "warning_count": len(warnings),
+                "total_uncompressed_size_bytes": self.total_uncompressed_size,
+            },
+            "checks": self.checks,
+            "track_checks": self.track_checks,
+            "files": self.files,
+            "redaction_findings": self.redaction_findings,
+            "warnings": warnings,
+            "blockers": blockers,
+        }
+        return sanitize_metadata(report, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS)
+
+
+def _is_safe_zip_entry(name: str) -> bool:
+    normalized = str(name or "").replace("\\", "/")
+    if not normalized or normalized.endswith("/"):
+        return False
+    if normalized.startswith("/") or normalized.startswith("\\") or normalized.startswith("//"):
+        return False
+    parts = normalized.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return False
+    if ":" in parts[0]:
+        return False
+    return PurePosixPath(*parts).as_posix() == normalized
+
+
+def _counts(values: list[str]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for value in values:
+        result[value] = result.get(value, 0) + 1
+    return result
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
+    digest = hashlib.sha256()
+    with archive.open(info, "r") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
+        if pattern.search(text):
+            findings.append({"path": path, "kind": kind, "message": f"{path} contains a local path-like value."})
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
+        if pattern.search(text):
+            findings.append({"path": path, "kind": "sensitive_value", "message": f"{path} contains a sensitive value pattern: {replacement}."})
+    return findings
+
+
+def _blocked_key_findings(path: str, value: Any, *, prefix: str = "") -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child_path = f"{prefix}.{key}" if prefix else str(key)
+            if str(key).lower() in REDACTION_BLOCKED_KEYS:
+                findings.append({"path": path, "field": child_path, "kind": "blocked_key", "message": f"{path} contains blocked key {child_path}."})
+            findings.extend(_blocked_key_findings(path, item, prefix=child_path))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            findings.extend(_blocked_key_findings(path, item, prefix=f"{prefix}[{index}]"))
+    return findings
+
+
+def _main() -> None:
+    report = verify_release_zip(Path(sys.argv[1]))
+    print_verification_report(report)
+    raise SystemExit(release_verification_exit_code(report))
+
+
+if __name__ == "__main__":
+    _main()

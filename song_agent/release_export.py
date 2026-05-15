@@ -212,7 +212,7 @@ def _copy_track_files(source_dir: Path, target_dir: Path, track_dir_name: str) -
         target = (target_dir / rel).resolve()
         _ensure_within(target_dir, target)
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(resolved, target)
+        _copy_release_export_file(resolved, target)
         records.append(_file_record(target_dir.parent.parent, target))
     for required in CORE_COPY_FILES:
         if not (target_dir / required).exists():
@@ -224,6 +224,31 @@ def _copy_allowed(rel: str) -> bool:
     if rel in CORE_COPY_FILES or rel in OPTIONAL_COPY_FILES:
         return True
     return any(rel.startswith(prefix) for prefix in OPTIONAL_COPY_PREFIXES)
+
+
+def _copy_release_export_file(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if source.suffix.lower() == ".json":
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            shutil.copy2(source, target)
+            return
+        _write_release_export_json(target, sanitize_metadata(data, blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS))
+        return
+    if source.suffix.lower() == ".txt":
+        try:
+            target.write_text(sanitize_sensitive_text(source.read_text(encoding="utf-8")), encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            shutil.copy2(source, target)
+        return
+    shutil.copy2(source, target)
+
+
+def _write_release_export_json(path: Path, data: dict[str, Any]) -> None:
+    tmp_path = path.with_name(f".tmp-{os.getpid()}-{threading.get_ident()}")
+    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
 
 
 def _zip_entries(export_dir: Path) -> list[tuple[Path, str]]:

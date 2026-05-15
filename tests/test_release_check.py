@@ -7,6 +7,7 @@ from song_agent.release_checks import (
     _redact_line,
     _remote_has_token,
     _status_is_clean,
+    _v38_release_zip_verifier_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -39,7 +40,7 @@ def test_version_consistency_checks_pyproject_and_changelog(tmp_path: Path, monk
 
     ok, detail = _version_consistency(tmp_path)
 
-    assert ok is True
+    assert ok is True, detail
     assert "package=0.5.0" in detail
 
 
@@ -55,6 +56,13 @@ def test_edit_smoke_preserves_parent_and_renders_child(tmp_path: Path) -> None:
 
     assert ok is True
     assert "parent_unchanged=True" in detail
+
+
+def test_v38_release_zip_verifier_smoke(tmp_path: Path) -> None:
+    ok, detail = _v38_release_zip_verifier_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "external=passed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

@@ -62,6 +62,20 @@ def build_doctor_parser() -> argparse.ArgumentParser:
     return doctor_parser
 
 
+def build_verify_release_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict-order warnings as failures.")
+    verify_parser.add_argument("--require-audio", action="store_true", help="Require each track to include song.wav.")
+    verify_parser.add_argument("--require-stems", action="store_true", help="Require each track to include a stems manifest and declared stem MIDI files.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "request",
@@ -133,6 +147,27 @@ def _main() -> None:
         if not report.ok:
             raise SystemExit(1)
         return
+    elif raw_args and raw_args[0] == "verify-release":
+        from song_agent.release_verifier import release_verification_exit_code, print_verification_report, verify_release_zip, write_verification_report
+
+        parser = build_verify_release_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_zip(
+            args.zip_path,
+            strict=args.strict,
+            require_audio=args.require_audio,
+            require_stems=args.require_stems,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_verification_report(report)
+        raise SystemExit(release_verification_exit_code(report))
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)

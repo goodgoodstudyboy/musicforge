@@ -55,6 +55,7 @@ from song_agent.references import ReferenceStore, reference_refs_snapshot, write
 from song_agent.reference_analysis import analyze_reference, create_asset_from_slice, generate_slices, render_reference_slice_midi
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
+from song_agent.release_verifier import verify_release_zip
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
@@ -196,6 +197,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.5 review sprint closeout smoke", *_v35_review_sprint_closeout_smoke(root))
     report.add("v3.6 delivery qa handoff smoke", *_v36_delivery_qa_handoff_smoke(root))
     report.add("v3.7 release workspace smoke", *_v37_release_workspace_smoke(root))
+    report.add("v3.8 release zip verifier smoke", *_v38_release_zip_verifier_smoke(root))
     return report
 
 
@@ -3630,6 +3632,8 @@ def _v34_provider_review_judge_smoke(root: Path) -> tuple[bool, str]:
             server.shutdown()
             server.server_close()
         os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
@@ -3790,6 +3794,8 @@ def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
             server.shutdown()
             server.server_close()
         os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
@@ -3934,10 +3940,12 @@ def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
             server.shutdown()
             server.server_close()
         os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v37_release_workspace_smoke(root: Path) -> tuple[bool, str]:
-    base = root / ".release-check" / "v37-release-workspace"
+    base = (root / ".release-check" / "v37-release-workspace").resolve()
     if base.exists():
         shutil.rmtree(base)
     base.mkdir(parents=True, exist_ok=True)
@@ -4061,6 +4069,144 @@ def _v37_release_workspace_smoke(root: Path) -> tuple[bool, str]:
             server.shutdown()
             server.server_close()
         os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v38_release_zip_verifier_smoke(root: Path) -> tuple[bool, str]:
+    base = (root / ".release-check" / "v38-release-verifier").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        first_project = _v37_signed_project(server, "Release Verifier Track One")
+        second_project = _v37_signed_project(server, "Release Verifier Track Two")
+        created_status, created = _release_http_json(
+            server,
+            "POST",
+            "/api/releases",
+            {"name": "Release Verifier EP", "release_type": "ep", "primary_artist": "MusicForge", "catalog_id": "MF-380"},
+        )
+        release_id = created.get("release", {}).get("release_id")
+        add_first_status, _add_first = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": first_project})
+        add_second_status, _add_second = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": second_project})
+        qa_status, qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zipped = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+        zip_path = base / ".musicforge" / "releases" / str(release_id) / "release-export.zip"
+        if not zip_path.exists():
+            return False, f"zip missing: created={created_status}, add1={add_first_status}, add2={add_second_status}, qa={qa_status}, export={export_status}, zip={zip_status}, sign={sign_status}, export_body={_exported}, zip_body={_zipped}, sign_body={signed}"
+
+        report = verify_release_zip(zip_path)
+        external_dir = base / "external-clean"
+        external_dir.mkdir()
+        external_zip = external_dir / "release-export.zip"
+        shutil.copy2(zip_path, external_zip)
+        os.chdir(external_dir)
+        external_report = verify_release_zip(external_zip)
+        os.chdir(base)
+
+        hash_mismatch_zip = _v38_rewrite_zip(zip_path, base / "hash-mismatch.zip", additions={"tracks/01-release-verifier-track-one/song.mid": b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xe0MTrk\x00\x00\x00\x04\x00\xff/\x00"})
+        dangerous_zip = _v38_rewrite_zip(zip_path, base / "dangerous.zip", additions={"../evil.txt": b"x"})
+        duplicate_zip = base / "duplicate.zip"
+        shutil.copy2(zip_path, duplicate_zip)
+        with zipfile.ZipFile(duplicate_zip, "a") as archive:
+            archive.writestr("README.txt", "duplicate")
+
+        def spoof_manifest(data: bytes) -> bytes:
+            manifest = json.loads(data.decode("utf-8"))
+            manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+            return json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+
+        spoof_zip = _v38_rewrite_zip(zip_path, base / "spoofed-extra.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": spoof_manifest})
+
+        def pollute_release(data: bytes) -> bytes:
+            release = json.loads(data.decode("utf-8"))
+            release["notes"] = r"C:\Users\demo\secret.zip api_key=sk-secret-value"
+            return json.dumps(release, ensure_ascii=False, indent=2).encode("utf-8")
+
+        polluted_zip = _v38_rewrite_zip(zip_path, base / "polluted.zip", transforms={"release.json": pollute_release})
+        bomb_zip = base / "bomb.zip"
+        with zipfile.ZipFile(bomb_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("manifest.json", b"0" * (1024 * 1024 + 1))
+
+        hash_report = verify_release_zip(hash_mismatch_zip)
+        dangerous_report = verify_release_zip(dangerous_zip)
+        duplicate_report = verify_release_zip(duplicate_zip)
+        spoof_report = verify_release_zip(spoof_zip, strict=True)
+        polluted_report = verify_release_zip(polluted_zip)
+        bomb_report = verify_release_zip(bomb_zip, max_uncompressed_size_mb=1)
+
+        ok = (
+            created_status == 201
+            and release_id
+            and add_first_status == 200
+            and add_second_status == 200
+            and qa_status == 200
+            and qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and export_status == 200
+            and zip_status == 200
+            and sign_status == 200
+            and signed.get("summary", {}).get("status") == "signed"
+            and report.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and _v38_check_status(hash_report, "manifest_file_hash_match") == "failed"
+            and _v38_check_status(dangerous_report, "zip_entry_path_safe") == "failed"
+            and _v38_check_status(duplicate_report, "zip_duplicate_entries") == "failed"
+            and _v38_check_status(spoof_report, "manifest_extra_entries") == "failed"
+            and _v38_check_status(polluted_report, "redaction_scan") == "failed"
+            and _v38_check_status(bomb_report, "zip_uncompressed_size_limit") == "failed"
+        )
+        return ok, (
+            f"release={release_id}, verify={report.get('status')}, external={external_report.get('status')}, "
+            f"hash={_v38_check_status(hash_report, 'manifest_file_hash_match')}, dangerous={_v38_check_status(dangerous_report, 'zip_entry_path_safe')}, "
+            f"duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}, spoof={_v38_check_status(spoof_report, 'manifest_extra_entries')}, "
+            f"redaction={_v38_check_status(polluted_report, 'redaction_scan')}, bomb={_v38_check_status(bomb_report, 'zip_uncompressed_size_limit')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v38_rewrite_zip(source: Path, target: Path, *, additions: dict[str, bytes] | None = None, transforms: dict[str, Any] | None = None, remove: set[str] | None = None) -> Path:
+    additions = additions or {}
+    transforms = transforms or {}
+    remove = remove or set()
+    with zipfile.ZipFile(source, "r") as src, zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            if info.filename in remove or info.filename in additions:
+                continue
+            data = src.read(info)
+            transform = transforms.get(info.filename)
+            if transform is not None:
+                data = transform(data)
+            dst.writestr(info.filename, data)
+        for name, data in additions.items():
+            dst.writestr(name, data)
+    return target
+
+
+def _v38_check_status(report: dict[str, Any], check_id: str) -> str | None:
+    for check in [*report.get("checks", []), *report.get("track_checks", [])]:
+        if isinstance(check, dict) and check.get("check_id") == check_id:
+            return str(check.get("status"))
+    return None
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

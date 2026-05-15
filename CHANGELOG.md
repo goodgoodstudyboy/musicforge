@@ -1,5 +1,18 @@
 # Changelog
 
+## v3.8.0 - 2026-05-15
+
+### Added
+- Release ZIP verifier module and `python -m song_agent.cli verify-release <zip>` CLI for portable, workspace-independent Release ZIP validation.
+- Verification reports with human output, `--json`, `--report-out`, `--strict`, `--require-audio`, `--require-stems`, ZIP size, uncompressed size, entry count, path safety, duplicate entry, manifest/files/hash, signoff hash, track core artifact, MIDI/WAV header, stems, and redaction checks.
+- release-check v3.8 smoke that copies a Release ZIP into a clean external directory and verifies failure cases for hash mismatch, dangerous entries, duplicate entries, spoofed `manifest.zip.entries`, redaction pollution, and ZIP bomb metadata.
+
+### Fixed
+- Release Export now sanitizes copied JSON/TXT track files before packaging, preventing local Project paths from leaking into portable Release ZIPs.
+
+### Verified
+- `python -m pytest tests\test_release_verifier.py tests\test_cli_verify_release.py tests\test_release_check.py tests\test_release_export.py tests\test_server_releases.py -q`
+
 ## v3.7.1 - 2026-05-15
 
 ### Fixed
