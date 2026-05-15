@@ -447,6 +447,13 @@ def test_webui_contains_release_workspace_controls():
     assert "/api/releases/${encodeURIComponent(release.release_id)}/tracks/${encodeURIComponent(button.dataset.trackId)}/remove" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/qa" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/qa/refresh" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/init" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa/refresh" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/export" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/platform.csv" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/credits.csv" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/export" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/export/zip" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/export.zip" in html

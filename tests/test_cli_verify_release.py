@@ -22,8 +22,8 @@ def test_cli_verify_release_json_and_report_out(tmp_path, monkeypatch, capsys):
     report = json.loads(output)
     saved = json.loads(report_path.read_text(encoding="utf-8"))
     assert exc.value.code == 0
-    assert report["status"] == "passed"
-    assert saved["status"] == "passed"
+    assert report["status"] == "warning"
+    assert saved["status"] == "warning"
 
 
 def test_cli_verify_release_failed_zip_exits_one(tmp_path, monkeypatch, capsys):

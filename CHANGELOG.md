@@ -1,5 +1,19 @@
 # Changelog
 
+## v3.9.0 - 2026-05-16
+
+### Added
+- Release Metadata documents under `.musicforge/releases/<release-id>/metadata.json` with release title, artists, label, language, release date, UPC, rights notes, track ISRC, explicit/instrumental flags, lyrics, and credits.
+- Metadata QA for required fields, UPC/ISRC formats, duplicate ISRCs, tracklist consistency, lyrics/explicit/instrumental warnings, credits coverage, confirmation state, and sensitive value redaction.
+- Metadata export files in Release Export and ZIP: `release-metadata.json`, `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`.
+- Release API endpoints for metadata init/save/QA/export plus platform and credits CSV downloads.
+- Studio Release Metadata panel with initialize, save, QA refresh, export, and CSV download controls.
+- `verify-release` metadata checks for manifest metadata summaries, protected metadata files, UTF-8 CSV parsing, tracklist consistency, metadata payload hash, lyrics/CSV/JSON redaction, and old pre-v3.9 ZIP compatibility warnings.
+- release-check v3.9 smoke covering metadata init, QA, export, ZIP verification, missing metadata file failure, and metadata redaction failure.
+
+### Verified
+- `python -m pytest tests\test_release_metadata.py tests\test_server_release_metadata.py tests\test_release_export.py tests\test_release_verifier.py tests\test_server_releases.py tests\test_release_check.py tests\test_webui.py -q`
+
 ## v3.8.1 - 2026-05-16
 
 ### Fixed

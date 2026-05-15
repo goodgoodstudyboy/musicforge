@@ -2680,9 +2680,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let qaData = { summary: release.qa_summary || {}, release_qa: { checks: [], track_checks: [] } };
       let exportData = { summary: release.export_summary || {}, manifest: {} };
       let signoffData = { summary: release.signoff_summary || {}, signoff: {} };
+      let metadataData = { summary: {}, metadata: {}, metadata_qa: { checks: [], track_checks: [] } };
       try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
       try { signoffData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`); } catch (err) {}
+      try {
+        metadataData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
+        const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
+        metadataData.metadata_qa = metadataQa.metadata_qa || {};
+        metadataData.qa_summary = metadataQa.summary || {};
+      } catch (err) {}
       const target = $("release-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -2714,6 +2721,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <span id="release-action-message" class="message"></span>
         </div>
         ${releaseTrackTable(release)}
+        ${releaseMetadataHtml(metadataData, release)}
         ${releaseQaHtml(qaData)}
         ${releaseExportHtml(exportData, release)}
         ${releaseSignoffHtml(signoffData)}
@@ -2729,6 +2737,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const signed = ["signed", "force_signed"].includes(signoffSummary.status);
       return `
         <button id="release-add-track" type="button" ${signed || !projects.length ? "disabled" : ""}>Add Track</button>
+        <button class="secondary" id="release-init-metadata" type="button" ${signed ? "disabled" : ""}>Initialize Metadata</button>
+        <button class="secondary" id="release-refresh-metadata-qa" type="button">Refresh Metadata QA</button>
+        <button class="secondary" id="release-export-metadata" type="button">Export Metadata</button>
         <button class="secondary" id="release-refresh-qa" type="button">Refresh Release QA</button>
         <button class="secondary" id="release-build-export" type="button" ${signed ? "disabled" : ""}>Build Release Export</button>
         <button class="secondary" id="release-build-zip" type="button">Build Release ZIP</button>
@@ -2777,6 +2788,51 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Tracks", summary.track_count || 0)}
         </div>
         ${deliveryChecksHtml([...(report.checks || []), ...(report.track_checks || [])])}
+      `;
+    }
+
+    function releaseMetadataHtml(metadataData, release) {
+      const metadata = (metadataData && metadataData.metadata) || {};
+      const summary = (metadataData && metadataData.summary) || {};
+      const qaSummary = (metadataData && metadataData.qa_summary) || {};
+      const releaseMeta = metadata.release || {};
+      const rows = (metadata.tracks || []).map((track) => `
+        <tr>
+          <td>${escapeHtml(track.track_number || "-")}</td>
+          <td>${escapeHtml(track.title || "-")}</td>
+          <td>${escapeHtml(track.display_artist || "-")}</td>
+          <td>${escapeHtml(track.isrc || "-")}</td>
+          <td>${track.explicit ? "yes" : "-"}</td>
+          <td>${track.instrumental ? "yes" : "-"}</td>
+          <td>${track.confirmed ? "yes" : "-"}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="panel-title subhead"><span>Release Metadata</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.exists ? "ready" : "missing")}
+          ${metric("Metadata QA", qaSummary.status || summary.qa_status || "missing")}
+          ${metric("Title", releaseMeta.title || release.name || "-")}
+          ${metric("UPC", releaseMeta.upc || "-")}
+        </div>
+        <div class="grid2">
+          <label>Release Title
+            <input id="release-metadata-title" value="${escapeHtml(releaseMeta.title || release.name || "")}">
+          </label>
+          <label>UPC
+            <input id="release-metadata-upc" value="${escapeHtml(releaseMeta.upc || "")}">
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-save-metadata" type="button" ${metadata.schema_version ? "" : "disabled"}>Save Metadata</button>
+          ${summary.exists ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/metadata/platform.csv">Platform CSV</a>` : ""}
+          ${summary.exists ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/metadata/credits.csv">Credits CSV</a>` : ""}
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Title</th><th>Artist</th><th>ISRC</th><th>Explicit</th><th>Instrumental</th><th>Confirmed</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='7'>Initialize metadata to edit release and track fields.</td></tr>"}</tbody>
+        </table>
+        ${deliveryChecksHtml([...((metadataData.metadata_qa || {}).checks || []), ...((metadataData.metadata_qa || {}).track_checks || [])])}
       `;
     }
 
@@ -2845,6 +2901,31 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ project_id: $("release-add-project").value, title: $("release-add-title").value.trim() }),
         });
+        await loadReleases();
+      });
+      bindAction("release-init-metadata", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/init`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-save-metadata", async () => {
+        const metadata = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
+        const payload = metadata.metadata || {};
+        payload.release = payload.release || {};
+        payload.release.title = $("release-metadata-title").value.trim();
+        payload.release.upc = $("release-metadata-upc").value.trim();
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        await loadReleases();
+      });
+      bindAction("release-refresh-metadata-qa", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-export-metadata", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/export`, { method: "POST" });
         await loadReleases();
       });
       bindAction("release-refresh-qa", async () => {

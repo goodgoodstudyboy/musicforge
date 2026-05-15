@@ -13,6 +13,14 @@ from song_agent.final_export import final_export_dir
 from song_agent.projectio import slugify, write_json
 from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
+from song_agent.release_metadata import (
+    attach_metadata_export_to_manifest,
+    export_release_metadata_files,
+    metadata_qa_allows_export,
+    read_release_metadata,
+    read_release_metadata_qa,
+    release_metadata_source_hash,
+)
 from song_agent.release_qa import release_qa_allows_export, release_qa_summary, release_source_hash
 from song_agent.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseStore, stable_hash
 
@@ -107,6 +115,11 @@ def build_release_export_bundle(
         "redaction_summary": {"status": "passed"},
     }
     write_json(export_dir / "manifest.json", sanitize_metadata(manifest, blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS))
+    metadata = read_release_metadata(release_store, release.release_id, default={})
+    metadata_qa = read_release_metadata_qa(release_store, release.release_id, default={}) if metadata else {}
+    if metadata and metadata_qa_allows_export(metadata_qa, current_source_hash=release_metadata_source_hash(release, metadata)):
+        metadata_export = export_release_metadata_files(release_store=release_store, release_id=release.release_id, qa_report=metadata_qa, now=now)
+        attach_metadata_export_to_manifest(release_store, release.release_id, metadata_export)
     manifest = read_release_export_manifest(release_store, release.release_id)
     return manifest
 

@@ -198,6 +198,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.6 delivery qa handoff smoke", *_v36_delivery_qa_handoff_smoke(root))
     report.add("v3.7 release workspace smoke", *_v37_release_workspace_smoke(root))
     report.add("v3.8 release zip verifier smoke", *_v38_release_zip_verifier_smoke(root))
+    report.add("v3.9 release metadata smoke", *_v39_release_metadata_smoke(root))
     return report
 
 
@@ -4169,8 +4170,8 @@ def _v38_release_zip_verifier_smoke(root: Path) -> tuple[bool, str]:
             and zip_status == 200
             and sign_status == 200
             and signed.get("summary", {}).get("status") == "signed"
-            and report.get("status") == "passed"
-            and external_report.get("status") == "passed"
+            and report.get("status") == "warning"
+            and external_report.get("status") == "warning"
             and _v38_check_status(hash_report, "manifest_file_hash_match") == "failed"
             and _v38_check_status(dangerous_report, "zip_entry_path_safe") == "failed"
             and _v38_check_status(backslash_report, "zip_entry_path_safe") == "failed"
@@ -4229,6 +4230,103 @@ def _v38_check_status(report: dict[str, Any], check_id: str) -> str | None:
         if isinstance(check, dict) and check.get("check_id") == check_id:
             return str(check.get("status"))
     return None
+
+
+def _v39_release_metadata_smoke(root: Path) -> tuple[bool, str]:
+    base = (root / ".release-check" / "v39-release-metadata").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Release Metadata Track One")
+        created_status, created = _release_http_json(
+            server,
+            "POST",
+            "/api/releases",
+            {"name": "Release Metadata Pack", "release_type": "demo_pack", "primary_artist": "MusicForge", "label": "Forge Label", "language": "English"},
+        )
+        release_id = created.get("release", {}).get("release_id")
+        add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "Release Metadata Track One"})
+        init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized.get("metadata", {})
+        if isinstance(metadata.get("release"), dict):
+            metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+            metadata["tracks"][0].update({"isrc": "USABC2600001", "lyrics": "Release metadata lyric", "credits": [{"role": "composer", "name": "Release Writer", "source": "user"}], "confirmed": True})
+        save_status, saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        metadata_qa_status, metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        qa_status, qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        metadata_export_status, metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        platform_status, platform_csv = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/metadata/platform.csv")
+        credits_status, credits_csv = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/metadata/credits.csv")
+        sign_status, signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+        zip_path = base / ".musicforge" / "releases" / str(release_id) / "release-export.zip"
+        verifier_report = verify_release_zip(zip_path)
+
+        missing_zip = _v38_rewrite_zip(zip_path, base / "metadata-missing.zip", remove={"release-metadata.json"})
+
+        def pollute_platform(data: bytes) -> bytes:
+            return data + b'\n"1","1","C:\\Users\\demo\\secret.zip api_key=sk-secret-value"\n'
+
+        polluted_zip = _v38_rewrite_zip(zip_path, base / "metadata-polluted.zip", transforms={"platform-metadata.csv": pollute_platform})
+        missing_report = verify_release_zip(missing_zip)
+        polluted_report = verify_release_zip(polluted_zip)
+        serialized = json.dumps({"saved": saved, "metadata_qa": metadata_qa, "exported": exported, "metadata_export": metadata_export, "signed": signed}, ensure_ascii=False)
+        ok = (
+            created_status == 201
+            and release_id
+            and add_status == 200
+            and init_status == 200
+            and initialized.get("metadata", {}).get("release", {}).get("title") == "Release Metadata Pack"
+            and save_status == 200
+            and saved.get("summary", {}).get("qa_status") == "passed"
+            and metadata_qa_status == 200
+            and metadata_qa.get("summary", {}).get("status") == "passed"
+            and qa_status == 200
+            and qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and export_status == 200
+            and exported.get("manifest", {}).get("metadata", {}).get("exists") is True
+            and metadata_export_status == 200
+            and metadata_export.get("summary", {}).get("status") == "exported"
+            and platform_status == 200
+            and b"USABC2600001" in platform_csv
+            and credits_status == 200
+            and b"Release Writer" in credits_csv
+            and sign_status == 200
+            and signed.get("summary", {}).get("status") == "signed"
+            and verifier_report.get("status") == "passed"
+            and _v38_check_status(verifier_report, "metadata_payload_hash") == "passed"
+            and _v38_check_status(missing_report, "metadata_files_present") == "failed"
+            and _v38_check_status(polluted_report, "manifest_file_hash_match") == "failed"
+            and _v38_check_status(polluted_report, "redaction_scan") == "failed"
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, (
+            f"release={release_id}, metadata_qa={metadata_qa.get('summary', {}).get('status')}, verify={verifier_report.get('status')}, "
+            f"missing={_v38_check_status(missing_report, 'metadata_files_present')}, polluted={_v38_check_status(polluted_report, 'redaction_scan')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

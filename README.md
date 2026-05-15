@@ -66,14 +66,22 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v3.8.1 adds a local Release Workspace for assembling multiple Project Delivery
+v3.9.0 adds a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
 a path-safe Release Export folder and Release ZIP under `.musicforge/releases/`.
 Release Signoff is explicit and audited; signed releases cannot be silently
 mutated without resetting signoff. The signoff record binds to the final Release
-Export manifest that is also written into the Release ZIP. Release ZIPs can be
+Export manifest that is also written into the Release ZIP.
+
+Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
+metadata QA, and export files for `release-metadata.json`,
+`platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are
+included in the Release Export manifest and ZIP, with hash checks and redaction
+scanning in the portable verifier.
+
+Release ZIPs can be
 verified outside the workspace:
 
 ```powershell

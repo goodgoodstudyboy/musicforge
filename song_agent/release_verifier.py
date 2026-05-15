@@ -6,6 +6,8 @@ import re
 import struct
 import sys
 import zipfile
+import csv
+import io
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -163,6 +165,7 @@ class _ReleaseZipVerifier:
         self.tracklist: dict[str, Any] = {}
         self.release_qa: dict[str, Any] = {}
         self.signoff: dict[str, Any] = {}
+        self.release_metadata: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -184,6 +187,7 @@ class _ReleaseZipVerifier:
                 self._verify_release_tracklist()
                 self._verify_tracks(archive)
                 self._verify_signoff()
+                self._verify_metadata(archive)
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -507,12 +511,66 @@ class _ReleaseZipVerifier:
             "Signoff qa_source_hash matches manifest." if qa_source and qa_source == manifest_qa_source else "Signoff qa_source_hash is missing or does not match manifest.",
         )
 
+    def _verify_metadata(self, archive: zipfile.ZipFile) -> None:
+        metadata_summary = self.manifest.get("metadata") if isinstance(self.manifest.get("metadata"), dict) else {}
+        if not metadata_summary:
+            self._add_check("metadata", "metadata_manifest_summary", "warning", "warning", "Release metadata summary is not present; treating this as a pre-v3.9 ZIP.")
+            return
+        self._add_check("metadata", "metadata_manifest_summary", "passed", "warning", "Release metadata summary exists.")
+        declared = [str(item) for item in metadata_summary.get("files", []) if str(item).strip()] if isinstance(metadata_summary.get("files"), list) else []
+        required = {"release-metadata.json", "platform-metadata.csv", "credits.csv"}
+        missing_declared = sorted(required - set(declared))
+        missing_entries = sorted(path for path in declared if path not in self.entry_map)
+        file_rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        manifest_paths = {str(item.get("path")) for item in file_rows if isinstance(item, dict)}
+        unprotected = sorted(path for path in declared if path not in manifest_paths)
+        failures = [*missing_declared, *missing_entries, *[f"{path} not protected by manifest.files" for path in unprotected]]
+        self._add_check(
+            "metadata",
+            "metadata_files_present",
+            "failed" if failures else "passed",
+            "blocking",
+            "Metadata file problems: " + "; ".join(failures[:5]) if failures else "Metadata files exist and are declared in manifest.files.",
+            count=len(failures),
+        )
+        if "release-metadata.json" in self.entry_map:
+            self.release_metadata = self._read_json_entry(archive, "release-metadata.json", "metadata", "metadata_json_parse")
+        platform_ok = self._read_csv_entry(archive, "platform-metadata.csv", "metadata_platform_csv")
+        credits_ok = self._read_csv_entry(archive, "credits.csv", "metadata_credits_csv")
+        self._add_check("metadata", "metadata_csv_utf8", "passed" if platform_ok and credits_ok else "failed", "blocking", "Metadata CSV files are UTF-8 readable." if platform_ok and credits_ok else "Metadata CSV files must be valid UTF-8 CSV.")
+        if self.release_metadata:
+            meta_tracks = self.release_metadata.get("tracks") if isinstance(self.release_metadata.get("tracks"), list) else []
+            tracklist_tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+            meta_ids = {str(item.get("track_id")) for item in meta_tracks if isinstance(item, dict)}
+            tracklist_ids = {str(item.get("track_id")) for item in tracklist_tracks if isinstance(item, dict)}
+            count_match = len(meta_tracks) == len(tracklist_tracks)
+            id_match = meta_ids == tracklist_ids
+            self._add_check(
+                "metadata",
+                "metadata_tracklist_consistency",
+                "passed" if count_match and id_match else "failed",
+                "blocking",
+                "Metadata tracks match tracklist." if count_match and id_match else "Metadata tracks do not match tracklist.",
+            )
+            expected_hash = metadata_summary.get("payload_hash")
+            if expected_hash:
+                actual_hash = stable_hash(self.release_metadata)
+                self._add_check(
+                    "metadata",
+                    "metadata_payload_hash",
+                    "passed" if expected_hash == actual_hash else "failed",
+                    "blocking",
+                    "Metadata payload hash matches manifest summary." if expected_hash == actual_hash else "Metadata payload hash does not match manifest summary.",
+                )
+
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         scan_names = [
             name
             for name in self.entry_names
             if name in {"manifest.json", "release.json", "tracklist.json", "release-qa.json", "release-signoff.json", "README.txt"}
             or name.endswith(("/project-export.json", "/song-plan.json", "/manifest.json", "/README.txt"))
+            or name in {"release-metadata.json", "platform-metadata.csv", "credits.csv"}
+            or name.startswith("lyrics/")
         ]
         for name in scan_names:
             info = self.entry_map.get(name)
@@ -582,6 +640,20 @@ class _ReleaseZipVerifier:
         else:
             self._add_check(scope, check_id, "passed", "blocking", f"{name} is valid JSON.")
         return value
+
+    def _read_csv_entry(self, archive: zipfile.ZipFile, name: str, check_id: str) -> bool:
+        info = self.entry_map.get(name)
+        if info is None:
+            self._add_check("metadata", check_id, "failed", "blocking", f"{name} is missing.")
+            return False
+        try:
+            text = archive.read(info).decode("utf-8")
+            list(csv.reader(io.StringIO(text)))
+        except (OSError, UnicodeDecodeError, csv.Error, RuntimeError) as exc:
+            self._add_check("metadata", check_id, "failed", "blocking", f"{name} is not valid UTF-8 CSV: {exc}")
+            return False
+        self._add_check("metadata", check_id, "passed", "blocking", f"{name} is valid UTF-8 CSV.")
+        return True
 
     def _check_midi_header(self, archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[bool, str]:
         data = archive.read(info)[:14]

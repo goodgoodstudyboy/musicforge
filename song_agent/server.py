@@ -104,6 +104,25 @@ from song_agent.release_export import (
     refresh_release_export_signoff_summary,
     release_export_summary,
 )
+from song_agent.release_metadata import (
+    ReleaseMetadataError,
+    attach_metadata_export_to_manifest,
+    export_release_metadata_files,
+    initialize_release_metadata,
+    metadata_export_summary,
+    read_release_metadata,
+    read_release_metadata_history,
+    read_release_metadata_qa,
+    release_metadata_source_hash,
+    release_metadata_summary,
+    write_release_metadata,
+    write_release_metadata_qa,
+)
+from song_agent.release_metadata_qa import (
+    build_release_metadata_qa_report,
+    mark_release_metadata_qa_stale,
+    release_metadata_qa_summary,
+)
 from song_agent.release_qa import (
     build_release_qa_report,
     build_release_signoff_record,
@@ -4168,7 +4187,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
             return
-        except (ReleaseValidationError, ValueError) as exc:
+        except (ReleaseValidationError, ReleaseMetadataError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         except (ReleaseConflictError, ReleaseStateError) as exc:
@@ -4264,6 +4283,82 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "release_id": release_id, "release_qa": report, "summary": release_qa_summary(report)})
                 return
 
+            if tail == "/metadata":
+                if method == "GET":
+                    metadata = read_release_metadata(self.release_store, release_id, default={})
+                    qa_report = self._get_or_refresh_release_metadata_qa(release_id, refresh=False) if metadata else {}
+                    self._send_json(
+                        {
+                            "ok": True,
+                            "release_id": release_id,
+                            "metadata": metadata,
+                            "history": read_release_metadata_history(self.release_store, release_id),
+                            "summary": release_metadata_summary(metadata, qa_report, metadata_export_summary(_safe_read_release_export_manifest(self.release_store, release_id))),
+                        }
+                    )
+                    return
+                if method == "POST":
+                    metadata = write_release_metadata(self.release_store, release_id, self._read_json_body(), now=_utc_now())
+                    report = self._get_or_refresh_release_metadata_qa(release_id, refresh=True)
+                    self._send_json({"ok": True, "release_id": release_id, "metadata": metadata, "summary": release_metadata_summary(metadata, report)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if tail == "/metadata/init":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                metadata = initialize_release_metadata(self.release_store, release_id, force=bool(payload.get("force", False)), merge=bool(payload.get("merge", False)), now=_utc_now())
+                report = self._get_or_refresh_release_metadata_qa(release_id, refresh=True)
+                self._send_json({"ok": True, "release_id": release_id, "metadata": metadata, "summary": release_metadata_summary(metadata, report)})
+                return
+
+            if tail == "/metadata/qa":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_release_metadata_qa(release_id, refresh=False)
+                self._send_json({"ok": True, "release_id": release_id, "metadata_qa": report, "summary": release_metadata_qa_summary(report)})
+                return
+
+            if tail == "/metadata/qa/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_release_metadata_qa(release_id, refresh=True)
+                self.release_store.append_event(release_id, "release_metadata_qa_refreshed", {"status": report.get("status")})
+                self._send_json({"ok": True, "release_id": release_id, "metadata_qa": report, "summary": release_metadata_qa_summary(report)})
+                return
+
+            if tail == "/metadata/export":
+                if method == "GET":
+                    manifest = _safe_read_release_export_manifest(self.release_store, release_id)
+                    self._send_json({"ok": True, "release_id": release_id, "metadata_export": manifest.get("metadata", {}), "summary": metadata_export_summary(manifest)})
+                    return
+                if method == "POST":
+                    report = self._get_or_refresh_release_metadata_qa(release_id, refresh=False)
+                    export_summary = export_release_metadata_files(release_store=self.release_store, release_id=release_id, qa_report=report, now=_utc_now())
+                    manifest = attach_metadata_export_to_manifest(self.release_store, release_id, export_summary)
+                    build_release_export_zip(self.release_store, release_id, now=_utc_now())
+                    manifest = read_release_export_manifest(self.release_store, release_id)
+                    document = self.release_store.update_export_summary(release_id, release_export_summary(manifest))
+                    self.release_store.append_event(release_id, "release_metadata_exported", {"file_count": len(export_summary.get("files", []))})
+                    self._send_json({"ok": True, "release": document.to_dict(), "manifest": manifest, "metadata_export": export_summary, "summary": metadata_export_summary(manifest)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if tail in {"/metadata/platform.csv", "/metadata/credits.csv"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                filename = "platform-metadata.csv" if tail.endswith("platform.csv") else "credits.csv"
+                self.release_store.get_release(release_id)
+                self._send_file(self.release_store.export_dir(release_id) / filename, "text/csv; charset=utf-8", filename=filename)
+                return
+
             if tail == "/export":
                 if method == "GET":
                     try:
@@ -4342,6 +4437,22 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = self.release_store.write_qa(release_id, report)
         self.release_store.update_qa_summary(release_id, release_qa_summary(report))
         return report
+
+    def _get_or_refresh_release_metadata_qa(self, release_id: str, *, refresh: bool) -> dict[str, Any]:
+        document = self.release_store.get_release(release_id)
+        metadata = read_release_metadata(self.release_store, release_id, default={})
+        if not metadata:
+            report = build_release_metadata_qa_report(release=document, metadata={}, now=_utc_now())
+            return write_release_metadata_qa(self.release_store, release_id, report)
+        if not refresh:
+            existing = read_release_metadata_qa(self.release_store, release_id, default={})
+            if existing:
+                current_hash = release_metadata_source_hash(document, metadata)
+                if str(existing.get("source_hash") or "") != current_hash:
+                    return mark_release_metadata_qa_stale(existing, current_source_hash=current_hash)
+                return existing
+        report = build_release_metadata_qa_report(release=document, metadata=metadata, now=_utc_now())
+        return write_release_metadata_qa(self.release_store, release_id, report)
 
     def _handle_release_signoff(self, method: str, release_id: str) -> None:
         if method == "GET":
@@ -9869,6 +9980,13 @@ def _rfc5987_quote(value: str) -> str:
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _safe_read_release_export_manifest(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:
+    try:
+        return read_release_export_manifest(release_store, release_id)
+    except FileNotFoundError:
+        return {}
 
 
 def _string_list(value: Any) -> list[str]:

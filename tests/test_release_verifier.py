@@ -23,10 +23,11 @@ def test_verify_release_zip_valid_portable_sidecar_and_report_out(tmp_path, monk
     write_verification_report(report, report_path)
     saved = json.loads(report_path.read_text(encoding="utf-8"))
 
-    assert report["status"] == "passed"
+    assert report["status"] == "warning"
     assert report["summary"]["track_count"] == 2
     assert report["summary"]["blocker_count"] == 0
-    assert saved["status"] == "passed"
+    assert saved["status"] == "warning"
+    assert _check(report, "metadata_manifest_summary")["status"] == "warning"
     assert _check(report, "manifest_extra_entries")["status"] == "passed"
     with zipfile.ZipFile(copied_zip) as archive:
         manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
