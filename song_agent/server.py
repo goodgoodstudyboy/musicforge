@@ -4338,6 +4338,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_json({"ok": True, "release_id": release_id, "metadata_export": manifest.get("metadata", {}), "summary": metadata_export_summary(manifest)})
                     return
                 if method == "POST":
+                    self._ensure_release_export_mutable(release_id)
                     report = self._get_or_refresh_release_metadata_qa(release_id, refresh=False)
                     export_summary = export_release_metadata_files(release_store=self.release_store, release_id=release_id, qa_report=report, now=_utc_now())
                     manifest = attach_metadata_export_to_manifest(self.release_store, release_id, export_summary)
@@ -4370,6 +4371,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 if method == "POST":
                     document = self.release_store.get_release(release_id)
+                    self._ensure_release_export_mutable(release_id, document=document)
                     report = self._get_or_refresh_release_qa(release_id, refresh=False, options={})
                     manifest = build_release_export_bundle(release=document, release_store=self.release_store, project_store=self.project_store, qa_report=report, now=_utc_now())
                     document = self.release_store.update_export_summary(release_id, release_export_summary(manifest))
@@ -4383,6 +4385,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
+                self._ensure_release_export_mutable(release_id)
                 zip_info = build_release_export_zip(self.release_store, release_id, now=_utc_now())
                 manifest = read_release_export_manifest(self.release_store, release_id)
                 document = self.release_store.update_export_summary(release_id, release_export_summary(manifest))
@@ -4453,6 +4456,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return existing
         report = build_release_metadata_qa_report(release=document, metadata=metadata, now=_utc_now())
         return write_release_metadata_qa(self.release_store, release_id, report)
+
+    def _ensure_release_export_mutable(self, release_id: str, *, document: Any | None = None) -> None:
+        document = document or self.release_store.get_release(release_id)
+        if document.status == "archived":
+            raise ReleaseStateError("Archived releases are read-only.")
+        if document.status == "signed":
+            raise ReleaseStateError("Signed releases cannot rebuild export or ZIP. Reset signoff before exporting again.")
 
     def _handle_release_signoff(self, method: str, release_id: str) -> None:
         if method == "GET":

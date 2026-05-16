@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.9.1 - 2026-05-16
+
+### Fixed
+- Signed releases now block `POST /api/releases/<id>/export`, `POST /api/releases/<id>/export/zip`, and `POST /api/releases/<id>/metadata/export` with 409 until signoff is reset, preserving the signed Release Export manifest hash and ZIP verification chain.
+- release-check v3.9 smoke now verifies signed release export mutation is blocked for all three write endpoints.
+
+### Verified
+- `python -m pytest tests\test_server_release_metadata.py tests\test_release_check.py::test_v39_release_metadata_smoke -q`
+
 ## v3.9.0 - 2026-05-16
 
 ### Added

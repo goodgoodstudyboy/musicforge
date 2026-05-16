@@ -4270,6 +4270,9 @@ def _v39_release_metadata_smoke(root: Path) -> tuple[bool, str]:
         platform_status, platform_csv = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/metadata/platform.csv")
         credits_status, credits_csv = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/metadata/credits.csv")
         sign_status, signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+        signed_export_status, signed_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        signed_zip_status, signed_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        signed_metadata_export_status, signed_metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
         zip_path = base / ".musicforge" / "releases" / str(release_id) / "release-export.zip"
         verifier_report = verify_release_zip(zip_path)
 
@@ -4281,7 +4284,19 @@ def _v39_release_metadata_smoke(root: Path) -> tuple[bool, str]:
         polluted_zip = _v38_rewrite_zip(zip_path, base / "metadata-polluted.zip", transforms={"platform-metadata.csv": pollute_platform})
         missing_report = verify_release_zip(missing_zip)
         polluted_report = verify_release_zip(polluted_zip)
-        serialized = json.dumps({"saved": saved, "metadata_qa": metadata_qa, "exported": exported, "metadata_export": metadata_export, "signed": signed}, ensure_ascii=False)
+        serialized = json.dumps(
+            {
+                "saved": saved,
+                "metadata_qa": metadata_qa,
+                "exported": exported,
+                "metadata_export": metadata_export,
+                "signed": signed,
+                "signed_export": signed_export,
+                "signed_zip": signed_zip,
+                "signed_metadata_export": signed_metadata_export,
+            },
+            ensure_ascii=False,
+        )
         ok = (
             created_status == 201
             and release_id
@@ -4304,6 +4319,12 @@ def _v39_release_metadata_smoke(root: Path) -> tuple[bool, str]:
             and b"Release Writer" in credits_csv
             and sign_status == 200
             and signed.get("summary", {}).get("status") == "signed"
+            and signed_export_status == 409
+            and signed_zip_status == 409
+            and signed_metadata_export_status == 409
+            and "signed" in signed_export.get("error", "").lower()
+            and "signed" in signed_zip.get("error", "").lower()
+            and "signed" in signed_metadata_export.get("error", "").lower()
             and verifier_report.get("status") == "passed"
             and _v38_check_status(verifier_report, "metadata_payload_hash") == "passed"
             and _v38_check_status(missing_report, "metadata_files_present") == "failed"
@@ -4316,6 +4337,7 @@ def _v39_release_metadata_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"release={release_id}, metadata_qa={metadata_qa.get('summary', {}).get('status')}, verify={verifier_report.get('status')}, "
+            f"signed_export={signed_export_status}/{signed_zip_status}/{signed_metadata_export_status}, "
             f"missing={_v38_check_status(missing_report, 'metadata_files_present')}, polluted={_v38_check_status(polluted_report, 'redaction_scan')}"
         )
     except Exception as exc:

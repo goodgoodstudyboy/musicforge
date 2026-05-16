@@ -102,3 +102,53 @@ def test_release_metadata_api_rejects_signed_release_mutation(tmp_path, monkeypa
     assert sign_status == 200
     assert mutate_status == 409
     assert "signed" in mutate["error"].lower()
+
+
+def test_signed_release_blocks_export_zip_and_metadata_export_until_reset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _signed_project(server, "Signed Export Guard Song")
+        created_status, created = request_json(server, "POST", "/api/releases", {"name": "Signed Export Guard", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = created["release"]["release_id"]
+        add_status, _added = request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        init_status, initialized = request_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized["metadata"]
+        metadata["release"].update({"copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        metadata["tracks"][0].update({"lyrics": "Clean lyric", "credits": [{"role": "composer", "name": "Writer"}], "confirmed": True})
+        save_status, _saved = request_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        metadata_qa_status, _metadata_qa = request_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        qa_status, _qa = request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _export = request_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, _signed = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "server-test"})
+
+        blocked_export_status, blocked_export = request_json(server, "POST", f"/api/releases/{release_id}/export")
+        blocked_zip_status, blocked_zip = request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        blocked_metadata_status, blocked_metadata = request_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        reset_status, _reset = request_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "guard regression rebuild"})
+        export_after_reset_status, _export_after_reset = request_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_after_reset_status, _zip_after_reset = request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        metadata_after_reset_status, _metadata_after_reset = request_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+    finally:
+        stop_test_server(server)
+
+    assert created_status == 201
+    assert add_status == 200
+    assert init_status == 200
+    assert save_status == 200
+    assert metadata_qa_status == 200
+    assert qa_status == 200
+    assert export_status == 200
+    assert zip_status == 200
+    assert sign_status == 200
+    assert blocked_export_status == 409
+    assert blocked_zip_status == 409
+    assert blocked_metadata_status == 409
+    assert "signed" in blocked_export["error"].lower()
+    assert "signed" in blocked_zip["error"].lower()
+    assert "signed" in blocked_metadata["error"].lower()
+    assert reset_status == 200
+    assert export_after_reset_status == 200
+    assert zip_after_reset_status == 200
+    assert metadata_after_reset_status == 200
