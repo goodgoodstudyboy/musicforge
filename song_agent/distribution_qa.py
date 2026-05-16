@@ -8,7 +8,9 @@ from typing import Any
 
 from song_agent.distribution import DistributionStore, DistributionTarget
 from song_agent.distribution_artwork import distribution_artwork_file_path, latest_distribution_artwork, read_distribution_artwork
+from song_agent.distribution_checklist import checklist_checks, checklist_summary, reconcile_distribution_checklist, read_distribution_checklist
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS, get_distribution_profile
+from song_agent.distribution_templates import resolve_mapping_source, template_mapping, template_summary
 from song_agent.projectio import read_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata
@@ -72,6 +74,8 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
     metadata_source = release_metadata_source_hash(release, metadata) if metadata else None
     artwork = _selected_artwork(store, release.release_id, target)
     profile = get_distribution_profile(target.profile_id)
+    template = store.resolve_target_template(target)
+    checklist = reconcile_distribution_checklist(store, release.release_id, target, template, write=False) if template else {}
     return sanitize_metadata(
         {
             "release": {
@@ -85,9 +89,13 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
             "target": {
                 "target_id": target.target_id,
                 "profile_id": target.profile_id,
+                "template_pack_id": target.template_pack_id,
+                "template_hash": target.template_hash,
                 "options": target.options,
             },
             "profile_hash": profile.get("profile_hash"),
+            "template": template_summary(template),
+            "checklist": checklist_summary(checklist) if checklist else {},
             "release_export_manifest_hash": stable_hash({key: value for key, value in export_manifest.items() if key != "zip"}) if export_manifest else None,
             "release_zip_sha256": _sha256_file(release_zip_path),
             "release_signoff_hash": stable_hash(release_signoff) if release_signoff else None,
@@ -183,6 +191,8 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
     release_signoff = store.release_store.read_signoff(release.release_id, default={})
     metadata = read_release_metadata(store.release_store, release.release_id, default={})
     metadata_qa = read_release_metadata_qa(store.release_store, release.release_id, default={}) if metadata else {}
+    template = store.resolve_target_template(target)
+    checklist = reconcile_distribution_checklist(store, release.release_id, target, template, write=False) if template else {}
 
     checks.append(_check("release_exists", False, "blocking", "Release exists."))
     checks.append(_check("release_not_hidden", bool(release.hidden), "blocking", "Release must not be hidden."))
@@ -211,6 +221,8 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
         checks.append(_check("metadata_qa_current", not metadata_qa or metadata_qa.get("status") not in {"passed", "warning"}, "blocking", "Release Metadata QA must be passed or warning and current."))
         checks.append(_check("metadata_export_present", not metadata_summary.get("exists"), "blocking", "Release Metadata Export must be present in signed Release Export."))
         checks.extend(_identifier_checks(metadata, options))
+        if template:
+            checks.extend(_mapping_checks(metadata, template))
         formula_warnings = raw_metadata_formula_findings(metadata)
         checks.append(_check("metadata_csv_formula_source", bool(formula_warnings), "warning", "Raw metadata contains CSV formula-prefixed values.", count=len(formula_warnings), extra={"findings": formula_warnings[:20]}))
     for csv_name in ("platform-metadata.csv", "credits.csv"):
@@ -229,8 +241,45 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
     checks.append(_check("artwork_exists", require_artwork and not artwork, "blocking", "Artwork is required for this profile."))
     if artwork:
         checks.extend(_artwork_checks(store, release.release_id, artwork, options))
+    if template:
+        if target.template_hash and template.get("template_hash") != target.template_hash:
+            checks.append(_check("template_current", True, "blocking", "Distribution template pack has changed since target binding. Rebind or refresh target template."))
+        else:
+            checks.append(_check("template_current", False, "blocking", "Distribution template pack binding is current."))
+        checks.extend(checklist_checks(checklist))
     checks.append(_check("source_hash_computable", not bool(source), "blocking", "Distribution source hash can be computed."))
     return [sanitize_metadata(check, blocked_keys=DISTRIBUTION_BLOCKED_KEYS) for check in checks]
+
+
+def _mapping_checks(metadata: dict[str, Any], template: dict[str, Any]) -> list[dict[str, Any]]:
+    mapping = template_mapping(template)
+    rows = mapping.get("platform_csv") if isinstance(mapping.get("platform_csv"), list) else []
+    tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
+    checks: list[dict[str, Any]] = []
+    missing_required: list[str] = []
+    missing_optional = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        source = str(row.get("source") or "")
+        column = str(row.get("column") or source)
+        for index, track in enumerate(tracks, start=1):
+            if not isinstance(track, dict):
+                continue
+            try:
+                value = resolve_mapping_source(source, release_metadata=metadata, track_metadata=track)
+            except ValueError:
+                missing_required.append(f"{column}:unsupported-source")
+                continue
+            if str(value or "").strip():
+                continue
+            if bool(row.get("required", False)):
+                missing_required.append(f"{column}:track-{index}")
+            else:
+                missing_optional += 1
+    checks.append(_check("template_mapping_required_fields", bool(missing_required), "blocking", "Template metadata mapping required fields are missing.", count=len(missing_required), extra={"missing": missing_required[:20]}))
+    checks.append(_check("template_mapping_optional_fields", missing_optional > 0, "warning", "Template metadata mapping optional fields are missing.", count=missing_optional))
+    return checks
 
 
 def _identifier_checks(metadata: dict[str, Any], options: dict[str, Any]) -> list[dict[str, Any]]:

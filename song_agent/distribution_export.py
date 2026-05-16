@@ -18,7 +18,9 @@ from song_agent.distribution import (
     distribution_signoff_summary,
 )
 from song_agent.distribution_artwork import distribution_artwork_file_path, latest_distribution_artwork, read_distribution_artwork
+from song_agent.distribution_checklist import checklist_export_payload, checklist_markdown, checklist_summary, reconcile_distribution_checklist
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS, get_distribution_profile
+from song_agent.distribution_templates import resolve_mapping_source, render_file_pattern, template_file_naming, template_mapping, template_summary
 from song_agent.distribution_qa import distribution_qa_allows_export, distribution_source_state
 from song_agent.projectio import read_json, slugify
 from song_agent.projects import now_iso
@@ -62,6 +64,8 @@ def build_distribution_export_package(
     export_dir.mkdir(parents=True, exist_ok=True)
 
     copied_files: list[dict[str, Any]] = []
+    template = store.resolve_target_template(target)
+    checklist = reconcile_distribution_checklist(store, release_id, target, template, write=True) if template else {}
     _write_package_json(export_dir, release, target, package_id, qa_report, now)
     _copy_release_file(release_export_dir, export_dir, "release.json", copied_files)
     _copy_release_file(release_export_dir, export_dir, "tracklist.json", copied_files)
@@ -69,12 +73,20 @@ def build_distribution_export_package(
         source = release_export_dir / rel
         if source.exists():
             _copy_release_file(release_export_dir, export_dir, rel, copied_files, csv_safe=rel.endswith(".csv"))
+    if template:
+        _write_template_files(export_dir, template, checklist)
+        copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "template-pack.json", export_dir / "template-summary.json", export_dir / "docs" / "checklist.json", export_dir / "docs" / "checklist.md"])
+        mapped_csv = _write_template_platform_csv(export_dir, store, release_id, template)
+        if mapped_csv:
+            copied_files.append(_file_record(export_dir, mapped_csv))
     _copy_tree_prefix(release_export_dir, export_dir, "lyrics", copied_files)
-    _copy_audio_files(release_export_dir, export_dir, release_manifest, copied_files)
-    artwork_record = _copy_artwork(store, release_id, target, export_dir, copied_files)
-    _write_docs(export_dir, release, target, package_id, qa_report, artwork_record)
+    _copy_audio_files(release_export_dir, export_dir, release_manifest, copied_files, template=template)
+    artwork_record = _copy_artwork(store, release_id, target, export_dir, copied_files, template=template)
+    wrote_checklist_doc = _write_docs(export_dir, release, target, package_id, qa_report, artwork_record, checklist=checklist, write_checklist=not bool(template))
     _write_readme(export_dir, release, target, package_id, qa_report)
-    copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "package.json", export_dir / "README.txt", export_dir / "docs" / "checklist.json", export_dir / "docs" / "submission-notes.md"])
+    copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "package.json", export_dir / "README.txt", export_dir / "docs" / "submission-notes.md"])
+    if wrote_checklist_doc and not template:
+        copied_files.append(_file_record(export_dir, export_dir / "docs" / "checklist.json"))
 
     signoff_public = _distribution_signoff_export_summary({})
     _write_json(export_dir / "distribution-signoff.json", signoff_public)
@@ -88,10 +100,14 @@ def build_distribution_export_package(
         "source_hash": current_source_hash,
         "qa_source_hash": qa_report.get("source_hash"),
         "profile": _profile_public(target.profile_id),
+        "template": template_summary(template) if template else {},
+        "checklist": checklist_summary(checklist) if checklist else {},
         "target": {
             "target_id": target.target_id,
             "name": target.name,
             "profile_id": target.profile_id,
+            "template_pack_id": target.template_pack_id,
+            "template_hash": target.template_hash,
             "options": target.options,
         },
         "release": {
@@ -312,9 +328,10 @@ def _copy_tree_prefix(source_root: Path, export_dir: Path, prefix: str, records:
         records.append(_file_record(export_dir, target))
 
 
-def _copy_audio_files(source_root: Path, export_dir: Path, release_manifest: dict[str, Any], records: list[dict[str, Any]]) -> None:
+def _copy_audio_files(source_root: Path, export_dir: Path, release_manifest: dict[str, Any], records: list[dict[str, Any]], *, template: dict[str, Any] | None = None) -> None:
     tracks = release_manifest.get("tracks") if isinstance(release_manifest.get("tracks"), list) else []
     used: set[str] = set()
+    naming = template_file_naming(template) if template else {}
     for track in tracks:
         if not isinstance(track, dict):
             continue
@@ -324,7 +341,7 @@ def _copy_audio_files(source_root: Path, export_dir: Path, release_manifest: dic
             continue
         title = slugify(str(track.get("title") or track.get("track_id") or "track"))[:60]
         number = int(track.get("track_number") or 1)
-        base = f"{number:02d}-{title or 'track'}.wav"
+        base = render_file_pattern(naming["audio"], track=track, ext="wav").split("/")[-1] if naming.get("audio") else f"{number:02d}-{title or 'track'}.wav"
         name = base
         index = 2
         while name in used:
@@ -337,21 +354,25 @@ def _copy_audio_files(source_root: Path, export_dir: Path, release_manifest: dic
         records.append(_file_record(export_dir, target))
 
 
-def _copy_artwork(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+def _copy_artwork(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]], *, template: dict[str, Any] | None = None) -> dict[str, Any]:
     artwork_id = str((target.options or {}).get("artwork_id") or "").strip()
     artwork = read_distribution_artwork(store, release_id, artwork_id) if artwork_id else latest_distribution_artwork(store, release_id)
     if not artwork:
         return {}
     source = distribution_artwork_file_path(store, release_id, artwork)
     suffix = Path(str(artwork.get("stored_filename") or "cover.png")).suffix.lower() or ".png"
-    target = export_dir / "artwork" / f"cover{suffix}"
+    naming = template_file_naming(template) if template else {}
+    rel = naming.get("artwork", "cover.{ext}").replace("{ext}", suffix.lstrip("."))
+    if not rel.startswith("artwork/"):
+        rel = "artwork/" + rel
+    target = export_dir / _validate_relative_path(rel)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
     records.append(_file_record(export_dir, target))
     return sanitize_metadata({**artwork, "package_path": f"artwork/cover{suffix}"}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: dict[str, Any], artwork: dict[str, Any]) -> None:
+def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: dict[str, Any], artwork: dict[str, Any], *, checklist: dict[str, Any] | None = None, write_checklist: bool = True) -> bool:
     checklist = {
         "package_id": package_id,
         "release_id": release.release_id,
@@ -360,10 +381,13 @@ def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, pack
         "qa_status": qa_report.get("status"),
         "artwork": bool(artwork),
         "metadata": True,
+        **(checklist if isinstance(checklist, dict) else {}),
     }
-    _write_json(export_dir / "docs" / "checklist.json", sanitize_metadata(checklist, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
+    if write_checklist:
+        _write_json(export_dir / "docs" / "checklist.json", sanitize_metadata(checklist, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
     note = str((target.options or {}).get("submission_note") or "")
     (export_dir / "docs" / "submission-notes.md").write_text(sanitize_sensitive_text(note or "Prepared locally by MusicForge.\n"), encoding="utf-8")
+    return write_checklist
 
 
 def _write_readme(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: dict[str, Any]) -> None:
@@ -378,6 +402,45 @@ def _write_readme(export_dir: Path, release: Any, target: DistributionTarget, pa
         "This package was prepared locally. It does not contain platform credentials or upload tokens.",
     ]
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_template_files(export_dir: Path, template: dict[str, Any], checklist: dict[str, Any]) -> None:
+    _write_json(export_dir / "template-pack.json", sanitize_metadata(template, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
+    _write_json(export_dir / "template-summary.json", template_summary(template))
+    payload = checklist_export_payload(checklist, template)
+    _write_json(export_dir / "docs" / "checklist.json", payload)
+    (export_dir / "docs" / "checklist.md").write_text(checklist_markdown(checklist, template), encoding="utf-8")
+
+
+def _write_template_platform_csv(export_dir: Path, store: DistributionStore, release_id: str, template: dict[str, Any]) -> Path | None:
+    mapping = template_mapping(template)
+    rows = mapping.get("platform_csv") if isinstance(mapping.get("platform_csv"), list) else []
+    if not rows:
+        return None
+    from song_agent.release_metadata import read_release_metadata
+
+    metadata = read_release_metadata(store.release_store, release_id, default={})
+    tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
+    headers = [str(row.get("column") or "") for row in rows if isinstance(row, dict) and row.get("column")]
+    if not headers:
+        return None
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=headers)
+    writer.writeheader()
+    for track in tracks:
+        if not isinstance(track, dict):
+            continue
+        out: dict[str, Any] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            column = str(row.get("column") or "")
+            value = resolve_mapping_source(str(row.get("source") or ""), release_metadata=metadata, track_metadata=track)
+            out[column] = _escape_csv_cell(str(value or ""))
+        writer.writerow(out)
+    target = export_dir / "template-platform-metadata.csv"
+    target.write_text(buffer.getvalue(), encoding="utf-8")
+    return target
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> Path:

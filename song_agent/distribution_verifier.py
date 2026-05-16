@@ -15,6 +15,8 @@ from typing import Any
 from song_agent import __version__
 from song_agent.distribution_export import DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
+from song_agent.distribution_checklist import checklist_payload_hash, checklist_summary
+from song_agent.distribution_templates import template_content_hash, template_summary, validate_template_pack
 from song_agent.projectio import write_json
 from song_agent.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
@@ -136,6 +138,9 @@ class _DistributionPackageVerifier:
         self.package: dict[str, Any] = {}
         self.release: dict[str, Any] = {}
         self.tracklist: dict[str, Any] = {}
+        self.template: dict[str, Any] = {}
+        self.template_summary_doc: dict[str, Any] = {}
+        self.checklist: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -156,6 +161,7 @@ class _DistributionPackageVerifier:
                 self._read_json_documents(archive)
                 self._verify_package_release()
                 self._verify_signoff()
+                self._verify_template_and_checklist()
                 self._verify_metadata_and_artwork(archive)
                 self._verify_redaction(archive)
         finally:
@@ -264,6 +270,12 @@ class _DistributionPackageVerifier:
             self.release = self._read_json_entry(archive, "release.json", "release", "distribution_release_parse")
         if "tracklist.json" in self.entry_map:
             self.tracklist = self._read_json_entry(archive, "tracklist.json", "tracklist", "distribution_tracklist_parse")
+        if "template-pack.json" in self.entry_map:
+            self.template = self._read_json_entry(archive, "template-pack.json", "template", "distribution_template_pack_parse")
+        if "template-summary.json" in self.entry_map:
+            self.template_summary_doc = self._read_json_entry(archive, "template-summary.json", "template", "distribution_template_summary_parse")
+        if "docs/checklist.json" in self.entry_map:
+            self.checklist = self._read_json_entry(archive, "docs/checklist.json", "checklist", "distribution_checklist_parse")
 
     def _verify_package_release(self) -> None:
         errors: list[str] = []
@@ -295,6 +307,32 @@ class _DistributionPackageVerifier:
         qa_source = self.signoff.get("qa_source_hash")
         manifest_qa_source = self.manifest.get("qa_source_hash")
         self._add_check("signoff", "distribution_signoff_qa_source", "passed" if qa_source and qa_source == manifest_qa_source else "failed", "blocking", "Distribution signoff qa_source_hash matches manifest." if qa_source and qa_source == manifest_qa_source else "Distribution signoff qa_source_hash is missing or does not match manifest.")
+
+    def _verify_template_and_checklist(self) -> None:
+        manifest_template = self.manifest.get("template") if isinstance(self.manifest.get("template"), dict) else {}
+        if not manifest_template:
+            self._add_check("template", "distribution_template_optional", "passed", "blocking", "No distribution template is declared.")
+            return
+        self._add_check("template", "distribution_template_pack_exists", "passed" if self.template else "failed", "blocking", "template-pack.json exists." if self.template else "template-pack.json is missing.")
+        self._add_check("template", "distribution_template_summary_exists", "passed" if self.template_summary_doc else "failed", "blocking", "template-summary.json exists." if self.template_summary_doc else "template-summary.json is missing.")
+        expected_hash = manifest_template.get("template_hash")
+        actual_hash = template_content_hash(self.template) if self.template else None
+        self._add_check("template", "distribution_template_hash_match", "passed" if expected_hash and actual_hash == expected_hash else "failed", "blocking", "template-pack.json hash matches manifest template hash." if expected_hash and actual_hash == expected_hash else "template-pack.json hash does not match manifest template hash.")
+        expected_summary_hash = manifest_template.get("payload_hash")
+        actual_summary_hash = template_summary(self.template).get("payload_hash") if self.template else None
+        doc_summary_hash = self.template_summary_doc.get("payload_hash") if self.template_summary_doc else None
+        self._add_check("template", "distribution_template_summary_hash_match", "passed" if expected_summary_hash and actual_summary_hash == expected_summary_hash and doc_summary_hash == expected_summary_hash else "failed", "blocking", "template summary hash matches manifest and template-pack.json." if expected_summary_hash and actual_summary_hash == expected_summary_hash and doc_summary_hash == expected_summary_hash else "template summary hash does not match manifest/template.")
+        validation = validate_template_pack(self.template) if self.template else {"status": "failed"}
+        self._add_check("template", "distribution_template_valid", "passed" if validation.get("status") == "passed" else "failed", "blocking", "template-pack.json is valid." if validation.get("status") == "passed" else "template-pack.json failed validation.")
+
+        manifest_checklist = self.manifest.get("checklist") if isinstance(self.manifest.get("checklist"), dict) else {}
+        self._add_check("checklist", "distribution_checklist_exists", "passed" if self.checklist else "failed", "blocking", "docs/checklist.json exists." if self.checklist else "docs/checklist.json is missing.")
+        expected_payload_hash = manifest_checklist.get("payload_hash")
+        actual_payload_hash = checklist_payload_hash(self.checklist) if self.checklist else None
+        summary_hash = checklist_summary(self.checklist).get("payload_hash") if self.checklist else None
+        self._add_check("checklist", "distribution_checklist_payload_hash", "passed" if expected_payload_hash and actual_payload_hash == expected_payload_hash and summary_hash == expected_payload_hash else "failed", "blocking", "Checklist payload hash matches manifest." if expected_payload_hash and actual_payload_hash == expected_payload_hash and summary_hash == expected_payload_hash else "Checklist payload hash does not match manifest.")
+        checklist_status = checklist_summary(self.checklist).get("status") if self.checklist else "missing"
+        self._add_check("checklist", "distribution_checklist_status", "passed" if checklist_status in {"passed", "warning"} else "failed", "blocking", f"Checklist status is {checklist_status}.")
 
     def _verify_metadata_and_artwork(self, archive: zipfile.ZipFile) -> None:
         metadata_required = {"release-metadata.json", "platform-metadata.csv", "credits.csv"}

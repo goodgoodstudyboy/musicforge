@@ -7,6 +7,7 @@ from pathlib import Path
 
 from song_agent.distribution import DistributionStore, distribution_signoff_summary
 from song_agent.distribution_artwork import import_distribution_artwork
+from song_agent.distribution_checklist import initialize_distribution_checklist, update_distribution_checklist_item
 from song_agent.distribution_export import (
     build_distribution_export_package,
     build_distribution_package_zip,
@@ -14,6 +15,7 @@ from song_agent.distribution_export import (
 )
 from song_agent.distribution_qa import build_distribution_qa_report
 from song_agent.distribution_verifier import verify_distribution_package
+from song_agent.distribution_templates import TemplatePackStore
 from song_agent.projectio import read_json, write_json
 from song_agent.release_export import build_release_export_bundle
 from song_agent.release_metadata import attach_metadata_export_to_manifest, export_release_metadata_files, initialize_release_metadata, write_release_metadata
@@ -93,6 +95,57 @@ def test_distribution_verifier_fails_tampered_signoff_and_formula_csv(tmp_path: 
     assert _check(formula_report, "distribution_manifest_file_hash_match")["status"] == "failed"
     assert _check(formula_report, "distribution_csv_formula_safe")["status"] == "failed"
     assert _check(backslash_report, "zip_entry_path_safe")["status"] == "failed"
+
+
+def test_template_checklist_export_and_verifier_tamper_guards(tmp_path: Path) -> None:
+    release_store, release_id = _signed_release_with_metadata(tmp_path)
+    store = DistributionStore(release_store)
+    templates = TemplatePackStore(tmp_path / ".musicforge" / "distribution-templates")
+    template = templates.create_template(
+        {
+            "slug": "qa-template-basic",
+            "name": "QA Template Basic",
+            "rules": {"require_artwork": True, "require_upc": True, "require_isrc": True, "csv_formula_escape": True},
+            "metadata_mapping": {"platform_csv": [{"column": "Title", "source": "track.title", "required": True}, {"column": "ISRC", "source": "track.isrc", "required": True}]},
+            "file_naming": {"artwork": "cover.{ext}", "audio": "{track_number:02d}-{slug_title}.wav"},
+            "checklist": [{"item_id": "explicit-confirmed", "label": "Explicit checked", "required": True}],
+        }
+    )
+    target = store.create_target(release_id, {"profile_id": "demo_pitch", "template_pack_id": template["template_pack_id"]})
+    artwork = import_distribution_artwork(store, release_id, {"filename": "cover.png", "content_base64": base64.b64encode(_png(1400, 1400)).decode("ascii")})
+    target = store.update_target(release_id, target.target_id, {"options": {"artwork_id": artwork["artwork_id"]}})
+    checklist = initialize_distribution_checklist(store, release_id, target, template)
+    failed_qa = build_distribution_qa_report(store=store, release_id=release_id, target=target)
+    checklist = update_distribution_checklist_item(store, release_id, target, template, "explicit-confirmed", {"status": "done", "note": "Checked"})
+    target = store.get_target(release_id, target.target_id)
+    qa = store.write_qa(release_id, target.target_id, build_distribution_qa_report(store=store, release_id=release_id, target=target))
+    manifest = build_distribution_export_package(store=store, release_id=release_id, target=target, qa_report=qa)
+    target = store.get_target(release_id, target.target_id)
+    build_distribution_package_zip(store, release_id, target)
+    sign_distribution_package(store=store, release_id=release_id, target=store.get_target(release_id, target.target_id), qa_report=qa, payload={"signed_by": "tester"})
+    zip_path = store.package_zip_path(release_id, manifest["package_id"])
+    report = verify_distribution_package(zip_path, require_artwork=True)
+
+    def tamper_template(data: bytes) -> bytes:
+        template_doc = json.loads(data.decode("utf-8"))
+        template_doc["name"] = "Tampered Template"
+        return json.dumps(template_doc, ensure_ascii=False, indent=2).encode("utf-8")
+
+    def tamper_checklist(data: bytes) -> bytes:
+        checklist_doc = json.loads(data.decode("utf-8"))
+        checklist_doc["items"][0]["status"] = "blocked"
+        return json.dumps(checklist_doc, ensure_ascii=False, indent=2).encode("utf-8")
+
+    tampered_template = verify_distribution_package(_rewrite_zip(zip_path, tmp_path / "template-tampered.zip", transforms={"template-pack.json": tamper_template}))
+    tampered_checklist = verify_distribution_package(_rewrite_zip(zip_path, tmp_path / "checklist-tampered.zip", transforms={"docs/checklist.json": tamper_checklist}))
+
+    assert any(item["check_id"] == "checklist_required_pending" for item in failed_qa["blockers"])
+    assert checklist["summary"]["status"] == "passed"
+    assert manifest["template"]["template_hash"] == template["template_hash"]
+    assert manifest["checklist"]["status"] == "passed"
+    assert report["status"] == "passed"
+    assert _check(tampered_template, "distribution_template_hash_match")["status"] == "failed"
+    assert _check(tampered_checklist, "distribution_checklist_payload_hash")["status"] == "failed"
 
 
 def _signed_release_with_metadata(tmp_path: Path, *, formula_title: bool = False):

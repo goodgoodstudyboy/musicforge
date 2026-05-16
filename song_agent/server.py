@@ -167,6 +167,15 @@ from song_agent.distribution_export import (
     sign_distribution_package,
 )
 from song_agent.distribution_profiles import get_distribution_profile, list_distribution_profiles
+from song_agent.distribution_templates import DistributionTemplateError, TemplatePackStore, template_summary
+from song_agent.distribution_checklist import (
+    DistributionChecklistError,
+    checklist_summary,
+    initialize_distribution_checklist,
+    read_distribution_checklist,
+    reconcile_distribution_checklist,
+    update_distribution_checklist_item,
+)
 from song_agent.distribution_qa import (
     build_distribution_qa_report,
     distribution_source_state,
@@ -2313,6 +2322,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.distribution_store  # type: ignore[attr-defined]
 
     @property
+    def distribution_template_store(self) -> TemplatePackStore:
+        return self.server.distribution_template_store  # type: ignore[attr-defined]
+
+    @property
     def edit_preset_store(self) -> EditPresetStore:
         return self.server.edit_preset_store  # type: ignore[attr-defined]
 
@@ -2446,6 +2459,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/distribution/profiles":
                 self._handle_distribution_profiles_root(method)
+                return
+
+            if path == "/api/distribution/template-packs":
+                self._handle_distribution_templates_root(method)
+                return
+
+            distribution_template_route = _match_distribution_template_route(path)
+            if distribution_template_route is not None:
+                self._handle_distribution_template_route(method, distribution_template_route)
+                return
+
+            if path == "/api/distribution/template-packs/import":
+                self._handle_distribution_template_import(method, parsed.query)
                 return
 
             distribution_profile_route = _match_distribution_profile_route(path)
@@ -2629,6 +2655,76 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "profile": get_distribution_profile(profile_id)})
         except ValueError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_distribution_templates_root(self, method: str) -> None:
+        try:
+            if method == "GET":
+                templates = self.distribution_template_store.list_templates()
+                self._send_json({"ok": True, "template_packs": templates, "summary": {"count": len(templates)}})
+                return
+            if method == "POST":
+                template = self.distribution_template_store.create_template(self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "template": template, "summary": template_summary(template)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except DistributionTemplateError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_distribution_template_import(self, method: str, query: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            rename = parse_qs(query).get("rename", ["0"])[0] in {"1", "true", "yes"}
+            template = self.distribution_template_store.import_template(self._read_json_body(), rename=rename, now=_utc_now())
+            self._send_json({"ok": True, "template": template, "summary": template_summary(template)}, status=HTTPStatus.CREATED)
+        except DistributionTemplateError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_distribution_template_route(self, method: str, route: tuple[str, str]) -> None:
+        template_id, action = route
+        try:
+            if action == "":
+                if method == "GET":
+                    template = self.distribution_template_store.get_template(template_id)
+                    self._send_json({"ok": True, "template": template, "summary": template_summary(template)})
+                    return
+                if method in {"POST", "PATCH"}:
+                    template = self.distribution_template_store.update_template(template_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "template": template, "summary": template_summary(template)})
+                    return
+            if action == "clone":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                template = self.distribution_template_store.clone_template(template_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "template": template, "summary": template_summary(template)}, status=HTTPStatus.CREATED)
+                return
+            if action == "delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.distribution_template_store.delete_template(template_id)})
+                return
+            if action == "export":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                template = self.distribution_template_store.get_template(template_id)
+                self._send_json({"ok": True, "template": template, "summary": template_summary(template)})
+                return
+            if action == "validate":
+                if method not in {"GET", "POST"}:
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body() if method == "POST" else {"template": self.distribution_template_store.get_template(template_id)}
+                self._send_json({"ok": True, "validation": self.distribution_template_store.validate_payload(payload)})
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except DistributionTemplateError as exc:
+            message = str(exc)
+            status = HTTPStatus.CONFLICT if "Builtin" in message or "already exists" in message or "cannot" in message else HTTPStatus.BAD_REQUEST
+            self._send_error(status, message)
 
     def _handle_provider_reset(self, method: str) -> None:
         if method != "POST":
@@ -4621,6 +4717,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                         "release_id": release_id,
                         "summary": self.distribution_store.summary(release_id),
                         "targets": [target.to_dict() for target in targets],
+                        "template_packs": self.distribution_template_store.list_templates(),
                         "events": self.distribution_store.read_events(release_id),
                     }
                 )
@@ -4629,7 +4726,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if tail == "/targets":
                 if method == "GET":
                     targets = self.distribution_store.list_targets(release_id)
-                    self._send_json({"ok": True, "release_id": release_id, "targets": [target.to_dict() for target in targets], "summary": self.distribution_store.summary(release_id)})
+                    self._send_json({"ok": True, "release_id": release_id, "targets": [target.to_dict() for target in targets], "summary": self.distribution_store.summary(release_id), "template_packs": self.distribution_template_store.list_templates()})
                     return
                 if method == "POST":
                     target = self.distribution_store.create_target(release_id, self._optional_json_body())
@@ -4690,7 +4787,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method == "GET":
                     signoff = self.distribution_store.read_signoff(release_id, target, default={})
                     qa = self._get_or_refresh_distribution_qa(release_id, target, refresh=False)
-                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "summary": distribution_target_summary(target), "qa_summary": distribution_qa_summary(qa), "signoff_summary": distribution_signoff_summary(signoff)})
+                    template = self.distribution_store.resolve_target_template(target)
+                    checklist = reconcile_distribution_checklist(self.distribution_store, release_id, target, template, write=False) if template else read_distribution_checklist(self.distribution_store, release_id, target_id, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "template": template, "template_summary": template_summary(template) if template else {}, "checklist": checklist, "checklist_summary": checklist_summary(checklist), "summary": distribution_target_summary(target), "qa_summary": distribution_qa_summary(qa), "signoff_summary": distribution_signoff_summary(signoff)})
                     return
                 if method in {"POST", "PATCH"}:
                     target = self.distribution_store.update_target(release_id, target_id, self._optional_json_body())
@@ -4710,6 +4809,33 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 report = self._get_or_refresh_distribution_qa(release_id, target, refresh=False)
                 self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "distribution_qa": report, "summary": distribution_qa_summary(report)})
+                return
+            if action == "checklist":
+                template = self.distribution_store.resolve_target_template(target)
+                if method == "GET":
+                    checklist = reconcile_distribution_checklist(self.distribution_store, release_id, target, template, write=False) if template else read_distribution_checklist(self.distribution_store, release_id, target_id, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "checklist": checklist, "summary": checklist_summary(checklist)})
+                    return
+                if method == "POST":
+                    if not template:
+                        self._send_error(HTTPStatus.BAD_REQUEST, "Distribution target has no template_pack_id.")
+                        return
+                    checklist = initialize_distribution_checklist(self.distribution_store, release_id, target, template, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "checklist": checklist, "summary": checklist_summary(checklist)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if action.startswith("checklist-item:"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                template = self.distribution_store.resolve_target_template(target)
+                if not template:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "Distribution target has no template_pack_id.")
+                    return
+                item_id = action.split(":", 1)[1]
+                checklist = update_distribution_checklist_item(self.distribution_store, release_id, target, template, item_id, self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "checklist": checklist, "summary": checklist_summary(checklist)})
                 return
             if action == "qa-refresh":
                 if method != "POST":
@@ -4808,7 +4934,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except (DistributionStateError, DistributionExportError, ReleaseStateError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except (DistributionValidationError, ValueError) as exc:
+        except (DistributionChecklistError, DistributionValidationError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _get_or_refresh_distribution_qa(self, release_id: str, target: Any, *, refresh: bool) -> dict[str, Any]:
@@ -9285,6 +9411,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.project_store = ProjectStore()
         self.release_store = ReleaseStore(project_store=self.project_store)
         self.distribution_store = DistributionStore(self.release_store)
+        self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
         self.editor_template_store = EditorTemplateStore()
@@ -9751,6 +9878,23 @@ def _match_distribution_profile_route(path: str) -> str | None:
     return unquote(rest)
 
 
+def _match_distribution_template_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/distribution/template-packs/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest:
+        return None
+    parts = [unquote(part) for part in rest.split("/") if part]
+    if not parts or parts[0] == "import":
+        return None
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"clone", "delete", "export", "validate"}:
+        return parts[0], parts[1]
+    return None
+
+
 def _match_distribution_target_tail(tail: str) -> tuple[str, str] | None:
     parts = [part for part in tail.strip("/").split("/") if part]
     if len(parts) < 2 or parts[0] != "targets":
@@ -9764,6 +9908,10 @@ def _match_distribution_target_tail(tail: str) -> tuple[str, str] | None:
         return target_id, "qa"
     if parts[2:] == ["qa", "refresh"]:
         return target_id, "qa-refresh"
+    if parts[2:] == ["checklist"]:
+        return target_id, "checklist"
+    if len(parts) == 5 and parts[2:4] == ["checklist", "items"]:
+        return target_id, "checklist-item:" + unquote(parts[4])
     if parts[2:] == ["export"]:
         return target_id, "export"
     if parts[2:] == ["export", "zip"]:

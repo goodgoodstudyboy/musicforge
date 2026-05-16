@@ -2695,6 +2695,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         distributionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution`);
         const artworkData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/artwork`);
         distributionData.artwork = artworkData.artwork || [];
+        const templateData = await api(`/api/distribution/template-packs`);
+        distributionData.template_packs = templateData.template_packs || distributionData.template_packs || [];
       } catch (err) {}
       const target = $("release-detail");
       target.innerHTML = `
@@ -2997,10 +2999,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     function releaseDistributionHtml(distributionData, release) {
       const targets = distributionData.targets || [];
       const artwork = distributionData.artwork || [];
+      const templatePacks = distributionData.template_packs || [];
+      const templateOptions = templatePacks.map((template) => `<option value="${escapeHtml(template.template_pack_id)}">${escapeHtml(template.name || template.slug)} · ${escapeHtml(template.source || "local")}</option>`).join("");
       const rows = targets.map((target) => `
         <tr>
           <td>${escapeHtml(target.name || target.target_id)}</td>
           <td>${escapeHtml(target.profile_id || "-")}</td>
+          <td>${escapeHtml(target.template_pack_id || "-")}</td>
           <td>${escapeHtml(target.status || "-")}</td>
           <td>${escapeHtml(((target.latest_qa_summary || {}).status) || "-")}</td>
           <td>${escapeHtml(((target.latest_export_summary || {}).package_id) || "-")}</td>
@@ -3011,6 +3016,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary distribution-zip" data-target-id="${escapeHtml(target.target_id)}" type="button">ZIP</button>
             <button class="secondary distribution-verify" data-target-id="${escapeHtml(target.target_id)}" type="button">Verify</button>
             <button class="secondary distribution-sign" data-target-id="${escapeHtml(target.target_id)}" type="button">Sign</button>
+            <button class="secondary distribution-checklist-init" data-target-id="${escapeHtml(target.target_id)}" type="button">Checklist</button>
+            <button class="secondary distribution-checklist-done" data-target-id="${escapeHtml(target.target_id)}" type="button">Done</button>
             <button class="danger distribution-reset" data-target-id="${escapeHtml(target.target_id)}" type="button">Reset</button>
             ${((target.latest_export_summary || {}).package_id) ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(target.target_id)}/export.zip">Download</a>` : ""}
           </td>
@@ -3023,6 +3030,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Latest", (distributionData.summary || {}).latest_status || "missing")}
           ${metric("Artwork", artwork.length)}
           ${metric("Signed", (distributionData.summary || {}).signed_target_count || 0)}
+          ${metric("Templates", templatePacks.length)}
+        </div>
+        <div class="panel-title subhead"><span>Platform Template Packs</span></div>
+        <div id="distribution-template-packs" class="grid2">
+          <label>Template Slug <input id="distribution-template-slug" value="custom-local-template"></label>
+          <label>Template Name <input id="distribution-template-name" value="Custom Local Template"></label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="distribution-create-template" type="button">Create Template</button>
+          <button class="secondary" id="distribution-clone-template" type="button">Clone Template</button>
         </div>
         <div class="grid2">
           <label>Profile
@@ -3036,6 +3053,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <input id="distribution-target-name" value="Distribution Package">
           </label>
         </div>
+        <label>Template Pack
+          <select id="distribution-template-pack">
+            <option value="">No Template</option>
+            ${templateOptions}
+          </select>
+        </label>
         <div class="grid2">
           <label>Artwork Filename
             <input id="distribution-artwork-filename" value="cover.png">
@@ -3049,18 +3072,41 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="distribution-import-artwork" type="button">Import Artwork</button>
         </div>
         <table>
-          <thead><tr><th>Name</th><th>Profile</th><th>Status</th><th>QA</th><th>Package</th><th>Signoff</th><th>Actions</th></tr></thead>
-          <tbody>${rows || "<tr><td colspan='7'>No distribution targets yet.</td></tr>"}</tbody>
+          <thead><tr><th>Name</th><th>Profile</th><th>Template</th><th>Status</th><th>QA</th><th>Package</th><th>Signoff</th><th>Actions</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='8'>No distribution targets yet.</td></tr>"}</tbody>
         </table>
       `;
     }
 
     function wireReleaseDistributionActions(release) {
+      bindAction("distribution-create-template", async () => {
+        await api(`/api/distribution/template-packs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slug: $("distribution-template-slug").value.trim(),
+            name: $("distribution-template-name").value.trim(),
+            rules: { require_artwork: true, require_upc: false, require_isrc: false, csv_formula_escape: true },
+            metadata_mapping: { platform_csv: [{ column: "Title", source: "track.title", required: true }] },
+            checklist: [{ item_id: "explicit-confirmed", label: "Explicit flag checked", required: true }]
+          }),
+        });
+        await loadReleases();
+      });
+      bindAction("distribution-clone-template", async () => {
+        const selected = $("distribution-template-pack").value || "tpl-generic-dsp-basic";
+        await api(`/api/distribution/template-packs/${encodeURIComponent(selected)}/clone`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: `${$("distribution-template-slug").value.trim() || "custom-local-template"}-copy` }),
+        });
+        await loadReleases();
+      });
       bindAction("distribution-create-target", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile_id: $("distribution-profile").value, name: $("distribution-target-name").value.trim() }),
+          body: JSON.stringify({ profile_id: $("distribution-profile").value, template_pack_id: $("distribution-template-pack").value, name: $("distribution-target-name").value.trim() }),
         });
         await loadReleases();
       });
@@ -3093,6 +3139,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ signed_by: "local-user" }),
+        });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-checklist-init").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/checklist`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-checklist-done").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/checklist/items/explicit-confirmed`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "done", note: "Checked locally" }),
         });
         await loadReleases();
       }));

@@ -1,5 +1,21 @@
 # Changelog
 
+## v4.1.0 - 2026-05-17
+
+### Added
+- Platform Template Packs for local Distribution Prep rules, metadata CSV mapping, file naming, and submission checklist definitions.
+- Distribution targets can bind a template pack; template rules and checklist status now participate in Distribution QA source hashing and export gates.
+- Distribution packages include `template-pack.json`, `template-summary.json`, template CSV output, and checklist JSON/Markdown docs.
+- `verify-distribution-package` now validates template hashes, template summary hashes, checklist payload hashes, checklist status, and tamper scenarios.
+- Studio Distribution Prep now exposes template pack selection, local template creation/clone controls, and checklist actions.
+- release-check v4.1 smoke covers template import safety, mapping/checklist QA, export/verify, signed-target mutation guards, and template/checklist ZIP tamper detection.
+
+### Scope
+- Platform Template Packs are local preparation templates only. They are not official platform rules and do not upload, submit, connect to distributor APIs, or store platform credentials.
+
+### Verified
+- `python -m pytest tests\test_distribution_templates.py tests\test_distribution_checklist.py tests\test_distribution.py tests\test_server_distribution.py tests\test_release_check.py::test_v41_distribution_template_packs_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+
 ## v4.0.1 - 2026-05-17
 
 ### Fixed

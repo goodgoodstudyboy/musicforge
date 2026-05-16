@@ -13,7 +13,27 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
     try:
         release_id = _signed_release(server)
         profiles_status, profiles = request_json(server, "GET", "/api/distribution/profiles")
-        target_status, target_data = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Pitch"})
+        templates_status, templates = request_json(server, "GET", "/api/distribution/template-packs")
+        template_status, template_created = request_json(
+            server,
+            "POST",
+            "/api/distribution/template-packs",
+            {
+                "slug": "server-template-basic",
+                "name": "Server Template Basic",
+                "rules": {"require_artwork": True, "require_upc": True, "require_isrc": True, "csv_formula_escape": True},
+                "metadata_mapping": {"platform_csv": [{"column": "Title", "source": "track.title", "required": True}]},
+                "file_naming": {"artwork": "cover.{ext}", "audio": "{track_number:02d}-{slug_title}.wav"},
+                "checklist": [{"item_id": "explicit-confirmed", "label": "Explicit checked", "required": True}],
+            },
+        )
+        template_id = template_created["template"]["template_pack_id"]
+        clone_status, cloned = request_json(server, "POST", "/api/distribution/template-packs/tpl-generic-dsp-basic/clone", {"slug": "server-generic-copy"})
+        validate_status, validated = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}/validate", {"template": template_created["template"]})
+        export_template_status, exported_template = request_json(server, "GET", f"/api/distribution/template-packs/{template_id}/export")
+        import_blocked_status, import_blocked = request_json(server, "POST", "/api/distribution/template-packs/import", {"source_path": str(tmp_path / "template.json"), "template": exported_template["template"]})
+        import_status, imported = request_json(server, "POST", "/api/distribution/template-packs/import?rename=true", {"template": exported_template["template"]})
+        target_status, target_data = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "template_pack_id": template_id, "name": "Pitch"})
         target_id = target_data["target"]["target_id"]
         local_cover = tmp_path / "server-cover.png"
         local_cover.write_bytes(_png(1400, 1400))
@@ -21,6 +41,9 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
         artwork_list_status, artwork_list = request_json(server, "GET", f"/api/releases/{release_id}/distribution/artwork")
         artwork_status, artwork = request_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_png(1400, 1400)).decode("ascii")})
         update_status, _updated = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork["artwork"]["artwork_id"]}})
+        checklist_status, checklist = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist")
+        qa_failed_status, qa_failed = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        checklist_update_status, checklist_updated = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "done", "note": "Checked"})
         qa_status, qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
         export_status, exported = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
         zip_status, zipped = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
@@ -32,6 +55,8 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
         verify_status, verified = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/verify", {"require_artwork": True})
         blocked_export_status, blocked_export = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
         blocked_qa_status, blocked_qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        blocked_checklist_status, blocked_checklist = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "blocked"})
+        blocked_template_status, blocked_template = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"template_pack_id": imported["template"]["template_pack_id"]})
         zip_download_status, zip_bytes = request_bytes(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/export.zip")
         reset_status, reset = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff/reset", {"reason": "rebuild distribution"})
         export_after_reset_status, _after = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
@@ -40,13 +65,32 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
 
     assert profiles_status == 200
     assert any(item["profile_id"] == "demo_pitch" for item in profiles["profiles"])
+    assert templates_status == 200
+    assert any(item["slug"] == "generic-dsp-basic" for item in templates["template_packs"])
+    assert template_status == 201
+    assert clone_status == 201
+    assert cloned["template"]["source"] == "user"
+    assert validate_status == 200
+    assert validated["validation"]["status"] == "passed"
+    assert export_template_status == 200
+    assert import_blocked_status == 400
+    assert "source_path" in import_blocked["error"]
+    assert import_status == 201
+    assert imported["template"]["content_hash"] == template_created["template"]["content_hash"]
     assert target_status == 201
+    assert target_data["target"]["template_pack_id"] == template_id
     assert blocked_source_status == 400
     assert "source_path" in blocked_source["error"]
     assert artwork_list_status == 200
     assert artwork_list["artwork"] == []
     assert artwork_status == 201
     assert update_status == 200
+    assert checklist_status == 200
+    assert checklist["summary"]["status"] == "failed"
+    assert qa_failed_status == 200
+    assert qa_failed["summary"]["status"] == "failed"
+    assert checklist_update_status == 200
+    assert checklist_updated["summary"]["status"] == "passed"
     assert qa_status == 200
     assert qa["summary"]["status"] in {"passed", "warning"}
     assert export_status == 201
@@ -62,8 +106,12 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
     assert verified["summary"]["status"] == "passed"
     assert blocked_export_status == 409
     assert blocked_qa_status == 409
+    assert blocked_checklist_status == 409
+    assert blocked_template_status == 409
     assert "signed" in blocked_export["error"].lower()
     assert "signed" in blocked_qa["error"].lower()
+    assert "signed" in blocked_checklist["error"].lower()
+    assert "signed" in blocked_template["error"].lower()
     assert zip_download_status == 200
     assert zip_bytes.startswith(b"PK")
     assert reset_status == 200

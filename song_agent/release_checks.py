@@ -201,6 +201,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.8 release zip verifier smoke", *_v38_release_zip_verifier_smoke(root))
     report.add("v3.9 release metadata smoke", *_v39_release_metadata_smoke(root))
     report.add("v4.0 distribution prep smoke", *_v40_distribution_prep_smoke(root))
+    report.add("v4.1 distribution template packs smoke", *_v41_distribution_template_packs_smoke(root))
     return report
 
 
@@ -4527,6 +4528,168 @@ def _v40_distribution_prep_smoke(root: Path) -> tuple[bool, str]:
 
 def _v40_png(width: int, height: int) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + (13).to_bytes(4, "big") + b"IHDR" + width.to_bytes(4, "big") + height.to_bytes(4, "big") + b"\x08\x02\x00\x00\x00" + b"\x00" * 16
+
+
+def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
+    base = (Path(tempfile.gettempdir()) / "mf-v41-distribution-template-packs").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Template Pack Track")
+        created_status, created = _release_http_json(server, "POST", "/api/releases", {"name": "Template Pack Release", "release_type": "demo_pack", "primary_artist": "MusicForge", "label": "Forge Label", "language": "English"})
+        release_id = created.get("release", {}).get("release_id")
+        add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "Template Pack Track"})
+        init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized.get("metadata", {})
+        if isinstance(metadata.get("release"), dict):
+            metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+            metadata["tracks"][0].update({"title": "Template Pack Track", "isrc": "USABC2600001", "lyrics": "Clean lyric", "credits": [{"role": "composer", "name": "Template Writer"}], "confirmed": True})
+        save_status, _saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        metadata_qa_status, metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        qa_status, qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        metadata_export_status, _metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        sign_status, _signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+
+        template_payload = {
+            "slug": "release-check-template-basic",
+            "name": "Release Check Template Basic",
+            "rules": {"require_artwork": True, "require_upc": True, "require_isrc": True, "csv_formula_escape": True},
+            "metadata_mapping": {"platform_csv": [{"column": "Title", "source": "track.title", "required": True}, {"column": "ISRC", "source": "track.isrc", "required": True}]},
+            "file_naming": {"artwork": "cover.{ext}", "audio": "{track_number:02d}-{slug_title}.wav"},
+            "checklist": [{"item_id": "explicit-confirmed", "label": "Explicit flag checked", "required": True}],
+        }
+        templates_status, templates = _release_http_json(server, "GET", "/api/distribution/template-packs")
+        template_status, template = _release_http_json(server, "POST", "/api/distribution/template-packs", template_payload)
+        template_id = template.get("template", {}).get("template_pack_id")
+        source_path_status, source_path_error = _release_http_json(server, "POST", "/api/distribution/template-packs/import", {"source_path": str(base / "template.json"), "template": template.get("template", {})})
+        validate_bad_status, validate_bad = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}/validate", {"template": {**template_payload, "description": "api_key=sk-secret-value"}})
+        export_template_status, exported_template = _release_http_json(server, "GET", f"/api/distribution/template-packs/{template_id}/export")
+        import_status, imported_template = _release_http_json(server, "POST", "/api/distribution/template-packs/import?rename=true", {"template": exported_template.get("template", {})})
+
+        target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "template_pack_id": template_id, "name": "Template Target"})
+        target_id = target.get("target", {}).get("target_id")
+        artwork_status, artwork = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")})
+        artwork_id = artwork.get("artwork", {}).get("artwork_id")
+        update_status, _updated = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork_id}})
+        checklist_status, checklist = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist")
+        qa_failed_status, qa_failed = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        checklist_done_status, checklist_done = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "done", "note": "Checked by release-check"})
+        dist_qa_status, dist_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        dist_export_status, dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        dist_zip_status, dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, dist_signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        dist_verify_status, dist_verify = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/verify", {"require_artwork": True})
+        blocked_checklist_status, blocked_checklist = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "blocked"})
+        blocked_template_status, blocked_template = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"template_pack_id": imported_template.get("template", {}).get("template_pack_id")})
+        zip_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/export.zip")
+        zip_path = base / "template-distribution.zip"
+        zip_path.write_bytes(zip_bytes)
+
+        def tamper_template(data: bytes) -> bytes:
+            value = json.loads(data.decode("utf-8"))
+            value["name"] = "Tampered"
+            return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+
+        def tamper_checklist(data: bytes) -> bytes:
+            value = json.loads(data.decode("utf-8"))
+            value["items"][0]["status"] = "blocked"
+            return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+
+        tampered_template_report = verify_distribution_package(_v38_rewrite_zip(zip_path, base / "template-tampered.zip", transforms={"template-pack.json": tamper_template}), require_artwork=True)
+        tampered_checklist_report = verify_distribution_package(_v38_rewrite_zip(zip_path, base / "checklist-tampered.zip", transforms={"docs/checklist.json": tamper_checklist}), require_artwork=True)
+        external_dir = base / "external-clean"
+        external_dir.mkdir()
+        external_zip = external_dir / "template-distribution.zip"
+        shutil.copy2(zip_path, external_zip)
+        old_external_cwd = Path.cwd()
+        os.chdir(external_dir)
+        external_report = verify_distribution_package(external_zip, require_artwork=True)
+        os.chdir(old_external_cwd)
+
+        serialized = json.dumps({"template": template, "dist_export": dist_export, "blocked_checklist": blocked_checklist, "blocked_template": blocked_template}, ensure_ascii=False)
+        ok = (
+            created_status == 201
+            and release_id
+            and add_status == 200
+            and init_status == 200
+            and save_status == 200
+            and metadata_qa_status == 200
+            and metadata_qa.get("summary", {}).get("status") == "passed"
+            and qa_status == 200
+            and qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and export_status == 200
+            and metadata_export_status == 200
+            and sign_status == 200
+            and templates_status == 200
+            and any(item.get("slug") == "generic-dsp-basic" for item in templates.get("template_packs", []))
+            and template_status == 201
+            and source_path_status == 400
+            and "source_path" in str(source_path_error.get("error") or "")
+            and validate_bad_status == 200
+            and validate_bad.get("validation", {}).get("status") == "failed"
+            and export_template_status == 200
+            and import_status == 201
+            and imported_template.get("template", {}).get("content_hash") == template.get("template", {}).get("content_hash")
+            and target_status == 201
+            and target.get("target", {}).get("template_pack_id") == template_id
+            and artwork_status == 201
+            and update_status == 200
+            and checklist_status == 200
+            and checklist.get("summary", {}).get("status") == "failed"
+            and qa_failed_status == 200
+            and qa_failed.get("summary", {}).get("status") == "failed"
+            and checklist_done_status == 200
+            and checklist_done.get("summary", {}).get("status") == "passed"
+            and dist_qa_status == 200
+            and dist_qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and dist_export_status == 201
+            and dist_export.get("manifest", {}).get("template", {}).get("template_hash") == template.get("template", {}).get("template_hash")
+            and dist_export.get("manifest", {}).get("checklist", {}).get("status") == "passed"
+            and dist_zip_status == 200
+            and dist_zip.get("zip", {}).get("sha256")
+            and dist_sign_status == 200
+            and dist_signed.get("summary", {}).get("status") == "signed"
+            and dist_verify_status == 200
+            and dist_verify.get("summary", {}).get("status") == "passed"
+            and blocked_checklist_status == 409
+            and blocked_template_status == 409
+            and zip_status == 200
+            and zip_bytes.startswith(b"PK")
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tampered_template_report, "distribution_template_hash_match") == "failed"
+            and _v38_check_status(tampered_checklist_report, "distribution_checklist_payload_hash") == "failed"
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, (
+            f"release={release_id}, target={target_id}, template={template_id}, "
+            f"pending_qa={qa_failed.get('summary', {}).get('status')}, qa={dist_qa.get('summary', {}).get('status')}, "
+            f"verify={dist_verify.get('summary', {}).get('status')}, external={external_report.get('status')}, "
+            f"source_path={source_path_status}, blocked={blocked_checklist_status}/{blocked_template_status}, "
+            f"template_tamper={_v38_check_status(tampered_template_report, 'distribution_template_hash_match')}, "
+            f"checklist_tamper={_v38_check_status(tampered_checklist_report, 'distribution_checklist_payload_hash')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

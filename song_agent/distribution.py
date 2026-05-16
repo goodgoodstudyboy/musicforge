@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS, get_distribution_profile, merge_profile_options
+from song_agent.distribution_templates import TemplatePackStore, template_rules, template_summary
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -44,6 +45,9 @@ class DistributionTarget:
     profile_id: str
     name: str
     status: str
+    template_pack_id: str | None = None
+    template_hash: str | None = None
+    template_source: str | None = None
     options: dict[str, Any] = field(default_factory=dict)
     latest_qa_summary: dict[str, Any] = field(default_factory=dict)
     latest_export_summary: dict[str, Any] = field(default_factory=dict)
@@ -60,6 +64,9 @@ class DistributionTarget:
                 "profile_id": self.profile_id,
                 "name": self.name,
                 "status": self.status,
+                "template_pack_id": self.template_pack_id,
+                "template_hash": self.template_hash,
+                "template_source": self.template_source,
                 "options": self.options,
                 "latest_qa_summary": self.latest_qa_summary,
                 "latest_export_summary": self.latest_export_summary,
@@ -75,7 +82,11 @@ class DistributionTarget:
         created_at = str(data.get("created_at") or now_iso())
         profile_id = _safe_id(data.get("profile_id"), default="generic_dsp")
         profile = get_distribution_profile(profile_id)
-        options = merge_profile_options(profile, data.get("options") if isinstance(data.get("options"), dict) else {})
+        template_pack_id = _optional_id(data.get("template_pack_id"))
+        template_hash = _optional_text(data.get("template_hash"), 128)
+        template_source = _optional_text(data.get("template_source"), 80)
+        rules = data.get("template_rules") if isinstance(data.get("template_rules"), dict) else {}
+        options = _merge_target_options(profile, rules, data.get("options") if isinstance(data.get("options"), dict) else {})
         status = str(data.get("status") or "draft")
         if status not in DISTRIBUTION_TARGET_STATUSES:
             status = "draft"
@@ -86,6 +97,9 @@ class DistributionTarget:
             profile_id=profile_id,
             name=_safe_text(data.get("name"), 120) or profile.get("name") or "Distribution Target",
             status=status,
+            template_pack_id=template_pack_id,
+            template_hash=template_hash,
+            template_source=template_source,
             options=options,
             latest_qa_summary=_safe_dict(data.get("latest_qa_summary")),
             latest_export_summary=_safe_dict(data.get("latest_export_summary")),
@@ -159,6 +173,8 @@ class DistributionStore:
             now = now_iso()
             profile_id = _safe_id(payload.get("profile_id"), default="generic_dsp")
             profile = get_distribution_profile(profile_id)
+            template = self._template_from_payload(payload)
+            rules = template_rules(template)
             target = DistributionTarget(
                 schema_version=DISTRIBUTION_TARGET_SCHEMA_VERSION,
                 target_id=target_id,
@@ -166,12 +182,15 @@ class DistributionStore:
                 profile_id=profile_id,
                 name=_safe_text(payload.get("name"), 120) or str(profile.get("name") or "Distribution Target"),
                 status="draft",
-                options=merge_profile_options(profile, payload.get("options") if isinstance(payload.get("options"), dict) else {}),
+                template_pack_id=template.get("template_pack_id") if template else None,
+                template_hash=template.get("template_hash") if template else None,
+                template_source=template.get("source") if template else None,
+                options=_merge_target_options(profile, rules, payload.get("options") if isinstance(payload.get("options"), dict) else {}),
                 created_at=now,
                 updated_at=now,
             )
             self.save_target(target, touch=False)
-            self.append_event(release_id, "distribution_target_created", {"target_id": target_id, "profile_id": profile_id})
+            self.append_event(release_id, "distribution_target_created", {"target_id": target_id, "profile_id": profile_id, "template_pack_id": target.template_pack_id})
             return target
 
     def update_target(self, release_id: str, target_id: str, patch: dict[str, Any]) -> DistributionTarget:
@@ -181,10 +200,19 @@ class DistributionStore:
             if "profile_id" in patch:
                 target.profile_id = _safe_id(patch.get("profile_id"), default=target.profile_id)
             profile = get_distribution_profile(target.profile_id)
+            template = self.resolve_target_template(target)
+            if "template_pack_id" in patch:
+                template = self._template_from_payload(patch)
+                target.template_pack_id = template.get("template_pack_id") if template else None
+                target.template_hash = template.get("template_hash") if template else None
+                target.template_source = template.get("source") if template else None
             if "name" in patch:
                 target.name = _safe_text(patch.get("name"), 120) or target.name
+            rules = template_rules(template)
             if "options" in patch and isinstance(patch.get("options"), dict):
-                target.options = merge_profile_options(profile, {**target.options, **patch["options"]})
+                target.options = _merge_target_options(profile, rules, {**target.options, **patch["options"]})
+            elif "profile_id" in patch or "template_pack_id" in patch:
+                target.options = _merge_target_options(profile, rules, target.options)
             target.latest_qa_summary = _stale_summary(target.latest_qa_summary, "target_updated")
             target.latest_export_summary = _stale_summary(target.latest_export_summary, "target_updated")
             self.save_target(target)
@@ -246,6 +274,22 @@ class DistributionStore:
         clean = sanitize_metadata(report, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
         write_json(self.qa_path(release_id, target_id), clean)
         return clean
+
+    def template_store(self) -> TemplatePackStore:
+        return TemplatePackStore(self.release_store.root.parent / "distribution-templates")
+
+    def resolve_target_template(self, target: DistributionTarget) -> dict[str, Any]:
+        if not target.template_pack_id:
+            return {}
+        try:
+            template = self.template_store().get_template(target.template_pack_id)
+        except ValueError:
+            return {}
+        return template
+
+    def target_template_summary(self, target: DistributionTarget) -> dict[str, Any]:
+        template = self.resolve_target_template(target)
+        return template_summary(template) if template else {}
 
     def latest_package_id(self, target: DistributionTarget) -> str | None:
         summary = target.latest_export_summary if isinstance(target.latest_export_summary, dict) else {}
@@ -357,6 +401,7 @@ class DistributionStore:
                 "signed_target_count": sum(1 for target in targets if target.status == "signed"),
                 "latest_target_id": targets[0].target_id if targets else None,
                 "latest_status": targets[0].status if targets else "missing",
+                "template_target_count": sum(1 for target in targets if target.template_pack_id),
             },
             blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
         )
@@ -370,6 +415,12 @@ class DistributionStore:
                 return target_id
         raise DistributionValidationError("Unable to allocate a unique distribution target id.")
 
+    def _template_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raw = str(payload.get("template_pack_id") or "").strip()
+        if not raw:
+            return {}
+        return self.template_store().get_template(raw)
+
 
 def distribution_target_summary(target: DistributionTarget | dict[str, Any] | None) -> dict[str, Any]:
     data = target.to_dict() if isinstance(target, DistributionTarget) else target if isinstance(target, dict) else {}
@@ -378,6 +429,9 @@ def distribution_target_summary(target: DistributionTarget | dict[str, Any] | No
             "target_id": data.get("target_id"),
             "release_id": data.get("release_id"),
             "profile_id": data.get("profile_id"),
+            "template_pack_id": data.get("template_pack_id"),
+            "template_hash": data.get("template_hash"),
+            "template_source": data.get("template_source"),
             "name": data.get("name"),
             "status": data.get("status") or "missing",
             "qa_status": (data.get("latest_qa_summary") or {}).get("status") if isinstance(data.get("latest_qa_summary"), dict) else None,
@@ -495,6 +549,32 @@ def _safe_id(value: Any, *, default: str) -> str:
     if not all(ch.isalnum() or ch in {"_", "-"} for ch in text):
         raise DistributionValidationError("Identifier contains unsupported characters.")
     return text[:80]
+
+
+def _optional_id(value: Any) -> str | None:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    if not all(ch.isalnum() or ch in {"_", "-"} for ch in text):
+        raise DistributionValidationError("Identifier contains unsupported characters.")
+    return text[:80]
+
+
+def _optional_text(value: Any, limit: int) -> str | None:
+    text = _safe_text(value, limit)
+    return text or None
+
+
+def _merge_target_options(profile: dict[str, Any], rules: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = merge_profile_options(profile, rules)
+    overrides = overrides if isinstance(overrides, dict) else {}
+    allowed = set(base) | {"artwork_id", "submission_note"}
+    for key, value in overrides.items():
+        if key not in allowed:
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            base[key] = value
+    return sanitize_metadata(base, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def _validate_target_id(value: str) -> str:

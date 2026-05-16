@@ -66,7 +66,7 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v4.0.1 adds a local Release Workspace for assembling multiple Project Delivery
+v4.1.0 adds a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
@@ -101,6 +101,13 @@ formula checks, Distribution Export/ZIP, Distribution Signoff, and portable
 package verification. Artwork import accepts uploaded base64 payloads only, and
 signed distribution targets reject repeat signoff before any QA refresh can
 mutate the signed package audit trail:
+
+Platform Template Packs add local-only distribution templates for target rules,
+metadata CSV mapping, package file naming, and human submission checklists.
+Templates can be created, cloned, imported, exported, and bound to Distribution
+Targets; they are not official platform rules and do not upload, submit, connect
+to distributor APIs, or store platform credentials. Template and checklist hashes
+are written into Distribution Export/ZIP and checked by the portable verifier.
 
 ```powershell
 python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --json --report-out distribution-verification-report.json
