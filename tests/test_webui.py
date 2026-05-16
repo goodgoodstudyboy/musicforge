@@ -461,6 +461,18 @@ def test_webui_contains_release_workspace_controls():
     assert "/api/releases/${encodeURIComponent(release.release_id)}/signoff/reset" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/${release.hidden ? \"unhide\" : \"hide\"}" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/archive" in html
+    assert "Distribution Prep" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/artwork" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/artwork/import" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/qa/refresh" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/export" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/export/zip" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(target.target_id)}/export.zip" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/verify" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff/reset" in html
 
 
 def test_webui_contains_interactive_editor_controls():

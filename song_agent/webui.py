@@ -2681,6 +2681,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let exportData = { summary: release.export_summary || {}, manifest: {} };
       let signoffData = { summary: release.signoff_summary || {}, signoff: {} };
       let metadataData = { summary: {}, metadata: {}, metadata_qa: { checks: [], track_checks: [] } };
+      let distributionData = { summary: {}, targets: [], artwork: [] };
       try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
       try { signoffData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`); } catch (err) {}
@@ -2689,6 +2690,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
         metadataData.metadata_qa = metadataQa.metadata_qa || {};
         metadataData.qa_summary = metadataQa.summary || {};
+      } catch (err) {}
+      try {
+        distributionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution`);
+        const artworkData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/artwork`);
+        distributionData.artwork = artworkData.artwork || [];
       } catch (err) {}
       const target = $("release-detail");
       target.innerHTML = `
@@ -2722,6 +2728,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         ${releaseTrackTable(release)}
         ${releaseMetadataHtml(metadataData, release)}
+        ${releaseDistributionHtml(distributionData, release)}
         ${releaseQaHtml(qaData)}
         ${releaseExportHtml(exportData, release)}
         ${releaseSignoffHtml(signoffData)}
@@ -2972,6 +2979,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/archive`, { method: "POST" });
         await loadReleases();
       });
+      wireReleaseDistributionActions(release);
       document.querySelectorAll(".release-track-refresh").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/releases/${encodeURIComponent(release.release_id)}/tracks/${encodeURIComponent(button.dataset.trackId)}/refresh`, { method: "POST" });
@@ -2984,6 +2992,118 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await loadReleases();
         });
       });
+    }
+
+    function releaseDistributionHtml(distributionData, release) {
+      const targets = distributionData.targets || [];
+      const artwork = distributionData.artwork || [];
+      const rows = targets.map((target) => `
+        <tr>
+          <td>${escapeHtml(target.name || target.target_id)}</td>
+          <td>${escapeHtml(target.profile_id || "-")}</td>
+          <td>${escapeHtml(target.status || "-")}</td>
+          <td>${escapeHtml(((target.latest_qa_summary || {}).status) || "-")}</td>
+          <td>${escapeHtml(((target.latest_export_summary || {}).package_id) || "-")}</td>
+          <td>${escapeHtml(((target.latest_signoff_summary || {}).status) || "not_signed")}</td>
+          <td>
+            <button class="secondary distribution-qa" data-target-id="${escapeHtml(target.target_id)}" type="button">QA</button>
+            <button class="secondary distribution-export" data-target-id="${escapeHtml(target.target_id)}" type="button">Export</button>
+            <button class="secondary distribution-zip" data-target-id="${escapeHtml(target.target_id)}" type="button">ZIP</button>
+            <button class="secondary distribution-verify" data-target-id="${escapeHtml(target.target_id)}" type="button">Verify</button>
+            <button class="secondary distribution-sign" data-target-id="${escapeHtml(target.target_id)}" type="button">Sign</button>
+            <button class="danger distribution-reset" data-target-id="${escapeHtml(target.target_id)}" type="button">Reset</button>
+            ${((target.latest_export_summary || {}).package_id) ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(target.target_id)}/export.zip">Download</a>` : ""}
+          </td>
+        </tr>
+      `).join("");
+      return `
+        <div class="panel-title subhead"><span>Distribution Prep</span></div>
+        <div class="summary-grid">
+          ${metric("Targets", targets.length)}
+          ${metric("Latest", (distributionData.summary || {}).latest_status || "missing")}
+          ${metric("Artwork", artwork.length)}
+          ${metric("Signed", (distributionData.summary || {}).signed_target_count || 0)}
+        </div>
+        <div class="grid2">
+          <label>Profile
+            <select id="distribution-profile">
+              <option value="demo_pitch">Demo Pitch</option>
+              <option value="generic_dsp">Generic DSP</option>
+              <option value="internal_archive">Internal Archive</option>
+            </select>
+          </label>
+          <label>Target Name
+            <input id="distribution-target-name" value="Distribution Package">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Artwork Filename
+            <input id="distribution-artwork-filename" value="cover.png">
+          </label>
+          <label>Artwork Base64
+            <input id="distribution-artwork-base64" placeholder="PNG/JPEG base64">
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="distribution-create-target" type="button">Create Target</button>
+          <button class="secondary" id="distribution-import-artwork" type="button">Import Artwork</button>
+        </div>
+        <table>
+          <thead><tr><th>Name</th><th>Profile</th><th>Status</th><th>QA</th><th>Package</th><th>Signoff</th><th>Actions</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='7'>No distribution targets yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function wireReleaseDistributionActions(release) {
+      bindAction("distribution-create-target", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile_id: $("distribution-profile").value, name: $("distribution-target-name").value.trim() }),
+        });
+        await loadReleases();
+      });
+      bindAction("distribution-import-artwork", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/artwork/import`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: $("distribution-artwork-filename").value.trim(), content_base64: $("distribution-artwork-base64").value.trim() }),
+        });
+        await loadReleases();
+      });
+      document.querySelectorAll(".distribution-qa").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/qa/refresh`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-export").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/export`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-zip").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/export/zip`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-verify").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/verify`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-sign").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signed_by: "local-user" }),
+        });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-reset").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Distribution package rebuild" }),
+        });
+        await loadReleases();
+      }));
     }
 
     async function renderProjectDetail(projectId) {

@@ -1,5 +1,21 @@
 # Changelog
 
+## v4.0.0 - 2026-05-16
+
+### Added
+- Distribution Prep targets under each Release with built-in `generic_dsp`, `demo_pitch`, and `internal_archive` profiles.
+- Distribution artwork import and QA for PNG/JPEG headers, dimensions, size limits, and selected artwork binding.
+- Distribution QA source hashing over signed Release Export/ZIP/signoff, Release Metadata/QA, target options, profile, and artwork state.
+- Distribution Export/ZIP packages with `distribution-manifest.json`, metadata JSON/CSV, lyrics, artwork, docs, optional audio, and signed sidecar payload hash binding for `distribution-signoff.json`.
+- `python -m song_agent.cli verify-distribution-package <zip>` for offline package validation, including path safety, duplicate entries, ZIP bomb guard, manifest file hashes, signoff hash binding, artwork/WAV headers, CSV formula safety, and redaction scanning.
+- Studio Distribution Prep controls and release-check v4.0 smoke coverage for package export, external verification, signed mutation blocking, signoff tamper failure, CSV formula pollution, and backslash ZIP entry failure.
+
+### Scope
+- Distribution Prep is local preparation and verification only. It does not upload to DSPs, call distributor APIs, or save platform credentials.
+
+### Verified
+- `python -m pytest tests\test_distribution.py tests\test_server_distribution.py tests\test_cli_verify_distribution.py tests\test_release_check.py::test_v40_distribution_prep_smoke tests\test_webui.py -q`
+
 ## v3.9.1 - 2026-05-16
 
 ### Fixed

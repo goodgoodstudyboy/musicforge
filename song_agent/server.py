@@ -142,6 +142,42 @@ from song_agent.releases import (
     release_summary,
     stable_hash,
 )
+from song_agent.distribution import (
+    DistributionNotFoundError,
+    DistributionStateError,
+    DistributionStore,
+    DistributionValidationError,
+    distribution_signoff_summary,
+    distribution_target_summary,
+)
+from song_agent.distribution_artwork import (
+    delete_distribution_artwork,
+    distribution_artwork_file_path,
+    distribution_artwork_summary,
+    import_distribution_artwork,
+    list_distribution_artwork,
+    read_distribution_artwork,
+)
+from song_agent.distribution_export import (
+    DistributionExportError,
+    build_distribution_export_package,
+    build_distribution_package_zip,
+    distribution_export_summary,
+    read_distribution_export_manifest,
+    sign_distribution_package,
+)
+from song_agent.distribution_profiles import get_distribution_profile, list_distribution_profiles
+from song_agent.distribution_qa import (
+    build_distribution_qa_report,
+    distribution_source_state,
+    distribution_qa_summary,
+    mark_distribution_qa_stale,
+)
+from song_agent.distribution_verifier import (
+    distribution_verification_summary,
+    verify_distribution_package,
+    write_distribution_verification_report,
+)
 from song_agent.context_packs import (
     ContextPackStaleError,
     ContextPackStore,
@@ -2273,6 +2309,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.release_store  # type: ignore[attr-defined]
 
     @property
+    def distribution_store(self) -> DistributionStore:
+        return self.server.distribution_store  # type: ignore[attr-defined]
+
+    @property
     def edit_preset_store(self) -> EditPresetStore:
         return self.server.edit_preset_store  # type: ignore[attr-defined]
 
@@ -2402,6 +2442,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/releases":
                 self._handle_releases_root(method, parsed.query)
+                return
+
+            if path == "/api/distribution/profiles":
+                self._handle_distribution_profiles_root(method)
+                return
+
+            distribution_profile_route = _match_distribution_profile_route(path)
+            if distribution_profile_route is not None:
+                self._handle_distribution_profile_route(method, distribution_profile_route)
                 return
 
             if path == "/api/usage/provider":
@@ -2565,6 +2614,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             )
             return
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_distribution_profiles_root(self, method: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        self._send_json({"ok": True, "profiles": list_distribution_profiles()})
+
+    def _handle_distribution_profile_route(self, method: str, profile_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self._send_json({"ok": True, "profile": get_distribution_profile(profile_id)})
+        except ValueError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_provider_reset(self, method: str) -> None:
         if method != "POST":
@@ -4360,6 +4424,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_file(self.release_store.export_dir(release_id) / filename, "text/csv; charset=utf-8", filename=filename)
                 return
 
+            if tail.startswith("/distribution"):
+                self._handle_distribution_route(method, release_id, tail.removeprefix("/distribution"))
+                return
+
             if tail == "/export":
                 if method == "GET":
                     try:
@@ -4539,6 +4607,222 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         self.release_store.reset_signoff(release_id, event)
         self.release_store.append_event(release_id, "release_signoff_reset", {"reason": event.get("reason"), "previous_status": release_signoff_summary(existing).get("status")})
         self._send_json({"ok": True, "release_id": release_id, "summary": {"status": "reset"}, "history_event": event})
+
+    def _handle_distribution_route(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                targets = self.distribution_store.list_targets(release_id)
+                self._send_json(
+                    {
+                        "ok": True,
+                        "release_id": release_id,
+                        "summary": self.distribution_store.summary(release_id),
+                        "targets": [target.to_dict() for target in targets],
+                        "events": self.distribution_store.read_events(release_id),
+                    }
+                )
+                return
+
+            if tail == "/targets":
+                if method == "GET":
+                    targets = self.distribution_store.list_targets(release_id)
+                    self._send_json({"ok": True, "release_id": release_id, "targets": [target.to_dict() for target in targets], "summary": self.distribution_store.summary(release_id)})
+                    return
+                if method == "POST":
+                    target = self.distribution_store.create_target(release_id, self._optional_json_body())
+                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "summary": distribution_target_summary(target)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if tail == "/artwork":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                rows = list_distribution_artwork(self.distribution_store, release_id)
+                self._send_json({"ok": True, "release_id": release_id, "artwork": rows, "latest": rows[0] if rows else {}, "summary": distribution_artwork_summary(rows[0] if rows else {})})
+                return
+
+            if tail == "/artwork/import":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                artwork = import_distribution_artwork(self.distribution_store, release_id, self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "artwork": artwork, "summary": distribution_artwork_summary(artwork)}, status=HTTPStatus.CREATED)
+                return
+
+            artwork_route = _match_distribution_artwork_tail(tail)
+            if artwork_route is not None:
+                artwork_id, action = artwork_route
+                if action == "":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    artwork = read_distribution_artwork(self.distribution_store, release_id, artwork_id)
+                    self._send_json({"ok": True, "release_id": release_id, "artwork": artwork, "summary": distribution_artwork_summary(artwork)})
+                    return
+                if action == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    artwork = read_distribution_artwork(self.distribution_store, release_id, artwork_id)
+                    path = distribution_artwork_file_path(self.distribution_store, release_id, artwork)
+                    self._send_file(path, str(artwork.get("media_type") or "application/octet-stream"), filename=str(artwork.get("stored_filename") or path.name))
+                    return
+                if action == "delete":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = delete_distribution_artwork(self.distribution_store, release_id, artwork_id)
+                    self._send_json({"ok": True, **result})
+                    return
+
+            target_route = _match_distribution_target_tail(tail)
+            if target_route is None:
+                self._send_error(HTTPStatus.NOT_FOUND, "Distribution route not found.")
+                return
+            target_id, action = target_route
+            target = self.distribution_store.get_target(release_id, target_id)
+            if action == "":
+                if method == "GET":
+                    signoff = self.distribution_store.read_signoff(release_id, target, default={})
+                    qa = self._get_or_refresh_distribution_qa(release_id, target, refresh=False)
+                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "summary": distribution_target_summary(target), "qa_summary": distribution_qa_summary(qa), "signoff_summary": distribution_signoff_summary(signoff)})
+                    return
+                if method in {"POST", "PATCH"}:
+                    target = self.distribution_store.update_target(release_id, target_id, self._optional_json_body())
+                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "summary": distribution_target_summary(target)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if action == "delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.distribution_store.delete_target(release_id, target_id)})
+                return
+            if action == "qa":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_distribution_qa(release_id, target, refresh=False)
+                self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "distribution_qa": report, "summary": distribution_qa_summary(report)})
+                return
+            if action == "qa-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.distribution_store.ensure_target_mutable(release_id, target)
+                report = self._get_or_refresh_distribution_qa(release_id, target, refresh=True)
+                self.distribution_store.append_event(release_id, "distribution_qa_refreshed", {"target_id": target_id, "status": report.get("status")})
+                self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "distribution_qa": report, "summary": distribution_qa_summary(report)})
+                return
+            if action == "export":
+                if method == "GET":
+                    package_id = self.distribution_store.latest_package_id(target)
+                    if not package_id:
+                        self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "manifest": {}, "summary": distribution_export_summary({})})
+                        return
+                    manifest = read_distribution_export_manifest(self.distribution_store, release_id, package_id)
+                    self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "manifest": manifest, "summary": distribution_export_summary(manifest)})
+                    return
+                if method == "POST":
+                    self.distribution_store.ensure_target_mutable(release_id, target)
+                    report = self._get_or_refresh_distribution_qa(release_id, target, refresh=False)
+                    manifest = build_distribution_export_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, now=_utc_now())
+                    target = self.distribution_store.get_target(release_id, target_id)
+                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "manifest": manifest, "summary": distribution_export_summary(manifest)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if action == "export-zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.distribution_store.ensure_target_mutable(release_id, target)
+                zip_info = build_distribution_package_zip(self.distribution_store, release_id, target, now=_utc_now())
+                target = self.distribution_store.get_target(release_id, target_id)
+                package_id = self.distribution_store.latest_package_id(target)
+                manifest = read_distribution_export_manifest(self.distribution_store, release_id, package_id) if package_id else {}
+                self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "zip": zip_info, "summary": distribution_export_summary(manifest)})
+                return
+            if action == "export-zip-download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                package_id = self.distribution_store.latest_package_id(target)
+                if not package_id:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Distribution package ZIP not found.")
+                    return
+                self._send_file(self.distribution_store.package_zip_path(release_id, package_id), "application/zip", filename=f"musicforge-{release_id}-{target_id}-distribution.zip")
+                return
+            if action == "verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                package_id = self.distribution_store.latest_package_id(target)
+                if not package_id:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Distribution package ZIP not found.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_distribution_package(
+                    self.distribution_store.package_zip_path(release_id, package_id),
+                    strict=bool(payload.get("strict", False)),
+                    require_audio=bool(payload.get("require_audio", False)),
+                    require_artwork=bool(payload.get("require_artwork", False)),
+                )
+                write_distribution_verification_report(report, self.distribution_store.package_dir(release_id, package_id) / "verification-report.json")
+                self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "verification": report, "summary": distribution_verification_summary(report)})
+                return
+            if action == "signoff":
+                if method == "GET":
+                    signoff = self.distribution_store.read_signoff(release_id, target, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "signoff": signoff, "summary": distribution_signoff_summary(signoff)})
+                    return
+                if method == "POST":
+                    report = self._get_or_refresh_distribution_qa(release_id, target, refresh=True)
+                    signoff = sign_distribution_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, payload=self._optional_json_body(), now=_utc_now())
+                    target = self.distribution_store.get_target(release_id, target_id)
+                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "signoff": signoff, "summary": distribution_signoff_summary(signoff)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if action == "signoff-reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                reason = str(payload.get("reason") or "").strip()
+                if not reason:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "reason is required.")
+                    return
+                event = self.distribution_store.reset_signoff(release_id, target_id, reason)
+                self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "summary": {"status": "reset"}, "history_event": event})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Distribution target route not found.")
+        except (ReleaseNotFoundError, DistributionNotFoundError, FileNotFoundError) as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (DistributionStateError, DistributionExportError, ReleaseStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (DistributionValidationError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _get_or_refresh_distribution_qa(self, release_id: str, target: Any, *, refresh: bool) -> dict[str, Any]:
+        if not refresh:
+            existing = self.distribution_store.read_qa(release_id, target.target_id, default={})
+            if existing:
+                release = self.release_store.get_release(release_id)
+                current = stable_hash(distribution_source_state(store=self.distribution_store, release=release, target=target))
+                if str(existing.get("source_hash") or "") != current:
+                    return mark_distribution_qa_stale(existing, current_source_hash=current)
+                return existing
+        report = build_distribution_qa_report(store=self.distribution_store, release_id=release_id, target=target, now=_utc_now())
+        report = self.distribution_store.write_qa(release_id, target.target_id, report)
+        self.distribution_store.update_qa_summary(release_id, target.target_id, distribution_qa_summary(report))
+        return report
 
     def _get_or_refresh_delivery_qa(self, project_id: str, *, refresh: bool) -> dict[str, Any]:
         project_dir = self.project_store.project_dir(project_id)
@@ -8999,6 +9283,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
         self.release_store = ReleaseStore(project_store=self.project_store)
+        self.distribution_store = DistributionStore(self.release_store)
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
         self.editor_template_store = EditorTemplateStore()
@@ -9453,6 +9738,56 @@ def _match_release_route(path: str) -> tuple[str, str] | None:
         release_id, tail = rest.split("/", 1)
         return unquote(release_id), "/" + tail
     return unquote(rest), ""
+
+
+def _match_distribution_profile_route(path: str) -> str | None:
+    prefix = "/api/distribution/profiles/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest or "/" in rest:
+        return None
+    return unquote(rest)
+
+
+def _match_distribution_target_tail(tail: str) -> tuple[str, str] | None:
+    parts = [part for part in tail.strip("/").split("/") if part]
+    if len(parts) < 2 or parts[0] != "targets":
+        return None
+    target_id = unquote(parts[1])
+    if len(parts) == 2:
+        return target_id, ""
+    if parts[2:] == ["delete"]:
+        return target_id, "delete"
+    if parts[2:] == ["qa"]:
+        return target_id, "qa"
+    if parts[2:] == ["qa", "refresh"]:
+        return target_id, "qa-refresh"
+    if parts[2:] == ["export"]:
+        return target_id, "export"
+    if parts[2:] == ["export", "zip"]:
+        return target_id, "export-zip"
+    if parts[2:] == ["export.zip"]:
+        return target_id, "export-zip-download"
+    if parts[2:] == ["verify"]:
+        return target_id, "verify"
+    if parts[2:] == ["signoff"]:
+        return target_id, "signoff"
+    if parts[2:] == ["signoff", "reset"]:
+        return target_id, "signoff-reset"
+    return None
+
+
+def _match_distribution_artwork_tail(tail: str) -> tuple[str, str] | None:
+    parts = [part for part in tail.strip("/").split("/") if part]
+    if len(parts) < 2 or parts[0] != "artwork":
+        return None
+    artwork_id = unquote(parts[1])
+    if len(parts) == 2:
+        return artwork_id, ""
+    if len(parts) == 3 and parts[2] in {"download", "delete"}:
+        return artwork_id, parts[2]
+    return None
 
 
 def _match_release_track_tail(tail: str) -> tuple[str, str] | None:

@@ -76,6 +76,20 @@ def build_verify_release_parser() -> argparse.ArgumentParser:
     return verify_parser
 
 
+def build_verify_distribution_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Distribution Package ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Distribution Package ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--require-audio", action="store_true", help="Require exported package audio WAV files.")
+    verify_parser.add_argument("--require-artwork", action="store_true", help="Require exported package artwork.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "request",
@@ -168,6 +182,32 @@ def _main() -> None:
         else:
             print_verification_report(report)
         raise SystemExit(release_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-distribution-package":
+        from song_agent.distribution_verifier import (
+            distribution_verification_exit_code,
+            print_distribution_verification_report,
+            verify_distribution_package,
+            write_distribution_verification_report,
+        )
+
+        parser = build_verify_distribution_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_distribution_package(
+            args.zip_path,
+            strict=args.strict,
+            require_audio=args.require_audio,
+            require_artwork=args.require_artwork,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_distribution_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_distribution_verification_report(report)
+        raise SystemExit(distribution_verification_exit_code(report))
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)

@@ -56,6 +56,7 @@ from song_agent.reference_analysis import analyze_reference, create_asset_from_s
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.release_verifier import verify_release_zip
+from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
@@ -199,6 +200,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.7 release workspace smoke", *_v37_release_workspace_smoke(root))
     report.add("v3.8 release zip verifier smoke", *_v38_release_zip_verifier_smoke(root))
     report.add("v3.9 release metadata smoke", *_v39_release_metadata_smoke(root))
+    report.add("v4.0 distribution prep smoke", *_v40_distribution_prep_smoke(root))
     return report
 
 
@@ -4349,6 +4351,161 @@ def _v39_release_metadata_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
+
+
+def _v40_distribution_prep_smoke(root: Path) -> tuple[bool, str]:
+    base = (Path(tempfile.gettempdir()) / "mf-v40-distribution-prep").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Distribution Prep Track")
+        created_status, created = _release_http_json(
+            server,
+            "POST",
+            "/api/releases",
+            {"name": "Distribution Prep Pack", "release_type": "demo_pack", "primary_artist": "MusicForge", "label": "Forge Label", "language": "English"},
+        )
+        release_id = created.get("release", {}).get("release_id")
+        add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "Distribution Prep Track"})
+        init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized.get("metadata", {})
+        if isinstance(metadata.get("release"), dict):
+            metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+            metadata["tracks"][0].update({"title": "=Distribution Prep Track", "isrc": "USABC2600001", "lyrics": "Clean lyric", "credits": [{"role": "composer", "name": "Distribution Writer"}], "confirmed": True})
+        save_status, _saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        metadata_qa_status, metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        qa_status, qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        metadata_export_status, _metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        sign_status, _signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+        profiles_status, profiles = _release_http_json(server, "GET", "/api/distribution/profiles")
+        target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Distribution Prep Target"})
+        target_id = target.get("target", {}).get("target_id")
+        artwork_status, artwork = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/distribution/artwork/import",
+            {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")},
+        )
+        artwork_id = artwork.get("artwork", {}).get("artwork_id")
+        update_status, _updated = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork_id, "submission_note": "=spreadsheet guard"}})
+        dist_qa_status, dist_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        dist_export_status, dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        dist_zip_status, dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, dist_signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        dist_verify_status, dist_verify = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/verify", {"require_artwork": True})
+        zip_download_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/export.zip")
+        blocked_export_status, blocked_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        blocked_qa_status, blocked_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+
+        package_id = dist_export.get("manifest", {}).get("package_id")
+        if zip_download_status != 200 or not zip_bytes.startswith(b"PK"):
+            return False, (
+                f"distribution zip download failed: status={zip_download_status}, prefix={zip_bytes[:80]!r}, "
+                f"release={release_id}, target={target_id}, package={package_id}, "
+                f"dist_export={dist_export_status}:{dist_export}, dist_zip={dist_zip_status}:{dist_zip}, "
+                f"dist_sign={dist_sign_status}:{dist_signed}"
+            )
+        zip_path = base / "distribution-package.zip"
+        zip_path.write_bytes(zip_bytes)
+        external_dir = base / "external-clean"
+        external_dir.mkdir()
+        external_zip = external_dir / "distribution-package.zip"
+        shutil.copy2(zip_path, external_zip)
+        old_external_cwd = Path.cwd()
+        os.chdir(external_dir)
+        external_report = verify_distribution_package(external_zip, require_artwork=True)
+        os.chdir(old_external_cwd)
+
+        def tamper_signoff(data: bytes) -> bytes:
+            signoff = json.loads(data.decode("utf-8"))
+            signoff["signed_by"] = "tampered-reviewer"
+            return json.dumps(signoff, ensure_ascii=False, indent=2).encode("utf-8")
+
+        def unescape_platform(data: bytes) -> bytes:
+            return data.replace(b"'=", b"=")
+
+        tampered_zip = _v38_rewrite_zip(zip_path, base / "tampered-distribution-signoff.zip", transforms={"distribution-signoff.json": tamper_signoff})
+        formula_zip = _v38_rewrite_zip(zip_path, base / "formula-distribution.csv.zip", transforms={"platform-metadata.csv": unescape_platform})
+        backslash_zip = _v38_backslash_entry_zip(base / "distribution-backslash.zip")
+        tampered_report = verify_distribution_package(tampered_zip)
+        formula_report = verify_distribution_package(formula_zip)
+        backslash_report = verify_distribution_package(backslash_zip)
+
+        reset_status, reset = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff/reset", {"reason": r"rebuild distribution C:\Users\demo"})
+        export_after_reset_status, _after_reset = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        serialized = json.dumps({"dist_signed": dist_signed, "blocked_export": blocked_export, "blocked_qa": blocked_qa, "reset": reset}, ensure_ascii=False)
+        ok = (
+            created_status == 201
+            and release_id
+            and add_status == 200
+            and init_status == 200
+            and save_status == 200
+            and metadata_qa_status == 200
+            and metadata_qa.get("summary", {}).get("status") == "passed"
+            and qa_status == 200
+            and qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and export_status == 200
+            and metadata_export_status == 200
+            and sign_status == 200
+            and profiles_status == 200
+            and any(item.get("profile_id") == "demo_pitch" for item in profiles.get("profiles", []))
+            and target_status == 201
+            and artwork_status == 201
+            and update_status == 200
+            and dist_qa_status == 200
+            and dist_qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and dist_export_status == 201
+            and dist_zip_status == 200
+            and dist_zip.get("zip", {}).get("sha256")
+            and dist_sign_status == 200
+            and dist_signed.get("summary", {}).get("status") == "signed"
+            and dist_verify_status == 200
+            and dist_verify.get("summary", {}).get("status") == "passed"
+            and zip_download_status == 200
+            and zip_bytes.startswith(b"PK")
+            and external_report.get("status") == "passed"
+            and blocked_export_status == 409
+            and blocked_qa_status == 409
+            and _v38_check_status(tampered_report, "distribution_signoff_sidecar_payload_hash") == "failed"
+            and _v38_check_status(formula_report, "distribution_csv_formula_safe") == "failed"
+            and _v38_check_status(backslash_report, "zip_entry_path_safe") == "failed"
+            and reset_status == 200
+            and reset.get("summary", {}).get("status") == "reset"
+            and export_after_reset_status == 201
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, (
+            f"release={release_id}, target={target_id}, qa={dist_qa.get('summary', {}).get('status')}, "
+            f"verify={dist_verify.get('summary', {}).get('status')}, external={external_report.get('status')}, "
+            f"blocked={blocked_export_status}/{blocked_qa_status}, tampered={_v38_check_status(tampered_report, 'distribution_signoff_sidecar_payload_hash')}, "
+            f"formula={_v38_check_status(formula_report, 'distribution_csv_formula_safe')}, backslash={_v38_check_status(backslash_report, 'zip_entry_path_safe')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v40_png(width: int, height: int) -> bytes:
+    return b"\x89PNG\r\n\x1a\n" + (13).to_bytes(4, "big") + b"IHDR" + width.to_bytes(4, "big") + height.to_bytes(4, "big") + b"\x08\x02\x00\x00\x00" + b"\x00" * 16
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

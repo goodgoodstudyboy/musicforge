@@ -9,6 +9,7 @@ from song_agent.release_checks import (
     _status_is_clean,
     _v38_release_zip_verifier_smoke,
     _v39_release_metadata_smoke,
+    _v40_distribution_prep_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -71,6 +72,14 @@ def test_v39_release_metadata_smoke(tmp_path: Path) -> None:
 
     assert ok is True, detail
     assert "verify=passed" in detail
+
+
+def test_v40_distribution_prep_smoke(tmp_path: Path) -> None:
+    ok, detail = _v40_distribution_prep_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "verify=passed" in detail
+    assert "external=passed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:
