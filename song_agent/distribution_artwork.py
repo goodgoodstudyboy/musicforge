@@ -134,18 +134,14 @@ def distribution_artwork_summary(record: dict[str, Any] | None) -> dict[str, Any
 
 
 def _payload_bytes(payload: dict[str, Any]) -> bytes:
+    if "source_path" in payload:
+        raise DistributionArtworkError("Artwork source_path is not supported. Upload content_base64 instead.")
     encoded = str(payload.get("content_base64") or payload.get("data_base64") or "").strip()
     if encoded:
         try:
             return base64.b64decode(encoded, validate=True)
         except (ValueError, base64.binascii.Error) as exc:  # type: ignore[attr-defined]
             raise DistributionArtworkError("Artwork base64 payload is invalid.") from exc
-    source_path = str(payload.get("source_path") or "").strip()
-    if source_path:
-        path = Path(source_path)
-        if not path.exists() or not path.is_file() or path.is_symlink():
-            raise DistributionArtworkError("Artwork source_path is not a regular file.")
-        return path.read_bytes()
     return b""
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 
 from tests.test_server_edits import request_bytes, request_json, start_test_server, stop_test_server
 from tests.test_server_releases import _signed_project
@@ -14,12 +15,20 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
         profiles_status, profiles = request_json(server, "GET", "/api/distribution/profiles")
         target_status, target_data = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Pitch"})
         target_id = target_data["target"]["target_id"]
+        local_cover = tmp_path / "server-cover.png"
+        local_cover.write_bytes(_png(1400, 1400))
+        blocked_source_status, blocked_source = request_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "source_path": str(local_cover)})
+        artwork_list_status, artwork_list = request_json(server, "GET", f"/api/releases/{release_id}/distribution/artwork")
         artwork_status, artwork = request_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_png(1400, 1400)).decode("ascii")})
         update_status, _updated = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork["artwork"]["artwork_id"]}})
         qa_status, qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
         export_status, exported = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
         zip_status, zipped = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
         sign_status, signed = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "server-test"})
+        qa_path = Path(".musicforge") / "releases" / release_id / "distribution" / "qa" / f"{target_id}-qa.json"
+        qa_before_repeat_signoff = qa_path.read_bytes()
+        repeat_sign_status, repeat_signoff = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "server-test"})
+        qa_after_repeat_signoff = qa_path.read_bytes()
         verify_status, verified = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/verify", {"require_artwork": True})
         blocked_export_status, blocked_export = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
         blocked_qa_status, blocked_qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
@@ -32,6 +41,10 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
     assert profiles_status == 200
     assert any(item["profile_id"] == "demo_pitch" for item in profiles["profiles"])
     assert target_status == 201
+    assert blocked_source_status == 400
+    assert "source_path" in blocked_source["error"]
+    assert artwork_list_status == 200
+    assert artwork_list["artwork"] == []
     assert artwork_status == 201
     assert update_status == 200
     assert qa_status == 200
@@ -42,6 +55,9 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
     assert zipped["zip"]["sha256"]
     assert sign_status == 200
     assert signed["summary"]["status"] == "signed"
+    assert repeat_sign_status == 409
+    assert "signed" in repeat_signoff["error"].lower()
+    assert qa_after_repeat_signoff == qa_before_repeat_signoff
     assert verify_status == 200
     assert verified["summary"]["status"] == "passed"
     assert blocked_export_status == 409

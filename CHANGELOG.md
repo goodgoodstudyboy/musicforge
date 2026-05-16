@@ -1,5 +1,15 @@
 # Changelog
 
+## v4.0.1 - 2026-05-17
+
+### Fixed
+- Distribution artwork import now rejects `source_path` payloads and only accepts uploaded base64 content, preventing API clients from reading server-local files.
+- Distribution target signoff now checks signed-target mutability before refreshing QA, so repeat signoff returns 409 without changing `qa.json`.
+- release-check v4.0 smoke now verifies `source_path` rejection and repeat signoff no-mutation behavior.
+
+### Verified
+- `python -m pytest tests\test_server_distribution.py tests\test_release_check.py::test_v40_distribution_prep_smoke tests\test_distribution.py tests\test_cli_verify_distribution.py -q`
+
 ## v4.0.0 - 2026-05-16
 
 ### Added

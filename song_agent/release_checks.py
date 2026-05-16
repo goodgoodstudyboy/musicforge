@@ -4392,6 +4392,15 @@ def _v40_distribution_prep_smoke(root: Path) -> tuple[bool, str]:
         profiles_status, profiles = _release_http_json(server, "GET", "/api/distribution/profiles")
         target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Distribution Prep Target"})
         target_id = target.get("target", {}).get("target_id")
+        local_cover = base / "server-cover.png"
+        local_cover.write_bytes(_v40_png(1400, 1400))
+        source_path_status, source_path_error = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/distribution/artwork/import",
+            {"filename": "cover.png", "source_path": str(local_cover)},
+        )
+        artwork_before_status, artwork_before = _release_http_json(server, "GET", f"/api/releases/{release_id}/distribution/artwork")
         artwork_status, artwork = _release_http_json(
             server,
             "POST",
@@ -4404,6 +4413,10 @@ def _v40_distribution_prep_smoke(root: Path) -> tuple[bool, str]:
         dist_export_status, dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
         dist_zip_status, dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
         dist_sign_status, dist_signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        qa_path = base / ".musicforge" / "releases" / str(release_id) / "distribution" / "qa" / f"{target_id}-qa.json"
+        qa_before_repeat_signoff = qa_path.read_bytes() if qa_path.exists() else b""
+        repeat_sign_status, repeat_signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        qa_after_repeat_signoff = qa_path.read_bytes() if qa_path.exists() else b""
         dist_verify_status, dist_verify = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/verify", {"require_artwork": True})
         zip_download_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/export.zip")
         blocked_export_status, blocked_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
@@ -4462,6 +4475,10 @@ def _v40_distribution_prep_smoke(root: Path) -> tuple[bool, str]:
             and profiles_status == 200
             and any(item.get("profile_id") == "demo_pitch" for item in profiles.get("profiles", []))
             and target_status == 201
+            and source_path_status == 400
+            and "source_path" in str(source_path_error.get("error") or "")
+            and artwork_before_status == 200
+            and artwork_before.get("artwork") == []
             and artwork_status == 201
             and update_status == 200
             and dist_qa_status == 200
@@ -4471,6 +4488,9 @@ def _v40_distribution_prep_smoke(root: Path) -> tuple[bool, str]:
             and dist_zip.get("zip", {}).get("sha256")
             and dist_sign_status == 200
             and dist_signed.get("summary", {}).get("status") == "signed"
+            and repeat_sign_status == 409
+            and "signed" in str(repeat_signoff.get("error") or "").lower()
+            and qa_after_repeat_signoff == qa_before_repeat_signoff
             and dist_verify_status == 200
             and dist_verify.get("summary", {}).get("status") == "passed"
             and zip_download_status == 200
@@ -4490,7 +4510,8 @@ def _v40_distribution_prep_smoke(root: Path) -> tuple[bool, str]:
         return ok, (
             f"release={release_id}, target={target_id}, qa={dist_qa.get('summary', {}).get('status')}, "
             f"verify={dist_verify.get('summary', {}).get('status')}, external={external_report.get('status')}, "
-            f"blocked={blocked_export_status}/{blocked_qa_status}, tampered={_v38_check_status(tampered_report, 'distribution_signoff_sidecar_payload_hash')}, "
+            f"source_path={source_path_status}, repeat_sign={repeat_sign_status}, blocked={blocked_export_status}/{blocked_qa_status}, "
+            f"tampered={_v38_check_status(tampered_report, 'distribution_signoff_sidecar_payload_hash')}, "
             f"formula={_v38_check_status(formula_report, 'distribution_csv_formula_safe')}, backslash={_v38_check_status(backslash_report, 'zip_entry_path_safe')}"
         )
     except Exception as exc:

@@ -66,7 +66,7 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v4.0.0 adds a local Release Workspace for assembling multiple Project Delivery
+v4.0.1 adds a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
@@ -98,7 +98,9 @@ Distribution Prep builds platform handoff packages from a signed Release Export
 without reading Project workspaces or storing platform credentials. It supports
 built-in distribution profiles, cover artwork import/QA, metadata and CSV
 formula checks, Distribution Export/ZIP, Distribution Signoff, and portable
-package verification:
+package verification. Artwork import accepts uploaded base64 payloads only, and
+signed distribution targets reject repeat signoff before any QA refresh can
+mutate the signed package audit trail:
 
 ```powershell
 python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --json --report-out distribution-verification-report.json

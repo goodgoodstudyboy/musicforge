@@ -4783,6 +4783,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "signoff": signoff, "summary": distribution_signoff_summary(signoff)})
                     return
                 if method == "POST":
+                    self.distribution_store.ensure_target_mutable(release_id, target)
                     report = self._get_or_refresh_distribution_qa(release_id, target, refresh=True)
                     signoff = sign_distribution_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, payload=self._optional_json_body(), now=_utc_now())
                     target = self.distribution_store.get_target(release_id, target_id)
