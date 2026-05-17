@@ -312,6 +312,24 @@ class DistributionStore:
                 "Reset distribution signoff before changing this template."
             )
 
+    def ensure_template_pack_deletable(self, template_pack_id: str) -> None:
+        targets = self.targets_using_template(template_pack_id)
+        if not targets:
+            return
+        signed_targets = [target for target in targets if self._target_has_signed_package(target)]
+        blockers = signed_targets or targets
+        ids = ", ".join(f"{target.release_id}/{target.target_id}" for target in blockers[:5])
+        suffix = "..." if len(blockers) > 5 else ""
+        if signed_targets:
+            raise DistributionStateError(
+                f"Distribution template pack is bound to signed distribution target(s): {ids}{suffix}. "
+                "Reset distribution signoff before deleting this template."
+            )
+        raise DistributionStateError(
+            f"Distribution template pack is bound to distribution target(s): {ids}{suffix}. "
+            "Unbind dependent targets before deleting this template."
+        )
+
     def mark_template_dependents_stale(self, template_pack_id: str, reason: str) -> list[dict[str, Any]]:
         stale_targets: list[dict[str, Any]] = []
         with self.lock:

@@ -4580,6 +4580,7 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
 
         target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "template_pack_id": template_id, "name": "Template Target"})
         target_id = target.get("target", {}).get("target_id")
+        blocked_unsigned_template_delete_status, blocked_unsigned_template_delete = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}/delete")
         artwork_status, artwork = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")})
         artwork_id = artwork.get("artwork", {}).get("artwork_id")
         update_status, _updated = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork_id}})
@@ -4626,6 +4627,7 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
                 "dist_export": dist_export,
                 "blocked_checklist": blocked_checklist,
                 "blocked_template": blocked_template,
+                "blocked_unsigned_template_delete": blocked_unsigned_template_delete,
                 "blocked_template_update": blocked_template_update,
                 "blocked_template_delete": blocked_template_delete,
             },
@@ -4656,6 +4658,8 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
             and imported_template.get("template", {}).get("content_hash") == template.get("template", {}).get("content_hash")
             and target_status == 201
             and target.get("target", {}).get("template_pack_id") == template_id
+            and blocked_unsigned_template_delete_status == 409
+            and "unbind" in str(blocked_unsigned_template_delete.get("error") or "").lower()
             and artwork_status == 201
             and update_status == 200
             and checklist_status == 200
@@ -4693,7 +4697,7 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
             f"release={release_id}, target={target_id}, template={template_id}, "
             f"pending_qa={qa_failed.get('summary', {}).get('status')}, qa={dist_qa.get('summary', {}).get('status')}, "
             f"verify={dist_verify.get('summary', {}).get('status')}, external={external_report.get('status')}, "
-            f"source_path={source_path_status}, blocked={blocked_checklist_status}/{blocked_template_status}/{blocked_template_update_status}/{blocked_template_delete_status}, "
+            f"source_path={source_path_status}, blocked={blocked_unsigned_template_delete_status}/{blocked_checklist_status}/{blocked_template_status}/{blocked_template_update_status}/{blocked_template_delete_status}, "
             f"template_tamper={_v38_check_status(tampered_template_report, 'distribution_template_hash_match')}, "
             f"checklist_tamper={_v38_check_status(tampered_checklist_report, 'distribution_checklist_payload_hash')}"
         )

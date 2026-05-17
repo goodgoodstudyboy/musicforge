@@ -148,8 +148,9 @@ def test_distribution_template_update_stales_unsigned_targets(tmp_path, monkeypa
         qa_status, qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
         update_template_status, updated_template = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}", {"name": "Server Template Stale Updated"})
         get_target_status, current_target = request_json(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}")
-        delete_template_status, deleted_template = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}/delete")
+        blocked_delete_status, blocked_delete = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}/delete")
         get_after_delete_status, target_after_delete = request_json(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}")
+        qa_after_blocked_delete_status, qa_after_blocked_delete = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
     finally:
         stop_test_server(server)
 
@@ -162,11 +163,14 @@ def test_distribution_template_update_stales_unsigned_targets(tmp_path, monkeypa
     assert get_target_status == 200
     assert current_target["target"]["latest_qa_summary"]["status"] == "stale"
     assert current_target["target"]["latest_qa_summary"]["stale_reason"] == "template_updated"
-    assert delete_template_status == 200
-    assert deleted_template["stale_targets"][0]["target_id"] == target_id
+    assert blocked_delete_status == 409
+    assert "unbind" in blocked_delete["error"].lower()
     assert get_after_delete_status == 200
     assert target_after_delete["target"]["latest_qa_summary"]["status"] == "stale"
-    assert target_after_delete["target"]["latest_qa_summary"]["stale_reason"] == "template_deleted"
+    assert target_after_delete["target"]["template_pack_id"] == template_id
+    assert qa_after_blocked_delete_status == 200
+    assert qa_after_blocked_delete["summary"]["status"] == "failed"
+    assert any(check["check_id"] == "template_current" and check["status"] == "failed" for check in qa_after_blocked_delete["distribution_qa"]["checks"])
 
 
 def _signed_release(server) -> str:

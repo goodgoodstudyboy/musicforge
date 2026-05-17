@@ -1,5 +1,15 @@
 # Changelog
 
+## v4.1.2 - 2026-05-17
+
+### Fixed
+- Distribution Template Pack delete now returns 409 while any Distribution target still references the template, including unsigned targets.
+- Template Pack delete no longer leaves targets with dangling `template_pack_id` values that would let QA/Export run without the intended template rules or checklist.
+- release-check v4.1 smoke now verifies referenced template deletion is blocked before and after Distribution target signoff.
+
+### Verified
+- `python -m pytest tests\test_server_distribution.py tests\test_distribution_templates.py tests\test_distribution_checklist.py tests\test_release_check.py::test_v41_distribution_template_packs_smoke -q`
+
 ## v4.1.1 - 2026-05-17
 
 ### Fixed

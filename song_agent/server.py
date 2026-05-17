@@ -2706,10 +2706,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                self.distribution_store.ensure_template_pack_mutable(template_id)
+                self.distribution_store.ensure_template_pack_deletable(template_id)
                 result = self.distribution_template_store.delete_template(template_id)
-                stale_targets = self.distribution_store.mark_template_dependents_stale(template_id, "template_deleted")
-                self._send_json({"ok": True, **result, "stale_targets": stale_targets})
+                self._send_json({"ok": True, **result})
                 return
             if action == "export":
                 if method != "GET":
