@@ -21,6 +21,19 @@ def test_webui_contains_music_fields():
     assert 'id="include-hidden"' in html
 
 
+def test_webui_contains_acceptance_workspace():
+    html = panel_html()
+
+    assert "Acceptance" in html
+    assert 'id="acceptance-form"' in html
+    assert 'id="acceptance-list"' in html
+    assert 'id="acceptance-detail"' in html
+    assert "/api/acceptance/suites" in html
+    assert "/cases/${encodeURIComponent" in html
+    assert "/report" in html
+    assert "/signoff" in html
+
+
 def test_webui_contains_runtime_tabs():
     html = panel_html()
 

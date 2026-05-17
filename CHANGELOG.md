@@ -1,5 +1,20 @@
 # Changelog
 
+## v4.4.0 - 2026-05-18
+
+### Added
+- Music Acceptance Lab for developer self-check suites, generated acceptance cases, deterministic SongPlan/MIDI/WAV health checks, listening review records, reports, and signoff.
+- `python -m song_agent.cli acceptance-check` for six-song local acceptance runs, optional synthetic CI reviews, JSON output, and report export.
+- Studio Acceptance workspace for suite creation, case generation, health checks, MIDI/audio access, listening review entry, report build, signoff, and reset.
+- release-check v4.4 smoke covering acceptance API flow, renderer-not-configured MIDI-only acceptance, signed-suite mutation guards, report tamper detection, missing-MIDI health failure, and redaction.
+
+### Fixed
+- Acceptance signoff now makes suites read-only for case/audio/review/report/archive mutations until signoff is reset.
+- Acceptance reports include source/content integrity checks so tampered review data or tampered report payloads fail verification instead of remaining silently trusted.
+
+### Verified
+- `python -m pytest tests\test_music_health.py tests\test_music_acceptance.py tests\test_cli_acceptance_check.py tests\test_server_acceptance.py tests\test_webui.py::test_webui_contains_acceptance_workspace tests\test_release_check.py::test_v44_music_acceptance_lab_smoke -q`
+
 ## v4.3.1 - 2026-05-18
 
 ### Fixed

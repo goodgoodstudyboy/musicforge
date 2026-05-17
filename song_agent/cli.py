@@ -105,6 +105,18 @@ def build_verify_submission_parser() -> argparse.ArgumentParser:
     return verify_parser
 
 
+def build_acceptance_check_parser() -> argparse.ArgumentParser:
+    acceptance_parser = argparse.ArgumentParser(description="Run a local Music Acceptance Lab suite.")
+    acceptance_parser.add_argument("--out", type=Path, default=Path(".musicforge") / "acceptance", help="Acceptance workspace directory.")
+    acceptance_parser.add_argument("--cases", type=int, default=6, help="Number of representative generated songs.")
+    acceptance_parser.add_argument("--render-audio", choices=["auto", "always", "never"], default="auto", help="Whether to render WAV audio.")
+    acceptance_parser.add_argument("--auto-review", action="store_true", help="Write synthetic reviews for CI/smoke use.")
+    acceptance_parser.add_argument("--min-rating", type=int, default=3, help="Minimum accepted review rating.")
+    acceptance_parser.add_argument("--json", action="store_true", help="Print the full acceptance report as JSON.")
+    acceptance_parser.add_argument("--report-out", type=Path, default=None, help="Write the acceptance report to this JSON file.")
+    return acceptance_parser
+
+
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "request",
@@ -250,6 +262,23 @@ def _main() -> None:
         else:
             print_submission_verification_report(report)
         raise SystemExit(submission_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "acceptance-check":
+        parser = build_acceptance_check_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = run_acceptance_check(
+            out_dir=args.out,
+            cases=args.cases,
+            render_audio_mode=args.render_audio,
+            auto_review=args.auto_review,
+            min_rating=args.min_rating,
+        )
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_acceptance_check_report(report)
+        raise SystemExit(0 if report.get("status") in {"passed", "needs_review"} else 1)
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)
@@ -320,6 +349,58 @@ def run_doctor(*, provider_test: bool = False) -> None:
         if provider_test:
             print(f"provider test: failed ({exc})")
     print("local deterministic mode: ok")
+
+
+def run_acceptance_check(
+    *,
+    out_dir: Path,
+    cases: int,
+    render_audio_mode: str,
+    auto_review: bool,
+    min_rating: int,
+) -> dict[str, Any]:
+    from song_agent.music_acceptance import AcceptanceStore, build_acceptance_report, default_acceptance_requests
+    from song_agent.music_health import music_health_allows_review
+
+    store = AcceptanceStore(out_dir)
+    suite = store.create_suite({"name": "v4.4 developer music acceptance", "mode": "developer_self_test", "min_rating": min_rating})
+    for index, request in enumerate(default_acceptance_requests(cases), start=1):
+        case = store.add_case(suite.suite_id, {"name": request["style"], "source_type": "generated_request", "request": request})
+        store.generate_case(suite.suite_id, case.case_id, render_audio_mode=render_audio_mode)
+        health = store.run_health(suite.suite_id, case.case_id)
+        if auto_review and music_health_allows_review(health):
+            store.write_review(
+                suite.suite_id,
+                case.case_id,
+                {
+                    "rating": max(min_rating, 4),
+                    "status": "accepted",
+                    "playback_confirmed": True,
+                    "listened_by": "acceptance-check",
+                    "audio_mode": "midi",
+                    "review_mode": "synthetic",
+                    "notes": f"Synthetic acceptance smoke review for case {index}; MIDI artifact was generated and health checks were reviewed.",
+                },
+            )
+    report = store.build_report(suite.suite_id) if auto_review else build_acceptance_report(store, store.get_suite(suite.suite_id))
+    if not auto_review:
+        report = {**report, "status": "needs_review", "summary": {**report.get("summary", {}), "review_required": True}}
+        write_json(store.report_path(suite.suite_id), report)
+    elif report.get("status") == "passed":
+        store.signoff(suite.suite_id, {"signed_by": "acceptance-check", "notes": "Synthetic CI acceptance signoff."})
+        report = store.read_report(suite.suite_id)
+    return report
+
+
+def print_acceptance_check_report(report: dict[str, Any]) -> None:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    print("MusicForge acceptance-check")
+    print(f"status: {report.get('status')}")
+    print(f"suite: {report.get('suite_id')}")
+    print(f"cases: {summary.get('case_count', 0)}")
+    print(f"accepted: {summary.get('accepted_count', 0)}")
+    print(f"average_rating: {summary.get('average_rating')}")
+    print(f"renderer: {summary.get('renderer_status')}")
 
 
 def _writable_status(path: Path) -> str:

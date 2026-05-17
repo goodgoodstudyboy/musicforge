@@ -216,6 +216,16 @@ from song_agent.submission_verifier import (
     verify_submission_package,
     write_submission_verification_report,
 )
+from song_agent.music_acceptance import (
+    AcceptanceNotFoundError,
+    AcceptanceStateError,
+    AcceptanceStore,
+    AcceptanceValidationError,
+    acceptance_report_summary,
+    acceptance_signoff_summary,
+    acceptance_suite_summary,
+    listening_review_summary,
+)
 from song_agent.context_packs import (
     ContextPackStaleError,
     ContextPackStore,
@@ -2355,6 +2365,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.submission_store  # type: ignore[attr-defined]
 
     @property
+    def acceptance_store(self) -> AcceptanceStore:
+        return self.server.acceptance_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2488,6 +2502,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/releases":
                 self._handle_releases_root(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/suites":
+                self._handle_acceptance_suites_root(method, parsed.query)
                 return
 
             if path == "/api/distribution/profiles":
@@ -2628,6 +2646,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_release_route(method, release_id, tail, parsed.query)
                 return
 
+            acceptance_route = _match_acceptance_route(path)
+            if acceptance_route is not None:
+                suite_id, tail = acceptance_route
+                self._handle_acceptance_route(method, suite_id, tail)
+                return
+
             batch_route = _match_batch_route(path)
             if batch_route is not None:
                 batch_id, tail = batch_route
@@ -2648,6 +2672,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ProviderError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except RendererError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except AcceptanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AcceptanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except Exception as exc:
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
@@ -3053,6 +3083,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             self._send_json({"ok": True, "release": document.to_dict(), "summary": release_summary(document)}, status=HTTPStatus.CREATED)
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_acceptance_suites_root(self, method: str, query_string: str) -> None:
+        if method == "GET":
+            query = parse_qs(query_string)
+            include_archived = query.get("include_archived", ["0"])[0] in {"1", "true", "yes"}
+            suites = self.acceptance_store.list_suites(include_archived=include_archived)
+            self._send_json({"ok": True, "suites": [suite.to_dict() for suite in suites], "summary": {"suite_count": len(suites)}})
+            return
+        if method == "POST":
+            suite = self.acceptance_store.create_suite(self._optional_json_body())
+            self._send_json({"ok": True, "suite": suite.to_dict(), "summary": acceptance_suite_summary(suite)}, status=HTTPStatus.CREATED)
             return
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
 
@@ -5216,6 +5259,150 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except (SubmissionStateError, SubmissionExportError, ReleaseStateError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (SubmissionValidationError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_route(self, method: str, suite_id: str, tail: str) -> None:
+        try:
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                if method == "GET":
+                    suite = self.acceptance_store.get_suite(suite_id)
+                    cases = self.acceptance_store.list_cases(suite_id)
+                    self._send_json({"ok": True, "suite": suite.to_dict(), "cases": [case.to_dict() for case in cases], "summary": acceptance_suite_summary(suite), "events": self.acceptance_store.read_events(suite_id)})
+                    return
+                if method == "POST":
+                    suite = self.acceptance_store.get_suite(suite_id)
+                    self.acceptance_store.ensure_mutable(suite)
+                    payload = self._optional_json_body()
+                    if payload.get("name"):
+                        suite.name = str(payload.get("name"))
+                    if payload.get("mode"):
+                        suite.mode = str(payload.get("mode"))
+                    if payload.get("min_rating") is not None:
+                        suite.min_rating = int(payload.get("min_rating"))
+                    suite = self.acceptance_store.save_suite(suite)
+                    self._send_json({"ok": True, "suite": suite.to_dict(), "summary": acceptance_suite_summary(suite)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if parts == ["cases"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                case = self.acceptance_store.add_case(suite_id, self._read_json_body())
+                self._send_json({"ok": True, "case": case.to_dict(), "summary": acceptance_suite_summary(self.acceptance_store.get_suite(suite_id))}, status=HTTPStatus.CREATED)
+                return
+
+            if parts == ["report"]:
+                if method == "GET":
+                    report = self.acceptance_store.read_report(suite_id, default={})
+                    self._send_json({"ok": True, "suite_id": suite_id, "report": report, "summary": acceptance_report_summary(report)})
+                    return
+                if method == "POST":
+                    report = self.acceptance_store.build_report(suite_id)
+                    self._send_json({"ok": True, "suite_id": suite_id, "report": report, "summary": acceptance_report_summary(report)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if parts == ["signoff"]:
+                if method == "GET":
+                    signoff = self.acceptance_store.read_signoff(suite_id, default={})
+                    self._send_json({"ok": True, "suite_id": suite_id, "signoff": signoff, "summary": acceptance_signoff_summary(signoff)})
+                    return
+                if method == "POST":
+                    signoff = self.acceptance_store.signoff(suite_id, self._optional_json_body())
+                    self._send_json({"ok": True, "suite_id": suite_id, "signoff": signoff, "summary": acceptance_signoff_summary(signoff)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if parts == ["signoff", "reset"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                reason = str(payload.get("reason") or "").strip()
+                if not reason:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "reason is required.")
+                    return
+                event = self.acceptance_store.reset_signoff(suite_id, reason)
+                self._send_json({"ok": True, "suite_id": suite_id, "summary": {"status": "reset"}, "history_event": event})
+                return
+
+            if parts == ["archive"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                suite = self.acceptance_store.archive_suite(suite_id)
+                self._send_json({"ok": True, "suite": suite.to_dict(), "summary": acceptance_suite_summary(suite)})
+                return
+
+            if len(parts) >= 2 and parts[0] == "cases":
+                case_id = parts[1]
+                action = parts[2] if len(parts) >= 3 else ""
+                if not action:
+                    case = self.acceptance_store.get_case(suite_id, case_id)
+                    self._send_json({"ok": True, "case": case.to_dict(), "health": self.acceptance_store.read_health(suite_id, case_id, default={}), "review": self.acceptance_store.read_review(suite_id, case_id, default={})})
+                    return
+                if action == "generate":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    case = self.acceptance_store.generate_case(suite_id, case_id, render_audio_mode=str(payload.get("render_audio") or "auto"))
+                    self._send_json({"ok": True, "case": case.to_dict()})
+                    return
+                if action == "health":
+                    if method == "GET":
+                        report = self.acceptance_store.read_health(suite_id, case_id, default={})
+                        self._send_json({"ok": True, "suite_id": suite_id, "case_id": case_id, "health": report})
+                        return
+                    if method == "POST":
+                        report = self.acceptance_store.run_health(suite_id, case_id)
+                        self._send_json({"ok": True, "suite_id": suite_id, "case_id": case_id, "health": report})
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if action == "render-audio":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    result = self.acceptance_store.render_audio(suite_id, case_id, mode=str(payload.get("mode") or "auto"))
+                    self._send_json({"ok": True, "suite_id": suite_id, "case_id": case_id, **result})
+                    return
+                if action == "review":
+                    if method == "GET":
+                        review = self.acceptance_store.read_review(suite_id, case_id, default={})
+                        self._send_json({"ok": True, "suite_id": suite_id, "case_id": case_id, "review": review, "summary": listening_review_summary(review)})
+                        return
+                    if method == "POST":
+                        review = self.acceptance_store.write_review(suite_id, case_id, self._read_json_body())
+                        self._send_json({"ok": True, "suite_id": suite_id, "case_id": case_id, "review": review, "summary": listening_review_summary(review)})
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if action == "midi":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.acceptance_store.case_dir(suite_id, case_id) / "song.mid", "audio/midi", filename=f"{suite_id}-{case_id}.mid")
+                    return
+                if action == "audio":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.acceptance_store.case_dir(suite_id, case_id) / "song.wav", "audio/wav", filename=f"{suite_id}-{case_id}.wav")
+                    return
+
+            self._send_error(HTTPStatus.NOT_FOUND, "Acceptance route not found.")
+        except AcceptanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AcceptanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> dict[str, Any]:
@@ -9713,6 +9900,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_store = ReleaseStore(project_store=self.project_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
+        self.acceptance_store = AcceptanceStore(project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -10167,6 +10355,19 @@ def _match_release_route(path: str) -> tuple[str, str] | None:
     if "/" in rest:
         release_id, tail = rest.split("/", 1)
         return unquote(release_id), "/" + tail
+    return unquote(rest), ""
+
+
+def _match_acceptance_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/suites/"
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix) :]
+    if not rest:
+        return None
+    if "/" in rest:
+        suite_id, tail = rest.split("/", 1)
+        return unquote(suite_id), "/" + tail
     return unquote(rest), ""
 
 

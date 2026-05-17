@@ -58,6 +58,7 @@ from song_agent.renderers.midi import render_midi
 from song_agent.release_verifier import verify_release_zip
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.submission_verifier import verify_submission_package
+from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
@@ -205,6 +206,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.1 distribution template packs smoke", *_v41_distribution_template_packs_smoke(root))
     report.add("v4.2 distribution layout contract smoke", *_v42_distribution_layout_contract_smoke(root))
     report.add("v4.3 submission workspace smoke", *_v43_submission_workspace_smoke(root))
+    report.add("v4.4 music acceptance lab smoke", *_v44_music_acceptance_lab_smoke(root))
     return report
 
 
@@ -5095,6 +5097,112 @@ def _v43_any_check_status(report: dict[str, Any], check_id: str) -> str | None:
         if isinstance(check, dict) and check.get("check_id") == check_id:
             return str(check.get("status") or "")
     return None
+
+
+def _v44_music_acceptance_lab_smoke(root: Path) -> tuple[bool, str]:
+    base = (Path(tempfile.gettempdir()) / "mf-v44-music-acceptance-lab").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        create_status, created = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.4 smoke acceptance", "min_rating": 3})
+        suite_id = created.get("suite", {}).get("suite_id")
+        case_ids: list[str] = []
+        for index, style in enumerate(("upbeat pop", "instrumental cinematic"), start=1):
+            case_status, case = _release_http_json(
+                server,
+                "POST",
+                f"/api/acceptance/suites/{suite_id}/cases",
+                {"name": style, "request": {"title": f"Acceptance Smoke {index}", "language": "English", "style": style, "theme": "release check", "duration_seconds": 90}},
+            )
+            case_id = case.get("case", {}).get("case_id")
+            case_ids.append(case_id)
+            generate_status, _generated = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+            health_status, health = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+            review_status, review = _release_http_json(
+                server,
+                "POST",
+                f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review",
+                {"rating": 4, "status": "accepted", "playback_confirmed": True, "listened_by": "release-check", "audio_mode": "midi", "review_mode": "synthetic", "notes": r"Synthetic review confirms MIDI playback and structure; api_key=sk-secret-value C:\Users\demo\song.wav"},
+            )
+            if not (
+                case_status == 201
+                and generate_status == 200
+                and health_status == 200
+                and health.get("health", {}).get("status") in {"passed", "warning"}
+                and health.get("health", {}).get("summary", {}).get("audio_status") == "skipped_renderer_not_configured"
+                and review_status == 200
+                and review.get("summary", {}).get("review_mode") == "synthetic"
+            ):
+                return False, f"case={case_id}, generate={generate_status}, health={health_status}, review={review_status}"
+        report_status, report = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        sign_status, signed = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/signoff", {"signed_by": "release-check"})
+        blocked_status, blocked = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases/{case_ids[0]}/review",
+            {"rating": 4, "status": "accepted", "playback_confirmed": True, "notes": "Should be blocked after signoff.", "audio_mode": "midi"},
+        )
+        report_path = base / ".musicforge" / "acceptance" / str(suite_id) / "music-acceptance-report.json"
+        tampered_report = read_json(report_path)
+        tampered_report["status"] = "passed" if tampered_report.get("status") != "passed" else "failed"
+        write_json(report_path, tampered_report)
+        tampered_status, tampered = _release_http_json(server, "GET", f"/api/acceptance/suites/{suite_id}/report")
+        signoff_check_status, signoff_check = _release_http_json(server, "GET", f"/api/acceptance/suites/{suite_id}/signoff")
+
+        store = AcceptanceStore(base / ".musicforge" / "acceptance")
+        missing_suite = store.create_suite({"name": "missing midi regression"})
+        missing_case = store.add_case(missing_suite.suite_id, {"request": {"title": "Missing MIDI", "language": "English", "style": "pop", "theme": "bad", "duration_seconds": 90}})
+        store.generate_case(missing_suite.suite_id, missing_case.case_id, render_audio_mode="never")
+        (store.case_dir(missing_suite.suite_id, missing_case.case_id) / "song.mid").unlink()
+        missing_health = store.run_health(missing_suite.suite_id, missing_case.case_id)
+
+        serialized = json.dumps({"report": report, "signed": signed}, ensure_ascii=False)
+        ok = (
+            create_status == 201
+            and len(case_ids) == 2
+            and report_status == 200
+            and report.get("summary", {}).get("status") == "passed"
+            and sign_status == 200
+            and signed.get("summary", {}).get("status") == "signed"
+            and blocked_status == 409
+            and "signed" in blocked.get("error", "").lower()
+            and tampered_status == 200
+            and tampered.get("summary", {}).get("status") == "failed"
+            and tampered.get("report", {}).get("verification", {}).get("content_status") == "failed"
+            and signoff_check_status == 200
+            and signoff_check.get("signoff", {}).get("report_integrity", {}).get("status") == "failed"
+            and missing_health.get("status") == "failed"
+            and any(item.get("check_id") == "midi_exists" for item in missing_health.get("blockers", []))
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        first_health = (report.get("report", {}).get("cases") or [{}])[0].get("health_status") if isinstance(report.get("report"), dict) else None
+        return ok, (
+            f"suite={suite_id}, cases={len(case_ids)}, health={first_health}, "
+            f"audio=skipped_renderer_not_configured, review=synthetic, sign={signed.get('summary', {}).get('status')}, "
+            f"report_tamper={tampered.get('summary', {}).get('status')}, signoff_integrity={signoff_check.get('signoff', {}).get('report_integrity', {}).get('status')}, "
+            f"missing_midi={missing_health.get('status')}, signed_guard={blocked_status}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

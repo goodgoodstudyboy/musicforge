@@ -1165,6 +1165,40 @@ def panel_html() -> str:
     </section>
     <section style="grid-column: 1 / -1;">
       <div class="panel-title">
+        <span>Acceptance</span>
+        <button class="secondary" id="refresh-acceptance" type="button">Refresh</button>
+      </div>
+      <div class="panel-body">
+        <div class="release-layout">
+          <form id="acceptance-form">
+            <label>Suite Name
+              <input id="acceptance-name" value="v4.4 developer music acceptance">
+            </label>
+            <div class="grid2">
+              <label>Min Rating
+                <input id="acceptance-min-rating" type="number" min="1" max="5" value="3">
+              </label>
+              <label>Mode
+                <select id="acceptance-mode">
+                  <option value="developer_self_test">developer_self_test</option>
+                  <option value="release_review">release_review</option>
+                </select>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit">New Suite</button>
+              <span id="acceptance-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div id="acceptance-list" class="release-list"><div class="empty">No acceptance suites yet.</div></div>
+          </div>
+        </div>
+        <div id="acceptance-detail" class="release-detail"><div class="empty">Select or create an acceptance suite.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
         <span>Batch</span>
         <div class="actions" style="margin-top:0;">
           <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
@@ -1234,6 +1268,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let releases = [];
     let selectedReleaseId = null;
     let includeHiddenReleases = false;
+    let acceptanceSuites = [];
+    let selectedAcceptanceSuiteId = null;
     let projects = [];
     let selectedProjectId = null;
     let includeHiddenProjects = false;
@@ -1323,11 +1359,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadJobs();
       await loadProjects();
       await loadReleases();
+      await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
         loadJobs();
         loadProjects();
         loadReleases();
+        loadAcceptanceSuites();
         loadAssets();
         loadReferences();
         loadContextPacks();
@@ -1498,6 +1536,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadReleases();
       } catch (err) {
         $("release-message").textContent = err.message;
+      }
+    });
+    $("refresh-acceptance").addEventListener("click", loadAcceptanceSuites);
+    $("acceptance-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await api("/api/acceptance/suites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: $("acceptance-name").value.trim() || "Music Acceptance Suite",
+            mode: $("acceptance-mode").value,
+            min_rating: Number($("acceptance-min-rating").value || 3),
+          }),
+        });
+        selectedAcceptanceSuiteId = data.suite.suite_id;
+        $("acceptance-message").textContent = "created";
+        await loadAcceptanceSuites();
+      } catch (err) {
+        $("acceptance-message").textContent = err.message;
       }
     });
     $("refresh-assets").addEventListener("click", loadAssets);
@@ -2049,6 +2107,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         if (selectedReleaseId) await renderReleaseDetail(selectedReleaseId);
       } catch (err) {
         $("release-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function loadAcceptanceSuites() {
+      try {
+        const data = await api("/api/acceptance/suites");
+        acceptanceSuites = data.suites || [];
+        if (selectedAcceptanceSuiteId && !acceptanceSuites.some((suite) => suite.suite_id === selectedAcceptanceSuiteId)) {
+          selectedAcceptanceSuiteId = null;
+          $("acceptance-detail").innerHTML = "<div class='empty'>Select or create an acceptance suite.</div>";
+        }
+        renderAcceptanceSuites();
+        if (selectedAcceptanceSuiteId) await renderAcceptanceDetail(selectedAcceptanceSuiteId);
+      } catch (err) {
+        $("acceptance-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
       }
     }
 
@@ -2739,6 +2812,162 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseSignoffHtml(signoffData)}
       `;
       wireReleaseActions(release);
+    }
+
+    function renderAcceptanceSuites() {
+      const list = $("acceptance-list");
+      if (!acceptanceSuites.length) {
+        list.innerHTML = "<div class='empty'>No acceptance suites yet.</div>";
+        return;
+      }
+      const rows = acceptanceSuites.map((suite) => `
+        <tr class="${suite.suite_id === selectedAcceptanceSuiteId ? "active" : ""}">
+          <td><button class="secondary acceptance-open" data-suite-id="${escapeHtml(suite.suite_id)}" type="button">Open</button></td>
+          <td>${escapeHtml(suite.name || suite.suite_id)}</td>
+          <td><span class="status ${escapeHtml(suite.status || "")}">${escapeHtml(suite.status || "-")}</span></td>
+          <td>${escapeHtml(suite.case_count || 0)}</td>
+          <td>${escapeHtml(suite.accepted_count || 0)}</td>
+          <td>${escapeHtml((suite.latest_report_summary || {}).status || "missing")}</td>
+          <td>${escapeHtml((suite.latest_signoff_summary || {}).status || "not_signed")}</td>
+        </tr>
+      `).join("");
+      list.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Name</th><th>Status</th><th>Cases</th><th>Accepted</th><th>Report</th><th>Signoff</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      list.querySelectorAll(".acceptance-open").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedAcceptanceSuiteId = button.dataset.suiteId;
+          renderAcceptanceSuites();
+          await renderAcceptanceDetail(selectedAcceptanceSuiteId);
+        });
+      });
+    }
+
+    async function renderAcceptanceDetail(suiteId) {
+      const data = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}`);
+      const suite = data.suite || {};
+      const cases = data.cases || [];
+      const report = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/report`).catch(() => ({ report: {}, summary: {} }));
+      const signoff = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/signoff`).catch(() => ({ signoff: {}, summary: {} }));
+      const caseRows = cases.map((item) => {
+        const health = item.health_summary || {};
+        const review = item.review_summary || {};
+        return `
+          <tr>
+            <td>${escapeHtml(item.case_id)}</td>
+            <td>${escapeHtml(item.name)}</td>
+            <td><span class="status ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td>
+            <td>${escapeHtml(health.status || "missing")}</td>
+            <td>${escapeHtml(health.audio_status || "-")}</td>
+            <td>${escapeHtml(review.status || "missing")}</td>
+            <td>${escapeHtml(review.rating ?? "-")}</td>
+            <td>
+              <button class="secondary acceptance-generate" data-case-id="${escapeHtml(item.case_id)}" type="button">Generate</button>
+              <button class="secondary acceptance-health" data-case-id="${escapeHtml(item.case_id)}" type="button">Health</button>
+              <a class="button-link secondary" href="/api/acceptance/suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(item.case_id)}/midi">MIDI</a>
+            </td>
+          </tr>
+        `;
+      }).join("");
+      $("acceptance-detail").innerHTML = `
+        <div class="panel-title subhead"><span>${escapeHtml(suite.name || suite.suite_id)}</span></div>
+        <div class="quick-grid">
+          ${metric("Status", suite.status || "-")}
+          ${metric("Cases", suite.case_count || 0)}
+          ${metric("Accepted", suite.accepted_count || 0)}
+          ${metric("Report", (report.summary || {}).status || "missing")}
+          ${metric("Signoff", (signoff.summary || {}).status || "not_signed")}
+        </div>
+        <div class="grid2">
+          <label>Case Title <input id="acceptance-case-title" value="Acceptance Song"></label>
+          <label>Style <input id="acceptance-case-style" value="upbeat pop"></label>
+        </div>
+        <label>Theme <input id="acceptance-case-theme" value="local acceptance review"></label>
+        <div class="actions">
+          <button id="acceptance-add-case" type="button">Add Case</button>
+          <button class="secondary" id="acceptance-build-report" type="button">Build Report</button>
+          <button class="secondary" id="acceptance-signoff" type="button">Signoff</button>
+          <button class="secondary" id="acceptance-reset-signoff" type="button">Reset Signoff</button>
+        </div>
+        <div class="panel-title subhead"><span>Cases</span></div>
+        <div class="table-wrap">
+          ${caseRows ? `<table><thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Health</th><th>Audio</th><th>Review</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${caseRows}</tbody></table>` : "<div class='empty'>No acceptance cases yet.</div>"}
+        </div>
+        <div class="panel-title subhead"><span>Listening Review</span></div>
+        <div class="grid2">
+          <label>Case ID <input id="acceptance-review-case-id" value="${escapeHtml((cases[0] || {}).case_id || "")}"></label>
+          <label>Rating <input id="acceptance-review-rating" type="number" min="1" max="5" value="4"></label>
+        </div>
+        <div class="grid2">
+          <label>Status
+            <select id="acceptance-review-status"><option value="accepted">accepted</option><option value="needs_fix">needs_fix</option><option value="rejected">rejected</option><option value="waived">waived</option></select>
+          </label>
+          <label>Audio Mode <input id="acceptance-review-audio-mode" value="midi"></label>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;"><input id="acceptance-review-playback" type="checkbox" style="width:auto;"> Playback Confirmed</label>
+        <label>Notes <textarea id="acceptance-review-notes">I listened to the generated MIDI and the structure is acceptable for this review.</textarea></label>
+        <div class="actions"><button id="acceptance-save-review" type="button">Save Review</button></div>
+        <pre>${escapeHtml(JSON.stringify(report.report || {}, null, 2))}</pre>
+      `;
+      wireAcceptanceActions(suiteId);
+    }
+
+    function wireAcceptanceActions(suiteId) {
+      $("acceptance-add-case")?.addEventListener("click", async () => {
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/cases`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: $("acceptance-case-style").value.trim() || "acceptance case",
+            request: {
+              title: $("acceptance-case-title").value.trim() || "Acceptance Song",
+              language: "English",
+              style: $("acceptance-case-style").value.trim() || "pop",
+              theme: $("acceptance-case-theme").value.trim() || "acceptance review",
+              duration_seconds: 90,
+            },
+          }),
+        });
+        await loadAcceptanceSuites();
+      });
+      document.querySelectorAll(".acceptance-generate").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(button.dataset.caseId)}/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ render_audio: "auto" }) });
+        await loadAcceptanceSuites();
+      }));
+      document.querySelectorAll(".acceptance-health").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(button.dataset.caseId)}/health`, { method: "POST" });
+        await loadAcceptanceSuites();
+      }));
+      $("acceptance-save-review")?.addEventListener("click", async () => {
+        const caseId = $("acceptance-review-case-id").value.trim();
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(caseId)}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rating: Number($("acceptance-review-rating").value || 4),
+            status: $("acceptance-review-status").value,
+            playback_confirmed: $("acceptance-review-playback").checked,
+            audio_mode: $("acceptance-review-audio-mode").value.trim() || "midi",
+            notes: $("acceptance-review-notes").value,
+          }),
+        });
+        await loadAcceptanceSuites();
+      });
+      $("acceptance-build-report")?.addEventListener("click", async () => {
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/report`, { method: "POST" });
+        await loadAcceptanceSuites();
+      });
+      $("acceptance-signoff")?.addEventListener("click", async () => {
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/signoff`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signed_by: "developer" }) });
+        await loadAcceptanceSuites();
+      });
+      $("acceptance-reset-signoff")?.addEventListener("click", async () => {
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/signoff/reset`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "review update" }) });
+        await loadAcceptanceSuites();
+      });
     }
 
     function releaseProjectOptions() {
