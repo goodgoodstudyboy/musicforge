@@ -2690,8 +2690,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_json({"ok": True, "template": template, "summary": template_summary(template)})
                     return
                 if method in {"POST", "PATCH"}:
+                    self.distribution_store.ensure_template_pack_mutable(template_id)
                     template = self.distribution_template_store.update_template(template_id, self._read_json_body(), now=_utc_now())
-                    self._send_json({"ok": True, "template": template, "summary": template_summary(template)})
+                    stale_targets = self.distribution_store.mark_template_dependents_stale(template_id, "template_updated")
+                    self._send_json({"ok": True, "template": template, "summary": template_summary(template), "stale_targets": stale_targets})
                     return
             if action == "clone":
                 if method != "POST":
@@ -2704,7 +2706,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                self._send_json({"ok": True, **self.distribution_template_store.delete_template(template_id)})
+                self.distribution_store.ensure_template_pack_mutable(template_id)
+                result = self.distribution_template_store.delete_template(template_id)
+                stale_targets = self.distribution_store.mark_template_dependents_stale(template_id, "template_deleted")
+                self._send_json({"ok": True, **result, "stale_targets": stale_targets})
                 return
             if action == "export":
                 if method != "GET":
@@ -2721,6 +2726,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "validation": self.distribution_template_store.validate_payload(payload)})
                 return
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except DistributionStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
         except DistributionTemplateError as exc:
             message = str(exc)
             status = HTTPStatus.CONFLICT if "Builtin" in message or "already exists" in message or "cannot" in message else HTTPStatus.BAD_REQUEST

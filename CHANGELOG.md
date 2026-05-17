@@ -1,5 +1,15 @@
 # Changelog
 
+## v4.1.1 - 2026-05-17
+
+### Fixed
+- Global Distribution Template Pack update/delete now scans dependent Distribution targets and returns 409 when any signed or force-signed target is bound to that template.
+- Template Pack changes that affect unsigned dependent targets now mark their QA/export summaries stale instead of leaving old summaries looking current.
+- release-check v4.1 smoke now verifies signed-target global template update/delete guards.
+
+### Verified
+- `python -m pytest tests\test_server_distribution.py tests\test_release_check.py::test_v41_distribution_template_packs_smoke tests\test_distribution_templates.py tests\test_distribution.py -q`
+
 ## v4.1.0 - 2026-05-17
 
 ### Added

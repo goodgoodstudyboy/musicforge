@@ -57,6 +57,8 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
         blocked_qa_status, blocked_qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
         blocked_checklist_status, blocked_checklist = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "blocked"})
         blocked_template_status, blocked_template = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"template_pack_id": imported["template"]["template_pack_id"]})
+        blocked_global_template_update_status, blocked_global_template_update = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}", {"name": "Changed After Signoff"})
+        blocked_global_template_delete_status, blocked_global_template_delete = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}/delete")
         zip_download_status, zip_bytes = request_bytes(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/export.zip")
         reset_status, reset = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff/reset", {"reason": "rebuild distribution"})
         export_after_reset_status, _after = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
@@ -108,15 +110,63 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
     assert blocked_qa_status == 409
     assert blocked_checklist_status == 409
     assert blocked_template_status == 409
+    assert blocked_global_template_update_status == 409
+    assert blocked_global_template_delete_status == 409
     assert "signed" in blocked_export["error"].lower()
     assert "signed" in blocked_qa["error"].lower()
     assert "signed" in blocked_checklist["error"].lower()
     assert "signed" in blocked_template["error"].lower()
+    assert "signed" in blocked_global_template_update["error"].lower()
+    assert "signed" in blocked_global_template_delete["error"].lower()
     assert zip_download_status == 200
     assert zip_bytes.startswith(b"PK")
     assert reset_status == 200
     assert reset["summary"]["status"] == "reset"
     assert export_after_reset_status == 201
+
+
+def test_distribution_template_update_stales_unsigned_targets(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id = _signed_release(server)
+        template_status, template_created = request_json(
+            server,
+            "POST",
+            "/api/distribution/template-packs",
+            {
+                "slug": "server-template-stale",
+                "name": "Server Template Stale",
+                "rules": {"require_upc": True, "require_isrc": True},
+                "metadata_mapping": {"platform_csv": [{"column": "Title", "source": "track.title", "required": True}]},
+                "file_naming": {"audio": "{track_number:02d}-{slug_title}.wav"},
+            },
+        )
+        template_id = template_created["template"]["template_pack_id"]
+        target_status, target_data = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "generic_dsp", "template_pack_id": template_id, "name": "Unsigned Target"})
+        target_id = target_data["target"]["target_id"]
+        qa_status, qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        update_template_status, updated_template = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}", {"name": "Server Template Stale Updated"})
+        get_target_status, current_target = request_json(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}")
+        delete_template_status, deleted_template = request_json(server, "POST", f"/api/distribution/template-packs/{template_id}/delete")
+        get_after_delete_status, target_after_delete = request_json(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}")
+    finally:
+        stop_test_server(server)
+
+    assert template_status == 201
+    assert target_status == 201
+    assert qa_status == 200
+    assert qa["summary"]["status"] in {"passed", "warning", "failed"}
+    assert update_template_status == 200
+    assert updated_template["stale_targets"][0]["target_id"] == target_id
+    assert get_target_status == 200
+    assert current_target["target"]["latest_qa_summary"]["status"] == "stale"
+    assert current_target["target"]["latest_qa_summary"]["stale_reason"] == "template_updated"
+    assert delete_template_status == 200
+    assert deleted_template["stale_targets"][0]["target_id"] == target_id
+    assert get_after_delete_status == 200
+    assert target_after_delete["target"]["latest_qa_summary"]["status"] == "stale"
+    assert target_after_delete["target"]["latest_qa_summary"]["stale_reason"] == "template_deleted"
 
 
 def _signed_release(server) -> str:

@@ -4593,6 +4593,8 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
         dist_verify_status, dist_verify = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/verify", {"require_artwork": True})
         blocked_checklist_status, blocked_checklist = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "blocked"})
         blocked_template_status, blocked_template = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"template_pack_id": imported_template.get("template", {}).get("template_pack_id")})
+        blocked_template_update_status, blocked_template_update = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}", {"name": "Changed After Signoff"})
+        blocked_template_delete_status, blocked_template_delete = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}/delete")
         zip_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/export.zip")
         zip_path = base / "template-distribution.zip"
         zip_path.write_bytes(zip_bytes)
@@ -4618,7 +4620,17 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
         external_report = verify_distribution_package(external_zip, require_artwork=True)
         os.chdir(old_external_cwd)
 
-        serialized = json.dumps({"template": template, "dist_export": dist_export, "blocked_checklist": blocked_checklist, "blocked_template": blocked_template}, ensure_ascii=False)
+        serialized = json.dumps(
+            {
+                "template": template,
+                "dist_export": dist_export,
+                "blocked_checklist": blocked_checklist,
+                "blocked_template": blocked_template,
+                "blocked_template_update": blocked_template_update,
+                "blocked_template_delete": blocked_template_delete,
+            },
+            ensure_ascii=False,
+        )
         ok = (
             created_status == 201
             and release_id
@@ -4665,6 +4677,10 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
             and dist_verify.get("summary", {}).get("status") == "passed"
             and blocked_checklist_status == 409
             and blocked_template_status == 409
+            and blocked_template_update_status == 409
+            and "signed" in str(blocked_template_update.get("error") or "").lower()
+            and blocked_template_delete_status == 409
+            and "signed" in str(blocked_template_delete.get("error") or "").lower()
             and zip_status == 200
             and zip_bytes.startswith(b"PK")
             and external_report.get("status") == "passed"
@@ -4677,7 +4693,7 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
             f"release={release_id}, target={target_id}, template={template_id}, "
             f"pending_qa={qa_failed.get('summary', {}).get('status')}, qa={dist_qa.get('summary', {}).get('status')}, "
             f"verify={dist_verify.get('summary', {}).get('status')}, external={external_report.get('status')}, "
-            f"source_path={source_path_status}, blocked={blocked_checklist_status}/{blocked_template_status}, "
+            f"source_path={source_path_status}, blocked={blocked_checklist_status}/{blocked_template_status}/{blocked_template_update_status}/{blocked_template_delete_status}, "
             f"template_tamper={_v38_check_status(tampered_template_report, 'distribution_template_hash_match')}, "
             f"checklist_tamper={_v38_check_status(tampered_checklist_report, 'distribution_checklist_payload_hash')}"
         )

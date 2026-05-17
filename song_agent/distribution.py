@@ -291,6 +291,48 @@ class DistributionStore:
         template = self.resolve_target_template(target)
         return template_summary(template) if template else {}
 
+    def targets_using_template(self, template_pack_id: str) -> list[DistributionTarget]:
+        template_id = _optional_id(template_pack_id)
+        if not template_id:
+            return []
+        matches: list[DistributionTarget] = []
+        for release in self.release_store.list_releases(include_hidden=True):
+            for target in self.list_targets(release.release_id):
+                if target.template_pack_id == template_id:
+                    matches.append(target)
+        return sorted(matches, key=lambda item: (item.release_id, item.target_id))
+
+    def ensure_template_pack_mutable(self, template_pack_id: str) -> None:
+        blockers = [target for target in self.targets_using_template(template_pack_id) if self._target_has_signed_package(target)]
+        if blockers:
+            ids = ", ".join(f"{target.release_id}/{target.target_id}" for target in blockers[:5])
+            suffix = "..." if len(blockers) > 5 else ""
+            raise DistributionStateError(
+                f"Distribution template pack is bound to signed distribution target(s): {ids}{suffix}. "
+                "Reset distribution signoff before changing this template."
+            )
+
+    def mark_template_dependents_stale(self, template_pack_id: str, reason: str) -> list[dict[str, Any]]:
+        stale_targets: list[dict[str, Any]] = []
+        with self.lock:
+            for target in self.targets_using_template(template_pack_id):
+                if self._target_has_signed_package(target):
+                    continue
+                before_qa = target.latest_qa_summary
+                before_export = target.latest_export_summary
+                target.latest_qa_summary = _stale_summary(target.latest_qa_summary, reason)
+                target.latest_export_summary = _stale_summary(target.latest_export_summary, reason)
+                if target.latest_qa_summary == before_qa and target.latest_export_summary == before_export:
+                    continue
+                self.save_target(target)
+                self.append_event(
+                    target.release_id,
+                    "distribution_template_dependency_stale",
+                    {"target_id": target.target_id, "template_pack_id": target.template_pack_id, "reason": reason},
+                )
+                stale_targets.append(distribution_target_summary(target))
+        return stale_targets
+
     def latest_package_id(self, target: DistributionTarget) -> str | None:
         summary = target.latest_export_summary if isinstance(target.latest_export_summary, dict) else {}
         package_id = str(summary.get("package_id") or "").strip()
@@ -364,11 +406,14 @@ class DistributionStore:
     def ensure_target_mutable(self, release_id: str, target: DistributionTarget) -> None:
         if target.status == "archived":
             raise DistributionStateError("Archived distribution targets are read-only.")
+        if self._target_has_signed_package(target):
+            raise DistributionStateError("Signed distribution packages cannot be modified. Reset distribution signoff before changing this target.")
+
+    def _target_has_signed_package(self, target: DistributionTarget) -> bool:
         if target.status == "signed" or target.latest_signoff_summary.get("status") in SIGNED_DISTRIBUTION_STATUSES:
-            raise DistributionStateError("Signed distribution packages cannot be modified. Reset distribution signoff before changing this target.")
-        signoff = self.read_signoff(release_id, target, default={})
-        if signoff.get("status") in SIGNED_DISTRIBUTION_STATUSES:
-            raise DistributionStateError("Signed distribution packages cannot be modified. Reset distribution signoff before changing this target.")
+            return True
+        signoff = self.read_signoff(target.release_id, target, default={})
+        return signoff.get("status") in SIGNED_DISTRIBUTION_STATUSES
 
     def append_event(self, release_id: str, event_type: str, payload: dict[str, Any]) -> None:
         path = self.distribution_dir(release_id) / "events.jsonl"
