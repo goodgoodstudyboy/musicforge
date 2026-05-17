@@ -14,6 +14,7 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.distribution_export import DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS
+from song_agent.distribution_layout import RESERVED_LAYOUT_PATHS, effective_file_naming, layout_payload_hash, validate_layout_path
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
 from song_agent.distribution_checklist import checklist_payload_hash, checklist_summary
 from song_agent.distribution_templates import template_content_hash, template_summary, validate_template_pack
@@ -141,6 +142,7 @@ class _DistributionPackageVerifier:
         self.template: dict[str, Any] = {}
         self.template_summary_doc: dict[str, Any] = {}
         self.checklist: dict[str, Any] = {}
+        self.layout: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -162,6 +164,7 @@ class _DistributionPackageVerifier:
                 self._verify_package_release()
                 self._verify_signoff()
                 self._verify_template_and_checklist()
+                self._verify_layout(archive)
                 self._verify_metadata_and_artwork(archive)
                 self._verify_redaction(archive)
         finally:
@@ -276,6 +279,8 @@ class _DistributionPackageVerifier:
             self.template_summary_doc = self._read_json_entry(archive, "template-summary.json", "template", "distribution_template_summary_parse")
         if "docs/checklist.json" in self.entry_map:
             self.checklist = self._read_json_entry(archive, "docs/checklist.json", "checklist", "distribution_checklist_parse")
+        if "layout/manifest-layout.json" in self.entry_map:
+            self.layout = self._read_json_entry(archive, "layout/manifest-layout.json", "layout", "distribution_layout_sidecar_parse")
 
     def _verify_package_release(self) -> None:
         errors: list[str] = []
@@ -334,6 +339,67 @@ class _DistributionPackageVerifier:
         checklist_status = checklist_summary(self.checklist).get("status") if self.checklist else "missing"
         self._add_check("checklist", "distribution_checklist_status", "passed" if checklist_status in {"passed", "warning"} else "failed", "blocking", f"Checklist status is {checklist_status}.")
 
+    def _verify_layout(self, archive: zipfile.ZipFile) -> None:
+        manifest_layout = self.manifest.get("layout") if isinstance(self.manifest.get("layout"), dict) else {}
+        generated_version = str((self.manifest.get("tool") or {}).get("version") or self.manifest.get("generated_by_version") or "").strip()
+        legacy = not manifest_layout
+        if legacy:
+            status = "failed" if self.strict or (generated_version and _version_at_least(generated_version, "4.2.0")) else "warning"
+            self._add_check("layout", "distribution_layout_legacy_missing", status, "blocking" if status == "failed" else "warning", "Distribution layout contract is missing.")
+            return
+        self._add_check("layout", "distribution_layout_exists", "passed", "blocking", "Distribution manifest includes layout contract.")
+        self._add_check("layout", "distribution_layout_sidecar_exists", "passed" if self.layout else "failed", "blocking", "layout/manifest-layout.json exists." if self.layout else "layout/manifest-layout.json is missing.")
+        if not self.layout:
+            return
+        manifest_hash = layout_payload_hash(manifest_layout)
+        sidecar_hash = layout_payload_hash(self.layout)
+        manifest_payload_hash = manifest_layout.get("payload_hash")
+        sidecar_payload_hash = self.layout.get("payload_hash")
+        hash_ok = bool(manifest_payload_hash and manifest_payload_hash == manifest_hash == sidecar_payload_hash == sidecar_hash)
+        self._add_check("layout", "distribution_layout_hash_match", "passed" if hash_ok else "failed", "blocking", "Layout sidecar hash matches manifest." if hash_ok else "Layout sidecar hash does not match manifest.")
+        manifest_entries = manifest_layout.get("entries") if isinstance(manifest_layout.get("entries"), list) else []
+        sidecar_entries = self.layout.get("entries") if isinstance(self.layout.get("entries"), list) else []
+        entries_match = layout_payload_hash({"entries": manifest_entries}) == layout_payload_hash({"entries": sidecar_entries})
+        self._add_check("layout", "distribution_layout_entries_declared", "passed" if entries_match else "failed", "blocking", "Layout entries match sidecar." if entries_match else "Layout entries differ between manifest and sidecar.")
+        manifest_files = {str(item.get("path") or ""): item for item in self.manifest.get("files", []) if isinstance(item, dict)}
+        missing_manifest: list[str] = []
+        missing_zip: list[str] = []
+        mismatches: list[str] = []
+        reserved: list[str] = []
+        unsafe: list[str] = []
+        for entry in manifest_entries:
+            if not isinstance(entry, dict):
+                continue
+            path = str(entry.get("path") or "")
+            try:
+                validate_layout_path(path)
+            except ValueError:
+                unsafe.append(path)
+            if path in RESERVED_LAYOUT_PATHS:
+                reserved.append(path)
+            if path not in manifest_files:
+                missing_manifest.append(path)
+            info = self.entry_map.get(path)
+            if info is None:
+                missing_zip.append(path)
+                continue
+            actual_size = int(info.file_size or 0)
+            actual_sha = _sha256_entry(archive, info)
+            if entry.get("size_bytes") != actual_size or entry.get("sha256") != actual_sha:
+                mismatches.append(path)
+        self._add_check("layout", "distribution_layout_entries_declared_in_files", "failed" if missing_manifest else "passed", "blocking", "Layout entries missing from manifest.files: " + ", ".join(missing_manifest[:5]) if missing_manifest else "Layout entries are declared in manifest.files.", count=len(missing_manifest))
+        self._add_check("layout", "distribution_layout_entries_exist", "failed" if missing_zip else "passed", "blocking", "Layout entries missing from ZIP: " + ", ".join(missing_zip[:5]) if missing_zip else "Layout entries exist in ZIP.", count=len(missing_zip))
+        self._add_check("layout", "distribution_layout_file_hash_match", "failed" if mismatches else "passed", "blocking", "Layout entry bytes mismatch: " + ", ".join(mismatches[:5]) if mismatches else "Layout entry hashes and sizes match ZIP.", count=len(mismatches))
+        self._add_check("layout", "distribution_layout_reserved_collision", "failed" if reserved else "passed", "blocking", "Layout entries target fixed sidecars: " + ", ".join(reserved[:5]) if reserved else "Layout entries do not target fixed sidecars.", count=len(reserved))
+        self._add_check("layout", "distribution_layout_path_safe", "failed" if unsafe else "passed", "blocking", "Layout entries contain unsafe paths: " + ", ".join(unsafe[:5]) if unsafe else "Layout entry paths are safe.", count=len(unsafe))
+        expected_naming = effective_file_naming(self.template) if self.template else {"audio": "audio/{track_number:02d}-{slug_title}.{ext}", "lyrics": "lyrics/{track_number:02d}-{slug_title}.txt", "artwork": "artwork/cover.{ext}"}
+        naming = manifest_layout.get("naming") if isinstance(manifest_layout.get("naming"), dict) else {}
+        self._add_check("layout", "distribution_layout_template_patterns_match", "passed" if naming == expected_naming else "failed", "blocking", "Layout naming patterns match template-pack.json." if naming == expected_naming else "Layout naming patterns do not match template-pack.json.")
+        artwork = self.manifest.get("artwork") if isinstance(self.manifest.get("artwork"), dict) else {}
+        artwork_path = str(artwork.get("package_path") or "")
+        artwork_entries = {str(entry.get("path") or "") for entry in manifest_entries if isinstance(entry, dict) and entry.get("kind") == "artwork"}
+        self._add_check("layout", "distribution_artwork_package_path_match", "passed" if not artwork or artwork_path in artwork_entries and artwork_path in self.entry_map else "failed", "blocking", "Artwork package_path points to layout artwork entry." if not artwork or artwork_path in artwork_entries and artwork_path in self.entry_map else "Artwork package_path does not point to a real layout artwork entry.")
+
     def _verify_metadata_and_artwork(self, archive: zipfile.ZipFile) -> None:
         metadata_required = {"release-metadata.json", "platform-metadata.csv", "credits.csv"}
         missing_metadata = sorted(metadata_required - set(self.entry_names))
@@ -367,20 +433,34 @@ class _DistributionPackageVerifier:
                 header_failures.append(name)
         self._add_check("artwork", "distribution_artwork_header", "failed" if header_failures else "passed", "blocking", "Artwork header failures: " + ", ".join(header_failures[:5]) if header_failures else "Artwork headers are valid.", count=len(header_failures))
         if self.require_audio:
-            audio_entries = [name for name in self.entry_names if name.startswith("audio/") and name.endswith(".wav")]
+            layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
+            audio_entries = [str(entry.get("path") or "") for entry in layout_entries if isinstance(entry, dict) and entry.get("kind") == "audio"]
+            if not audio_entries:
+                audio_entries = [name for name in self.entry_names if name.startswith("audio/") and name.endswith((".wav", ".mid", ".midi"))]
+            missing_audio = [name for name in audio_entries if name not in self.entry_map]
             bad_audio = []
             for name in audio_entries:
-                data = archive.read(self.entry_map[name])[:12]
-                if len(data) < 12 or not data.startswith(b"RIFF") or data[8:12] != b"WAVE":
+                info = self.entry_map.get(name)
+                if info is None:
+                    continue
+                suffix = Path(name).suffix.lower()
+                data = archive.read(info)[:14]
+                if suffix == ".wav" and (len(data) < 12 or not data.startswith(b"RIFF") or data[8:12] != b"WAVE"):
                     bad_audio.append(name)
-            self._add_check("audio", "distribution_audio_wav_header", "failed" if not audio_entries or bad_audio else "passed", "blocking", "Audio WAV files are missing or invalid." if not audio_entries or bad_audio else "Audio WAV headers are valid.", count=len(bad_audio) if audio_entries else 1)
+                elif suffix in {".mid", ".midi"} and (len(data) < 14 or not data.startswith(b"MThd")):
+                    bad_audio.append(name)
+            failed = not audio_entries or missing_audio or bad_audio
+            self._add_check("audio", "distribution_audio_file_valid", "failed" if failed else "passed", "blocking", "Audio files are missing or invalid." if failed else "Audio layout files are present and valid.", count=len(missing_audio) + len(bad_audio) if audio_entries else 1)
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
+        layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
+        layout_lyrics = {str(entry.get("path") or "") for entry in layout_entries if isinstance(entry, dict) and entry.get("kind") == "lyrics"}
         scan_names = [
             name
             for name in self.entry_names
             if name in {"distribution-manifest.json", "distribution-signoff.json", "package.json", "release.json", "tracklist.json", "release-metadata.json", "platform-metadata.csv", "credits.csv", "README.txt"}
             or name.startswith("lyrics/")
+            or name in layout_lyrics
             or name.startswith("docs/")
         ]
         for name in scan_names:
@@ -513,6 +593,22 @@ def _counts(values: list[str]) -> dict[str, int]:
     for value in values:
         result[value] = result.get(value, 0) + 1
     return result
+
+
+def _version_at_least(version: str, minimum: str) -> bool:
+    def parts(value: str) -> tuple[int, int, int]:
+        raw = str(value or "0.0.0").split("-", 1)[0].lstrip("v")
+        nums = []
+        for item in raw.split(".")[:3]:
+            try:
+                nums.append(int(item))
+            except ValueError:
+                nums.append(0)
+        while len(nums) < 3:
+            nums.append(0)
+        return nums[0], nums[1], nums[2]
+
+    return parts(version) >= parts(minimum)
 
 
 def _sha256_file(path: Path) -> str:

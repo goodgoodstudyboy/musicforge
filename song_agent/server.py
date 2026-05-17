@@ -168,6 +168,7 @@ from song_agent.distribution_export import (
 )
 from song_agent.distribution_profiles import get_distribution_profile, list_distribution_profiles
 from song_agent.distribution_templates import DistributionTemplateError, TemplatePackStore, template_summary
+from song_agent.distribution_layout import build_distribution_layout_plan, layout_summary
 from song_agent.distribution_checklist import (
     DistributionChecklistError,
     checklist_summary,
@@ -182,6 +183,7 @@ from song_agent.distribution_qa import (
     distribution_qa_summary,
     mark_distribution_qa_stale,
 )
+from song_agent.release_metadata import read_release_metadata
 from song_agent.distribution_verifier import (
     distribution_verification_summary,
     verify_distribution_package,
@@ -4831,6 +4833,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
+            if action == "layout":
+                if method not in {"GET", "POST"}:
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                layout = self._build_distribution_layout(release_id, target)
+                if method == "POST":
+                    layout = self.distribution_store.write_layout(release_id, target_id, layout)
+                    self.distribution_store.append_event(release_id, "distribution_layout_refreshed", {"target_id": target_id, "status": layout.get("summary", {}).get("status")})
+                self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "layout": layout, "summary": layout_summary(layout)})
+                return
             if action.startswith("checklist-item:"):
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -4866,7 +4878,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     report = self._get_or_refresh_distribution_qa(release_id, target, refresh=False)
                     manifest = build_distribution_export_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, now=_utc_now())
                     target = self.distribution_store.get_target(release_id, target_id)
-                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "manifest": manifest, "summary": distribution_export_summary(manifest)}, status=HTTPStatus.CREATED)
+                    self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "manifest": manifest, "summary": distribution_export_summary(manifest), "layout_summary": layout_summary(manifest.get("layout") if isinstance(manifest.get("layout"), dict) else {})}, status=HTTPStatus.CREATED)
                     return
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
@@ -4956,6 +4968,27 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = self.distribution_store.write_qa(release_id, target.target_id, report)
         self.distribution_store.update_qa_summary(release_id, target.target_id, distribution_qa_summary(report))
         return report
+
+    def _build_distribution_layout(self, release_id: str, target: Any) -> dict[str, Any]:
+        release = self.release_store.get_release(release_id)
+        try:
+            release_manifest = read_release_export_manifest(self.release_store, release_id)
+        except FileNotFoundError:
+            release_manifest = {}
+        metadata = read_release_metadata(self.release_store, release_id, default={})
+        template = self.distribution_store.resolve_target_template(target)
+        artwork_id = str((target.options or {}).get("artwork_id") or "").strip()
+        artwork = read_distribution_artwork(self.distribution_store, release_id, artwork_id) if artwork_id else latest_distribution_artwork(self.distribution_store, release_id)
+        return build_distribution_layout_plan(
+            release_id=release_id,
+            target=target,
+            release=release,
+            release_manifest=release_manifest,
+            release_metadata=metadata,
+            template=template,
+            artwork=artwork if isinstance(artwork, dict) else {},
+            release_export_dir=self.release_store.export_dir(release_id),
+        )
 
     def _get_or_refresh_delivery_qa(self, project_id: str, *, refresh: bool) -> dict[str, Any]:
         project_dir = self.project_store.project_dir(project_id)
@@ -9916,6 +9949,8 @@ def _match_distribution_target_tail(tail: str) -> tuple[str, str] | None:
         return target_id, "qa-refresh"
     if parts[2:] == ["checklist"]:
         return target_id, "checklist"
+    if parts[2:] == ["layout"] or parts[2:] == ["layout", "refresh"]:
+        return target_id, "layout"
     if len(parts) == 5 and parts[2:4] == ["checklist", "items"]:
         return target_id, "checklist-item:" + unquote(parts[4])
     if parts[2:] == ["export"]:

@@ -202,6 +202,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v3.9 release metadata smoke", *_v39_release_metadata_smoke(root))
     report.add("v4.0 distribution prep smoke", *_v40_distribution_prep_smoke(root))
     report.add("v4.1 distribution template packs smoke", *_v41_distribution_template_packs_smoke(root))
+    report.add("v4.2 distribution layout contract smoke", *_v42_distribution_layout_contract_smoke(root))
     return report
 
 
@@ -4700,6 +4701,166 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
             f"source_path={source_path_status}, blocked={blocked_unsigned_template_delete_status}/{blocked_checklist_status}/{blocked_template_status}/{blocked_template_update_status}/{blocked_template_delete_status}, "
             f"template_tamper={_v38_check_status(tampered_template_report, 'distribution_template_hash_match')}, "
             f"checklist_tamper={_v38_check_status(tampered_checklist_report, 'distribution_checklist_payload_hash')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v42_distribution_layout_contract_smoke(root: Path) -> tuple[bool, str]:
+    base = (Path(tempfile.gettempdir()) / "mf-v42-distribution-layout-contract").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Layout Contract Track")
+        created_status, created = _release_http_json(server, "POST", "/api/releases", {"name": "Layout Contract Release", "release_type": "demo_pack", "primary_artist": "MusicForge", "label": "Forge Label", "language": "English"})
+        release_id = created.get("release", {}).get("release_id")
+        add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "Layout Contract Track"})
+        init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized.get("metadata", {})
+        if isinstance(metadata.get("release"), dict):
+            metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+            metadata["tracks"][0].update({"title": "Layout Contract Track", "isrc": "USABC2600001", "lyrics": "Clean lyric", "credits": [{"role": "composer", "name": "Layout Writer"}], "confirmed": True})
+        save_status, _saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        metadata_qa_status, metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        qa_status, qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        metadata_export_status, _metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        sign_status, _signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+
+        template_payload = {
+            "slug": "layout-contract-template",
+            "name": "Layout Contract Template",
+            "rules": {"require_artwork": True, "require_upc": True, "require_isrc": True, "csv_formula_escape": True},
+            "metadata_mapping": {"platform_csv": [{"column": "Title", "source": "track.title", "required": True}]},
+            "file_naming": {
+                "audio": "tracks/disc-{disc_number}/{track_number:02d}-{slug_title}.{ext}",
+                "lyrics": "lyrics/{track_number:02d}-{slug_title}.txt",
+                "artwork": "artwork/{release_slug}-cover.{ext}",
+            },
+            "checklist": [{"item_id": "explicit-confirmed", "label": "Explicit flag checked", "required": True}],
+        }
+        template_status, template = _release_http_json(server, "POST", "/api/distribution/template-packs", template_payload)
+        template_id = template.get("template", {}).get("template_pack_id")
+        bad_artwork_status, bad_artwork = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}/validate", {"template": {**template_payload, "file_naming": {"artwork": "artwork/{slug_title}.{ext}"}}})
+        unsafe_status, unsafe = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}/validate", {"template": {**template_payload, "file_naming": {"audio": "../x.wav"}}})
+        collision_status, collision_template = _release_http_json(server, "POST", "/api/distribution/template-packs", {**template_payload, "slug": "layout-collision-template", "name": "Layout Collision Template", "file_naming": {"audio": "audio/song.{ext}", "lyrics": "lyrics/{track_number:02d}-{slug_title}.txt", "artwork": "artwork/{release_slug}-cover.{ext}"}})
+
+        target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "template_pack_id": template_id, "name": "Layout Target"})
+        target_id = target.get("target", {}).get("target_id")
+        artwork_status, artwork = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")})
+        artwork_id = artwork.get("artwork", {}).get("artwork_id")
+        update_status, _updated = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork_id}})
+        checklist_status, _checklist = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist")
+        checklist_done_status, _done = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "done", "note": "Checked by release-check"})
+        layout_status, layout = _release_http_json(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/layout")
+        dist_qa_status, dist_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        dist_export_status, dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        dist_zip_status, _dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, dist_signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        zip_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/export.zip")
+        zip_path = base / "layout-distribution.zip"
+        zip_path.write_bytes(zip_bytes)
+        report = verify_distribution_package(zip_path, require_artwork=True)
+        external_dir = base / "external-clean"
+        external_dir.mkdir()
+        external_zip = external_dir / "layout-distribution.zip"
+        shutil.copy2(zip_path, external_zip)
+        old_external_cwd = Path.cwd()
+        os.chdir(external_dir)
+        external_report = verify_distribution_package(external_zip, require_artwork=True)
+        os.chdir(old_external_cwd)
+
+        def tamper_layout(data: bytes) -> bytes:
+            value = json.loads(data.decode("utf-8"))
+            value["entries"][0]["path"] = "audio/tampered.wav"
+            return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+
+        def tamper_artwork_path(data: bytes) -> bytes:
+            value = json.loads(data.decode("utf-8"))
+            value["artwork"]["package_path"] = "artwork/missing.png"
+            return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+
+        layout_tamper = verify_distribution_package(_v38_rewrite_zip(zip_path, base / "layout-tampered.zip", transforms={"layout/manifest-layout.json": tamper_layout}), require_artwork=True)
+        artwork_tamper = verify_distribution_package(_v38_rewrite_zip(zip_path, base / "artwork-path-tampered.zip", transforms={"distribution-manifest.json": tamper_artwork_path}), require_artwork=True)
+        with zipfile.ZipFile(zip_path) as archive:
+            names = set(archive.namelist())
+        expected_audio = "tracks/disc-1/01-layout-contract-track.mid"
+        expected_artwork = "artwork/layout-contract-release-cover.png"
+        expected_lyrics = "lyrics/01-layout-contract-track.txt"
+        serialized = json.dumps({"layout": layout, "dist_export": dist_export}, ensure_ascii=False)
+        ok = (
+            created_status == 201
+            and add_status == 200
+            and init_status == 200
+            and save_status == 200
+            and metadata_qa_status == 200
+            and metadata_qa.get("summary", {}).get("status") == "passed"
+            and qa_status == 200
+            and qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and export_status == 200
+            and metadata_export_status == 200
+            and sign_status == 200
+            and template_status == 201
+            and bad_artwork_status == 200
+            and bad_artwork.get("validation", {}).get("status") == "failed"
+            and unsafe_status == 200
+            and unsafe.get("validation", {}).get("status") == "failed"
+            and collision_status == 201
+            and collision_template.get("template", {}).get("template_pack_id")
+            and target_status == 201
+            and artwork_status == 201
+            and update_status == 200
+            and checklist_status == 200
+            and checklist_done_status == 200
+            and layout_status == 200
+            and layout.get("summary", {}).get("status") == "passed"
+            and expected_audio in [entry.get("path") for entry in layout.get("layout", {}).get("entries", [])]
+            and dist_qa_status == 200
+            and dist_qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and dist_export_status == 201
+            and dist_export.get("layout_summary", {}).get("status") == "passed"
+            and dist_export.get("manifest", {}).get("artwork", {}).get("package_path") == expected_artwork
+            and dist_zip_status == 200
+            and dist_sign_status == 200
+            and dist_signed.get("summary", {}).get("status") == "signed"
+            and zip_status == 200
+            and zip_bytes.startswith(b"PK")
+            and expected_audio in names
+            and expected_artwork in names
+            and expected_lyrics in names
+            and "layout/manifest-layout.json" in names
+            and "layout/file-tree.txt" in names
+            and report.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and _v38_check_status(layout_tamper, "distribution_layout_hash_match") == "failed"
+            and _v38_check_status(artwork_tamper, "distribution_artwork_package_path_match") == "failed"
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, (
+            f"target={target_id}, layout={layout.get('summary', {}).get('status')}, "
+            f"audio={expected_audio}, artwork={expected_artwork}, lyrics={expected_lyrics}, "
+            f"sign={dist_sign_status}:{dist_signed.get('summary', {}).get('status')}, external={external_report.get('status')}, layout_tamper={_v38_check_status(layout_tamper, 'distribution_layout_hash_match')}, "
+            f"artwork_path_tamper={_v38_check_status(artwork_tamper, 'distribution_artwork_package_path_match')}, "
+            f"unsafe_pattern={unsafe.get('validation', {}).get('status')}, bad_artwork_var={bad_artwork.get('validation', {}).get('status')}"
         )
     except Exception as exc:
         return False, str(exc)

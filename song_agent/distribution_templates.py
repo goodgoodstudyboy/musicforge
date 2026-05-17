@@ -49,7 +49,12 @@ MAPPING_SOURCE_ALLOWLIST = {
     "track.lyrics",
     "track.credits",
 }
-FILE_NAMING_VARIABLES = {"track_number", "track_number:02d", "disc_number", "slug_title", "track_id", "ext"}
+FILE_NAMING_VARIABLES_BY_KEY = {
+    "audio": {"track_number", "track_number:02d", "disc_number", "slug_title", "track_id", "isrc", "ext"},
+    "lyrics": {"track_number", "track_number:02d", "disc_number", "slug_title", "track_id", "isrc", "language", "ext"},
+    "artwork": {"release_slug", "release_id", "upc", "profile_id", "target_id", "ext"},
+}
+FILE_NAMING_VARIABLES = set().union(*FILE_NAMING_VARIABLES_BY_KEY.values())
 TEMPLATE_IMPORT_BLOCKED_KEYS = DISTRIBUTION_BLOCKED_KEYS | {
     "path",
     "source_path",
@@ -634,16 +639,17 @@ def _safe_file_naming(value: Any) -> dict[str, str]:
         key = str(key)
         if key not in {"artwork", "audio", "lyrics"}:
             raise DistributionTemplateError(f"Unsupported file_naming key: {key}.")
-        result[key] = _safe_file_pattern(str(item or ""))
+        result[key] = _safe_file_pattern(str(item or ""), key=key)
     return result
 
 
-def _safe_file_pattern(pattern: str) -> str:
-    text = _safe_text(pattern, 160)
+def _safe_file_pattern(pattern: str, *, key: str | None = None) -> str:
+    text = str(pattern or "").strip()[:160]
     if not text:
         raise DistributionTemplateError("file_naming pattern must be non-empty.")
+    allowed = FILE_NAMING_VARIABLES_BY_KEY.get(key or "", FILE_NAMING_VARIABLES)
     for match in _FILE_VAR_RE.finditer(text):
-        if match.group(1) not in FILE_NAMING_VARIABLES:
+        if match.group(1) not in allowed:
             raise DistributionTemplateError(f"Unsupported file_naming variable: {match.group(1)}.")
     stripped = _FILE_VAR_RE.sub("x", text)
     if "{" in stripped or "}" in stripped:

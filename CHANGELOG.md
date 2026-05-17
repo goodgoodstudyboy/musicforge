@@ -1,5 +1,21 @@
 # Changelog
 
+## v4.2.0 - 2026-05-17
+
+### Added
+- Distribution Package Layout Contract centralizes template `file_naming` into a single auditable planner for audio, artwork, and lyrics package paths.
+- Distribution Export now writes `layout/manifest-layout.json` and `layout/file-tree.txt`, includes layout summary/hash metadata, and uses the layout plan for copied package files.
+- Distribution QA, Studio, and API now expose Layout preview/refresh so package paths can be inspected before export.
+- `verify-distribution-package` validates layout sidecar hashes, manifest/layout consistency, layout file hashes, artwork package path binding, custom lyrics paths, and legacy v4.1 layout-missing compatibility.
+- release-check v4.2 smoke covers custom audio/artwork/lyrics naming, external verification, layout tamper detection, artwork path tamper detection, unsafe patterns, and bad artwork variables.
+
+### Fixed
+- Template `file_naming.artwork` now rejects track-scoped variables instead of silently accepting rules that cannot be rendered for release-scoped artwork.
+- Distribution audio layout preserves custom subdirectories and falls back to signed Release Export MIDI when WAV audio is absent.
+
+### Verified
+- `python -m pytest tests\test_distribution_layout.py tests\test_distribution_templates.py tests\test_distribution.py tests\test_server_distribution.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v42_distribution_layout_contract_smoke -q`
+
 ## v4.1.2 - 2026-05-17
 
 ### Fixed

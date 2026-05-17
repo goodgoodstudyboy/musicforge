@@ -11,6 +11,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from song_agent import __version__
 from song_agent.distribution import (
     DistributionStore,
     DistributionTarget,
@@ -20,12 +21,19 @@ from song_agent.distribution import (
 from song_agent.distribution_artwork import distribution_artwork_file_path, latest_distribution_artwork, read_distribution_artwork
 from song_agent.distribution_checklist import checklist_export_payload, checklist_markdown, checklist_summary, reconcile_distribution_checklist
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS, get_distribution_profile
-from song_agent.distribution_templates import resolve_mapping_source, render_file_pattern, template_file_naming, template_mapping, template_summary
+from song_agent.distribution_layout import (
+    build_distribution_layout_plan,
+    layout_file_tree_text,
+    layout_manifest_payload,
+    layout_summary,
+)
+from song_agent.distribution_templates import resolve_mapping_source, template_mapping, template_summary
 from song_agent.distribution_qa import distribution_qa_allows_export, distribution_source_state
-from song_agent.projectio import read_json, slugify
+from song_agent.projectio import read_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.release_export import read_release_export_manifest
+from song_agent.release_metadata import read_release_metadata
 from song_agent.release_qa import scan_release_payload_for_sensitive_values
 from song_agent.releases import stable_hash
 
@@ -66,6 +74,22 @@ def build_distribution_export_package(
     copied_files: list[dict[str, Any]] = []
     template = store.resolve_target_template(target)
     checklist = reconcile_distribution_checklist(store, release_id, target, template, write=True) if template else {}
+    release_metadata = read_release_metadata(store.release_store, release_id, default={})
+    artwork = _selected_artwork(store, release_id, target)
+    layout_plan = build_distribution_layout_plan(
+        release_id=release_id,
+        target=target,
+        release=release,
+        release_manifest=release_manifest,
+        release_metadata=release_metadata,
+        template=template,
+        artwork=artwork,
+        release_export_dir=release_export_dir,
+    )
+    if layout_plan.get("summary", {}).get("status") == "failed":
+        errors = layout_plan.get("errors") if isinstance(layout_plan.get("errors"), list) else []
+        message = str(errors[0].get("message") if errors and isinstance(errors[0], dict) else "Distribution layout plan failed.")
+        raise DistributionExportError(message)
     _write_package_json(export_dir, release, target, package_id, qa_report, now)
     _copy_release_file(release_export_dir, export_dir, "release.json", copied_files)
     _copy_release_file(release_export_dir, export_dir, "tracklist.json", copied_files)
@@ -79,19 +103,30 @@ def build_distribution_export_package(
         mapped_csv = _write_template_platform_csv(export_dir, store, release_id, template)
         if mapped_csv:
             copied_files.append(_file_record(export_dir, mapped_csv))
-    _copy_tree_prefix(release_export_dir, export_dir, "lyrics", copied_files)
-    _copy_audio_files(release_export_dir, export_dir, release_manifest, copied_files, template=template)
-    artwork_record = _copy_artwork(store, release_id, target, export_dir, copied_files, template=template)
+    layout_records = _copy_layout_entries(store, release_id, release_export_dir, export_dir, layout_plan, artwork=artwork)
+    copied_files.extend(layout_records)
+    artwork_record = _artwork_record(artwork, layout_plan)
     wrote_checklist_doc = _write_docs(export_dir, release, target, package_id, qa_report, artwork_record, checklist=checklist, write_checklist=not bool(template))
     _write_readme(export_dir, release, target, package_id, qa_report)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "package.json", export_dir / "README.txt", export_dir / "docs" / "submission-notes.md"])
     if wrote_checklist_doc and not template:
         copied_files.append(_file_record(export_dir, export_dir / "docs" / "checklist.json"))
+    layout_payload = layout_manifest_payload(layout_plan, copied_files)
+    _write_json(export_dir / "layout" / "manifest-layout.json", layout_payload)
+    (export_dir / "layout" / "file-tree.txt").parent.mkdir(parents=True, exist_ok=True)
+    file_tree_paths = [str(item.get("path") or "") for item in copied_files]
+    file_tree_paths.extend(["layout/manifest-layout.json", "layout/file-tree.txt"])
+    (export_dir / "layout" / "file-tree.txt").write_text(layout_file_tree_text(file_tree_paths), encoding="utf-8")
+    copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "layout" / "manifest-layout.json", export_dir / "layout" / "file-tree.txt"])
+    layout_payload = layout_manifest_payload(layout_plan, copied_files)
+    _write_json(export_dir / "layout" / "manifest-layout.json", layout_payload)
+    copied_files = [_file_record(export_dir, export_dir / str(item["path"])) for item in copied_files if str(item.get("path") or "").strip()]
 
     signoff_public = _distribution_signoff_export_summary({})
     _write_json(export_dir / "distribution-signoff.json", signoff_public)
     manifest = {
         "schema_version": DISTRIBUTION_EXPORT_SCHEMA_VERSION,
+        "tool": {"name": "MusicForge Distribution Export", "version": __version__},
         "package_id": package_id,
         "release_id": release_id,
         "target_id": target.target_id,
@@ -118,6 +153,7 @@ def build_distribution_export_package(
             "release_zip_sha256": _sha256_file(store.release_store.zip_path(release_id)),
         },
         "artwork": artwork_record,
+        "layout": layout_payload,
         "sidecars": {
             "distribution_signoff": _distribution_signoff_sidecar_record(signoff_public),
         },
@@ -128,6 +164,7 @@ def build_distribution_export_package(
             "total_bytes": sum(int(item.get("size_bytes") or 0) for item in copied_files),
             "qa_status": qa_report.get("status"),
             "signoff_status": "not_signed",
+            "layout_status": layout_payload.get("summary", {}).get("status"),
         },
         "redaction_summary": {"status": "passed"},
     }
@@ -269,6 +306,8 @@ def distribution_export_summary(manifest: dict[str, Any] | None) -> dict[str, An
             "total_bytes": summary.get("total_bytes", 0),
             "zip_filename": zip_info.get("filename"),
             "zip_entry_count": zip_info.get("entry_count"),
+            "layout_status": (data.get("layout") or {}).get("summary", {}).get("status") if isinstance(data.get("layout"), dict) else None,
+            "layout_hash": (data.get("layout") or {}).get("layout_hash") if isinstance(data.get("layout"), dict) else None,
         },
         blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
     )
@@ -313,63 +352,54 @@ def _copy_release_file(source_root: Path, export_dir: Path, rel: str, records: l
     records.append(_file_record(export_dir, target))
 
 
-def _copy_tree_prefix(source_root: Path, export_dir: Path, prefix: str, records: list[dict[str, Any]]) -> None:
-    source_dir = source_root / prefix
-    if not source_dir.exists():
-        return
-    for file in sorted(source_dir.rglob("*")):
-        if not file.is_file() or file.is_symlink():
-            continue
-        rel = _validate_relative_path(file.resolve().relative_to(source_root.resolve()).as_posix())
-        target = (export_dir / rel).resolve()
-        _ensure_within(export_dir, target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(sanitize_sensitive_text(file.read_text(encoding="utf-8")), encoding="utf-8")
-        records.append(_file_record(export_dir, target))
-
-
-def _copy_audio_files(source_root: Path, export_dir: Path, release_manifest: dict[str, Any], records: list[dict[str, Any]], *, template: dict[str, Any] | None = None) -> None:
-    tracks = release_manifest.get("tracks") if isinstance(release_manifest.get("tracks"), list) else []
-    used: set[str] = set()
-    naming = template_file_naming(template) if template else {}
-    for track in tracks:
-        if not isinstance(track, dict):
-            continue
-        directory = str(track.get("directory") or "").strip("/")
-        source = source_root / directory / "song.wav"
-        if not source.exists():
-            continue
-        title = slugify(str(track.get("title") or track.get("track_id") or "track"))[:60]
-        number = int(track.get("track_number") or 1)
-        base = render_file_pattern(naming["audio"], track=track, ext="wav").split("/")[-1] if naming.get("audio") else f"{number:02d}-{title or 'track'}.wav"
-        name = base
-        index = 2
-        while name in used:
-            name = base.replace(".wav", f"-{index}.wav")
-            index += 1
-        used.add(name)
-        target = export_dir / "audio" / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        records.append(_file_record(export_dir, target))
-
-
-def _copy_artwork(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]], *, template: dict[str, Any] | None = None) -> dict[str, Any]:
+def _selected_artwork(store: DistributionStore, release_id: str, target: DistributionTarget) -> dict[str, Any]:
     artwork_id = str((target.options or {}).get("artwork_id") or "").strip()
     artwork = read_distribution_artwork(store, release_id, artwork_id) if artwork_id else latest_distribution_artwork(store, release_id)
+    return artwork if isinstance(artwork, dict) else {}
+
+
+def _copy_layout_entries(store: DistributionStore, release_id: str, release_export_dir: Path, export_dir: Path, layout_plan: dict[str, Any], *, artwork: dict[str, Any]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for entry in layout_plan.get("entries", []) if isinstance(layout_plan.get("entries"), list) else []:
+        if not isinstance(entry, dict) or not entry.get("exists") or entry.get("status") == "failed":
+            continue
+        kind = str(entry.get("kind") or "")
+        path = str(entry.get("path") or "")
+        if not path:
+            continue
+        target = (export_dir / _validate_relative_path(path)).resolve()
+        _ensure_within(export_dir, target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if kind in {"audio", "lyrics"}:
+            source_rel = _validate_relative_path(str(entry.get("source_rel") or ""))
+            source = (release_export_dir / source_rel).resolve()
+            _ensure_within(release_export_dir, source)
+            if not source.exists() or not source.is_file() or source.is_symlink():
+                if entry.get("required"):
+                    raise DistributionExportError(f"Required layout source is missing: {source_rel}.")
+                continue
+            if kind == "lyrics":
+                target.write_text(sanitize_sensitive_text(source.read_text(encoding="utf-8")), encoding="utf-8")
+            else:
+                shutil.copy2(source, target)
+            records.append(_file_record(export_dir, target))
+        elif kind == "artwork":
+            if not artwork:
+                if entry.get("required"):
+                    raise DistributionExportError("Required artwork is missing.")
+                continue
+            source = distribution_artwork_file_path(store, release_id, artwork)
+            shutil.copy2(source, target)
+            records.append(_file_record(export_dir, target))
+    return records
+
+
+def _artwork_record(artwork: dict[str, Any], layout_plan: dict[str, Any]) -> dict[str, Any]:
     if not artwork:
         return {}
-    source = distribution_artwork_file_path(store, release_id, artwork)
-    suffix = Path(str(artwork.get("stored_filename") or "cover.png")).suffix.lower() or ".png"
-    naming = template_file_naming(template) if template else {}
-    rel = naming.get("artwork", "cover.{ext}").replace("{ext}", suffix.lstrip("."))
-    if not rel.startswith("artwork/"):
-        rel = "artwork/" + rel
-    target = export_dir / _validate_relative_path(rel)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target)
-    records.append(_file_record(export_dir, target))
-    return sanitize_metadata({**artwork, "package_path": f"artwork/cover{suffix}"}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+    entries = layout_plan.get("entries") if isinstance(layout_plan.get("entries"), list) else []
+    package_path = next((entry.get("path") for entry in entries if isinstance(entry, dict) and entry.get("kind") == "artwork"), None)
+    return sanitize_metadata({**artwork, "package_path": package_path}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: dict[str, Any], artwork: dict[str, Any], *, checklist: dict[str, Any] | None = None, write_checklist: bool = True) -> bool:

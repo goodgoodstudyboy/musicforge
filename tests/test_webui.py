@@ -477,10 +477,13 @@ def test_webui_contains_release_workspace_controls():
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/export/zip" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(target.target_id)}/export.zip" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/verify" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/layout" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/checklist" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/checklist/items/explicit-confirmed" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff/reset" in html
+    assert 'id="distribution-layout-preview"' in html
+    assert 'id="distribution-layout-file-tree"' in html
     assert "upload to platform" not in html.lower()
     assert "credential" not in html.lower()
 

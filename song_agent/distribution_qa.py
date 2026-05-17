@@ -9,6 +9,7 @@ from typing import Any
 from song_agent.distribution import DistributionStore, DistributionTarget
 from song_agent.distribution_artwork import distribution_artwork_file_path, latest_distribution_artwork, read_distribution_artwork
 from song_agent.distribution_checklist import checklist_checks, checklist_summary, reconcile_distribution_checklist, read_distribution_checklist
+from song_agent.distribution_layout import build_distribution_layout_plan, layout_check_items, layout_summary
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS, get_distribution_profile
 from song_agent.distribution_templates import resolve_mapping_source, template_mapping, template_summary
 from song_agent.projectio import read_json
@@ -76,6 +77,16 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
     profile = get_distribution_profile(target.profile_id)
     template = store.resolve_target_template(target)
     checklist = reconcile_distribution_checklist(store, release.release_id, target, template, write=False) if template else {}
+    layout = build_distribution_layout_plan(
+        release_id=release.release_id,
+        target=target,
+        release=release,
+        release_manifest=export_manifest,
+        release_metadata=metadata,
+        template=template,
+        artwork=artwork,
+        release_export_dir=store.release_store.export_dir(release.release_id),
+    )
     return sanitize_metadata(
         {
             "release": {
@@ -96,6 +107,7 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
             "profile_hash": profile.get("profile_hash"),
             "template": template_summary(template),
             "checklist": checklist_summary(checklist) if checklist else {},
+            "layout": layout_summary(layout),
             "release_export_manifest_hash": stable_hash({key: value for key, value in export_manifest.items() if key != "zip"}) if export_manifest else None,
             "release_zip_sha256": _sha256_file(release_zip_path),
             "release_signoff_hash": stable_hash(release_signoff) if release_signoff else None,
@@ -193,6 +205,16 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
     metadata_qa = read_release_metadata_qa(store.release_store, release.release_id, default={}) if metadata else {}
     template = store.resolve_target_template(target)
     checklist = reconcile_distribution_checklist(store, release.release_id, target, template, write=False) if template else {}
+    layout = build_distribution_layout_plan(
+        release_id=release.release_id,
+        target=target,
+        release=release,
+        release_manifest=export_manifest,
+        release_metadata=metadata,
+        template=template,
+        artwork=_selected_artwork(store, release.release_id, target),
+        release_export_dir=store.release_store.export_dir(release.release_id),
+    )
 
     checks.append(_check("release_exists", False, "blocking", "Release exists."))
     checks.append(_check("release_not_hidden", bool(release.hidden), "blocking", "Release must not be hidden."))
@@ -247,6 +269,7 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
         else:
             checks.append(_check("template_current", False, "blocking", "Distribution template pack binding is current."))
         checks.extend(checklist_checks(checklist))
+    checks.extend(layout_check_items(layout))
     checks.append(_check("source_hash_computable", not bool(source), "blocking", "Distribution source hash can be computed."))
     return [sanitize_metadata(check, blocked_keys=DISTRIBUTION_BLOCKED_KEYS) for check in checks]
 

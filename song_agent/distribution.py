@@ -126,6 +126,9 @@ class DistributionStore:
     def qa_path(self, release_id: str, target_id: str) -> Path:
         return self.distribution_dir(release_id) / "qa" / f"{_validate_target_id(target_id)}-qa.json"
 
+    def layout_path(self, release_id: str, target_id: str) -> Path:
+        return self.distribution_dir(release_id) / "layout" / f"{_validate_target_id(target_id)}-layout.json"
+
     def artwork_dir(self, release_id: str) -> Path:
         return self.distribution_dir(release_id) / "artwork"
 
@@ -273,6 +276,21 @@ class DistributionStore:
         self.get_target(release_id, target_id)
         clean = sanitize_metadata(report, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
         write_json(self.qa_path(release_id, target_id), clean)
+        return clean
+
+    def read_layout(self, release_id: str, target_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        path = self.layout_path(release_id, target_id)
+        if not path.exists():
+            if default is not None:
+                return default
+            raise DistributionNotFoundError("Distribution layout does not exist.")
+        value = read_json(path)
+        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+
+    def write_layout(self, release_id: str, target_id: str, layout: dict[str, Any]) -> dict[str, Any]:
+        self.get_target(release_id, target_id)
+        clean = sanitize_metadata(layout, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+        write_json(self.layout_path(release_id, target_id), clean)
         return clean
 
     def template_store(self) -> TemplatePackStore:

@@ -42,6 +42,8 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
         artwork_status, artwork = request_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_png(1400, 1400)).decode("ascii")})
         update_status, _updated = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork["artwork"]["artwork_id"]}})
         checklist_status, checklist = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist")
+        layout_status, layout = request_json(server, "GET", f"/api/releases/{release_id}/distribution/targets/{target_id}/layout")
+        layout_refresh_status, layout_refreshed = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/layout/refresh")
         qa_failed_status, qa_failed = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
         checklist_update_status, checklist_updated = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/checklist/items/explicit-confirmed", {"status": "done", "note": "Checked"})
         qa_status, qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
@@ -89,6 +91,11 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
     assert update_status == 200
     assert checklist_status == 200
     assert checklist["summary"]["status"] == "failed"
+    assert layout_status == 200
+    assert layout["summary"]["status"] in {"passed", "warning"}
+    assert any(entry["kind"] == "artwork" for entry in layout["layout"]["entries"])
+    assert layout_refresh_status == 200
+    assert layout_refreshed["summary"]["status"] in {"passed", "warning"}
     assert qa_failed_status == 200
     assert qa_failed["summary"]["status"] == "failed"
     assert checklist_update_status == 200
@@ -97,6 +104,7 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
     assert qa["summary"]["status"] in {"passed", "warning"}
     assert export_status == 201
     assert exported["summary"]["status"] == "exported"
+    assert exported["layout_summary"]["status"] in {"passed", "warning"}
     assert zip_status == 200
     assert zipped["zip"]["sha256"]
     assert sign_status == 200

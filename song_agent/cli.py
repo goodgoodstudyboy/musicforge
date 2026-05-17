@@ -82,7 +82,7 @@ def build_verify_distribution_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
     verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
     verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
-    verify_parser.add_argument("--require-audio", action="store_true", help="Require exported package audio WAV files.")
+    verify_parser.add_argument("--require-audio", action="store_true", help="Require exported package layout audio files.")
     verify_parser.add_argument("--require-artwork", action="store_true", help="Require exported package artwork.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")

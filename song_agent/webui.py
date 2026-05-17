@@ -3015,6 +3015,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary distribution-export" data-target-id="${escapeHtml(target.target_id)}" type="button">Export</button>
             <button class="secondary distribution-zip" data-target-id="${escapeHtml(target.target_id)}" type="button">ZIP</button>
             <button class="secondary distribution-verify" data-target-id="${escapeHtml(target.target_id)}" type="button">Verify</button>
+            <button class="secondary distribution-layout-preview" data-target-id="${escapeHtml(target.target_id)}" type="button">Layout</button>
             <button class="secondary distribution-sign" data-target-id="${escapeHtml(target.target_id)}" type="button">Sign</button>
             <button class="secondary distribution-checklist-init" data-target-id="${escapeHtml(target.target_id)}" type="button">Checklist</button>
             <button class="secondary distribution-checklist-done" data-target-id="${escapeHtml(target.target_id)}" type="button">Done</button>
@@ -3075,6 +3076,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <thead><tr><th>Name</th><th>Profile</th><th>Template</th><th>Status</th><th>QA</th><th>Package</th><th>Signoff</th><th>Actions</th></tr></thead>
           <tbody>${rows || "<tr><td colspan='8'>No distribution targets yet.</td></tr>"}</tbody>
         </table>
+        <div id="distribution-layout-preview" class="panel">
+          <div class="panel-title subhead"><span>Layout Preview</span></div>
+          <div id="distribution-layout-summary" class="muted">Select a target to preview package paths.</div>
+          <pre id="distribution-layout-file-tree"></pre>
+          <div id="distribution-layout-entries"></div>
+        </div>
       `;
     }
 
@@ -3133,6 +3140,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       document.querySelectorAll(".distribution-verify").forEach((button) => button.addEventListener("click", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/verify`, { method: "POST" });
         await loadReleases();
+      }));
+      document.querySelectorAll(".distribution-layout-preview").forEach((button) => button.addEventListener("click", async () => {
+        const data = await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/layout`);
+        const layout = data.layout || {};
+        const summary = layout.summary || {};
+        const entries = layout.entries || [];
+        $("distribution-layout-summary").textContent = `status=${summary.status || "-"} audio=${summary.audio_count || 0} lyrics=${summary.lyrics_count || 0} artwork=${summary.artwork_count || 0} collisions=${summary.collision_count || 0}`;
+        $("distribution-layout-file-tree").textContent = entries.map((entry) => entry.path || "").filter(Boolean).sort().join("\\n");
+        $("distribution-layout-entries").innerHTML = `<table><thead><tr><th>Kind</th><th>Track</th><th>Path</th><th>Status</th></tr></thead><tbody>${entries.map((entry) => `<tr><td>${escapeHtml(entry.kind || "")}</td><td>${escapeHtml(entry.track_id || "-")}</td><td>${escapeHtml(entry.path || "")}</td><td>${escapeHtml(entry.status || "")}</td></tr>`).join("")}</tbody></table>`;
       }));
       document.querySelectorAll(".distribution-sign").forEach((button) => button.addEventListener("click", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff`, {
