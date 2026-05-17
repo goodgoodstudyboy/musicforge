@@ -484,6 +484,15 @@ def test_webui_contains_release_workspace_controls():
     assert "/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets/${encodeURIComponent(button.dataset.targetId)}/signoff/reset" in html
     assert 'id="distribution-layout-preview"' in html
     assert 'id="distribution-layout-file-tree"' in html
+    assert 'id="release-submissions"' in html
+    assert 'id="submission-create"' in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/submissions" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/qa/refresh" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/export" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/export/zip" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/verify" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/signoff" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}/items/${encodeURIComponent(itemId)}/record-submission" in html
     assert "upload to platform" not in html.lower()
     assert "credential" not in html.lower()
 

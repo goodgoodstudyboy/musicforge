@@ -12,6 +12,7 @@ from song_agent.release_checks import (
     _v40_distribution_prep_smoke,
     _v41_distribution_template_packs_smoke,
     _v42_distribution_layout_contract_smoke,
+    _v43_submission_workspace_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -100,6 +101,15 @@ def test_v42_distribution_layout_contract_smoke(tmp_path: Path) -> None:
     assert "external=passed" in detail
     assert "layout_tamper=failed" in detail
     assert "artwork_path_tamper=failed" in detail
+
+
+def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:
+    ok, detail = _v43_submission_workspace_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "external=passed" in detail
+    assert "signoff_tamper=failed" in detail
+    assert "target_tamper=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

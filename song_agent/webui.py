@@ -2682,6 +2682,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let signoffData = { summary: release.signoff_summary || {}, signoff: {} };
       let metadataData = { summary: {}, metadata: {}, metadata_qa: { checks: [], track_checks: [] } };
       let distributionData = { summary: {}, targets: [], artwork: [] };
+      let submissionData = { summary: {}, submissions: [] };
       try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
       try { signoffData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`); } catch (err) {}
@@ -2698,6 +2699,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         const templateData = await api(`/api/distribution/template-packs`);
         distributionData.template_packs = templateData.template_packs || distributionData.template_packs || [];
       } catch (err) {}
+      try { submissionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions`); } catch (err) {}
       const target = $("release-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -2731,6 +2733,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseTrackTable(release)}
         ${releaseMetadataHtml(metadataData, release)}
         ${releaseDistributionHtml(distributionData, release)}
+        ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseQaHtml(qaData)}
         ${releaseExportHtml(exportData, release)}
         ${releaseSignoffHtml(signoffData)}
@@ -2982,6 +2985,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadReleases();
       });
       wireReleaseDistributionActions(release);
+      wireReleaseSubmissionActions(release);
       document.querySelectorAll(".release-track-refresh").forEach((button) => {
         button.addEventListener("click", async () => {
           await api(`/api/releases/${encodeURIComponent(release.release_id)}/tracks/${encodeURIComponent(button.dataset.trackId)}/refresh`, { method: "POST" });
@@ -3178,6 +3182,163 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
         await loadReleases();
       }));
+    }
+
+    function releaseSubmissionsHtml(submissionData, distributionData, release) {
+      const submissions = submissionData.submissions || [];
+      const signedTargets = (distributionData.targets || []).filter((target) => target.status === "signed" || ((target.latest_signoff_summary || {}).status === "signed"));
+      const targetOptions = signedTargets.map((target) => `<option value="${escapeHtml(target.target_id)}">${escapeHtml(target.name || target.target_id)} · ${escapeHtml(target.profile_id || "")}</option>`).join("");
+      const rows = submissions.map((submission) => {
+        const signoff = submission.latest_signoff_summary || {};
+        const exportSummary = submission.latest_export_summary || {};
+        return `
+          <tr>
+            <td>${escapeHtml(submission.submission_id)}</td>
+            <td>${escapeHtml(submission.name || "")}</td>
+            <td>${escapeHtml(submission.status || "")}</td>
+            <td>${escapeHtml((submission.items || []).length)}</td>
+            <td>${escapeHtml(signoff.status || "not_signed")}</td>
+            <td>
+              <button class="secondary submission-refresh" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Refresh</button>
+              <button class="secondary submission-qa" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">QA</button>
+              <button class="secondary submission-export" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Export</button>
+              <button class="secondary submission-zip" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">ZIP</button>
+              <button class="secondary submission-verify" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Verify</button>
+              <button class="secondary submission-sign" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Sign</button>
+              ${exportSummary.zip_filename ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submission.submission_id)}/export.zip">Download</a>` : ""}
+            </td>
+          </tr>
+        `;
+      }).join("");
+      return `
+        <div id="release-submissions" class="panel">
+          <div class="panel-title subhead"><span>Submission Workspace</span></div>
+          <div class="summary-grid">
+            ${metric("Batches", (submissionData.summary || {}).submission_count || 0)}
+            ${metric("Latest", (submissionData.summary || {}).latest_status || "missing")}
+            ${metric("Signed", (submissionData.summary || {}).signed_count || 0)}
+            ${metric("Accepted", (submissionData.summary || {}).accepted_count || 0)}
+          </div>
+          <div class="grid2">
+            <label>Batch Name <input id="submission-name" value="Platform Submission"></label>
+            <label>Target <select id="submission-target">${targetOptions}</select></label>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="submission-create" type="button">Create Batch</button>
+            <button class="secondary" id="submission-add-target" type="button">Add Target</button>
+            <button class="secondary" id="submission-record-submitted" type="button">Record Submitted</button>
+            <button class="secondary" id="submission-record-feedback" type="button">Record Feedback</button>
+            <button class="secondary" id="submission-mark-accepted" type="button">Mark Accepted</button>
+          </div>
+          <table>
+            <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Items</th><th>Signoff</th><th>Actions</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='6'>No submission batches yet.</td></tr>"}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function firstSubmissionId() {
+      const row = document.querySelector(".submission-refresh,.submission-qa,.submission-export,.submission-zip,.submission-verify,.submission-sign");
+      return row ? row.dataset.submissionId : "";
+    }
+
+    function firstSubmissionItemId(submission) {
+      const items = (submission && submission.items) || [];
+      return items.length ? items[0].item_id : "";
+    }
+
+    function wireReleaseSubmissionActions(release) {
+      bindAction("submission-create", async () => {
+        const targetId = $("submission-target").value;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: $("submission-name").value.trim() || "Platform Submission", target_ids: targetId ? [targetId] : [] }),
+        });
+        await loadReleases();
+      });
+      bindAction("submission-add-target", async () => {
+        const submissionId = firstSubmissionId();
+        if (!submissionId) return;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}/targets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target_id: $("submission-target").value }),
+        });
+        await loadReleases();
+      });
+      document.querySelectorAll(".submission-refresh").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/refresh`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-qa").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/qa/refresh`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-export").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/export`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-zip").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/export/zip`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-verify").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deep: true }),
+        });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-sign").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signed_by: "local-user" }),
+        });
+        await loadReleases();
+      }));
+      bindAction("submission-record-submitted", async () => {
+        const submissionId = firstSubmissionId();
+        if (!submissionId) return;
+        const data = await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}`);
+        const itemId = firstSubmissionItemId(data.submission);
+        if (!itemId) return;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}/items/${encodeURIComponent(itemId)}/record-submission`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ external_reference: "local-submission" }),
+        });
+        await loadReleases();
+      });
+      bindAction("submission-record-feedback", async () => {
+        const submissionId = firstSubmissionId();
+        if (!submissionId) return;
+        const data = await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}`);
+        const itemId = firstSubmissionItemId(data.submission);
+        if (!itemId) return;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}/items/${encodeURIComponent(itemId)}/record-feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "needs_changes", message: "Local feedback" }),
+        });
+        await loadReleases();
+      });
+      bindAction("submission-mark-accepted", async () => {
+        const submissionId = firstSubmissionId();
+        if (!submissionId) return;
+        const data = await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}`);
+        const itemId = firstSubmissionItemId(data.submission);
+        if (!itemId) return;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submissionId)}/items/${encodeURIComponent(itemId)}/accepted`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ external_reference: "accepted-local" }),
+        });
+        await loadReleases();
+      });
     }
 
     async function renderProjectDetail(projectId) {

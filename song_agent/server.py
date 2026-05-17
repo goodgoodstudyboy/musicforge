@@ -189,6 +189,33 @@ from song_agent.distribution_verifier import (
     verify_distribution_package,
     write_distribution_verification_report,
 )
+from song_agent.submissions import (
+    SubmissionNotFoundError,
+    SubmissionStateError,
+    SubmissionStore,
+    SubmissionValidationError,
+    submission_batch_summary,
+    submission_signoff_summary,
+)
+from song_agent.submission_qa import (
+    build_submission_qa_report,
+    mark_submission_qa_stale,
+    submission_qa_summary,
+    submission_source_state,
+)
+from song_agent.submission_export import (
+    SubmissionExportError,
+    build_submission_export_bundle,
+    build_submission_package_zip,
+    read_submission_export_manifest,
+    sign_submission_package,
+    submission_export_summary,
+)
+from song_agent.submission_verifier import (
+    submission_verification_summary,
+    verify_submission_package,
+    write_submission_verification_report,
+)
 from song_agent.context_packs import (
     ContextPackStaleError,
     ContextPackStore,
@@ -2322,6 +2349,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
+
+    @property
+    def submission_store(self) -> SubmissionStore:
+        return self.server.submission_store  # type: ignore[attr-defined]
 
     @property
     def distribution_template_store(self) -> TemplatePackStore:
@@ -4532,6 +4563,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_distribution_route(method, release_id, tail.removeprefix("/distribution"))
                 return
 
+            if tail.startswith("/submissions"):
+                self._handle_submission_route(method, release_id, tail.removeprefix("/submissions"))
+                return
+
             if tail == "/export":
                 if method == "GET":
                     try:
@@ -4967,6 +5002,233 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = build_distribution_qa_report(store=self.distribution_store, release_id=release_id, target=target, now=_utc_now())
         report = self.distribution_store.write_qa(release_id, target.target_id, report)
         self.distribution_store.update_qa_summary(release_id, target.target_id, distribution_qa_summary(report))
+        return report
+
+    def _handle_submission_route(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    batches = self.submission_store.list_submissions(release_id)
+                    self._send_json({"ok": True, "release_id": release_id, "submissions": [batch.to_dict() for batch in batches], "summary": self.submission_store.summary(release_id)})
+                    return
+                if method == "POST":
+                    batch = self.submission_store.create_submission(release_id, self._optional_json_body())
+                    self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if tail == "/batches" or tail == "":
+                if method == "GET":
+                    batches = self.submission_store.list_submissions(release_id)
+                    self._send_json({"ok": True, "release_id": release_id, "submissions": [batch.to_dict() for batch in batches], "summary": self.submission_store.summary(release_id)})
+                    return
+                if method == "POST":
+                    batch = self.submission_store.create_submission(release_id, self._optional_json_body())
+                    self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            route = _match_submission_tail(tail)
+            if route is None:
+                self._send_error(HTTPStatus.NOT_FOUND, "Submission route not found.")
+                return
+            submission_id, action, item_id = route
+            batch = self.submission_store.get_submission(release_id, submission_id)
+            if action == "":
+                if method == "GET":
+                    signoff = self.submission_store.read_signoff(release_id, submission_id, default={})
+                    qa = self._get_or_refresh_submission_qa(release_id, batch, refresh=False)
+                    self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch), "qa_summary": submission_qa_summary(qa), "signoff_summary": submission_signoff_summary(signoff), "events": self.submission_store.read_events(release_id, submission_id)})
+                    return
+                if method in {"POST", "PATCH"}:
+                    batch = self.submission_store.update_submission(release_id, submission_id, self._optional_json_body())
+                    self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if action == "targets":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._read_json_body()
+                target_id = str(payload.get("target_id") or "").strip()
+                if not target_id:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "target_id is required.")
+                    return
+                batch = self.submission_store.add_target(release_id, submission_id, target_id)
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                return
+
+            if action == "remove-item":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch = self.submission_store.remove_target(release_id, submission_id, item_id or "")
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                return
+
+            if action == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch = self.submission_store.refresh_items(release_id, submission_id)
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                return
+
+            if action == "qa":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self._get_or_refresh_submission_qa(release_id, batch, refresh=False)
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "submission_qa": report, "summary": submission_qa_summary(report)})
+                return
+
+            if action == "qa-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.submission_store.ensure_mutable(batch)
+                report = self._get_or_refresh_submission_qa(release_id, batch, refresh=True)
+                self.submission_store.append_event(release_id, submission_id, "submission_qa_refreshed", {"status": report.get("status")})
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "submission_qa": report, "summary": submission_qa_summary(report)})
+                return
+
+            if action == "export":
+                if method == "GET":
+                    try:
+                        manifest = read_submission_export_manifest(self.submission_store, release_id, submission_id)
+                    except FileNotFoundError:
+                        self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "manifest": {}, "summary": submission_export_summary({})})
+                        return
+                    self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "manifest": manifest, "summary": submission_export_summary(manifest)})
+                    return
+                if method == "POST":
+                    self.submission_store.ensure_mutable(batch)
+                    report = self._get_or_refresh_submission_qa(release_id, batch, refresh=False)
+                    manifest = build_submission_export_bundle(store=self.submission_store, release_id=release_id, submission=batch, qa_report=report, now=_utc_now())
+                    batch = self.submission_store.get_submission(release_id, submission_id)
+                    self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "manifest": manifest, "summary": submission_export_summary(manifest)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if action == "export-zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.submission_store.ensure_mutable(batch)
+                zip_info = build_submission_package_zip(self.submission_store, release_id, batch, now=_utc_now())
+                manifest = read_submission_export_manifest(self.submission_store, release_id, submission_id)
+                batch = self.submission_store.update_export_summary(release_id, submission_id, submission_export_summary(manifest))
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "zip": zip_info, "summary": submission_export_summary(manifest)})
+                return
+
+            if action == "export-zip-download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.submission_store.get_submission(release_id, submission_id)
+                self._send_file(self.submission_store.package_zip_path(release_id, submission_id), "application/zip", filename=f"musicforge-{release_id}-{submission_id}-submission.zip")
+                return
+
+            if action == "signoff":
+                if method == "GET":
+                    signoff = self.submission_store.read_signoff(release_id, submission_id, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "signoff": signoff, "summary": submission_signoff_summary(signoff)})
+                    return
+                if method == "POST":
+                    self.submission_store.ensure_mutable(batch)
+                    report = self._get_or_refresh_submission_qa(release_id, batch, refresh=True)
+                    signoff = sign_submission_package(store=self.submission_store, release_id=release_id, submission=batch, qa_report=report, payload=self._optional_json_body(), now=_utc_now())
+                    batch = self.submission_store.get_submission(release_id, submission_id)
+                    self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "signoff": signoff, "summary": submission_signoff_summary(signoff)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if action == "signoff-reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                reason = str(payload.get("reason") or "").strip()
+                if not reason:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "reason is required.")
+                    return
+                event = self.submission_store.reset_signoff(release_id, submission_id, reason)
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "summary": {"status": "reset"}, "history_event": event})
+                return
+
+            if action == "verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_submission_package(
+                    self.submission_store.package_zip_path(release_id, submission_id),
+                    strict=bool(payload.get("strict", False)),
+                    require_submitted=bool(payload.get("require_submitted", False)),
+                    require_accepted=bool(payload.get("require_accepted", False)),
+                    deep=bool(payload.get("deep", False)),
+                )
+                write_submission_verification_report(report, self.submission_store.submission_dir(release_id, submission_id) / "submission-verification-report.json")
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "verification": report, "summary": submission_verification_summary(report)})
+                return
+
+            if action == "record-submission":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch = self.submission_store.record_submission(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                return
+
+            if action == "record-feedback":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch = self.submission_store.record_feedback(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                return
+
+            if action == "mark-accepted":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch = self.submission_store.mark_accepted(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                return
+
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch = self.submission_store.archive_submission(release_id, submission_id)
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                return
+
+            self._send_error(HTTPStatus.NOT_FOUND, "Submission route not found.")
+        except (ReleaseNotFoundError, SubmissionNotFoundError, FileNotFoundError) as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (SubmissionStateError, SubmissionExportError, ReleaseStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (SubmissionValidationError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> dict[str, Any]:
+        if not refresh:
+            existing = self.submission_store.read_qa(release_id, batch.submission_id, default={})
+            if existing:
+                current = stable_hash(submission_source_state(store=self.submission_store, release_id=release_id, submission=batch))
+                if str(existing.get("source_hash") or "") != current:
+                    return mark_submission_qa_stale(existing, current_source_hash=current)
+                return existing
+        report = build_submission_qa_report(store=self.submission_store, release_id=release_id, submission=batch, now=_utc_now())
+        report = self.submission_store.write_qa(release_id, batch.submission_id, report)
+        self.submission_store.update_qa_summary(release_id, batch.submission_id, submission_qa_summary(report))
         return report
 
     def _build_distribution_layout(self, release_id: str, target: Any) -> dict[str, Any]:
@@ -9450,6 +9712,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.project_store = ProjectStore()
         self.release_store = ReleaseStore(project_store=self.project_store)
         self.distribution_store = DistributionStore(self.release_store)
+        self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -9977,6 +10240,52 @@ def _match_distribution_artwork_tail(tail: str) -> tuple[str, str] | None:
         return artwork_id, ""
     if len(parts) == 3 and parts[2] in {"download", "delete"}:
         return artwork_id, parts[2]
+    return None
+
+
+def _match_submission_tail(tail: str) -> tuple[str, str, str | None] | None:
+    parts = [unquote(part) for part in tail.strip("/").split("/") if part]
+    if not parts:
+        return None
+    if parts[0] == "batches" and len(parts) >= 2:
+        parts = parts[1:]
+    submission_id = parts[0]
+    if len(parts) == 1:
+        return submission_id, "", None
+    rest = parts[1:]
+    if rest == ["targets"]:
+        return submission_id, "targets", None
+    if rest == ["refresh"]:
+        return submission_id, "refresh", None
+    if rest == ["qa"]:
+        return submission_id, "qa", None
+    if rest == ["qa", "refresh"]:
+        return submission_id, "qa-refresh", None
+    if rest == ["export"]:
+        return submission_id, "export", None
+    if rest == ["export", "zip"]:
+        return submission_id, "export-zip", None
+    if rest == ["export.zip"]:
+        return submission_id, "export-zip-download", None
+    if rest == ["signoff"]:
+        return submission_id, "signoff", None
+    if rest == ["signoff", "reset"]:
+        return submission_id, "signoff-reset", None
+    if rest == ["verify"]:
+        return submission_id, "verify", None
+    if rest == ["archive"]:
+        return submission_id, "archive", None
+    if len(rest) == 3 and rest[0] == "items":
+        item_id = rest[1]
+        action = rest[2]
+        if action == "remove":
+            return submission_id, "remove-item", item_id
+        if action == "record-submission":
+            return submission_id, "record-submission", item_id
+        if action == "record-feedback":
+            return submission_id, "record-feedback", item_id
+        if action == "accepted":
+            return submission_id, "mark-accepted", item_id
     return None
 
 

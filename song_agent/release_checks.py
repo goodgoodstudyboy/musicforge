@@ -57,6 +57,7 @@ from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.release_verifier import verify_release_zip
 from song_agent.distribution_verifier import verify_distribution_package
+from song_agent.submission_verifier import verify_submission_package
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
@@ -203,6 +204,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.0 distribution prep smoke", *_v40_distribution_prep_smoke(root))
     report.add("v4.1 distribution template packs smoke", *_v41_distribution_template_packs_smoke(root))
     report.add("v4.2 distribution layout contract smoke", *_v42_distribution_layout_contract_smoke(root))
+    report.add("v4.3 submission workspace smoke", *_v43_submission_workspace_smoke(root))
     return report
 
 
@@ -4897,6 +4899,180 @@ def _v42_distribution_layout_contract_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
+
+
+def _v43_submission_workspace_smoke(root: Path) -> tuple[bool, str]:
+    base = (Path(tempfile.gettempdir()) / "mf-v43-submission-workspace").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Submission Workspace Track")
+        created_status, created = _release_http_json(server, "POST", "/api/releases", {"name": "Submission Workspace Release", "release_type": "demo_pack", "primary_artist": "MusicForge", "label": "Forge Label", "language": "English"})
+        release_id = created.get("release", {}).get("release_id")
+        add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "Submission Workspace Track"})
+        init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized.get("metadata", {})
+        if isinstance(metadata.get("release"), dict):
+            metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+            metadata["tracks"][0].update({"title": "Submission Workspace Track", "isrc": "USABC2600001", "lyrics": "Clean lyric", "credits": [{"role": "composer", "name": "Submission Writer"}], "confirmed": True})
+        save_status, _saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        metadata_qa_status, _metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        metadata_export_status, _metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        sign_status, _signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+
+        target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Submission DSP Target"})
+        target_id = target.get("target", {}).get("target_id")
+        artwork_status, artwork = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")})
+        artwork_id = artwork.get("artwork", {}).get("artwork_id")
+        update_status, _updated = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork_id}})
+        dist_qa_status, dist_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        dist_export_status, _dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        dist_zip_status, _dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, _dist_signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+
+        sub_create_status, sub_created = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions", {"name": "Release Check Submission", "target_ids": [target_id]})
+        submission_id = sub_created.get("submission", {}).get("submission_id")
+        item_id = (sub_created.get("submission", {}).get("items") or [{}])[0].get("item_id")
+        sub_qa_status, sub_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/qa/refresh")
+        sub_export_status, sub_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
+        sub_zip_status, _sub_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export/zip")
+        sub_sign_status, sub_signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/signoff", {"signed_by": "release-check", "notes": r"accepted C:\Users\demo api_key=sk-secret-value"})
+        blocked_add_status, blocked_add = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/targets", {"target_id": target_id})
+        blocked_export_status, blocked_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
+        submitted_status, submitted = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-submission", {"external_reference": "DSP-SUB-1"})
+        feedback_status, feedback = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-feedback", {"status": "needs_changes", "message": "metadata note"})
+        accepted_status, accepted = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/accepted", {"external_reference": "DSP-SUB-1"})
+        verify_status, verified = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/verify", {"deep": True})
+        zip_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/submissions/{submission_id}/export.zip")
+        zip_path = base / "submission-package.zip"
+        zip_path.write_bytes(zip_bytes)
+        external_dir = base / "external-clean"
+        external_dir.mkdir()
+        external_zip = external_dir / "submission-package.zip"
+        shutil.copy2(zip_path, external_zip)
+        old_external_cwd = Path.cwd()
+        os.chdir(external_dir)
+        external_report = verify_submission_package(external_zip, deep=True)
+        os.chdir(old_external_cwd)
+
+        def tamper_signoff(data: bytes) -> bytes:
+            value = json.loads(data.decode("utf-8"))
+            value["signed_by"] = "tampered-reviewer"
+            return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+
+        def tamper_target_zip(data: bytes) -> bytes:
+            return data + b"tampered"
+
+        tampered_signoff = verify_submission_package(_v38_rewrite_zip(zip_path, base / "submission-signoff-tampered.zip", transforms={"submission-signoff.json": tamper_signoff}))
+        tampered_target = verify_submission_package(_v38_rewrite_zip(zip_path, base / "submission-target-tampered.zip", transforms={f"targets/{target_id}/distribution-package.zip": tamper_target_zip}))
+        backslash_report = verify_submission_package(_v43_backslash_submission_zip(base / "submission-backslash.zip"))
+        duplicate_report = verify_submission_package(_v43_duplicate_submission_zip(zip_path, base / "submission-duplicate.zip"))
+        serialized = json.dumps({"sub_signed": sub_signed, "sub_export": sub_export, "verified": verified}, ensure_ascii=False)
+        ok = (
+            created_status == 201
+            and add_status == 200
+            and init_status == 200
+            and save_status == 200
+            and metadata_qa_status == 200
+            and qa_status == 200
+            and export_status == 200
+            and metadata_export_status == 200
+            and sign_status == 200
+            and target_status == 201
+            and artwork_status == 201
+            and update_status == 200
+            and dist_qa_status == 200
+            and dist_qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and dist_export_status == 201
+            and dist_zip_status == 200
+            and dist_sign_status == 200
+            and sub_create_status == 201
+            and sub_qa_status == 200
+            and sub_qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and sub_export_status == 201
+            and sub_zip_status == 200
+            and sub_sign_status == 200
+            and sub_signed.get("summary", {}).get("status") == "signed"
+            and blocked_add_status == 409
+            and blocked_export_status == 409
+            and "signed" in blocked_add.get("error", "").lower()
+            and "signed" in blocked_export.get("error", "").lower()
+            and submitted_status == 200
+            and submitted.get("summary", {}).get("status") == "submitted"
+            and feedback_status == 200
+            and feedback.get("summary", {}).get("status") == "needs_changes"
+            and accepted_status == 200
+            and accepted.get("summary", {}).get("status") == "accepted"
+            and verify_status == 200
+            and verified.get("summary", {}).get("status") == "passed"
+            and zip_status == 200
+            and zip_bytes.startswith(b"PK")
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tampered_signoff, "submission_signoff_sidecar_payload_hash") == "failed"
+            and _v43_any_check_status(tampered_target, "target_distribution_zip_hash_match") == "failed"
+            and _v38_check_status(backslash_report, "zip_entry_path_safe") == "failed"
+            and _v38_check_status(duplicate_report, "zip_duplicate_entries") == "failed"
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+            and str(base) not in serialized
+        )
+        return ok, (
+            f"submission={submission_id}, sign={sub_signed.get('summary', {}).get('status')}, "
+            f"verify={verified.get('summary', {}).get('status')}, external={external_report.get('status')}, "
+            f"signoff_tamper={_v38_check_status(tampered_signoff, 'submission_signoff_sidecar_payload_hash')}, "
+            f"target_tamper={_v43_any_check_status(tampered_target, 'target_distribution_zip_hash_match')}, "
+            f"backslash={_v38_check_status(backslash_report, 'zip_entry_path_safe')}, duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v43_backslash_submission_zip(target: Path) -> Path:
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("submission-manifest.json", "{}")
+        archive.writestr("submission-signoff.json", "{}")
+        archive.writestr("submission-report.json", "{}")
+        archive.writestr("submission-targets.csv", "a\n")
+        archive.writestr("submission-events.jsonl", "")
+        archive.writestr("README.txt", "readme")
+        archive.writestr("extra/name.txt", "x")
+    target.write_bytes(target.read_bytes().replace(b"extra/name.txt", b"extra\\name.txt"))
+    return target
+
+
+def _v43_duplicate_submission_zip(source: Path, target: Path) -> Path:
+    shutil.copy2(source, target)
+    with zipfile.ZipFile(target, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("README.txt", "duplicate")
+    return target
+
+
+def _v43_any_check_status(report: dict[str, Any], check_id: str) -> str | None:
+    for check in [*(report.get("checks", []) if isinstance(report.get("checks"), list) else []), *(report.get("item_checks", []) if isinstance(report.get("item_checks"), list) else [])]:
+        if isinstance(check, dict) and check.get("check_id") == check_id:
+            return str(check.get("status") or "")
+    return None
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

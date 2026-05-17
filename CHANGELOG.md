@@ -1,5 +1,20 @@
 # Changelog
 
+## v4.3.0 - 2026-05-18
+
+### Added
+- Submission Workspace for grouping signed Distribution Targets into local multi-platform submission batches.
+- Submission QA, Export, ZIP, Signoff, external submitted/feedback/accepted records, and signed-package mutation guards.
+- Portable `verify-submission-package` CLI with deep nested Distribution Package verification, sidecar signoff payload checks, ZIP safety, duplicate entry, hash, CSV formula, and redaction checks.
+- Studio Release page controls for creating submission batches, running QA/Export/ZIP/Verify/Sign, and recording external status updates.
+- release-check v4.3 smoke covering offline verification, signed mutation blocking, signoff sidecar tamper, nested target ZIP tamper, duplicate entry, and backslash entry failures.
+
+### Scope
+- Submission Workspace is local preparation and tracking only. It does not upload to platforms, connect to distributor APIs, or store platform credentials.
+
+### Verified
+- `python -m pytest tests\test_submissions.py tests\test_cli_verify_submission.py tests\test_server_submissions.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v43_submission_workspace_smoke -q`
+
 ## v4.2.1 - 2026-05-17
 
 ### Fixed

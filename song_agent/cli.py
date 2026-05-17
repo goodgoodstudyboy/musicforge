@@ -90,6 +90,21 @@ def build_verify_distribution_parser() -> argparse.ArgumentParser:
     return verify_parser
 
 
+def build_verify_submission_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Submission Package ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Submission Package ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--require-submitted", action="store_true", help="Require every item to have submitted-or-later status.")
+    verify_parser.add_argument("--require-accepted", action="store_true", help="Require every item to be accepted.")
+    verify_parser.add_argument("--deep", action="store_true", help="Run the Distribution Package verifier on nested target ZIP files.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=1024, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=4096, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=10000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "request",
@@ -208,6 +223,33 @@ def _main() -> None:
         else:
             print_distribution_verification_report(report)
         raise SystemExit(distribution_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-submission-package":
+        from song_agent.submission_verifier import (
+            print_submission_verification_report,
+            submission_verification_exit_code,
+            verify_submission_package,
+            write_submission_verification_report,
+        )
+
+        parser = build_verify_submission_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_submission_package(
+            args.zip_path,
+            strict=args.strict,
+            require_submitted=args.require_submitted,
+            require_accepted=args.require_accepted,
+            deep=args.deep,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_submission_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_submission_verification_report(report)
+        raise SystemExit(submission_verification_exit_code(report))
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)

@@ -66,7 +66,7 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v4.2.1 adds a local Release Workspace for assembling multiple Project Delivery
+v4.3.0 adds a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
@@ -116,6 +116,18 @@ through one layout planner; Distribution Export writes
 Layout preview; and `verify-distribution-package` validates layout hashes,
 paths, file hashes, artwork package paths, and legacy v4.1 package
 compatibility.
+
+Submission Workspace groups signed Distribution Targets into local submission
+batches for platform handoff tracking. It adds Submission QA, Export, ZIP,
+Signoff, portable verification, and external submitted/feedback/accepted records.
+Signed Submission packages cannot be silently rebuilt or have targets changed
+without resetting signoff, while external status records remain auditable local
+events. This is local tracking only; it does not upload to platforms or store
+platform credentials.
+
+```powershell
+python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
+```
 
 ```powershell
 python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --json --report-out distribution-verification-report.json
