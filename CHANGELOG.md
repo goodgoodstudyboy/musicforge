@@ -1,5 +1,15 @@
 # Changelog
 
+## v4.2.1 - 2026-05-17
+
+### Fixed
+- Distribution Layout now rejects rendered audio/artwork/lyrics paths whose filename extension does not match the actual source extension, preventing MIDI fallback bytes from being exported under a hardcoded `.wav` package path.
+- `verify-distribution-package` now catches invalid/tampered template `file_naming` rules and returns a failed verification report instead of raising an exception.
+- release-check v4.2 smoke now covers only-MIDI + hardcoded-WAV layout failure and bad `template-pack.json` verifier failure reporting.
+
+### Verified
+- `python -m pytest tests\test_distribution_layout.py tests\test_distribution.py tests\test_release_check.py::test_v42_distribution_layout_contract_smoke -q`
+
 ## v4.2.0 - 2026-05-17
 
 ### Added

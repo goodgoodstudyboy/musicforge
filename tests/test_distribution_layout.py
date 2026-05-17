@@ -79,12 +79,26 @@ def test_distribution_layout_fails_fixed_sidecar_collision(tmp_path: Path) -> No
     assert any(error["check_id"] == "layout_reserved_collision" for error in plan["errors"])
 
 
-def _release_export(tmp_path: Path, *, track_count: int = 1) -> Path:
+def test_distribution_layout_rejects_hardcoded_audio_extension_mismatch(tmp_path: Path) -> None:
+    export_dir = _release_export(tmp_path, include_wav=False, include_mid=True)
+    template = _template(file_naming={"audio": "audio/{track_number:02d}-{slug_title}.wav"})
+
+    plan = _plan(export_dir=export_dir, template=template)
+
+    assert plan["summary"]["status"] == "failed"
+    assert any(error["check_id"] == "layout_audio_extension_mismatch" for error in plan["errors"])
+    assert _entry(plan, "audio:track-001")["ext"] == "mid"
+
+
+def _release_export(tmp_path: Path, *, track_count: int = 1, include_wav: bool = True, include_mid: bool = False) -> Path:
     export_dir = tmp_path / "release-export"
     for index in range(1, track_count + 1):
         track_dir = export_dir / "tracks" / f"{index:02d}-layout-song"
         track_dir.mkdir(parents=True, exist_ok=True)
-        (track_dir / "song.wav").write_bytes(b"RIFF\x04\x00\x00\x00WAVE")
+        if include_wav:
+            (track_dir / "song.wav").write_bytes(b"RIFF\x04\x00\x00\x00WAVE")
+        if include_mid:
+            (track_dir / "song.mid").write_bytes(b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xe0")
     lyrics_dir = export_dir / "lyrics"
     lyrics_dir.mkdir(parents=True, exist_ok=True)
     for index in range(1, track_count + 1):

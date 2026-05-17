@@ -23,7 +23,7 @@ def test_distribution_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeyp
                 "name": "Server Template Basic",
                 "rules": {"require_artwork": True, "require_upc": True, "require_isrc": True, "csv_formula_escape": True},
                 "metadata_mapping": {"platform_csv": [{"column": "Title", "source": "track.title", "required": True}]},
-                "file_naming": {"artwork": "cover.{ext}", "audio": "{track_number:02d}-{slug_title}.wav"},
+                "file_naming": {"artwork": "cover.{ext}", "audio": "{track_number:02d}-{slug_title}.{ext}"},
                 "checklist": [{"item_id": "explicit-confirmed", "label": "Explicit checked", "required": True}],
             },
         )

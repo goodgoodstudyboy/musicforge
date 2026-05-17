@@ -17,7 +17,7 @@ from song_agent.distribution_export import DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXC
 from song_agent.distribution_layout import RESERVED_LAYOUT_PATHS, effective_file_naming, layout_payload_hash, validate_layout_path
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
 from song_agent.distribution_checklist import checklist_payload_hash, checklist_summary
-from song_agent.distribution_templates import template_content_hash, template_summary, validate_template_pack
+from song_agent.distribution_templates import DistributionTemplateError, template_content_hash, template_summary, validate_template_pack
 from song_agent.projectio import write_json
 from song_agent.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
@@ -392,9 +392,15 @@ class _DistributionPackageVerifier:
         self._add_check("layout", "distribution_layout_file_hash_match", "failed" if mismatches else "passed", "blocking", "Layout entry bytes mismatch: " + ", ".join(mismatches[:5]) if mismatches else "Layout entry hashes and sizes match ZIP.", count=len(mismatches))
         self._add_check("layout", "distribution_layout_reserved_collision", "failed" if reserved else "passed", "blocking", "Layout entries target fixed sidecars: " + ", ".join(reserved[:5]) if reserved else "Layout entries do not target fixed sidecars.", count=len(reserved))
         self._add_check("layout", "distribution_layout_path_safe", "failed" if unsafe else "passed", "blocking", "Layout entries contain unsafe paths: " + ", ".join(unsafe[:5]) if unsafe else "Layout entry paths are safe.", count=len(unsafe))
-        expected_naming = effective_file_naming(self.template) if self.template else {"audio": "audio/{track_number:02d}-{slug_title}.{ext}", "lyrics": "lyrics/{track_number:02d}-{slug_title}.txt", "artwork": "artwork/cover.{ext}"}
+        try:
+            expected_naming = effective_file_naming(self.template) if self.template else {"audio": "audio/{track_number:02d}-{slug_title}.{ext}", "lyrics": "lyrics/{track_number:02d}-{slug_title}.txt", "artwork": "artwork/cover.{ext}"}
+            template_pattern_ok = True
+        except (DistributionTemplateError, ValueError) as exc:
+            expected_naming = {}
+            template_pattern_ok = False
+            self._add_check("layout", "distribution_layout_template_pattern_parse", "failed", "blocking", f"Template file_naming could not be parsed: {exc}")
         naming = manifest_layout.get("naming") if isinstance(manifest_layout.get("naming"), dict) else {}
-        self._add_check("layout", "distribution_layout_template_patterns_match", "passed" if naming == expected_naming else "failed", "blocking", "Layout naming patterns match template-pack.json." if naming == expected_naming else "Layout naming patterns do not match template-pack.json.")
+        self._add_check("layout", "distribution_layout_template_patterns_match", "passed" if template_pattern_ok and naming == expected_naming else "failed", "blocking", "Layout naming patterns match template-pack.json." if template_pattern_ok and naming == expected_naming else "Layout naming patterns do not match template-pack.json.")
         artwork = self.manifest.get("artwork") if isinstance(self.manifest.get("artwork"), dict) else {}
         artwork_path = str(artwork.get("package_path") or "")
         artwork_entries = {str(entry.get("path") or "") for entry in manifest_entries if isinstance(entry, dict) and entry.get("kind") == "artwork"}

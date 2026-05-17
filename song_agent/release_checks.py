@@ -4568,7 +4568,7 @@ def _v41_distribution_template_packs_smoke(root: Path) -> tuple[bool, str]:
             "name": "Release Check Template Basic",
             "rules": {"require_artwork": True, "require_upc": True, "require_isrc": True, "csv_formula_escape": True},
             "metadata_mapping": {"platform_csv": [{"column": "Title", "source": "track.title", "required": True}, {"column": "ISRC", "source": "track.isrc", "required": True}]},
-            "file_naming": {"artwork": "cover.{ext}", "audio": "{track_number:02d}-{slug_title}.wav"},
+            "file_naming": {"artwork": "cover.{ext}", "audio": "{track_number:02d}-{slug_title}.{ext}"},
             "checklist": [{"item_id": "explicit-confirmed", "label": "Explicit flag checked", "required": True}],
         }
         templates_status, templates = _release_http_json(server, "GET", "/api/distribution/template-packs")
@@ -4762,6 +4762,7 @@ def _v42_distribution_layout_contract_smoke(root: Path) -> tuple[bool, str]:
         bad_artwork_status, bad_artwork = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}/validate", {"template": {**template_payload, "file_naming": {"artwork": "artwork/{slug_title}.{ext}"}}})
         unsafe_status, unsafe = _release_http_json(server, "POST", f"/api/distribution/template-packs/{template_id}/validate", {"template": {**template_payload, "file_naming": {"audio": "../x.wav"}}})
         collision_status, collision_template = _release_http_json(server, "POST", "/api/distribution/template-packs", {**template_payload, "slug": "layout-collision-template", "name": "Layout Collision Template", "file_naming": {"audio": "audio/song.{ext}", "lyrics": "lyrics/{track_number:02d}-{slug_title}.txt", "artwork": "artwork/{release_slug}-cover.{ext}"}})
+        hardcoded_wav_status, hardcoded_wav_template = _release_http_json(server, "POST", "/api/distribution/template-packs", {**template_payload, "slug": "layout-hardcoded-wav-template", "name": "Layout Hardcoded WAV Template", "file_naming": {"audio": "audio/{track_number:02d}-{slug_title}.wav", "lyrics": "lyrics/{track_number:02d}-{slug_title}.txt", "artwork": "artwork/{release_slug}-cover.{ext}"}})
 
         target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "template_pack_id": template_id, "name": "Layout Target"})
         target_id = target.get("target", {}).get("target_id")
@@ -4800,6 +4801,20 @@ def _v42_distribution_layout_contract_smoke(root: Path) -> tuple[bool, str]:
 
         layout_tamper = verify_distribution_package(_v38_rewrite_zip(zip_path, base / "layout-tampered.zip", transforms={"layout/manifest-layout.json": tamper_layout}), require_artwork=True)
         artwork_tamper = verify_distribution_package(_v38_rewrite_zip(zip_path, base / "artwork-path-tampered.zip", transforms={"distribution-manifest.json": tamper_artwork_path}), require_artwork=True)
+
+        def poison_template(data: bytes) -> bytes:
+            value = json.loads(data.decode("utf-8"))
+            value["file_naming"]["audio"] = "../x.wav"
+            return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+
+        bad_template_pack_report = verify_distribution_package(_v38_rewrite_zip(zip_path, base / "bad-template-pack.zip", transforms={"template-pack.json": poison_template}), require_artwork=True)
+
+        hardcoded_target_status, hardcoded_target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "template_pack_id": hardcoded_wav_template.get("template", {}).get("template_pack_id"), "name": "Hardcoded WAV Layout Target"})
+        hardcoded_target_id = hardcoded_target.get("target", {}).get("target_id")
+        hardcoded_update_status, _hardcoded_update = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{hardcoded_target_id}", {"options": {"artwork_id": artwork_id}})
+        hardcoded_layout_status, hardcoded_layout = _release_http_json(server, "GET", f"/api/releases/{release_id}/distribution/targets/{hardcoded_target_id}/layout")
+        hardcoded_qa_status, hardcoded_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{hardcoded_target_id}/qa/refresh")
+        hardcoded_export_status, _hardcoded_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{hardcoded_target_id}/export")
         with zipfile.ZipFile(zip_path) as archive:
             names = set(archive.namelist())
         expected_audio = "tracks/disc-1/01-layout-contract-track.mid"
@@ -4825,6 +4840,7 @@ def _v42_distribution_layout_contract_smoke(root: Path) -> tuple[bool, str]:
             and unsafe.get("validation", {}).get("status") == "failed"
             and collision_status == 201
             and collision_template.get("template", {}).get("template_pack_id")
+            and hardcoded_wav_status == 201
             and target_status == 201
             and artwork_status == 201
             and update_status == 200
@@ -4852,6 +4868,14 @@ def _v42_distribution_layout_contract_smoke(root: Path) -> tuple[bool, str]:
             and external_report.get("status") == "passed"
             and _v38_check_status(layout_tamper, "distribution_layout_hash_match") == "failed"
             and _v38_check_status(artwork_tamper, "distribution_artwork_package_path_match") == "failed"
+            and _v38_check_status(bad_template_pack_report, "distribution_layout_template_pattern_parse") == "failed"
+            and hardcoded_target_status == 201
+            and hardcoded_update_status == 200
+            and hardcoded_layout_status == 200
+            and hardcoded_layout.get("summary", {}).get("status") == "failed"
+            and hardcoded_qa_status == 200
+            and hardcoded_qa.get("summary", {}).get("status") == "failed"
+            and hardcoded_export_status == 409
             and "C:\\Users" not in serialized
             and str(base) not in serialized
         )
@@ -4860,6 +4884,8 @@ def _v42_distribution_layout_contract_smoke(root: Path) -> tuple[bool, str]:
             f"audio={expected_audio}, artwork={expected_artwork}, lyrics={expected_lyrics}, "
             f"sign={dist_sign_status}:{dist_signed.get('summary', {}).get('status')}, external={external_report.get('status')}, layout_tamper={_v38_check_status(layout_tamper, 'distribution_layout_hash_match')}, "
             f"artwork_path_tamper={_v38_check_status(artwork_tamper, 'distribution_artwork_package_path_match')}, "
+            f"bad_template_pack={_v38_check_status(bad_template_pack_report, 'distribution_layout_template_pattern_parse')}, "
+            f"hardcoded_wav={hardcoded_layout.get('summary', {}).get('status')}/{hardcoded_qa.get('summary', {}).get('status')}/{hardcoded_export_status}, "
             f"unsafe_pattern={unsafe.get('validation', {}).get('status')}, bad_artwork_var={bad_artwork.get('validation', {}).get('status')}"
         )
     except Exception as exc:

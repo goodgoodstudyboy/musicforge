@@ -175,7 +175,6 @@ def test_distribution_export_applies_layout_contract_paths(tmp_path: Path) -> No
     target = store.get_target(release_id, target.target_id)
     build_distribution_package_zip(store, release_id, target)
     sign_distribution_package(store=store, release_id=release_id, target=store.get_target(release_id, target.target_id), qa_report=qa, payload={"signed_by": "tester"})
-    audio_report = verify_distribution_package(store.package_zip_path(release_id, package_id), require_audio=True, require_artwork=True)
     paths = {item["path"] for item in manifest["files"]}
     layout_paths = {item["path"] for item in manifest["layout"]["entries"]}
 
@@ -265,6 +264,66 @@ def test_distribution_verifier_require_audio_accepts_layout_midi_fallback(tmp_pa
     assert any(entry["kind"] == "audio" and entry["path"].endswith(".mid") for entry in manifest["layout"]["entries"])
     assert report["status"] == "passed"
     assert _check(report, "distribution_audio_file_valid")["status"] == "passed"
+
+
+def test_distribution_export_rejects_hardcoded_wav_pattern_for_midi_fallback(tmp_path: Path) -> None:
+    release_store, release_id = _signed_release_with_metadata(tmp_path)
+    store = DistributionStore(release_store)
+    templates = TemplatePackStore(tmp_path / ".musicforge" / "distribution-templates")
+    template = templates.create_template(
+        {
+            "slug": "hardcoded-wav-template",
+            "name": "Hardcoded WAV Template",
+            "file_naming": {"audio": "audio/{track_number:02d}-{slug_title}.wav"},
+        }
+    )
+    target = store.create_target(release_id, {"profile_id": "demo_pitch", "template_pack_id": template["template_pack_id"]})
+    artwork = import_distribution_artwork(store, release_id, {"filename": "cover.png", "content_base64": base64.b64encode(_png(1400, 1400)).decode("ascii")})
+    target = store.update_target(release_id, target.target_id, {"options": {"artwork_id": artwork["artwork_id"]}})
+    for wav_path in release_store.export_dir(release_id).glob("tracks/*/song.wav"):
+        wav_path.unlink()
+    qa = store.write_qa(release_id, target.target_id, build_distribution_qa_report(store=store, release_id=release_id, target=target))
+
+    assert qa["summary"]["status"] == "failed"
+    assert any(check["check_id"] == "layout_plan_valid" and check["status"] == "failed" for check in qa["checks"])
+    try:
+        build_distribution_export_package(store=store, release_id=release_id, target=target, qa_report=qa)
+    except ValueError as exc:
+        assert "qa gate failed" in str(exc).lower()
+    else:
+        raise AssertionError("Distribution export should reject hardcoded .wav layout for MIDI source.")
+
+
+def test_distribution_verifier_returns_failed_report_for_bad_template_pack(tmp_path: Path) -> None:
+    release_store, release_id = _signed_release_with_metadata(tmp_path)
+    store = DistributionStore(release_store)
+    templates = TemplatePackStore(tmp_path / ".musicforge" / "distribution-templates")
+    template = templates.create_template(
+        {
+            "slug": "layout-verifier-template",
+            "name": "Layout Verifier Template",
+            "file_naming": {"audio": "audio/{track_number:02d}-{slug_title}.{ext}"},
+        }
+    )
+    target = store.create_target(release_id, {"profile_id": "demo_pitch", "template_pack_id": template["template_pack_id"]})
+    artwork = import_distribution_artwork(store, release_id, {"filename": "cover.png", "content_base64": base64.b64encode(_png(1400, 1400)).decode("ascii")})
+    target = store.update_target(release_id, target.target_id, {"options": {"artwork_id": artwork["artwork_id"]}})
+    qa = store.write_qa(release_id, target.target_id, build_distribution_qa_report(store=store, release_id=release_id, target=target))
+    manifest = build_distribution_export_package(store=store, release_id=release_id, target=target, qa_report=qa)
+    target = store.get_target(release_id, target.target_id)
+    build_distribution_package_zip(store, release_id, target)
+    sign_distribution_package(store=store, release_id=release_id, target=store.get_target(release_id, target.target_id), qa_report=qa, payload={"signed_by": "tester"})
+    zip_path = store.package_zip_path(release_id, manifest["package_id"])
+
+    def poison_template(data: bytes) -> bytes:
+        template_doc = json.loads(data.decode("utf-8"))
+        template_doc["file_naming"]["audio"] = "../x.wav"
+        return json.dumps(template_doc, ensure_ascii=False, indent=2).encode("utf-8")
+
+    report = verify_distribution_package(_rewrite_zip(zip_path, tmp_path / "bad-template-pack.zip", transforms={"template-pack.json": poison_template}))
+
+    assert report["status"] == "failed"
+    assert _check(report, "distribution_layout_template_pattern_parse")["status"] == "failed"
 
 
 def _signed_release_with_metadata(tmp_path: Path, *, formula_title: bool = False):

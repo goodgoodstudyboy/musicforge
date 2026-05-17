@@ -339,7 +339,10 @@ def _entry(
 
 def _add_entry(entries: list[dict[str, Any]], warnings: list[dict[str, Any]], errors: list[dict[str, Any]], used_paths: dict[str, str], entry: dict[str, Any]) -> None:
     if entry.get("error"):
-        errors.append({"entry_id": entry.get("entry_id"), "check_id": "layout_unsafe_path", "message": entry.get("error")})
+        error_text = str(entry.get("error") or "")
+        kind = str(entry.get("kind") or "entry")
+        check_id = f"layout_{kind}_extension_mismatch" if "extension" in error_text.lower() else "layout_unsafe_path"
+        errors.append({"entry_id": entry.get("entry_id"), "check_id": check_id, "message": entry.get("error")})
         entries.append(entry)
         return
     path = str(entry.get("path") or "")
@@ -387,7 +390,12 @@ def _render_pattern(kind: str, pattern: str, *, track: dict[str, Any] | None, re
         rendered = pattern.format(**values)
     except (KeyError, ValueError) as exc:
         raise ValueError("Distribution file naming pattern is invalid.") from exc
-    return validate_layout_path(rendered)
+    path = validate_layout_path(rendered)
+    suffix = PurePosixPath(path).suffix.lower().lstrip(".")
+    expected = ext.strip(".").lower()
+    if path not in RESERVED_LAYOUT_PATHS and suffix != expected:
+        raise ValueError(f"{kind} layout path extension must match source extension .{expected}.")
+    return path
 
 
 def validate_layout_path(path: str) -> str:
