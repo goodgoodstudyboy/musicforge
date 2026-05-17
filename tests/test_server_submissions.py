@@ -29,6 +29,7 @@ def test_submission_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeypat
         qa_status, qa = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/qa/refresh")
         export_status, exported = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
         zip_status, zipped = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export/zip")
+        pre_sign_submit_status, pre_sign_submit = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-submission", {"external_reference": "PRE-SIGN"})
         sign_status, signed = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/signoff", {"signed_by": "server-test"})
         blocked_add_status, blocked_add = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/targets", {"target_id": target_id})
         blocked_export_status, blocked_export = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
@@ -41,6 +42,16 @@ def test_submission_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeypat
         reset_status, reset = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/signoff/reset", {"reason": "submission rebuild"})
         qa_after_reset_status, _qa_after_reset = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/qa/refresh")
         export_after_reset_status, _after_reset = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
+
+        pending_target_status, pending_target = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Unsigned Submission Target"})
+        pending_target_id = pending_target["target"]["target_id"]
+        pending_create_status, pending_created = request_json(server, "POST", f"/api/releases/{release_id}/submissions", {"name": "Pending Submission", "target_ids": [pending_target_id]})
+        pending_submission_id = pending_created["submission"]["submission_id"]
+        pending_item_id = pending_created["submission"]["items"][0]["item_id"]
+        pending_unsigned_submit_status, pending_unsigned_submit = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{pending_submission_id}/items/{pending_item_id}/record-submission", {"external_reference": "UNSIGNED-SUB"})
+        server.submission_store.update_signoff_summary(release_id, pending_submission_id, {"status": "signed", "source": "regression-fixture"})
+        pending_signed_submit_status, pending_signed_submit = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{pending_submission_id}/items/{pending_item_id}/record-submission", {"external_reference": "UNREADY-SUB"})
+        pending_signed_accept_status, pending_signed_accept = request_json(server, "POST", f"/api/releases/{release_id}/submissions/{pending_submission_id}/items/{pending_item_id}/accepted", {"external_reference": "UNREADY-SUB"})
     finally:
         stop_test_server(server)
 
@@ -63,6 +74,8 @@ def test_submission_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeypat
     assert exported["summary"]["status"] == "exported"
     assert zip_status == 200
     assert zipped["zip"]["sha256"]
+    assert pre_sign_submit_status == 409
+    assert "signed" in pre_sign_submit["error"].lower()
     assert sign_status == 200
     assert signed["summary"]["status"] == "signed"
     assert blocked_add_status == 409
@@ -85,3 +98,11 @@ def test_submission_api_end_to_end_and_signed_mutation_guard(tmp_path, monkeypat
     assert reset["summary"]["status"] == "reset"
     assert qa_after_reset_status == 200
     assert export_after_reset_status == 201
+    assert pending_target_status == 201
+    assert pending_create_status == 201
+    assert pending_unsigned_submit_status == 409
+    assert "signed" in pending_unsigned_submit["error"].lower()
+    assert pending_signed_submit_status == 409
+    assert "ready" in pending_signed_submit["error"].lower() or "one of" in pending_signed_submit["error"].lower()
+    assert pending_signed_accept_status == 409
+    assert "one of" in pending_signed_accept["error"].lower()

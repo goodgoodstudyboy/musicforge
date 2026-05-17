@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.3.1 - 2026-05-18
+
+### Fixed
+- Submission external status updates now require a signed Submission package before recording submitted, feedback, or accepted events.
+- `record-submission` now only accepts ready, current items, so pending targets without Distribution ZIP/signoff cannot be marked submitted.
+- `record-feedback` and `accepted` now require a submitted/feedback/needs_changes item state before mutating external status.
+- release-check v4.3 smoke covers unsigned Submission and pending item status-transition guards.
+
+### Verified
+- `python -m pytest tests\test_server_submissions.py tests\test_submissions.py tests\test_release_check.py::test_v43_submission_workspace_smoke -q`
+
 ## v4.3.0 - 2026-05-18
 
 ### Added

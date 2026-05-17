@@ -368,6 +368,8 @@ class SubmissionStore:
             submission_id,
             item_id,
             event_type="submission_item_submitted",
+            allowed_statuses={"ready"},
+            require_ready_snapshot=True,
             updater=lambda item: _record_item_submitted(item, payload),
         )
 
@@ -377,6 +379,7 @@ class SubmissionStore:
             submission_id,
             item_id,
             event_type="submission_item_feedback_recorded",
+            allowed_statuses={"submitted", "feedback_received", "needs_changes"},
             updater=lambda item: _record_item_feedback(item, payload),
         )
 
@@ -386,6 +389,7 @@ class SubmissionStore:
             submission_id,
             item_id,
             event_type="submission_item_accepted",
+            allowed_statuses={"submitted", "feedback_received", "needs_changes"},
             updater=lambda item: _record_item_accepted(item, payload or {}),
         )
 
@@ -582,13 +586,27 @@ class SubmissionStore:
         signoff = self.read_signoff(batch.release_id, batch.submission_id, default={})
         return signoff.get("status") in SIGNED_SUBMISSION_STATUSES
 
-    def _update_item_external(self, release_id: str, submission_id: str, item_id: str, *, event_type: str, updater: Any) -> SubmissionBatch:
+    def _update_item_external(
+        self,
+        release_id: str,
+        submission_id: str,
+        item_id: str,
+        *,
+        event_type: str,
+        updater: Any,
+        allowed_statuses: set[str],
+        require_ready_snapshot: bool = False,
+    ) -> SubmissionBatch:
         with self.lock:
             batch = self.get_submission(release_id, submission_id)
+            if not self._has_signed_package(batch):
+                raise SubmissionStateError("Submission batch must be signed before recording external submission status.")
             found = False
+            validated_item_id = _validate_item_id(item_id)
             for item in batch.items:
-                if item.item_id != _validate_item_id(item_id):
+                if item.item_id != validated_item_id:
                     continue
+                self._ensure_external_item_transition(batch, item, allowed_statuses=allowed_statuses, require_ready_snapshot=require_ready_snapshot)
                 updater(item)
                 item.updated_at = now_iso()
                 found = True
@@ -599,6 +617,23 @@ class SubmissionStore:
             batch.status = _batch_external_status(batch.items, batch.status)
             self.save_submission(batch)
             return batch
+
+    def _ensure_external_item_transition(self, batch: SubmissionBatch, item: SubmissionItem, *, allowed_statuses: set[str], require_ready_snapshot: bool) -> None:
+        if item.status not in allowed_statuses:
+            allowed = ", ".join(sorted(allowed_statuses))
+            raise SubmissionStateError(f"Submission item {item.item_id} must be in one of [{allowed}] before this external status update.")
+        if item.stale:
+            raise SubmissionStateError(f"Submission item {item.item_id} snapshot is stale. Refresh the submission batch before recording external status.")
+        if item.warnings:
+            raise SubmissionStateError(f"Submission item {item.item_id} is not ready: {item.warnings[0]}")
+        current = submission_item_current_snapshot(self, item)
+        if current.get("stale"):
+            raise SubmissionStateError(f"Submission item {item.item_id} snapshot is stale. Refresh the submission batch before recording external status.")
+        if require_ready_snapshot:
+            current_item = self.snapshot_item(item.release_id, item.submission_id, item.target_id, item_id=item.item_id)
+            if current_item.status != "ready":
+                reason = current_item.warnings[0] if current_item.warnings else "Distribution package is not ready."
+                raise SubmissionStateError(f"Submission item {item.item_id} is not ready: {reason}")
 
 
 def submission_batch_summary(batch: SubmissionBatch | dict[str, Any] | None) -> dict[str, Any]:

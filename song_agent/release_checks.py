@@ -4949,6 +4949,7 @@ def _v43_submission_workspace_smoke(root: Path) -> tuple[bool, str]:
         sub_qa_status, sub_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/qa/refresh")
         sub_export_status, sub_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
         sub_zip_status, _sub_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export/zip")
+        pre_sign_submit_status, pre_sign_submit = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-submission", {"external_reference": "PRE-SIGN"})
         sub_sign_status, sub_signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/signoff", {"signed_by": "release-check", "notes": r"accepted C:\Users\demo api_key=sk-secret-value"})
         blocked_add_status, blocked_add = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/targets", {"target_id": target_id})
         blocked_export_status, blocked_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
@@ -4980,6 +4981,16 @@ def _v43_submission_workspace_smoke(root: Path) -> tuple[bool, str]:
         tampered_target = verify_submission_package(_v38_rewrite_zip(zip_path, base / "submission-target-tampered.zip", transforms={f"targets/{target_id}/distribution-package.zip": tamper_target_zip}))
         backslash_report = verify_submission_package(_v43_backslash_submission_zip(base / "submission-backslash.zip"))
         duplicate_report = verify_submission_package(_v43_duplicate_submission_zip(zip_path, base / "submission-duplicate.zip"))
+
+        pending_target_status, pending_target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Submission Pending Target"})
+        pending_target_id = pending_target.get("target", {}).get("target_id")
+        pending_create_status, pending_created = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions", {"name": "Pending Submission", "target_ids": [pending_target_id]})
+        pending_submission_id = pending_created.get("submission", {}).get("submission_id")
+        pending_item_id = (pending_created.get("submission", {}).get("items") or [{}])[0].get("item_id")
+        pending_unsigned_submit_status, pending_unsigned_submit = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{pending_submission_id}/items/{pending_item_id}/record-submission", {"external_reference": "UNSIGNED-SUB"})
+        server.submission_store.update_signoff_summary(release_id, pending_submission_id, {"status": "signed", "source": "release-check-regression"})
+        pending_signed_submit_status, pending_signed_submit = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{pending_submission_id}/items/{pending_item_id}/record-submission", {"external_reference": "PENDING-SUB"})
+        pending_signed_accept_status, pending_signed_accept = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{pending_submission_id}/items/{pending_item_id}/accepted", {"external_reference": "PENDING-SUB"})
         serialized = json.dumps({"sub_signed": sub_signed, "sub_export": sub_export, "verified": verified}, ensure_ascii=False)
         ok = (
             created_status == 201
@@ -5004,6 +5015,7 @@ def _v43_submission_workspace_smoke(root: Path) -> tuple[bool, str]:
             and sub_qa.get("summary", {}).get("status") in {"passed", "warning"}
             and sub_export_status == 201
             and sub_zip_status == 200
+            and pre_sign_submit_status == 409
             and sub_sign_status == 200
             and sub_signed.get("summary", {}).get("status") == "signed"
             and blocked_add_status == 409
@@ -5025,6 +5037,15 @@ def _v43_submission_workspace_smoke(root: Path) -> tuple[bool, str]:
             and _v43_any_check_status(tampered_target, "target_distribution_zip_hash_match") == "failed"
             and _v38_check_status(backslash_report, "zip_entry_path_safe") == "failed"
             and _v38_check_status(duplicate_report, "zip_duplicate_entries") == "failed"
+            and pending_target_status == 201
+            and pending_create_status == 201
+            and pending_unsigned_submit_status == 409
+            and pending_signed_submit_status == 409
+            and pending_signed_accept_status == 409
+            and "signed" in pre_sign_submit.get("error", "").lower()
+            and "signed" in pending_unsigned_submit.get("error", "").lower()
+            and ("ready" in pending_signed_submit.get("error", "").lower() or "one of" in pending_signed_submit.get("error", "").lower())
+            and "one of" in pending_signed_accept.get("error", "").lower()
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
             and "C:\\Users" not in serialized
@@ -5035,7 +5056,8 @@ def _v43_submission_workspace_smoke(root: Path) -> tuple[bool, str]:
             f"verify={verified.get('summary', {}).get('status')}, external={external_report.get('status')}, "
             f"signoff_tamper={_v38_check_status(tampered_signoff, 'submission_signoff_sidecar_payload_hash')}, "
             f"target_tamper={_v43_any_check_status(tampered_target, 'target_distribution_zip_hash_match')}, "
-            f"backslash={_v38_check_status(backslash_report, 'zip_entry_path_safe')}, duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}"
+            f"backslash={_v38_check_status(backslash_report, 'zip_entry_path_safe')}, duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}, "
+            f"pre_sign={pre_sign_submit_status}, pending={pending_signed_submit_status}/{pending_signed_accept_status}"
         )
     except Exception as exc:
         return False, str(exc)
