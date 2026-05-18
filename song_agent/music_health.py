@@ -25,6 +25,7 @@ def analyze_music_health(
     validator_report: dict[str, Any] | None = None,
     quality_report: dict[str, Any] | None = None,
     renderer_configured: bool = False,
+    audio_not_required_status: str = "skipped_renderer_not_configured",
     now: str | None = None,
 ) -> dict[str, Any]:
     """Run deterministic checks that catch obvious broken music artifacts."""
@@ -113,7 +114,11 @@ def analyze_music_health(
             checks.append(_check("wav_nonzero_size", wav_path.stat().st_size > 44, "blocking", "WAV file is non-empty."))
             checks.append(_check("wav_duration_reasonable", _wav_duration_reasonable(wav_path, total_beats, plan.tempo_bpm), "warning", "WAV duration is close to SongPlan duration."))
     else:
-        checks.append(_check("audio_renderer_configured", False, "info", "Audio renderer is not configured; WAV render is skipped."))
+        audio_status = audio_not_required_status or "skipped_renderer_not_configured"
+        audio_message = "Audio renderer is not configured; WAV render is skipped."
+        if audio_status == "skipped_by_request":
+            audio_message = "Audio rendering was skipped by request; WAV is not required for this suite."
+        checks.append(_check("audio_renderer_configured", False, "info", audio_message))
 
     blockers = [check for check in checks if check["status"] == "failed" and check["severity"] == "blocking"]
     warnings = [check for check in checks if check["status"] == "warning"]

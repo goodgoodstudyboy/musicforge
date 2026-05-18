@@ -51,7 +51,7 @@ def test_cli_acceptance_check_without_auto_review_needs_review(tmp_path, monkeyp
     assert "status: needs_review" in output
 
 
-def test_cli_acceptance_check_reports_health_failure_without_crashing(tmp_path, monkeypatch, capsys):
+def _write_unusable_renderer_config(tmp_path):
     renderer_path = tmp_path / ".musicforge" / "renderer.json"
     renderer_path.parent.mkdir(parents=True)
     soundfont = tmp_path / "fake.sf2"
@@ -69,6 +69,10 @@ def test_cli_acceptance_check_reports_health_failure_without_crashing(tmp_path, 
         ),
         encoding="utf-8",
     )
+
+
+def test_cli_acceptance_check_reports_health_failure_without_crashing(tmp_path, monkeypatch, capsys):
+    _write_unusable_renderer_config(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("sys.argv", ["song-agent", "acceptance-check", "--cases", "1", "--auto-review", "--render-audio", "auto", "--json"])
 
@@ -80,3 +84,19 @@ def test_cli_acceptance_check_reports_health_failure_without_crashing(tmp_path, 
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "failed"
     assert any("health blocking failures" in blocker for blocker in report["blockers"])
+
+
+def test_cli_acceptance_check_render_audio_never_is_midi_only_even_when_renderer_configured(tmp_path, monkeypatch, capsys):
+    _write_unusable_renderer_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["song-agent", "acceptance-check", "--cases", "1", "--auto-review", "--render-audio", "never", "--json"])
+
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code == 0
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "passed"
+    assert report["summary"]["accepted_count"] == 1
+    assert report["cases"][0]["audio_status"] == "skipped_by_request"

@@ -363,7 +363,10 @@ def run_acceptance_check(
     from song_agent.music_health import music_health_allows_review
 
     store = AcceptanceStore(out_dir)
-    suite = store.create_suite({"name": "v4.4 developer music acceptance", "mode": "developer_self_test", "min_rating": min_rating})
+    suite_payload = {"name": "v4.4 developer music acceptance", "mode": "developer_self_test", "min_rating": min_rating}
+    if render_audio_mode == "never":
+        suite_payload["require_audio_if_renderer_configured"] = False
+    suite = store.create_suite(suite_payload)
     for index, request in enumerate(default_acceptance_requests(cases), start=1):
         case = store.add_case(suite.suite_id, {"name": request["style"], "source_type": "generated_request", "request": request})
         store.generate_case(suite.suite_id, case.case_id, render_audio_mode=render_audio_mode)

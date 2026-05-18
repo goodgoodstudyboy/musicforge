@@ -410,6 +410,7 @@ class AcceptanceStore:
                 validator_report=_read_optional_json(case_dir / "validator-report.json"),
                 quality_report=_read_optional_json(case_dir / "quality.json"),
                 renderer_configured=renderer_configured(config) and suite.require_audio_if_renderer_configured,
+                audio_not_required_status=str(case.artifacts.get("audio_status") or "skipped_renderer_not_configured"),
                 now=now_iso(),
             )
             write_json(self.health_path(suite_id, case_id), report)

@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.4.1 - 2026-05-18
+
+### Fixed
+- `acceptance-check --render-audio never` now creates a MIDI-only suite by setting `require_audio_if_renderer_configured=false`, so local renderer config cannot force a missing WAV failure.
+- Music health reports preserve `audio_status=skipped_by_request` for MIDI-only acceptance runs instead of treating skipped audio as a renderer failure.
+
+### Clarified
+- `--auto-review` remains synthetic CI/smoke evidence only; human release readiness still requires manual playback review records.
+
+### Verified
+- `python -m pytest tests\test_cli_acceptance_check.py tests\test_music_health.py tests\test_music_acceptance.py tests\test_server_acceptance.py -q`
+
 ## v4.4.0 - 2026-05-18
 
 ### Added
