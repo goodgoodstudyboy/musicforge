@@ -172,7 +172,7 @@ def test_release_signoff_blocks_non_manual_release_candidate_acceptance(tmp_path
     assert "Acceptance suite" in signoff["error"]
 
 
-def test_release_signoff_records_manual_release_candidate_acceptance_gate(tmp_path, monkeypatch):
+def test_release_signoff_blocks_incomplete_manual_release_candidate_acceptance(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()
     try:
@@ -198,8 +198,6 @@ def test_release_signoff_records_manual_release_candidate_acceptance_gate(tmp_pa
         request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Manual release candidate review.", "audio_mode": "midi", "review_mode": "manual"})
         report_status, report = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
         sign_status, signed = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "acceptance_suite_id": suite_id})
-        with zipfile.ZipFile(Path(".musicforge") / "releases" / release_id / "release-export.zip") as archive:
-            zipped_signoff = json.loads(archive.read("release-signoff.json").decode("utf-8"))
     finally:
         stop_test_server(server)
 
@@ -207,12 +205,12 @@ def test_release_signoff_records_manual_release_candidate_acceptance_gate(tmp_pa
     assert suite_status == 201
     assert case_status == 201
     assert report_status == 200
-    assert report["summary"]["acceptance_status"] == "release_ready_passed"
-    assert sign_status == 200
-    assert signed["summary"]["acceptance_gate"]["status"] == "passed"
-    assert signed["summary"]["acceptance_gate"]["suite_id"] == suite_id
-    assert zipped_signoff["acceptance_gate"]["status"] == "passed"
-    assert zipped_signoff["acceptance_gate"]["suite_id"] == suite_id
+    assert report["summary"]["acceptance_status"] == "failed"
+    assert report["summary"]["songbook_coverage_status"] == "incomplete"
+    assert report["summary"]["release_ready"] is False
+    assert "sad_ballad_001" in report["summary"]["missing_song_ids"]
+    assert sign_status == 409
+    assert "Acceptance suite" in signed["error"]
 
 
 def test_release_auth_protected(tmp_path, monkeypatch):

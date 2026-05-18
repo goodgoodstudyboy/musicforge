@@ -772,7 +772,17 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
         blockers.append(f"redaction scan found {len(sensitive)} issue(s)")
     manual_accepted = sum(1 for row in case_rows if row.get("review_status") == "accepted" and row.get("review_mode") == "manual")
     synthetic_accepted = sum(1 for row in case_rows if row.get("review_status") == "accepted" and row.get("review_mode") == "synthetic")
-    acceptance_status = _acceptance_status(blockers=blockers, case_count=len(cases), manual_accepted=manual_accepted, synthetic_accepted=synthetic_accepted, suite=suite)
+    coverage = _songbook_coverage(case_rows, suite)
+    coverage_blockers = _songbook_coverage_blockers(coverage, suite)
+    blockers.extend(coverage_blockers)
+    acceptance_status = _acceptance_status(
+        blockers=blockers,
+        case_count=len(cases),
+        manual_accepted=manual_accepted,
+        synthetic_accepted=synthetic_accepted,
+        suite=suite,
+        songbook_coverage_status=coverage["songbook_coverage_status"],
+    )
     status = "passed" if not blockers else "failed"
     source_hash = stable_hash(acceptance_source_state(store, suite))
     report = {
@@ -798,6 +808,10 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
             "acceptance_status": acceptance_status,
             "release_ready": acceptance_status == "release_ready_passed",
             "manual_required": suite.require_manual_review,
+            "expected_case_count": coverage["expected_case_count"],
+            "missing_song_ids": coverage["missing_song_ids"],
+            "duplicate_song_ids": coverage["duplicate_song_ids"],
+            "songbook_coverage_status": coverage["songbook_coverage_status"],
         },
         "cases": case_rows,
         "blockers": blockers,
@@ -886,6 +900,10 @@ def acceptance_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "blocking_count": summary.get("blocking_count", 0),
             "acceptance_status": summary.get("acceptance_status") or data.get("status") or "missing",
             "release_ready": bool(summary.get("release_ready", False)),
+            "expected_case_count": summary.get("expected_case_count", 0),
+            "missing_song_ids": summary.get("missing_song_ids", []),
+            "duplicate_song_ids": summary.get("duplicate_song_ids", []),
+            "songbook_coverage_status": summary.get("songbook_coverage_status") or "not_applicable",
             "profile_id": data.get("profile_id"),
             "songbook_id": data.get("songbook_id"),
             "songbook_version": data.get("songbook_version"),
@@ -1074,11 +1092,76 @@ def _expectation_blockers(case: AcceptanceCase, health_summary: dict[str, Any]) 
     return blockers
 
 
-def _acceptance_status(*, blockers: list[str], case_count: int, manual_accepted: int, synthetic_accepted: int, suite: AcceptanceSuite) -> str:
+def _songbook_coverage(case_rows: list[dict[str, Any]], suite: AcceptanceSuite) -> dict[str, Any]:
+    if not suite.release_ready_profile:
+        return {
+            "expected_case_count": 0,
+            "missing_song_ids": [],
+            "duplicate_song_ids": [],
+            "songbook_coverage_status": "not_applicable",
+        }
+    profile = get_acceptance_profile(suite.profile_id)
+    expected_song_ids = [str(song.get("song_id") or "") for song in list_regression_songs(profile.case_count)]
+    expected_song_ids = [song_id for song_id in expected_song_ids if song_id]
+    seen: dict[str, int] = {}
+    manual_accepted_song_ids: set[str] = set()
+    for row in case_rows:
+        song_id = str(row.get("song_id") or "").strip()
+        if not song_id:
+            continue
+        seen[song_id] = seen.get(song_id, 0) + 1
+        if row.get("review_status") == "accepted" and row.get("review_mode") == "manual":
+            manual_accepted_song_ids.add(song_id)
+    duplicate_song_ids = sorted(song_id for song_id, count in seen.items() if count > 1)
+    missing_song_ids = [song_id for song_id in expected_song_ids if song_id not in manual_accepted_song_ids]
+    expected_set = set(expected_song_ids)
+    complete = (
+        len(case_rows) >= profile.case_count
+        and not missing_song_ids
+        and not duplicate_song_ids
+        and all(song_id in expected_set for song_id in seen)
+    )
+    return sanitize_metadata(
+        {
+            "expected_case_count": profile.case_count,
+            "case_count": len(case_rows),
+            "missing_song_ids": missing_song_ids,
+            "duplicate_song_ids": duplicate_song_ids,
+            "songbook_coverage_status": "complete" if complete else "incomplete",
+        }
+    )
+
+
+def _songbook_coverage_blockers(coverage: dict[str, Any], suite: AcceptanceSuite) -> list[str]:
+    if not suite.release_ready_profile or coverage.get("songbook_coverage_status") == "complete":
+        return []
+    blockers = ["release-ready profile requires complete regression songbook coverage"]
+    missing = coverage.get("missing_song_ids") if isinstance(coverage.get("missing_song_ids"), list) else []
+    duplicates = coverage.get("duplicate_song_ids") if isinstance(coverage.get("duplicate_song_ids"), list) else []
+    expected = int(coverage.get("expected_case_count", 0) or 0)
+    if expected and int(coverage.get("case_count", 0) or 0) < expected:
+        blockers.append(f"case count below expected {expected}")
+    if missing:
+        blockers.append("missing song ids: " + ", ".join(str(item) for item in missing[:12]))
+    if duplicates:
+        blockers.append("duplicate song ids: " + ", ".join(str(item) for item in duplicates[:12]))
+    return blockers
+
+
+def _acceptance_status(
+    *,
+    blockers: list[str],
+    case_count: int,
+    manual_accepted: int,
+    synthetic_accepted: int,
+    suite: AcceptanceSuite,
+    songbook_coverage_status: str = "not_applicable",
+) -> str:
     if blockers:
         return "failed"
     if suite.release_ready_profile:
-        return "release_ready_passed" if manual_accepted == case_count and case_count > 0 else "manual_required"
+        complete = songbook_coverage_status == "complete"
+        return "release_ready_passed" if complete and manual_accepted == case_count and case_count > 0 else "manual_required"
     if manual_accepted == case_count and case_count > 0:
         return "manual_passed"
     if synthetic_accepted == case_count and case_count > 0:

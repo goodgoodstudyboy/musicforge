@@ -5231,6 +5231,7 @@ def _v45_acceptance_profiles_songbook_smoke(root: Path) -> tuple[bool, str]:
         diff_status, diff = _release_http_json(server, "POST", f"/api/acceptance/suites/{right_id}/diff", {"other_suite_id": left_id})
 
         rc_status, rc_suite = _v45_acceptance_suite(server, "RC Synthetic", profile_id="release_candidate", review_mode="synthetic")
+        incomplete_rc_status, incomplete_rc_suite = _v45_acceptance_suite(server, "RC Incomplete Manual", profile_id="release_candidate", review_mode="manual")
 
         project_id = _v37_signed_project(server, "Acceptance Gate Track")
         release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Acceptance Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
@@ -5240,6 +5241,7 @@ def _v45_acceptance_profiles_songbook_smoke(root: Path) -> tuple[bool, str]:
         export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
         zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
         blocked_sign_status, blocked_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "acceptance_suite_id": rc_suite.get("suite_id")})
+        incomplete_sign_status, incomplete_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "acceptance_suite_id": incomplete_rc_suite.get("suite_id")})
 
         profile_ids = {item.get("profile_id") for item in profiles.get("profiles", []) if isinstance(item, dict)}
         song_count = len(songbook.get("songbook", {}).get("songs", []))
@@ -5253,17 +5255,20 @@ def _v45_acceptance_profiles_songbook_smoke(root: Path) -> tuple[bool, str]:
             and diff_status == 200
             and diff.get("diff", {}).get("status") == "passed"
             and rc_status == "failed"
+            and incomplete_rc_status == "failed"
             and release_status == 201
             and track_status == 200
             and qa_status == 200
             and export_status == 200
             and zip_status == 200
             and blocked_sign_status == 409
+            and incomplete_sign_status == 409
             and "Acceptance suite" in str(blocked_sign.get("error") or "")
+            and "Acceptance suite" in str(incomplete_sign.get("error") or "")
         )
         return ok, (
             f"profiles={len(profile_ids)}, songs={song_count}, diff={diff.get('diff', {}).get('status')}, "
-            f"rc={rc_status}, release_gate={blocked_sign_status}"
+            f"rc={rc_status}, incomplete_rc={incomplete_rc_status}, release_gate={blocked_sign_status}/{incomplete_sign_status}"
         )
     except Exception as exc:
         return False, str(exc)

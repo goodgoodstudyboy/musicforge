@@ -4803,13 +4803,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         summary = acceptance_report_summary(report)
         acceptance_status = str(summary.get("acceptance_status") or "")
         release_ready = bool(summary.get("release_ready", False))
-        ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed"
+        coverage_status = str(summary.get("songbook_coverage_status") or "not_applicable")
+        ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed" and coverage_status in {"complete", "not_applicable"}
         return {
             "status": "passed" if ok else "failed",
             "suite_id": suite_id,
             "profile_id": summary.get("profile_id"),
             "acceptance_status": acceptance_status,
             "release_ready": release_ready,
+            "songbook_coverage_status": coverage_status,
+            "expected_case_count": summary.get("expected_case_count", 0),
+            "missing_song_ids": summary.get("missing_song_ids", []),
+            "duplicate_song_ids": summary.get("duplicate_song_ids", []),
             "manual_accepted_count": summary.get("manual_accepted_count", 0),
             "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
             "message": "Acceptance suite is not manual release-ready.",

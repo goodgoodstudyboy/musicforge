@@ -7,6 +7,7 @@ import pytest
 from song_agent.projectio import read_json, write_json
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.music_acceptance import AcceptanceStateError, AcceptanceStore
+from song_agent.regression_songbook import BUILTIN_SONGBOOK_ID, BUILTIN_SONGBOOK_VERSION, list_regression_songs
 
 
 def test_acceptance_suite_generate_health_review_report_signoff(tmp_path: Path, monkeypatch) -> None:
@@ -112,7 +113,7 @@ def test_acceptance_report_detects_source_and_report_tamper(tmp_path: Path, monk
     assert signoff["report_integrity"]["status"] == "failed"
 
 
-def test_release_candidate_requires_manual_review_and_diff_tracks_song_ids(tmp_path: Path, monkeypatch) -> None:
+def test_release_candidate_requires_complete_songbook_coverage(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     store = AcceptanceStore(tmp_path / ".musicforge" / "acceptance")
     suite = store.create_suite({"profile_id": "release_candidate", "require_audio_if_renderer_configured": False})
@@ -140,14 +141,79 @@ def test_release_candidate_requires_manual_review_and_diff_tracks_song_ids(tmp_p
         case.case_id,
         {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Manual playback review confirms this regression song is acceptable.", "audio_mode": "midi", "review_mode": "manual"},
     )
+    incomplete_report = store.build_report(suite.suite_id)
+    assert incomplete_report["status"] == "failed"
+    assert incomplete_report["summary"]["acceptance_status"] == "failed"
+    assert incomplete_report["summary"]["release_ready"] is False
+    assert incomplete_report["summary"]["expected_case_count"] == 12
+    assert incomplete_report["summary"]["songbook_coverage_status"] == "incomplete"
+    assert "sad_ballad_001" in incomplete_report["summary"]["missing_song_ids"]
+    assert any("complete regression songbook coverage" in blocker for blocker in incomplete_report["blockers"])
+
+
+def test_release_candidate_full_songbook_can_be_release_ready_and_diff_tracks_song_ids(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = AcceptanceStore(tmp_path / ".musicforge" / "acceptance")
+    suite = store.create_suite({"profile_id": "release_candidate", "require_audio_if_renderer_configured": False})
+    for song in list_regression_songs():
+        case = store.add_case(
+            suite.suite_id,
+            {
+                "name": song["title"],
+                "song_id": song["song_id"],
+                "songbook_id": BUILTIN_SONGBOOK_ID,
+                "songbook_version": BUILTIN_SONGBOOK_VERSION,
+                "expectations": song["expectations"],
+                "request": song["request"],
+            },
+        )
+        store.generate_case(suite.suite_id, case.case_id, render_audio_mode="never")
+        store.run_health(suite.suite_id, case.case_id)
+        store.write_review(
+            suite.suite_id,
+            case.case_id,
+            {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Manual playback review confirms this regression song is acceptable.", "audio_mode": "midi", "review_mode": "manual"},
+        )
+
     manual_report = store.build_report(suite.suite_id)
     assert manual_report["summary"]["acceptance_status"] == "release_ready_passed"
     assert manual_report["summary"]["release_ready"] is True
-
+    assert manual_report["summary"]["songbook_coverage_status"] == "complete"
+    assert manual_report["summary"]["missing_song_ids"] == []
+    assert manual_report["summary"]["duplicate_song_ids"] == []
     diff = build_acceptance_diff(manual_report, manual_report)
     assert diff["status"] == "passed"
-    assert diff["summary"]["song_count"] == 1
-    assert diff["songs"][0]["song_id"] == "upbeat_pop_001"
+    assert diff["summary"]["song_count"] == 12
+    assert diff["songs"][0]["song_id"] == "acoustic_folk_001"
+
+
+def test_release_candidate_duplicate_song_id_blocks_coverage(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = AcceptanceStore(tmp_path / ".musicforge" / "acceptance")
+    suite = store.create_suite({"profile_id": "release_candidate", "require_audio_if_renderer_configured": False})
+    for index in range(12):
+        case = store.add_case(
+            suite.suite_id,
+            {
+                "name": f"Duplicate {index}",
+                "song_id": "upbeat_pop_001",
+                "request": {"title": f"Duplicate {index}", "language": "English", "style": "upbeat pop", "theme": "duplicate", "duration_seconds": 90},
+            },
+        )
+        store.generate_case(suite.suite_id, case.case_id, render_audio_mode="never")
+        store.run_health(suite.suite_id, case.case_id)
+        store.write_review(
+            suite.suite_id,
+            case.case_id,
+            {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Manual playback review confirms this duplicate song is acceptable.", "audio_mode": "midi", "review_mode": "manual"},
+        )
+
+    report = store.build_report(suite.suite_id)
+
+    assert report["status"] == "failed"
+    assert report["summary"]["songbook_coverage_status"] == "incomplete"
+    assert report["summary"]["duplicate_song_ids"] == ["upbeat_pop_001"]
+    assert "sad_ballad_001" in report["summary"]["missing_song_ids"]
 
 
 def test_legacy_acceptance_mode_defaults_to_developer_manual(tmp_path: Path, monkeypatch) -> None:

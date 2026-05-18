@@ -132,6 +132,7 @@ def test_v45_acceptance_profiles_songbook_smoke(tmp_path: Path) -> None:
     assert "songs=12" in detail
     assert "diff=passed" in detail
     assert "rc=failed" in detail
+    assert "incomplete_rc=failed" in detail
     assert "release_gate=409" in detail
 
 

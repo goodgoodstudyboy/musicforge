@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.5.1 - 2026-05-19
+
+### Fixed
+- Release-ready Acceptance reports now require complete Regression Songbook coverage for release-ready profiles.
+- `release_candidate` and `audio_required` reports must cover all 12 built-in song IDs, with no duplicate song IDs, and every song must have a manual accepted review before `release_ready=true`.
+- Release Signoff now rejects incomplete-songbook Acceptance Suites even if their existing cases were manually accepted.
+
+### Added
+- Acceptance report summaries now include `expected_case_count`, `missing_song_ids`, `duplicate_song_ids`, and `songbook_coverage_status`.
+- release-check v4.5 smoke now covers both synthetic release-candidate rejection and one-song manual release-candidate rejection.
+
+### Verified
+- `python -m pytest tests\test_music_acceptance.py tests\test_server_releases.py::test_release_signoff_blocks_non_manual_release_candidate_acceptance tests\test_server_releases.py::test_release_signoff_blocks_incomplete_manual_release_candidate_acceptance tests\test_release_check.py::test_v45_acceptance_profiles_songbook_smoke tests\test_cli_acceptance_check.py::test_cli_acceptance_release_candidate_auto_review_cannot_pass -q`
+
 ## v4.5.0 - 2026-05-19
 
 ### Added
