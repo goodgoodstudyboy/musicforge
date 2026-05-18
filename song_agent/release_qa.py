@@ -197,6 +197,7 @@ def release_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
             "qa_source_hash": data.get("qa_source_hash"),
             "export_manifest_hash": data.get("export_manifest_hash"),
             "forced": bool(data.get("forced", False)),
+            "acceptance_gate": data.get("acceptance_gate") if isinstance(data.get("acceptance_gate"), dict) else {},
         },
         blocked_keys=BLOCKED_RELEASE_KEYS,
     )

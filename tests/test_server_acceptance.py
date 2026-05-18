@@ -59,3 +59,55 @@ def test_acceptance_api_end_to_end_and_signed_guard(tmp_path, monkeypatch):
     assert "signed" in blocked_archive["error"].lower()
     assert reset_status == 200
     assert reset["summary"]["status"] == "reset"
+
+
+def test_acceptance_profiles_songbook_and_diff_api(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        profiles_status, profiles = request_json(server, "GET", "/api/acceptance/profiles")
+        songbook_status, songbook = request_json(server, "GET", "/api/acceptance/songbook")
+        first_status, first = request_json(server, "POST", "/api/acceptance/suites", {"name": "Left", "profile_id": "midi_smoke", "require_audio_if_renderer_configured": False})
+        second_status, second = request_json(server, "POST", "/api/acceptance/suites", {"name": "Right", "profile_id": "midi_smoke", "require_audio_if_renderer_configured": False})
+        left_id = first["suite"]["suite_id"]
+        right_id = second["suite"]["suite_id"]
+        for suite_id in (left_id, right_id):
+            case_status, case_data = request_json(
+                server,
+                "POST",
+                f"/api/acceptance/suites/{suite_id}/cases",
+                {
+                    "song_id": "upbeat_pop_001",
+                    "request": {"title": "Diff Song", "language": "English", "style": "upbeat pop", "theme": "api", "duration_seconds": 90},
+                },
+            )
+            case_id = case_data["case"]["case_id"]
+            request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+            request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+            request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 4, "status": "accepted", "playback_confirmed": True, "notes": "Manual review confirms the generated MIDI is acceptable.", "audio_mode": "midi", "review_mode": "manual"})
+            request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        diff_status, diff = request_json(server, "POST", f"/api/acceptance/suites/{right_id}/diff", {"other_suite_id": left_id})
+    finally:
+        stop_test_server(server)
+
+    assert profiles_status == 200
+    assert any(item["profile_id"] == "release_candidate" for item in profiles["profiles"])
+    assert songbook_status == 200
+    assert len(songbook["songbook"]["songs"]) == 12
+    assert first_status == 201
+    assert second_status == 201
+    assert diff_status == 200
+    assert diff["diff"]["status"] == "passed"
+    assert diff["diff"]["songs"][0]["song_id"] == "upbeat_pop_001"
+
+
+def test_acceptance_create_rejects_unknown_profile(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        status, data = request_json(server, "POST", "/api/acceptance/suites", {"name": "Bad Profile", "profile_id": "unknown_profile"})
+    finally:
+        stop_test_server(server)
+
+    assert status == 400
+    assert "Unknown acceptance profile" in data["error"]

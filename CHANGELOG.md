@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.5.0 - 2026-05-19
+
+### Added
+- Acceptance Profiles for repeatable music gates: `midi_smoke`, `developer_manual`, `release_candidate`, and `audio_required`.
+- Built-in 12-song Regression Songbook with stable song IDs, requests, expectations, and Studio/API exposure.
+- `acceptance-check --profile ...` and `acceptance-diff` for profile-based acceptance runs and songbook-aligned regression comparisons.
+- Manual release-candidate gate: synthetic reviews can support smoke tests, but release-ready acceptance requires manual listening reviews.
+- Release Signoff acceptance binding blocks non-manual or non-release-ready acceptance reports unless force signoff is used and audited.
+- Studio Acceptance controls for profile selection, regression songbook browsing, songbook case creation, and acceptance status display.
+- release-check v4.5 smoke covering profiles, songbook, diff, synthetic release-candidate failure, and Release Signoff acceptance blocking.
+
+### Verified
+- `python -m pytest tests\test_webui.py::test_webui_contains_acceptance_workspace tests\test_cli_acceptance_check.py tests\test_music_acceptance.py tests\test_server_acceptance.py tests\test_server_releases.py::test_release_signoff_blocks_non_manual_release_candidate_acceptance tests\test_release_check.py::test_v45_acceptance_profiles_songbook_smoke -q`
+
 ## v4.4.1 - 2026-05-18
 
 ### Fixed

@@ -207,6 +207,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.2 distribution layout contract smoke", *_v42_distribution_layout_contract_smoke(root))
     report.add("v4.3 submission workspace smoke", *_v43_submission_workspace_smoke(root))
     report.add("v4.4 music acceptance lab smoke", *_v44_music_acceptance_lab_smoke(root))
+    report.add("v4.5 acceptance profiles songbook smoke", *_v45_acceptance_profiles_songbook_smoke(root))
     return report
 
 
@@ -5203,6 +5204,107 @@ def _v44_music_acceptance_lab_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
+
+
+def _v45_acceptance_profiles_songbook_smoke(root: Path) -> tuple[bool, str]:
+    base = (Path(tempfile.gettempdir()) / "mf-v45-acceptance-profiles-songbook").resolve()
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir(parents=True, exist_ok=True)
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        profiles_status, profiles = _release_http_json(server, "GET", "/api/acceptance/profiles")
+        songbook_status, songbook = _release_http_json(server, "GET", "/api/acceptance/songbook")
+
+        left_status, left_suite = _v45_acceptance_suite(server, "Left", review_mode="manual")
+        right_status, right_suite = _v45_acceptance_suite(server, "Right", review_mode="manual")
+        left_id = left_suite.get("suite_id")
+        right_id = right_suite.get("suite_id")
+        diff_status, diff = _release_http_json(server, "POST", f"/api/acceptance/suites/{right_id}/diff", {"other_suite_id": left_id})
+
+        rc_status, rc_suite = _v45_acceptance_suite(server, "RC Synthetic", profile_id="release_candidate", review_mode="synthetic")
+
+        project_id = _v37_signed_project(server, "Acceptance Gate Track")
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Acceptance Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        blocked_sign_status, blocked_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "acceptance_suite_id": rc_suite.get("suite_id")})
+
+        profile_ids = {item.get("profile_id") for item in profiles.get("profiles", []) if isinstance(item, dict)}
+        song_count = len(songbook.get("songbook", {}).get("songs", []))
+        ok = (
+            profiles_status == 200
+            and {"midi_smoke", "developer_manual", "release_candidate", "audio_required"}.issubset(profile_ids)
+            and songbook_status == 200
+            and song_count == 12
+            and left_status == "passed"
+            and right_status == "passed"
+            and diff_status == 200
+            and diff.get("diff", {}).get("status") == "passed"
+            and rc_status == "failed"
+            and release_status == 201
+            and track_status == 200
+            and qa_status == 200
+            and export_status == 200
+            and zip_status == 200
+            and blocked_sign_status == 409
+            and "Acceptance suite" in str(blocked_sign.get("error") or "")
+        )
+        return ok, (
+            f"profiles={len(profile_ids)}, songs={song_count}, diff={diff.get('diff', {}).get('status')}, "
+            f"rc={rc_status}, release_gate={blocked_sign_status}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v45_acceptance_suite(server: Any, name: str, *, profile_id: str = "midi_smoke", review_mode: str = "manual") -> tuple[str, dict[str, Any]]:
+    create_status, created = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": name, "profile_id": profile_id, "require_audio_if_renderer_configured": False})
+    if create_status != 201:
+        return "failed", {}
+    suite = created.get("suite", {})
+    suite_id = suite.get("suite_id")
+    song_ids = ["upbeat_pop_001"] if profile_id == "release_candidate" else ["upbeat_pop_001", "sad_ballad_001"]
+    for song_id in song_ids:
+        case_status, case = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases",
+            {"song_id": song_id, "request": {"title": song_id, "language": "English", "style": "upbeat pop", "theme": "v4.5 smoke", "duration_seconds": 90}},
+        )
+        case_id = case.get("case", {}).get("case_id")
+        generate_status, _generated = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        health_status, _health = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        review_status, _review = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review",
+            {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Acceptance profile smoke review confirms MIDI playback.", "audio_mode": "midi", "review_mode": review_mode},
+        )
+        if not (case_status == 201 and generate_status == 200 and health_status == 200 and review_status == 200):
+            return "failed", suite
+    report_status, report = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+    if report_status != 200:
+        return "failed", suite
+    return str(report.get("summary", {}).get("status") or report.get("report", {}).get("status") or "failed"), suite
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

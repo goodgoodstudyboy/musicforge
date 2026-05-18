@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from song_agent.projectio import read_json, write_json
+from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.music_acceptance import AcceptanceStateError, AcceptanceStore
 
 
@@ -109,3 +110,51 @@ def test_acceptance_report_detects_source_and_report_tamper(tmp_path: Path, monk
     assert content_failed["verification"]["content_status"] == "failed"
     signoff = store.read_signoff(suite.suite_id)
     assert signoff["report_integrity"]["status"] == "failed"
+
+
+def test_release_candidate_requires_manual_review_and_diff_tracks_song_ids(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = AcceptanceStore(tmp_path / ".musicforge" / "acceptance")
+    suite = store.create_suite({"profile_id": "release_candidate", "require_audio_if_renderer_configured": False})
+    case = store.add_case(
+        suite.suite_id,
+        {
+            "song_id": "upbeat_pop_001",
+            "request": {"title": "Manual Gate", "language": "English", "style": "upbeat pop", "theme": "test", "duration_seconds": 90},
+        },
+    )
+    store.generate_case(suite.suite_id, case.case_id, render_audio_mode="never")
+    store.run_health(suite.suite_id, case.case_id)
+    store.write_review(
+        suite.suite_id,
+        case.case_id,
+        {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Synthetic review should not make this release-ready.", "audio_mode": "midi", "review_mode": "synthetic"},
+    )
+    synthetic_report = store.build_report(suite.suite_id)
+    assert synthetic_report["status"] == "failed"
+    assert synthetic_report["summary"]["acceptance_status"] == "failed"
+    assert any("manual review required" in blocker for blocker in synthetic_report["blockers"])
+
+    store.write_review(
+        suite.suite_id,
+        case.case_id,
+        {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Manual playback review confirms this regression song is acceptable.", "audio_mode": "midi", "review_mode": "manual"},
+    )
+    manual_report = store.build_report(suite.suite_id)
+    assert manual_report["summary"]["acceptance_status"] == "release_ready_passed"
+    assert manual_report["summary"]["release_ready"] is True
+
+    diff = build_acceptance_diff(manual_report, manual_report)
+    assert diff["status"] == "passed"
+    assert diff["summary"]["song_count"] == 1
+    assert diff["songs"][0]["song_id"] == "upbeat_pop_001"
+
+
+def test_legacy_acceptance_mode_defaults_to_developer_manual(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = AcceptanceStore(tmp_path / ".musicforge" / "acceptance")
+
+    suite = store.create_suite({"name": "Legacy Suite", "mode": "developer_self_test"})
+
+    assert suite.profile_id == "developer_manual"
+    assert suite.mode == "developer_self_test"

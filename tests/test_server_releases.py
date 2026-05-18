@@ -134,6 +134,87 @@ def test_project_add_to_release_and_release_qa_stale_after_project_export_change
     assert core_check["status"] == "failed"
 
 
+def test_release_signoff_blocks_non_manual_release_candidate_acceptance(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _signed_project(server, "Acceptance Gate Track")
+        created_status, created = request_json(server, "POST", "/api/releases", {"name": "Acceptance Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = created["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+
+        suite_status, suite_data = request_json(server, "POST", "/api/acceptance/suites", {"name": "RC Synthetic", "profile_id": "release_candidate", "require_audio_if_renderer_configured": False})
+        suite_id = suite_data["suite"]["suite_id"]
+        case_status, case_data = request_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases",
+            {"song_id": "upbeat_pop_001", "request": {"title": "Gate Song", "language": "English", "style": "upbeat pop", "theme": "gate", "duration_seconds": 90}},
+        )
+        case_id = case_data["case"]["case_id"]
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Synthetic release candidate review should be blocked.", "audio_mode": "midi", "review_mode": "synthetic"})
+        report_status, report = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        sign_status, signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "acceptance_suite_id": suite_id})
+    finally:
+        stop_test_server(server)
+
+    assert created_status == 201
+    assert suite_status == 201
+    assert case_status == 201
+    assert report_status == 200
+    assert report["summary"]["release_ready"] is False
+    assert sign_status == 409
+    assert "Acceptance suite" in signoff["error"]
+
+
+def test_release_signoff_records_manual_release_candidate_acceptance_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _signed_project(server, "Acceptance Gate Manual Track")
+        created_status, created = request_json(server, "POST", "/api/releases", {"name": "Acceptance Gate Manual Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = created["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+
+        suite_status, suite_data = request_json(server, "POST", "/api/acceptance/suites", {"name": "RC Manual", "profile_id": "release_candidate", "require_audio_if_renderer_configured": False})
+        suite_id = suite_data["suite"]["suite_id"]
+        case_status, case_data = request_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases",
+            {"song_id": "upbeat_pop_001", "request": {"title": "Gate Manual Song", "language": "English", "style": "upbeat pop", "theme": "gate", "duration_seconds": 90}},
+        )
+        case_id = case_data["case"]["case_id"]
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "notes": "Manual release candidate review.", "audio_mode": "midi", "review_mode": "manual"})
+        report_status, report = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        sign_status, signed = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "acceptance_suite_id": suite_id})
+        with zipfile.ZipFile(Path(".musicforge") / "releases" / release_id / "release-export.zip") as archive:
+            zipped_signoff = json.loads(archive.read("release-signoff.json").decode("utf-8"))
+    finally:
+        stop_test_server(server)
+
+    assert created_status == 201
+    assert suite_status == 201
+    assert case_status == 201
+    assert report_status == 200
+    assert report["summary"]["acceptance_status"] == "release_ready_passed"
+    assert sign_status == 200
+    assert signed["summary"]["acceptance_gate"]["status"] == "passed"
+    assert signed["summary"]["acceptance_gate"]["suite_id"] == suite_id
+    assert zipped_signoff["acceptance_gate"]["status"] == "passed"
+    assert zipped_signoff["acceptance_gate"]["suite_id"] == suite_id
+
+
 def test_release_auth_protected(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_auth_server(AuthConfig(enabled=True, token=TOKEN))

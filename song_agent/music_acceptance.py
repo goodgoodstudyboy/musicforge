@@ -8,11 +8,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from song_agent.acceptance_profiles import AcceptanceProfile, get_acceptance_profile, profile_payload
 from song_agent.agent.pipeline import SongAgent
 from song_agent.music_health import analyze_music_health, music_health_allows_review, music_health_summary
 from song_agent.projectio import read_json, slugify, write_json
 from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
+from song_agent.regression_songbook import BUILTIN_SONGBOOK_ID, BUILTIN_SONGBOOK_VERSION, list_regression_songs
 from song_agent.renderers.audio import RendererError, load_renderer_config, render_audio, renderer_configured
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongPlan, SongRequest
@@ -53,6 +55,10 @@ class AcceptanceCase:
     name: str
     source_type: str
     status: str
+    song_id: str | None = None
+    songbook_id: str | None = None
+    songbook_version: str | None = None
+    expectations: dict[str, Any] = field(default_factory=dict)
     request_summary: dict[str, Any] = field(default_factory=dict)
     job_id: str | None = None
     project_id: str | None = None
@@ -72,6 +78,10 @@ class AcceptanceCase:
                 "name": self.name,
                 "source_type": self.source_type,
                 "status": self.status,
+                "song_id": self.song_id,
+                "songbook_id": self.songbook_id,
+                "songbook_version": self.songbook_version,
+                "expectations": self.expectations,
                 "request_summary": self.request_summary,
                 "job_id": self.job_id,
                 "project_id": self.project_id,
@@ -97,6 +107,10 @@ class AcceptanceCase:
             name=_safe_text(data.get("name"), 120) or "Acceptance Case",
             source_type=_safe_text(data.get("source_type"), 80) or "generated_request",
             status=status,
+            song_id=_optional_text(data.get("song_id"), 120),
+            songbook_id=_optional_text(data.get("songbook_id"), 120),
+            songbook_version=_optional_text(data.get("songbook_version"), 80),
+            expectations=_safe_dict(data.get("expectations")),
             request_summary=_safe_dict(data.get("request_summary")),
             job_id=_optional_text(data.get("job_id"), 120),
             project_id=_optional_text(data.get("project_id"), 120),
@@ -116,6 +130,13 @@ class AcceptanceSuite:
     name: str
     status: str
     mode: str
+    profile_id: str = "developer_manual"
+    profile: dict[str, Any] = field(default_factory=dict)
+    songbook_id: str = BUILTIN_SONGBOOK_ID
+    songbook_version: str = BUILTIN_SONGBOOK_VERSION
+    require_manual_review: bool = False
+    allow_synthetic_review: bool = True
+    release_ready_profile: bool = False
     min_rating: int = 3
     require_audio_if_renderer_configured: bool = True
     case_count: int = 0
@@ -135,6 +156,13 @@ class AcceptanceSuite:
                 "name": self.name,
                 "status": self.status,
                 "mode": self.mode,
+                "profile_id": self.profile_id,
+                "profile": self.profile,
+                "songbook_id": self.songbook_id,
+                "songbook_version": self.songbook_version,
+                "require_manual_review": self.require_manual_review,
+                "allow_synthetic_review": self.allow_synthetic_review,
+                "release_ready_profile": self.release_ready_profile,
                 "min_rating": self.min_rating,
                 "require_audio_if_renderer_configured": self.require_audio_if_renderer_configured,
                 "case_count": self.case_count,
@@ -160,6 +188,13 @@ class AcceptanceSuite:
             name=_safe_text(data.get("name"), 120) or "Music Acceptance Suite",
             status=status,
             mode=_safe_text(data.get("mode"), 80) or "developer_self_test",
+            profile_id=_safe_text(data.get("profile_id"), 80) or "developer_manual",
+            profile=_safe_dict(data.get("profile")),
+            songbook_id=_safe_text(data.get("songbook_id"), 120) or BUILTIN_SONGBOOK_ID,
+            songbook_version=_safe_text(data.get("songbook_version"), 80) or BUILTIN_SONGBOOK_VERSION,
+            require_manual_review=bool(data.get("require_manual_review", False)),
+            allow_synthetic_review=bool(data.get("allow_synthetic_review", True)),
+            release_ready_profile=bool(data.get("release_ready_profile", False)),
             min_rating=max(1, min(5, int(data.get("min_rating", 3) or 3))),
             require_audio_if_renderer_configured=bool(data.get("require_audio_if_renderer_configured", True)),
             case_count=int(data.get("case_count", 0) or 0),
@@ -245,17 +280,28 @@ class AcceptanceStore:
     def create_suite(self, payload: dict[str, Any] | None = None) -> AcceptanceSuite:
         payload = payload or {}
         with self.lock:
+            profile = _profile_from_payload(payload)
             suite_id = self._reserve_suite_id()
             now = now_iso()
             config, sources = load_renderer_config()
+            require_audio = profile.require_audio_if_renderer_configured
+            if payload.get("require_audio_if_renderer_configured") is not None:
+                require_audio = bool(payload.get("require_audio_if_renderer_configured"))
             suite = AcceptanceSuite(
                 schema_version=ACCEPTANCE_SUITE_SCHEMA_VERSION,
                 suite_id=suite_id,
                 name=_safe_text(payload.get("name"), 120) or "Music Acceptance Suite",
                 status="draft",
-                mode=_safe_text(payload.get("mode"), 80) or "developer_self_test",
-                min_rating=max(1, min(5, int(payload.get("min_rating", 3) or 3))),
-                require_audio_if_renderer_configured=bool(payload.get("require_audio_if_renderer_configured", True)),
+                mode=_safe_text(payload.get("mode"), 80) or profile.profile_id,
+                profile_id=profile.profile_id,
+                profile=profile_payload(profile),
+                songbook_id=_safe_text(payload.get("songbook_id"), 120) or profile.songbook_id,
+                songbook_version=_safe_text(payload.get("songbook_version"), 80) or BUILTIN_SONGBOOK_VERSION,
+                require_manual_review=bool(payload.get("require_manual_review", profile.require_manual_review)),
+                allow_synthetic_review=bool(payload.get("allow_synthetic_review", profile.allow_synthetic_review)),
+                release_ready_profile=bool(payload.get("release_ready_profile", profile.release_ready)),
+                min_rating=max(1, min(5, int(payload.get("min_rating", profile.min_rating) or profile.min_rating))),
+                require_audio_if_renderer_configured=require_audio,
                 renderer_snapshot=_renderer_snapshot(config, sources),
                 created_at=now,
                 updated_at=now,
@@ -308,6 +354,10 @@ class AcceptanceStore:
                 name=_safe_text(payload.get("name"), 120) or request.get("title") or f"Acceptance Case {case_id}",
                 source_type=source_type,
                 status="pending",
+                song_id=_optional_text(payload.get("song_id"), 120),
+                songbook_id=_optional_text(payload.get("songbook_id"), 120) or suite.songbook_id,
+                songbook_version=_optional_text(payload.get("songbook_version"), 80) or suite.songbook_version,
+                expectations=_safe_dict(payload.get("expectations")),
                 request_summary=_request_summary(request),
                 project_id=_optional_text(payload.get("project_id"), 120),
                 version_id=_optional_text(payload.get("version_id"), 40),
@@ -674,6 +724,7 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
         health_summary = music_health_summary(health)
         review_summary = listening_review_summary(review)
         rating = review_summary.get("rating")
+        review_mode = str(review_summary.get("review_mode") or "manual")
         if isinstance(rating, int):
             ratings.append(rating)
         if not health:
@@ -688,9 +739,16 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
             blockers.append(f"{case.case_id}: review status is {review_summary.get('status')}")
         if review and isinstance(rating, int) and rating < suite.min_rating and review_summary.get("status") != "waived":
             blockers.append(f"{case.case_id}: rating below {suite.min_rating}")
+        if review and suite.require_manual_review and review_mode != "manual":
+            blockers.append(f"{case.case_id}: manual review required")
+        expectation_blockers = _expectation_blockers(case, health_summary)
+        blockers.extend(expectation_blockers)
         case_rows.append(
             {
                 "case_id": case.case_id,
+                "song_id": case.song_id,
+                "songbook_id": case.songbook_id,
+                "songbook_version": case.songbook_version,
                 "name": case.name,
                 "status": case.status,
                 "health_status": health_summary.get("status"),
@@ -698,7 +756,13 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
                 "rating": rating,
                 "playback_confirmed": review_summary.get("playback_confirmed", False),
                 "audio_status": health_summary.get("audio_status"),
-                "review_mode": review_summary.get("review_mode"),
+                "review_mode": review_mode,
+                "note_count": health_summary.get("note_count", 0),
+                "track_count": health_summary.get("track_count", 0),
+                "section_count": health_summary.get("section_count", 0),
+                "quality_overall": health_summary.get("quality_overall"),
+                "health_blockers": [item.get("check_id") for item in health.get("blockers", []) if isinstance(item, dict)],
+                "expectation_blockers": expectation_blockers,
             }
         )
     if not cases:
@@ -706,6 +770,9 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
     sensitive = _redaction_findings({"suite": suite.to_dict(), "cases": case_rows})
     if sensitive:
         blockers.append(f"redaction scan found {len(sensitive)} issue(s)")
+    manual_accepted = sum(1 for row in case_rows if row.get("review_status") == "accepted" and row.get("review_mode") == "manual")
+    synthetic_accepted = sum(1 for row in case_rows if row.get("review_status") == "accepted" and row.get("review_mode") == "synthetic")
+    acceptance_status = _acceptance_status(blockers=blockers, case_count=len(cases), manual_accepted=manual_accepted, synthetic_accepted=synthetic_accepted, suite=suite)
     status = "passed" if not blockers else "failed"
     source_hash = stable_hash(acceptance_source_state(store, suite))
     report = {
@@ -714,14 +781,23 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
         "status": status,
         "generated_at": now_iso(),
         "source_hash": source_hash,
+        "profile": suite.profile,
+        "profile_id": suite.profile_id,
+        "songbook_id": suite.songbook_id,
+        "songbook_version": suite.songbook_version,
         "summary": {
             "case_count": len(cases),
             "accepted_count": sum(1 for row in case_rows if row.get("review_status") == "accepted"),
             "waived_count": sum(1 for row in case_rows if row.get("review_status") == "waived"),
             "health_failed_count": sum(1 for row in case_rows if row.get("health_status") == "failed"),
+            "manual_accepted_count": manual_accepted,
+            "synthetic_accepted_count": synthetic_accepted,
             "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
             "renderer_status": "configured" if suite.renderer_snapshot.get("configured") else "not_configured",
             "blocking_count": len(blockers),
+            "acceptance_status": acceptance_status,
+            "release_ready": acceptance_status == "release_ready_passed",
+            "manual_required": suite.require_manual_review,
         },
         "cases": case_rows,
         "blockers": blockers,
@@ -741,6 +817,10 @@ def acceptance_source_state(store: AcceptanceStore, suite: AcceptanceSuite) -> d
                 "name": case.name,
                 "source_type": case.source_type,
                 "status": case.status,
+                "song_id": case.song_id,
+                "songbook_id": case.songbook_id,
+                "songbook_version": case.songbook_version,
+                "expectations": case.expectations,
                 "request_summary": case.request_summary,
                 "artifacts": case.artifacts,
                 "health": store.read_health(suite.suite_id, case.case_id, default={}),
@@ -752,8 +832,14 @@ def acceptance_source_state(store: AcceptanceStore, suite: AcceptanceSuite) -> d
             "suite_id": suite.suite_id,
             "name": suite.name,
             "mode": suite.mode,
+            "profile_id": suite.profile_id,
+            "songbook_id": suite.songbook_id,
+            "songbook_version": suite.songbook_version,
             "min_rating": suite.min_rating,
             "require_audio_if_renderer_configured": suite.require_audio_if_renderer_configured,
+            "require_manual_review": suite.require_manual_review,
+            "allow_synthetic_review": suite.allow_synthetic_review,
+            "release_ready_profile": suite.release_ready_profile,
             "cases": cases,
         }
     )
@@ -793,9 +879,16 @@ def acceptance_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "accepted_count": summary.get("accepted_count", 0),
             "waived_count": summary.get("waived_count", 0),
             "health_failed_count": summary.get("health_failed_count", 0),
+            "manual_accepted_count": summary.get("manual_accepted_count", 0),
+            "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
             "average_rating": summary.get("average_rating"),
             "renderer_status": summary.get("renderer_status"),
             "blocking_count": summary.get("blocking_count", 0),
+            "acceptance_status": summary.get("acceptance_status") or data.get("status") or "missing",
+            "release_ready": bool(summary.get("release_ready", False)),
+            "profile_id": data.get("profile_id"),
+            "songbook_id": data.get("songbook_id"),
+            "songbook_version": data.get("songbook_version"),
         }
     )
 
@@ -827,6 +920,9 @@ def acceptance_suite_summary(suite: AcceptanceSuite | dict[str, Any] | None) -> 
             "suite_id": data.get("suite_id"),
             "name": data.get("name"),
             "status": data.get("status") or "missing",
+            "profile_id": data.get("profile_id"),
+            "songbook_id": data.get("songbook_id"),
+            "songbook_version": data.get("songbook_version"),
             "case_count": data.get("case_count", 0),
             "accepted_count": data.get("accepted_count", 0),
             "failed_count": data.get("failed_count", 0),
@@ -842,20 +938,24 @@ def stable_hash(value: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def acceptance_profile_payload(profile_id: str | None) -> dict[str, Any]:
+    return profile_payload(get_acceptance_profile(profile_id))
+
+
 def default_acceptance_requests(count: int) -> list[dict[str, Any]]:
-    presets = [
-        ("Neon Morning", "upbeat pop", "bright city sunrise"),
-        ("Quiet Harbor", "ballad", "late night reflection"),
-        ("Circuit Bloom", "electronic synth", "glowing machines"),
-        ("Sidewalk Cipher", "hip-hop beat-driven", "confident street story"),
-        ("Wide Sky Signal", "instrumental cinematic", "open landscape"),
-        ("Woodsmoke Letter", "acoustic singer-songwriter", "warm homecoming"),
-    ]
+    return [song["request"] for song in default_acceptance_song_cases(count)]
+
+
+def default_acceptance_song_cases(count: int) -> list[dict[str, Any]]:
+    songs = list_regression_songs()
     rows = []
     for index in range(max(1, count)):
-        title, style, theme = presets[index % len(presets)]
-        suffix = "" if index < len(presets) else f" {index + 1}"
-        rows.append({"title": f"{title}{suffix}", "language": "English", "style": style, "theme": theme, "duration_seconds": 90})
+        song = dict(songs[index % len(songs)])
+        if index >= len(songs):
+            song["song_id"] = f"{song['song_id']}_{index + 1}"
+            song["title"] = f"{song['title']} {index + 1}"
+            song["request"] = {**song["request"], "title": song["title"]}
+        rows.append(song)
     return rows
 
 
@@ -944,6 +1044,46 @@ def _review_payload(case_id: str, payload: dict[str, Any], *, min_rating: int) -
 def _case_status_from_review(review: dict[str, Any]) -> str:
     status = str(review.get("status") or "")
     return {"accepted": "accepted", "waived": "waived", "rejected": "rejected", "needs_fix": "rejected"}.get(status, "rejected")
+
+
+def _profile_from_payload(payload: dict[str, Any]) -> AcceptanceProfile:
+    if isinstance(payload.get("profile"), dict) and payload["profile"].get("profile_id"):
+        return get_acceptance_profile(str(payload["profile"].get("profile_id")))
+    profile_id = str(payload.get("profile_id") or "").strip()
+    if profile_id:
+        return get_acceptance_profile(profile_id)
+    mode = str(payload.get("mode") or "").strip()
+    legacy_modes = {"", "developer_self_test", "release_review"}
+    return get_acceptance_profile("developer_manual" if mode in legacy_modes else mode)
+
+
+def _expectation_blockers(case: AcceptanceCase, health_summary: dict[str, Any]) -> list[str]:
+    expectations = case.expectations if isinstance(case.expectations, dict) else {}
+    blockers: list[str] = []
+    minimums = (
+        ("note_count_min", "note_count", "note count"),
+        ("tracks_min", "track_count", "track count"),
+        ("sections_min", "section_count", "section count"),
+        ("quality_min", "quality_overall", "quality"),
+    )
+    for expectation_key, summary_key, label in minimums:
+        expected = expectations.get(expectation_key)
+        actual = health_summary.get(summary_key)
+        if isinstance(expected, (int, float)) and (not isinstance(actual, (int, float)) or actual < expected):
+            blockers.append(f"{case.case_id}: {label} below expected {expected}")
+    return blockers
+
+
+def _acceptance_status(*, blockers: list[str], case_count: int, manual_accepted: int, synthetic_accepted: int, suite: AcceptanceSuite) -> str:
+    if blockers:
+        return "failed"
+    if suite.release_ready_profile:
+        return "release_ready_passed" if manual_accepted == case_count and case_count > 0 else "manual_required"
+    if manual_accepted == case_count and case_count > 0:
+        return "manual_passed"
+    if synthetic_accepted == case_count and case_count > 0:
+        return "synthetic_passed"
+    return "passed"
 
 
 def _renderer_snapshot(config: Any, sources: dict[str, str]) -> dict[str, Any]:

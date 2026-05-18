@@ -1172,12 +1172,22 @@ def panel_html() -> str:
         <div class="release-layout">
           <form id="acceptance-form">
             <label>Suite Name
-              <input id="acceptance-name" value="v4.4 developer music acceptance">
+              <input id="acceptance-name" value="v4.5 regression songbook acceptance">
             </label>
             <div class="grid2">
+              <label>Profile
+                <select id="acceptance-profile">
+                  <option value="developer_manual">developer_manual</option>
+                  <option value="midi_smoke">midi_smoke</option>
+                  <option value="release_candidate">release_candidate</option>
+                  <option value="audio_required">audio_required</option>
+                </select>
+              </label>
               <label>Min Rating
                 <input id="acceptance-min-rating" type="number" min="1" max="5" value="3">
               </label>
+            </div>
+            <div class="grid2">
               <label>Mode
                 <select id="acceptance-mode">
                   <option value="developer_self_test">developer_self_test</option>
@@ -1191,6 +1201,9 @@ def panel_html() -> str:
             </div>
           </form>
           <div>
+            <div class="panel-title subhead"><span>Regression Songbook</span></div>
+            <div id="acceptance-songbook" class="release-list"><div class="empty">Loading songbook.</div></div>
+            <div class="panel-title subhead"><span>Suites</span></div>
             <div id="acceptance-list" class="release-list"><div class="empty">No acceptance suites yet.</div></div>
           </div>
         </div>
@@ -1269,6 +1282,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let selectedReleaseId = null;
     let includeHiddenReleases = false;
     let acceptanceSuites = [];
+    let acceptanceProfiles = [];
+    let acceptanceSongbook = null;
     let selectedAcceptanceSuiteId = null;
     let projects = [];
     let selectedProjectId = null;
@@ -1359,6 +1374,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadJobs();
       await loadProjects();
       await loadReleases();
+      await loadAcceptanceReferenceData();
       await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
@@ -1548,6 +1564,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           body: JSON.stringify({
             name: $("acceptance-name").value.trim() || "Music Acceptance Suite",
             mode: $("acceptance-mode").value,
+            profile_id: $("acceptance-profile").value,
             min_rating: Number($("acceptance-min-rating").value || 3),
           }),
         });
@@ -2122,6 +2139,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         if (selectedAcceptanceSuiteId) await renderAcceptanceDetail(selectedAcceptanceSuiteId);
       } catch (err) {
         $("acceptance-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function loadAcceptanceReferenceData() {
+      try {
+        const [profilesData, songbookData] = await Promise.all([
+          api("/api/acceptance/profiles"),
+          api("/api/acceptance/songbook"),
+        ]);
+        acceptanceProfiles = profilesData.profiles || [];
+        acceptanceSongbook = songbookData.songbook || null;
+        renderAcceptanceReferenceData();
+      } catch (err) {
+        $("acceptance-songbook").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
       }
     }
 
@@ -2846,6 +2877,54 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
     }
 
+    function renderAcceptanceReferenceData() {
+      if ($("acceptance-profile") && acceptanceProfiles.length) {
+        const current = $("acceptance-profile").value || "developer_manual";
+        $("acceptance-profile").innerHTML = acceptanceProfiles.map((profile) => {
+          const id = profile.profile_id || "";
+          return `<option value="${escapeHtml(id)}" ${id === current ? "selected" : ""}>${escapeHtml(id)}</option>`;
+        }).join("");
+      }
+      const songs = (acceptanceSongbook || {}).songs || [];
+      const songbook = $("acceptance-songbook");
+      if (!songbook) return;
+      if (!songs.length) {
+        songbook.innerHTML = "<div class='empty'>No regression songs available.</div>";
+        return;
+      }
+      songbook.innerHTML = `
+        <table>
+          <thead><tr><th>Song ID</th><th>Title</th><th>Style</th><th>Min</th></tr></thead>
+          <tbody>${songs.slice(0, 12).map((song) => `
+            <tr>
+              <td>${escapeHtml(song.song_id || "-")}</td>
+              <td>${escapeHtml(song.title || "-")}</td>
+              <td>${escapeHtml(song.style || "-")}</td>
+              <td>${escapeHtml(((song.expectations || {}).quality_min) || "-")}</td>
+            </tr>
+          `).join("")}</tbody>
+        </table>
+      `;
+    }
+
+    function acceptanceSongOptions() {
+      const songs = (acceptanceSongbook || {}).songs || [];
+      return songs.map((song) => `<option value="${escapeHtml(song.song_id)}">${escapeHtml(song.song_id)} · ${escapeHtml(song.title || "")}</option>`).join("");
+    }
+
+    function acceptanceSuiteOptions(selectedId = "") {
+      return acceptanceSuites.map((suite) => {
+        const summary = suite.latest_report_summary || {};
+        const label = `${suite.name || suite.suite_id} · ${suite.profile_id || "-"} · ${summary.acceptance_status || summary.status || "missing"}`;
+        return `<option value="${escapeHtml(suite.suite_id)}" ${suite.suite_id === selectedId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+    }
+
+    function selectedAcceptanceSong() {
+      const songId = $("acceptance-song-id")?.value || "";
+      return ((acceptanceSongbook || {}).songs || []).find((song) => song.song_id === songId) || null;
+    }
+
     async function renderAcceptanceDetail(suiteId) {
       const data = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}`);
       const suite = data.suite || {};
@@ -2858,6 +2937,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         return `
           <tr>
             <td>${escapeHtml(item.case_id)}</td>
+            <td>${escapeHtml(item.song_id || "-")}</td>
             <td>${escapeHtml(item.name)}</td>
             <td><span class="status ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td>
             <td>${escapeHtml(health.status || "missing")}</td>
@@ -2876,25 +2956,44 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <div class="panel-title subhead"><span>${escapeHtml(suite.name || suite.suite_id)}</span></div>
         <div class="quick-grid">
           ${metric("Status", suite.status || "-")}
+          ${metric("Profile", suite.profile_id || "-")}
+          ${metric("Songbook", suite.songbook_id || "-")}
           ${metric("Cases", suite.case_count || 0)}
           ${metric("Accepted", suite.accepted_count || 0)}
           ${metric("Report", (report.summary || {}).status || "missing")}
+          ${metric("Acceptance", (report.summary || {}).acceptance_status || "missing")}
           ${metric("Signoff", (signoff.summary || {}).status || "not_signed")}
         </div>
         <div class="grid2">
+          <label>Regression Song
+            <select id="acceptance-song-id">${acceptanceSongOptions()}</select>
+          </label>
           <label>Case Title <input id="acceptance-case-title" value="Acceptance Song"></label>
-          <label>Style <input id="acceptance-case-style" value="upbeat pop"></label>
         </div>
-        <label>Theme <input id="acceptance-case-theme" value="local acceptance review"></label>
+        <div class="grid2">
+          <label>Style <input id="acceptance-case-style" value="upbeat pop"></label>
+          <label>Theme <input id="acceptance-case-theme" value="local acceptance review"></label>
+        </div>
         <div class="actions">
           <button id="acceptance-add-case" type="button">Add Case</button>
           <button class="secondary" id="acceptance-build-report" type="button">Build Report</button>
           <button class="secondary" id="acceptance-signoff" type="button">Signoff</button>
           <button class="secondary" id="acceptance-reset-signoff" type="button">Reset Signoff</button>
         </div>
+        <div class="panel-title subhead"><span>Acceptance Diff</span></div>
+        <div class="grid2">
+          <label>Baseline Suite
+            <select id="acceptance-diff-suite"><option value="">select baseline</option>${acceptanceSuiteOptions()}</select>
+          </label>
+          <label>Diff Status
+            <input id="acceptance-diff-status" readonly value="-">
+          </label>
+        </div>
+        <div class="actions"><button class="secondary" id="acceptance-run-diff" type="button">Compare Suites</button></div>
+        <pre id="acceptance-diff-result"></pre>
         <div class="panel-title subhead"><span>Cases</span></div>
         <div class="table-wrap">
-          ${caseRows ? `<table><thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Health</th><th>Audio</th><th>Review</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${caseRows}</tbody></table>` : "<div class='empty'>No acceptance cases yet.</div>"}
+          ${caseRows ? `<table><thead><tr><th>ID</th><th>Song ID</th><th>Name</th><th>Status</th><th>Health</th><th>Audio</th><th>Review</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${caseRows}</tbody></table>` : "<div class='empty'>No acceptance cases yet.</div>"}
         </div>
         <div class="panel-title subhead"><span>Listening Review</span></div>
         <div class="grid2">
@@ -2916,19 +3015,33 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     }
 
     function wireAcceptanceActions(suiteId) {
+      $("acceptance-song-id")?.addEventListener("change", () => {
+        const song = selectedAcceptanceSong();
+        if (!song) return;
+        $("acceptance-case-title").value = song.title || "Acceptance Song";
+        $("acceptance-case-style").value = song.style || "pop";
+        $("acceptance-case-theme").value = song.theme || "acceptance review";
+      });
       $("acceptance-add-case")?.addEventListener("click", async () => {
+        const song = selectedAcceptanceSong();
+        const request = song && song.request ? song.request : {
+          title: $("acceptance-case-title").value.trim() || "Acceptance Song",
+          language: "English",
+          style: $("acceptance-case-style").value.trim() || "pop",
+          theme: $("acceptance-case-theme").value.trim() || "acceptance review",
+          duration_seconds: 90,
+        };
         await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/cases`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: $("acceptance-case-style").value.trim() || "acceptance case",
-            request: {
-              title: $("acceptance-case-title").value.trim() || "Acceptance Song",
-              language: "English",
-              style: $("acceptance-case-style").value.trim() || "pop",
-              theme: $("acceptance-case-theme").value.trim() || "acceptance review",
-              duration_seconds: 90,
-            },
+            name: (song && song.title) || $("acceptance-case-style").value.trim() || "acceptance case",
+            source_type: song ? "regression_songbook" : "generated_request",
+            song_id: song ? song.song_id : undefined,
+            songbook_id: song ? (acceptanceSongbook || {}).songbook_id : undefined,
+            songbook_version: song ? (acceptanceSongbook || {}).songbook_version : undefined,
+            expectations: song ? (song.expectations || {}) : {},
+            request,
           }),
         });
         await loadAcceptanceSuites();
@@ -2959,6 +3072,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       $("acceptance-build-report")?.addEventListener("click", async () => {
         await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/report`, { method: "POST" });
         await loadAcceptanceSuites();
+      });
+      $("acceptance-run-diff")?.addEventListener("click", async () => {
+        const otherSuiteId = $("acceptance-diff-suite").value;
+        if (!otherSuiteId) return;
+        const data = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/diff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ other_suite_id: otherSuiteId }),
+        });
+        $("acceptance-diff-status").value = (data.diff || {}).status || "-";
+        $("acceptance-diff-result").textContent = JSON.stringify(data.diff || {}, null, 2);
       });
       $("acceptance-signoff")?.addEventListener("click", async () => {
         await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/signoff`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signed_by: "developer" }) });
@@ -3101,6 +3225,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     function releaseSignoffHtml(signoffData) {
       const summary = (signoffData && signoffData.summary) || {};
       const signoff = (signoffData && signoffData.signoff) || {};
+      const gate = summary.acceptance_gate || signoff.acceptance_gate || {};
       return `
         <div class="panel-title subhead"><span>Release Signoff</span></div>
         <div class="summary-grid">
@@ -3108,13 +3233,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Signed At", summary.signed_at || "-")}
           ${metric("Signed By", summary.signed_by || "-")}
           ${metric("Forced", summary.forced ? "yes" : "-")}
+          ${metric("Acceptance Gate", gate.status || "-")}
+          ${metric("Acceptance Suite", gate.suite_id || "-")}
         </div>
         <div class="grid2">
           <label>Signed By
             <input id="release-signed-by" value="${escapeHtml(signoff.signed_by || "local-user")}">
           </label>
+          <label>Acceptance Suite
+            <select id="release-acceptance-suite">
+              <option value="">none</option>
+              ${acceptanceSuiteOptions((gate || {}).suite_id || "")}
+            </select>
+          </label>
+        </div>
+        <div class="grid2">
           <label>Reset Reason
             <input id="release-reset-reason" placeholder="Reason required before reset">
+          </label>
+          <label>Gate Status
+            <input value="${escapeHtml(gate.acceptance_status || "-")}" readonly>
           </label>
         </div>
         <label>Notes
@@ -3132,6 +3270,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         signed_by: $("release-signed-by").value.trim() || "local-user",
         notes: $("release-signoff-notes").value.trim(),
         override_reason: $("release-override-reason").value.trim(),
+        acceptance_suite_id: $("release-acceptance-suite").value,
       };
     }
 

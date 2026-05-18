@@ -26,9 +26,20 @@ def test_webui_contains_acceptance_workspace():
 
     assert "Acceptance" in html
     assert 'id="acceptance-form"' in html
+    assert 'id="acceptance-profile"' in html
+    assert 'id="acceptance-songbook"' in html
+    assert 'id="acceptance-song-id"' in html
     assert 'id="acceptance-list"' in html
     assert 'id="acceptance-detail"' in html
     assert "/api/acceptance/suites" in html
+    assert "/api/acceptance/profiles" in html
+    assert "/api/acceptance/songbook" in html
+    assert "Regression Songbook" in html
+    assert "release_candidate" in html
+    assert "song_id" in html
+    assert "Acceptance Diff" in html
+    assert 'id="acceptance-diff-suite"' in html
+    assert "/diff" in html
     assert "/cases/${encodeURIComponent" in html
     assert "/report" in html
     assert "/signoff" in html
@@ -472,6 +483,9 @@ def test_webui_contains_release_workspace_controls():
     assert "/api/releases/${encodeURIComponent(release.release_id)}/export.zip" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/signoff" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/signoff/reset" in html
+    assert 'id="release-acceptance-suite"' in html
+    assert "acceptance_suite_id" in html
+    assert "Acceptance Gate" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/${release.hidden ? \"unhide\" : \"hide\"}" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/archive" in html
     assert "Distribution Prep" in html

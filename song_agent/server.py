@@ -216,6 +216,8 @@ from song_agent.submission_verifier import (
     verify_submission_package,
     write_submission_verification_report,
 )
+from song_agent.acceptance_diff import build_acceptance_diff
+from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.music_acceptance import (
     AcceptanceNotFoundError,
     AcceptanceStateError,
@@ -226,6 +228,7 @@ from song_agent.music_acceptance import (
     acceptance_suite_summary,
     listening_review_summary,
 )
+from song_agent.regression_songbook import builtin_songbook
 from song_agent.context_packs import (
     ContextPackStaleError,
     ContextPackStore,
@@ -2508,6 +2511,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_acceptance_suites_root(method, parsed.query)
                 return
 
+            if path == "/api/acceptance/profiles":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "profiles": list_acceptance_profiles()})
+                return
+
+            if path == "/api/acceptance/songbook":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "songbook": builtin_songbook()})
+                return
+
             if path == "/api/distribution/profiles":
                 self._handle_distribution_profiles_root(method)
                 return
@@ -4730,6 +4747,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         document = self.release_store.get_release(release_id)
         report = self._get_or_refresh_release_qa(release_id, refresh=True, options={})
         force = bool(payload.get("force", False))
+        acceptance_gate = self._release_acceptance_gate(payload)
+        if acceptance_gate.get("status") == "failed" and not force:
+            self._send_error(HTTPStatus.CONFLICT, str(acceptance_gate.get("message") or "Acceptance release gate failed."))
+            return
         if not release_qa_allows_signoff(report) and not force:
             self._send_error(HTTPStatus.CONFLICT, "Release QA gate failed. Refresh QA or pass force=true with override_reason.")
             return
@@ -4757,6 +4778,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
+        if acceptance_gate:
+            pending_signoff["acceptance_gate"] = acceptance_gate
         self.release_store.write_signoff(release_id, {**pending_signoff, "export_manifest_hash": None})
         try:
             final_manifest = refresh_release_export_signoff_summary(self.release_store, release_id)
@@ -4771,6 +4794,26 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         document = self.release_store.update_signoff_summary(release_id, release_signoff_summary(signoff))
         self.release_store.append_event(release_id, "release_force_signed" if force else "release_signed", {"status": report.get("status"), "forced": force})
         self._send_json({"ok": True, "release": document.to_dict(), "signoff": signoff, "summary": release_signoff_summary(signoff)})
+
+    def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        suite_id = str(payload.get("acceptance_suite_id") or "").strip()
+        if not suite_id:
+            return {}
+        report = self.acceptance_store.read_report(suite_id)
+        summary = acceptance_report_summary(report)
+        acceptance_status = str(summary.get("acceptance_status") or "")
+        release_ready = bool(summary.get("release_ready", False))
+        ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed"
+        return {
+            "status": "passed" if ok else "failed",
+            "suite_id": suite_id,
+            "profile_id": summary.get("profile_id"),
+            "acceptance_status": acceptance_status,
+            "release_ready": release_ready,
+            "manual_accepted_count": summary.get("manual_accepted_count", 0),
+            "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
+            "message": "Acceptance suite is not manual release-ready.",
+        }
 
     def _handle_release_signoff_reset(self, method: str, release_id: str) -> None:
         if method != "POST":
@@ -5337,6 +5380,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 suite = self.acceptance_store.archive_suite(suite_id)
                 self._send_json({"ok": True, "suite": suite.to_dict(), "summary": acceptance_suite_summary(suite)})
+                return
+
+            if parts == ["diff"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                other_suite_id = str(payload.get("other_suite_id") or payload.get("left_suite_id") or "").strip()
+                if not other_suite_id:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "other_suite_id is required.")
+                    return
+                left = self.acceptance_store.read_report(other_suite_id)
+                right = self.acceptance_store.read_report(suite_id)
+                diff = build_acceptance_diff(left, right)
+                self._send_json({"ok": True, "suite_id": suite_id, "other_suite_id": other_suite_id, "diff": diff, "summary": diff.get("summary", {})})
                 return
 
             if len(parts) >= 2 and parts[0] == "cases":

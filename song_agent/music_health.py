@@ -162,6 +162,8 @@ def music_health_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "blocking_failed": summary.get("blocking_failed", 0),
             "warning_count": summary.get("warning_count", 0),
             "note_count": summary.get("note_count", 0),
+            "track_count": summary.get("track_count", 0),
+            "section_count": summary.get("section_count", 0),
             "audio_status": summary.get("audio_status") or "missing",
             "midi_status": summary.get("midi_status") or "missing",
             "quality_overall": summary.get("quality_overall"),

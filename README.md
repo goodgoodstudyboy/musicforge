@@ -66,7 +66,7 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v4.4.1 includes a local Release Workspace for assembling multiple Project Delivery
+v4.5.0 includes a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
@@ -84,15 +84,23 @@ and report reads re-check source/content hashes so tampered reviews or reports
 show up as failed.
 
 ```powershell
-python -m song_agent.cli acceptance-check --cases 6 --render-audio auto --report-out runs\acceptance-v440.json
-python -m song_agent.cli acceptance-check --cases 2 --auto-review --render-audio never
+python -m song_agent.cli acceptance-check --profile midi_smoke --auto-review --render-audio never
+python -m song_agent.cli acceptance-check --profile developer_manual --render-audio auto --report-out runs\acceptance-v450.json
+python -m song_agent.cli acceptance-check --profile release_candidate --render-audio auto
+python -m song_agent.cli acceptance-diff runs\acceptance-baseline.json runs\acceptance-current.json --json
 ```
 
-Use `--render-audio never` for stable MIDI-only self-checks; it disables WAV as
-a required health gate even when a local renderer config exists. `--auto-review`
-is only for CI/smoke and writes `review_mode=synthetic`; real release readiness
-still requires a person to play the MIDI/WAV and record a manual listening
-review.
+Acceptance Profiles make the gate repeatable: `midi_smoke` is a synthetic
+MIDI-only smoke, `developer_manual` is the default six-case developer run,
+`release_candidate` runs the 12-song regression songbook and requires manual
+listening reviews, and `audio_required` also requires WAV output. Use
+`--render-audio never` for stable MIDI-only self-checks; it disables WAV as a
+required health gate even when a local renderer config exists. `--auto-review`
+is only for CI/smoke and writes `review_mode=synthetic`; release-candidate
+readiness still requires a person to play the MIDI/WAV and record manual
+listening reviews. Release Signoff can bind an acceptance suite and blocks
+non-manual or non-release-ready acceptance reports unless force signoff is used
+and audited.
 
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,

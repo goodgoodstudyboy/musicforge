@@ -108,6 +108,7 @@ def build_verify_submission_parser() -> argparse.ArgumentParser:
 def build_acceptance_check_parser() -> argparse.ArgumentParser:
     acceptance_parser = argparse.ArgumentParser(description="Run a local Music Acceptance Lab suite.")
     acceptance_parser.add_argument("--out", type=Path, default=Path(".musicforge") / "acceptance", help="Acceptance workspace directory.")
+    acceptance_parser.add_argument("--profile", default="developer_manual", help="Acceptance profile: midi_smoke, developer_manual, release_candidate, or audio_required.")
     acceptance_parser.add_argument("--cases", type=int, default=6, help="Number of representative generated songs.")
     acceptance_parser.add_argument("--render-audio", choices=["auto", "always", "never"], default="auto", help="Whether to render WAV audio.")
     acceptance_parser.add_argument("--auto-review", action="store_true", help="Write synthetic reviews for CI/smoke use.")
@@ -115,6 +116,15 @@ def build_acceptance_check_parser() -> argparse.ArgumentParser:
     acceptance_parser.add_argument("--json", action="store_true", help="Print the full acceptance report as JSON.")
     acceptance_parser.add_argument("--report-out", type=Path, default=None, help="Write the acceptance report to this JSON file.")
     return acceptance_parser
+
+
+def build_acceptance_diff_parser() -> argparse.ArgumentParser:
+    diff_parser = argparse.ArgumentParser(description="Compare two Music Acceptance reports by regression song id.")
+    diff_parser.add_argument("left_report", type=Path, help="Baseline music-acceptance-report.json.")
+    diff_parser.add_argument("right_report", type=Path, help="Current music-acceptance-report.json.")
+    diff_parser.add_argument("--json", action="store_true", help="Print the full diff report as JSON.")
+    diff_parser.add_argument("--report-out", type=Path, default=None, help="Write the diff report to this JSON file.")
+    return diff_parser
 
 
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
@@ -267,6 +277,7 @@ def _main() -> None:
         args = parser.parse_args(raw_args[1:])
         report = run_acceptance_check(
             out_dir=args.out,
+            profile_id=args.profile,
             cases=args.cases,
             render_audio_mode=args.render_audio,
             auto_review=args.auto_review,
@@ -279,6 +290,19 @@ def _main() -> None:
         else:
             print_acceptance_check_report(report)
         raise SystemExit(0 if report.get("status") in {"passed", "needs_review"} else 1)
+    elif raw_args and raw_args[0] == "acceptance-diff":
+        from song_agent.acceptance_diff import build_acceptance_diff
+
+        parser = build_acceptance_diff_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = build_acceptance_diff(read_json(args.left_report), read_json(args.right_report))
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_acceptance_diff_report(report)
+        raise SystemExit(0 if report.get("status") == "passed" else 1)
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)
@@ -354,24 +378,51 @@ def run_doctor(*, provider_test: bool = False) -> None:
 def run_acceptance_check(
     *,
     out_dir: Path,
+    profile_id: str,
     cases: int,
     render_audio_mode: str,
     auto_review: bool,
     min_rating: int,
 ) -> dict[str, Any]:
-    from song_agent.music_acceptance import AcceptanceStore, build_acceptance_report, default_acceptance_requests
+    from song_agent.acceptance_profiles import get_acceptance_profile
+    from song_agent.music_acceptance import AcceptanceStore, build_acceptance_report, default_acceptance_song_cases
     from song_agent.music_health import music_health_allows_review
 
+    profile = get_acceptance_profile(profile_id)
+    if cases == 6 and profile.case_count != 6:
+        cases = profile.case_count
+    render_audio_mode = render_audio_mode if render_audio_mode != "auto" or profile.render_audio == "auto" else profile.render_audio
     store = AcceptanceStore(out_dir)
-    suite_payload = {"name": "v4.4 developer music acceptance", "mode": "developer_self_test", "min_rating": min_rating}
+    suite_payload = {
+        "name": f"v4.5 {profile.profile_id} music acceptance",
+        "mode": profile.profile_id,
+        "profile_id": profile.profile_id,
+        "min_rating": max(min_rating, profile.min_rating),
+        "require_audio_if_renderer_configured": profile.require_audio_if_renderer_configured,
+        "allow_synthetic_review": profile.allow_synthetic_review,
+        "require_manual_review": profile.require_manual_review,
+        "release_ready_profile": profile.release_ready,
+    }
     if render_audio_mode == "never":
         suite_payload["require_audio_if_renderer_configured"] = False
     suite = store.create_suite(suite_payload)
-    for index, request in enumerate(default_acceptance_requests(cases), start=1):
-        case = store.add_case(suite.suite_id, {"name": request["style"], "source_type": "generated_request", "request": request})
+    for index, song in enumerate(default_acceptance_song_cases(cases), start=1):
+        request = song["request"]
+        case = store.add_case(
+            suite.suite_id,
+            {
+                "name": song.get("title") or request.get("style"),
+                "source_type": "regression_songbook",
+                "song_id": song.get("song_id"),
+                "songbook_id": song.get("songbook_id") or "builtin_v1",
+                "songbook_version": song.get("songbook_version") or "2026-05-19",
+                "expectations": song.get("expectations") or {},
+                "request": request,
+            },
+        )
         store.generate_case(suite.suite_id, case.case_id, render_audio_mode=render_audio_mode)
         health = store.run_health(suite.suite_id, case.case_id)
-        if auto_review and music_health_allows_review(health):
+        if auto_review and profile.allow_synthetic_review and music_health_allows_review(health):
             store.write_review(
                 suite.suite_id,
                 case.case_id,
@@ -404,6 +455,18 @@ def print_acceptance_check_report(report: dict[str, Any]) -> None:
     print(f"accepted: {summary.get('accepted_count', 0)}")
     print(f"average_rating: {summary.get('average_rating')}")
     print(f"renderer: {summary.get('renderer_status')}")
+    print(f"acceptance_status: {summary.get('acceptance_status')}")
+
+
+def print_acceptance_diff_report(report: dict[str, Any]) -> None:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    print("MusicForge acceptance-diff")
+    print(f"status: {report.get('status')}")
+    print(f"left: {report.get('left_suite_id')}")
+    print(f"right: {report.get('right_suite_id')}")
+    print(f"songs: {summary.get('song_count', 0)}")
+    print(f"new_blockers: {summary.get('new_blocker_count', 0)}")
+    print(f"rating_regressions: {summary.get('rating_regression_count', 0)}")
 
 
 def _writable_status(path: Path) -> str:

@@ -14,6 +14,7 @@ from song_agent.release_checks import (
     _v42_distribution_layout_contract_smoke,
     _v43_submission_workspace_smoke,
     _v44_music_acceptance_lab_smoke,
+    _v45_acceptance_profiles_songbook_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -122,6 +123,16 @@ def test_v44_music_acceptance_lab_smoke(tmp_path: Path) -> None:
     assert "signoff_integrity=failed" in detail
     assert "missing_midi=failed" in detail
     assert "signed_guard=409" in detail
+
+
+def test_v45_acceptance_profiles_songbook_smoke(tmp_path: Path) -> None:
+    ok, detail = _v45_acceptance_profiles_songbook_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "songs=12" in detail
+    assert "diff=passed" in detail
+    assert "rc=failed" in detail
+    assert "release_gate=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

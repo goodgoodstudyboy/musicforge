@@ -349,6 +349,7 @@ def _release_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
             "forced": bool(signoff.get("forced", False)),
             "qa_source_hash": signoff.get("qa_source_hash"),
             "export_manifest_hash": signoff.get("export_manifest_hash"),
+            "acceptance_gate": signoff.get("acceptance_gate") if isinstance(signoff.get("acceptance_gate"), dict) else {},
         },
         blocked_keys=BLOCKED_RELEASE_KEYS,
     )

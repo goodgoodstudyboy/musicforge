@@ -100,3 +100,18 @@ def test_cli_acceptance_check_render_audio_never_is_midi_only_even_when_renderer
     assert report["status"] == "passed"
     assert report["summary"]["accepted_count"] == 1
     assert report["cases"][0]["audio_status"] == "skipped_by_request"
+
+
+def test_cli_acceptance_release_candidate_auto_review_cannot_pass(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["song-agent", "acceptance-check", "--profile", "release_candidate", "--cases", "1", "--auto-review", "--render-audio", "never", "--json"])
+
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code == 1
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "failed"
+    assert report["summary"]["manual_required"] is True
+    assert report["summary"]["release_ready"] is False
