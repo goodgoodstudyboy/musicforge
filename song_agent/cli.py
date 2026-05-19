@@ -105,6 +105,18 @@ def build_verify_submission_parser() -> argparse.ArgumentParser:
     return verify_parser
 
 
+def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Human Review Pack ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_acceptance_check_parser() -> argparse.ArgumentParser:
     acceptance_parser = argparse.ArgumentParser(description="Run a local Music Acceptance Lab suite.")
     acceptance_parser.add_argument("--out", type=Path, default=Path(".musicforge") / "acceptance", help="Acceptance workspace directory.")
@@ -272,6 +284,30 @@ def _main() -> None:
         else:
             print_submission_verification_report(report)
         raise SystemExit(submission_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-human-review-pack":
+        from song_agent.human_review_verifier import (
+            human_review_verification_exit_code,
+            print_human_review_verification_report,
+            verify_human_review_pack,
+            write_human_review_verification_report,
+        )
+
+        parser = build_verify_human_review_pack_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_human_review_pack(
+            args.zip_path,
+            strict=args.strict,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_human_review_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_human_review_verification_report(report)
+        raise SystemExit(human_review_verification_exit_code(report))
     elif raw_args and raw_args[0] == "acceptance-check":
         parser = build_acceptance_check_parser()
         args = parser.parse_args(raw_args[1:])

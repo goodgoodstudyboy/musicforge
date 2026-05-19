@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.6.0 - 2026-05-19
+
+### Added
+- Human Review Pack export for Acceptance Suites, including portable `index.html`, MIDI/WAV assets, response template, manifest, checksums, and ZIP download.
+- `verify-human-review-pack` CLI for offline ZIP verification with path-safety, duplicate-entry, hash, static HTML, MIDI/WAV header, and redaction checks.
+- Human review response import writes manual listening reviews back to Acceptance cases, preserves source/tags/markers, rejects `source_path`, enforces pack source hashes, and blocks stale imports.
+- `needs_fix` and `rejected` imported reviews now create audited follow-up records and project ReviewTasks when the Acceptance case is linked to a Project version.
+- Acceptance reports and Release Signoff acceptance gates now include Human Review Pack evidence summaries.
+- Studio Acceptance workspace controls for creating, zipping, verifying, downloading, and importing Human Review Packs.
+- release-check v4.6 smoke covers 12-song release-candidate pack export, external verification, needs-fix import, stale/source_path guards, full accepted re-review, Release Signoff evidence, and tampered ZIP failure.
+
+### Verified
+- `python -m pytest tests\test_human_review_pack.py tests\test_cli_human_review_pack.py tests\test_server_acceptance.py tests\test_release_check.py::test_v46_human_review_pack_smoke -q`
+
 ## v4.5.1 - 2026-05-19
 
 ### Fixed

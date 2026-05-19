@@ -39,6 +39,10 @@ def test_webui_contains_acceptance_workspace():
     assert "song_id" in html
     assert "Acceptance Diff" in html
     assert 'id="acceptance-diff-suite"' in html
+    assert "Human Review Pack" in html
+    assert 'id="acceptance-human-review-response"' in html
+    assert "/human-review-packs" in html
+    assert "/review-imports" in html
     assert "/diff" in html
     assert "/cases/${encodeURIComponent" in html
     assert "/report" in html

@@ -757,6 +757,11 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
                 "playback_confirmed": review_summary.get("playback_confirmed", False),
                 "audio_status": health_summary.get("audio_status"),
                 "review_mode": review_mode,
+                "review_source_type": (review.get("source") or {}).get("source_type") if isinstance(review.get("source"), dict) else None,
+                "review_pack_id": (review.get("source") or {}).get("pack_id") if isinstance(review.get("source"), dict) else None,
+                "review_import_id": (review.get("source") or {}).get("import_id") if isinstance(review.get("source"), dict) else None,
+                "review_tag_count": len(review.get("tags", [])) if isinstance(review.get("tags"), list) else 0,
+                "review_marker_count": len(review.get("markers", [])) if isinstance(review.get("markers"), list) else 0,
                 "note_count": health_summary.get("note_count", 0),
                 "track_count": health_summary.get("track_count", 0),
                 "section_count": health_summary.get("section_count", 0),
@@ -785,6 +790,7 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
     )
     status = "passed" if not blockers else "failed"
     source_hash = stable_hash(acceptance_source_state(store, suite))
+    human_review_pack = _human_review_evidence_summary(store, suite.suite_id)
     report = {
         "schema_version": ACCEPTANCE_REPORT_SCHEMA_VERSION,
         "suite_id": suite.suite_id,
@@ -812,6 +818,7 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
             "missing_song_ids": coverage["missing_song_ids"],
             "duplicate_song_ids": coverage["duplicate_song_ids"],
             "songbook_coverage_status": coverage["songbook_coverage_status"],
+            "human_review_pack": human_review_pack,
         },
         "cases": case_rows,
         "blockers": blockers,
@@ -904,6 +911,7 @@ def acceptance_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "missing_song_ids": summary.get("missing_song_ids", []),
             "duplicate_song_ids": summary.get("duplicate_song_ids", []),
             "songbook_coverage_status": summary.get("songbook_coverage_status") or "not_applicable",
+            "human_review_pack": summary.get("human_review_pack") if isinstance(summary.get("human_review_pack"), dict) else {"status": "missing", "pack_count": 0, "import_count": 0},
             "profile_id": data.get("profile_id"),
             "songbook_id": data.get("songbook_id"),
             "songbook_version": data.get("songbook_version"),
@@ -922,6 +930,11 @@ def listening_review_summary(review: dict[str, Any] | None) -> dict[str, Any]:
             "listened_at": data.get("listened_at"),
             "audio_mode": data.get("audio_mode"),
             "review_mode": data.get("review_mode") or "manual",
+            "review_source_type": (data.get("source") or {}).get("source_type") if isinstance(data.get("source"), dict) else None,
+            "review_pack_id": (data.get("source") or {}).get("pack_id") if isinstance(data.get("source"), dict) else None,
+            "review_import_id": (data.get("source") or {}).get("import_id") if isinstance(data.get("source"), dict) else None,
+            "tag_count": len(data.get("tags", [])) if isinstance(data.get("tags"), list) else 0,
+            "marker_count": len(data.get("markers", [])) if isinstance(data.get("markers"), list) else 0,
         }
     )
 
@@ -1041,8 +1054,7 @@ def _review_payload(case_id: str, payload: dict[str, Any], *, min_rating: int) -
         raise AcceptanceValidationError("waived review requires a waiver reason.")
     if status == "accepted" and rating < min_rating:
         raise AcceptanceValidationError(f"accepted review requires rating >= {min_rating}.")
-    return sanitize_metadata(
-        {
+    review = {
             "schema_version": LISTENING_REVIEW_SCHEMA_VERSION,
             "case_id": case_id,
             "status": status,
@@ -1055,8 +1067,37 @@ def _review_payload(case_id: str, payload: dict[str, Any], *, min_rating: int) -
             "issues": [_safe_text(item, 300) for item in payload.get("issues", []) if str(item).strip()] if isinstance(payload.get("issues"), list) else [],
             "waivers": [_safe_text(item, 500) for item in waivers if str(item).strip()] or ([_safe_text(payload.get("waiver_reason"), 500)] if payload.get("waiver_reason") else []),
             "review_mode": _safe_text(payload.get("review_mode"), 40) or "manual",
-        }
-    )
+    }
+    if isinstance(payload.get("source"), dict):
+        review["source"] = sanitize_metadata(
+            {
+                "source_type": _safe_text(payload["source"].get("source_type"), 80),
+                "pack_id": _safe_text(payload["source"].get("pack_id"), 80),
+                "import_id": _safe_text(payload["source"].get("import_id"), 80),
+                "reviewer_id": _safe_text(payload["source"].get("reviewer_id"), 80),
+                "organization": _safe_text(payload["source"].get("organization"), 120),
+            }
+        )
+    if isinstance(payload.get("tags"), list):
+        review["tags"] = [_safe_text(item, 80) for item in payload.get("tags", []) if str(item).strip()][:40]
+    if isinstance(payload.get("markers"), list):
+        markers = []
+        for marker in payload.get("markers", [])[:100]:
+            if not isinstance(marker, dict):
+                continue
+            markers.append(
+                sanitize_metadata(
+                    {
+                        "beat": marker.get("beat"),
+                        "time_seconds": marker.get("time_seconds"),
+                        "severity": _safe_text(marker.get("severity"), 40) or "note",
+                        "label": _safe_text(marker.get("label"), 120),
+                        "note": _safe_text(marker.get("note"), 500),
+                    }
+                )
+            )
+        review["markers"] = markers
+    return sanitize_metadata(review)
 
 
 def _case_status_from_review(review: dict[str, Any]) -> str:
@@ -1221,6 +1262,15 @@ def _redaction_findings(payload: Any) -> list[dict[str, Any]]:
         if pattern in raw:
             findings.append({"pattern": pattern, "message": "Sensitive value pattern found."})
     return findings
+
+
+def _human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> dict[str, Any]:
+    try:
+        from song_agent.human_review_pack import human_review_evidence_summary
+
+        return human_review_evidence_summary(store, suite_id)
+    except Exception:
+        return {"status": "missing", "pack_count": 0, "import_count": 0}
 
 
 def _safe_text(value: Any, limit: int) -> str:

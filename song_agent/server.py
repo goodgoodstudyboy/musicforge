@@ -228,6 +228,12 @@ from song_agent.music_acceptance import (
     acceptance_suite_summary,
     listening_review_summary,
 )
+from song_agent.human_review_pack import (
+    HumanReviewPackNotFoundError,
+    HumanReviewPackStateError,
+    HumanReviewPackStore,
+    HumanReviewPackValidationError,
+)
 from song_agent.regression_songbook import builtin_songbook
 from song_agent.context_packs import (
     ContextPackStaleError,
@@ -2372,6 +2378,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.acceptance_store  # type: ignore[attr-defined]
 
     @property
+    def human_review_pack_store(self) -> HumanReviewPackStore:
+        return self.server.human_review_pack_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2692,9 +2702,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except AcceptanceStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except HumanReviewPackStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
         except AcceptanceNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except HumanReviewPackNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except AcceptanceValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except HumanReviewPackValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except Exception as exc:
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
@@ -4804,6 +4820,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         acceptance_status = str(summary.get("acceptance_status") or "")
         release_ready = bool(summary.get("release_ready", False))
         coverage_status = str(summary.get("songbook_coverage_status") or "not_applicable")
+        human_review_pack = summary.get("human_review_pack") if isinstance(summary.get("human_review_pack"), dict) else {}
         ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed" and coverage_status in {"complete", "not_applicable"}
         return {
             "status": "passed" if ok else "failed",
@@ -4817,6 +4834,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "duplicate_song_ids": summary.get("duplicate_song_ids", []),
             "manual_accepted_count": summary.get("manual_accepted_count", 0),
             "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
+            "human_review_pack": human_review_pack,
             "message": "Acceptance suite is not manual release-ready.",
         }
 
@@ -5402,6 +5420,67 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "suite_id": suite_id, "other_suite_id": other_suite_id, "diff": diff, "summary": diff.get("summary", {})})
                 return
 
+            if parts == ["human-review-packs"]:
+                if method == "GET":
+                    packs = self.human_review_pack_store.list_packs(suite_id)
+                    self._send_json({"ok": True, "suite_id": suite_id, "packs": packs, "summary": {"pack_count": len(packs)}})
+                    return
+                if method == "POST":
+                    result = self.human_review_pack_store.create_pack(suite_id, self._optional_json_body())
+                    self._send_json({"ok": True, "suite_id": suite_id, **result}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if len(parts) >= 2 and parts[0] == "human-review-packs":
+                pack_id = parts[1]
+                action = parts[2] if len(parts) >= 3 else ""
+                if not action:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    pack = self.human_review_pack_store.get_pack(suite_id, pack_id)
+                    self._send_json({"ok": True, "suite_id": suite_id, "pack": pack})
+                    return
+                if action == "zip":
+                    if method == "POST":
+                        result = self.human_review_pack_store.build_zip(suite_id, pack_id)
+                        self._send_json({"ok": True, "suite_id": suite_id, **result})
+                        return
+                    if method == "GET":
+                        self._send_file(self.human_review_pack_store.zip_path(suite_id, pack_id), "application/zip", filename=f"{suite_id}-{pack_id}-human-review-pack.zip")
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if action == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    report = self.human_review_pack_store.verify_pack(suite_id, pack_id, strict=bool(payload.get("strict", False)))
+                    self._send_json({"ok": report.get("status") == "passed", "suite_id": suite_id, "pack_id": pack_id, "report": report, "summary": report.get("summary", {})})
+                    return
+
+            if parts == ["review-imports"]:
+                if method == "GET":
+                    imports = self.human_review_pack_store.list_imports(suite_id)
+                    self._send_json({"ok": True, "suite_id": suite_id, "imports": imports, "summary": {"import_count": len(imports)}})
+                    return
+                if method == "POST":
+                    record = self.human_review_pack_store.import_response(suite_id, self._read_json_body())
+                    self._send_json({"ok": True, "suite_id": suite_id, "import": record, "summary": record.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if len(parts) == 2 and parts[0] == "review-imports":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                record = self.human_review_pack_store.get_import(suite_id, parts[1])
+                self._send_json({"ok": True, "suite_id": suite_id, "import": record, "summary": record.get("summary", {})})
+                return
+
             if len(parts) >= 2 and parts[0] == "cases":
                 case_id = parts[1]
                 action = parts[2] if len(parts) >= 3 else ""
@@ -5463,9 +5542,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Acceptance route not found.")
         except AcceptanceStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except HumanReviewPackStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
         except AcceptanceNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except HumanReviewPackNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except AcceptanceValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except HumanReviewPackValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> dict[str, Any]:
@@ -9964,6 +10049,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.acceptance_store = AcceptanceStore(project_store=self.project_store)
+        self.human_review_pack_store = HumanReviewPackStore(self.acceptance_store, project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

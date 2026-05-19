@@ -61,6 +61,68 @@ def test_acceptance_api_end_to_end_and_signed_guard(tmp_path, monkeypatch):
     assert reset["summary"]["status"] == "reset"
 
 
+def test_acceptance_human_review_pack_api(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        _status, created = request_json(server, "POST", "/api/acceptance/suites", {"name": "Human Review API", "require_audio_if_renderer_configured": False})
+        suite_id = created["suite"]["suite_id"]
+        case_status, case_data = request_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases",
+            {"song_id": "api_song_001", "request": {"title": "API Song", "language": "English", "style": "pop", "theme": "human review", "duration_seconds": 90}},
+        )
+        case_id = case_data["case"]["case_id"]
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        pack_status, pack_data = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs", {})
+        pack_id = pack_data["pack"]["pack_id"]
+        zip_status, zip_data = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{pack_id}/zip", {})
+        verify_status, verify_data = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{pack_id}/verify", {"strict": True})
+        source_path_status, source_path_data = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"source_path": "C:\\Users\\secret\\response.json"})
+        response = {
+            "suite_id": suite_id,
+            "pack_id": pack_id,
+            "pack_source_hash": pack_data["pack"]["source_hash"],
+            "reviewer": {"name": "api reviewer"},
+            "reviews": [
+                {
+                    "case_id": case_id,
+                    "status": "accepted",
+                    "rating": 5,
+                    "playback_confirmed": True,
+                    "audio_mode": "midi",
+                    "notes": "Human review API confirms MIDI playback is acceptable.",
+                }
+            ],
+        }
+        import_status, imported = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": response})
+        report_status, report = request_json(server, "GET", f"/api/acceptance/suites/{suite_id}/report")
+        signed_status, signed = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/signoff", {"signed_by": "api"})
+        blocked_pack_status, blocked_pack = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs", {})
+    finally:
+        stop_test_server(server)
+
+    assert case_status == 201
+    assert pack_status == 201
+    assert pack_data["pack"]["case_count"] == 1
+    assert zip_status == 200
+    assert zip_data["zip"]["entry_count"] >= 6
+    assert verify_status == 200
+    assert verify_data["report"]["status"] == "passed"
+    assert source_path_status == 400
+    assert "source_path" in source_path_data["error"]
+    assert import_status == 201
+    assert imported["summary"]["accepted_count"] == 1
+    assert report_status == 200
+    assert report["summary"]["human_review_pack"]["latest_import_id"] == imported["import"]["import_id"]
+    assert signed_status == 200
+    assert signed["summary"]["status"] == "signed"
+    assert blocked_pack_status == 409
+    assert "signed" in blocked_pack["error"].lower()
+
+
 def test_acceptance_profiles_songbook_and_diff_api(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

@@ -66,7 +66,7 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v4.5.1 includes a local Release Workspace for assembling multiple Project Delivery
+v4.6.0 includes a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
@@ -102,6 +102,19 @@ readiness still requires a person to play the MIDI/WAV and record manual
 listening reviews. Release Signoff can bind an acceptance suite and blocks
 non-manual, incomplete-songbook, or otherwise non-release-ready acceptance
 reports unless force signoff is used and audited.
+
+Human Review Packs turn an Acceptance Suite into an offline listening package
+for business or external reviewers. The pack ZIP contains a static `index.html`,
+case MIDI/WAV assets, `response-template.json`, `pack.json`, `manifest.json`,
+and checksums. Reviewers can open the pack locally, listen, export a response
+JSON, and the Studio/API import writes those responses back as manual
+`listening-review.json` records. Imports are source-hash guarded, reject
+`source_path`, and `needs_fix` or `rejected` responses create follow-up review
+work records without applying edits automatically.
+
+```powershell
+python -m song_agent.cli verify-human-review-pack path\to\human-review-pack.zip --json --report-out human-review-verification-report.json
+```
 
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,

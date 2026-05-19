@@ -15,6 +15,7 @@ from song_agent.release_checks import (
     _v43_submission_workspace_smoke,
     _v44_music_acceptance_lab_smoke,
     _v45_acceptance_profiles_songbook_smoke,
+    _v46_human_review_pack_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -134,6 +135,18 @@ def test_v45_acceptance_profiles_songbook_smoke(tmp_path: Path) -> None:
     assert "rc=failed" in detail
     assert "incomplete_rc=failed" in detail
     assert "release_gate=409" in detail
+
+
+def test_v46_human_review_pack_smoke(tmp_path: Path) -> None:
+    ok, detail = _v46_human_review_pack_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "cases=12" in detail
+    assert "verify=passed" in detail
+    assert "needs_fix=1" in detail
+    assert "all=release_ready_passed" in detail
+    assert "tampered=failed" in detail
+    assert "guards=400/409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

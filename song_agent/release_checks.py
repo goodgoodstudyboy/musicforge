@@ -58,6 +58,7 @@ from song_agent.renderers.midi import render_midi
 from song_agent.release_verifier import verify_release_zip
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.submission_verifier import verify_submission_package
+from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
@@ -208,6 +209,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.3 submission workspace smoke", *_v43_submission_workspace_smoke(root))
     report.add("v4.4 music acceptance lab smoke", *_v44_music_acceptance_lab_smoke(root))
     report.add("v4.5 acceptance profiles songbook smoke", *_v45_acceptance_profiles_songbook_smoke(root))
+    report.add("v4.6 human review pack smoke", *_v46_human_review_pack_smoke(root))
     return report
 
 
@@ -5310,6 +5312,174 @@ def _v45_acceptance_suite(server: Any, name: str, *, profile_id: str = "midi_smo
     if report_status != 200:
         return "failed", suite
     return str(report.get("summary", {}).get("status") or report.get("report", {}).get("status") or "failed"), suite
+
+
+def _v46_human_review_pack_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v46-human-review-pack-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+        from song_agent.regression_songbook import list_regression_songs
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        create_status, created = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.6 Human Review", "profile_id": "release_candidate", "require_audio_if_renderer_configured": False})
+        suite_id = created.get("suite", {}).get("suite_id")
+        case_ids: list[str] = []
+        for song in list_regression_songs():
+            case_status, case = _release_http_json(
+                server,
+                "POST",
+                f"/api/acceptance/suites/{suite_id}/cases",
+                {
+                    "name": song.get("title"),
+                    "song_id": song.get("song_id"),
+                    "songbook_id": song.get("songbook_id"),
+                    "songbook_version": song.get("songbook_version"),
+                    "expectations": song.get("expectations") or {},
+                    "request": song.get("request") or {},
+                },
+            )
+            case_id = case.get("case", {}).get("case_id")
+            case_ids.append(case_id)
+            generate_status, _generated = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+            health_status, _health = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+            if not (case_status == 201 and generate_status == 200 and health_status == 200):
+                raise RuntimeError(f"case prep failed for {song.get('song_id')}: {case_status}/{generate_status}/{health_status}")
+
+        pack_status, pack_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs", {})
+        pack = pack_response.get("pack", {})
+        pack_id = pack.get("pack_id")
+        zip_status, zip_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{pack_id}/zip", {})
+        verify_status, verify_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{pack_id}/verify", {"strict": True})
+        zip_path = base / ".musicforge" / "acceptance" / suite_id / "human-review-packs" / pack_id / f"{suite_id}-{pack_id}-human-review-pack.zip"
+        external_zip = base / "external-human-review-pack.zip"
+        shutil.copy2(zip_path, external_zip)
+        external_verify = verify_human_review_pack(external_zip, strict=True)
+
+        response = _v46_review_response(pack, needs_fix_song_id="rap_beat_001")
+        import_status, imported = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": response})
+        report_status, report = _release_http_json(server, "GET", f"/api/acceptance/suites/{suite_id}/report")
+        source_path_status, _source_path = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"source_path": "C:\\Users\\secret\\review-response.json"})
+        stale = _v46_review_response(pack)
+        stale["pack_source_hash"] = "0" * 64
+        stale_status, _stale_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": stale})
+
+        repack_status, repack_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs", {})
+        repack = repack_response.get("pack", {})
+        repack_id = repack.get("pack_id")
+        rezip_status, _rezip_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{repack_id}/zip", {})
+        reverify_status, reverify_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{repack_id}/verify", {"strict": True})
+        accepted_response = _v46_review_response(repack)
+        import_all_status, imported_all = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": accepted_response})
+        report_all_status, report_all = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+
+        project_id = _v37_signed_project(server, "Human Review Gate Track")
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Human Review Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_release_status, _zip_release = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "acceptance_suite_id": suite_id})
+
+        tampered_zip = base / "tampered-human-review-pack.zip"
+        tamper_source_zip = base / ".musicforge" / "acceptance" / suite_id / "human-review-packs" / repack_id / f"{suite_id}-{repack_id}-human-review-pack.zip"
+        with zipfile.ZipFile(tamper_source_zip, "r") as source, zipfile.ZipFile(tampered_zip, "w") as target:
+            for info in source.infolist():
+                data = source.read(info)
+                if info.filename == "index.html":
+                    data = data.replace(b"</body>", b'<script src="https://example.com/review.js"></script></body>')
+                target.writestr(info.filename, data)
+            target.writestr("manifest.json", json.dumps(read_json(base / ".musicforge" / "acceptance" / suite_id / "human-review-packs" / repack_id / "manifest.json")))
+            target.writestr("../escape.txt", "bad")
+        tampered_verify = verify_human_review_pack(tampered_zip, strict=True)
+
+        serialized_import = json.dumps(imported_all, ensure_ascii=False)
+        ok = (
+            create_status == 201
+            and len(case_ids) == 12
+            and pack_status == 201
+            and pack.get("case_count") == 12
+            and zip_status == 200
+            and verify_status == 200
+            and verify_response.get("report", {}).get("status") == "passed"
+            and external_verify.get("status") == "passed"
+            and import_status == 201
+            and imported.get("summary", {}).get("needs_fix_count") == 1
+            and imported.get("summary", {}).get("created_review_task_count") >= 1
+            and report_status == 200
+            and report.get("summary", {}).get("release_ready") is False
+            and source_path_status == 400
+            and stale_status == 409
+            and repack_status == 201
+            and rezip_status == 200
+            and reverify_status == 200
+            and reverify_response.get("report", {}).get("status") == "passed"
+            and import_all_status == 201
+            and imported_all.get("summary", {}).get("accepted_count") == 12
+            and report_all_status == 200
+            and report_all.get("summary", {}).get("acceptance_status") == "release_ready_passed"
+            and release_status == 201
+            and track_status == 200
+            and qa_status == 200
+            and export_status == 200
+            and zip_release_status == 200
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("human_review_pack", {}).get("latest_import_id")
+            and tampered_verify.get("status") == "failed"
+            and "sk-secret-value" not in serialized_import
+            and "C:\\Users" not in serialized_import
+        )
+        return ok, (
+            f"suite={suite_id}, cases={len(case_ids)}, pack={pack_id}, verify={verify_response.get('report', {}).get('status')}, "
+            f"needs_fix={imported.get('summary', {}).get('needs_fix_count')}, repack={repack_status}/{reverify_response.get('report', {}).get('status')}, all={report_all.get('summary', {}).get('acceptance_status')}, "
+            f"release_sign={sign_status}, tampered={tampered_verify.get('status')}, guards={source_path_status}/{stale_status}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v46_review_response(pack: dict[str, Any], *, needs_fix_song_id: str | None = None) -> dict[str, Any]:
+    reviews = []
+    for item in pack.get("cases", []):
+        if not isinstance(item, dict):
+            continue
+        needs_fix = bool(needs_fix_song_id and item.get("song_id") == needs_fix_song_id)
+        reviews.append(
+            {
+                "case_id": item.get("case_id"),
+                "song_id": item.get("song_id"),
+                "status": "needs_fix" if needs_fix else "accepted",
+                "rating": 2 if needs_fix else 5,
+                "playback_confirmed": True,
+                "audio_mode": item.get("audio_mode") or "midi",
+                "notes": "Manual human review confirms playback; hook section needs adjustment." if needs_fix else "Manual human review confirms playback and musical quality are acceptable.",
+                "issues": ["hook section needs adjustment"] if needs_fix else [],
+                "markers": [{"beat": 8, "severity": "warning", "label": "hook", "note": "Needs adjustment"}] if needs_fix else [],
+                "tags": ["external-review"],
+            }
+        )
+    return {
+        "schema_version": 1,
+        "suite_id": pack.get("suite_id"),
+        "pack_id": pack.get("pack_id"),
+        "pack_source_hash": pack.get("source_hash"),
+        "reviewer": {"name": "release-check reviewer", "organization": "MusicForge QA"},
+        "reviewed_at": "2026-05-19T00:00:00+00:00",
+        "reviews": reviews,
+    }
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

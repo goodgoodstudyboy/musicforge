@@ -2931,6 +2931,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const cases = data.cases || [];
       const report = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/report`).catch(() => ({ report: {}, summary: {} }));
       const signoff = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/signoff`).catch(() => ({ signoff: {}, summary: {} }));
+      const humanPacks = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs`).catch(() => ({ packs: [], summary: {} }));
+      const humanImports = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/review-imports`).catch(() => ({ imports: [], summary: {} }));
+      const latestHumanPack = (humanPacks.packs || [])[0] || {};
+      const latestHumanImport = (humanImports.imports || [])[0] || {};
       const caseRows = cases.map((item) => {
         const health = item.health_summary || {};
         const review = item.review_summary || {};
@@ -2991,6 +2995,22 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         <div class="actions"><button class="secondary" id="acceptance-run-diff" type="button">Compare Suites</button></div>
         <pre id="acceptance-diff-result"></pre>
+        <div class="panel-title subhead"><span>Human Review Pack</span></div>
+        <div class="quick-grid">
+          ${metric("Packs", (humanPacks.summary || {}).pack_count || 0)}
+          ${metric("Latest Pack", latestHumanPack.pack_id || "-")}
+          ${metric("Pack Status", latestHumanPack.status || "-")}
+          ${metric("Latest Import", latestHumanImport.import_id || "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-create-human-pack" type="button">Create Pack</button>
+          <button class="secondary" id="acceptance-zip-human-pack" type="button" ${latestHumanPack.pack_id ? "" : "disabled"}>Build Pack ZIP</button>
+          <button class="secondary" id="acceptance-verify-human-pack" type="button" ${latestHumanPack.pack_id ? "" : "disabled"}>Verify Pack</button>
+          ${latestHumanPack.pack_id ? `<a class="button-link secondary" href="/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs/${encodeURIComponent(latestHumanPack.pack_id)}/zip">Download Pack</a>` : ""}
+        </div>
+        <label>Review Response JSON <textarea id="acceptance-human-review-response" placeholder="Paste exported human review response JSON here"></textarea></label>
+        <div class="actions"><button class="secondary" id="acceptance-import-human-review" type="button">Import Response</button></div>
+        <pre id="acceptance-human-review-result">${escapeHtml(JSON.stringify({ pack: latestHumanPack, import: latestHumanImport }, null, 2))}</pre>
         <div class="panel-title subhead"><span>Cases</span></div>
         <div class="table-wrap">
           ${caseRows ? `<table><thead><tr><th>ID</th><th>Song ID</th><th>Name</th><th>Status</th><th>Health</th><th>Audio</th><th>Review</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${caseRows}</tbody></table>` : "<div class='empty'>No acceptance cases yet.</div>"}
@@ -3083,6 +3103,30 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
         $("acceptance-diff-status").value = (data.diff || {}).status || "-";
         $("acceptance-diff-result").textContent = JSON.stringify(data.diff || {}, null, 2);
+      });
+      $("acceptance-create-human-pack")?.addEventListener("click", async () => {
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        await loadAcceptanceSuites();
+      });
+      $("acceptance-zip-human-pack")?.addEventListener("click", async () => {
+        const packId = ((await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs`)).packs || [])[0]?.pack_id;
+        if (!packId) return;
+        await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs/${encodeURIComponent(packId)}/zip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        await loadAcceptanceSuites();
+      });
+      $("acceptance-verify-human-pack")?.addEventListener("click", async () => {
+        const packId = ((await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs`)).packs || [])[0]?.pack_id;
+        if (!packId) return;
+        const data = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs/${encodeURIComponent(packId)}/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true }) });
+        $("acceptance-human-review-result").textContent = JSON.stringify(data.report || data, null, 2);
+      });
+      $("acceptance-import-human-review")?.addEventListener("click", async () => {
+        const raw = $("acceptance-human-review-response").value.trim();
+        if (!raw) return;
+        const response = JSON.parse(raw);
+        const data = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/review-imports`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ response }) });
+        $("acceptance-human-review-result").textContent = JSON.stringify(data.import || data, null, 2);
+        await loadAcceptanceSuites();
       });
       $("acceptance-signoff")?.addEventListener("click", async () => {
         await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/signoff`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signed_by: "developer" }) });
