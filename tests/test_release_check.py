@@ -159,7 +159,7 @@ def test_v47_acceptance_analytics_smoke(tmp_path: Path) -> None:
     assert ok is True, detail
     assert "heatmap=12" in detail
     assert "readiness=blocked" in detail
-    assert "stale=True" in detail
+    assert "stale=True/409" in detail
     assert "release_gate=409/200" in detail
     assert "export_summary=blocked" in detail
 

@@ -5573,6 +5573,7 @@ def _v47_acceptance_analytics_smoke(root: Path) -> tuple[bool, str]:
             },
         )
         stale_status, stale_detail = _release_http_json(server, "GET", f"/api/acceptance/analytics/reports/{report_id}")
+        stale_create_status, stale_create = _release_http_json(server, "POST", f"/api/acceptance/analytics/reports/{report_id}/recommendations/{recommendation_id}/create-review-task", {})
 
         global_heatmap = len(global_report.get("analytics", {}).get("songbook_heatmap", []))
         issue_count = len(suite_report.get("analytics", {}).get("issue_taxonomy", []))
@@ -5594,6 +5595,8 @@ def _v47_acceptance_analytics_smoke(root: Path) -> tuple[bool, str]:
             and duplicate_task_response.get("status") == "existing"
             and stale_status == 200
             and stale_detail.get("analytics", {}).get("stale") is True
+            and stale_create_status == 409
+            and "stale" in str(stale_create.get("error") or "").lower()
             and release_status == 201
             and track_status == 200
             and qa_status == 200
@@ -5610,7 +5613,7 @@ def _v47_acceptance_analytics_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"heatmap={global_heatmap}, issues={issue_count}, readiness={suite_report.get('summary', {}).get('readiness_status')}, "
-            f"task={task_status}/{duplicate_task_status}, stale={stale_detail.get('analytics', {}).get('stale')}, "
+            f"task={task_status}/{duplicate_task_status}, stale={stale_detail.get('analytics', {}).get('stale')}/{stale_create_status}, "
             f"release_gate={blocked_sign_status}/{force_sign_status}, export_summary={analytics_summary.get('readiness_status')}"
         )
     except Exception as exc:

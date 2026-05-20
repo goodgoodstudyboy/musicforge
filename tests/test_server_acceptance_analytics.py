@@ -92,13 +92,21 @@ def test_acceptance_analytics_recommendation_create_review_task(tmp_path: Path, 
         job = wait_for_job(server, version_data["job"]["job_id"])
         request_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": "v001"})
         request_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
-        suite_id, _case_id = _acceptance_case(server, project_id=project_id)
+        suite_id, case_id = _acceptance_case(server, project_id=project_id)
         refresh_status, refreshed = request_json(server, "POST", f"/api/acceptance/suites/{suite_id}/analytics/refresh")
         report_id = refreshed["analytics"]["report_id"]
         recommendation_id = next(item["recommendation_id"] for item in refreshed["analytics"]["recommendations"] if item["type"] == "create_review_task")
         create_task_status, task = request_json(server, "POST", f"/api/acceptance/analytics/reports/{report_id}/recommendations/{recommendation_id}/create-review-task", {})
         duplicate_status, duplicate = request_json(server, "POST", f"/api/acceptance/analytics/reports/{report_id}/recommendations/{recommendation_id}/create-review-task", {})
         list_status, listing = request_json(server, "GET", f"/api/projects/{project_id}/review-tasks")
+        request_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review",
+            {"status": "accepted", "rating": 5, "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual reviewer confirms the stale analytics issue was fixed."},
+        )
+        stale_status, stale_detail = request_json(server, "GET", f"/api/acceptance/analytics/reports/{report_id}")
+        stale_create_status, stale_create = request_json(server, "POST", f"/api/acceptance/analytics/reports/{report_id}/recommendations/{recommendation_id}/create-review-task", {})
     finally:
         stop_test_server(server)
 
@@ -112,6 +120,10 @@ def test_acceptance_analytics_recommendation_create_review_task(tmp_path: Path, 
     assert duplicate["status"] == "existing"
     assert list_status == 200
     assert listing["tasks"][0]["source"]["source_type"] == "acceptance_analytics"
+    assert stale_status == 200
+    assert stale_detail["analytics"]["stale"] is True
+    assert stale_create_status == 409
+    assert "stale" in stale_create["error"].lower()
 
 
 def test_acceptance_analytics_release_scope_and_auth(tmp_path: Path, monkeypatch) -> None:

@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.7.1 - 2026-05-20
+
+### Fixed
+- Stale Acceptance Analytics reports can no longer create recommendation ReviewTasks. Users must refresh analytics before turning a recommendation into a task.
+
+### Added
+- Server regression and release-check v4.7 smoke coverage for stale recommendation create returning 409 while fresh creation and duplicate open-task detection still work.
+
+### Verified
+- `python -m pytest tests\test_server_acceptance_analytics.py::test_acceptance_analytics_recommendation_create_review_task tests\test_release_check.py::test_v47_acceptance_analytics_smoke -q`
+
 ## v4.7.0 - 2026-05-20
 
 ### Added

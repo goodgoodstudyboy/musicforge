@@ -264,6 +264,8 @@ class AcceptanceAnalyticsStore:
     def create_review_task_from_recommendation(self, report_id: str, recommendation_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         report = self.get_report(report_id)
+        if report.get("stale") is True:
+            raise AcceptanceAnalyticsStateError("Acceptance analytics report is stale. Refresh analytics before creating ReviewTasks.")
         recommendation = next((item for item in report.get("recommendations", []) if isinstance(item, dict) and item.get("recommendation_id") == recommendation_id), None)
         if not recommendation:
             raise AcceptanceAnalyticsNotFoundError(recommendation_id)
