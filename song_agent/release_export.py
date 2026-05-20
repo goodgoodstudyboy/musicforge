@@ -12,6 +12,7 @@ from typing import Any
 from song_agent.final_export import final_export_dir
 from song_agent.acceptance_analytics import AcceptanceAnalyticsStore, AnalyticsScope, write_acceptance_analytics_summary
 from song_agent.acceptance_fix_sprints import AcceptanceFixSprintStore, write_acceptance_fix_sprints_summary
+from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore, write_acceptance_kb_summary
 from song_agent.projectio import slugify, write_json
 from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -94,12 +95,15 @@ def build_release_export_bundle(
     write_json(export_dir / "release-signoff.json", signoff_public)
     analytics_summary = _release_acceptance_analytics_summary(release_store, release.release_id, export_dir)
     fix_sprint_summary = _release_acceptance_fix_sprint_summary(release_store, release.release_id, export_dir)
+    kb_summary = _release_acceptance_kb_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
     if (export_dir / "acceptance-analytics-summary.json").exists():
         copied_files.append(_file_record(export_dir, export_dir / "acceptance-analytics-summary.json"))
     if (export_dir / "acceptance-fix-sprints-summary.json").exists():
         copied_files.append(_file_record(export_dir, export_dir / "acceptance-fix-sprints-summary.json"))
+    if (export_dir / "acceptance-kb-summary.json").exists():
+        copied_files.append(_file_record(export_dir, export_dir / "acceptance-kb-summary.json"))
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -114,6 +118,7 @@ def build_release_export_bundle(
         },
         "acceptance_analytics": analytics_summary,
         "acceptance_fix_sprint": fix_sprint_summary,
+        "acceptance_kb": kb_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -395,6 +400,16 @@ def _release_acceptance_fix_sprint_summary(release_store: ReleaseStore, release_
     except Exception:
         summary = {"status": "missing"}
         write_json(export_dir / "acceptance-fix-sprints-summary.json", summary)
+        return summary
+
+
+def _release_acceptance_kb_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        store = AcceptanceKnowledgeBaseStore(project_store=release_store.project_store)
+        return write_acceptance_kb_summary(export_dir / "acceptance-kb-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "acceptance-kb-summary.json", summary)
         return summary
 
 

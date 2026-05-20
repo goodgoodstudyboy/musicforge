@@ -136,6 +136,7 @@ def build_final_export_bundle(
     review_judge = _final_review_judge(project_export, edit_metadata)
     review_sprint_closeout = _final_review_sprint_closeout(project_export)
     acceptance_fix_sprint = _final_acceptance_fix_sprint(project_export)
+    acceptance_kb = _final_acceptance_kb(project_export)
     delivery_qa = _final_delivery_qa(project_export)
     delivery_signoff = _final_delivery_signoff(project_export)
 
@@ -159,6 +160,7 @@ def build_final_export_bundle(
         "review_judge": review_judge,
         "review_sprint_closeout": review_sprint_closeout,
         "acceptance_fix_sprint": acceptance_fix_sprint,
+        "acceptance_kb": acceptance_kb,
         "delivery_qa": delivery_qa,
         "delivery_signoff": delivery_signoff,
         "files": files,
@@ -683,6 +685,27 @@ def _final_acceptance_fix_sprint(project_export: dict[str, Any] | None) -> dict[
                 "recheck_suite_id": summary.get("recheck_suite_id"),
                 "delta_status": summary.get("delta_status"),
                 "closeout_status": summary.get("closeout_status"),
+            }
+        )
+    )
+
+
+def _final_acceptance_kb(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_kb_summary"), dict):
+        return {}
+    summary = project_export["acceptance_kb_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "report_id": summary.get("report_id"),
+                "entry_count": summary.get("entry_count"),
+                "effective_count": summary.get("effective_count"),
+                "ineffective_count": summary.get("ineffective_count"),
+                "average_effectiveness_score": summary.get("average_effectiveness_score"),
+                "top_recurring_issues": summary.get("top_recurring_issues") if isinstance(summary.get("top_recurring_issues"), list) else [],
+                "warning_count": summary.get("warning_count"),
+                "stale": summary.get("stale"),
             }
         )
     )

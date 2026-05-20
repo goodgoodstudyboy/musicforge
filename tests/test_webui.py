@@ -47,8 +47,16 @@ def test_webui_contains_acceptance_workspace():
     assert "Acceptance Fix Sprints" in html
     assert 'id="acceptance-fix-sprints"' in html
     assert 'id="acceptance-create-fix-sprint"' in html
+    assert "Knowledge Base" in html
+    assert 'id="acceptance-kb"' in html
+    assert 'id="acceptance-kb-refresh"' in html
+    assert 'id="acceptance-kb-recommend"' in html
+    assert "Issue Patterns" in html
+    assert "Style Patterns" in html
+    assert "Recommendation Panel" in html
     assert "/api/acceptance/fix-sprints" in html
     assert "/api/acceptance/analytics" in html
+    assert "/api/acceptance/kb" in html
     assert "/analytics/refresh" in html
     assert "Songbook Heatmap" in html
     assert "Issue Taxonomy" in html

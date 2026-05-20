@@ -1219,6 +1219,17 @@ def panel_html() -> str:
           <button class="secondary" id="acceptance-refresh-fix-sprints" type="button">Refresh Fix Sprints</button>
         </div>
         <div id="acceptance-fix-sprints" class="release-detail"><div class="empty">No acceptance fix sprints yet.</div></div>
+        <div class="panel-title subhead"><span>Knowledge Base</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-kb-refresh" type="button">Refresh KB</button>
+          <button class="secondary" id="acceptance-kb-recommend" type="button">Recommend</button>
+        </div>
+        <div class="grid3">
+          <label>Issue Type <input id="acceptance-kb-issue-type" value="hook"></label>
+          <label>Style <input id="acceptance-kb-style" value=""></label>
+          <label>Song ID <input id="acceptance-kb-song-id" value=""></label>
+        </div>
+        <div id="acceptance-kb" class="release-detail"><div class="empty">No acceptance knowledge report yet.</div></div>
       </div>
     </section>
     <section style="grid-column: 1 / -1;">
@@ -1298,6 +1309,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let selectedAcceptanceSuiteId = null;
     let acceptanceAnalytics = null;
     let acceptanceFixSprints = [];
+    let acceptanceKb = null;
+    let acceptanceKbRecommendation = null;
     let projects = [];
     let selectedProjectId = null;
     let includeHiddenProjects = false;
@@ -1390,6 +1403,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadAcceptanceReferenceData();
       await loadAcceptanceAnalytics();
       await loadAcceptanceFixSprints();
+      await loadAcceptanceKb();
       await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
@@ -1398,6 +1412,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadReleases();
         loadAcceptanceAnalytics();
         loadAcceptanceFixSprints();
+        loadAcceptanceKb();
         loadAcceptanceSuites();
         loadAssets();
         loadReferences();
@@ -1582,6 +1597,30 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     });
     $("acceptance-refresh-fix-sprints").addEventListener("click", loadAcceptanceFixSprints);
+    $("acceptance-kb-refresh").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/acceptance/kb/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "global" }) });
+        acceptanceKb = data.knowledge_report || null;
+        acceptanceKbRecommendation = null;
+        renderAcceptanceKb();
+      } catch (err) {
+        $("acceptance-kb").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("acceptance-kb-recommend").addEventListener("click", async () => {
+      try {
+        const payload = {
+          issue_types: [$("acceptance-kb-issue-type").value.trim()].filter(Boolean),
+          style: $("acceptance-kb-style").value.trim(),
+          song_id: $("acceptance-kb-song-id").value.trim(),
+        };
+        const data = await api("/api/acceptance/kb/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        acceptanceKbRecommendation = data.recommendation || null;
+        renderAcceptanceKb();
+      } catch (err) {
+        $("acceptance-kb").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
     $("acceptance-create-fix-sprint").addEventListener("click", async () => {
       try {
         if (!acceptanceAnalytics || !acceptanceAnalytics.report_id) throw new Error("Refresh Acceptance Analytics first.");
@@ -2214,6 +2253,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         acceptanceFixSprints = [];
       }
       renderAcceptanceFixSprints();
+    }
+
+    async function loadAcceptanceKb() {
+      try {
+        const data = await api("/api/acceptance/kb");
+        acceptanceKb = data.knowledge_report || null;
+      } catch (err) {
+        acceptanceKb = null;
+      }
+      renderAcceptanceKb();
     }
 
     async function loadAssets() {
@@ -3109,6 +3158,64 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/acceptance/fix-sprints/${encodeURIComponent(button.dataset.fixSprintId)}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
         await loadAcceptanceFixSprints();
       }));
+    }
+
+    function renderAcceptanceKb(report = acceptanceKb) {
+      const target = $("acceptance-kb");
+      if (!target) return;
+      if (!report || !report.report_id) {
+        target.innerHTML = "<div class='empty'>No acceptance knowledge report yet.</div>";
+        return;
+      }
+      const summary = report.summary || {};
+      const issueRows = (report.issue_patterns || []).slice(0, 8).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.issue_type || "-")}</td>
+          <td>${escapeHtml(item.entry_count || 0)}</td>
+          <td>${escapeHtml(item.effective_count || 0)}</td>
+          <td>${escapeHtml(item.average_effectiveness_score ?? "-")}</td>
+          <td>${escapeHtml(item.risk || "-")}</td>
+        </tr>
+      `).join("");
+      const styleRows = (report.style_patterns || []).slice(0, 8).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.style || "-")}</td>
+          <td>${escapeHtml(item.entry_count || 0)}</td>
+          <td>${escapeHtml((item.recurring_issues || []).join(", "))}</td>
+          <td>${escapeHtml(item.average_effectiveness_score ?? "-")}</td>
+          <td>${escapeHtml(item.stability_status || "-")}</td>
+        </tr>
+      `).join("");
+      const entryRows = (report.recommendations || []).slice(0, 6).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.type || "-")}</td>
+          <td>${escapeHtml(item.issue_type || item.style || item.song_id || "-")}</td>
+          <td>${escapeHtml(item.reason || "")}</td>
+        </tr>
+      `).join("");
+      const rec = acceptanceKbRecommendation || {};
+      target.innerHTML = `
+        <div class="summary-grid">
+          ${metric("Entries", summary.entry_count || 0)}
+          ${metric("Effective", summary.effective_count || 0)}
+          ${metric("Mixed", summary.mixed_count || 0)}
+          ${metric("Ineffective", summary.ineffective_count || 0)}
+          ${metric("Average", summary.average_effectiveness_score ?? "-")}
+          ${metric("Stale", report.stale ? "yes" : "-")}
+        </div>
+        <div class="panel-title subhead"><span>Issue Patterns</span></div>
+        <table>
+          <thead><tr><th>Issue</th><th>Entries</th><th>Effective</th><th>Score</th><th>Risk</th></tr></thead>
+          <tbody>${issueRows || "<tr><td colspan='5'>No issue patterns yet.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Style Patterns</span></div>
+        <table>
+          <thead><tr><th>Style</th><th>Entries</th><th>Recurring Issues</th><th>Score</th><th>Status</th></tr></thead>
+          <tbody>${styleRows || "<tr><td colspan='5'>No style patterns yet.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Recommendation Panel</span></div>
+        ${rec.status ? `<pre>${escapeHtml(JSON.stringify(rec, null, 2))}</pre>` : `<table><thead><tr><th>Type</th><th>Target</th><th>Reason</th></tr></thead><tbody>${entryRows || "<tr><td colspan='3'>No KB recommendations yet.</td></tr>"}</tbody></table>`}
+      `;
     }
 
     function selectedAcceptanceSong() {

@@ -18,6 +18,7 @@ from song_agent.release_checks import (
     _v46_human_review_pack_smoke,
     _v47_acceptance_analytics_smoke,
     _v48_acceptance_fix_sprint_smoke,
+    _v49_acceptance_knowledge_base_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -176,6 +177,17 @@ def test_v48_acceptance_fix_sprint_smoke(tmp_path: Path) -> None:
     assert "gate=passed" in detail
     assert "stale_guard=409" in detail
     assert "stale_force_close=409" in detail
+
+
+def test_v49_acceptance_knowledge_base_smoke(tmp_path: Path) -> None:
+    ok, detail = _v49_acceptance_knowledge_base_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "entries=1" in detail
+    assert "effective=1" in detail
+    assert "search=1" in detail
+    assert "recommendation=available" in detail
+    assert "export=ok" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

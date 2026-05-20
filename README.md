@@ -90,6 +90,9 @@ python -m song_agent.cli acceptance-check --profile release_candidate --render-a
 python -m song_agent.cli acceptance-diff runs\acceptance-baseline.json runs\acceptance-current.json --json
 python -m song_agent.cli acceptance-analytics --scope global --refresh --json
 python -m song_agent.cli acceptance-fix-sprint create --analytics-report-id analytics-20260520-example --json
+python -m song_agent.cli acceptance-kb refresh --json
+python -m song_agent.cli acceptance-kb search --issue-type hook --style rap --json
+python -m song_agent.cli acceptance-kb recommend --issue-type rhythm --song-id rap_beat_001 --json
 ```
 
 Acceptance Profiles make the gate repeatable: `midi_smoke` is a synthetic
@@ -139,6 +142,13 @@ Release Export writes `acceptance-fix-sprints-summary.json`, and Release
 Signoff can require closed Fix Sprint evidence with
 `require_acceptance_fix_sprint=true`. Project Export and Final Export also carry
 the latest matching Fix Sprint summary for project-level handoff review.
+
+Acceptance Knowledge Base turns closed, non-stale Fix Sprints into local
+issue/fix/outcome entries with deterministic effectiveness scores, issue/style
+patterns, search, and advisory recommendations. It is local-only and does not
+call external models, create tasks, apply edits, or gate release signoff.
+Project Export, Release Export, Final Export, and Release Signoff carry only
+sanitized KB summaries, not full listening notes or raw provider responses.
 
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,

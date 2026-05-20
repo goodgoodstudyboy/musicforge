@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.9.0 - 2026-05-21
+
+### Added
+- Acceptance Knowledge Base store, API, and CLI for turning closed, non-stale Acceptance Fix Sprints into local issue/fix/outcome entries.
+- Deterministic effectiveness scoring, issue/style/song patterns, KB search, and advisory recommendations that never create tasks or apply edits automatically.
+- Studio Acceptance Knowledge Base panel with summary, issue patterns, style patterns, and recommendation controls.
+- Project Export, Release Export, Final Export, and Release Signoff now include sanitized KB summaries only.
+- release-check v4.9 smoke covers KB refresh, entry generation, search, recommendation, export summaries, and redaction.
+
+### Verified
+- `python -m pytest tests\test_acceptance_kb.py tests\test_server_acceptance_kb.py tests\test_cli_acceptance_kb.py tests\test_release_check.py::test_v49_acceptance_knowledge_base_smoke tests\test_webui.py::test_webui_contains_acceptance_workspace -q`
+
 ## v4.8.1 - 2026-05-20
 
 ### Fixed

@@ -234,6 +234,13 @@ from song_agent.acceptance_fix_sprints import (
     fix_sprint_summary,
     latest_fix_sprint_summary,
 )
+from song_agent.acceptance_kb import (
+    AcceptanceKnowledgeBaseError,
+    AcceptanceKnowledgeBaseNotFoundError,
+    AcceptanceKnowledgeBaseStore,
+    knowledge_entry_summary,
+    knowledge_report_summary,
+)
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.music_acceptance import (
@@ -2408,6 +2415,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.acceptance_fix_sprint_store  # type: ignore[attr-defined]
 
     @property
+    def acceptance_kb_store(self) -> AcceptanceKnowledgeBaseStore:
+        return self.server.acceptance_kb_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2563,6 +2574,36 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/acceptance/fix-sprints":
                 self._handle_acceptance_fix_sprints_root(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/kb":
+                self._handle_acceptance_kb_root(method)
+                return
+
+            if path == "/api/acceptance/kb/refresh":
+                self._handle_acceptance_kb_refresh(method)
+                return
+
+            if path == "/api/acceptance/kb/entries":
+                self._handle_acceptance_kb_entries(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/kb/search":
+                self._handle_acceptance_kb_search(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/kb/recommend":
+                self._handle_acceptance_kb_recommend(method)
+                return
+
+            kb_entry_route = _match_acceptance_kb_entry_route(path)
+            if kb_entry_route is not None:
+                self._handle_acceptance_kb_entry_route(method, kb_entry_route)
+                return
+
+            kb_report_id = _match_acceptance_kb_report_route(path)
+            if kb_report_id is not None:
+                self._handle_acceptance_kb_report(method, kb_report_id)
                 return
 
             fix_sprint_route = _match_acceptance_fix_sprint_route(path)
@@ -4885,15 +4926,23 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         suite_id = str(payload.get("acceptance_suite_id") or "").strip()
         analytics_evidence = self._release_acceptance_analytics_gate(payload)
         fix_sprint_evidence = self._release_acceptance_fix_sprint_gate(payload)
+        kb_evidence = self._release_acceptance_kb_gate(payload)
         if not suite_id:
             if not analytics_evidence:
-                return {"acceptance_fix_sprint": fix_sprint_evidence} if fix_sprint_evidence else {}
+                gate = {}
+                if fix_sprint_evidence:
+                    gate["acceptance_fix_sprint"] = fix_sprint_evidence
+                if kb_evidence:
+                    gate["acceptance_kb"] = kb_evidence
+                return gate
             gate = {"acceptance_analytics": analytics_evidence}
             if fix_sprint_evidence:
                 gate["acceptance_fix_sprint"] = fix_sprint_evidence
                 if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                     gate["status"] = "failed"
                     gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
+            if kb_evidence:
+                gate["acceptance_kb"] = kb_evidence
             if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = "Acceptance analytics readiness is blocked."
@@ -4930,6 +4979,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
+        if kb_evidence:
+            gate["acceptance_kb"] = kb_evidence
         return gate
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -4976,6 +5027,17 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Sprint evidence is missing."}
         except AcceptanceFixSprintError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
+
+    def _release_acceptance_kb_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        release_id = str(payload.get("release_id") or "").strip()
+        if not release_id:
+            return {}
+        try:
+            summary = self.acceptance_kb_store.summary(release_id=release_id)
+            status = "warning" if summary.get("stale") else "available" if int(summary.get("entry_count") or 0) else "missing"
+            return {**summary, "status": status}
+        except AcceptanceKnowledgeBaseError as exc:
+            return {"status": "warning", "message": str(exc)}
 
     def _handle_release_signoff_reset(self, method: str, release_id: str) -> None:
         if method != "POST":
@@ -6002,6 +6064,102 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AcceptanceFixSprintStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (AcceptanceFixSprintError, AcceptanceAnalyticsError, AcceptanceNotFoundError, FileNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_kb_root(self, method: str) -> None:
+        try:
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            report = self.acceptance_kb_store.latest_report()
+            self._send_json({"ok": True, "knowledge_report": report, "summary": knowledge_report_summary(report)})
+        except AcceptanceKnowledgeBaseError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_kb_refresh(self, method: str) -> None:
+        try:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            report = self.acceptance_kb_store.refresh(self._optional_json_body(), now=_utc_now())
+            self._send_json({"ok": True, "knowledge_report": report, "summary": knowledge_report_summary(report)}, status=HTTPStatus.CREATED)
+        except AcceptanceKnowledgeBaseError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_kb_report(self, method: str, report_id: str) -> None:
+        try:
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            report = self.acceptance_kb_store.get_report(report_id)
+            self._send_json({"ok": True, "knowledge_report": report, "summary": knowledge_report_summary(report)})
+        except AcceptanceKnowledgeBaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceKnowledgeBaseError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_kb_entries(self, method: str, query_string: str) -> None:
+        try:
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            query = parse_qs(query_string)
+            include_hidden = _query_value(query, "include_hidden") in {"1", "true", "yes"}
+            entries = self.acceptance_kb_store.list_entries(include_hidden=include_hidden)
+            self._send_json({"ok": True, "entries": [knowledge_entry_summary(entry) for entry in entries], "summary": {"entry_count": len(entries)}})
+        except AcceptanceKnowledgeBaseError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_kb_entry_route(self, method: str, route: tuple[str, str]) -> None:
+        entry_id, action = route
+        try:
+            if not action:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                entry = self.acceptance_kb_store.read_entry(entry_id)
+                self._send_json({"ok": True, "entry": entry.to_dict(), "summary": knowledge_entry_summary(entry)})
+                return
+            if action in {"hide", "unhide"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                entry = self.acceptance_kb_store.hide_entry(entry_id, hidden=action == "hide", now=_utc_now())
+                self._send_json({"ok": True, "entry": entry.to_dict(), "summary": knowledge_entry_summary(entry)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Acceptance KB entry route not found.")
+        except AcceptanceKnowledgeBaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceKnowledgeBaseError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_kb_search(self, method: str, query_string: str) -> None:
+        try:
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            query = parse_qs(query_string)
+            payload = {
+                "issue_type": _query_value(query, "issue_type") or "",
+                "style": _query_value(query, "style") or "",
+                "song_id": _query_value(query, "song_id") or "",
+                "project_id": _query_value(query, "project_id") or "",
+                "release_id": _query_value(query, "release_id") or "",
+                "outcome_status": _query_value(query, "outcome_status") or "",
+            }
+            entries = self.acceptance_kb_store.search_entries(payload)
+            self._send_json({"ok": True, "entries": [knowledge_entry_summary(entry) for entry in entries], "summary": {"entry_count": len(entries)}})
+        except AcceptanceKnowledgeBaseError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_kb_recommend(self, method: str) -> None:
+        try:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            recommendation = self.acceptance_kb_store.recommend(self._optional_json_body())
+            self._send_json({"ok": True, "recommendation": recommendation})
+        except AcceptanceKnowledgeBaseError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> dict[str, Any]:
@@ -10503,6 +10661,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.human_review_pack_store = HumanReviewPackStore(self.acceptance_store, project_store=self.project_store)
         self.acceptance_analytics_store = AcceptanceAnalyticsStore(acceptance_store=self.acceptance_store, project_store=self.project_store, release_store=self.release_store)
         self.acceptance_fix_sprint_store = AcceptanceFixSprintStore(acceptance_store=self.acceptance_store, analytics_store=self.acceptance_analytics_store, project_store=self.project_store)
+        self.acceptance_kb_store = AcceptanceKnowledgeBaseStore(fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -10988,6 +11147,28 @@ def _match_acceptance_analytics_recommendation_route(path: str) -> tuple[str, st
     parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
     if len(parts) == 4 and parts[1] == "recommendations" and parts[3] == "create-review-task":
         return parts[0], parts[2]
+    return None
+
+
+def _match_acceptance_kb_report_route(path: str) -> str | None:
+    prefix = "/api/acceptance/kb/reports/"
+    if not path.startswith(prefix):
+        return None
+    report_id = unquote(path[len(prefix) :].strip("/"))
+    return report_id or None
+
+
+def _match_acceptance_kb_entry_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/kb/entries/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"hide", "unhide"}:
+        return parts[0], parts[1]
     return None
 
 

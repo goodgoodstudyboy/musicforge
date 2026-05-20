@@ -191,6 +191,43 @@ def build_acceptance_fix_sprint_parser() -> argparse.ArgumentParser:
     return fix_parser
 
 
+def build_acceptance_kb_parser() -> argparse.ArgumentParser:
+    kb_parser = argparse.ArgumentParser(description="Manage the local MusicForge Acceptance Knowledge Base.")
+    subparsers = kb_parser.add_subparsers(dest="action", required=True)
+
+    refresh = subparsers.add_parser("refresh", help="Refresh Acceptance KB entries and report.")
+    refresh.add_argument("--project-id", default=None)
+    refresh.add_argument("--release-id", default=None)
+
+    subparsers.add_parser("report", help="Show the latest Acceptance KB report.")
+
+    entries = subparsers.add_parser("entries", help="List Acceptance KB entries.")
+    entries.add_argument("--include-hidden", action="store_true")
+
+    show = subparsers.add_parser("show", help="Show one Acceptance KB entry.")
+    show.add_argument("entry_id")
+
+    search = subparsers.add_parser("search", help="Search Acceptance KB entries.")
+    search.add_argument("--issue-type", default=None)
+    search.add_argument("--style", default=None)
+    search.add_argument("--song-id", default=None)
+    search.add_argument("--project-id", default=None)
+    search.add_argument("--release-id", default=None)
+    search.add_argument("--outcome-status", default=None)
+
+    recommend = subparsers.add_parser("recommend", help="Recommend next actions from Acceptance KB history.")
+    recommend.add_argument("--issue-type", action="append", dest="issue_types", default=[])
+    recommend.add_argument("--style", default=None)
+    recommend.add_argument("--song-id", default=None)
+    recommend.add_argument("--project-id", default=None)
+    recommend.add_argument("--release-id", default=None)
+
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write the command result as JSON.")
+    return kb_parser
+
+
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "request",
@@ -450,6 +487,41 @@ def _main() -> None:
         else:
             print_acceptance_fix_sprint_result(result)
         raise SystemExit(0)
+    elif raw_args and raw_args[0] == "acceptance-kb":
+        from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
+
+        parser = build_acceptance_kb_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = AcceptanceKnowledgeBaseStore()
+        if args.action == "refresh":
+            scope = {"type": "global", "project_id": args.project_id, "release_id": args.release_id}
+            report = store.refresh(scope)
+            result = {"ok": True, "knowledge_report": report, "summary": knowledge_report_summary(report)}
+        elif args.action == "report":
+            report = store.latest_report()
+            result = {"ok": True, "knowledge_report": report, "summary": knowledge_report_summary(report)}
+        elif args.action == "entries":
+            entries = store.list_entries(include_hidden=args.include_hidden)
+            result = {"ok": True, "entries": [knowledge_entry_summary(entry) for entry in entries], "summary": {"entry_count": len(entries)}}
+        elif args.action == "show":
+            entry = store.read_entry(args.entry_id)
+            result = {"ok": True, "entry": entry.to_dict(), "summary": knowledge_entry_summary(entry)}
+        elif args.action == "search":
+            query = {"issue_type": args.issue_type, "style": args.style, "song_id": args.song_id, "project_id": args.project_id, "release_id": args.release_id, "outcome_status": args.outcome_status}
+            entries = store.search_entries(query)
+            result = {"ok": True, "entries": [knowledge_entry_summary(entry) for entry in entries], "summary": {"entry_count": len(entries)}}
+        elif args.action == "recommend":
+            recommendation = store.recommend({"issue_types": args.issue_types, "style": args.style, "song_id": args.song_id, "project_id": args.project_id, "release_id": args.release_id})
+            result = {"ok": True, "recommendation": recommendation}
+        else:
+            parser.error("unknown acceptance-kb action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_acceptance_kb_result(result)
+        raise SystemExit(0)
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)
@@ -648,6 +720,25 @@ def print_acceptance_fix_sprint_result(result: dict[str, Any]) -> None:
         print(f"delta_status: {(delta.get('summary') or {}).get('status')}")
     if closeout:
         print(f"closeout_status: {closeout.get('status')}")
+
+
+def print_acceptance_kb_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    recommendation = result.get("recommendation") if isinstance(result.get("recommendation"), dict) else {}
+    entry = result.get("entry") if isinstance(result.get("entry"), dict) else {}
+    print("MusicForge acceptance-kb")
+    if summary:
+        print(f"status: {summary.get('status') or '-'}")
+        print(f"entries: {summary.get('entry_count', 0)}")
+        print(f"effective: {summary.get('effective_count', 0)}")
+        print(f"average_score: {summary.get('average_effectiveness_score')}")
+    if result.get("entries") is not None:
+        print(f"listed_entries: {len(result.get('entries') or [])}")
+    if recommendation:
+        print(f"recommendation: {recommendation.get('status')}")
+        print(f"matches: {recommendation.get('matching_entry_count', 0)}")
+    if entry:
+        print(f"entry: {entry.get('entry_id')}")
 
 
 def _acceptance_analytics_fail_on(readiness: str, fail_on: str | None) -> bool:
