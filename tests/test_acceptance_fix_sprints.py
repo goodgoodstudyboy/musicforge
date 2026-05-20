@@ -63,6 +63,8 @@ def test_fix_sprint_create_from_analytics_and_stale_guard(tmp_path: Path, monkey
     assert store.read_sprint(sprint.fix_sprint_id).status == "stale"
     with pytest.raises(AcceptanceFixSprintStateError):
         store.create_review_tasks(sprint.fix_sprint_id)
+    with pytest.raises(AcceptanceFixSprintStateError):
+        store.close(sprint.fix_sprint_id, {"force": True, "override_reason": "stale source must block force close"})
 
 
 def test_fix_sprint_waive_recheck_delta_and_close(tmp_path: Path, monkeypatch) -> None:

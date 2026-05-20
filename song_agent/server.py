@@ -4964,8 +4964,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             closeout = self.acceptance_fix_sprint_store.read_closeout(sprint.fix_sprint_id, default={})
             summary = fix_sprint_summary(sprint, items)
             closeout_summary = acceptance_fix_closeout_summary(closeout)
+            stale = self.acceptance_fix_sprint_store.sprint_is_stale(sprint)
             ok = sprint.status == "closed" and closeout_summary.get("status") in {"passed", "warning", "force_closed"}
-            evidence = {**summary, "sprint_status": summary.get("status"), "closeout": closeout_summary}
+            evidence = {**summary, "sprint_status": summary.get("status"), "stale": stale, "closeout": closeout_summary}
+            if stale:
+                return {**evidence, "status": "failed" if require_gate else "warning", "message": "Acceptance Fix Sprint source analytics is stale. Refresh analytics before signoff."}
             if require_gate and not ok:
                 return {**evidence, "status": "failed", "message": "Acceptance Fix Sprint is not closed."}
             return {**evidence, "status": "passed" if ok else "warning" if summary.get("status") != "missing" else "missing"}

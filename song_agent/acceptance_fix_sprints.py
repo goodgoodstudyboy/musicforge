@@ -442,7 +442,7 @@ class AcceptanceFixSprintStore:
         payload = payload or {}
         sprint = self.read_sprint(fix_sprint_id)
         force = bool(payload.get("force", False))
-        if self.sprint_is_stale(sprint) and not force:
+        if self.sprint_is_stale(sprint):
             raise AcceptanceFixSprintStateError("Fix Sprint source analytics is stale. Refresh analytics and create a new Fix Sprint.")
         items = self.sync_items(fix_sprint_id, now=now)
         delta = self.read_delta(fix_sprint_id, default={})

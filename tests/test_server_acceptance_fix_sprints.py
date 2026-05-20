@@ -49,6 +49,7 @@ def test_acceptance_fix_sprint_api_creates_tasks_and_blocks_stale(tmp_path: Path
             {"status": "accepted", "rating": 5, "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual reviewer accepted the stale case."},
         )
         stale_task_status, stale_task = request_json(server, "POST", f"/api/acceptance/fix-sprints/{stale_sprint_id}/create-review-tasks")
+        stale_close_status, stale_close = request_json(server, "POST", f"/api/acceptance/fix-sprints/{stale_sprint_id}/close", {"force": True, "override_reason": "stale source must block force close"})
     finally:
         stop_test_server(server)
 
@@ -65,6 +66,8 @@ def test_acceptance_fix_sprint_api_creates_tasks_and_blocks_stale(tmp_path: Path
     assert stale_create_status == 201
     assert stale_task_status == 409
     assert "stale" in stale_task["error"].lower()
+    assert stale_close_status == 409
+    assert "stale" in stale_close["error"].lower()
 
 
 def test_acceptance_fix_sprint_closeout_and_release_evidence(tmp_path: Path, monkeypatch) -> None:
@@ -72,7 +75,7 @@ def test_acceptance_fix_sprint_closeout_and_release_evidence(tmp_path: Path, mon
     server = start_test_server()
     try:
         project_id = _signed_project(server, "Fix Sprint Release Track")
-        suite_id, _case_id = _acceptance_case(server, project_id=project_id)
+        suite_id, case_id = _acceptance_case(server, project_id=project_id)
         release_status, release = request_json(server, "POST", "/api/releases", {"name": "Fix Sprint Release", "release_type": "demo_pack", "primary_artist": "QA"})
         release_id = release["release"]["release_id"]
         request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
@@ -107,6 +110,14 @@ def test_acceptance_fix_sprint_closeout_and_release_evidence(tmp_path: Path, mon
         project_export_status, project_export = request_json(server, "GET", f"/api/projects/{project_id}/export")
         final_export_status, final_export = request_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
         sign_status, signed = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "force": True, "override_reason": "acceptance analytics remains blocked in smoke", "require_acceptance_fix_sprint": True})
+        reset_status, _reset = request_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "verify stale fix sprint gate"})
+        request_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review",
+            {"status": "accepted", "rating": 5, "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Source review changed after Fix Sprint close."},
+        )
+        stale_gate_status, stale_gate = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_acceptance_fix_sprint": True})
     finally:
         stop_test_server(server)
 
@@ -128,3 +139,6 @@ def test_acceptance_fix_sprint_closeout_and_release_evidence(tmp_path: Path, mon
     assert final_export["final_export"]["acceptance_fix_sprint"]["status"] == "closed"
     assert sign_status == 200
     assert signed["signoff"]["acceptance_gate"]["acceptance_fix_sprint"]["status"] == "passed"
+    assert reset_status == 200
+    assert stale_gate_status == 409
+    assert "stale" in stale_gate["error"].lower()

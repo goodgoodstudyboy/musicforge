@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.8.1 - 2026-05-20
+
+### Fixed
+- Stale Acceptance Fix Sprints can no longer be force-closed; `force=true` only bypasses closeout checks, not source analytics integrity.
+- Release Signoff rechecks Acceptance Fix Sprint stale state, so closed-but-stale Fix Sprint evidence is reported as failed when `require_acceptance_fix_sprint=true`.
+
+### Added
+- Store, API, and release-check regressions for stale Fix Sprint force close returning 409.
+
+### Verified
+- `python -m pytest tests\test_acceptance_fix_sprints.py tests\test_server_acceptance_fix_sprints.py tests\test_release_check.py::test_v48_acceptance_fix_sprint_smoke -q`
+
 ## v4.8.0 - 2026-05-20
 
 ### Added

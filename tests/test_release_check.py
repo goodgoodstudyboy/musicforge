@@ -175,6 +175,7 @@ def test_v48_acceptance_fix_sprint_smoke(tmp_path: Path) -> None:
     assert "final=closed" in detail
     assert "gate=passed" in detail
     assert "stale_guard=409" in detail
+    assert "stale_force_close=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

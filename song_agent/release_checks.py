@@ -5731,6 +5731,7 @@ def _v48_acceptance_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
         stale_fix_id = stale_fix.get("fix_sprint", {}).get("fix_sprint_id")
         _release_http_json(server, "POST", f"/api/acceptance/suites/{stale_suite_id}/cases/{stale_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Stale guard source changed."})
         stale_guard_status, stale_guard = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{stale_fix_id}/create-review-tasks")
+        stale_force_close_status, stale_force_close = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{stale_fix_id}/close", {"force": True, "override_reason": "stale source must block force close"})
 
         manifest = export.get("manifest", {})
         evidence = signed.get("signoff", {}).get("acceptance_gate", {}).get("acceptance_fix_sprint", {})
@@ -5777,12 +5778,15 @@ def _v48_acceptance_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
             and stale_fix_status == 201
             and stale_guard_status == 409
             and "stale" in str(stale_guard.get("error") or "").lower()
+            and stale_force_close_status == 409
+            and "stale" in str(stale_force_close.get("error") or "").lower()
         )
         return ok, (
             f"sprint={fix_sprint_id}, tasks={tasks_status}/{duplicate_status}, recheck={recheck_suite_id}, "
             f"delta={delta.get('summary', {}).get('status')}, close={closeout_status}, "
             f"export={manifest.get('acceptance_fix_sprint', {}).get('status')}, project={project_export.get('acceptance_fix_sprint_summary', {}).get('status')}, "
-            f"final={final_export.get('final_export', {}).get('acceptance_fix_sprint', {}).get('status')}, gate={evidence.get('status')}, stale_guard={stale_guard_status}"
+            f"final={final_export.get('final_export', {}).get('acceptance_fix_sprint', {}).get('status')}, gate={evidence.get('status')}, "
+            f"stale_guard={stale_guard_status}, stale_force_close={stale_force_close_status}"
         )
     except Exception as exc:
         return False, str(exc)
