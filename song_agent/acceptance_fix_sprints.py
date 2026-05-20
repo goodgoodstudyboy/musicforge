@@ -464,6 +464,26 @@ class AcceptanceFixSprintStore:
         return sanitize_metadata(read_json(path))
 
     def sprint_is_stale(self, sprint: AcceptanceFixSprint) -> bool:
+        if sprint.source.get("source_type") == "acceptance_fix_plan":
+            try:
+                from song_agent.acceptance_fix_planning import AcceptanceFixPlanningStore
+
+                plan_store = AcceptanceFixPlanningStore(analytics_store=self.analytics_store, project_store=self.project_store, fix_sprint_store=self)
+                plan = plan_store.read_plan(str(sprint.source.get("fix_plan_id") or ""))
+                if plan_store.plan_is_stale(plan):
+                    return True
+                if str(plan.source.get("source_hash") or "") != str(sprint.source.get("fix_plan_source_hash") or ""):
+                    return True
+                expected = sprint.source.get("planned_item_hashes") if isinstance(sprint.source.get("planned_item_hashes"), dict) else {}
+                current = {str(item.get("planned_item_id") or ""): item for item in plan.planned_items if isinstance(item, dict)}
+                for planned_item_id, expected_hash in expected.items():
+                    if planned_item_id not in current:
+                        return True
+                    if stable_hash(current[planned_item_id]) != expected_hash:
+                        return True
+                return False
+            except Exception:
+                return True
         report = self.analytics_store.get_report(str(sprint.source.get("report_id") or ""))
         if report.get("stale") is True:
             return True

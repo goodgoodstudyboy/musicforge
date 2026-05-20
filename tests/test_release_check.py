@@ -19,6 +19,7 @@ from song_agent.release_checks import (
     _v47_acceptance_analytics_smoke,
     _v48_acceptance_fix_sprint_smoke,
     _v49_acceptance_knowledge_base_smoke,
+    _v410_knowledge_assisted_fix_planning_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -189,6 +190,18 @@ def test_v49_acceptance_knowledge_base_smoke(tmp_path: Path) -> None:
     assert "recommendation=available" in detail
     assert "export=ok" in detail
     assert "hide_refresh=0/1" in detail
+
+
+def test_v410_knowledge_assisted_fix_planning_smoke(tmp_path: Path) -> None:
+    ok, detail = _v410_knowledge_assisted_fix_planning_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "plan=afp-" in detail
+    assert "items=1" in detail
+    assert "kb=1" in detail
+    assert "sprint=afs-" in detail
+    assert "stale_guard=409" in detail
+    assert "hidden=excluded/included" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

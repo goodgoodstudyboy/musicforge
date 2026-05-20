@@ -234,6 +234,14 @@ from song_agent.acceptance_fix_sprints import (
     fix_sprint_summary,
     latest_fix_sprint_summary,
 )
+from song_agent.acceptance_fix_planning import (
+    AcceptanceFixPlanError,
+    AcceptanceFixPlanNotFoundError,
+    AcceptanceFixPlanStateError,
+    AcceptanceFixPlanningStore,
+    fix_plan_summary,
+    latest_fix_plan_summary,
+)
 from song_agent.acceptance_kb import (
     AcceptanceKnowledgeBaseError,
     AcceptanceKnowledgeBaseNotFoundError,
@@ -2415,6 +2423,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.acceptance_fix_sprint_store  # type: ignore[attr-defined]
 
     @property
+    def acceptance_fix_plan_store(self) -> AcceptanceFixPlanningStore:
+        return self.server.acceptance_fix_plan_store  # type: ignore[attr-defined]
+
+    @property
     def acceptance_kb_store(self) -> AcceptanceKnowledgeBaseStore:
         return self.server.acceptance_kb_store  # type: ignore[attr-defined]
 
@@ -2574,6 +2586,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/acceptance/fix-sprints":
                 self._handle_acceptance_fix_sprints_root(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/fix-plans":
+                self._handle_acceptance_fix_plans_root(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/fix-plans/recommend":
+                self._handle_acceptance_fix_plans_recommend(method)
+                return
+
+            fix_plan_route = _match_acceptance_fix_plan_route(path)
+            if fix_plan_route is not None:
+                self._handle_acceptance_fix_plan_route(method, fix_plan_route)
                 return
 
             if path == "/api/acceptance/kb":
@@ -4926,16 +4951,27 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         suite_id = str(payload.get("acceptance_suite_id") or "").strip()
         analytics_evidence = self._release_acceptance_analytics_gate(payload)
         fix_sprint_evidence = self._release_acceptance_fix_sprint_gate(payload)
+        fix_plan_evidence = self._release_acceptance_fix_plan_gate(payload)
         kb_evidence = self._release_acceptance_kb_gate(payload)
         if not suite_id:
             if not analytics_evidence:
                 gate = {}
+                if fix_plan_evidence:
+                    gate["acceptance_fix_plan"] = fix_plan_evidence
+                    if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                        gate["status"] = "failed"
+                        gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
                 if fix_sprint_evidence:
                     gate["acceptance_fix_sprint"] = fix_sprint_evidence
                 if kb_evidence:
                     gate["acceptance_kb"] = kb_evidence
                 return gate
             gate = {"acceptance_analytics": analytics_evidence}
+            if fix_plan_evidence:
+                gate["acceptance_fix_plan"] = fix_plan_evidence
+                if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                    gate["status"] = "failed"
+                    gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
             if fix_sprint_evidence:
                 gate["acceptance_fix_sprint"] = fix_sprint_evidence
                 if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
@@ -4974,6 +5010,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = "Acceptance analytics readiness is blocked."
+        if fix_plan_evidence:
+            gate["acceptance_fix_plan"] = fix_plan_evidence
+            if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                gate["status"] = "failed"
+                gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
         if fix_sprint_evidence:
             gate["acceptance_fix_sprint"] = fix_sprint_evidence
             if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
@@ -5026,6 +5067,34 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AcceptanceFixSprintNotFoundError:
             return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Sprint evidence is missing."}
         except AcceptanceFixSprintError as exc:
+            return {"status": "failed" if require_gate else "warning", "message": str(exc)}
+
+    def _release_acceptance_fix_plan_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        plan_id = str(payload.get("acceptance_fix_plan_id") or "").strip()
+        release_id = str(payload.get("release_id") or "").strip()
+        require_gate = bool(payload.get("require_acceptance_fix_plan", False))
+        try:
+            if plan_id:
+                plan = self.acceptance_fix_plan_store.read_plan(plan_id)
+                summary = fix_plan_summary(plan)
+            elif release_id:
+                summary = latest_fix_plan_summary(self.acceptance_fix_plan_store, release_id=release_id)
+                if summary.get("status") == "missing":
+                    return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Plan evidence is missing."}
+                plan = self.acceptance_fix_plan_store.read_plan(str(summary.get("plan_id") or ""))
+            else:
+                return {}
+            stale = self.acceptance_fix_plan_store.plan_is_stale(plan)
+            status = "passed" if plan.status in {"ready", "used", "warning"} and not stale else "warning"
+            evidence = {**summary, "stale": stale}
+            if stale:
+                return {**evidence, "status": "failed" if require_gate else "warning", "message": "Acceptance Fix Plan is stale. Refresh the plan before signoff."}
+            if require_gate and plan.status not in {"ready", "used", "warning"}:
+                return {**evidence, "status": "failed", "message": "Acceptance Fix Plan is not ready."}
+            return {**evidence, "status": status}
+        except AcceptanceFixPlanNotFoundError:
+            return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Plan evidence is missing."}
+        except AcceptanceFixPlanError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
     def _release_acceptance_kb_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -5926,6 +5995,76 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AcceptanceFixSprintStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (AcceptanceFixSprintError, AcceptanceAnalyticsError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_fix_plans_root(self, method: str, query_string: str) -> None:
+        try:
+            if method == "GET":
+                query = parse_qs(query_string)
+                include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+                status = _query_value(query, "status")
+                plans = self.acceptance_fix_plan_store.list_plans(include_archived=include_archived, status=status)
+                self._send_json({"ok": True, "fix_plans": [plan.to_dict() for plan in plans], "summary": {"plan_count": len(plans)}})
+                return
+            if method == "POST":
+                plan = self.acceptance_fix_plan_store.create(self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except AcceptanceFixPlanStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (AcceptanceFixPlanError, AcceptanceAnalyticsError, AcceptanceKnowledgeBaseError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_fix_plans_recommend(self, method: str) -> None:
+        try:
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            preview = self.acceptance_fix_plan_store.preview(self._optional_json_body(), now=_utc_now())
+            self._send_json({"ok": True, "fix_plan_preview": preview, "summary": fix_plan_summary(preview)})
+        except AcceptanceFixPlanStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (AcceptanceFixPlanError, AcceptanceAnalyticsError, AcceptanceKnowledgeBaseError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_fix_plan_route(self, method: str, route: tuple[str, str]) -> None:
+        plan_id, action = route
+        try:
+            if not action:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.acceptance_fix_plan_store.read_plan(plan_id)
+                self._send_json({"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)})
+                return
+            if action == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.acceptance_fix_plan_store.refresh_plan(plan_id, now=_utc_now())
+                self._send_json({"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)})
+                return
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.acceptance_fix_plan_store.archive_plan(plan_id, now=_utc_now())
+                self._send_json({"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)})
+                return
+            if action == "create-fix-sprint":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.acceptance_fix_plan_store.create_fix_sprint(plan_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Acceptance Fix Plan route not found.")
+        except AcceptanceFixPlanNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceFixPlanStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (AcceptanceFixPlanError, AcceptanceAnalyticsError, AcceptanceKnowledgeBaseError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_acceptance_fix_sprint_route(self, method: str, route: tuple[str, list[str]]) -> None:
@@ -10663,6 +10802,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.acceptance_analytics_store = AcceptanceAnalyticsStore(acceptance_store=self.acceptance_store, project_store=self.project_store, release_store=self.release_store)
         self.acceptance_fix_sprint_store = AcceptanceFixSprintStore(acceptance_store=self.acceptance_store, analytics_store=self.acceptance_analytics_store, project_store=self.project_store)
         self.acceptance_kb_store = AcceptanceKnowledgeBaseStore(fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
+        self.acceptance_fix_plan_store = AcceptanceFixPlanningStore(analytics_store=self.acceptance_analytics_store, kb_store=self.acceptance_kb_store, fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -11169,6 +11309,20 @@ def _match_acceptance_kb_entry_route(path: str) -> tuple[str, str] | None:
     if len(parts) == 1:
         return parts[0], ""
     if len(parts) == 2 and parts[1] in {"hide", "unhide"}:
+        return parts[0], parts[1]
+    return None
+
+
+def _match_acceptance_fix_plan_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/fix-plans/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"refresh", "archive", "create-fix-sprint"}:
         return parts[0], parts[1]
     return None
 

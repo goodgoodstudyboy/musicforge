@@ -213,6 +213,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.7 acceptance analytics smoke", *_v47_acceptance_analytics_smoke(root))
     report.add("v4.8 acceptance fix sprint smoke", *_v48_acceptance_fix_sprint_smoke(root))
     report.add("v4.9 acceptance knowledge base smoke", *_v49_acceptance_knowledge_base_smoke(root))
+    report.add("v4.10 knowledge-assisted fix planning smoke", *_v410_knowledge_assisted_fix_planning_smoke(root))
     return report
 
 
@@ -5927,6 +5928,152 @@ def _v49_acceptance_knowledge_base_smoke(root: Path) -> tuple[bool, str]:
             f"search={search.get('summary', {}).get('entry_count')}, recommendation={recommendation.get('status')}, "
             f"export={'ok' if manifest.get('acceptance_kb', {}).get('entry_count', 0) >= 1 else 'missing'}, "
             f"hide_refresh={hide_search.get('summary', {}).get('entry_count')}/{include_hidden.get('summary', {}).get('entry_count')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v410_knowledge_assisted_fix_planning_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v410-fix-plan-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Acceptance Fix Plan Track")
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Acceptance Fix Plan Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        suite_status, suite = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.10 source", "profile_id": "developer_manual", "require_audio_if_renderer_configured": False})
+        suite_id = suite.get("suite", {}).get("suite_id")
+        case_status, case = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases", {"name": "Fix Plan Source Case", "source_type": "project_version", "project_id": project_id, "version_id": "v001", "song_id": "rap_beat_001", "request": {"title": "Fix Plan Source", "language": "English", "style": "rap beat", "theme": "planning", "duration_seconds": 90}})
+        case_id = case.get("case", {}).get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        review_status, _review = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 2, "status": "needs_fix", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Hook and rhythm need work with local-path-marker and masked-key-marker.", "tags": ["hook", "rhythm"]})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        analytics_status, analytics = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        analytics_report_id = analytics.get("analytics", {}).get("report_id")
+        seed_fix_status, seed_fix = _release_http_json(server, "POST", "/api/acceptance/fix-sprints", {"analytics_report_id": analytics_report_id, "scope": {"type": "release", "release_id": release_id}})
+        seed_sprint_id = seed_fix.get("fix_sprint", {}).get("fix_sprint_id")
+        tasks_status, tasks = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/create-review-tasks")
+        task_id = (tasks.get("results") or [{}])[0].get("task_id")
+        task_path = base / ".musicforge" / "projects" / project_id / "review-tasks" / str(task_id) / "task.json"
+        task = read_json(task_path)
+        task["status"] = "resolved"
+        task["resolution_note"] = "Acceptance Fix Plan seed fix resolved hook and rhythm."
+        write_json(task_path, task)
+        _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/refresh-status")
+        recheck_status, recheck = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/create-recheck-suite", {"profile_id": "developer_manual"})
+        recheck_suite_id = recheck.get("suite", {}).get("suite_id")
+        recheck_detail_status, recheck_detail = _release_http_json(server, "GET", f"/api/acceptance/suites/{recheck_suite_id}")
+        recheck_case_id = (recheck_detail.get("cases") or [{}])[0].get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/health")
+        recheck_review_status, _ = _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual recheck accepted."})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/report")
+        delta_status, delta = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/delta/refresh")
+        close_status, closeout = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/close")
+        kb_status, kb = _release_http_json(server, "POST", "/api/acceptance/kb/refresh", {"type": "global"})
+        kb_report_id = kb.get("knowledge_report", {}).get("report_id")
+
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 2, "status": "needs_fix", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Hook still needs work.", "tags": ["hook", "rhythm"]})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        analytics2_status, analytics2 = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        analytics2_report_id = analytics2.get("analytics", {}).get("report_id")
+        plan_status, plan = _release_http_json(server, "POST", "/api/acceptance/fix-plans", {"analytics_report_id": analytics2_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}})
+        plan_id = plan.get("fix_plan", {}).get("plan_id")
+        preview_status, preview = _release_http_json(server, "POST", "/api/acceptance/fix-plans/recommend", {"analytics_report_id": analytics2_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}})
+        sprint_status, sprint = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/create-fix-sprint", {"name": "Knowledge-assisted Fix Sprint"})
+        planned_sprint = sprint.get("fix_sprint", {})
+        planned_sprint_id = planned_sprint.get("fix_sprint_id")
+        plan_detail_status, plan_detail = _release_http_json(server, "GET", f"/api/acceptance/fix-plans/{plan_id}")
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        project_export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "analytics remains blocked in planning smoke", "require_acceptance_fix_plan": True})
+
+        analytics3_status, analytics3 = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        analytics3_report_id = analytics3.get("analytics", {}).get("report_id")
+        stale_plan_status, stale_plan = _release_http_json(server, "POST", "/api/acceptance/fix-plans", {"analytics_report_id": analytics3_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}})
+        stale_plan_id = stale_plan.get("fix_plan", {}).get("plan_id")
+        entries_status, entries = _release_http_json(server, "GET", "/api/acceptance/kb/entries")
+        entry_id = (entries.get("entries") or [{}])[0].get("entry_id")
+        hide_status, _hidden = _release_http_json(server, "POST", f"/api/acceptance/kb/entries/{entry_id}/hide")
+        stale_guard_status, _stale_guard = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{stale_plan_id}/create-fix-sprint")
+        hidden_default_status, hidden_default = _release_http_json(server, "POST", "/api/acceptance/fix-plans/recommend", {"analytics_report_id": analytics3_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}})
+        hidden_include_status, hidden_include = _release_http_json(server, "POST", "/api/acceptance/fix-plans/recommend", {"analytics_report_id": analytics3_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}, "include_hidden_kb": True})
+
+        plan_payload = json.dumps(plan, ensure_ascii=False)
+        manifest = export.get("manifest", {})
+        plan_summary = plan.get("summary", {})
+        ok = (
+            release_status == 201
+            and track_status == 200
+            and suite_status == 201
+            and case_status == 201
+            and review_status == 200
+            and analytics_status == 201
+            and seed_fix_status == 201
+            and tasks_status == 201
+            and recheck_status == 201
+            and recheck_detail_status == 200
+            and recheck_review_status == 200
+            and delta_status == 200
+            and delta.get("summary", {}).get("status") == "improved"
+            and close_status == 200
+            and closeout.get("summary", {}).get("status") == "passed"
+            and kb_status == 201
+            and analytics2_status == 201
+            and plan_status == 201
+            and int(plan_summary.get("planned_item_count") or 0) >= 1
+            and int(plan_summary.get("kb_match_count") or 0) >= 1
+            and preview_status == 200
+            and sprint_status == 201
+            and planned_sprint.get("source", {}).get("source_type") == "acceptance_fix_plan"
+            and plan_detail_status == 200
+            and plan_detail.get("fix_plan", {}).get("execution", {}).get("created_fix_sprint_id") == planned_sprint_id
+            and qa_status == 200
+            and export_status == 200
+            and manifest.get("acceptance_fix_plan", {}).get("plan_id") == plan_id
+            and any(file.get("path") == "acceptance-fix-plan-summary.json" for file in manifest.get("files", []) if isinstance(file, dict))
+            and project_export_status == 200
+            and project_export.get("acceptance_fix_plan_summary", {}).get("plan_id") == plan_id
+            and final_export_status == 200
+            and final_export.get("final_export", {}).get("acceptance_fix_plan", {}).get("plan_id") == plan_id
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("acceptance_fix_plan", {}).get("status") == "passed"
+            and analytics3_status == 201
+            and stale_plan_status == 201
+            and entries_status == 200
+            and hide_status == 200
+            and stale_guard_status == 409
+            and hidden_default_status == 200
+            and hidden_default.get("summary", {}).get("kb_match_count") == 0
+            and hidden_include_status == 200
+            and hidden_include.get("summary", {}).get("kb_match_count") >= 1
+            and "hidden_entries_included" in hidden_include.get("fix_plan_preview", {}).get("warnings", [])
+            and "masked-key-marker" not in plan_payload
+            and "local-path-marker" not in plan_payload
+        )
+        return ok, (
+            f"plan={plan_id}, items={plan_summary.get('planned_item_count')}, kb={plan_summary.get('kb_match_count')}, "
+            f"sprint={planned_sprint_id}, stale_guard={stale_guard_status}, "
+            f"hidden={'excluded' if hidden_default.get('summary', {}).get('kb_match_count') == 0 else 'included'}/"
+            f"{'included' if hidden_include.get('summary', {}).get('kb_match_count', 0) >= 1 else 'excluded'}"
         )
     except Exception as exc:
         return False, str(exc)

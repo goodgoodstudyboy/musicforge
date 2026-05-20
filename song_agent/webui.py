@@ -1219,6 +1219,18 @@ def panel_html() -> str:
           <button class="secondary" id="acceptance-refresh-fix-sprints" type="button">Refresh Fix Sprints</button>
         </div>
         <div id="acceptance-fix-sprints" class="release-detail"><div class="empty">No acceptance fix sprints yet.</div></div>
+        <div class="panel-title subhead"><span>Fix Planning</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-fix-plan-refresh" type="button">Refresh Plans</button>
+          <button class="secondary" id="acceptance-fix-plan-create" type="button">Create Plan</button>
+          <button class="secondary" id="acceptance-fix-plan-create-sprint" type="button">Create Sprint From Plan</button>
+        </div>
+        <div class="grid3">
+          <label>Plan Max Items <input id="acceptance-fix-plan-max-items" type="number" min="1" max="50" value="20"></label>
+          <label>Include Hidden KB <input id="acceptance-fix-plan-hidden" type="checkbox" style="width:auto;margin-top:10px;"></label>
+          <label>Plan ID <input id="acceptance-fix-plan-id" readonly value=""></label>
+        </div>
+        <div id="acceptance-fix-plans" class="release-detail"><div class="empty">No acceptance fix plans yet.</div></div>
         <div class="panel-title subhead"><span>Knowledge Base</span></div>
         <div class="actions">
           <button class="secondary" id="acceptance-kb-refresh" type="button">Refresh KB</button>
@@ -1309,6 +1321,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let selectedAcceptanceSuiteId = null;
     let acceptanceAnalytics = null;
     let acceptanceFixSprints = [];
+    let acceptanceFixPlans = [];
     let acceptanceKb = null;
     let acceptanceKbRecommendation = null;
     let projects = [];
@@ -1597,6 +1610,37 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     });
     $("acceptance-refresh-fix-sprints").addEventListener("click", loadAcceptanceFixSprints);
+    $("acceptance-fix-plan-refresh").addEventListener("click", loadAcceptanceFixPlans);
+    $("acceptance-fix-plan-create").addEventListener("click", async () => {
+      try {
+        if (!acceptanceAnalytics || !acceptanceAnalytics.report_id) throw new Error("Refresh Acceptance Analytics first.");
+        const data = await api("/api/acceptance/fix-plans", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            analytics_report_id: acceptanceAnalytics.report_id,
+            kb_report_id: (acceptanceKb || {}).report_id || null,
+            max_items: Number($("acceptance-fix-plan-max-items").value || 20),
+            include_hidden_kb: $("acceptance-fix-plan-hidden").checked,
+          }),
+        });
+        $("acceptance-fix-plan-id").value = (data.fix_plan || {}).plan_id || "";
+        await loadAcceptanceFixPlans();
+      } catch (err) {
+        $("acceptance-fix-plans").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("acceptance-fix-plan-create-sprint").addEventListener("click", async () => {
+      try {
+        const planId = $("acceptance-fix-plan-id").value.trim() || ((acceptanceFixPlans[0] || {}).plan_id || "");
+        if (!planId) throw new Error("Create or select a Fix Plan first.");
+        await api(`/api/acceptance/fix-plans/${encodeURIComponent(planId)}/create-fix-sprint`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Knowledge-assisted Fix Sprint" }) });
+        await loadAcceptanceFixPlans();
+        await loadAcceptanceFixSprints();
+      } catch (err) {
+        $("acceptance-fix-plans").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
     $("acceptance-kb-refresh").addEventListener("click", async () => {
       try {
         const data = await api("/api/acceptance/kb/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "global" }) });
@@ -2253,6 +2297,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         acceptanceFixSprints = [];
       }
       renderAcceptanceFixSprints();
+    }
+
+    async function loadAcceptanceFixPlans() {
+      try {
+        const data = await api("/api/acceptance/fix-plans");
+        acceptanceFixPlans = data.fix_plans || [];
+      } catch (err) {
+        acceptanceFixPlans = [];
+      }
+      renderAcceptanceFixPlans();
     }
 
     async function loadAcceptanceKb() {
@@ -3157,6 +3211,39 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       document.querySelectorAll(".acceptance-fix-close").forEach((button) => button.addEventListener("click", async () => {
         await api(`/api/acceptance/fix-sprints/${encodeURIComponent(button.dataset.fixSprintId)}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
         await loadAcceptanceFixSprints();
+      }));
+    }
+
+    function renderAcceptanceFixPlans() {
+      const target = $("acceptance-fix-plans");
+      if (!target) return;
+      if (!acceptanceFixPlans.length) {
+        target.innerHTML = "<div class='empty'>No acceptance fix plans yet.</div>";
+        return;
+      }
+      const rows = acceptanceFixPlans.map((plan) => {
+        const summary = plan.summary || {};
+        const execution = plan.execution || {};
+        return `
+          <tr>
+            <td><button class="secondary acceptance-fix-plan-select" data-plan-id="${escapeHtml(plan.plan_id)}" type="button">Select</button></td>
+            <td>${escapeHtml(plan.plan_id)}</td>
+            <td>${escapeHtml(plan.status || "-")}</td>
+            <td>${escapeHtml(summary.planned_item_count || 0)}</td>
+            <td>${escapeHtml(summary.kb_match_count || 0)}</td>
+            <td>${escapeHtml(summary.risk_warning_count || 0)}</td>
+            <td>${escapeHtml(execution.created_fix_sprint_id || "-")}</td>
+          </tr>
+        `;
+      }).join("");
+      target.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Plan</th><th>Status</th><th>Items</th><th>KB Matches</th><th>Risks</th><th>Fix Sprint</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      document.querySelectorAll(".acceptance-fix-plan-select").forEach((button) => button.addEventListener("click", () => {
+        $("acceptance-fix-plan-id").value = button.dataset.planId || "";
       }));
     }
 

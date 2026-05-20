@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.10.0 - 2026-05-21
+
+### Added
+- Knowledge-assisted Acceptance Fix Plan store, API, CLI, and Studio controls for ranking Acceptance Analytics recommendations with KB evidence before creating a Fix Sprint.
+- Fix Plan source hashes and stale guards covering analytics recommendations and referenced KB entry summaries.
+- Project Export, Release Export, Final Export, and Release Signoff summaries for Acceptance Fix Plan evidence.
+- release-check v4.10 smoke covering plan creation, KB matching, Fix Sprint creation, stale KB evidence blocking, hidden KB exclusion/inclusion, export summaries, and redaction.
+
+### Verified
+- `python -m pytest tests\test_acceptance_fix_planning.py tests\test_server_acceptance_fix_planning.py tests\test_cli_acceptance_fix_plan.py tests\test_release_check.py::test_v410_knowledge_assisted_fix_planning_smoke tests\test_webui.py::test_webui_contains_acceptance_workspace -q`
+
 ## v4.9.1 - 2026-05-21
 
 ### Fixed

@@ -136,6 +136,7 @@ def build_final_export_bundle(
     review_judge = _final_review_judge(project_export, edit_metadata)
     review_sprint_closeout = _final_review_sprint_closeout(project_export)
     acceptance_fix_sprint = _final_acceptance_fix_sprint(project_export)
+    acceptance_fix_plan = _final_acceptance_fix_plan(project_export)
     acceptance_kb = _final_acceptance_kb(project_export)
     delivery_qa = _final_delivery_qa(project_export)
     delivery_signoff = _final_delivery_signoff(project_export)
@@ -160,6 +161,7 @@ def build_final_export_bundle(
         "review_judge": review_judge,
         "review_sprint_closeout": review_sprint_closeout,
         "acceptance_fix_sprint": acceptance_fix_sprint,
+        "acceptance_fix_plan": acceptance_fix_plan,
         "acceptance_kb": acceptance_kb,
         "delivery_qa": delivery_qa,
         "delivery_signoff": delivery_signoff,
@@ -685,6 +687,26 @@ def _final_acceptance_fix_sprint(project_export: dict[str, Any] | None) -> dict[
                 "recheck_suite_id": summary.get("recheck_suite_id"),
                 "delta_status": summary.get("delta_status"),
                 "closeout_status": summary.get("closeout_status"),
+            }
+        )
+    )
+
+
+def _final_acceptance_fix_plan(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_fix_plan_summary"), dict):
+        return {}
+    summary = project_export["acceptance_fix_plan_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "plan_id": summary.get("plan_id"),
+                "planned_item_count": summary.get("planned_item_count"),
+                "high_priority_count": summary.get("high_priority_count"),
+                "kb_match_count": summary.get("kb_match_count"),
+                "risk_warning_count": summary.get("risk_warning_count"),
+                "created_fix_sprint_id": summary.get("created_fix_sprint_id"),
+                "stale": summary.get("stale"),
             }
         )
     )

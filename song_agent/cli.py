@@ -191,6 +191,42 @@ def build_acceptance_fix_sprint_parser() -> argparse.ArgumentParser:
     return fix_parser
 
 
+def build_acceptance_fix_plan_parser() -> argparse.ArgumentParser:
+    plan_parser = argparse.ArgumentParser(description="Manage local MusicForge knowledge-assisted Acceptance Fix Plans.")
+    subparsers = plan_parser.add_subparsers(dest="action", required=True)
+
+    create = subparsers.add_parser("create", help="Create a Fix Plan from Acceptance Analytics and KB history.")
+    create.add_argument("--analytics-report-id", required=True, help="Source Acceptance Analytics report id.")
+    create.add_argument("--kb-report-id", default=None, help="Optional Acceptance KB report id.")
+    create.add_argument("--max-items", type=int, default=20, help="Maximum planned items.")
+    create.add_argument("--include-hidden-kb", action="store_true", help="Allow hidden KB entries in planning evidence.")
+
+    subparsers.add_parser("list", help="List Fix Plans.").add_argument("--include-archived", action="store_true")
+
+    show = subparsers.add_parser("show", help="Show a Fix Plan.")
+    show.add_argument("plan_id")
+
+    refresh = subparsers.add_parser("refresh", help="Refresh an existing Fix Plan.")
+    refresh.add_argument("plan_id")
+
+    create_sprint = subparsers.add_parser("create-fix-sprint", help="Create a Fix Sprint from a Fix Plan.")
+    create_sprint.add_argument("plan_id")
+    create_sprint.add_argument("--name", default=None)
+    create_sprint.add_argument("--planned-item-id", action="append", dest="planned_item_ids", default=[])
+    create_sprint.add_argument("--profile", default=None)
+
+    recommend = subparsers.add_parser("recommend", help="Preview a non-persisted Fix Plan.")
+    recommend.add_argument("--analytics-report-id", required=True)
+    recommend.add_argument("--kb-report-id", default=None)
+    recommend.add_argument("--max-items", type=int, default=20)
+    recommend.add_argument("--include-hidden-kb", action="store_true")
+
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write the command result as JSON.")
+    return plan_parser
+
+
 def build_acceptance_kb_parser() -> argparse.ArgumentParser:
     kb_parser = argparse.ArgumentParser(description="Manage the local MusicForge Acceptance Knowledge Base.")
     subparsers = kb_parser.add_subparsers(dest="action", required=True)
@@ -487,6 +523,38 @@ def _main() -> None:
         else:
             print_acceptance_fix_sprint_result(result)
         raise SystemExit(0)
+    elif raw_args and raw_args[0] == "acceptance-fix-plan":
+        from song_agent.acceptance_fix_planning import AcceptanceFixPlanningStore, fix_plan_summary
+
+        parser = build_acceptance_fix_plan_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = AcceptanceFixPlanningStore()
+        if args.action == "create":
+            plan = store.create({"analytics_report_id": args.analytics_report_id, "kb_report_id": args.kb_report_id, "max_items": args.max_items, "include_hidden_kb": args.include_hidden_kb})
+            result = {"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)}
+        elif args.action == "list":
+            plans = store.list_plans(include_archived=args.include_archived)
+            result = {"ok": True, "fix_plans": [plan.to_dict() for plan in plans], "summary": {"plan_count": len(plans)}}
+        elif args.action == "show":
+            plan = store.read_plan(args.plan_id)
+            result = {"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)}
+        elif args.action == "refresh":
+            plan = store.refresh_plan(args.plan_id)
+            result = {"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)}
+        elif args.action == "create-fix-sprint":
+            result = {"ok": True, **store.create_fix_sprint(args.plan_id, {"name": args.name, "planned_item_ids": args.planned_item_ids, "profile_id": args.profile})}
+        elif args.action == "recommend":
+            preview = store.preview({"analytics_report_id": args.analytics_report_id, "kb_report_id": args.kb_report_id, "max_items": args.max_items, "include_hidden_kb": args.include_hidden_kb})
+            result = {"ok": True, "fix_plan_preview": preview, "summary": fix_plan_summary(preview)}
+        else:
+            parser.error("unknown acceptance-fix-plan action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_acceptance_fix_plan_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "acceptance-kb":
         from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
 
@@ -720,6 +788,19 @@ def print_acceptance_fix_sprint_result(result: dict[str, Any]) -> None:
         print(f"delta_status: {(delta.get('summary') or {}).get('status')}")
     if closeout:
         print(f"closeout_status: {closeout.get('status')}")
+
+
+def print_acceptance_fix_plan_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    plan = result.get("fix_plan") or result.get("fix_plan_preview")
+    plan = plan if isinstance(plan, dict) else {}
+    print("MusicForge acceptance-fix-plan")
+    print(f"plan: {summary.get('plan_id') or plan.get('plan_id') or '-'}")
+    print(f"status: {summary.get('status') or plan.get('status') or '-'}")
+    print(f"items: {summary.get('planned_item_count', 0)}")
+    print(f"kb_matches: {summary.get('kb_match_count', 0)}")
+    if result.get("fix_sprint"):
+        print(f"created_fix_sprint: {(result.get('fix_sprint') or {}).get('fix_sprint_id')}")
 
 
 def print_acceptance_kb_result(result: dict[str, Any]) -> None:
