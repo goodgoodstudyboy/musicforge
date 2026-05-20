@@ -144,9 +144,12 @@ def test_v46_human_review_pack_smoke(tmp_path: Path) -> None:
     assert "cases=12" in detail
     assert "verify=passed" in detail
     assert "needs_fix=1" in detail
+    assert "reimport=201" in detail
     assert "all=release_ready_passed" in detail
+    assert "pack_stale=False/False" in detail
     assert "tampered=failed" in detail
     assert "guards=400/409" in detail
+    assert "song_mismatch=400" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

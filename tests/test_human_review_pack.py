@@ -98,6 +98,39 @@ def test_human_review_pack_import_all_accepted_passes(tmp_path: Path, monkeypatc
     assert report["summary"]["manual_accepted_count"] == 2
 
 
+def test_human_review_pack_import_does_not_stale_pack_and_allows_reimport(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    acceptance_store, suite_id, _case_ids = _suite_with_cases(tmp_path)
+    pack_store = HumanReviewPackStore(acceptance_store)
+    pack = pack_store.create_pack(suite_id)["pack"]
+    pack_store.build_zip(suite_id, pack["pack_id"])
+
+    imported = pack_store.import_response(suite_id, {"response": _response(pack, statuses=["accepted", "needs_fix"])})
+    after_first = pack_store.get_pack(suite_id, pack["pack_id"])
+    revised = _response(pack)
+    revised["reviews"][0]["notes"] = "Manual listener revised this response after a second full playback."
+    imported_revised = pack_store.import_response(suite_id, {"response": revised})
+    after_second = pack_store.get_pack(suite_id, pack["pack_id"])
+
+    assert imported["summary"]["needs_fix_count"] == 1
+    assert after_first["stale"] is False
+    assert imported_revised["summary"]["accepted_count"] == 2
+    assert after_second["stale"] is False
+
+
+def test_human_review_response_rejects_song_id_mismatch(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    acceptance_store, suite_id, _case_ids = _suite_with_cases(tmp_path)
+    pack_store = HumanReviewPackStore(acceptance_store)
+    pack = pack_store.create_pack(suite_id)["pack"]
+    pack_store.build_zip(suite_id, pack["pack_id"])
+    response = _response(pack)
+    response["reviews"][0]["song_id"] = "WRONG_SONG"
+
+    with pytest.raises(HumanReviewPackValidationError, match="song_id"):
+        pack_store.import_response(suite_id, {"response": response})
+
+
 def test_human_review_pack_stale_and_signed_guards(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     acceptance_store, suite_id, _case_ids = _suite_with_cases(tmp_path)

@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.6.1 - 2026-05-20
+
+### Fixed
+- Human Review Pack source hashes now bind only the listened suite/case content, health, and MIDI/WAV artifacts, so importing listening reviews does not make the original pack stale.
+- Human review response imports now reject any review whose `song_id` does not exactly match the corresponding Pack case.
+
+### Added
+- release-check v4.6 smoke now covers same-pack revised response import, non-stale Pack state after imports, and `song_id` mismatch rejection.
+
+### Verified
+- `python -m pytest tests\test_human_review_pack.py tests\test_release_check.py::test_v46_human_review_pack_smoke -q`
+
 ## v4.6.0 - 2026-05-19
 
 ### Added

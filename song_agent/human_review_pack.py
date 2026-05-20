@@ -16,7 +16,6 @@ from song_agent.music_acceptance import (
     AcceptanceStateError,
     AcceptanceStore,
     AcceptanceValidationError,
-    acceptance_source_state,
     listening_review_summary,
     stable_hash,
 )
@@ -333,6 +332,13 @@ class HumanReviewPackStore:
             raise HumanReviewPackValidationError("Human review response must contain reviews.")
         case_by_id = {case.case_id: case for case in self.acceptance_store.list_cases(suite_id)}
         pack_case_by_id = {str(item.get("case_id")): item for item in pack.cases if isinstance(item, dict)}
+        for review in reviews:
+            if not isinstance(review, dict):
+                continue
+            case_id = _validate_case_id(str(review.get("case_id") or ""))
+            if case_id not in pack_case_by_id:
+                raise HumanReviewPackValidationError(f"Unknown review case_id: {case_id}.")
+            _ensure_review_song_id_matches_pack(case_id, review, pack_case_by_id[case_id])
         import_id = self._next_import_id(suite_id)
         imported: list[dict[str, Any]] = []
         created_review_tasks: list[dict[str, Any]] = []
@@ -610,18 +616,26 @@ def validate_import_id(value: str) -> str:
 
 
 def _pack_source_state(store: AcceptanceStore, suite: Any) -> dict[str, Any]:
-    state = acceptance_source_state(store, suite)
-    artifact_hashes = []
-    for case in store.list_cases(suite.suite_id):
-        case_dir = store.case_dir(suite.suite_id, case.case_id)
-        artifact_hashes.append(
-            {
-                "case_id": case.case_id,
-                "song_mid_sha256": _sha256_file(case_dir / "song.mid") if (case_dir / "song.mid").exists() else "",
-                "song_wav_sha256": _sha256_file(case_dir / "song.wav") if (case_dir / "song.wav").exists() else "",
-            }
-        )
-    return sanitize_metadata({**state, "artifact_hashes": artifact_hashes})
+    cases = [
+        _case_source_state(store, suite.suite_id, case.case_id)
+        for case in sorted(store.list_cases(suite.suite_id), key=lambda item: item.case_id)
+    ]
+    return sanitize_metadata(
+        {
+            "suite_id": suite.suite_id,
+            "name": suite.name,
+            "mode": suite.mode,
+            "profile_id": suite.profile_id,
+            "songbook_id": suite.songbook_id,
+            "songbook_version": suite.songbook_version,
+            "min_rating": suite.min_rating,
+            "require_audio_if_renderer_configured": suite.require_audio_if_renderer_configured,
+            "require_manual_review": suite.require_manual_review,
+            "allow_synthetic_review": suite.allow_synthetic_review,
+            "release_ready_profile": suite.release_ready_profile,
+            "cases": cases,
+        }
+    )
 
 
 def _case_source_state(store: AcceptanceStore, suite_id: str, case_id: str) -> dict[str, Any]:
@@ -629,12 +643,37 @@ def _case_source_state(store: AcceptanceStore, suite_id: str, case_id: str) -> d
     case_dir = store.case_dir(suite_id, case_id)
     return sanitize_metadata(
         {
-            "case": case.to_dict(),
+            "case": {
+                "case_id": case.case_id,
+                "suite_id": case.suite_id,
+                "name": case.name,
+                "source_type": case.source_type,
+                "song_id": case.song_id,
+                "songbook_id": case.songbook_id,
+                "songbook_version": case.songbook_version,
+                "expectations": case.expectations,
+                "request_summary": case.request_summary,
+                "job_id": case.job_id,
+                "project_id": case.project_id,
+                "version_id": case.version_id,
+                "artifacts": case.artifacts,
+                "health_summary": case.health_summary,
+                "created_at": case.created_at,
+            },
             "health": store.read_health(suite_id, case_id, default={}),
             "midi_sha256": _sha256_file(case_dir / "song.mid") if (case_dir / "song.mid").exists() else "",
             "wav_sha256": _sha256_file(case_dir / "song.wav") if (case_dir / "song.wav").exists() else "",
         }
     )
+
+
+def _ensure_review_song_id_matches_pack(case_id: str, review: dict[str, Any], pack_case: dict[str, Any]) -> None:
+    if "song_id" not in review:
+        return
+    review_song_id = "" if review.get("song_id") is None else str(review.get("song_id"))
+    pack_song_id = "" if pack_case.get("song_id") is None else str(pack_case.get("song_id"))
+    if review_song_id != pack_song_id:
+        raise HumanReviewPackValidationError(f"{case_id} song_id does not match human review pack.")
 
 
 def _response_template(pack: dict[str, Any]) -> dict[str, Any]:

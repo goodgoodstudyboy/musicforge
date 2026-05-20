@@ -5361,21 +5361,22 @@ def _v46_human_review_pack_smoke(root: Path) -> tuple[bool, str]:
         shutil.copy2(zip_path, external_zip)
         external_verify = verify_human_review_pack(external_zip, strict=True)
 
+        song_mismatch = _v46_review_response(pack)
+        if song_mismatch.get("reviews"):
+            song_mismatch["reviews"][0]["song_id"] = "WRONG_SONG"
+        song_mismatch_status, _song_mismatch_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": song_mismatch})
         response = _v46_review_response(pack, needs_fix_song_id="rap_beat_001")
         import_status, imported = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": response})
         report_status, report = _release_http_json(server, "GET", f"/api/acceptance/suites/{suite_id}/report")
+        pack_after_needs_status, pack_after_needs = _release_http_json(server, "GET", f"/api/acceptance/suites/{suite_id}/human-review-packs/{pack_id}")
         source_path_status, _source_path = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"source_path": "C:\\Users\\secret\\review-response.json"})
         stale = _v46_review_response(pack)
         stale["pack_source_hash"] = "0" * 64
         stale_status, _stale_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": stale})
 
-        repack_status, repack_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs", {})
-        repack = repack_response.get("pack", {})
-        repack_id = repack.get("pack_id")
-        rezip_status, _rezip_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{repack_id}/zip", {})
-        reverify_status, reverify_response = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/human-review-packs/{repack_id}/verify", {"strict": True})
-        accepted_response = _v46_review_response(repack)
+        accepted_response = _v46_review_response(pack)
         import_all_status, imported_all = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/review-imports", {"response": accepted_response})
+        pack_after_all_status, pack_after_all = _release_http_json(server, "GET", f"/api/acceptance/suites/{suite_id}/human-review-packs/{pack_id}")
         report_all_status, report_all = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
 
         project_id = _v37_signed_project(server, "Human Review Gate Track")
@@ -5388,14 +5389,14 @@ def _v46_human_review_pack_smoke(root: Path) -> tuple[bool, str]:
         sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "acceptance_suite_id": suite_id})
 
         tampered_zip = base / "tampered-human-review-pack.zip"
-        tamper_source_zip = base / ".musicforge" / "acceptance" / suite_id / "human-review-packs" / repack_id / f"{suite_id}-{repack_id}-human-review-pack.zip"
+        tamper_source_zip = base / ".musicforge" / "acceptance" / suite_id / "human-review-packs" / pack_id / f"{suite_id}-{pack_id}-human-review-pack.zip"
         with zipfile.ZipFile(tamper_source_zip, "r") as source, zipfile.ZipFile(tampered_zip, "w") as target:
             for info in source.infolist():
                 data = source.read(info)
                 if info.filename == "index.html":
                     data = data.replace(b"</body>", b'<script src="https://example.com/review.js"></script></body>')
                 target.writestr(info.filename, data)
-            target.writestr("manifest.json", json.dumps(read_json(base / ".musicforge" / "acceptance" / suite_id / "human-review-packs" / repack_id / "manifest.json")))
+            target.writestr("manifest.json", json.dumps(read_json(base / ".musicforge" / "acceptance" / suite_id / "human-review-packs" / pack_id / "manifest.json")))
             target.writestr("../escape.txt", "bad")
         tampered_verify = verify_human_review_pack(tampered_zip, strict=True)
 
@@ -5409,19 +5410,20 @@ def _v46_human_review_pack_smoke(root: Path) -> tuple[bool, str]:
             and verify_status == 200
             and verify_response.get("report", {}).get("status") == "passed"
             and external_verify.get("status") == "passed"
+            and song_mismatch_status == 400
             and import_status == 201
             and imported.get("summary", {}).get("needs_fix_count") == 1
             and imported.get("summary", {}).get("created_review_task_count") >= 1
             and report_status == 200
             and report.get("summary", {}).get("release_ready") is False
+            and pack_after_needs_status == 200
+            and pack_after_needs.get("pack", {}).get("stale") is False
             and source_path_status == 400
             and stale_status == 409
-            and repack_status == 201
-            and rezip_status == 200
-            and reverify_status == 200
-            and reverify_response.get("report", {}).get("status") == "passed"
             and import_all_status == 201
             and imported_all.get("summary", {}).get("accepted_count") == 12
+            and pack_after_all_status == 200
+            and pack_after_all.get("pack", {}).get("stale") is False
             and report_all_status == 200
             and report_all.get("summary", {}).get("acceptance_status") == "release_ready_passed"
             and release_status == 201
@@ -5437,8 +5439,9 @@ def _v46_human_review_pack_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"suite={suite_id}, cases={len(case_ids)}, pack={pack_id}, verify={verify_response.get('report', {}).get('status')}, "
-            f"needs_fix={imported.get('summary', {}).get('needs_fix_count')}, repack={repack_status}/{reverify_response.get('report', {}).get('status')}, all={report_all.get('summary', {}).get('acceptance_status')}, "
-            f"release_sign={sign_status}, tampered={tampered_verify.get('status')}, guards={source_path_status}/{stale_status}"
+            f"needs_fix={imported.get('summary', {}).get('needs_fix_count')}, reimport={import_all_status}, all={report_all.get('summary', {}).get('acceptance_status')}, "
+            f"pack_stale={pack_after_needs.get('pack', {}).get('stale')}/{pack_after_all.get('pack', {}).get('stale')}, "
+            f"release_sign={sign_status}, tampered={tampered_verify.get('status')}, guards={source_path_status}/{stale_status}, song_mismatch={song_mismatch_status}"
         )
     except Exception as exc:
         return False, str(exc)
