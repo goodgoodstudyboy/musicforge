@@ -6147,7 +6147,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 "release_id": _query_value(query, "release_id") or "",
                 "outcome_status": _query_value(query, "outcome_status") or "",
             }
-            entries = self.acceptance_kb_store.search_entries(payload)
+            include_hidden = _query_value(query, "include_hidden") in {"1", "true", "yes"}
+            entries = self.acceptance_kb_store.search_entries(payload, include_hidden=include_hidden)
             self._send_json({"ok": True, "entries": [knowledge_entry_summary(entry) for entry in entries], "summary": {"entry_count": len(entries)}})
         except AcceptanceKnowledgeBaseError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))

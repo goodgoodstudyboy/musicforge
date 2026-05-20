@@ -33,7 +33,9 @@ def test_acceptance_kb_api_refresh_entries_search_recommend_and_hide(tmp_path: P
         search_status, search = request_json(server, "GET", "/api/acceptance/kb/search?issue_type=hook")
         recommend_status, recommend = request_json(server, "POST", "/api/acceptance/kb/recommend", {"issue_types": ["hook"], "song_id": "rap_beat_001"})
         hide_status, _hidden = request_json(server, "POST", f"/api/acceptance/kb/entries/{entry_id}/hide")
+        refresh_after_hide_status, refresh_after_hide = request_json(server, "POST", "/api/acceptance/kb/refresh", {"type": "global"})
         hidden_search_status, hidden_search = request_json(server, "GET", "/api/acceptance/kb/search?issue_type=hook")
+        include_hidden_search_status, include_hidden_search = request_json(server, "GET", "/api/acceptance/kb/search?issue_type=hook&include_hidden=1")
     finally:
         stop_test_server(server)
 
@@ -52,5 +54,10 @@ def test_acceptance_kb_api_refresh_entries_search_recommend_and_hide(tmp_path: P
     assert recommend_status == 200
     assert recommend["recommendation"]["status"] == "available"
     assert hide_status == 200
+    assert refresh_after_hide_status == 201
+    assert refresh_after_hide["summary"]["entry_count"] == 0
     assert hidden_search_status == 200
     assert hidden_search["summary"]["entry_count"] == 0
+    assert include_hidden_search_status == 200
+    assert include_hidden_search["summary"]["entry_count"] == 1
+    assert include_hidden_search["entries"][0]["entry_id"] == entry_id

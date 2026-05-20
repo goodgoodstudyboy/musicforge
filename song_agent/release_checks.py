@@ -5870,6 +5870,11 @@ def _v49_acceptance_knowledge_base_smoke(root: Path) -> tuple[bool, str]:
         export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
         project_export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
         final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        entry_id = (entries.get("entries") or [{}])[0].get("entry_id")
+        hide_status, _hidden = _release_http_json(server, "POST", f"/api/acceptance/kb/entries/{entry_id}/hide")
+        hide_refresh_status, hide_refresh = _release_http_json(server, "POST", "/api/acceptance/kb/refresh", {"type": "global"})
+        hide_search_status, hide_search = _release_http_json(server, "GET", "/api/acceptance/kb/search?issue_type=hook")
+        include_hidden_status, include_hidden = _release_http_json(server, "GET", "/api/acceptance/kb/search?issue_type=hook&include_hidden=1")
 
         entry_payload = json.dumps(entries, ensure_ascii=False)
         kb_summary = kb.get("summary", {})
@@ -5907,13 +5912,21 @@ def _v49_acceptance_knowledge_base_smoke(root: Path) -> tuple[bool, str]:
             and project_export.get("acceptance_kb_summary", {}).get("entry_count", 0) >= 1
             and final_export_status == 200
             and final_export.get("final_export", {}).get("acceptance_kb", {}).get("entry_count", 0) >= 1
+            and hide_status == 200
+            and hide_refresh_status == 201
+            and hide_refresh.get("summary", {}).get("entry_count") == 0
+            and hide_search_status == 200
+            and hide_search.get("summary", {}).get("entry_count") == 0
+            and include_hidden_status == 200
+            and include_hidden.get("summary", {}).get("entry_count") == 1
             and "masked-key-marker" not in entry_payload
             and "local-path-marker" not in entry_payload
         )
         return ok, (
             f"entries={kb_summary.get('entry_count')}, effective={kb_summary.get('effective_count')}, "
             f"search={search.get('summary', {}).get('entry_count')}, recommendation={recommendation.get('status')}, "
-            f"export={'ok' if manifest.get('acceptance_kb', {}).get('entry_count', 0) >= 1 else 'missing'}"
+            f"export={'ok' if manifest.get('acceptance_kb', {}).get('entry_count', 0) >= 1 else 'missing'}, "
+            f"hide_refresh={hide_search.get('summary', {}).get('entry_count')}/{include_hidden.get('summary', {}).get('entry_count')}"
         )
     except Exception as exc:
         return False, str(exc)

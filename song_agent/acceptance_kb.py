@@ -285,6 +285,8 @@ class AcceptanceKnowledgeBaseStore:
         entry_id = existing.entry_id if existing else self._next_entry_id()
         created_at = existing.created_at if existing else now
         entry = build_entry_from_sources(entry_id=entry_id, sprint=sprint, items=[item.to_dict() for item in items], delta=delta, closeout=closeout, task_sources=source_payload["tasks"], source_fingerprint=source_fingerprint, created_at=created_at, now=now)
+        if existing and existing.status == "hidden":
+            entry = KnowledgeEntry.from_dict({**entry.to_dict(), "status": "hidden", "updated_at": now})
         return entry
 
     def _review_task_sources(self, items: list[Any]) -> list[dict[str, Any]]:

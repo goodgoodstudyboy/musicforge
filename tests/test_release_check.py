@@ -188,6 +188,7 @@ def test_v49_acceptance_knowledge_base_smoke(tmp_path: Path) -> None:
     assert "search=1" in detail
     assert "recommendation=available" in detail
     assert "export=ok" in detail
+    assert "hide_refresh=0/1" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

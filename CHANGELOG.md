@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.9.1 - 2026-05-21
+
+### Fixed
+- Hidden Acceptance KB entries now stay hidden across refreshes for the same source fingerprint.
+
+### Added
+- Store, API, and release-check regressions for hide -> refresh preserving hidden KB entry visibility.
+
+### Verified
+- `python -m pytest tests\test_acceptance_kb.py tests\test_server_acceptance_kb.py tests\test_cli_acceptance_kb.py tests\test_release_check.py::test_v49_acceptance_knowledge_base_smoke -q`
+
 ## v4.9.0 - 2026-05-21
 
 ### Added

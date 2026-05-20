@@ -57,9 +57,12 @@ def test_acceptance_kb_hide_excludes_default_search(tmp_path: Path, monkeypatch)
     entry = store.search_entries({"issue_type": "hook"})[0]
 
     store.hide_entry(entry.entry_id)
+    report = store.refresh()
 
     assert store.search_entries({"issue_type": "hook"}) == []
     assert len(store.search_entries({"issue_type": "hook"}, include_hidden=True)) == 1
+    assert report["summary"]["entry_count"] == 0
+    assert store.read_entry(entry.entry_id).status == "hidden"
 
 
 def test_effectiveness_score_penalizes_force_waiver_and_open_items() -> None:
