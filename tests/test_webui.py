@@ -44,6 +44,10 @@ def test_webui_contains_acceptance_workspace():
     assert "Acceptance Analytics" in html
     assert 'id="acceptance-analytics"' in html
     assert 'id="acceptance-refresh-analytics"' in html
+    assert "Acceptance Fix Sprints" in html
+    assert 'id="acceptance-fix-sprints"' in html
+    assert 'id="acceptance-create-fix-sprint"' in html
+    assert "/api/acceptance/fix-sprints" in html
     assert "/api/acceptance/analytics" in html
     assert "/analytics/refresh" in html
     assert "Songbook Heatmap" in html

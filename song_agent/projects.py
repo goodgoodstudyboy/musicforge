@@ -530,6 +530,7 @@ class ProjectStore:
             "review_tasks": _collect_project_review_tasks(self.project_dir(project_id)),
             "review_sprints": _collect_project_review_sprints(self.project_dir(project_id)),
             "review_metrics_summary": _collect_project_review_metrics_summary(self.project_dir(project_id)),
+            "acceptance_fix_sprint_summary": _collect_project_acceptance_fix_sprint_summary(document.state.project_id),
             "delivery_qa_summary": _collect_project_delivery_qa_summary(self.project_dir(project_id)),
             "delivery_signoff_summary": _collect_project_delivery_signoff_summary(self.project_dir(project_id)),
             "generated_at": now_iso(),
@@ -1225,6 +1226,15 @@ def _collect_project_review_metrics_summary(project_dir: Path) -> dict[str, Any]
         return _sanitize_asset_metadata(project_review_metrics_summary(store.read_project_metrics(default={})))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
+
+
+def _collect_project_acceptance_fix_sprint_summary(project_id: str) -> dict[str, Any]:
+    from song_agent.acceptance_fix_sprints import AcceptanceFixSprintStore, latest_fix_sprint_summary
+
+    try:
+        return _sanitize_asset_metadata(latest_fix_sprint_summary(AcceptanceFixSprintStore(), project_id=project_id))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {"status": "missing"}
 
 
 def _collect_project_delivery_qa_summary(project_dir: Path) -> dict[str, Any]:

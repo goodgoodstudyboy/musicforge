@@ -89,6 +89,7 @@ python -m song_agent.cli acceptance-check --profile developer_manual --render-au
 python -m song_agent.cli acceptance-check --profile release_candidate --render-audio auto
 python -m song_agent.cli acceptance-diff runs\acceptance-baseline.json runs\acceptance-current.json --json
 python -m song_agent.cli acceptance-analytics --scope global --refresh --json
+python -m song_agent.cli acceptance-fix-sprint create --analytics-report-id analytics-20260520-example --json
 ```
 
 Acceptance Profiles make the gate repeatable: `midi_smoke` is a synthetic
@@ -126,6 +127,18 @@ generates candidates, applies edits, closes tasks, or signs releases. Release
 Export writes `acceptance-analytics-summary.json`, and Release Signoff records
 analytics evidence. A blocked analytics readiness status prevents normal release
 signoff until force signoff is used with an audited override.
+
+Acceptance-driven Fix Sprints turn stale-safe Acceptance Analytics
+recommendations into an explicit repair loop: create a Fix Sprint, create or
+bind ReviewTasks, run a recheck Acceptance Suite, refresh the delta report, and
+close the sprint only after non-waived items are fixed or audited. The sprint
+never generates candidates, applies edits, resolves tasks, or signs releases on
+its own. Recheck suites are kept out of the source analytics hash so the repair
+loop can compare before/after reports without making its own source stale.
+Release Export writes `acceptance-fix-sprints-summary.json`, and Release
+Signoff can require closed Fix Sprint evidence with
+`require_acceptance_fix_sprint=true`. Project Export and Final Export also carry
+the latest matching Fix Sprint summary for project-level handoff review.
 
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,

@@ -17,6 +17,7 @@ from song_agent.release_checks import (
     _v45_acceptance_profiles_songbook_smoke,
     _v46_human_review_pack_smoke,
     _v47_acceptance_analytics_smoke,
+    _v48_acceptance_fix_sprint_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -162,6 +163,18 @@ def test_v47_acceptance_analytics_smoke(tmp_path: Path) -> None:
     assert "stale=True/409" in detail
     assert "release_gate=409/200" in detail
     assert "export_summary=blocked" in detail
+
+
+def test_v48_acceptance_fix_sprint_smoke(tmp_path: Path) -> None:
+    ok, detail = _v48_acceptance_fix_sprint_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "tasks=201/200" in detail
+    assert "close=passed" in detail
+    assert "project=closed" in detail
+    assert "final=closed" in detail
+    assert "gate=passed" in detail
+    assert "stale_guard=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

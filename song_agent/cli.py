@@ -152,6 +152,45 @@ def build_acceptance_analytics_parser() -> argparse.ArgumentParser:
     return analytics_parser
 
 
+def build_acceptance_fix_sprint_parser() -> argparse.ArgumentParser:
+    fix_parser = argparse.ArgumentParser(description="Manage local MusicForge Acceptance Fix Sprints.")
+    subparsers = fix_parser.add_subparsers(dest="action", required=True)
+
+    create = subparsers.add_parser("create", help="Create a Fix Sprint from an Acceptance Analytics report.")
+    create.add_argument("--analytics-report-id", required=True, help="Source Acceptance Analytics report id.")
+    create.add_argument("--name", default=None, help="Fix Sprint name.")
+    create.add_argument("--max-items", type=int, default=20, help="Maximum recommendations to import.")
+    create.add_argument("--recommendation-id", action="append", dest="recommendation_ids", default=[], help="Recommendation id to include. Can be repeated.")
+
+    show = subparsers.add_parser("show", help="Show a Fix Sprint.")
+    show.add_argument("fix_sprint_id")
+
+    listing = subparsers.add_parser("list", help="List Fix Sprints.")
+    listing.add_argument("--include-archived", action="store_true")
+
+    tasks = subparsers.add_parser("create-review-tasks", help="Create or bind ReviewTasks for Fix Sprint items.")
+    tasks.add_argument("fix_sprint_id")
+    tasks.add_argument("--item-id", default=None)
+
+    recheck = subparsers.add_parser("create-recheck-suite", help="Create a recheck Acceptance Suite.")
+    recheck.add_argument("fix_sprint_id")
+    recheck.add_argument("--profile", default=None)
+
+    delta = subparsers.add_parser("delta", help="Read or refresh a Fix Sprint delta report.")
+    delta.add_argument("fix_sprint_id")
+    delta.add_argument("--refresh", action="store_true")
+
+    close = subparsers.add_parser("close", help="Close a Fix Sprint after recheck and delta.")
+    close.add_argument("fix_sprint_id")
+    close.add_argument("--force", action="store_true")
+    close.add_argument("--override-reason", default="")
+
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write the command result as JSON.")
+    return fix_parser
+
+
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "request",
@@ -368,6 +407,49 @@ def _main() -> None:
             print_acceptance_analytics_report(report)
         summary = acceptance_analytics_summary(report)
         raise SystemExit(1 if _acceptance_analytics_fail_on(str(summary.get("readiness_status") or ""), args.fail_on) else 0)
+    elif raw_args and raw_args[0] == "acceptance-fix-sprint":
+        from song_agent.acceptance_fix_sprints import AcceptanceFixSprintStore, fix_sprint_summary
+
+        parser = build_acceptance_fix_sprint_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = AcceptanceFixSprintStore()
+        if args.action == "create":
+            sprint = store.create_from_analytics(
+                {
+                    "analytics_report_id": args.analytics_report_id,
+                    "name": args.name,
+                    "max_items": args.max_items,
+                    "recommendation_ids": args.recommendation_ids,
+                }
+            )
+            items = store.read_items(sprint.fix_sprint_id)
+            result = {"ok": True, "fix_sprint": sprint.to_dict(), "items": [item.to_dict() for item in items], "summary": fix_sprint_summary(sprint, items)}
+        elif args.action == "show":
+            sprint = store.read_sprint(args.fix_sprint_id)
+            items = store.read_items(args.fix_sprint_id)
+            result = {"ok": True, "fix_sprint": sprint.to_dict(), "items": [item.to_dict() for item in items], "summary": fix_sprint_summary(sprint, items)}
+        elif args.action == "list":
+            sprints = store.list_sprints(include_archived=args.include_archived)
+            result = {"ok": True, "fix_sprints": [sprint.to_dict() for sprint in sprints], "summary": {"fix_sprint_count": len(sprints)}}
+        elif args.action == "create-review-tasks":
+            result = {"ok": True, **store.create_review_tasks(args.fix_sprint_id, item_id=args.item_id)}
+        elif args.action == "create-recheck-suite":
+            result = {"ok": True, **store.create_recheck_suite(args.fix_sprint_id, {"profile_id": args.profile} if args.profile else {})}
+        elif args.action == "delta":
+            report = store.refresh_delta(args.fix_sprint_id) if args.refresh else store.read_delta(args.fix_sprint_id)
+            result = {"ok": True, "delta_report": report, "summary": report.get("summary", {})}
+        elif args.action == "close":
+            report = store.close(args.fix_sprint_id, {"force": args.force, "override_reason": args.override_reason})
+            result = {"ok": True, "closeout_report": report, "summary": report.get("summary", {})}
+        else:
+            parser.error("unknown acceptance-fix-sprint action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_acceptance_fix_sprint_result(result)
+        raise SystemExit(0)
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)
@@ -547,6 +629,25 @@ def print_acceptance_analytics_report(report: dict[str, Any]) -> None:
     print(f"average_rating: {summary.get('average_rating')}")
     print(f"issues: {summary.get('issue_count', 0)}")
     print(f"recommendations: {summary.get('recommendation_count', 0)}")
+
+
+def print_acceptance_fix_sprint_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    sprint = result.get("fix_sprint") if isinstance(result.get("fix_sprint"), dict) else {}
+    delta = result.get("delta_report") if isinstance(result.get("delta_report"), dict) else {}
+    closeout = result.get("closeout_report") if isinstance(result.get("closeout_report"), dict) else {}
+    print("MusicForge acceptance-fix-sprint")
+    print(f"fix_sprint: {summary.get('fix_sprint_id') or sprint.get('fix_sprint_id') or delta.get('fix_sprint_id') or closeout.get('fix_sprint_id') or '-'}")
+    print(f"status: {summary.get('status') or sprint.get('status') or closeout.get('status') or '-'}")
+    if "item_count" in summary:
+        print(f"items: {summary.get('item_count', 0)}")
+        print(f"open_items: {summary.get('open_item_count', 0)}")
+    if result.get("results"):
+        print(f"task_results: {len(result.get('results') or [])}")
+    if delta:
+        print(f"delta_status: {(delta.get('summary') or {}).get('status')}")
+    if closeout:
+        print(f"closeout_status: {closeout.get('status')}")
 
 
 def _acceptance_analytics_fail_on(readiness: str, fail_on: str | None) -> bool:

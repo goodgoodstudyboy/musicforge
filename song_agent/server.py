@@ -225,6 +225,15 @@ from song_agent.acceptance_analytics import (
     acceptance_analytics_summary,
     release_acceptance_analytics_evidence,
 )
+from song_agent.acceptance_fix_sprints import (
+    AcceptanceFixSprintError,
+    AcceptanceFixSprintNotFoundError,
+    AcceptanceFixSprintStateError,
+    AcceptanceFixSprintStore,
+    acceptance_fix_closeout_summary,
+    fix_sprint_summary,
+    latest_fix_sprint_summary,
+)
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.music_acceptance import (
@@ -2395,6 +2404,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.acceptance_analytics_store  # type: ignore[attr-defined]
 
     @property
+    def acceptance_fix_sprint_store(self) -> AcceptanceFixSprintStore:
+        return self.server.acceptance_fix_sprint_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2546,6 +2559,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 self._send_json({"ok": True, "songbook": builtin_songbook()})
+                return
+
+            if path == "/api/acceptance/fix-sprints":
+                self._handle_acceptance_fix_sprints_root(method, parsed.query)
+                return
+
+            fix_sprint_route = _match_acceptance_fix_sprint_route(path)
+            if fix_sprint_route is not None:
+                self._handle_acceptance_fix_sprint_route(method, fix_sprint_route)
                 return
 
             if path == "/api/acceptance/analytics":
@@ -4862,10 +4884,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
         suite_id = str(payload.get("acceptance_suite_id") or "").strip()
         analytics_evidence = self._release_acceptance_analytics_gate(payload)
+        fix_sprint_evidence = self._release_acceptance_fix_sprint_gate(payload)
         if not suite_id:
             if not analytics_evidence:
-                return {}
+                return {"acceptance_fix_sprint": fix_sprint_evidence} if fix_sprint_evidence else {}
             gate = {"acceptance_analytics": analytics_evidence}
+            if fix_sprint_evidence:
+                gate["acceptance_fix_sprint"] = fix_sprint_evidence
+                if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                    gate["status"] = "failed"
+                    gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
             if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = "Acceptance analytics readiness is blocked."
@@ -4897,6 +4925,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = "Acceptance analytics readiness is blocked."
+        if fix_sprint_evidence:
+            gate["acceptance_fix_sprint"] = fix_sprint_evidence
+            if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                gate["status"] = "failed"
+                gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
         return gate
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -4912,6 +4945,34 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except (AcceptanceAnalyticsError, AcceptanceAnalyticsNotFoundError, ReleaseNotFoundError, ValueError):
             return {"status": "missing", "warning": "acceptance_analytics_unavailable"}
         return release_acceptance_analytics_evidence(report)
+
+    def _release_acceptance_fix_sprint_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        fix_sprint_id = str(payload.get("acceptance_fix_sprint_id") or "").strip()
+        release_id = str(payload.get("release_id") or "").strip()
+        require_gate = bool(payload.get("require_acceptance_fix_sprint", False))
+        try:
+            if fix_sprint_id:
+                sprint = self.acceptance_fix_sprint_store.read_sprint(fix_sprint_id)
+            elif release_id:
+                summary = latest_fix_sprint_summary(self.acceptance_fix_sprint_store, release_id=release_id)
+                if summary.get("status") == "missing":
+                    return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Sprint evidence is missing."}
+                sprint = self.acceptance_fix_sprint_store.read_sprint(str(summary.get("fix_sprint_id") or ""))
+            else:
+                return {}
+            items = self.acceptance_fix_sprint_store.read_items(sprint.fix_sprint_id)
+            closeout = self.acceptance_fix_sprint_store.read_closeout(sprint.fix_sprint_id, default={})
+            summary = fix_sprint_summary(sprint, items)
+            closeout_summary = acceptance_fix_closeout_summary(closeout)
+            ok = sprint.status == "closed" and closeout_summary.get("status") in {"passed", "warning", "force_closed"}
+            evidence = {**summary, "sprint_status": summary.get("status"), "closeout": closeout_summary}
+            if require_gate and not ok:
+                return {**evidence, "status": "failed", "message": "Acceptance Fix Sprint is not closed."}
+            return {**evidence, "status": "passed" if ok else "warning" if summary.get("status") != "missing" else "missing"}
+        except AcceptanceFixSprintNotFoundError:
+            return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Sprint evidence is missing."}
+        except AcceptanceFixSprintError as exc:
+            return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
     def _handle_release_signoff_reset(self, method: str, release_id: str) -> None:
         if method != "POST":
@@ -5772,6 +5833,172 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AcceptanceAnalyticsStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (AcceptanceAnalyticsError, FileNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_fix_sprints_root(self, method: str, query_string: str) -> None:
+        try:
+            if method == "GET":
+                query = parse_qs(query_string)
+                include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+                status = _query_value(query, "status") or None
+                sprints = self.acceptance_fix_sprint_store.list_sprints(include_archived=include_archived, status=status)
+                self._send_json(
+                    {
+                        "ok": True,
+                        "fix_sprints": [sprint.to_dict() for sprint in sprints],
+                        "summary": {"fix_sprint_count": len(sprints), "latest": fix_sprint_summary(sprints[0]) if sprints else {"status": "missing"}},
+                    }
+                )
+                return
+            if method == "POST":
+                sprint = self.acceptance_fix_sprint_store.create_from_analytics(self._read_json_body())
+                items = self.acceptance_fix_sprint_store.read_items(sprint.fix_sprint_id)
+                self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "items": [item.to_dict() for item in items], "summary": fix_sprint_summary(sprint, items)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except AcceptanceFixSprintNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceFixSprintStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (AcceptanceFixSprintError, AcceptanceAnalyticsError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_fix_sprint_route(self, method: str, route: tuple[str, list[str]]) -> None:
+        fix_sprint_id, parts = route
+        try:
+            if not parts:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint = self.acceptance_fix_sprint_store.read_sprint(fix_sprint_id)
+                items = self.acceptance_fix_sprint_store.read_items(fix_sprint_id)
+                self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "items": [item.to_dict() for item in items], "summary": fix_sprint_summary(sprint, items)})
+                return
+
+            if parts == ["archive"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint = self.acceptance_fix_sprint_store.archive_sprint(fix_sprint_id, now=_utc_now())
+                self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "summary": fix_sprint_summary(sprint)})
+                return
+
+            if parts == ["refresh-status"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                sprint = self.acceptance_fix_sprint_store.refresh_status(fix_sprint_id, now=_utc_now())
+                items = self.acceptance_fix_sprint_store.read_items(fix_sprint_id)
+                self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "items": [item.to_dict() for item in items], "summary": fix_sprint_summary(sprint, items)})
+                return
+
+            if parts == ["items"]:
+                if method == "GET":
+                    items = self.acceptance_fix_sprint_store.read_items(fix_sprint_id)
+                    sprint = self.acceptance_fix_sprint_store.read_sprint(fix_sprint_id)
+                    self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "items": [item.to_dict() for item in items], "summary": fix_sprint_summary(sprint, items)})
+                    return
+                if method == "POST":
+                    item = self.acceptance_fix_sprint_store.add_item(fix_sprint_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "item": item.to_dict()}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if len(parts) >= 3 and parts[0] == "items":
+                item_id = parts[1]
+                action = parts[2]
+                if action == "waive":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._read_json_body()
+                    item = self.acceptance_fix_sprint_store.waive_item(fix_sprint_id, item_id, str(payload.get("reason") or payload.get("notes") or ""), now=_utc_now())
+                    self._send_json({"ok": True, "item": item.to_dict()})
+                    return
+                if action == "reopen":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    item = self.acceptance_fix_sprint_store.reopen_item(fix_sprint_id, item_id, now=_utc_now())
+                    self._send_json({"ok": True, "item": item.to_dict()})
+                    return
+                if action == "create-review-task":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.acceptance_fix_sprint_store.create_review_tasks(fix_sprint_id, item_id=item_id, now=_utc_now())
+                    created = any(row.get("status") == "created" for row in result.get("results", []) if isinstance(row, dict))
+                    self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED if created else HTTPStatus.OK)
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Acceptance Fix Sprint item route not found.")
+                return
+
+            if parts == ["create-review-tasks"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.acceptance_fix_sprint_store.create_review_tasks(fix_sprint_id, now=_utc_now())
+                created = any(row.get("status") == "created" for row in result.get("results", []) if isinstance(row, dict))
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED if created else HTTPStatus.OK)
+                return
+
+            if parts == ["create-recheck-suite"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.acceptance_fix_sprint_store.create_recheck_suite(fix_sprint_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+
+            if parts == ["link-recheck-suite"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._read_json_body()
+                sprint = self.acceptance_fix_sprint_store.link_recheck_suite(fix_sprint_id, str(payload.get("suite_id") or ""), now=_utc_now())
+                self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "summary": fix_sprint_summary(sprint)})
+                return
+
+            if parts == ["delta"]:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                delta = self.acceptance_fix_sprint_store.read_delta(fix_sprint_id)
+                self._send_json({"ok": True, "delta_report": delta, "summary": delta.get("summary", {})})
+                return
+
+            if parts == ["delta", "refresh"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                delta = self.acceptance_fix_sprint_store.refresh_delta(fix_sprint_id, now=_utc_now())
+                self._send_json({"ok": True, "delta_report": delta, "summary": delta.get("summary", {})})
+                return
+
+            if parts == ["closeout"]:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                closeout = self.acceptance_fix_sprint_store.read_closeout(fix_sprint_id)
+                self._send_json({"ok": True, "closeout_report": closeout, "summary": acceptance_fix_closeout_summary(closeout)})
+                return
+
+            if parts == ["close"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                closeout = self.acceptance_fix_sprint_store.close(fix_sprint_id, self._optional_json_body(), now=_utc_now())
+                sprint = self.acceptance_fix_sprint_store.read_sprint(fix_sprint_id)
+                self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "closeout_report": closeout, "summary": acceptance_fix_closeout_summary(closeout)})
+                return
+
+            self._send_error(HTTPStatus.NOT_FOUND, "Acceptance Fix Sprint route not found.")
+        except AcceptanceFixSprintNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceFixSprintStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (AcceptanceFixSprintError, AcceptanceAnalyticsError, AcceptanceNotFoundError, FileNotFoundError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> dict[str, Any]:
@@ -10272,6 +10499,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.acceptance_store = AcceptanceStore(project_store=self.project_store)
         self.human_review_pack_store = HumanReviewPackStore(self.acceptance_store, project_store=self.project_store)
         self.acceptance_analytics_store = AcceptanceAnalyticsStore(acceptance_store=self.acceptance_store, project_store=self.project_store, release_store=self.release_store)
+        self.acceptance_fix_sprint_store = AcceptanceFixSprintStore(acceptance_store=self.acceptance_store, analytics_store=self.acceptance_analytics_store, project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -10758,6 +10986,16 @@ def _match_acceptance_analytics_recommendation_route(path: str) -> tuple[str, st
     if len(parts) == 4 and parts[1] == "recommendations" and parts[3] == "create-review-task":
         return parts[0], parts[2]
     return None
+
+
+def _match_acceptance_fix_sprint_route(path: str) -> tuple[str, list[str]] | None:
+    prefix = "/api/acceptance/fix-sprints/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if not parts:
+        return None
+    return parts[0], parts[1:]
 
 
 def _analytics_scope_from_query(query_string: str) -> AnalyticsScope:

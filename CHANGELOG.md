@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.8.0 - 2026-05-20
+
+### Added
+- Acceptance-driven Fix Sprint store, API, and CLI for turning fresh Acceptance Analytics recommendations into audited fix items, ReviewTask creation, recheck Acceptance Suites, delta reports, and closeout reports.
+- Studio Acceptance Fix Sprints controls for creating a sprint from analytics, creating ReviewTasks, creating recheck suites, refreshing deltas, and closing the loop.
+- Project Export, Final Export, and Release Export now write Acceptance Fix Sprint summaries; Release Signoff can require closed Fix Sprint evidence with `require_acceptance_fix_sprint=true`.
+- release-check v4.8 smoke covers Fix Sprint creation, duplicate ReviewTask binding, recheck/delta/closeout, Release Export/Signoff evidence, and stale source guard returning 409.
+
+### Fixed
+- Acceptance Analytics source state now excludes downstream `acceptance_fix_sprint` ReviewTasks and non-suite-scope recheck suites, so a Fix Sprint does not make its own source report stale while still blocking genuinely stale source reports before task creation.
+
+### Verified
+- `python -m pytest tests\test_acceptance_fix_sprints.py tests\test_server_acceptance_fix_sprints.py tests\test_cli_acceptance_fix_sprint.py tests\test_release_check.py::test_v48_acceptance_fix_sprint_smoke -q`
+
 ## v4.7.1 - 2026-05-20
 
 ### Fixed

@@ -224,6 +224,8 @@ class AcceptanceAnalyticsStore:
                 suite = self.acceptance_store.get_suite(suite_id)
             except Exception:
                 continue
+            if scope.type != "suite" and suite.mode == "acceptance_fix_recheck":
+                continue
             cases = []
             for case in self.acceptance_store.list_cases(suite_id):
                 health = self.acceptance_store.read_health(suite_id, case.case_id, default={})
@@ -395,6 +397,8 @@ class AcceptanceAnalyticsStore:
             store = ReviewTaskStore(self.project_store.project_dir(project_id))
             for task in store.list_tasks(include_archived=True):
                 source = task.source if isinstance(task.source, dict) else {}
+                if source.get("source_type") == "acceptance_fix_sprint":
+                    continue
                 if scope.type == "suite" and source.get("suite_id") != scope.suite_id:
                     continue
                 rows.append(
@@ -795,7 +799,7 @@ def _recommendations(heatmap: list[dict[str, Any]], taxonomy: list[dict[str, Any
                 "severity": severity,
                 "title": f"{'Fix' if rec_type == 'create_review_task' else 'Review'} {item.get('song_id')} acceptance weakness",
                 "reason": _bounded(f"{item.get('song_id')} has weakness score {score}, latest status {item.get('latest_status')}, and top issues {', '.join(issue_types) or 'none'}.", 300),
-                "target": {"song_id": item.get("song_id"), "style": item.get("style"), "project_id": item.get("project_id")},
+                "target": {"song_id": item.get("song_id"), "style": item.get("style"), "project_id": item.get("project_id"), "version_id": item.get("version_id")},
                 "evidence": {"case_ids": item.get("case_ids", []), "suite_ids": item.get("suite_ids", []), "issue_types": issue_types},
                 "manual_required": True,
                 "created_review_task_id": None,

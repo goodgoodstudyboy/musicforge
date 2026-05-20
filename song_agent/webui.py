@@ -1211,8 +1211,14 @@ def panel_html() -> str:
         <div class="panel-title subhead"><span>Acceptance Analytics</span></div>
         <div class="actions">
           <button class="secondary" id="acceptance-refresh-analytics" type="button">Refresh Analytics</button>
+          <button class="secondary" id="acceptance-create-fix-sprint" type="button">Create Fix Sprint</button>
         </div>
         <div id="acceptance-analytics" class="release-detail"><div class="empty">No acceptance analytics report yet.</div></div>
+        <div class="panel-title subhead"><span>Acceptance Fix Sprints</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-refresh-fix-sprints" type="button">Refresh Fix Sprints</button>
+        </div>
+        <div id="acceptance-fix-sprints" class="release-detail"><div class="empty">No acceptance fix sprints yet.</div></div>
       </div>
     </section>
     <section style="grid-column: 1 / -1;">
@@ -1291,6 +1297,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let acceptanceSongbook = null;
     let selectedAcceptanceSuiteId = null;
     let acceptanceAnalytics = null;
+    let acceptanceFixSprints = [];
     let projects = [];
     let selectedProjectId = null;
     let includeHiddenProjects = false;
@@ -1382,6 +1389,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadReleases();
       await loadAcceptanceReferenceData();
       await loadAcceptanceAnalytics();
+      await loadAcceptanceFixSprints();
       await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
@@ -1389,6 +1397,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadProjects();
         loadReleases();
         loadAcceptanceAnalytics();
+        loadAcceptanceFixSprints();
         loadAcceptanceSuites();
         loadAssets();
         loadReferences();
@@ -1570,6 +1579,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         renderAcceptanceAnalytics();
       } catch (err) {
         $("acceptance-analytics").innerHTML = `<div class="empty">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("acceptance-refresh-fix-sprints").addEventListener("click", loadAcceptanceFixSprints);
+    $("acceptance-create-fix-sprint").addEventListener("click", async () => {
+      try {
+        if (!acceptanceAnalytics || !acceptanceAnalytics.report_id) throw new Error("Refresh Acceptance Analytics first.");
+        await api("/api/acceptance/fix-sprints", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ analytics_report_id: acceptanceAnalytics.report_id, name: "Acceptance-driven Fix Sprint" }),
+        });
+        await loadAcceptanceFixSprints();
+      } catch (err) {
+        $("acceptance-fix-sprints").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
       }
     });
     $("acceptance-form").addEventListener("submit", async (event) => {
@@ -2181,6 +2204,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         acceptanceAnalytics = null;
       }
       renderAcceptanceAnalytics();
+    }
+
+    async function loadAcceptanceFixSprints() {
+      try {
+        const data = await api("/api/acceptance/fix-sprints");
+        acceptanceFixSprints = data.fix_sprints || [];
+      } catch (err) {
+        acceptanceFixSprints = [];
+      }
+      renderAcceptanceFixSprints();
     }
 
     async function loadAssets() {
@@ -3021,6 +3054,60 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           body: JSON.stringify({}),
         });
         $("acceptance-analytics-report-id").value = data.status || data.task_id || report.report_id;
+      }));
+    }
+
+    function renderAcceptanceFixSprints() {
+      const target = $("acceptance-fix-sprints");
+      if (!target) return;
+      if (!acceptanceFixSprints.length) {
+        target.innerHTML = "<div class='empty'>No acceptance fix sprints yet.</div>";
+        return;
+      }
+      const rows = acceptanceFixSprints.map((sprint) => {
+        const counts = sprint.counts || {};
+        const recheck = sprint.recheck || {};
+        const delta = sprint.delta_summary || {};
+        return `
+          <tr>
+            <td>${escapeHtml(sprint.fix_sprint_id)}</td>
+            <td>${escapeHtml(sprint.name || "")}</td>
+            <td>${escapeHtml(sprint.status || "-")}</td>
+            <td>${escapeHtml(counts.item_count || 0)}</td>
+            <td>${escapeHtml(counts.open_item_count || 0)}</td>
+            <td>${escapeHtml(recheck.suite_id || "-")}</td>
+            <td>${escapeHtml(delta.status || "-")}</td>
+            <td class="actions">
+              <button class="secondary acceptance-fix-tasks" data-fix-sprint-id="${escapeHtml(sprint.fix_sprint_id)}" type="button">Create ReviewTasks</button>
+              <button class="secondary acceptance-fix-recheck" data-fix-sprint-id="${escapeHtml(sprint.fix_sprint_id)}" type="button">Create Recheck</button>
+              <button class="secondary acceptance-fix-delta" data-fix-sprint-id="${escapeHtml(sprint.fix_sprint_id)}" type="button">Delta</button>
+              <button class="secondary acceptance-fix-close" data-fix-sprint-id="${escapeHtml(sprint.fix_sprint_id)}" type="button">Close</button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+      target.innerHTML = `
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Items</th><th>Open</th><th>Recheck</th><th>Delta</th><th>Actions</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      document.querySelectorAll(".acceptance-fix-tasks").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/acceptance/fix-sprints/${encodeURIComponent(button.dataset.fixSprintId)}/create-review-tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        await loadAcceptanceFixSprints();
+      }));
+      document.querySelectorAll(".acceptance-fix-recheck").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/acceptance/fix-sprints/${encodeURIComponent(button.dataset.fixSprintId)}/create-recheck-suite`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        await loadAcceptanceFixSprints();
+        await loadAcceptanceSuites();
+      }));
+      document.querySelectorAll(".acceptance-fix-delta").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/acceptance/fix-sprints/${encodeURIComponent(button.dataset.fixSprintId)}/delta/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        await loadAcceptanceFixSprints();
+      }));
+      document.querySelectorAll(".acceptance-fix-close").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/acceptance/fix-sprints/${encodeURIComponent(button.dataset.fixSprintId)}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        await loadAcceptanceFixSprints();
       }));
     }
 

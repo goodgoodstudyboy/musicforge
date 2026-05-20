@@ -135,6 +135,7 @@ def build_final_export_bundle(
     review_metrics = _final_review_metrics(project_export)
     review_judge = _final_review_judge(project_export, edit_metadata)
     review_sprint_closeout = _final_review_sprint_closeout(project_export)
+    acceptance_fix_sprint = _final_acceptance_fix_sprint(project_export)
     delivery_qa = _final_delivery_qa(project_export)
     delivery_signoff = _final_delivery_signoff(project_export)
 
@@ -157,6 +158,7 @@ def build_final_export_bundle(
         "review_metrics": review_metrics,
         "review_judge": review_judge,
         "review_sprint_closeout": review_sprint_closeout,
+        "acceptance_fix_sprint": acceptance_fix_sprint,
         "delivery_qa": delivery_qa,
         "delivery_signoff": delivery_signoff,
         "files": files,
@@ -660,6 +662,27 @@ def _final_delivery_qa(project_export: dict[str, Any] | None) -> dict[str, Any]:
                 "final_version_id": summary.get("final_version_id"),
                 "zip_sha256": summary.get("zip_sha256"),
                 "zip_matches_manifest": summary.get("zip_matches_manifest"),
+            }
+        )
+    )
+
+
+def _final_acceptance_fix_sprint(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_fix_sprint_summary"), dict):
+        return {}
+    summary = project_export["acceptance_fix_sprint_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "fix_sprint_id": summary.get("fix_sprint_id"),
+                "item_count": summary.get("item_count"),
+                "open_item_count": summary.get("open_item_count"),
+                "linked_review_task_count": summary.get("linked_review_task_count"),
+                "completed_review_task_count": summary.get("completed_review_task_count"),
+                "recheck_suite_id": summary.get("recheck_suite_id"),
+                "delta_status": summary.get("delta_status"),
+                "closeout_status": summary.get("closeout_status"),
             }
         )
     )

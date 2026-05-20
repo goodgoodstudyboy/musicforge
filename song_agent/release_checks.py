@@ -211,6 +211,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.5 acceptance profiles songbook smoke", *_v45_acceptance_profiles_songbook_smoke(root))
     report.add("v4.6 human review pack smoke", *_v46_human_review_pack_smoke(root))
     report.add("v4.7 acceptance analytics smoke", *_v47_acceptance_analytics_smoke(root))
+    report.add("v4.8 acceptance fix sprint smoke", *_v48_acceptance_fix_sprint_smoke(root))
     return report
 
 
@@ -5615,6 +5616,173 @@ def _v47_acceptance_analytics_smoke(root: Path) -> tuple[bool, str]:
             f"heatmap={global_heatmap}, issues={issue_count}, readiness={suite_report.get('summary', {}).get('readiness_status')}, "
             f"task={task_status}/{duplicate_task_status}, stale={stale_detail.get('analytics', {}).get('stale')}/{stale_create_status}, "
             f"release_gate={blocked_sign_status}/{force_sign_status}, export_summary={analytics_summary.get('readiness_status')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v48_acceptance_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v48-acceptance-fix-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Acceptance Fix Sprint Track")
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Acceptance Fix Sprint Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+
+        suite_status, suite = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.8 source", "profile_id": "developer_manual", "require_audio_if_renderer_configured": False})
+        suite_id = suite.get("suite", {}).get("suite_id")
+        case_status, case = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases",
+            {
+                "name": "Fix Sprint Source Case",
+                "source_type": "project_version",
+                "project_id": project_id,
+                "version_id": "v001",
+                "song_id": "rap_beat_001",
+                "request": {"title": "Fix Sprint Source", "language": "English", "style": "rap beat", "theme": "fix sprint", "duration_seconds": 90},
+            },
+        )
+        case_id = case.get("case", {}).get("case_id")
+        generate_status, _generated = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        health_status, _health = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        review_status, _review = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review",
+            {
+                "rating": 2,
+                "status": "needs_fix",
+                "playback_confirmed": True,
+                "review_mode": "manual",
+                "audio_mode": "midi",
+                "notes": "Hook, rhythm, workflow, arrangement, and ending need acceptance-driven repair.",
+                "tags": ["hook", "rhythm", "workflow", "arrangement", "ending"],
+            },
+        )
+        report_status, _report = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        analytics_status, analytics = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        source_report_id = analytics.get("analytics", {}).get("report_id")
+        fix_status, fix = _release_http_json(server, "POST", "/api/acceptance/fix-sprints", {"analytics_report_id": source_report_id, "scope": {"type": "release", "release_id": release_id}})
+        fix_sprint_id = fix.get("fix_sprint", {}).get("fix_sprint_id")
+        tasks_status, tasks = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{fix_sprint_id}/create-review-tasks")
+        duplicate_status, duplicate = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{fix_sprint_id}/create-review-tasks")
+        task_id = (tasks.get("results") or [{}])[0].get("task_id")
+        task_path = base / ".musicforge" / "projects" / project_id / "review-tasks" / str(task_id) / "task.json"
+        task = read_json(task_path)
+        task["status"] = "resolved"
+        task["resolution_note"] = "Acceptance-driven fix completed."
+        write_json(task_path, task)
+        refresh_status, refreshed = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{fix_sprint_id}/refresh-status")
+        recheck_status, recheck = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{fix_sprint_id}/create-recheck-suite", {"profile_id": "developer_manual"})
+        recheck_suite_id = recheck.get("suite", {}).get("suite_id")
+        recheck_detail_status, recheck_detail = _release_http_json(server, "GET", f"/api/acceptance/suites/{recheck_suite_id}")
+        recheck_case_id = (recheck_detail.get("cases") or [{}])[0].get("case_id")
+        recheck_generate_status, _ = _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/generate", {"render_audio": "never"})
+        recheck_health_status, _ = _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/health")
+        recheck_review_status, _ = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/review",
+            {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Recheck confirms the fix."},
+        )
+        recheck_report_status, _ = _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/report")
+        delta_status, delta = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{fix_sprint_id}/delta/refresh")
+        close_status, closeout = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{fix_sprint_id}/close")
+        closeout_status = closeout.get("closeout_report", {}).get("status")
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        force_sign_status, signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "v4.8 acceptance fix sprint smoke keeps source analytics blocked", "require_acceptance_fix_sprint": True})
+        project_export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+
+        stale_suite_status, stale_suite = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.8 stale source", "profile_id": "developer_manual", "require_audio_if_renderer_configured": False})
+        stale_suite_id = stale_suite.get("suite", {}).get("suite_id")
+        stale_case_status, stale_case = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{stale_suite_id}/cases",
+            {"song_id": "rock_chorus_001", "request": {"title": "Stale Fix Sprint", "language": "English", "style": "rock chorus", "theme": "stale", "duration_seconds": 90}},
+        )
+        stale_case_id = stale_case.get("case", {}).get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{stale_suite_id}/cases/{stale_case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{stale_suite_id}/cases/{stale_case_id}/health")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{stale_suite_id}/cases/{stale_case_id}/review", {"rating": 2, "status": "needs_fix", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Hook needs work.", "tags": ["hook"]})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{stale_suite_id}/report")
+        stale_analytics_status, stale_analytics = _release_http_json(server, "POST", f"/api/acceptance/suites/{stale_suite_id}/analytics/refresh")
+        stale_fix_status, stale_fix = _release_http_json(server, "POST", "/api/acceptance/fix-sprints", {"analytics_report_id": stale_analytics.get("analytics", {}).get("report_id")})
+        stale_fix_id = stale_fix.get("fix_sprint", {}).get("fix_sprint_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{stale_suite_id}/cases/{stale_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Stale guard source changed."})
+        stale_guard_status, stale_guard = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{stale_fix_id}/create-review-tasks")
+
+        manifest = export.get("manifest", {})
+        evidence = signed.get("signoff", {}).get("acceptance_gate", {}).get("acceptance_fix_sprint", {})
+        ok = (
+            release_status == 201
+            and track_status == 200
+            and suite_status == 201
+            and case_status == 201
+            and generate_status == 200
+            and health_status == 200
+            and review_status == 200
+            and report_status == 200
+            and analytics_status == 201
+            and fix_status == 201
+            and tasks_status == 201
+            and (tasks.get("results") or [{}])[0].get("status") == "created"
+            and duplicate_status == 200
+            and (duplicate.get("results") or [{}])[0].get("status") == "existing"
+            and refresh_status == 200
+            and refreshed.get("summary", {}).get("completed_review_task_count") == 1
+            and recheck_status == 201
+            and recheck_detail_status == 200
+            and recheck_generate_status == 200
+            and recheck_health_status == 200
+            and recheck_review_status == 200
+            and recheck_report_status == 200
+            and delta_status == 200
+            and delta.get("summary", {}).get("fixed_item_count") == 1
+            and close_status == 200
+            and closeout_status == "passed"
+            and qa_status == 200
+            and export_status == 200
+            and manifest.get("acceptance_fix_sprint", {}).get("status") == "closed"
+            and force_sign_status == 200
+            and evidence.get("status") == "passed"
+            and evidence.get("sprint_status") == "closed"
+            and project_export_status == 200
+            and project_export.get("acceptance_fix_sprint_summary", {}).get("status") == "closed"
+            and final_export_status == 200
+            and final_export.get("final_export", {}).get("acceptance_fix_sprint", {}).get("status") == "closed"
+            and stale_suite_status == 201
+            and stale_case_status == 201
+            and stale_analytics_status == 201
+            and stale_fix_status == 201
+            and stale_guard_status == 409
+            and "stale" in str(stale_guard.get("error") or "").lower()
+        )
+        return ok, (
+            f"sprint={fix_sprint_id}, tasks={tasks_status}/{duplicate_status}, recheck={recheck_suite_id}, "
+            f"delta={delta.get('summary', {}).get('status')}, close={closeout_status}, "
+            f"export={manifest.get('acceptance_fix_sprint', {}).get('status')}, project={project_export.get('acceptance_fix_sprint_summary', {}).get('status')}, "
+            f"final={final_export.get('final_export', {}).get('acceptance_fix_sprint', {}).get('status')}, gate={evidence.get('status')}, stale_guard={stale_guard_status}"
         )
     except Exception as exc:
         return False, str(exc)
