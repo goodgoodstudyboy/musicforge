@@ -35,6 +35,8 @@ def test_acceptance_fix_plan_api_create_sprint_and_stale_guard(tmp_path: Path, m
         list_status, listing = request_json(server, "GET", "/api/acceptance/fix-plans")
         detail_plan_status, detail_plan = request_json(server, "GET", f"/api/acceptance/fix-plans/{plan_id}")
         sprint_status, sprint = request_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/create-fix-sprint", {"name": "API Planned Sprint"})
+        repeat_sprint_status, repeat_sprint = request_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/create-fix-sprint", {"name": "Duplicate Planned Sprint"})
+        repeat_detail_status, repeat_detail = request_json(server, "GET", f"/api/acceptance/fix-plans/{plan_id}")
 
         stale_create_status, stale_created = request_json(server, "POST", "/api/acceptance/fix-plans", {"analytics_report_id": analytics2["report_id"], "kb_report_id": kb["knowledge_report"]["report_id"]})
         stale_plan_id = stale_created["fix_plan"]["plan_id"]
@@ -66,6 +68,10 @@ def test_acceptance_fix_plan_api_create_sprint_and_stale_guard(tmp_path: Path, m
     assert detail_plan["fix_plan"]["plan_id"] == plan_id
     assert sprint_status == 201
     assert sprint["fix_sprint"]["source"]["source_type"] == "acceptance_fix_plan"
+    assert repeat_sprint_status == 409
+    assert "already created" in repeat_sprint["error"]
+    assert repeat_detail_status == 200
+    assert repeat_detail["fix_plan"]["execution"]["created_fix_sprint_id"] == sprint["fix_sprint"]["fix_sprint_id"]
     assert stale_create_status == 201
     assert entries_status == 200
     assert hide_status == 200

@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.10.1 - 2026-05-21
+
+### Fixed
+- Acceptance Fix Plans can now create only one Fix Sprint; repeated create-fix-sprint attempts return 409 without overwriting execution evidence.
+
+### Added
+- Store, API, CLI, and release-check regressions for duplicate Fix Sprint creation from the same Fix Plan.
+
+### Verified
+- `python -m pytest tests\test_acceptance_fix_planning.py tests\test_server_acceptance_fix_planning.py tests\test_cli_acceptance_fix_plan.py tests\test_release_check.py::test_v410_knowledge_assisted_fix_planning_smoke -q`
+
 ## v4.10.0 - 2026-05-21
 
 ### Added

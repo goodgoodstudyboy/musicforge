@@ -33,6 +33,13 @@ def test_fix_plan_create_matches_kb_and_creates_sprint(tmp_path: Path, monkeypat
     assert result["fix_sprint"]["source"]["fix_plan_id"] == plan.plan_id
     assert result["items"][0]["source"]["source_type"] == "planned_item"
     assert result["plan"]["status"] == "used"
+    assert result["plan"]["execution"]["created_fix_sprint_id"] == result["fix_sprint"]["fix_sprint_id"]
+
+    with pytest.raises(AcceptanceFixPlanStateError, match="already created"):
+        plan_store.create_fix_sprint(plan.plan_id, {"name": "Duplicate Sprint"}, now="2026-05-21T00:12:00+00:00")
+
+    saved = plan_store.read_plan(plan.plan_id)
+    assert saved.execution["created_fix_sprint_id"] == result["fix_sprint"]["fix_sprint_id"]
 
 
 def test_fix_plan_hidden_kb_default_excluded_and_explicit_included(tmp_path: Path, monkeypatch) -> None:

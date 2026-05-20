@@ -200,6 +200,7 @@ def test_v410_knowledge_assisted_fix_planning_smoke(tmp_path: Path) -> None:
     assert "items=1" in detail
     assert "kb=1" in detail
     assert "sprint=afs-" in detail
+    assert "duplicate=409" in detail
     assert "stale_guard=409" in detail
     assert "hidden=excluded/included" in detail
 

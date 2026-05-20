@@ -232,6 +232,8 @@ class AcceptanceFixPlanningStore:
         payload = payload or {}
         now = now or now_iso()
         plan = self.read_plan(plan_id)
+        if plan.status == "used" or plan.execution.get("created_fix_sprint_id"):
+            raise AcceptanceFixPlanStateError("Acceptance Fix Plan has already created a Fix Sprint. Refresh or create a new plan.")
         if plan.status in {"archived", "stale"} or self.plan_is_stale(plan):
             raise AcceptanceFixPlanStateError("Acceptance Fix Plan is stale. Refresh the plan before creating a Fix Sprint.")
         selected = _selected_planned_items(plan, payload.get("planned_item_ids"))

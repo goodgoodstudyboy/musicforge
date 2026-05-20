@@ -40,3 +40,10 @@ def test_acceptance_fix_plan_cli_create_show_recommend_and_sprint(tmp_path: Path
     except SystemExit as exc:
         assert exc.code == 0
     assert "created_fix_sprint: afs-000002" in capsys.readouterr().out
+
+    monkeypatch.setattr(sys, "argv", ["song-agent", "acceptance-fix-plan", "create-fix-sprint", "afp-000001"])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code == 1
+    assert "already created" in capsys.readouterr().err

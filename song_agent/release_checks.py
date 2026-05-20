@@ -5999,6 +5999,7 @@ def _v410_knowledge_assisted_fix_planning_smoke(root: Path) -> tuple[bool, str]:
         sprint_status, sprint = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/create-fix-sprint", {"name": "Knowledge-assisted Fix Sprint"})
         planned_sprint = sprint.get("fix_sprint", {})
         planned_sprint_id = planned_sprint.get("fix_sprint_id")
+        duplicate_sprint_status, _duplicate_sprint = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/create-fix-sprint", {"name": "Duplicate Knowledge-assisted Fix Sprint"})
         plan_detail_status, plan_detail = _release_http_json(server, "GET", f"/api/acceptance/fix-plans/{plan_id}")
         qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
         export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
@@ -6044,6 +6045,7 @@ def _v410_knowledge_assisted_fix_planning_smoke(root: Path) -> tuple[bool, str]:
             and preview_status == 200
             and sprint_status == 201
             and planned_sprint.get("source", {}).get("source_type") == "acceptance_fix_plan"
+            and duplicate_sprint_status == 409
             and plan_detail_status == 200
             and plan_detail.get("fix_plan", {}).get("execution", {}).get("created_fix_sprint_id") == planned_sprint_id
             and qa_status == 200
@@ -6071,7 +6073,7 @@ def _v410_knowledge_assisted_fix_planning_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"plan={plan_id}, items={plan_summary.get('planned_item_count')}, kb={plan_summary.get('kb_match_count')}, "
-            f"sprint={planned_sprint_id}, stale_guard={stale_guard_status}, "
+            f"sprint={planned_sprint_id}, duplicate={duplicate_sprint_status}, stale_guard={stale_guard_status}, "
             f"hidden={'excluded' if hidden_default.get('summary', {}).get('kb_match_count') == 0 else 'included'}/"
             f"{'included' if hidden_include.get('summary', {}).get('kb_match_count', 0) >= 1 else 'excluded'}"
         )
