@@ -1208,6 +1208,11 @@ def panel_html() -> str:
           </div>
         </div>
         <div id="acceptance-detail" class="release-detail"><div class="empty">Select or create an acceptance suite.</div></div>
+        <div class="panel-title subhead"><span>Acceptance Analytics</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-refresh-analytics" type="button">Refresh Analytics</button>
+        </div>
+        <div id="acceptance-analytics" class="release-detail"><div class="empty">No acceptance analytics report yet.</div></div>
       </div>
     </section>
     <section style="grid-column: 1 / -1;">
@@ -1285,6 +1290,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let acceptanceProfiles = [];
     let acceptanceSongbook = null;
     let selectedAcceptanceSuiteId = null;
+    let acceptanceAnalytics = null;
     let projects = [];
     let selectedProjectId = null;
     let includeHiddenProjects = false;
@@ -1375,12 +1381,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadProjects();
       await loadReleases();
       await loadAcceptanceReferenceData();
+      await loadAcceptanceAnalytics();
       await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
         loadJobs();
         loadProjects();
         loadReleases();
+        loadAcceptanceAnalytics();
         loadAcceptanceSuites();
         loadAssets();
         loadReferences();
@@ -1555,6 +1563,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     });
     $("refresh-acceptance").addEventListener("click", loadAcceptanceSuites);
+    $("acceptance-refresh-analytics").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/acceptance/analytics/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "global" }) });
+        acceptanceAnalytics = data.analytics || null;
+        renderAcceptanceAnalytics();
+      } catch (err) {
+        $("acceptance-analytics").innerHTML = `<div class="empty">${escapeHtml(err.message)}</div>`;
+      }
+    });
     $("acceptance-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       try {
@@ -2154,6 +2171,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } catch (err) {
         $("acceptance-songbook").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
       }
+    }
+
+    async function loadAcceptanceAnalytics() {
+      try {
+        const data = await api("/api/acceptance/analytics");
+        acceptanceAnalytics = data.analytics || null;
+      } catch (err) {
+        acceptanceAnalytics = null;
+      }
+      renderAcceptanceAnalytics();
     }
 
     async function loadAssets() {
@@ -2787,6 +2814,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let metadataData = { summary: {}, metadata: {}, metadata_qa: { checks: [], track_checks: [] } };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
+      let releaseAnalyticsData = { summary: {}, analytics: null };
       try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
       try { signoffData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`); } catch (err) {}
@@ -2804,6 +2832,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         distributionData.template_packs = templateData.template_packs || distributionData.template_packs || [];
       } catch (err) {}
       try { submissionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions`); } catch (err) {}
+      try { releaseAnalyticsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/acceptance-analytics`); } catch (err) {}
       const target = $("release-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -2838,6 +2867,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseMetadataHtml(metadataData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
+        ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
         ${releaseQaHtml(qaData)}
         ${releaseExportHtml(exportData, release)}
         ${releaseSignoffHtml(signoffData)}
@@ -2920,6 +2950,80 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }).join("");
     }
 
+    function renderAcceptanceAnalytics(report = acceptanceAnalytics) {
+      const target = $("acceptance-analytics");
+      if (!target) return;
+      if (!report || !report.report_id) {
+        target.innerHTML = "<div class='empty'>No acceptance analytics report yet.</div>";
+        return;
+      }
+      const summary = report.summary || {};
+      const heatmapRows = (report.songbook_heatmap || []).slice(0, 12).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.song_id || "-")}</td>
+          <td>${escapeHtml(item.status || "-")}</td>
+          <td>${escapeHtml(item.case_count || 0)}</td>
+          <td>${escapeHtml(item.manual_accepted_count || 0)}</td>
+          <td>${escapeHtml(item.issue_count || 0)}</td>
+          <td>${escapeHtml(item.average_rating ?? "-")}</td>
+        </tr>
+      `).join("");
+      const issueRows = (report.issue_taxonomy || []).slice(0, 8).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.issue_type || "-")}</td>
+          <td>${escapeHtml(item.count || 0)}</td>
+          <td>${escapeHtml(item.severity || "-")}</td>
+          <td>${escapeHtml(item.example_excerpt || "")}</td>
+        </tr>
+      `).join("");
+      const recommendationRows = (report.recommendations || []).slice(0, 8).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.type || "-")}</td>
+          <td>${escapeHtml(item.song_id || "-")}</td>
+          <td>${escapeHtml(item.priority || "-")}</td>
+          <td>${escapeHtml(item.reason || "")}</td>
+          <td>${item.type === "create_review_task" ? `<button class="secondary acceptance-analytics-create-task" data-report-id="${escapeHtml(report.report_id)}" data-recommendation-id="${escapeHtml(item.recommendation_id)}" type="button">Create Task</button>` : "-"}</td>
+        </tr>
+      `).join("");
+      target.innerHTML = `
+        <div class="summary-grid">
+          ${metric("Readiness", summary.readiness_status || "watch")}
+          ${metric("Cases", summary.case_count || 0)}
+          ${metric("Manual Accepted", summary.manual_accepted_count || 0)}
+          ${metric("Needs Fix", summary.needs_fix_count || 0)}
+          ${metric("Blocked", summary.blocked_count || 0)}
+          ${metric("Stale", report.stale ? "yes" : "-")}
+        </div>
+        <div class="grid2">
+          <label>Report ID <input id="acceptance-analytics-report-id" readonly value="${escapeHtml(report.report_id)}"></label>
+          <label>Source Hash <input readonly value="${escapeHtml(report.source_hash || "")}"></label>
+        </div>
+        <div class="panel-title subhead"><span>Songbook Heatmap</span></div>
+        <table>
+          <thead><tr><th>Song ID</th><th>Status</th><th>Cases</th><th>Manual</th><th>Issues</th><th>Rating</th></tr></thead>
+          <tbody>${heatmapRows || "<tr><td colspan='6'>No songbook metrics yet.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Issue Taxonomy</span></div>
+        <table>
+          <thead><tr><th>Issue</th><th>Count</th><th>Severity</th><th>Example</th></tr></thead>
+          <tbody>${issueRows || "<tr><td colspan='4'>No issues detected.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Recommendations</span></div>
+        <table>
+          <thead><tr><th>Action</th><th>Song</th><th>Priority</th><th>Reason</th><th></th></tr></thead>
+          <tbody>${recommendationRows || "<tr><td colspan='5'>No recommendations.</td></tr>"}</tbody>
+        </table>
+      `;
+      document.querySelectorAll(".acceptance-analytics-create-task").forEach((button) => button.addEventListener("click", async () => {
+        const data = await api(`/api/acceptance/analytics/reports/${encodeURIComponent(button.dataset.reportId)}/recommendations/${encodeURIComponent(button.dataset.recommendationId)}/create-review-task`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        $("acceptance-analytics-report-id").value = data.status || data.task_id || report.report_id;
+      }));
+    }
+
     function selectedAcceptanceSong() {
       const songId = $("acceptance-song-id")?.value || "";
       return ((acceptanceSongbook || {}).songs || []).find((song) => song.song_id === songId) || null;
@@ -2933,6 +3037,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const signoff = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/signoff`).catch(() => ({ signoff: {}, summary: {} }));
       const humanPacks = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/human-review-packs`).catch(() => ({ packs: [], summary: {} }));
       const humanImports = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/review-imports`).catch(() => ({ imports: [], summary: {} }));
+      const analyticsData = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/analytics`).catch(() => ({ analytics: null, summary: {} }));
       const latestHumanPack = (humanPacks.packs || [])[0] || {};
       const latestHumanImport = (humanImports.imports || [])[0] || {};
       const caseRows = cases.map((item) => {
@@ -2981,8 +3086,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <div class="actions">
           <button id="acceptance-add-case" type="button">Add Case</button>
           <button class="secondary" id="acceptance-build-report" type="button">Build Report</button>
+          <button class="secondary" id="acceptance-refresh-suite-analytics" type="button">Refresh Analytics</button>
           <button class="secondary" id="acceptance-signoff" type="button">Signoff</button>
           <button class="secondary" id="acceptance-reset-signoff" type="button">Reset Signoff</button>
+        </div>
+        <div class="panel-title subhead"><span>Suite Analytics</span></div>
+        <div class="quick-grid">
+          ${metric("Readiness", (analyticsData.summary || {}).readiness_status || "missing")}
+          ${metric("Top Issue", (((analyticsData.analytics || {}).issue_taxonomy || [])[0] || {}).issue_type || "-")}
+          ${metric("Recommendations", ((analyticsData.analytics || {}).recommendations || []).length)}
+          ${metric("Stale", (analyticsData.analytics || {}).stale ? "yes" : "-")}
         </div>
         <div class="panel-title subhead"><span>Acceptance Diff</span></div>
         <div class="grid2">
@@ -3091,6 +3204,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       $("acceptance-build-report")?.addEventListener("click", async () => {
         await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/report`, { method: "POST" });
+        await loadAcceptanceSuites();
+      });
+      $("acceptance-refresh-suite-analytics")?.addEventListener("click", async () => {
+        const data = await api(`/api/acceptance/suites/${encodeURIComponent(suiteId)}/analytics/refresh`, { method: "POST" });
+        acceptanceAnalytics = data.analytics || acceptanceAnalytics;
+        renderAcceptanceAnalytics(acceptanceAnalytics);
         await loadAcceptanceSuites();
       });
       $("acceptance-run-diff")?.addEventListener("click", async () => {
@@ -3266,10 +3385,30 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseAcceptanceAnalyticsHtml(analyticsData, release) {
+      const summary = (analyticsData && analyticsData.summary) || {};
+      const report = (analyticsData && analyticsData.analytics) || {};
+      return `
+        <div class="panel-title subhead"><span>Acceptance Analytics</span></div>
+        <div class="summary-grid">
+          ${metric("Readiness", summary.readiness_status || "missing")}
+          ${metric("Cases", summary.case_count || 0)}
+          ${metric("Needs Fix", summary.needs_fix_count || 0)}
+          ${metric("Blocked", summary.blocked_count || 0)}
+          ${metric("Report", report.report_id || "-")}
+          ${metric("Stale", report.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-refresh-acceptance-analytics" type="button">Refresh Acceptance Analytics</button>
+        </div>
+      `;
+    }
+
     function releaseSignoffHtml(signoffData) {
       const summary = (signoffData && signoffData.summary) || {};
       const signoff = (signoffData && signoffData.signoff) || {};
       const gate = summary.acceptance_gate || signoff.acceptance_gate || {};
+      const analyticsGate = gate.acceptance_analytics || {};
       return `
         <div class="panel-title subhead"><span>Release Signoff</span></div>
         <div class="summary-grid">
@@ -3279,6 +3418,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Forced", summary.forced ? "yes" : "-")}
           ${metric("Acceptance Gate", gate.status || "-")}
           ${metric("Acceptance Suite", gate.suite_id || "-")}
+          ${metric("Analytics", analyticsGate.readiness_status || "-")}
         </div>
         <div class="grid2">
           <label>Signed By
@@ -3362,6 +3502,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       bindAction("release-build-zip", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/export/zip`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-refresh-acceptance-analytics", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/acceptance-analytics/refresh`, { method: "POST" });
         await loadReleases();
       });
       bindAction("release-signoff", async () => {

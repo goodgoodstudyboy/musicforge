@@ -41,6 +41,15 @@ def test_webui_contains_acceptance_workspace():
     assert 'id="acceptance-diff-suite"' in html
     assert "Human Review Pack" in html
     assert 'id="acceptance-human-review-response"' in html
+    assert "Acceptance Analytics" in html
+    assert 'id="acceptance-analytics"' in html
+    assert 'id="acceptance-refresh-analytics"' in html
+    assert "/api/acceptance/analytics" in html
+    assert "/analytics/refresh" in html
+    assert "Songbook Heatmap" in html
+    assert "Issue Taxonomy" in html
+    assert "Recommendations" in html
+    assert "create-review-task" in html
     assert "/human-review-packs" in html
     assert "/review-imports" in html
     assert "/diff" in html
@@ -490,6 +499,8 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-acceptance-suite"' in html
     assert "acceptance_suite_id" in html
     assert "Acceptance Gate" in html
+    assert "Refresh Acceptance Analytics" in html
+    assert "/acceptance-analytics" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/${release.hidden ? \"unhide\" : \"hide\"}" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/archive" in html
     assert "Distribution Prep" in html

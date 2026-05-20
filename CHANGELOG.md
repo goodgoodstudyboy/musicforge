@@ -1,5 +1,18 @@
 # Changelog
 
+## v4.7.0 - 2026-05-20
+
+### Added
+- Acceptance Analytics reports for global, suite, release, and project scopes, with deterministic source hashes, stale detection, songbook heatmaps, issue taxonomy, reviewer summaries, trends, weakness rankings, and manual-only recommendations.
+- `acceptance-analytics` CLI for refreshing/reporting analytics with JSON output, report export, and readiness threshold exits.
+- API endpoints for analytics refresh/detail plus explicit recommendation-to-ReviewTask creation with duplicate open-task guards.
+- Studio Acceptance Analytics dashboards for global, suite, and release views.
+- Release Export now writes `acceptance-analytics-summary.json`, and Release Signoff records analytics evidence; blocked analytics readiness returns 409 unless force signoff is explicitly audited.
+- release-check v4.7 smoke covers heatmap coverage, blocked readiness, stale report detection, explicit ReviewTask creation, Release Signoff blocking, forced analytics evidence, and export summaries.
+
+### Verified
+- `python -m pytest tests\test_acceptance_analytics.py tests\test_server_acceptance_analytics.py tests\test_cli_acceptance_analytics.py tests\test_webui.py::test_webui_contains_acceptance_workspace tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v47_acceptance_analytics_smoke -q`
+
 ## v4.6.1 - 2026-05-20
 
 ### Fixed

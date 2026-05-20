@@ -567,7 +567,7 @@ class _ReleaseZipVerifier:
         scan_names = [
             name
             for name in self.entry_names
-            if name in {"manifest.json", "release.json", "tracklist.json", "release-qa.json", "release-signoff.json", "README.txt"}
+            if name in {"manifest.json", "release.json", "tracklist.json", "release-qa.json", "release-signoff.json", "acceptance-analytics-summary.json", "README.txt"}
             or name.endswith(("/project-export.json", "/song-plan.json", "/manifest.json", "/README.txt"))
             or name in {"release-metadata.json", "platform-metadata.csv", "credits.csv"}
             or name.startswith("lyrics/")

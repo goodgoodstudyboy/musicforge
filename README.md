@@ -66,7 +66,7 @@ Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
 
-v4.6.1 includes a local Release Workspace for assembling multiple Project Delivery
+v4.7.0 includes a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks
 each track's Project Final Export, Project Delivery QA, Project Delivery Signoff,
 artifact baseline, ZIP integrity, stale snapshots, and redaction before creating
@@ -88,6 +88,7 @@ python -m song_agent.cli acceptance-check --profile midi_smoke --auto-review --r
 python -m song_agent.cli acceptance-check --profile developer_manual --render-audio auto --report-out runs\acceptance-v450.json
 python -m song_agent.cli acceptance-check --profile release_candidate --render-audio auto
 python -m song_agent.cli acceptance-diff runs\acceptance-baseline.json runs\acceptance-current.json --json
+python -m song_agent.cli acceptance-analytics --scope global --refresh --json
 ```
 
 Acceptance Profiles make the gate repeatable: `midi_smoke` is a synthetic
@@ -115,6 +116,16 @@ work records without applying edits automatically.
 ```powershell
 python -m song_agent.cli verify-human-review-pack path\to\human-review-pack.zip --json --report-out human-review-verification-report.json
 ```
+
+Acceptance Analytics turns Acceptance Suites, Regression Songbook cases, Human
+Review Pack imports, and follow-up ReviewTasks into deterministic quality
+reports. It produces songbook heatmaps, issue taxonomy, reviewer summaries,
+trend and weakness rankings, and manual-only recommendations. Recommendations
+can create ReviewTasks only through an explicit user action; analytics never
+generates candidates, applies edits, closes tasks, or signs releases. Release
+Export writes `acceptance-analytics-summary.json`, and Release Signoff records
+analytics evidence. A blocked analytics readiness status prevents normal release
+signoff until force signoff is used with an audited override.
 
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,

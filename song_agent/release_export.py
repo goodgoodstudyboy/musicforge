@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from song_agent.final_export import final_export_dir
+from song_agent.acceptance_analytics import AcceptanceAnalyticsStore, AnalyticsScope, write_acceptance_analytics_summary
 from song_agent.projectio import slugify, write_json
 from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -90,8 +91,11 @@ def build_release_export_bundle(
     write_json(export_dir / "tracklist.json", {"tracks": tracklist})
     write_json(export_dir / "release-qa.json", qa_public)
     write_json(export_dir / "release-signoff.json", signoff_public)
+    analytics_summary = _release_acceptance_analytics_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
+    if (export_dir / "acceptance-analytics-summary.json").exists():
+        copied_files.append(_file_record(export_dir, export_dir / "acceptance-analytics-summary.json"))
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -104,6 +108,7 @@ def build_release_export_bundle(
         "sidecars": {
             "release_signoff": _release_signoff_sidecar_record(signoff_public),
         },
+        "acceptance_analytics": analytics_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -365,6 +370,17 @@ def _release_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[str,
 
 def _release_signoff_hash_payload(signoff_public: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in signoff_public.items() if key not in SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
+
+
+def _release_acceptance_analytics_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        analytics_store = AcceptanceAnalyticsStore(release_store=release_store, project_store=release_store.project_store)
+        report = analytics_store.refresh(AnalyticsScope.from_values(scope_type="release", release_id=release_id))
+    except Exception:
+        summary = {"status": "missing", "readiness_status": "missing"}
+        write_json(export_dir / "acceptance-analytics-summary.json", summary)
+        return summary
+    return write_acceptance_analytics_summary(export_dir / "acceptance-analytics-summary.json", report)
 
 
 def _validate_relative_path(path: str) -> str:

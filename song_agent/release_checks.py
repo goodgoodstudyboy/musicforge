@@ -210,6 +210,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.4 music acceptance lab smoke", *_v44_music_acceptance_lab_smoke(root))
     report.add("v4.5 acceptance profiles songbook smoke", *_v45_acceptance_profiles_songbook_smoke(root))
     report.add("v4.6 human review pack smoke", *_v46_human_review_pack_smoke(root))
+    report.add("v4.7 acceptance analytics smoke", *_v47_acceptance_analytics_smoke(root))
     return report
 
 
@@ -5483,6 +5484,144 @@ def _v46_review_response(pack: dict[str, Any], *, needs_fix_song_id: str | None 
         "reviewed_at": "2026-05-19T00:00:00+00:00",
         "reviews": reviews,
     }
+
+
+def _v47_acceptance_analytics_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v47-acceptance-analytics-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Acceptance Analytics Track")
+        suite_status, created_suite = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.7 analytics", "profile_id": "developer_manual", "require_audio_if_renderer_configured": False})
+        suite_id = created_suite.get("suite", {}).get("suite_id")
+        case_status, case = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases",
+            {
+                "name": "Analytics Project Case",
+                "source_type": "project_version",
+                "project_id": project_id,
+                "version_id": "v001",
+                "song_id": "rap_beat_001",
+                "request": {"title": "Analytics Project Case", "language": "English", "style": "rap beat", "theme": "analytics", "duration_seconds": 90},
+            },
+        )
+        case_id = case.get("case", {}).get("case_id")
+        generate_status, _generated = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        health_status, _health = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        review_status, _review = _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review",
+            {
+                "rating": 1,
+                "status": "rejected",
+                "playback_confirmed": True,
+                "review_mode": "manual",
+                "audio_mode": "midi",
+                "notes": "Hook, rhythm, melody, arrangement, mix, structure, and ending all need repair.",
+                "tags": ["hook", "rhythm", "melody", "arrangement", "mix", "structure", "ending"],
+            },
+        )
+        report_status, _acceptance_report = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        global_status, global_report = _release_http_json(server, "POST", "/api/acceptance/analytics/refresh", {"scope": "global"})
+        suite_analytics_status, suite_report = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/analytics/refresh")
+        report_id = suite_report.get("analytics", {}).get("report_id")
+        recommendation_id = next(
+            (
+                item.get("recommendation_id")
+                for item in suite_report.get("analytics", {}).get("recommendations", [])
+                if isinstance(item, dict) and item.get("type") == "create_review_task"
+            ),
+            "",
+        )
+        task_status, task_response = _release_http_json(server, "POST", f"/api/acceptance/analytics/reports/{report_id}/recommendations/{recommendation_id}/create-review-task", {})
+        duplicate_task_status, duplicate_task_response = _release_http_json(server, "POST", f"/api/acceptance/analytics/reports/{report_id}/recommendations/{recommendation_id}/create-review-task", {})
+
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Analytics Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        release_analytics_status, release_analytics = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, export_response = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        blocked_sign_status, blocked_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+        force_sign_status, force_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "v4.7 analytics blocked smoke"})
+        final_manifest = read_json(base / ".musicforge" / "releases" / release_id / "release-export" / "manifest.json")
+        analytics_summary_path = base / ".musicforge" / "releases" / release_id / "release-export" / "acceptance-analytics-summary.json"
+        analytics_summary = read_json(analytics_summary_path) if analytics_summary_path.exists() else {}
+
+        _release_http_json(
+            server,
+            "POST",
+            f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review",
+            {
+                "rating": 5,
+                "status": "accepted",
+                "playback_confirmed": True,
+                "review_mode": "manual",
+                "audio_mode": "midi",
+                "notes": "Manual reviewer confirms the analytics case has been repaired.",
+            },
+        )
+        stale_status, stale_detail = _release_http_json(server, "GET", f"/api/acceptance/analytics/reports/{report_id}")
+
+        global_heatmap = len(global_report.get("analytics", {}).get("songbook_heatmap", []))
+        issue_count = len(suite_report.get("analytics", {}).get("issue_taxonomy", []))
+        ok = (
+            suite_status == 201
+            and case_status == 201
+            and generate_status == 200
+            and health_status == 200
+            and review_status == 200
+            and report_status == 200
+            and global_status == 201
+            and global_heatmap == 12
+            and suite_analytics_status == 201
+            and suite_report.get("summary", {}).get("readiness_status") == "blocked"
+            and issue_count >= 4
+            and task_status == 201
+            and task_response.get("status") == "created"
+            and duplicate_task_status == 200
+            and duplicate_task_response.get("status") == "existing"
+            and stale_status == 200
+            and stale_detail.get("analytics", {}).get("stale") is True
+            and release_status == 201
+            and track_status == 200
+            and qa_status == 200
+            and export_status == 200
+            and zip_status == 200
+            and release_analytics_status == 201
+            and release_analytics.get("summary", {}).get("readiness_status") == "blocked"
+            and blocked_sign_status == 409
+            and "Acceptance analytics" in str(blocked_sign.get("error") or "")
+            and force_sign_status == 200
+            and force_sign.get("signoff", {}).get("acceptance_gate", {}).get("acceptance_analytics", {}).get("readiness_status") == "blocked"
+            and final_manifest.get("acceptance_analytics", {}).get("readiness_status") == "blocked"
+            and analytics_summary.get("readiness_status") == "blocked"
+        )
+        return ok, (
+            f"heatmap={global_heatmap}, issues={issue_count}, readiness={suite_report.get('summary', {}).get('readiness_status')}, "
+            f"task={task_status}/{duplicate_task_status}, stale={stale_detail.get('analytics', {}).get('stale')}, "
+            f"release_gate={blocked_sign_status}/{force_sign_status}, export_summary={analytics_summary.get('readiness_status')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

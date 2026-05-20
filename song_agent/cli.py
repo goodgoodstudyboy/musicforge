@@ -139,6 +139,19 @@ def build_acceptance_diff_parser() -> argparse.ArgumentParser:
     return diff_parser
 
 
+def build_acceptance_analytics_parser() -> argparse.ArgumentParser:
+    analytics_parser = argparse.ArgumentParser(description="Build or read local MusicForge Acceptance Analytics.")
+    analytics_parser.add_argument("--scope", choices=["global", "suite", "release", "project"], default="global", help="Analytics scope.")
+    analytics_parser.add_argument("--suite-id", default=None, help="Suite id for suite scope.")
+    analytics_parser.add_argument("--release-id", default=None, help="Release id for release scope.")
+    analytics_parser.add_argument("--project-id", default=None, help="Project id for project scope.")
+    analytics_parser.add_argument("--refresh", action="store_true", help="Recalculate and persist a fresh analytics report.")
+    analytics_parser.add_argument("--json", action="store_true", help="Print the full analytics report as JSON.")
+    analytics_parser.add_argument("--report-out", type=Path, default=None, help="Write the analytics report to this JSON file.")
+    analytics_parser.add_argument("--fail-on", choices=["blocked", "needs_work", "watch"], default=None, help="Exit 1 when readiness is at or above this severity.")
+    return analytics_parser
+
+
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "request",
@@ -339,6 +352,22 @@ def _main() -> None:
         else:
             print_acceptance_diff_report(report)
         raise SystemExit(0 if report.get("status") == "passed" else 1)
+    elif raw_args and raw_args[0] == "acceptance-analytics":
+        from song_agent.acceptance_analytics import AcceptanceAnalyticsStore, AnalyticsScope, acceptance_analytics_summary
+
+        parser = build_acceptance_analytics_parser()
+        args = parser.parse_args(raw_args[1:])
+        scope = AnalyticsScope.from_values(scope_type=args.scope, suite_id=args.suite_id, release_id=args.release_id, project_id=args.project_id)
+        store = AcceptanceAnalyticsStore()
+        report = store.refresh(scope) if args.refresh else store.latest_report(scope)
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_acceptance_analytics_report(report)
+        summary = acceptance_analytics_summary(report)
+        raise SystemExit(1 if _acceptance_analytics_fail_on(str(summary.get("readiness_status") or ""), args.fail_on) else 0)
     else:
         parser = build_parser()
         args = parser.parse_args(raw_args)
@@ -503,6 +532,28 @@ def print_acceptance_diff_report(report: dict[str, Any]) -> None:
     print(f"songs: {summary.get('song_count', 0)}")
     print(f"new_blockers: {summary.get('new_blocker_count', 0)}")
     print(f"rating_regressions: {summary.get('rating_regression_count', 0)}")
+
+
+def print_acceptance_analytics_report(report: dict[str, Any]) -> None:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    source = report.get("source_summary") if isinstance(report.get("source_summary"), dict) else {}
+    print("MusicForge acceptance-analytics")
+    print(f"readiness: {summary.get('readiness_status')}")
+    print(f"scope: {(report.get('scope') or {}).get('type') if isinstance(report.get('scope'), dict) else 'global'}")
+    print(f"report: {report.get('report_id')}")
+    print(f"suites: {source.get('suite_count', 0)}")
+    print(f"cases: {summary.get('case_count', 0)}")
+    print(f"manual_coverage: {summary.get('manual_coverage_rate', 0.0)}")
+    print(f"average_rating: {summary.get('average_rating')}")
+    print(f"issues: {summary.get('issue_count', 0)}")
+    print(f"recommendations: {summary.get('recommendation_count', 0)}")
+
+
+def _acceptance_analytics_fail_on(readiness: str, fail_on: str | None) -> bool:
+    if not fail_on:
+        return False
+    order = {"ready": 0, "watch": 1, "needs_work": 2, "blocked": 3, "empty": 0, "missing": 0}
+    return order.get(readiness, 0) >= order.get(fail_on, 0)
 
 
 def _writable_status(path: Path) -> str:

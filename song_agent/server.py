@@ -216,6 +216,15 @@ from song_agent.submission_verifier import (
     verify_submission_package,
     write_submission_verification_report,
 )
+from song_agent.acceptance_analytics import (
+    AcceptanceAnalyticsError,
+    AcceptanceAnalyticsNotFoundError,
+    AcceptanceAnalyticsStateError,
+    AcceptanceAnalyticsStore,
+    AnalyticsScope,
+    acceptance_analytics_summary,
+    release_acceptance_analytics_evidence,
+)
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.music_acceptance import (
@@ -2382,6 +2391,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.human_review_pack_store  # type: ignore[attr-defined]
 
     @property
+    def acceptance_analytics_store(self) -> AcceptanceAnalyticsStore:
+        return self.server.acceptance_analytics_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2533,6 +2546,25 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 self._send_json({"ok": True, "songbook": builtin_songbook()})
+                return
+
+            if path == "/api/acceptance/analytics":
+                self._handle_acceptance_analytics_root(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/analytics/refresh":
+                self._handle_acceptance_analytics_refresh(method, parsed.query)
+                return
+
+            analytics_recommendation_route = _match_acceptance_analytics_recommendation_route(path)
+            if analytics_recommendation_route is not None:
+                report_id, recommendation_id = analytics_recommendation_route
+                self._handle_acceptance_analytics_recommendation(method, report_id, recommendation_id)
+                return
+
+            analytics_report_route = _match_acceptance_analytics_report_route(path)
+            if analytics_report_route is not None:
+                self._handle_acceptance_analytics_report(method, analytics_report_route)
                 return
 
             if path == "/api/distribution/profiles":
@@ -3785,6 +3817,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_review_tasks_root(method, project_id, query_string)
             return
 
+        if tail == "/acceptance-analytics":
+            self._handle_project_acceptance_analytics(method, project_id)
+            return
+
+        if tail == "/acceptance-analytics/refresh":
+            self._handle_project_acceptance_analytics_refresh(method, project_id)
+            return
+
         editor_preview_match = _match_project_editor_preview_tail(tail)
         if editor_preview_match is not None:
             preview_id, action = editor_preview_match
@@ -4643,6 +4683,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_submission_route(method, release_id, tail.removeprefix("/submissions"))
                 return
 
+            if tail == "/acceptance-analytics":
+                self._handle_release_acceptance_analytics(method, release_id)
+                return
+
+            if tail == "/acceptance-analytics/refresh":
+                self._handle_release_acceptance_analytics_refresh(method, release_id)
+                return
+
             if tail == "/export":
                 if method == "GET":
                     try:
@@ -4763,7 +4811,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         document = self.release_store.get_release(release_id)
         report = self._get_or_refresh_release_qa(release_id, refresh=True, options={})
         force = bool(payload.get("force", False))
-        acceptance_gate = self._release_acceptance_gate(payload)
+        acceptance_gate = self._release_acceptance_gate({**payload, "release_id": release_id, "force": force})
         if acceptance_gate.get("status") == "failed" and not force:
             self._send_error(HTTPStatus.CONFLICT, str(acceptance_gate.get("message") or "Acceptance release gate failed."))
             return
@@ -4813,8 +4861,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
     def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
         suite_id = str(payload.get("acceptance_suite_id") or "").strip()
+        analytics_evidence = self._release_acceptance_analytics_gate(payload)
         if not suite_id:
-            return {}
+            if not analytics_evidence:
+                return {}
+            gate = {"acceptance_analytics": analytics_evidence}
+            if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
+                gate["status"] = "failed"
+                gate["message"] = "Acceptance analytics readiness is blocked."
+            return gate
         report = self.acceptance_store.read_report(suite_id)
         summary = acceptance_report_summary(report)
         acceptance_status = str(summary.get("acceptance_status") or "")
@@ -4822,7 +4877,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         coverage_status = str(summary.get("songbook_coverage_status") or "not_applicable")
         human_review_pack = summary.get("human_review_pack") if isinstance(summary.get("human_review_pack"), dict) else {}
         ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed" and coverage_status in {"complete", "not_applicable"}
-        return {
+        gate = {
             "status": "passed" if ok else "failed",
             "suite_id": suite_id,
             "profile_id": summary.get("profile_id"),
@@ -4837,6 +4892,26 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "human_review_pack": human_review_pack,
             "message": "Acceptance suite is not manual release-ready.",
         }
+        if analytics_evidence:
+            gate["acceptance_analytics"] = analytics_evidence
+            if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
+                gate["status"] = "failed"
+                gate["message"] = "Acceptance analytics readiness is blocked."
+        return gate
+
+    def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        report_id = str(payload.get("acceptance_analytics_report_id") or "").strip()
+        release_id = str(payload.get("release_id") or "").strip()
+        try:
+            if report_id:
+                report = self.acceptance_analytics_store.get_report(report_id)
+            elif release_id:
+                report = self.acceptance_analytics_store.latest_report(AnalyticsScope.from_values(scope_type="release", release_id=release_id))
+            else:
+                return {}
+        except (AcceptanceAnalyticsError, AcceptanceAnalyticsNotFoundError, ReleaseNotFoundError, ValueError):
+            return {"status": "missing", "warning": "acceptance_analytics_unavailable"}
+        return release_acceptance_analytics_evidence(report)
 
     def _handle_release_signoff_reset(self, method: str, release_id: str) -> None:
         if method != "POST":
@@ -5420,6 +5495,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "suite_id": suite_id, "other_suite_id": other_suite_id, "diff": diff, "summary": diff.get("summary", {})})
                 return
 
+            if parts == ["analytics"]:
+                self._handle_suite_acceptance_analytics(method, suite_id)
+                return
+
+            if parts == ["analytics", "refresh"]:
+                self._handle_suite_acceptance_analytics_refresh(method, suite_id)
+                return
+
             if parts == ["human-review-packs"]:
                 if method == "GET":
                     packs = self.human_review_pack_store.list_packs(suite_id)
@@ -5551,6 +5634,144 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AcceptanceValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except HumanReviewPackValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_suite_acceptance_analytics(self, method: str, suite_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            scope = AnalyticsScope.from_values(scope_type="suite", suite_id=suite_id)
+            report = self.acceptance_analytics_store.latest_report(scope)
+            self._send_json({"ok": True, "suite_id": suite_id, "analytics": report, "summary": acceptance_analytics_summary(report)})
+        except AcceptanceAnalyticsNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (AcceptanceAnalyticsError, AcceptanceNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_suite_acceptance_analytics_refresh(self, method: str, suite_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            scope = AnalyticsScope.from_values(scope_type="suite", suite_id=suite_id)
+            report = self.acceptance_analytics_store.refresh(scope, now=_utc_now())
+            self._send_json({"ok": True, "suite_id": suite_id, "analytics": report, "summary": acceptance_analytics_summary(report)}, status=HTTPStatus.CREATED)
+        except (AcceptanceAnalyticsError, AcceptanceNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_acceptance_analytics(self, method: str, project_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            scope = AnalyticsScope.from_values(scope_type="project", project_id=project_id)
+            report = self.acceptance_analytics_store.latest_report(scope)
+            self._send_json({"ok": True, "project_id": project_id, "analytics": report, "summary": acceptance_analytics_summary(report)})
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+        except (AcceptanceAnalyticsError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_project_acceptance_analytics_refresh(self, method: str, project_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.project_store.get_project(project_id)
+            scope = AnalyticsScope.from_values(scope_type="project", project_id=project_id)
+            report = self.acceptance_analytics_store.refresh(scope, now=_utc_now())
+            self._send_json({"ok": True, "project_id": project_id, "analytics": report, "summary": acceptance_analytics_summary(report)}, status=HTTPStatus.CREATED)
+        except FileNotFoundError:
+            self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
+        except (AcceptanceAnalyticsError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_release_acceptance_analytics(self, method: str, release_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.release_store.get_release(release_id)
+            scope = AnalyticsScope.from_values(scope_type="release", release_id=release_id)
+            report = self.acceptance_analytics_store.latest_report(scope)
+            self._send_json({"ok": True, "release_id": release_id, "analytics": report, "summary": acceptance_analytics_summary(report)})
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (AcceptanceAnalyticsError, AcceptanceNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_release_acceptance_analytics_refresh(self, method: str, release_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            self.release_store.get_release(release_id)
+            scope = AnalyticsScope.from_values(scope_type="release", release_id=release_id)
+            report = self.acceptance_analytics_store.refresh(scope, now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "analytics": report, "summary": acceptance_analytics_summary(report)}, status=HTTPStatus.CREATED)
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (AcceptanceAnalyticsError, AcceptanceNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_analytics_root(self, method: str, query_string: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            scope = _analytics_scope_from_query(query_string)
+            report = self.acceptance_analytics_store.latest_report(scope)
+            self._send_json({"ok": True, "analytics": report, "summary": acceptance_analytics_summary(report)})
+        except AcceptanceAnalyticsNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (AcceptanceAnalyticsError, AcceptanceNotFoundError, ReleaseNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_analytics_refresh(self, method: str, query_string: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            payload = self._optional_json_body()
+            query = parse_qs(query_string)
+            scope = AnalyticsScope.from_values(
+                scope_type=str(payload.get("scope") or _query_value(query, "scope") or "global"),
+                suite_id=payload.get("suite_id") or _query_value(query, "suite_id") or None,
+                release_id=payload.get("release_id") or _query_value(query, "release_id") or None,
+                project_id=payload.get("project_id") or _query_value(query, "project_id") or None,
+            )
+            report = self.acceptance_analytics_store.refresh(scope, now=_utc_now())
+            self._send_json({"ok": True, "analytics": report, "summary": acceptance_analytics_summary(report)}, status=HTTPStatus.CREATED)
+        except (AcceptanceAnalyticsError, AcceptanceNotFoundError, ReleaseNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_analytics_report(self, method: str, report_id: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            report = self.acceptance_analytics_store.get_report(report_id)
+            self._send_json({"ok": True, "analytics": report, "summary": acceptance_analytics_summary(report)})
+        except AcceptanceAnalyticsNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceAnalyticsError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_analytics_recommendation(self, method: str, report_id: str, recommendation_id: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            result = self.acceptance_analytics_store.create_review_task_from_recommendation(report_id, recommendation_id, self._optional_json_body())
+            status = HTTPStatus.CREATED if result.get("status") == "created" else HTTPStatus.OK
+            self._send_json({"ok": True, **result}, status=status)
+        except AcceptanceAnalyticsNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceAnalyticsStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (AcceptanceAnalyticsError, FileNotFoundError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> dict[str, Any]:
@@ -10050,6 +10271,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.acceptance_store = AcceptanceStore(project_store=self.project_store)
         self.human_review_pack_store = HumanReviewPackStore(self.acceptance_store, project_store=self.project_store)
+        self.acceptance_analytics_store = AcceptanceAnalyticsStore(acceptance_store=self.acceptance_store, project_store=self.project_store, release_store=self.release_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -10518,6 +10740,34 @@ def _match_acceptance_route(path: str) -> tuple[str, str] | None:
         suite_id, tail = rest.split("/", 1)
         return unquote(suite_id), "/" + tail
     return unquote(rest), ""
+
+
+def _match_acceptance_analytics_report_route(path: str) -> str | None:
+    prefix = "/api/acceptance/analytics/reports/"
+    if not path.startswith(prefix):
+        return None
+    report_id = unquote(path[len(prefix) :].strip("/"))
+    return report_id or None
+
+
+def _match_acceptance_analytics_recommendation_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/analytics/reports/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if len(parts) == 4 and parts[1] == "recommendations" and parts[3] == "create-review-task":
+        return parts[0], parts[2]
+    return None
+
+
+def _analytics_scope_from_query(query_string: str) -> AnalyticsScope:
+    query = parse_qs(query_string)
+    return AnalyticsScope.from_values(
+        scope_type=_query_value(query, "scope") or "global",
+        suite_id=_query_value(query, "suite_id") or None,
+        release_id=_query_value(query, "release_id") or None,
+        project_id=_query_value(query, "project_id") or None,
+    )
 
 
 def _match_distribution_profile_route(path: str) -> str | None:
