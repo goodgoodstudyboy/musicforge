@@ -231,6 +231,65 @@ def build_acceptance_fix_plan_parser() -> argparse.ArgumentParser:
     return plan_parser
 
 
+def build_planning_ruleset_parser() -> argparse.ArgumentParser:
+    ruleset_parser = argparse.ArgumentParser(description="Manage local MusicForge Planning Rule Sets.")
+    subparsers = ruleset_parser.add_subparsers(dest="action", required=True)
+
+    create = subparsers.add_parser("create", help="Create a Planning Rule Set.")
+    create.add_argument("--template", default="baseline", help="Template: baseline, manual_conservative, kb_trust_light, waiver_strict, synthetic_strict.")
+    create.add_argument("--name", default=None)
+    create.add_argument("--description", default=None)
+
+    subparsers.add_parser("list", help="List Planning Rule Sets.").add_argument("--include-archived", action="store_true")
+
+    show = subparsers.add_parser("show", help="Show a Planning Rule Set.")
+    show.add_argument("ruleset_id")
+
+    clone = subparsers.add_parser("clone", help="Clone a Planning Rule Set.")
+    clone.add_argument("ruleset_id")
+    clone.add_argument("--name", default=None)
+
+    archive = subparsers.add_parser("archive", help="Archive a Planning Rule Set.")
+    archive.add_argument("ruleset_id")
+
+    validate = subparsers.add_parser("validate", help="Validate a Planning Rule Set.")
+    validate.add_argument("ruleset_id")
+
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write the command result as JSON.")
+    return ruleset_parser
+
+
+def build_planning_simulation_parser() -> argparse.ArgumentParser:
+    simulation_parser = argparse.ArgumentParser(description="Run local MusicForge Planning Rule Simulations.")
+    subparsers = simulation_parser.add_subparsers(dest="action", required=True)
+
+    run = subparsers.add_parser("run", help="Run a Planning Rule Simulation.")
+    run.add_argument("--ruleset-id", required=True)
+    run.add_argument("--release-id", default=None)
+    run.add_argument("--project-id", default=None)
+    run.add_argument("--review-id", action="append", dest="review_ids", default=[])
+    run.add_argument("--include-warning-reviews", action="store_true", default=True)
+    run.add_argument("--exclude-synthetic-only", action="store_true")
+
+    show = subparsers.add_parser("show", help="Show a Planning Rule Simulation.")
+    show.add_argument("simulation_id")
+
+    refresh = subparsers.add_parser("refresh", help="Refresh a Planning Rule Simulation.")
+    refresh.add_argument("simulation_id")
+
+    archive = subparsers.add_parser("archive", help="Archive a Planning Rule Simulation.")
+    archive.add_argument("simulation_id")
+
+    subparsers.add_parser("list", help="List Planning Rule Simulations.").add_argument("--include-archived", action="store_true")
+
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write the command result as JSON.")
+    return simulation_parser
+
+
 def build_acceptance_kb_parser() -> argparse.ArgumentParser:
     kb_parser = argparse.ArgumentParser(description="Manage the local MusicForge Acceptance Knowledge Base.")
     subparsers = kb_parser.add_subparsers(dest="action", required=True)
@@ -568,6 +627,70 @@ def _main() -> None:
         else:
             print_acceptance_fix_plan_result(result)
         raise SystemExit(0)
+    elif raw_args and raw_args[0] == "planning-ruleset":
+        from song_agent.planning_rule_simulation import PlanningRuleSimulationStore, ruleset_summary
+
+        parser = build_planning_ruleset_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = PlanningRuleSimulationStore()
+        if args.action == "create":
+            payload = {"template": args.template, "name": args.name, "description": args.description}
+            ruleset = store.create_ruleset(payload)
+            result = {"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)}
+        elif args.action == "list":
+            rulesets = store.list_rulesets(include_archived=args.include_archived)
+            result = {"ok": True, "rulesets": [ruleset.to_dict() for ruleset in rulesets], "summary": {"ruleset_count": len(rulesets)}}
+        elif args.action == "show":
+            ruleset = store.read_ruleset(args.ruleset_id)
+            result = {"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)}
+        elif args.action == "clone":
+            ruleset = store.clone_ruleset(args.ruleset_id, {"name": args.name} if args.name else {})
+            result = {"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)}
+        elif args.action == "archive":
+            ruleset = store.archive_ruleset(args.ruleset_id)
+            result = {"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)}
+        elif args.action == "validate":
+            result = {"ok": True, "validation": store.validate_ruleset(args.ruleset_id)}
+        else:
+            parser.error("unknown planning-ruleset action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_planning_ruleset_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "planning-simulation":
+        from song_agent.planning_rule_simulation import PlanningRuleSimulationStore, planning_simulation_summary
+
+        parser = build_planning_simulation_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = PlanningRuleSimulationStore()
+        if args.action == "run":
+            scope = {"type": "release" if args.release_id else "project" if args.project_id else "global", "release_id": args.release_id, "project_id": args.project_id}
+            simulation = store.create_simulation({"ruleset_id": args.ruleset_id, "scope": scope, "review_ids": args.review_ids, "include_warning_reviews": args.include_warning_reviews, "exclude_synthetic_only": args.exclude_synthetic_only})
+            result = {"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)}
+        elif args.action == "show":
+            simulation = store.read_simulation(args.simulation_id)
+            result = {"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)}
+        elif args.action == "refresh":
+            simulation = store.refresh_simulation(args.simulation_id)
+            result = {"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)}
+        elif args.action == "archive":
+            simulation = store.archive_simulation(args.simulation_id)
+            result = {"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)}
+        elif args.action == "list":
+            simulations = store.list_simulations(include_archived=args.include_archived)
+            result = {"ok": True, "simulations": [simulation.to_dict() for simulation in simulations], "summary": {"simulation_count": len(simulations)}}
+        else:
+            parser.error("unknown planning-simulation action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_planning_simulation_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "acceptance-kb":
         from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
 
@@ -825,6 +948,36 @@ def print_acceptance_fix_plan_result(result: dict[str, Any]) -> None:
     print(f"kb_matches: {summary.get('kb_match_count', 0)}")
     if result.get("fix_sprint"):
         print(f"created_fix_sprint: {(result.get('fix_sprint') or {}).get('fix_sprint_id')}")
+
+
+def print_planning_ruleset_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    ruleset = result.get("ruleset") if isinstance(result.get("ruleset"), dict) else {}
+    validation = result.get("validation") if isinstance(result.get("validation"), dict) else {}
+    print("MusicForge planning-ruleset")
+    if validation:
+        print(f"validation: {validation.get('status')}")
+        print(f"ruleset: {validation.get('ruleset_id')}")
+        return
+    print(f"ruleset: {summary.get('ruleset_id') or ruleset.get('ruleset_id') or '-'}")
+    print(f"status: {summary.get('status') or ruleset.get('status') or '-'}")
+    print(f"template: {summary.get('template') or '-'}")
+    if result.get("rulesets") is not None:
+        print(f"rulesets: {len(result.get('rulesets') or [])}")
+
+
+def print_planning_simulation_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    simulation = result.get("simulation") if isinstance(result.get("simulation"), dict) else {}
+    print("MusicForge planning-simulation")
+    print(f"simulation: {summary.get('simulation_id') or simulation.get('simulation_id') or '-'}")
+    print(f"ruleset: {summary.get('ruleset_id') or simulation.get('ruleset_id') or '-'}")
+    print(f"reviews: {summary.get('review_count', 0)}")
+    print(f"items: {summary.get('item_count', 0)}")
+    print(f"alignment: {summary.get('baseline_alignment_score')} -> {summary.get('simulated_alignment_score')} ({summary.get('alignment_delta')})")
+    print(f"recommendation: {summary.get('recommendation') or '-'}")
+    if result.get("simulations") is not None:
+        print(f"simulations: {len(result.get('simulations') or [])}")
 
 
 def print_acceptance_kb_result(result: dict[str, Any]) -> None:

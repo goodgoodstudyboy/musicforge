@@ -1,5 +1,15 @@
 # Changelog
 
+## v4.12.0 - 2026-05-21
+
+### Added
+- Planning Rule Set and Planning Rule Simulation stores for deterministic Outcome Review replay.
+- Planning ruleset/simulation API, CLI, Studio panel, Project/Release/Final Export summaries, and Release Signoff evidence.
+- release-check v4.12 smoke covering synthetic-only penalty, export summaries, signoff gate, stale guard, and redaction.
+
+### Verified
+- `python -m pytest tests\test_planning_rule_simulation.py tests\test_server_planning_rule_simulation.py tests\test_cli_planning_rule_simulation.py tests\test_release_check.py::test_v412_planning_rule_simulation_smoke -q`
+
 ## v4.11.1 - 2026-05-21
 
 ### Fixed

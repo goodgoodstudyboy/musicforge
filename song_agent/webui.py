@@ -1234,6 +1234,20 @@ def panel_html() -> str:
         <div id="acceptance-fix-plans" class="release-detail"><div class="empty">No acceptance fix plans yet.</div></div>
         <div class="panel-title subhead"><span>Fix Plan Outcome Review</span></div>
         <div id="acceptance-fix-plan-review" class="release-detail"><div class="empty">Select a Fix Plan and refresh Outcome Review.</div></div>
+        <div class="panel-title subhead"><span>Planning Rule Simulation</span></div>
+        <div class="actions">
+          <select id="planning-ruleset-template">
+            <option value="baseline">baseline</option>
+            <option value="manual_conservative">manual_conservative</option>
+            <option value="kb_trust_light">kb_trust_light</option>
+            <option value="waiver_strict">waiver_strict</option>
+            <option value="synthetic_strict">synthetic_strict</option>
+          </select>
+          <button class="secondary" id="planning-ruleset-create" type="button">Create Rule Set</button>
+          <button class="secondary" id="planning-simulation-run" type="button">Run Simulation</button>
+          <button class="secondary" id="planning-simulation-refresh" type="button">Refresh Simulations</button>
+        </div>
+        <div id="planning-rule-simulation" class="release-detail"><div class="empty">Simulation only. No production rules are changed.</div></div>
         <div class="panel-title subhead"><span>Knowledge Base</span></div>
         <div class="actions">
           <button class="secondary" id="acceptance-kb-refresh" type="button">Refresh KB</button>
@@ -1326,6 +1340,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let acceptanceFixSprints = [];
     let acceptanceFixPlans = [];
     let acceptanceFixPlanReview = null;
+    let planningRuleSets = [];
+    let planningSimulations = [];
     let acceptanceKb = null;
     let acceptanceKbRecommendation = null;
     let projects = [];
@@ -1421,6 +1437,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadAcceptanceAnalytics();
       await loadAcceptanceFixSprints();
       await loadAcceptanceKb();
+      await loadPlanningSimulations();
       await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
@@ -1430,6 +1447,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadAcceptanceAnalytics();
         loadAcceptanceFixSprints();
         loadAcceptanceKb();
+        loadPlanningSimulations();
         loadAcceptanceSuites();
         loadAssets();
         loadReferences();
@@ -1656,6 +1674,35 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         $("acceptance-fix-plan-review").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
       }
     });
+    $("planning-ruleset-create").addEventListener("click", async () => {
+      try {
+        await api("/api/acceptance/planning-rulesets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ template: $("planning-ruleset-template").value }),
+        });
+        await loadPlanningSimulations();
+      } catch (err) {
+        $("planning-rule-simulation").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("planning-simulation-run").addEventListener("click", async () => {
+      try {
+        const ruleset = planningRuleSets[0];
+        if (!ruleset) throw new Error("Create a Planning Rule Set first.");
+        const reviewId = (acceptanceFixPlanReview || {}).review_id;
+        if (!reviewId) throw new Error("Refresh an Outcome Review first.");
+        await api("/api/acceptance/planning-simulations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ruleset_id: ruleset.ruleset_id, review_ids: [reviewId], include_warning_reviews: true }),
+        });
+        await loadPlanningSimulations();
+      } catch (err) {
+        $("planning-rule-simulation").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("planning-simulation-refresh").addEventListener("click", loadPlanningSimulations);
     $("acceptance-kb-refresh").addEventListener("click", async () => {
       try {
         const data = await api("/api/acceptance/kb/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "global" }) });
@@ -2337,6 +2384,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         acceptanceFixPlanReview = null;
       }
       renderAcceptanceFixPlanReview();
+    }
+
+    async function loadPlanningSimulations() {
+      try {
+        const [rulesetsData, simulationsData] = await Promise.all([
+          api("/api/acceptance/planning-rulesets"),
+          api("/api/acceptance/planning-simulations"),
+        ]);
+        planningRuleSets = rulesetsData.rulesets || [];
+        planningSimulations = simulationsData.simulations || [];
+      } catch (err) {
+        planningRuleSets = [];
+        planningSimulations = [];
+      }
+      renderPlanningSimulations();
     }
 
     async function loadAcceptanceKb() {
@@ -3315,6 +3377,40 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <tbody>${items || "<tr><td colspan='5'>No item outcomes.</td></tr>"}</tbody>
         </table>
         ${hints ? `<ul>${hints}</ul>` : ""}
+      `;
+    }
+
+    function renderPlanningSimulations() {
+      const target = $("planning-rule-simulation");
+      if (!target) return;
+      const ruleset = planningRuleSets[0] || {};
+      if (!planningSimulations.length) {
+        target.innerHTML = `<div class="empty">Simulation only. Rule sets: ${escapeHtml(planningRuleSets.length)}. Latest rule set: ${escapeHtml(ruleset.ruleset_id || "-")}.</div>`;
+        return;
+      }
+      const rows = planningSimulations.slice(0, 8).map((simulation) => {
+        const summary = simulation.summary || {};
+        return `
+          <tr>
+            <td>${escapeHtml(simulation.simulation_id || "-")}</td>
+            <td>${escapeHtml(simulation.ruleset_id || "-")}</td>
+            <td>${escapeHtml(simulation.status || "-")}</td>
+            <td>${escapeHtml(summary.review_count || 0)}</td>
+            <td>${escapeHtml(summary.alignment_delta ?? "-")}</td>
+            <td>${escapeHtml(summary.recommendation || "-")}</td>
+          </tr>
+        `;
+      }).join("");
+      target.innerHTML = `
+        <div class="grid3">
+          <div><b>Mode</b><br>simulation only</div>
+          <div><b>Rule Sets</b><br>${escapeHtml(planningRuleSets.length)}</div>
+          <div><b>Simulations</b><br>${escapeHtml(planningSimulations.length)}</div>
+        </div>
+        <table>
+          <thead><tr><th>Simulation</th><th>Rule Set</th><th>Status</th><th>Reviews</th><th>Delta</th><th>Recommendation</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       `;
     }
 

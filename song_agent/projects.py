@@ -534,6 +534,7 @@ class ProjectStore:
             "acceptance_fix_plan_summary": _collect_project_acceptance_fix_plan_summary(document.state.project_id),
             "acceptance_fix_plan_review_summary": _collect_project_acceptance_fix_plan_review_summary(document.state.project_id),
             "acceptance_kb_summary": _collect_project_acceptance_kb_summary(document.state.project_id),
+            "planning_rule_simulation_summary": _collect_project_planning_rule_simulation_summary(document.state.project_id),
             "delivery_qa_summary": _collect_project_delivery_qa_summary(self.project_dir(project_id)),
             "delivery_signoff_summary": _collect_project_delivery_signoff_summary(self.project_dir(project_id)),
             "generated_at": now_iso(),
@@ -1263,6 +1264,15 @@ def _collect_project_acceptance_kb_summary(project_id: str) -> dict[str, Any]:
 
     try:
         return _sanitize_asset_metadata(AcceptanceKnowledgeBaseStore().summary(project_id=project_id))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {"status": "missing"}
+
+
+def _collect_project_planning_rule_simulation_summary(project_id: str) -> dict[str, Any]:
+    from song_agent.planning_rule_simulation import PlanningRuleSimulationStore, latest_planning_simulation_summary
+
+    try:
+        return _sanitize_asset_metadata(latest_planning_simulation_summary(PlanningRuleSimulationStore(), project_id=project_id))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {"status": "missing"}
 

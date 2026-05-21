@@ -139,6 +139,7 @@ def build_final_export_bundle(
     acceptance_fix_plan = _final_acceptance_fix_plan(project_export)
     acceptance_fix_plan_review = _final_acceptance_fix_plan_review(project_export)
     acceptance_kb = _final_acceptance_kb(project_export)
+    planning_rule_simulation = _final_planning_rule_simulation(project_export)
     delivery_qa = _final_delivery_qa(project_export)
     delivery_signoff = _final_delivery_signoff(project_export)
 
@@ -165,6 +166,7 @@ def build_final_export_bundle(
         "acceptance_fix_plan": acceptance_fix_plan,
         "acceptance_fix_plan_review": acceptance_fix_plan_review,
         "acceptance_kb": acceptance_kb,
+        "planning_rule_simulation": planning_rule_simulation,
         "delivery_qa": delivery_qa,
         "delivery_signoff": delivery_signoff,
         "files": files,
@@ -750,6 +752,26 @@ def _final_acceptance_kb(project_export: dict[str, Any] | None) -> dict[str, Any
                 "average_effectiveness_score": summary.get("average_effectiveness_score"),
                 "top_recurring_issues": summary.get("top_recurring_issues") if isinstance(summary.get("top_recurring_issues"), list) else [],
                 "warning_count": summary.get("warning_count"),
+                "stale": summary.get("stale"),
+            }
+        )
+    )
+
+
+def _final_planning_rule_simulation(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("planning_rule_simulation_summary"), dict):
+        return {}
+    summary = project_export["planning_rule_simulation_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "simulation_id": summary.get("simulation_id"),
+                "ruleset_id": summary.get("ruleset_id"),
+                "review_count": summary.get("review_count"),
+                "item_count": summary.get("item_count"),
+                "alignment_delta": summary.get("alignment_delta"),
+                "recommendation": summary.get("recommendation"),
                 "stale": summary.get("stale"),
             }
         )

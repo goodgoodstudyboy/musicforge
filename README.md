@@ -172,6 +172,22 @@ Release Signoff can require non-stale Outcome Review evidence with
 Final Export carry only sanitized summaries; full item outcomes stay in the
 local workspace.
 
+Planning Rule Simulation replays historical Outcome Reviews through local
+candidate rule sets such as `synthetic_strict`, `waiver_strict`, and
+`manual_conservative`. It is a scoring sandbox only: it does not modify
+production planning rules, create Fix Plans, create Sprints, apply edits, or
+call providers. Simulations are source-hash guarded against changed rulesets or
+Outcome Reviews, and exports/signoff carry only sanitized summaries.
+
+```powershell
+python -m song_agent.cli planning-ruleset create --template synthetic_strict --name "Synthetic Strict"
+python -m song_agent.cli planning-simulation run --ruleset-id afprs-000001 --review-id afpr-000001 --json --report-out runs\planning-simulation.json
+```
+
+Release Signoff can require non-stale simulation evidence with
+`require_planning_rule_simulation=true`; a worse candidate recommendation is
+recorded as evidence for review but does not automatically activate rules.
+
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,
 `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are

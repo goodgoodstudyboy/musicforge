@@ -258,6 +258,14 @@ from song_agent.acceptance_kb import (
     knowledge_entry_summary,
     knowledge_report_summary,
 )
+from song_agent.planning_rule_simulation import (
+    PlanningRuleSimulationError,
+    PlanningRuleSimulationNotFoundError,
+    PlanningRuleSimulationStateError,
+    PlanningRuleSimulationStore,
+    planning_simulation_summary,
+    ruleset_summary,
+)
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.music_acceptance import (
@@ -2444,6 +2452,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.acceptance_kb_store  # type: ignore[attr-defined]
 
     @property
+    def planning_rule_simulation_store(self) -> PlanningRuleSimulationStore:
+        return self.server.planning_rule_simulation_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2611,6 +2623,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/acceptance/fix-plan-reviews":
                 self._handle_acceptance_fix_plan_reviews_root(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/planning-rulesets":
+                self._handle_planning_rulesets_root(method, parsed.query)
+                return
+
+            planning_ruleset_route = _match_planning_ruleset_route(path)
+            if planning_ruleset_route is not None:
+                self._handle_planning_ruleset_route(method, planning_ruleset_route)
+                return
+
+            if path == "/api/acceptance/planning-simulations":
+                self._handle_planning_simulations_root(method, parsed.query)
+                return
+
+            planning_simulation_route = _match_planning_simulation_route(path)
+            if planning_simulation_route is not None:
+                self._handle_planning_simulation_route(method, planning_simulation_route)
                 return
 
             fix_plan_review_route = _match_acceptance_fix_plan_review_route(path)
@@ -4976,6 +5006,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         fix_plan_evidence = self._release_acceptance_fix_plan_gate(payload)
         fix_plan_review_evidence = self._release_acceptance_fix_plan_review_gate(payload)
         kb_evidence = self._release_acceptance_kb_gate(payload)
+        planning_simulation_evidence = self._release_planning_rule_simulation_gate(payload)
         if not suite_id:
             if not analytics_evidence:
                 gate = {}
@@ -4993,6 +5024,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     gate["acceptance_fix_sprint"] = fix_sprint_evidence
                 if kb_evidence:
                     gate["acceptance_kb"] = kb_evidence
+                if planning_simulation_evidence:
+                    gate["planning_rule_simulation"] = planning_simulation_evidence
+                    if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                        gate["status"] = "failed"
+                        gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
                 return gate
             gate = {"acceptance_analytics": analytics_evidence}
             if fix_plan_evidence:
@@ -5012,6 +5048,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
             if kb_evidence:
                 gate["acceptance_kb"] = kb_evidence
+            if planning_simulation_evidence:
+                gate["planning_rule_simulation"] = planning_simulation_evidence
+                if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                    gate["status"] = "failed"
+                    gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
             if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = "Acceptance analytics readiness is blocked."
@@ -5060,6 +5101,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
         if kb_evidence:
             gate["acceptance_kb"] = kb_evidence
+        if planning_simulation_evidence:
+            gate["planning_rule_simulation"] = planning_simulation_evidence
+            if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                gate["status"] = "failed"
+                gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
         return gate
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -5176,6 +5222,54 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             return {**summary, "status": status}
         except AcceptanceKnowledgeBaseError as exc:
             return {"status": "warning", "message": str(exc)}
+
+    def _release_planning_rule_simulation_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        simulation_id = str(payload.get("planning_simulation_id") or "").strip()
+        release_id = str(payload.get("release_id") or "").strip()
+        require_gate = bool(payload.get("require_planning_rule_simulation", False))
+        try:
+            if simulation_id:
+                simulation = self.planning_rule_simulation_store.read_simulation(simulation_id)
+                summary = planning_simulation_summary(simulation)
+            elif release_id:
+                summary = self.planning_rule_simulation_store.latest_summary(release_id=release_id)
+                if summary.get("status") == "missing":
+                    return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Simulation evidence is missing."}
+                simulation = self.planning_rule_simulation_store.read_simulation(str(summary.get("simulation_id") or ""))
+            else:
+                return {}
+            stale = self.planning_rule_simulation_store.simulation_is_stale(simulation)
+            scope = simulation.scope if isinstance(simulation.scope, dict) else {}
+            scope_ok = not release_id or scope.get("release_id") == release_id or self._planning_simulation_reviews_match_release(simulation, release_id)
+            evidence = {**summary, "stale": stale}
+            if stale:
+                return {**evidence, "status": "failed" if require_gate else "warning", "message": "Planning Rule Simulation is stale. Refresh the simulation before signoff."}
+            if require_gate and simulation.status in {"blocked", "archived", "stale"}:
+                return {**evidence, "status": "failed", "message": "Planning Rule Simulation is not ready."}
+            if require_gate and not scope_ok:
+                return {**evidence, "status": "failed", "message": "Planning Rule Simulation is not scoped to this release."}
+            status = "passed" if simulation.status in {"ready", "warning"} else "warning"
+            if summary.get("recommendation") == "candidate_worse":
+                return {**evidence, "status": status, "message": "Planning Rule Simulation candidate is worse; review before adopting rules."}
+            return {**evidence, "status": status}
+        except PlanningRuleSimulationNotFoundError:
+            return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Simulation evidence is missing."}
+        except PlanningRuleSimulationError as exc:
+            return {"status": "failed" if require_gate else "warning", "message": str(exc)}
+
+    def _planning_simulation_reviews_match_release(self, simulation: Any, release_id: str) -> bool:
+        source = simulation.source if hasattr(simulation, "source") and isinstance(simulation.source, dict) else {}
+        review_ids = source.get("review_ids") if isinstance(source.get("review_ids"), list) else []
+        if not review_ids:
+            return False
+        for review_id in review_ids:
+            try:
+                review = self.acceptance_fix_plan_review_store.read_review(str(review_id))
+            except AcceptanceFixPlanReviewError:
+                return False
+            if review.scope.get("release_id") != release_id:
+                return False
+        return True
 
     def _handle_release_signoff_reset(self, method: str, release_id: str) -> None:
         if method != "POST":
@@ -6142,6 +6236,117 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AcceptanceFixPlanReviewStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except AcceptanceFixPlanReviewError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_rulesets_root(self, method: str, query_string: str) -> None:
+        try:
+            if method == "GET":
+                query = parse_qs(query_string)
+                include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+                rulesets = self.planning_rule_simulation_store.list_rulesets(include_archived=include_archived)
+                self._send_json({"ok": True, "rulesets": [ruleset.to_dict() for ruleset in rulesets], "summary": {"ruleset_count": len(rulesets)}})
+                return
+            if method == "POST":
+                ruleset = self.planning_rule_simulation_store.create_ruleset(self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except PlanningRuleSimulationStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleSimulationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_ruleset_route(self, method: str, route: tuple[str, str]) -> None:
+        ruleset_id, action = route
+        try:
+            if not action:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                ruleset = self.planning_rule_simulation_store.read_ruleset(ruleset_id)
+                self._send_json({"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)})
+                return
+            if action == "clone":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                ruleset = self.planning_rule_simulation_store.clone_ruleset(ruleset_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)}, status=HTTPStatus.CREATED)
+                return
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                ruleset = self.planning_rule_simulation_store.archive_ruleset(ruleset_id, now=_utc_now())
+                self._send_json({"ok": True, "ruleset": ruleset.to_dict(), "summary": ruleset_summary(ruleset)})
+                return
+            if action == "validate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "validation": self.planning_rule_simulation_store.validate_ruleset(ruleset_id)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Planning Rule Set route not found.")
+        except PlanningRuleSimulationNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PlanningRuleSimulationStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleSimulationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_simulations_root(self, method: str, query_string: str) -> None:
+        try:
+            if method == "GET":
+                query = parse_qs(query_string)
+                include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+                status = _query_value(query, "status") or None
+                release_id = _query_value(query, "release_id") or None
+                project_id = _query_value(query, "project_id") or None
+                simulations = self.planning_rule_simulation_store.list_simulations(include_archived=include_archived, status=status, release_id=release_id, project_id=project_id)
+                self._send_json({"ok": True, "simulations": [simulation.to_dict() for simulation in simulations], "summary": {"simulation_count": len(simulations), "latest": planning_simulation_summary(simulations[0]) if simulations else {"status": "missing"}}})
+                return
+            if method == "POST":
+                simulation = self.planning_rule_simulation_store.create_simulation(self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except PlanningRuleSimulationStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleSimulationNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (PlanningRuleSimulationError, AcceptanceFixPlanReviewError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_simulation_route(self, method: str, route: tuple[str, str]) -> None:
+        simulation_id, action = route
+        try:
+            if not action:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                simulation = self.planning_rule_simulation_store.read_simulation(simulation_id)
+                self._send_json({"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)})
+                return
+            if action == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                simulation = self.planning_rule_simulation_store.refresh_simulation(simulation_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)})
+                return
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                simulation = self.planning_rule_simulation_store.archive_simulation(simulation_id, now=_utc_now())
+                self._send_json({"ok": True, "simulation": simulation.to_dict(), "summary": planning_simulation_summary(simulation)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Planning Rule Simulation route not found.")
+        except PlanningRuleSimulationNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PlanningRuleSimulationStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (PlanningRuleSimulationError, AcceptanceFixPlanReviewError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_acceptance_fix_plan_route(self, method: str, route: tuple[str, str]) -> None:
@@ -10938,6 +11143,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.acceptance_kb_store = AcceptanceKnowledgeBaseStore(fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
         self.acceptance_fix_plan_store = AcceptanceFixPlanningStore(analytics_store=self.acceptance_analytics_store, kb_store=self.acceptance_kb_store, fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
         self.acceptance_fix_plan_review_store = AcceptanceFixPlanReviewStore(plan_store=self.acceptance_fix_plan_store, fix_sprint_store=self.acceptance_fix_sprint_store, kb_store=self.acceptance_kb_store, project_store=self.project_store)
+        self.planning_rule_simulation_store = PlanningRuleSimulationStore(review_store=self.acceptance_fix_plan_review_store, project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -11466,6 +11672,34 @@ def _match_acceptance_fix_plan_route(path: str) -> tuple[str, str] | None:
 
 def _match_acceptance_fix_plan_review_route(path: str) -> tuple[str, str] | None:
     prefix = "/api/acceptance/fix-plan-reviews/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"refresh", "archive"}:
+        return parts[0], parts[1]
+    return None
+
+
+def _match_planning_ruleset_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/planning-rulesets/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"clone", "archive", "validate"}:
+        return parts[0], parts[1]
+    return None
+
+
+def _match_planning_simulation_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/planning-simulations/"
     if not path.startswith(prefix):
         return None
     parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
