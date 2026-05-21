@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.11.0 - 2026-05-21
+
+### Added
+- Acceptance Fix Plan Outcome Review reports for used Fix Plans and closed Fix Sprints.
+- Deterministic plan effectiveness, ranking alignment, KB helpfulness, item outcome, and calibration hint summaries.
+- API, CLI, Studio controls, Project/Release/Final Export summaries, and Release Signoff evidence for outcome reviews.
+- release-check v4.11 smoke covering refresh, export summaries, signoff gate, stale guard, and redaction.
+
+### Verified
+- `python -m pytest tests\test_acceptance_fix_plan_reviews.py tests\test_server_acceptance_fix_plan_reviews.py tests\test_cli_acceptance_fix_plan_review.py tests\test_release_check.py::test_v411_fix_plan_outcome_review_smoke tests\test_webui.py::test_webui_contains_acceptance_workspace -q`
+
 ## v4.10.1 - 2026-05-21
 
 ### Fixed

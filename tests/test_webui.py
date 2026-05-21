@@ -51,6 +51,11 @@ def test_webui_contains_acceptance_workspace():
     assert 'id="acceptance-fix-plans"' in html
     assert 'id="acceptance-fix-plan-create"' in html
     assert 'id="acceptance-fix-plan-create-sprint"' in html
+    assert "Fix Plan Outcome Review" in html
+    assert "Refresh Outcome Review" in html
+    assert 'id="acceptance-fix-plan-review"' in html
+    assert "/outcome-review/refresh" in html
+    assert "Plan Effectiveness" in html
     assert "Knowledge Base" in html
     assert 'id="acceptance-kb"' in html
     assert 'id="acceptance-kb-refresh"' in html

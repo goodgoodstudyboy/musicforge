@@ -1224,6 +1224,7 @@ def panel_html() -> str:
           <button class="secondary" id="acceptance-fix-plan-refresh" type="button">Refresh Plans</button>
           <button class="secondary" id="acceptance-fix-plan-create" type="button">Create Plan</button>
           <button class="secondary" id="acceptance-fix-plan-create-sprint" type="button">Create Sprint From Plan</button>
+          <button class="secondary" id="acceptance-fix-plan-review-refresh" type="button">Refresh Outcome Review</button>
         </div>
         <div class="grid3">
           <label>Plan Max Items <input id="acceptance-fix-plan-max-items" type="number" min="1" max="50" value="20"></label>
@@ -1231,6 +1232,8 @@ def panel_html() -> str:
           <label>Plan ID <input id="acceptance-fix-plan-id" readonly value=""></label>
         </div>
         <div id="acceptance-fix-plans" class="release-detail"><div class="empty">No acceptance fix plans yet.</div></div>
+        <div class="panel-title subhead"><span>Fix Plan Outcome Review</span></div>
+        <div id="acceptance-fix-plan-review" class="release-detail"><div class="empty">Select a Fix Plan and refresh Outcome Review.</div></div>
         <div class="panel-title subhead"><span>Knowledge Base</span></div>
         <div class="actions">
           <button class="secondary" id="acceptance-kb-refresh" type="button">Refresh KB</button>
@@ -1322,6 +1325,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let acceptanceAnalytics = null;
     let acceptanceFixSprints = [];
     let acceptanceFixPlans = [];
+    let acceptanceFixPlanReview = null;
     let acceptanceKb = null;
     let acceptanceKbRecommendation = null;
     let projects = [];
@@ -1639,6 +1643,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadAcceptanceFixSprints();
       } catch (err) {
         $("acceptance-fix-plans").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("acceptance-fix-plan-review-refresh").addEventListener("click", async () => {
+      try {
+        const planId = $("acceptance-fix-plan-id").value.trim() || ((acceptanceFixPlans[0] || {}).plan_id || "");
+        if (!planId) throw new Error("Select a Fix Plan first.");
+        const data = await api(`/api/acceptance/fix-plans/${encodeURIComponent(planId)}/outcome-review/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        acceptanceFixPlanReview = data.outcome_review || null;
+        renderAcceptanceFixPlanReview();
+      } catch (err) {
+        $("acceptance-fix-plan-review").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
       }
     });
     $("acceptance-kb-refresh").addEventListener("click", async () => {
@@ -2307,6 +2322,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         acceptanceFixPlans = [];
       }
       renderAcceptanceFixPlans();
+    }
+
+    async function loadAcceptanceFixPlanReview(planId) {
+      if (!planId) {
+        acceptanceFixPlanReview = null;
+        renderAcceptanceFixPlanReview();
+        return;
+      }
+      try {
+        const data = await api(`/api/acceptance/fix-plans/${encodeURIComponent(planId)}/outcome-review`);
+        acceptanceFixPlanReview = data.outcome_review || null;
+      } catch (err) {
+        acceptanceFixPlanReview = null;
+      }
+      renderAcceptanceFixPlanReview();
     }
 
     async function loadAcceptanceKb() {
@@ -3244,7 +3274,48 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
       document.querySelectorAll(".acceptance-fix-plan-select").forEach((button) => button.addEventListener("click", () => {
         $("acceptance-fix-plan-id").value = button.dataset.planId || "";
+        loadAcceptanceFixPlanReview(button.dataset.planId || "");
       }));
+    }
+
+    function renderAcceptanceFixPlanReview() {
+      const target = $("acceptance-fix-plan-review");
+      if (!target) return;
+      const review = acceptanceFixPlanReview || {};
+      if (!review.review_id) {
+        const status = review.status || "missing";
+        target.innerHTML = `<div class="empty">Outcome Review ${escapeHtml(status)}.</div>`;
+        return;
+      }
+      const summary = review.summary || {};
+      const hints = (review.calibration_hints || []).slice(0, 5).map((hint) => `<li>${escapeHtml(hint.type || "hint")}: ${escapeHtml(hint.reason || "")}</li>`).join("");
+      const items = (review.item_outcomes || []).slice(0, 8).map((item) => {
+        const outcome = item.outcome || {};
+        return `
+          <tr>
+            <td>${escapeHtml(item.planned_item_id || "-")}</td>
+            <td>${escapeHtml(item.fix_item_id || "-")}</td>
+            <td>${escapeHtml(item.planning_score ?? "-")}</td>
+            <td>${escapeHtml(outcome.evidence_status || "-")}</td>
+            <td>${escapeHtml(outcome.observed_effectiveness_score ?? "-")}</td>
+          </tr>
+        `;
+      }).join("");
+      target.innerHTML = `
+        <div class="grid3">
+          <div><b>Review</b><br>${escapeHtml(review.review_id)}</div>
+          <div><b>Status</b><br>${escapeHtml(review.status || "-")}</div>
+          <div><b>Plan Effectiveness</b><br>${escapeHtml(summary.plan_effectiveness_score ?? "-")}</div>
+          <div><b>Ranking Alignment</b><br>${escapeHtml(summary.ranking_alignment_score ?? "-")}</div>
+          <div><b>KB Helpfulness</b><br>${escapeHtml(summary.kb_evidence_helpfulness || "-")}</div>
+          <div><b>Warnings</b><br>${escapeHtml(summary.warning_count || 0)}</div>
+        </div>
+        <table>
+          <thead><tr><th>Planned Item</th><th>Fix Item</th><th>Score</th><th>Evidence</th><th>Effectiveness</th></tr></thead>
+          <tbody>${items || "<tr><td colspan='5'>No item outcomes.</td></tr>"}</tbody>
+        </table>
+        ${hints ? `<ul>${hints}</ul>` : ""}
+      `;
     }
 
     function renderAcceptanceKb(report = acceptanceKb) {

@@ -150,6 +150,28 @@ call external models, create tasks, apply edits, or gate release signoff.
 Project Export, Release Export, Final Export, and Release Signoff carry only
 sanitized KB summaries, not full listening notes or raw provider responses.
 
+Knowledge-assisted Fix Plans use fresh Acceptance Analytics plus local KB
+evidence to rank proposed repair work before a Fix Sprint is created. A plan can
+create only one Fix Sprint, and every execution remains manual: it never applies
+edits, resolves tasks, changes scoring rules, or signs releases automatically.
+
+Fix Plan Outcome Review evaluates a used Fix Plan after its generated Fix
+Sprint is closed. It compares the plan, planned items, Fix Sprint items, delta
+report, closeout report, and KB evidence to produce deterministic plan
+effectiveness, ranking alignment, KB helpfulness, item outcomes, and calibration
+hints. Outcome Review is source-hash guarded and can be refreshed from Studio or
+CLI:
+
+```powershell
+python -m song_agent.cli acceptance-fix-plan review afp-000001 --refresh
+python -m song_agent.cli acceptance-fix-plan review afp-000001 --json --report-out runs\fix-plan-review.json
+```
+
+Release Signoff can require non-stale Outcome Review evidence with
+`require_acceptance_fix_plan_review=true`. Project Export, Release Export, and
+Final Export carry only sanitized summaries; full item outcomes stay in the
+local workspace.
+
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,
 `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are

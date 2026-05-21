@@ -215,6 +215,10 @@ def build_acceptance_fix_plan_parser() -> argparse.ArgumentParser:
     create_sprint.add_argument("--planned-item-id", action="append", dest="planned_item_ids", default=[])
     create_sprint.add_argument("--profile", default=None)
 
+    review = subparsers.add_parser("review", help="Show or refresh a Fix Plan Outcome Review.")
+    review.add_argument("plan_id")
+    review.add_argument("--refresh", action="store_true")
+
     recommend = subparsers.add_parser("recommend", help="Preview a non-persisted Fix Plan.")
     recommend.add_argument("--analytics-report-id", required=True)
     recommend.add_argument("--kb-report-id", default=None)
@@ -525,6 +529,7 @@ def _main() -> None:
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "acceptance-fix-plan":
         from song_agent.acceptance_fix_planning import AcceptanceFixPlanningStore, fix_plan_summary
+        from song_agent.acceptance_fix_plan_reviews import AcceptanceFixPlanReviewStore, fix_plan_review_summary
 
         parser = build_acceptance_fix_plan_parser()
         args = parser.parse_args(raw_args[1:])
@@ -543,6 +548,14 @@ def _main() -> None:
             result = {"ok": True, "fix_plan": plan.to_dict(), "summary": fix_plan_summary(plan)}
         elif args.action == "create-fix-sprint":
             result = {"ok": True, **store.create_fix_sprint(args.plan_id, {"name": args.name, "planned_item_ids": args.planned_item_ids, "profile_id": args.profile})}
+        elif args.action == "review":
+            review_store = AcceptanceFixPlanReviewStore(plan_store=store, fix_sprint_store=store.fix_sprint_store, kb_store=store.kb_store, project_store=store.project_store)
+            if args.refresh:
+                review = review_store.refresh_for_plan(args.plan_id)
+                result = {"ok": True, "outcome_review": review.to_dict(), "summary": fix_plan_review_summary(review)}
+            else:
+                review = review_store.get_or_missing_for_plan(args.plan_id)
+                result = {"ok": True, "outcome_review": review, "summary": fix_plan_review_summary(review)}
         elif args.action == "recommend":
             preview = store.preview({"analytics_report_id": args.analytics_report_id, "kb_report_id": args.kb_report_id, "max_items": args.max_items, "include_hidden_kb": args.include_hidden_kb})
             result = {"ok": True, "fix_plan_preview": preview, "summary": fix_plan_summary(preview)}
@@ -794,6 +807,17 @@ def print_acceptance_fix_plan_result(result: dict[str, Any]) -> None:
     summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
     plan = result.get("fix_plan") or result.get("fix_plan_preview")
     plan = plan if isinstance(plan, dict) else {}
+    review = result.get("outcome_review") if isinstance(result.get("outcome_review"), dict) else {}
+    if review:
+        print("MusicForge acceptance-fix-plan review")
+        print(f"review: {summary.get('review_id') or review.get('review_id') or '-'}")
+        print(f"plan: {summary.get('plan_id') or review.get('plan_id') or '-'}")
+        print(f"sprint: {summary.get('fix_sprint_id') or review.get('fix_sprint_id') or '-'}")
+        print(f"status: {summary.get('status') or review.get('status') or '-'}")
+        print(f"effectiveness: {summary.get('plan_effectiveness_score') if summary.get('plan_effectiveness_score') is not None else '-'}")
+        print(f"kb_helpfulness: {summary.get('kb_evidence_helpfulness') or '-'}")
+        print(f"warnings: {summary.get('warning_count', 0)}")
+        return
     print("MusicForge acceptance-fix-plan")
     print(f"plan: {summary.get('plan_id') or plan.get('plan_id') or '-'}")
     print(f"status: {summary.get('status') or plan.get('status') or '-'}")

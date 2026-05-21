@@ -214,6 +214,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.8 acceptance fix sprint smoke", *_v48_acceptance_fix_sprint_smoke(root))
     report.add("v4.9 acceptance knowledge base smoke", *_v49_acceptance_knowledge_base_smoke(root))
     report.add("v4.10 knowledge-assisted fix planning smoke", *_v410_knowledge_assisted_fix_planning_smoke(root))
+    report.add("v4.11 fix plan outcome review smoke", *_v411_fix_plan_outcome_review_smoke(root))
     return report
 
 
@@ -6076,6 +6077,165 @@ def _v410_knowledge_assisted_fix_planning_smoke(root: Path) -> tuple[bool, str]:
             f"sprint={planned_sprint_id}, duplicate={duplicate_sprint_status}, stale_guard={stale_guard_status}, "
             f"hidden={'excluded' if hidden_default.get('summary', {}).get('kb_match_count') == 0 else 'included'}/"
             f"{'included' if hidden_include.get('summary', {}).get('kb_match_count', 0) >= 1 else 'excluded'}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v411_fix_plan_outcome_review_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v411-plan-review-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Fix Plan Outcome Review Track")
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Fix Plan Outcome Review Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+
+        suite_status, suite = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.11 source", "profile_id": "developer_manual", "require_audio_if_renderer_configured": False})
+        suite_id = suite.get("suite", {}).get("suite_id")
+        case_status, case = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases", {"name": "Outcome Source Case", "source_type": "project_version", "project_id": project_id, "version_id": "v001", "song_id": "rap_beat_001", "request": {"title": "Outcome Source", "language": "English", "style": "rap beat", "theme": "outcome", "duration_seconds": 90}})
+        case_id = case.get("case", {}).get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        review_status, _review = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 2, "status": "needs_fix", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Hook and rhythm need work with local-path-marker and masked-key-marker.", "tags": ["hook", "rhythm"]})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        analytics_status, analytics = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        analytics_report_id = analytics.get("analytics", {}).get("report_id")
+        seed_fix_status, seed_fix = _release_http_json(server, "POST", "/api/acceptance/fix-sprints", {"analytics_report_id": analytics_report_id, "scope": {"type": "release", "release_id": release_id}})
+        seed_sprint_id = seed_fix.get("fix_sprint", {}).get("fix_sprint_id")
+        tasks_status, tasks = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/create-review-tasks")
+        task_id = (tasks.get("results") or [{}])[0].get("task_id")
+        task_path = base / ".musicforge" / "projects" / project_id / "review-tasks" / str(task_id) / "task.json"
+        task = read_json(task_path)
+        task["status"] = "resolved"
+        task["resolution_note"] = "Outcome review seed fix resolved hook and rhythm."
+        write_json(task_path, task)
+        _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/refresh-status")
+        recheck_status, recheck = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/create-recheck-suite", {"profile_id": "developer_manual"})
+        recheck_suite_id = recheck.get("suite", {}).get("suite_id")
+        recheck_detail_status, recheck_detail = _release_http_json(server, "GET", f"/api/acceptance/suites/{recheck_suite_id}")
+        recheck_case_id = (recheck_detail.get("cases") or [{}])[0].get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/health")
+        recheck_review_status, _ = _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual recheck accepted."})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/report")
+        delta_status, delta = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/delta/refresh")
+        close_status, closeout = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/close")
+        kb_status, kb = _release_http_json(server, "POST", "/api/acceptance/kb/refresh", {"type": "global"})
+        kb_report_id = kb.get("knowledge_report", {}).get("report_id")
+
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 2, "status": "needs_fix", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Hook still needs work.", "tags": ["hook", "rhythm"]})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        analytics2_status, analytics2 = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        analytics2_report_id = analytics2.get("analytics", {}).get("report_id")
+        plan_status, plan = _release_http_json(server, "POST", "/api/acceptance/fix-plans", {"analytics_report_id": analytics2_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}})
+        plan_id = plan.get("fix_plan", {}).get("plan_id")
+        sprint_status, sprint = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/create-fix-sprint", {"name": "Outcome Review Sprint"})
+        planned_sprint_id = sprint.get("fix_sprint", {}).get("fix_sprint_id")
+        planned_item_id = (sprint.get("items") or [{}])[0].get("item_id")
+        waive_status, _waive = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/items/{planned_item_id}/waive", {"reason": "manual rewrite verified"})
+        planned_recheck_status, planned_recheck = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/create-recheck-suite", {"profile_id": "developer_manual"})
+        planned_suite_id = planned_recheck.get("suite", {}).get("suite_id")
+        planned_detail_status, planned_detail = _release_http_json(server, "GET", f"/api/acceptance/suites/{planned_suite_id}")
+        planned_case_id = (planned_detail.get("cases") or [{}])[0].get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/health")
+        planned_review_status, _planned_review = _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual planned recheck accepted."})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/report")
+        planned_delta_status, planned_delta = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/delta/refresh")
+        planned_close_status, planned_closeout = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/close", {"force": True, "override_reason": "waived issue was manually verified"})
+        review_refresh_status, review = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/outcome-review/refresh")
+        review_id = review.get("outcome_review", {}).get("review_id")
+        review_summary = review.get("summary", {})
+        review_list_status, review_list = _release_http_json(server, "GET", "/api/acceptance/fix-plan-reviews")
+        review_detail_status, review_detail = _release_http_json(server, "GET", f"/api/acceptance/fix-plan-reviews/{review_id}")
+
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        project_export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "analytics remains blocked in outcome review smoke", "require_acceptance_fix_plan_review": True, "acceptance_fix_plan_review_id": review_id})
+        reset_status, _reset = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "verify stale outcome review gate"})
+
+        delta_path = base / ".musicforge" / "acceptance-fix-sprints" / str(planned_sprint_id) / "delta-report.json"
+        polluted_delta = read_json(delta_path)
+        polluted_delta["summary"]["rating_delta"] = -9
+        write_json(delta_path, polluted_delta)
+        stale_get_status, stale_get = _release_http_json(server, "GET", f"/api/acceptance/fix-plan-reviews/{review_id}")
+        stale_sign_status, stale_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_acceptance_fix_plan_review": True, "acceptance_fix_plan_review_id": review_id})
+
+        review_payload = json.dumps(review, ensure_ascii=False)
+        manifest = export.get("manifest", {})
+        ok = (
+            release_status == 201
+            and track_status == 200
+            and suite_status == 201
+            and case_status == 201
+            and review_status == 200
+            and analytics_status == 201
+            and seed_fix_status == 201
+            and tasks_status == 201
+            and recheck_status == 201
+            and recheck_detail_status == 200
+            and recheck_review_status == 200
+            and delta_status == 200
+            and close_status == 200
+            and closeout.get("summary", {}).get("status") == "passed"
+            and kb_status == 201
+            and analytics2_status == 201
+            and plan_status == 201
+            and sprint_status == 201
+            and waive_status == 200
+            and planned_recheck_status == 201
+            and planned_detail_status == 200
+            and planned_review_status == 200
+            and planned_delta_status == 200
+            and planned_close_status == 200
+            and planned_closeout.get("summary", {}).get("status") in {"passed", "force_closed"}
+            and review_refresh_status == 201
+            and review_summary.get("review_id") == review_id
+            and int(review_summary.get("plan_effectiveness_score") or 0) > 0
+            and review_summary.get("kb_evidence_helpfulness") not in {"missing", None}
+            and (review.get("outcome_review", {}).get("item_outcomes") or [{}])[0].get("planned_item_id") == "afpi-000001"
+            and review_list_status == 200
+            and int(review_list.get("summary", {}).get("review_count") or 0) >= 1
+            and review_detail_status == 200
+            and qa_status == 200
+            and export_status == 200
+            and manifest.get("acceptance_fix_plan_review", {}).get("review_id") == review_id
+            and any(file.get("path") == "acceptance-fix-plan-review-summary.json" for file in manifest.get("files", []) if isinstance(file, dict))
+            and project_export_status == 200
+            and project_export.get("acceptance_fix_plan_review_summary", {}).get("review_id") == review_id
+            and final_export_status == 200
+            and final_export.get("final_export", {}).get("acceptance_fix_plan_review", {}).get("review_id") == review_id
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("acceptance_fix_plan_review", {}).get("status") == "passed"
+            and reset_status == 200
+            and stale_get_status == 200
+            and stale_get.get("summary", {}).get("stale") is True
+            and stale_sign_status == 409
+            and "masked-key-marker" not in review_payload
+            and "local-path-marker" not in review_payload
+        )
+        return ok, (
+            f"review={review_id}, effectiveness={review_summary.get('plan_effectiveness_score')}, "
+            f"helpfulness={review_summary.get('kb_evidence_helpfulness')}, stale_guard={stale_sign_status}, "
+            f"signoff={signoff.get('signoff', {}).get('acceptance_gate', {}).get('acceptance_fix_plan_review', {}).get('status')}"
         )
     except Exception as exc:
         return False, str(exc)

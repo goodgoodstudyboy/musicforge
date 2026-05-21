@@ -377,7 +377,7 @@ class AcceptanceFixSprintStore:
             }
         )
         warnings = []
-        source_report = self.analytics_store.get_report(str(sprint.source.get("report_id") or ""))
+        source_report = self.analytics_store.get_report(_source_report_id(sprint))
         for song_id in song_ids:
             source_item = next((item for item in items if str(item.target.get("song_id") or "") == song_id), None)
             target = source_item.target if source_item else {}
@@ -414,7 +414,7 @@ class AcceptanceFixSprintStore:
         except Exception:
             self.acceptance_store.build_report(suite_id)
         recheck_report = self.analytics_store.refresh(AnalyticsScope.from_values(scope_type="suite", suite_id=suite_id), now=now or now_iso())
-        source_report = self.analytics_store.get_report(str(sprint.source.get("report_id") or ""))
+        source_report = self.analytics_store.get_report(_source_report_id(sprint))
         items = self.sync_items(fix_sprint_id, now=now)
         delta = build_delta_report(sprint, items, source_report, recheck_report, now=now or now_iso(), project_store=self.project_store)
         write_json(self.sprint_dir(fix_sprint_id) / "delta-report.json", delta)
@@ -484,7 +484,7 @@ class AcceptanceFixSprintStore:
                 return False
             except Exception:
                 return True
-        report = self.analytics_store.get_report(str(sprint.source.get("report_id") or ""))
+        report = self.analytics_store.get_report(_source_report_id(sprint))
         if report.get("stale") is True:
             return True
         if str(report.get("source_hash") or "") != str(sprint.source.get("source_hash") or ""):
@@ -535,7 +535,7 @@ class AcceptanceFixSprintStore:
                     "priority": item.priority,
                     "title": item.title[:160],
                     "summary": item.summary[:800],
-                    "source": {"source_type": "acceptance_fix_sprint", "fix_sprint_id": sprint.fix_sprint_id, "item_id": item.item_id, "analytics_report_id": sprint.source.get("report_id"), "recommendation_id": item.source.get("recommendation_id"), "source_hash": sprint.source.get("source_hash")},
+                    "source": {"source_type": "acceptance_fix_sprint", "fix_sprint_id": sprint.fix_sprint_id, "item_id": item.item_id, "analytics_report_id": _source_report_id(sprint), "recommendation_id": item.source.get("recommendation_id"), "source_hash": sprint.source.get("source_hash")},
                     "review_snapshot": {"fix_item": item.to_dict()},
                     "target": {"scope": "project", "project_id": project_id, "song_id": item.target.get("song_id"), "issue_types": issue_types},
                     "hashes": {"analytics_source_hash": str(sprint.source.get("source_hash") or "")},
@@ -642,7 +642,7 @@ def build_delta_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFixIte
             "schema_version": ACCEPTANCE_FIX_DELTA_SCHEMA_VERSION,
             "fix_sprint_id": sprint.fix_sprint_id,
             "generated_at": now or now_iso(),
-            "source": {"analytics_report_id": sprint.source.get("report_id"), "source_hash": sprint.source.get("source_hash")},
+            "source": {"analytics_report_id": _source_report_id(sprint), "source_hash": sprint.source.get("source_hash")},
             "recheck": {"suite_id": sprint.recheck.get("suite_id"), "analytics_report_id": recheck_report.get("report_id"), "source_hash": recheck_report.get("source_hash")},
             "summary": {
                 "status": status,
@@ -707,7 +707,7 @@ def fix_sprint_summary(sprint: AcceptanceFixSprint | dict[str, Any] | None, item
         {
             "fix_sprint_id": data.get("fix_sprint_id"),
             "status": data.get("status") or "missing",
-            "source_report_id": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("report_id"),
+            "source_report_id": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("report_id") or (data.get("source") if isinstance(data.get("source"), dict) else {}).get("analytics_report_id"),
             "source_hash": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("source_hash"),
             "item_count": counts.get("item_count", len(items or [])),
             "open_item_count": counts.get("open_item_count", 0),
@@ -842,6 +842,10 @@ def _request_for_recheck(report: dict[str, Any], song_id: str) -> dict[str, Any]
                 summary = case.get("request_summary") if isinstance(case.get("request_summary"), dict) else {}
                 return {"title": summary.get("title") or song_id, "language": summary.get("language") or "English", "style": summary.get("style") or "pop", "theme": summary.get("theme") or "acceptance fix recheck", "duration_seconds": 90}
     return {"title": song_id, "language": "English", "style": "pop", "theme": "acceptance fix recheck", "duration_seconds": 90}
+
+
+def _source_report_id(sprint: AcceptanceFixSprint) -> str:
+    return str(sprint.source.get("report_id") or sprint.source.get("analytics_report_id") or "")
 
 
 def _song_deltas(source_report: dict[str, Any], recheck_report: dict[str, Any]) -> list[dict[str, Any]]:

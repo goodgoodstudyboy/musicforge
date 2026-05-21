@@ -137,6 +137,7 @@ def build_final_export_bundle(
     review_sprint_closeout = _final_review_sprint_closeout(project_export)
     acceptance_fix_sprint = _final_acceptance_fix_sprint(project_export)
     acceptance_fix_plan = _final_acceptance_fix_plan(project_export)
+    acceptance_fix_plan_review = _final_acceptance_fix_plan_review(project_export)
     acceptance_kb = _final_acceptance_kb(project_export)
     delivery_qa = _final_delivery_qa(project_export)
     delivery_signoff = _final_delivery_signoff(project_export)
@@ -162,6 +163,7 @@ def build_final_export_bundle(
         "review_sprint_closeout": review_sprint_closeout,
         "acceptance_fix_sprint": acceptance_fix_sprint,
         "acceptance_fix_plan": acceptance_fix_plan,
+        "acceptance_fix_plan_review": acceptance_fix_plan_review,
         "acceptance_kb": acceptance_kb,
         "delivery_qa": delivery_qa,
         "delivery_signoff": delivery_signoff,
@@ -706,6 +708,27 @@ def _final_acceptance_fix_plan(project_export: dict[str, Any] | None) -> dict[st
                 "kb_match_count": summary.get("kb_match_count"),
                 "risk_warning_count": summary.get("risk_warning_count"),
                 "created_fix_sprint_id": summary.get("created_fix_sprint_id"),
+                "stale": summary.get("stale"),
+            }
+        )
+    )
+
+
+def _final_acceptance_fix_plan_review(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_fix_plan_review_summary"), dict):
+        return {}
+    summary = project_export["acceptance_fix_plan_review_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "readiness": summary.get("readiness"),
+                "review_id": summary.get("review_id"),
+                "plan_id": summary.get("plan_id"),
+                "fix_sprint_id": summary.get("fix_sprint_id"),
+                "plan_effectiveness_score": summary.get("plan_effectiveness_score"),
+                "ranking_alignment_score": summary.get("ranking_alignment_score"),
+                "kb_evidence_helpfulness": summary.get("kb_evidence_helpfulness"),
                 "stale": summary.get("stale"),
             }
         )

@@ -242,6 +242,15 @@ from song_agent.acceptance_fix_planning import (
     fix_plan_summary,
     latest_fix_plan_summary,
 )
+from song_agent.acceptance_fix_plan_reviews import (
+    AcceptanceFixPlanReviewError,
+    AcceptanceFixPlanReviewNotFoundError,
+    AcceptanceFixPlanReviewStateError,
+    AcceptanceFixPlanReviewStore,
+    REVIEW_READY_STATUSES,
+    fix_plan_review_summary,
+    latest_fix_plan_review_summary,
+)
 from song_agent.acceptance_kb import (
     AcceptanceKnowledgeBaseError,
     AcceptanceKnowledgeBaseNotFoundError,
@@ -2427,6 +2436,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.acceptance_fix_plan_store  # type: ignore[attr-defined]
 
     @property
+    def acceptance_fix_plan_review_store(self) -> AcceptanceFixPlanReviewStore:
+        return self.server.acceptance_fix_plan_review_store  # type: ignore[attr-defined]
+
+    @property
     def acceptance_kb_store(self) -> AcceptanceKnowledgeBaseStore:
         return self.server.acceptance_kb_store  # type: ignore[attr-defined]
 
@@ -2594,6 +2607,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if path == "/api/acceptance/fix-plans/recommend":
                 self._handle_acceptance_fix_plans_recommend(method)
+                return
+
+            if path == "/api/acceptance/fix-plan-reviews":
+                self._handle_acceptance_fix_plan_reviews_root(method, parsed.query)
+                return
+
+            fix_plan_review_route = _match_acceptance_fix_plan_review_route(path)
+            if fix_plan_review_route is not None:
+                self._handle_acceptance_fix_plan_review_route(method, fix_plan_review_route)
                 return
 
             fix_plan_route = _match_acceptance_fix_plan_route(path)
@@ -4952,6 +4974,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         analytics_evidence = self._release_acceptance_analytics_gate(payload)
         fix_sprint_evidence = self._release_acceptance_fix_sprint_gate(payload)
         fix_plan_evidence = self._release_acceptance_fix_plan_gate(payload)
+        fix_plan_review_evidence = self._release_acceptance_fix_plan_review_gate(payload)
         kb_evidence = self._release_acceptance_kb_gate(payload)
         if not suite_id:
             if not analytics_evidence:
@@ -4961,6 +4984,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                         gate["status"] = "failed"
                         gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
+                if fix_plan_review_evidence:
+                    gate["acceptance_fix_plan_review"] = fix_plan_review_evidence
+                    if fix_plan_review_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                        gate["status"] = "failed"
+                        gate["message"] = str(fix_plan_review_evidence.get("message") or "Acceptance Fix Plan Outcome Review gate failed.")
                 if fix_sprint_evidence:
                     gate["acceptance_fix_sprint"] = fix_sprint_evidence
                 if kb_evidence:
@@ -4972,6 +5000,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                     gate["status"] = "failed"
                     gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
+            if fix_plan_review_evidence:
+                gate["acceptance_fix_plan_review"] = fix_plan_review_evidence
+                if fix_plan_review_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                    gate["status"] = "failed"
+                    gate["message"] = str(fix_plan_review_evidence.get("message") or "Acceptance Fix Plan Outcome Review gate failed.")
             if fix_sprint_evidence:
                 gate["acceptance_fix_sprint"] = fix_sprint_evidence
                 if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
@@ -5015,6 +5048,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
+        if fix_plan_review_evidence:
+            gate["acceptance_fix_plan_review"] = fix_plan_review_evidence
+            if fix_plan_review_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                gate["status"] = "failed"
+                gate["message"] = str(fix_plan_review_evidence.get("message") or "Acceptance Fix Plan Outcome Review gate failed.")
         if fix_sprint_evidence:
             gate["acceptance_fix_sprint"] = fix_sprint_evidence
             if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
@@ -5095,6 +5133,37 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AcceptanceFixPlanNotFoundError:
             return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Plan evidence is missing."}
         except AcceptanceFixPlanError as exc:
+            return {"status": "failed" if require_gate else "warning", "message": str(exc)}
+
+    def _release_acceptance_fix_plan_review_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        review_id = str(payload.get("acceptance_fix_plan_review_id") or "").strip()
+        release_id = str(payload.get("release_id") or "").strip()
+        require_gate = bool(payload.get("require_acceptance_fix_plan_review", False))
+        try:
+            if review_id:
+                review = self.acceptance_fix_plan_review_store.read_review(review_id)
+                summary = fix_plan_review_summary(review)
+            elif release_id:
+                summary = latest_fix_plan_review_summary(self.acceptance_fix_plan_review_store, release_id=release_id)
+                if summary.get("status") == "missing":
+                    return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Plan Outcome Review evidence is missing."}
+                review = self.acceptance_fix_plan_review_store.read_review(str(summary.get("review_id") or ""))
+            else:
+                return {}
+            stale = self.acceptance_fix_plan_review_store.review_is_stale(review)
+            scope = review.scope if isinstance(review.scope, dict) else {}
+            scope_ok = not release_id or scope.get("release_id") == release_id
+            evidence = {**summary, "stale": stale}
+            if stale:
+                return {**evidence, "status": "failed" if require_gate else "warning", "message": "Acceptance Fix Plan Outcome Review is stale. Refresh the review before signoff."}
+            if require_gate and review.status in {"blocked", "archived", "stale"}:
+                return {**evidence, "status": "failed", "message": "Acceptance Fix Plan Outcome Review is not ready."}
+            if require_gate and not scope_ok:
+                return {**evidence, "status": "failed", "message": "Acceptance Fix Plan Outcome Review is not scoped to this release."}
+            return {**evidence, "status": "passed" if review.status in REVIEW_READY_STATUSES else "warning"}
+        except AcceptanceFixPlanReviewNotFoundError:
+            return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Plan Outcome Review evidence is missing."}
+        except AcceptanceFixPlanReviewError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
     def _release_acceptance_kb_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -6028,6 +6097,53 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except (AcceptanceFixPlanError, AcceptanceAnalyticsError, AcceptanceKnowledgeBaseError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_acceptance_fix_plan_reviews_root(self, method: str, query_string: str) -> None:
+        try:
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            query = parse_qs(query_string)
+            include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+            status = _query_value(query, "status") or None
+            release_id = _query_value(query, "release_id") or None
+            project_id = _query_value(query, "project_id") or None
+            reviews = self.acceptance_fix_plan_review_store.list_reviews(include_archived=include_archived, status=status, release_id=release_id, project_id=project_id)
+            self._send_json({"ok": True, "outcome_reviews": [review.to_dict() for review in reviews], "summary": {"review_count": len(reviews), "latest": fix_plan_review_summary(reviews[0]) if reviews else {"status": "missing"}}})
+        except AcceptanceFixPlanReviewError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_acceptance_fix_plan_review_route(self, method: str, route: tuple[str, str]) -> None:
+        review_id, action = route
+        try:
+            if not action:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review = self.acceptance_fix_plan_review_store.read_review(review_id)
+                self._send_json({"ok": True, "outcome_review": review.to_dict(), "summary": fix_plan_review_summary(review)})
+                return
+            if action == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review = self.acceptance_fix_plan_review_store.refresh_review(review_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "outcome_review": review.to_dict(), "summary": fix_plan_review_summary(review)})
+                return
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review = self.acceptance_fix_plan_review_store.archive_review(review_id, now=_utc_now())
+                self._send_json({"ok": True, "outcome_review": review.to_dict(), "summary": fix_plan_review_summary(review)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Acceptance Fix Plan Outcome Review route not found.")
+        except AcceptanceFixPlanReviewNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AcceptanceFixPlanReviewStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AcceptanceFixPlanReviewError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_acceptance_fix_plan_route(self, method: str, route: tuple[str, str]) -> None:
         plan_id, action = route
         try:
@@ -6059,11 +6175,29 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 result = self.acceptance_fix_plan_store.create_fix_sprint(plan_id, self._optional_json_body(), now=_utc_now())
                 self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
                 return
+            if action == "outcome-review":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review = self.acceptance_fix_plan_review_store.get_or_missing_for_plan(plan_id)
+                self._send_json({"ok": True, "outcome_review": review, "summary": fix_plan_review_summary(review)})
+                return
+            if action == "outcome-review/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review = self.acceptance_fix_plan_review_store.refresh_for_plan(plan_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "outcome_review": review.to_dict(), "summary": fix_plan_review_summary(review)}, status=HTTPStatus.CREATED)
+                return
             self._send_error(HTTPStatus.NOT_FOUND, "Acceptance Fix Plan route not found.")
         except AcceptanceFixPlanNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except AcceptanceFixPlanStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AcceptanceFixPlanReviewStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AcceptanceFixPlanReviewError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except (AcceptanceFixPlanError, AcceptanceAnalyticsError, AcceptanceKnowledgeBaseError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -10803,6 +10937,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.acceptance_fix_sprint_store = AcceptanceFixSprintStore(acceptance_store=self.acceptance_store, analytics_store=self.acceptance_analytics_store, project_store=self.project_store)
         self.acceptance_kb_store = AcceptanceKnowledgeBaseStore(fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
         self.acceptance_fix_plan_store = AcceptanceFixPlanningStore(analytics_store=self.acceptance_analytics_store, kb_store=self.acceptance_kb_store, fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
+        self.acceptance_fix_plan_review_store = AcceptanceFixPlanReviewStore(plan_store=self.acceptance_fix_plan_store, fix_sprint_store=self.acceptance_fix_sprint_store, kb_store=self.acceptance_kb_store, project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -11322,7 +11457,23 @@ def _match_acceptance_fix_plan_route(path: str) -> tuple[str, str] | None:
         return None
     if len(parts) == 1:
         return parts[0], ""
-    if len(parts) == 2 and parts[1] in {"refresh", "archive", "create-fix-sprint"}:
+    if len(parts) == 2 and parts[1] in {"refresh", "archive", "create-fix-sprint", "outcome-review"}:
+        return parts[0], parts[1]
+    if len(parts) == 3 and parts[1] == "outcome-review" and parts[2] == "refresh":
+        return parts[0], "outcome-review/refresh"
+    return None
+
+
+def _match_acceptance_fix_plan_review_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/fix-plan-reviews/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"refresh", "archive"}:
         return parts[0], parts[1]
     return None
 
