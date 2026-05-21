@@ -6,7 +6,7 @@ from tests.test_server_edits import request_json, start_test_server, stop_test_s
 from tests.test_server_releases import _signed_project
 
 
-def _server_plan_with_closed_sprint(server, *, scope: dict | None = None) -> tuple[str, str, str, str]:
+def _server_plan_with_closed_sprint(server, *, scope: dict | None = None, planned_review_mode: str = "manual") -> tuple[str, str, str, str]:
     from tests.test_server_acceptance_fix_sprints import _project_with_acceptance_issue
 
     project_id, _suite_id, _case_id, analytics = _project_with_acceptance_issue(server)
@@ -43,7 +43,7 @@ def _server_plan_with_closed_sprint(server, *, scope: dict | None = None) -> tup
     planned_case_id = planned_detail["cases"][0]["case_id"]
     request_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/generate", {"render_audio": "never"})
     request_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/health")
-    request_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/review", {"status": "accepted", "rating": 5, "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Accepted planned fix."})
+    request_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/review", {"status": "accepted", "rating": 5, "playback_confirmed": True, "review_mode": planned_review_mode, "audio_mode": "midi", "notes": "Accepted planned fix."})
     request_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/report")
     request_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/delta/refresh")
     request_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/close", {"force": True, "override_reason": "waived issue was manually verified"})
@@ -122,3 +122,23 @@ def test_acceptance_fix_plan_review_export_and_release_signoff_gate(tmp_path: Pa
     assert final_export["final_export"]["acceptance_fix_plan_review"]["review_id"] == review_id
     assert sign_status == 200
     assert signed["signoff"]["acceptance_gate"]["acceptance_fix_plan_review"]["status"] == "passed"
+
+
+def test_acceptance_fix_plan_review_api_marks_synthetic_only_recheck(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        plan_id, _sprint_id, _project_id, _analytics_report_id = _server_plan_with_closed_sprint(server, planned_review_mode="synthetic")
+        refresh_status, refreshed = request_json(server, "POST", f"/api/acceptance/fix-plans/{plan_id}/outcome-review/refresh")
+    finally:
+        stop_test_server(server)
+
+    summary = refreshed["summary"]
+    warnings = refreshed["outcome_review"]["warnings"]
+
+    assert refresh_status == 201
+    assert summary["manual_recheck_confirmed"] is False
+    assert summary["synthetic_only"] is True
+    assert summary["manual_accepted_count"] == 0
+    assert summary["synthetic_accepted_count"] == 1
+    assert "synthetic_only_recheck" in warnings

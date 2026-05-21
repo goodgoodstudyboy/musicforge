@@ -9,7 +9,7 @@ from song_agent.projectio import read_json, write_json
 from tests.test_acceptance_fix_planning import _planning_sources
 
 
-def _closed_planned_sprint(tmp_path: Path, monkeypatch):
+def _closed_planned_sprint(tmp_path: Path, monkeypatch, *, review_mode: str = "manual"):
     monkeypatch.chdir(tmp_path)
     acceptance_store, _analytics_store, kb_store, plan_store, _suite_id, _case_id, report, kb_report = _planning_sources(tmp_path, monkeypatch)
     plan = plan_store.create({"analytics_report_id": report["report_id"], "kb_report_id": kb_report["report_id"], "max_items": 5}, now="2026-05-21T01:00:00+00:00")
@@ -26,7 +26,7 @@ def _closed_planned_sprint(tmp_path: Path, monkeypatch):
     acceptance_store.write_review(
         suite_id,
         recheck_case.case_id,
-        {"status": "accepted", "rating": 5, "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Accepted after planned rewrite with local-path-marker and masked-key-marker."},
+        {"status": "accepted", "rating": 5, "playback_confirmed": True, "review_mode": review_mode, "audio_mode": "midi", "notes": "Accepted after planned rewrite with local-path-marker and masked-key-marker."},
     )
     acceptance_store.build_report(suite_id)
     fix_store.refresh_delta(sprint_id, now="2026-05-21T01:04:00+00:00")
@@ -72,3 +72,18 @@ def test_fix_plan_outcome_review_sanitizes_sensitive_notes(tmp_path: Path, monke
 
     assert "local-path-marker" not in serialized
     assert "masked-key-marker" not in serialized
+
+
+def test_fix_plan_outcome_review_marks_synthetic_only_recheck(tmp_path: Path, monkeypatch) -> None:
+    store, _plan_store, _fix_store, plan_id, _sprint_id = _closed_planned_sprint(tmp_path, monkeypatch, review_mode="synthetic")
+
+    review = store.refresh_for_plan(plan_id, now="2026-05-21T01:06:00+00:00")
+
+    assert review.status == "warning"
+    assert review.summary["manual_recheck_confirmed"] is False
+    assert review.summary["synthetic_only"] is True
+    assert review.summary["manual_accepted_count"] == 0
+    assert review.summary["synthetic_accepted_count"] == 1
+    assert review.summary["manual_review_count"] == 0
+    assert review.summary["synthetic_review_count"] == 1
+    assert "synthetic_only_recheck" in review.warnings

@@ -829,11 +829,15 @@ def _recommendations(heatmap: list[dict[str, Any]], taxonomy: list[dict[str, Any
 def _summary(facts: list[CaseFact], tasks: list[dict[str, Any]], taxonomy: list[dict[str, Any]], recommendations: list[dict[str, Any]]) -> dict[str, Any]:
     ratings = [fact.rating for fact in facts if isinstance(fact.rating, int)]
     manual_reviews = [fact for fact in facts if fact.review_mode == "manual" and fact.review_status != "missing"]
+    manual_accepted = sum(1 for fact in facts if fact.review_mode == "manual" and fact.review_status == "accepted")
+    synthetic_accepted = sum(1 for fact in facts if fact.review_mode == "synthetic" and fact.review_status == "accepted")
     critical_issues = [item for item in taxonomy if item.get("severity") == "high"]
     open_tasks = [task for task in tasks if task.get("status") in OPEN_TASK_STATUSES]
     return {
         "readiness_status": "empty",
         "accepted_count": sum(1 for fact in facts if fact.review_status == "accepted"),
+        "manual_accepted_count": manual_accepted,
+        "synthetic_accepted_count": synthetic_accepted,
         "needs_fix_count": sum(1 for fact in facts if fact.review_status == "needs_fix"),
         "rejected_count": sum(1 for fact in facts if fact.review_status == "rejected"),
         "waived_count": sum(1 for fact in facts if fact.review_status == "waived"),

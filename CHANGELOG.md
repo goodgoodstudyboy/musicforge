@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.11.1 - 2026-05-21
+
+### Fixed
+- Outcome Review no longer treats synthetic-only recheck acceptance as manual confirmation.
+- Fix Sprint delta reports now carry recheck manual/synthetic accepted and review counts for downstream evidence.
+
+### Added
+- Store, API, and release-check regressions for synthetic-only recheck warnings.
+
+### Verified
+- `python -m pytest tests\test_acceptance_fix_sprints.py tests\test_acceptance_fix_plan_reviews.py tests\test_server_acceptance_fix_plan_reviews.py tests\test_release_check.py::test_v411_fix_plan_outcome_review_smoke -q`
+
 ## v4.11.0 - 2026-05-21
 
 ### Added

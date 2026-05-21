@@ -214,6 +214,8 @@ def test_v411_fix_plan_outcome_review_smoke(tmp_path: Path) -> None:
     assert "effectiveness=" in detail
     assert "helpfulness=" in detail
     assert "stale_guard=409" in detail
+    assert "manual=False" in detail
+    assert "synthetic_only=True" in detail
     assert "signoff=passed" in detail
 
 

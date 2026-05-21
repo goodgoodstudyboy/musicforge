@@ -651,6 +651,10 @@ def build_delta_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFixIte
                 "rating_delta": rating_delta,
                 "issue_count_delta": issue_delta,
                 "accepted_delta": accepted_delta,
+                "manual_accepted_count": _accepted_count(recheck_report, mode="manual"),
+                "synthetic_accepted_count": _accepted_count(recheck_report, mode="synthetic"),
+                "manual_review_count": _review_count(recheck_report, mode="manual"),
+                "synthetic_review_count": _review_count(recheck_report, mode="synthetic"),
                 "needs_fix_delta": int(after_summary.get("needs_fix_count") or 0) - int(before_summary.get("needs_fix_count") or 0),
                 "rejected_delta": int(after_summary.get("rejected_count") or 0) - int(before_summary.get("rejected_count") or 0),
                 "fixed_item_count": fixed_count,
@@ -880,6 +884,22 @@ def _review_task_close_rate(items: list[AcceptanceFixItem], project_store: Proje
         except Exception:
             continue
     return round(closed / len(linked), 4)
+
+
+def _accepted_count(report: dict[str, Any], *, mode: str) -> int:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    key = f"{mode}_accepted_count"
+    if key in summary:
+        return _int(summary.get(key), 0)
+    return sum(1 for row in report.get("cases", []) if isinstance(row, dict) and row.get("review_mode") == mode and row.get("review_status") == "accepted")
+
+
+def _review_count(report: dict[str, Any], *, mode: str) -> int:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    key = f"{mode}_review_count"
+    if key in summary:
+        return _int(summary.get(key), 0)
+    return sum(1 for row in report.get("cases", []) if isinstance(row, dict) and row.get("review_mode") == mode and row.get("review_status") in {"accepted", "needs_fix", "rejected", "waived"})
 
 
 def _close_check(check_id: str, passed: bool, severity: str, message: str, details: list[str]) -> dict[str, Any]:

@@ -6155,7 +6155,7 @@ def _v411_fix_plan_outcome_review_smoke(root: Path) -> tuple[bool, str]:
         planned_case_id = (planned_detail.get("cases") or [{}])[0].get("case_id")
         _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/generate", {"render_audio": "never"})
         _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/health")
-        planned_review_status, _planned_review = _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual planned recheck accepted."})
+        planned_review_status, _planned_review = _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "synthetic", "audio_mode": "midi", "notes": "Synthetic planned recheck accepted."})
         _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/report")
         planned_delta_status, planned_delta = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/delta/refresh")
         planned_close_status, planned_closeout = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/close", {"force": True, "override_reason": "waived issue was manually verified"})
@@ -6211,6 +6211,9 @@ def _v411_fix_plan_outcome_review_smoke(root: Path) -> tuple[bool, str]:
             and review_summary.get("review_id") == review_id
             and int(review_summary.get("plan_effectiveness_score") or 0) > 0
             and review_summary.get("kb_evidence_helpfulness") not in {"missing", None}
+            and review_summary.get("manual_recheck_confirmed") is False
+            and review_summary.get("synthetic_only") is True
+            and "synthetic_only_recheck" in review.get("outcome_review", {}).get("warnings", [])
             and (review.get("outcome_review", {}).get("item_outcomes") or [{}])[0].get("planned_item_id") == "afpi-000001"
             and review_list_status == 200
             and int(review_list.get("summary", {}).get("review_count") or 0) >= 1
@@ -6234,7 +6237,8 @@ def _v411_fix_plan_outcome_review_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"review={review_id}, effectiveness={review_summary.get('plan_effectiveness_score')}, "
-            f"helpfulness={review_summary.get('kb_evidence_helpfulness')}, stale_guard={stale_sign_status}, "
+            f"helpfulness={review_summary.get('kb_evidence_helpfulness')}, manual={review_summary.get('manual_recheck_confirmed')}, "
+            f"synthetic_only={review_summary.get('synthetic_only')}, stale_guard={stale_sign_status}, "
             f"signoff={signoff.get('signoff', {}).get('acceptance_gate', {}).get('acceptance_fix_plan_review', {}).get('status')}"
         )
     except Exception as exc:

@@ -372,6 +372,10 @@ def fix_plan_review_summary(review: AcceptanceFixPlanReview | dict[str, Any] | N
             "warning_count": summary.get("warning_count", 0),
             "manual_recheck_confirmed": summary.get("manual_recheck_confirmed", False),
             "synthetic_only": summary.get("synthetic_only", False),
+            "manual_accepted_count": summary.get("manual_accepted_count", 0),
+            "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
+            "manual_review_count": summary.get("manual_review_count", 0),
+            "synthetic_review_count": summary.get("synthetic_review_count", 0),
             "stale": data.get("status") == "stale" or bool(summary.get("stale", False)),
             "source_hash": source.get("source_hash"),
             "warnings": data.get("warnings", []) if isinstance(data.get("warnings"), list) else [],
@@ -488,8 +492,14 @@ def _review_summary(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items:
         warnings.append("waived_items_present")
     if open_items:
         warnings.append("open_items_present")
-    manual_recheck_confirmed = bool((delta_summary.get("accepted_delta") or 0) > 0 or str(delta_summary.get("after_readiness") or "") in {"ready", "watch"})
-    synthetic_only = False
+    manual_accepted_count = _int(delta_summary.get("manual_accepted_count"), 0)
+    synthetic_accepted_count = _int(delta_summary.get("synthetic_accepted_count"), 0)
+    manual_review_count = _int(delta_summary.get("manual_review_count"), 0)
+    synthetic_review_count = _int(delta_summary.get("synthetic_review_count"), 0)
+    manual_recheck_confirmed = manual_accepted_count > 0 or manual_review_count > 0
+    synthetic_only = synthetic_accepted_count > 0 and manual_accepted_count == 0 and manual_review_count == 0
+    if synthetic_only:
+        warnings.append("synthetic_only_recheck")
     ranking = _ranking_alignment_score(plan.planned_items, item_outcomes)
     helpfulness = _overall_kb_helpfulness(item_outcomes)
     return sanitize_metadata(
@@ -508,6 +518,10 @@ def _review_summary(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items:
             "warning_count": len(warnings) + sum(1 for item in item_outcomes if item.get("warnings")),
             "manual_recheck_confirmed": manual_recheck_confirmed,
             "synthetic_only": synthetic_only,
+            "manual_accepted_count": manual_accepted_count,
+            "synthetic_accepted_count": synthetic_accepted_count,
+            "manual_review_count": manual_review_count,
+            "synthetic_review_count": synthetic_review_count,
             "delta_status": delta_summary.get("status"),
             "closeout_status": closeout.get("status"),
             "warnings": warnings,
