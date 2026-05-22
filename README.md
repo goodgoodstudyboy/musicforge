@@ -188,6 +188,24 @@ Release Signoff can require non-stale simulation evidence with
 `require_planning_rule_simulation=true`; a worse candidate recommendation is
 recorded as evidence for review but does not automatically activate rules.
 
+Planning Rule Governance promotes simulated rule sets into frozen active rule
+versions. A promotion must be created from non-stale simulation evidence, then
+manually approved and promoted before new Acceptance Fix Plans record it. The
+active pointer can be rolled back, and governance never creates Fix Plans,
+creates Sprints, applies edits, or signs releases automatically.
+
+```powershell
+python -m song_agent.cli planning-rule-governance promote-request --ruleset-id afprs-000001 --simulation-id afpsim-000001 --json
+python -m song_agent.cli planning-rule-governance approve prgprom-000001 --approved-by developer --note "Historical alignment improved"
+python -m song_agent.cli planning-rule-governance promote prgprom-000001 --promoted-by developer
+python -m song_agent.cli planning-rule-governance active --json
+```
+
+Release Signoff can require non-stale active governance evidence with
+`require_planning_rule_governance=true`. Project Export, Release Export, and
+Final Export include compact governance summaries and do not include the full
+frozen ruleset payload.
+
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,
 `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are

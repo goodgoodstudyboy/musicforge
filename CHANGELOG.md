@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.13.0 - 2026-05-22
+
+### Added
+- Planning Rule Governance store for promotion requests, approval, active rule versions, frozen ruleset payloads, and rollback.
+- Planning Rule Governance API, CLI commands, Studio panel, Project/Release/Final Export summaries, and Release Signoff evidence.
+- New Acceptance Fix Plans now record active planning rule version evidence, or explicit `legacy_default` when no active version exists.
+- release-check v4.13 smoke covering promotion, active version traceability, signoff gate, stale evidence guard, rollback, and redaction.
+
+### Verified
+- `python -m pytest tests\test_planning_rule_governance.py tests\test_server_planning_rule_governance.py tests\test_cli_planning_rule_governance.py tests\test_release_check.py::test_v413_planning_rule_governance_smoke -q`
+
 ## v4.12.0 - 2026-05-21
 
 ### Added

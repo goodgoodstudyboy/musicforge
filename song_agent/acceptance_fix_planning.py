@@ -154,6 +154,7 @@ class AcceptanceFixPlanningStore:
         self.fix_sprint_store = fix_sprint_store or AcceptanceFixSprintStore(analytics_store=self.analytics_store, project_store=self.project_store)
         self.kb_store = kb_store or AcceptanceKnowledgeBaseStore(fix_sprint_store=self.fix_sprint_store, project_store=self.project_store)
         self.lock = _lock_for_root(self.root.resolve())
+        self.planning_rule_governance_store = None
 
     def plan_dir(self, plan_id: str) -> Path:
         base = self.root.resolve()
@@ -322,8 +323,10 @@ class AcceptanceFixPlanningStore:
             warnings.append("hidden_entries_included")
         if not kb_entries:
             warnings.append("no_kb_history")
+        planning_rule_governance = self._planning_rule_governance_source()
         source_payload = {
             "planning_rules_version": PLANNING_RULES_VERSION,
+            "planning_rule_governance": planning_rule_governance,
             "analytics_report_id": report_id,
             "analytics_source_hash": analytics.get("source_hash"),
             "recommendation_hashes": {str(item.get("recommendation_id") or ""): stable_hash(item) for item in recommendations},
@@ -343,6 +346,9 @@ class AcceptanceFixPlanningStore:
             "recommended_recheck_profile": "developer_manual",
             "manual_recheck_required": True,
             "max_items": max_items,
+            "planning_rule_version_id": planning_rule_governance.get("planning_rule_version_id"),
+            "governance_status": planning_rule_governance.get("governance_status"),
+            "generated_with_active_rules": bool(planning_rule_governance.get("generated_with_active_rules", False)),
         }
         return AcceptanceFixPlan(
             plan_id=plan_id,
@@ -359,6 +365,7 @@ class AcceptanceFixPlanningStore:
             planned_items=planned_items,
             strategy={
                 "planning_rules_version": PLANNING_RULES_VERSION,
+                "planning_rule_governance": planning_rule_governance,
                 "recommended_recheck_profile": "developer_manual",
                 "manual_recheck_required": True,
                 "suggested_order": [item.get("planned_item_id") for item in planned_items],
@@ -370,6 +377,18 @@ class AcceptanceFixPlanningStore:
             updated_at=now,
             created_by=_bounded(payload.get("created_by"), 120) or ("preview" if preview else "developer"),
         )
+
+    def _planning_rule_governance_source(self) -> dict[str, Any]:
+        try:
+            from song_agent.planning_rule_governance import PlanningRuleGovernanceStore, fix_plan_rule_governance_source
+
+            store = self.planning_rule_governance_store
+            if store is None:
+                store = PlanningRuleGovernanceStore(project_store=self.project_store)
+                self.planning_rule_governance_store = store
+            return fix_plan_rule_governance_source(store)
+        except Exception:
+            return {"status": "legacy_default", "governance_status": "legacy_default", "generated_with_active_rules": False, "planning_rule_version_id": None}
 
     def _kb_report(self, report_id: Any) -> tuple[dict[str, Any], str]:
         wanted = str(report_id or "").strip()
@@ -459,6 +478,9 @@ def fix_plan_summary(plan: AcceptanceFixPlan | dict[str, Any] | None) -> dict[st
             "analytics_source_hash": source.get("analytics_source_hash"),
             "kb_report_id": source.get("kb_report_id"),
             "kb_source_hash": source.get("kb_source_hash"),
+            "planning_rule_governance": source.get("planning_rule_governance") if isinstance(source.get("planning_rule_governance"), dict) else {},
+            "planning_rule_version_id": (source.get("planning_rule_governance") if isinstance(source.get("planning_rule_governance"), dict) else {}).get("planning_rule_version_id"),
+            "governance_status": (source.get("planning_rule_governance") if isinstance(source.get("planning_rule_governance"), dict) else {}).get("governance_status", "legacy_default"),
             "source_hash": source.get("source_hash"),
             "stale": data.get("status") == "stale" or bool(summary.get("stale", False)),
             "warnings": data.get("warnings", []) if isinstance(data.get("warnings"), list) else [],

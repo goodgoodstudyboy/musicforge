@@ -290,6 +290,56 @@ def build_planning_simulation_parser() -> argparse.ArgumentParser:
     return simulation_parser
 
 
+def build_planning_rule_governance_parser() -> argparse.ArgumentParser:
+    governance_parser = argparse.ArgumentParser(description="Govern local MusicForge Planning Rule promotions and active versions.")
+    subparsers = governance_parser.add_subparsers(dest="action", required=True)
+
+    subparsers.add_parser("active", help="Show the current active Planning Rule Version.")
+    subparsers.add_parser("versions", help="List Planning Rule Versions.").add_argument("--include-archived", action="store_true")
+
+    version = subparsers.add_parser("version", help="Show one Planning Rule Version.")
+    version.add_argument("version_id")
+
+    subparsers.add_parser("promotions", help="List Planning Rule Promotions.").add_argument("--include-archived", action="store_true")
+
+    promotion = subparsers.add_parser("promotion", help="Show one Planning Rule Promotion.")
+    promotion.add_argument("promotion_id")
+
+    request = subparsers.add_parser("promote-request", help="Create a Planning Rule Promotion request.")
+    request.add_argument("--ruleset-id", required=True)
+    request.add_argument("--simulation-id", required=True)
+    request.add_argument("--note", default="")
+
+    approve = subparsers.add_parser("approve", help="Approve a Planning Rule Promotion.")
+    approve.add_argument("promotion_id")
+    approve.add_argument("--approved-by", default="developer")
+    approve.add_argument("--note", default="")
+    approve.add_argument("--force", action="store_true")
+    approve.add_argument("--override-reason", default="")
+
+    reject = subparsers.add_parser("reject", help="Reject a Planning Rule Promotion.")
+    reject.add_argument("promotion_id")
+    reject.add_argument("--rejected-by", default="developer")
+    reject.add_argument("--reason", required=True)
+
+    promote = subparsers.add_parser("promote", help="Promote an approved Planning Rule Promotion to active.")
+    promote.add_argument("promotion_id")
+    promote.add_argument("--promoted-by", default="developer")
+    promote.add_argument("--activation-note", default="")
+
+    rollback = subparsers.add_parser("rollback", help="Rollback active Planning Rules to a previous version.")
+    rollback.add_argument("--target-version-id", required=True)
+    rollback.add_argument("--rolled-back-by", default="developer")
+    rollback.add_argument("--reason", required=True)
+
+    subparsers.add_parser("events", help="List Planning Rule Governance events.").add_argument("--limit", type=int, default=50)
+
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write the command result as JSON.")
+    return governance_parser
+
+
 def build_acceptance_kb_parser() -> argparse.ArgumentParser:
     kb_parser = argparse.ArgumentParser(description="Manage the local MusicForge Acceptance Knowledge Base.")
     subparsers = kb_parser.add_subparsers(dest="action", required=True)
@@ -691,6 +741,54 @@ def _main() -> None:
         else:
             print_planning_simulation_result(result)
         raise SystemExit(0)
+    elif raw_args and raw_args[0] == "planning-rule-governance":
+        from song_agent.planning_rule_governance import PlanningRuleGovernanceStore, governance_summary, promotion_summary
+
+        parser = build_planning_rule_governance_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = PlanningRuleGovernanceStore()
+        if args.action == "active":
+            version = store.active_version()
+            result = {"ok": True, "active": store.active_pointer(), "version": version.to_dict() if version else {}, "summary": store.active_summary()}
+        elif args.action == "versions":
+            versions = store.list_versions(include_archived=args.include_archived)
+            result = {"ok": True, "versions": [version.to_dict() for version in versions], "summary": {"version_count": len(versions), "active": store.active_summary()}}
+        elif args.action == "version":
+            version = store.read_version(args.version_id)
+            result = {"ok": True, "version": version.to_dict(), "frozen_ruleset_summary": {}, "summary": governance_summary(version, active=store.active_pointer(), evidence_stale=store.version_evidence_is_stale(version))}
+        elif args.action == "promotions":
+            promotions = store.list_promotions(include_archived=args.include_archived)
+            result = {"ok": True, "promotions": [promotion.to_dict() for promotion in promotions], "summary": {"promotion_count": len(promotions)}}
+        elif args.action == "promotion":
+            promotion = store.read_promotion(args.promotion_id)
+            result = {"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)}
+        elif args.action == "promote-request":
+            promotion = store.create_promotion({"ruleset_id": args.ruleset_id, "simulation_id": args.simulation_id, "note": args.note})
+            result = {"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)}
+        elif args.action == "approve":
+            promotion = store.approve_promotion(args.promotion_id, {"approved_by": args.approved_by, "approval_note": args.note, "force": args.force, "override_reason": args.override_reason})
+            result = {"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)}
+        elif args.action == "reject":
+            promotion = store.reject_promotion(args.promotion_id, {"rejected_by": args.rejected_by, "reason": args.reason})
+            result = {"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)}
+        elif args.action == "promote":
+            promoted = store.promote(args.promotion_id, {"promoted_by": args.promoted_by, "activation_note": args.activation_note})
+            result = {"ok": True, "version": promoted["version"].to_dict(), "active": promoted["active"], "promotion": promoted["promotion"].to_dict(), "summary": promoted["summary"]}
+        elif args.action == "rollback":
+            rolled_back = store.rollback({"target_version_id": args.target_version_id, "rolled_back_by": args.rolled_back_by, "reason": args.reason})
+            result = {"ok": True, "version": rolled_back["version"].to_dict(), "active": rolled_back["active"], "summary": rolled_back["summary"]}
+        elif args.action == "events":
+            events = store.events(limit=args.limit)
+            result = {"ok": True, "events": events, "summary": {"event_count": len(events)}}
+        else:
+            parser.error("unknown planning-rule-governance action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_planning_rule_governance_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "acceptance-kb":
         from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
 
@@ -978,6 +1076,24 @@ def print_planning_simulation_result(result: dict[str, Any]) -> None:
     print(f"recommendation: {summary.get('recommendation') or '-'}")
     if result.get("simulations") is not None:
         print(f"simulations: {len(result.get('simulations') or [])}")
+
+
+def print_planning_rule_governance_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    promotion = result.get("promotion") if isinstance(result.get("promotion"), dict) else {}
+    version = result.get("version") if isinstance(result.get("version"), dict) else {}
+    print("MusicForge planning-rule-governance")
+    print(f"status: {summary.get('status') or version.get('status') or promotion.get('status') or '-'}")
+    print(f"active_version: {summary.get('active_version_id') or version.get('version_id') or '-'}")
+    if promotion:
+        print(f"promotion: {promotion.get('promotion_id')}")
+        print(f"recommendation: {(promotion.get('evidence') or {}).get('recommendation')}")
+    if result.get("versions") is not None:
+        print(f"versions: {len(result.get('versions') or [])}")
+    if result.get("promotions") is not None:
+        print(f"promotions: {len(result.get('promotions') or [])}")
+    if result.get("events") is not None:
+        print(f"events: {len(result.get('events') or [])}")
 
 
 def print_acceptance_kb_result(result: dict[str, Any]) -> None:

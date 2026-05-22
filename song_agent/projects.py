@@ -535,6 +535,7 @@ class ProjectStore:
             "acceptance_fix_plan_review_summary": _collect_project_acceptance_fix_plan_review_summary(document.state.project_id),
             "acceptance_kb_summary": _collect_project_acceptance_kb_summary(document.state.project_id),
             "planning_rule_simulation_summary": _collect_project_planning_rule_simulation_summary(document.state.project_id),
+            "planning_rule_governance_summary": _collect_project_planning_rule_governance_summary(document.state.project_id),
             "delivery_qa_summary": _collect_project_delivery_qa_summary(self.project_dir(project_id)),
             "delivery_signoff_summary": _collect_project_delivery_signoff_summary(self.project_dir(project_id)),
             "generated_at": now_iso(),
@@ -1273,6 +1274,26 @@ def _collect_project_planning_rule_simulation_summary(project_id: str) -> dict[s
 
     try:
         return _sanitize_asset_metadata(latest_planning_simulation_summary(PlanningRuleSimulationStore(), project_id=project_id))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {"status": "missing"}
+
+
+def _collect_project_planning_rule_governance_summary(project_id: str) -> dict[str, Any]:
+    from song_agent.acceptance_fix_planning import AcceptanceFixPlanningStore
+    from song_agent.planning_rule_governance import PlanningRuleGovernanceStore, active_governance_summary
+
+    try:
+        summary = _sanitize_asset_metadata(active_governance_summary(PlanningRuleGovernanceStore()))
+        used: dict[str, int] = {}
+        for plan in AcceptanceFixPlanningStore().list_plans(include_archived=False):
+            matches_project = plan.scope.get("project_id") == project_id or any(str((item.get("target") if isinstance(item.get("target"), dict) else {}).get("project_id") or "") == project_id for item in plan.planned_items)
+            if not matches_project:
+                continue
+            governance = plan.source.get("planning_rule_governance") if isinstance(plan.source.get("planning_rule_governance"), dict) else {}
+            version_id = str(governance.get("planning_rule_version_id") or governance.get("version_id") or "legacy_default")
+            used[version_id] = used.get(version_id, 0) + 1
+        summary["used_rule_versions"] = [{"version_id": key, "plan_count": value} for key, value in sorted(used.items())]
+        return summary
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {"status": "missing"}
 

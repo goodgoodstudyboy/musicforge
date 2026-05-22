@@ -22,6 +22,7 @@ from song_agent.release_checks import (
     _v410_knowledge_assisted_fix_planning_smoke,
     _v411_fix_plan_outcome_review_smoke,
     _v412_planning_rule_simulation_smoke,
+    _v413_planning_rule_governance_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -229,6 +230,17 @@ def test_v412_planning_rule_simulation_smoke(tmp_path: Path) -> None:
     assert "synthetic=1" in detail
     assert "stale_guard=409" in detail
     assert "signoff=passed" in detail
+
+
+def test_v413_planning_rule_governance_smoke(tmp_path: Path) -> None:
+    ok, detail = _v413_planning_rule_governance_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "promotion=prgprom-" in detail
+    assert "version=prgv-" in detail
+    assert "signoff=passed" in detail
+    assert "stale_guard=409" in detail
+    assert "rollback=passed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

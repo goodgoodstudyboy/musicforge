@@ -1248,6 +1248,14 @@ def panel_html() -> str:
           <button class="secondary" id="planning-simulation-refresh" type="button">Refresh Simulations</button>
         </div>
         <div id="planning-rule-simulation" class="release-detail"><div class="empty">Simulation only. No production rules are changed.</div></div>
+        <div class="panel-title subhead"><span>Planning Rule Governance</span></div>
+        <div class="actions">
+          <button class="secondary" id="planning-governance-refresh" type="button">Refresh Governance</button>
+          <button class="secondary" id="planning-governance-create" type="button">Create Promotion</button>
+          <button class="secondary" id="planning-governance-approve" type="button">Approve</button>
+          <button class="secondary" id="planning-governance-promote" type="button">Promote</button>
+        </div>
+        <div id="planning-rule-governance" class="release-detail"><div class="empty">No active planning rule version.</div></div>
         <div class="panel-title subhead"><span>Knowledge Base</span></div>
         <div class="actions">
           <button class="secondary" id="acceptance-kb-refresh" type="button">Refresh KB</button>
@@ -1342,6 +1350,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let acceptanceFixPlanReview = null;
     let planningRuleSets = [];
     let planningSimulations = [];
+    let planningGovernance = null;
+    let planningPromotions = [];
+    let planningVersions = [];
     let acceptanceKb = null;
     let acceptanceKbRecommendation = null;
     let projects = [];
@@ -1438,6 +1449,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadAcceptanceFixSprints();
       await loadAcceptanceKb();
       await loadPlanningSimulations();
+      await loadPlanningGovernance();
       await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
@@ -1448,6 +1460,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadAcceptanceFixSprints();
         loadAcceptanceKb();
         loadPlanningSimulations();
+        loadPlanningGovernance();
         loadAcceptanceSuites();
         loadAssets();
         loadReferences();
@@ -1703,6 +1716,49 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     });
     $("planning-simulation-refresh").addEventListener("click", loadPlanningSimulations);
+    $("planning-governance-refresh").addEventListener("click", loadPlanningGovernance);
+    $("planning-governance-create").addEventListener("click", async () => {
+      try {
+        const simulation = planningSimulations[0];
+        if (!simulation) throw new Error("Run a Planning Rule Simulation first.");
+        await api("/api/acceptance/planning-rule-governance/promotions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ruleset_id: simulation.ruleset_id, simulation_id: simulation.simulation_id, note: "Studio promotion request" }),
+        });
+        await loadPlanningGovernance();
+      } catch (err) {
+        $("planning-rule-governance").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("planning-governance-approve").addEventListener("click", async () => {
+      try {
+        const promotion = planningPromotions.find((item) => item.status === "pending") || planningPromotions[0];
+        if (!promotion) throw new Error("Create a Planning Rule Promotion first.");
+        await api(`/api/acceptance/planning-rule-governance/promotions/${encodeURIComponent(promotion.promotion_id)}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approved_by: "studio", approval_note: "Approved in Studio" }),
+        });
+        await loadPlanningGovernance();
+      } catch (err) {
+        $("planning-rule-governance").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+    $("planning-governance-promote").addEventListener("click", async () => {
+      try {
+        const promotion = planningPromotions.find((item) => item.status === "approved") || planningPromotions[0];
+        if (!promotion) throw new Error("Approve a Planning Rule Promotion first.");
+        await api(`/api/acceptance/planning-rule-governance/promotions/${encodeURIComponent(promotion.promotion_id)}/promote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ promoted_by: "studio" }),
+        });
+        await loadPlanningGovernance();
+      } catch (err) {
+        $("planning-rule-governance").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
     $("acceptance-kb-refresh").addEventListener("click", async () => {
       try {
         const data = await api("/api/acceptance/kb/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "global" }) });
@@ -2399,6 +2455,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         planningSimulations = [];
       }
       renderPlanningSimulations();
+    }
+
+    async function loadPlanningGovernance() {
+      try {
+        const [activeData, promotionsData, versionsData] = await Promise.all([
+          api("/api/acceptance/planning-rule-governance/active"),
+          api("/api/acceptance/planning-rule-governance/promotions"),
+          api("/api/acceptance/planning-rule-governance/versions"),
+        ]);
+        planningGovernance = activeData || null;
+        planningPromotions = promotionsData.promotions || [];
+        planningVersions = versionsData.versions || [];
+      } catch (err) {
+        planningGovernance = null;
+        planningPromotions = [];
+        planningVersions = [];
+      }
+      renderPlanningGovernance();
     }
 
     async function loadAcceptanceKb() {
@@ -3410,6 +3484,49 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <table>
           <thead><tr><th>Simulation</th><th>Rule Set</th><th>Status</th><th>Reviews</th><th>Delta</th><th>Recommendation</th></tr></thead>
           <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function renderPlanningGovernance() {
+      const target = $("planning-rule-governance");
+      if (!target) return;
+      const summary = (planningGovernance || {}).summary || {};
+      const active = (planningGovernance || {}).active || {};
+      const promotionRows = planningPromotions.slice(0, 8).map((promotion) => {
+        const evidence = promotion.evidence || {};
+        return `
+          <tr>
+            <td>${escapeHtml(promotion.promotion_id || "-")}</td>
+            <td>${escapeHtml(promotion.status || "-")}</td>
+            <td>${escapeHtml(promotion.ruleset_id || "-")}</td>
+            <td>${escapeHtml(promotion.simulation_id || "-")}</td>
+            <td>${escapeHtml(evidence.recommendation || "-")}</td>
+            <td>${escapeHtml(evidence.alignment_delta ?? "-")}</td>
+          </tr>
+        `;
+      }).join("");
+      const versionRows = planningVersions.slice(0, 6).map((version) => `
+        <tr>
+          <td>${escapeHtml(version.version_id || "-")}</td>
+          <td>${escapeHtml(version.status || "-")}</td>
+          <td>${escapeHtml(version.ruleset_id || "-")}</td>
+          <td>${escapeHtml((version.promoted_from || {}).simulation_id || "-")}</td>
+        </tr>
+      `).join("");
+      target.innerHTML = `
+        <div class="grid3">
+          <div><b>Active Version</b><br>${escapeHtml(summary.active_version_id || active.active_version_id || "-")}</div>
+          <div><b>Ruleset</b><br>${escapeHtml(summary.ruleset_id || "-")}</div>
+          <div><b>Evidence</b><br>${escapeHtml(summary.evidence_stale ? "stale" : summary.status || "missing")}</div>
+        </div>
+        <table>
+          <thead><tr><th>Promotion</th><th>Status</th><th>Rule Set</th><th>Simulation</th><th>Recommendation</th><th>Delta</th></tr></thead>
+          <tbody>${promotionRows || "<tr><td colspan='6'>No promotions.</td></tr>"}</tbody>
+        </table>
+        <table>
+          <thead><tr><th>Version</th><th>Status</th><th>Rule Set</th><th>Simulation</th></tr></thead>
+          <tbody>${versionRows || "<tr><td colspan='4'>No versions.</td></tr>"}</tbody>
         </table>
       `;
     }

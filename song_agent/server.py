@@ -266,6 +266,15 @@ from song_agent.planning_rule_simulation import (
     planning_simulation_summary,
     ruleset_summary,
 )
+from song_agent.planning_rule_governance import (
+    PlanningRuleGovernanceError,
+    PlanningRuleGovernanceNotFoundError,
+    PlanningRuleGovernanceStateError,
+    PlanningRuleGovernanceStore,
+    active_governance_summary,
+    governance_summary,
+    promotion_summary,
+)
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.music_acceptance import (
@@ -2456,6 +2465,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.planning_rule_simulation_store  # type: ignore[attr-defined]
 
     @property
+    def planning_rule_governance_store(self) -> PlanningRuleGovernanceStore:
+        return self.server.planning_rule_governance_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2641,6 +2654,36 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             planning_simulation_route = _match_planning_simulation_route(path)
             if planning_simulation_route is not None:
                 self._handle_planning_simulation_route(method, planning_simulation_route)
+                return
+
+            if path == "/api/acceptance/planning-rule-governance/active":
+                self._handle_planning_rule_governance_active(method)
+                return
+
+            if path == "/api/acceptance/planning-rule-governance/versions":
+                self._handle_planning_rule_governance_versions(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/planning-rule-governance/promotions":
+                self._handle_planning_rule_governance_promotions(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/planning-rule-governance/rollback":
+                self._handle_planning_rule_governance_rollback(method)
+                return
+
+            if path == "/api/acceptance/planning-rule-governance/events":
+                self._handle_planning_rule_governance_events(method, parsed.query)
+                return
+
+            governance_version_route = _match_planning_rule_governance_version_route(path)
+            if governance_version_route is not None:
+                self._handle_planning_rule_governance_version_route(method, governance_version_route)
+                return
+
+            governance_promotion_route = _match_planning_rule_governance_promotion_route(path)
+            if governance_promotion_route is not None:
+                self._handle_planning_rule_governance_promotion_route(method, governance_promotion_route)
                 return
 
             fix_plan_review_route = _match_acceptance_fix_plan_review_route(path)
@@ -5007,6 +5050,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         fix_plan_review_evidence = self._release_acceptance_fix_plan_review_gate(payload)
         kb_evidence = self._release_acceptance_kb_gate(payload)
         planning_simulation_evidence = self._release_planning_rule_simulation_gate(payload)
+        planning_governance_evidence = self._release_planning_rule_governance_gate(payload)
         if not suite_id:
             if not analytics_evidence:
                 gate = {}
@@ -5029,6 +5073,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                         gate["status"] = "failed"
                         gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
+                if planning_governance_evidence:
+                    gate["planning_rule_governance"] = planning_governance_evidence
+                    if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                        gate["status"] = "failed"
+                        gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
                 return gate
             gate = {"acceptance_analytics": analytics_evidence}
             if fix_plan_evidence:
@@ -5053,6 +5102,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                     gate["status"] = "failed"
                     gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
+            if planning_governance_evidence:
+                gate["planning_rule_governance"] = planning_governance_evidence
+                if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                    gate["status"] = "failed"
+                    gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
             if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = "Acceptance analytics readiness is blocked."
@@ -5106,6 +5160,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
+        if planning_governance_evidence:
+            gate["planning_rule_governance"] = planning_governance_evidence
+            if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
+                gate["status"] = "failed"
+                gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
         return gate
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -5255,6 +5314,34 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except PlanningRuleSimulationNotFoundError:
             return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Simulation evidence is missing."}
         except PlanningRuleSimulationError as exc:
+            return {"status": "failed" if require_gate else "warning", "message": str(exc)}
+
+    def _release_planning_rule_governance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        require_gate = bool(payload.get("require_planning_rule_governance", False))
+        requested_version_id = str(payload.get("planning_rule_version_id") or "").strip()
+        force = bool(payload.get("force", False))
+        try:
+            active = self.planning_rule_governance_store.active_version()
+            if active is None:
+                return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Governance active version is missing."}
+            summary = self.planning_rule_governance_store.active_summary()
+            evidence_stale = self.planning_rule_governance_store.version_evidence_is_stale(active)
+            integrity_ok = self.planning_rule_governance_store.version_integrity_ok(active)
+            evidence = {**summary, "evidence_stale": evidence_stale, "integrity_ok": integrity_ok}
+            if active.status in {"rolled_back", "archived"}:
+                return {**evidence, "status": "failed", "message": "Planning Rule Governance active version is not active."}
+            if evidence_stale:
+                return {**evidence, "status": "failed" if require_gate else "warning", "message": "Planning Rule Governance simulation evidence is stale."}
+            if not integrity_ok:
+                return {**evidence, "status": "failed", "message": "Planning Rule Governance frozen ruleset integrity failed."}
+            if requested_version_id and requested_version_id != active.version_id:
+                if not force:
+                    return {**evidence, "status": "failed" if require_gate else "warning", "message": "Requested Planning Rule Version is not active."}
+                if not str(payload.get("override_reason") or "").strip():
+                    return {**evidence, "status": "failed", "message": "override_reason is required when forcing Planning Rule Version mismatch."}
+                return {**evidence, "status": "warning", "message": "Planning Rule Version mismatch was force-accepted."}
+            return {**evidence, "status": "passed"}
+        except PlanningRuleGovernanceError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
     def _planning_simulation_reviews_match_release(self, simulation: Any, release_id: str) -> bool:
@@ -6348,6 +6435,123 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (PlanningRuleSimulationError, AcceptanceFixPlanReviewError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_rule_governance_active(self, method: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        version = self.planning_rule_governance_store.active_version()
+        active = self.planning_rule_governance_store.active_pointer()
+        summary = self.planning_rule_governance_store.active_summary()
+        self._send_json({"ok": True, "active": active, "version": version.to_dict() if version else {}, "summary": summary})
+
+    def _handle_planning_rule_governance_versions(self, method: str, query_string: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        query = parse_qs(query_string)
+        include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+        status = _query_value(query, "status") or None
+        versions = self.planning_rule_governance_store.list_versions(include_archived=include_archived, status=status)
+        self._send_json({"ok": True, "versions": [version.to_dict() for version in versions], "summary": {"version_count": len(versions), "active": self.planning_rule_governance_store.active_summary()}})
+
+    def _handle_planning_rule_governance_version_route(self, method: str, route: tuple[str, str]) -> None:
+        version_id, action = route
+        try:
+            if action or method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED if action else HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            version = self.planning_rule_governance_store.read_version(version_id)
+            frozen = self.planning_rule_governance_store.frozen_ruleset(version_id)
+            active = self.planning_rule_governance_store.active_pointer()
+            self._send_json({"ok": True, "version": version.to_dict(), "frozen_ruleset_summary": ruleset_summary(frozen), "summary": governance_summary(version, active=active, evidence_stale=self.planning_rule_governance_store.version_evidence_is_stale(version))})
+        except PlanningRuleGovernanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PlanningRuleGovernanceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_rule_governance_promotions(self, method: str, query_string: str) -> None:
+        try:
+            if method == "GET":
+                query = parse_qs(query_string)
+                include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+                status = _query_value(query, "status") or None
+                promotions = self.planning_rule_governance_store.list_promotions(include_archived=include_archived, status=status)
+                self._send_json({"ok": True, "promotions": [promotion.to_dict() for promotion in promotions], "summary": {"promotion_count": len(promotions)}})
+                return
+            if method == "POST":
+                promotion = self.planning_rule_governance_store.create_promotion(self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except PlanningRuleGovernanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleGovernanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (PlanningRuleGovernanceError, PlanningRuleSimulationError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_rule_governance_promotion_route(self, method: str, route: tuple[str, str]) -> None:
+        promotion_id, action = route
+        try:
+            if not action:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                promotion = self.planning_rule_governance_store.read_promotion(promotion_id)
+                self._send_json({"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)})
+                return
+            if action == "approve":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                promotion = self.planning_rule_governance_store.approve_promotion(promotion_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)})
+                return
+            if action == "reject":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                promotion = self.planning_rule_governance_store.reject_promotion(promotion_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "promotion": promotion.to_dict(), "summary": promotion_summary(promotion)})
+                return
+            if action == "promote":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.planning_rule_governance_store.promote(promotion_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "version": result["version"].to_dict(), "active": result["active"], "promotion": result["promotion"].to_dict(), "summary": result["summary"]}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Planning Rule Governance promotion route not found.")
+        except PlanningRuleGovernanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleGovernanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (PlanningRuleGovernanceError, PlanningRuleSimulationError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_rule_governance_rollback(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        try:
+            result = self.planning_rule_governance_store.rollback(self._read_json_body(), now=_utc_now())
+            self._send_json({"ok": True, "version": result["version"].to_dict(), "active": result["active"], "summary": result["summary"]})
+        except PlanningRuleGovernanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleGovernanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (PlanningRuleGovernanceError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_rule_governance_events(self, method: str, query_string: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        query = parse_qs(query_string)
+        limit = int(_query_value(query, "limit") or 50)
+        events = self.planning_rule_governance_store.events(limit=limit)
+        self._send_json({"ok": True, "events": events, "summary": {"event_count": len(events)}})
 
     def _handle_acceptance_fix_plan_route(self, method: str, route: tuple[str, str]) -> None:
         plan_id, action = route
@@ -11144,6 +11348,8 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.acceptance_fix_plan_store = AcceptanceFixPlanningStore(analytics_store=self.acceptance_analytics_store, kb_store=self.acceptance_kb_store, fix_sprint_store=self.acceptance_fix_sprint_store, project_store=self.project_store)
         self.acceptance_fix_plan_review_store = AcceptanceFixPlanReviewStore(plan_store=self.acceptance_fix_plan_store, fix_sprint_store=self.acceptance_fix_sprint_store, kb_store=self.acceptance_kb_store, project_store=self.project_store)
         self.planning_rule_simulation_store = PlanningRuleSimulationStore(review_store=self.acceptance_fix_plan_review_store, project_store=self.project_store)
+        self.planning_rule_governance_store = PlanningRuleGovernanceStore(simulation_store=self.planning_rule_simulation_store, project_store=self.project_store)
+        self.acceptance_fix_plan_store.planning_rule_governance_store = self.planning_rule_governance_store
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -11708,6 +11914,28 @@ def _match_planning_simulation_route(path: str) -> tuple[str, str] | None:
     if len(parts) == 1:
         return parts[0], ""
     if len(parts) == 2 and parts[1] in {"refresh", "archive"}:
+        return parts[0], parts[1]
+    return None
+
+
+def _match_planning_rule_governance_version_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/planning-rule-governance/versions/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if len(parts) == 1:
+        return parts[0], ""
+    return None
+
+
+def _match_planning_rule_governance_promotion_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/planning-rule-governance/promotions/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"approve", "reject", "promote"}:
         return parts[0], parts[1]
     return None
 
