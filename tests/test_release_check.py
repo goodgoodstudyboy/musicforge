@@ -240,6 +240,7 @@ def test_v413_planning_rule_governance_smoke(tmp_path: Path) -> None:
     assert "version=prgv-" in detail
     assert "signoff=passed" in detail
     assert "stale_guard=409" in detail
+    assert "tampered_version=409" in detail
     assert "rollback=passed" in detail
 
 

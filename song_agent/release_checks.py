@@ -6509,6 +6509,15 @@ def _v413_planning_rule_governance_smoke(root: Path) -> tuple[bool, str]:
         sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "analytics remains warning in governance smoke", "require_planning_rule_governance": True, "planning_rule_version_id": version_id})
         reset_status, _reset = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "verify stale governance gate"})
 
+        version_path = base / ".musicforge" / "planning-rule-governance" / "versions" / str(version_id) / "version.json"
+        original_version = read_json(version_path)
+        polluted_version = json.loads(json.dumps(original_version))
+        polluted_version["promoted_from"]["recommendation"] = "candidate_better_tampered"
+        polluted_version["approval"]["approved_by"] = "tampered-reviewer"
+        write_json(version_path, polluted_version)
+        tampered_version_status, _tampered_version = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_planning_rule_governance": True, "planning_rule_version_id": version_id})
+        write_json(version_path, original_version)
+
         delta_path = base / ".musicforge" / "acceptance-fix-sprints" / str(planned_sprint_id) / "delta-report.json"
         polluted_delta = read_json(delta_path)
         polluted_delta["summary"]["rating_delta"] = -9
@@ -6563,6 +6572,7 @@ def _v413_planning_rule_governance_smoke(root: Path) -> tuple[bool, str]:
             and sign_status == 200
             and signoff.get("signoff", {}).get("acceptance_gate", {}).get("planning_rule_governance", {}).get("status") == "passed"
             and reset_status == 200
+            and tampered_version_status == 409
             and stale_sign_status == 409
             and rollback_status == 200
             and rollback.get("summary", {}).get("active_version_id") == version_id
@@ -6572,7 +6582,7 @@ def _v413_planning_rule_governance_smoke(root: Path) -> tuple[bool, str]:
         return ok, (
             f"promotion={promotion_id}, version={version_id}, active={active.get('summary', {}).get('active_version_id')}, "
             f"plan_rule={governed_source.get('planning_rule_version_id')}, signoff={signoff.get('signoff', {}).get('acceptance_gate', {}).get('planning_rule_governance', {}).get('status')}, "
-            f"stale_guard={stale_sign_status}, rollback=passed"
+            f"stale_guard={stale_sign_status}, tampered_version={tampered_version_status}, rollback=passed"
         )
     except Exception as exc:
         return False, str(exc)

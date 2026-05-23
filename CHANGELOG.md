@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.13.1 - 2026-05-24
+
+### Fixed
+- Planning Rule Governance Release Signoff now verifies both frozen ruleset payload integrity and `version.json` source evidence integrity.
+- Tampering `promoted_from` or `approval` in a Planning Rule Version now blocks `require_planning_rule_governance=true` signoff.
+
+### Added
+- Store, server, and release-check regressions for tampered Planning Rule Version evidence.
+
+### Verified
+- `python -m pytest tests\test_planning_rule_governance.py tests\test_server_planning_rule_governance.py tests\test_release_check.py::test_v413_planning_rule_governance_smoke -q`
+
 ## v4.13.0 - 2026-05-22
 
 ### Added

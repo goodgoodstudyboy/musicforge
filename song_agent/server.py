@@ -5326,14 +5326,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Governance active version is missing."}
             summary = self.planning_rule_governance_store.active_summary()
             evidence_stale = self.planning_rule_governance_store.version_evidence_is_stale(active)
-            integrity_ok = self.planning_rule_governance_store.version_integrity_ok(active)
-            evidence = {**summary, "evidence_stale": evidence_stale, "integrity_ok": integrity_ok}
+            frozen_integrity_ok = self.planning_rule_governance_store.frozen_ruleset_integrity_ok(active)
+            version_source_integrity_ok = self.planning_rule_governance_store.version_source_integrity_ok(active)
+            integrity_ok = frozen_integrity_ok and version_source_integrity_ok
+            evidence = {**summary, "evidence_stale": evidence_stale, "integrity_ok": integrity_ok, "frozen_ruleset_integrity_ok": frozen_integrity_ok, "version_source_integrity_ok": version_source_integrity_ok}
             if active.status in {"rolled_back", "archived"}:
                 return {**evidence, "status": "failed", "message": "Planning Rule Governance active version is not active."}
             if evidence_stale:
                 return {**evidence, "status": "failed" if require_gate else "warning", "message": "Planning Rule Governance simulation evidence is stale."}
-            if not integrity_ok:
+            if not frozen_integrity_ok:
                 return {**evidence, "status": "failed", "message": "Planning Rule Governance frozen ruleset integrity failed."}
+            if not version_source_integrity_ok:
+                return {**evidence, "status": "failed", "message": "Planning Rule Governance version source integrity failed."}
             if requested_version_id and requested_version_id != active.version_id:
                 if not force:
                     return {**evidence, "status": "failed" if require_gate else "warning", "message": "Requested Planning Rule Version is not active."}

@@ -468,13 +468,27 @@ class PlanningRuleGovernanceStore:
                 return True
         return False
 
-    def version_integrity_ok(self, version: PlanningRuleVersion | dict[str, Any]) -> bool:
+    def frozen_ruleset_integrity_ok(self, version: PlanningRuleVersion | dict[str, Any]) -> bool:
         data = version.to_dict() if isinstance(version, PlanningRuleVersion) else version if isinstance(version, dict) else {}
         try:
             frozen = self.frozen_ruleset(str(data.get("version_id") or ""))
         except PlanningRuleGovernanceError:
             return False
         return stable_hash(frozen) == str(data.get("ruleset_hash") or "")
+
+    def version_source_integrity_ok(self, version: PlanningRuleVersion | dict[str, Any]) -> bool:
+        data = version.to_dict() if isinstance(version, PlanningRuleVersion) else version if isinstance(version, dict) else {}
+        try:
+            frozen = self.frozen_ruleset(str(data.get("version_id") or ""))
+        except PlanningRuleGovernanceError:
+            return False
+        promoted_from = data.get("promoted_from") if isinstance(data.get("promoted_from"), dict) else {}
+        approval = data.get("approval") if isinstance(data.get("approval"), dict) else {}
+        expected = stable_hash({"ruleset": frozen, "promotion": promoted_from, "approval": approval})
+        return expected == str(data.get("source_hash") or "")
+
+    def version_integrity_ok(self, version: PlanningRuleVersion | dict[str, Any]) -> bool:
+        return self.frozen_ruleset_integrity_ok(version) and self.version_source_integrity_ok(version)
 
     def events(self, *, limit: int = 50) -> list[dict[str, Any]]:
         path = self.root / "events.jsonl"

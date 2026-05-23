@@ -36,10 +36,25 @@ def test_planning_rule_governance_promote_rollback_and_freeze(tmp_path, monkeypa
     assert version.status == "active"
     assert active["active_version_id"] == version.version_id
     assert governance.version_integrity_ok(version)
+    assert governance.version_source_integrity_ok(version)
 
     simulation_store.archive_ruleset(ruleset.ruleset_id)
     assert governance.frozen_ruleset(version.version_id)["ruleset_id"] == ruleset.ruleset_id
     assert governance.version_evidence_is_stale(version) is False
+
+    version_path = governance.version_dir(version.version_id) / "version.json"
+    polluted = read_json(version_path)
+    polluted["promoted_from"]["recommendation"] = "candidate_better_tampered"
+    polluted["approval"]["approved_by"] = "tampered-reviewer"
+    write_json(version_path, polluted)
+    tampered = governance.read_version(version.version_id)
+    assert governance.frozen_ruleset_integrity_ok(tampered) is True
+    assert governance.version_source_integrity_ok(tampered) is False
+    assert governance.version_integrity_ok(tampered) is False
+
+    repaired = version.to_dict()
+    write_json(version_path, repaired)
+    assert governance.version_integrity_ok(governance.read_version(version.version_id)) is True
 
     ruleset2 = simulation_store.create_ruleset({"template": "manual_conservative"})
     review_id = simulation.source["review_ids"][0]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+
 from song_agent.projectio import read_json, write_json
 from tests.test_server_acceptance_fix_plan_reviews import _server_plan_with_closed_sprint
 from tests.test_server_edits import request_json, start_test_server, stop_test_server
@@ -38,6 +40,15 @@ def test_planning_rule_governance_api_fix_plan_export_and_signoff(tmp_path, monk
         sign_status, signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "force": True, "override_reason": "acceptance smoke remains warning", "require_planning_rule_governance": True, "planning_rule_version_id": version_id})
         reset_status, _reset = request_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "stale governance guard"})
 
+        version_path = tmp_path / ".musicforge" / "planning-rule-governance" / "versions" / version_id / "version.json"
+        version_data = read_json(version_path)
+        original_version_data = copy.deepcopy(version_data)
+        version_data["promoted_from"]["recommendation"] = "candidate_better_tampered"
+        version_data["approval"]["approved_by"] = "tampered-reviewer"
+        write_json(version_path, version_data)
+        tampered_sign_status, tampered_sign = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_planning_rule_governance": True, "planning_rule_version_id": version_id})
+        write_json(version_path, original_version_data)
+
         delta_path = tmp_path / ".musicforge" / "acceptance-fix-sprints" / sprint_id / "delta-report.json"
         delta = read_json(delta_path)
         delta["summary"]["rating_delta"] = -8
@@ -73,6 +84,8 @@ def test_planning_rule_governance_api_fix_plan_export_and_signoff(tmp_path, monk
     assert sign_status == 200
     assert signoff["signoff"]["acceptance_gate"]["planning_rule_governance"]["status"] == "passed"
     assert reset_status == 200
+    assert tampered_sign_status == 409
+    assert "version source integrity" in tampered_sign["error"].lower()
     assert stale_sign_status == 409
     assert "stale" in stale_sign["error"].lower()
     assert rollback_status == 200
