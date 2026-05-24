@@ -141,6 +141,7 @@ def build_final_export_bundle(
     acceptance_kb = _final_acceptance_kb(project_export)
     planning_rule_simulation = _final_planning_rule_simulation(project_export)
     planning_rule_governance = _final_planning_rule_governance(project_export)
+    planning_rule_impact = _final_planning_rule_impact(project_export)
     delivery_qa = _final_delivery_qa(project_export)
     delivery_signoff = _final_delivery_signoff(project_export)
 
@@ -169,6 +170,7 @@ def build_final_export_bundle(
         "acceptance_kb": acceptance_kb,
         "planning_rule_simulation": planning_rule_simulation,
         "planning_rule_governance": planning_rule_governance,
+        "planning_rule_impact": planning_rule_impact,
         "delivery_qa": delivery_qa,
         "delivery_signoff": delivery_signoff,
         "files": files,
@@ -796,6 +798,30 @@ def _final_planning_rule_governance(project_export: dict[str, Any] | None) -> di
                 "alignment_delta": summary.get("alignment_delta"),
                 "stale": summary.get("stale"),
                 "evidence_stale": summary.get("evidence_stale"),
+            }
+        )
+    )
+
+
+def _final_planning_rule_impact(project_export: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(project_export, dict) or not isinstance(project_export.get("planning_rule_impact_summary"), dict):
+        return {}
+    summary = project_export["planning_rule_impact_summary"]
+    return _drop_empty(
+        _sanitize_asset_metadata(
+            {
+                "status": summary.get("status"),
+                "report_id": summary.get("report_id"),
+                "active_version_id": summary.get("active_version_id"),
+                "observed_plan_count": summary.get("observed_plan_count"),
+                "observed_review_count": summary.get("observed_review_count"),
+                "manual_review_count": summary.get("manual_review_count"),
+                "synthetic_review_count": summary.get("synthetic_review_count"),
+                "effectiveness_delta": summary.get("effectiveness_delta"),
+                "ranking_alignment_delta": summary.get("ranking_alignment_delta"),
+                "recommendation": summary.get("recommendation"),
+                "rollback_recommended": summary.get("rollback_recommended"),
+                "stale": summary.get("stale"),
             }
         )
     )

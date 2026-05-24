@@ -17,6 +17,7 @@ from song_agent.acceptance_fix_plan_reviews import AcceptanceFixPlanReviewStore,
 from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore, write_acceptance_kb_summary
 from song_agent.planning_rule_simulation import PlanningRuleSimulationStore, write_planning_simulation_summary
 from song_agent.planning_rule_governance import PlanningRuleGovernanceStore, write_planning_rule_governance_summary
+from song_agent.planning_rule_impact import PlanningRuleImpactStore, write_planning_rule_impact_summary
 from song_agent.projectio import slugify, write_json
 from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -104,6 +105,7 @@ def build_release_export_bundle(
     kb_summary = _release_acceptance_kb_summary(release_store, release.release_id, export_dir)
     planning_simulation_summary = _release_planning_rule_simulation_summary(release_store, release.release_id, export_dir)
     planning_governance_summary = _release_planning_rule_governance_summary(release_store, release.release_id, export_dir)
+    planning_impact_summary = _release_planning_rule_impact_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
     if (export_dir / "acceptance-analytics-summary.json").exists():
@@ -120,6 +122,8 @@ def build_release_export_bundle(
         copied_files.append(_file_record(export_dir, export_dir / "planning-rule-simulation-summary.json"))
     if (export_dir / "planning-rule-governance-summary.json").exists():
         copied_files.append(_file_record(export_dir, export_dir / "planning-rule-governance-summary.json"))
+    if (export_dir / "planning-rule-impact-summary.json").exists():
+        copied_files.append(_file_record(export_dir, export_dir / "planning-rule-impact-summary.json"))
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -139,6 +143,7 @@ def build_release_export_bundle(
         "acceptance_kb": kb_summary,
         "planning_rule_simulation": planning_simulation_summary,
         "planning_rule_governance": planning_governance_summary,
+        "planning_rule_impact": planning_impact_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -470,6 +475,16 @@ def _release_planning_rule_governance_summary(release_store: ReleaseStore, relea
     except Exception:
         summary = {"status": "missing"}
         write_json(export_dir / "planning-rule-governance-summary.json", summary)
+        return summary
+
+
+def _release_planning_rule_impact_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        store = PlanningRuleImpactStore(project_store=release_store.project_store)
+        return write_planning_rule_impact_summary(export_dir / "planning-rule-impact-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "planning-rule-impact-summary.json", summary)
         return summary
 
 

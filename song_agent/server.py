@@ -275,6 +275,13 @@ from song_agent.planning_rule_governance import (
     governance_summary,
     promotion_summary,
 )
+from song_agent.planning_rule_impact import (
+    PlanningRuleImpactError,
+    PlanningRuleImpactNotFoundError,
+    PlanningRuleImpactStateError,
+    PlanningRuleImpactStore,
+    planning_rule_impact_summary,
+)
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.music_acceptance import (
@@ -2469,6 +2476,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.planning_rule_governance_store  # type: ignore[attr-defined]
 
     @property
+    def planning_rule_impact_store(self) -> PlanningRuleImpactStore:
+        return self.server.planning_rule_impact_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2684,6 +2695,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             governance_promotion_route = _match_planning_rule_governance_promotion_route(path)
             if governance_promotion_route is not None:
                 self._handle_planning_rule_governance_promotion_route(method, governance_promotion_route)
+                return
+
+            if path == "/api/acceptance/planning-rule-impact/reports":
+                self._handle_planning_rule_impact_reports(method, parsed.query)
+                return
+
+            if path == "/api/acceptance/planning-rule-impact/latest":
+                self._handle_planning_rule_impact_latest(method, parsed.query)
+                return
+
+            impact_report_route = _match_planning_rule_impact_report_route(path)
+            if impact_report_route is not None:
+                self._handle_planning_rule_impact_report_route(method, impact_report_route)
                 return
 
             fix_plan_review_route = _match_acceptance_fix_plan_review_route(path)
@@ -4995,6 +5019,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = self._get_or_refresh_release_qa(release_id, refresh=True, options={})
         force = bool(payload.get("force", False))
         acceptance_gate = self._release_acceptance_gate({**payload, "release_id": release_id, "force": force})
+        hard_gate = acceptance_gate.get("planning_rule_impact") if isinstance(acceptance_gate.get("planning_rule_impact"), dict) else {}
+        if hard_gate.get("hard_block") and hard_gate.get("status") == "failed":
+            self._send_error(HTTPStatus.CONFLICT, str(hard_gate.get("message") or "Planning Rule Impact gate failed."))
+            return
         if acceptance_gate.get("status") == "failed" and not force:
             self._send_error(HTTPStatus.CONFLICT, str(acceptance_gate.get("message") or "Acceptance release gate failed."))
             return
@@ -5051,6 +5079,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         kb_evidence = self._release_acceptance_kb_gate(payload)
         planning_simulation_evidence = self._release_planning_rule_simulation_gate(payload)
         planning_governance_evidence = self._release_planning_rule_governance_gate(payload)
+        planning_impact_evidence = self._release_planning_rule_impact_gate(payload)
         if not suite_id:
             if not analytics_evidence:
                 gate = {}
@@ -5078,6 +5107,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                         gate["status"] = "failed"
                         gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
+                if planning_impact_evidence:
+                    gate["planning_rule_impact"] = planning_impact_evidence
+                    if planning_impact_evidence.get("status") == "failed":
+                        gate["status"] = "failed"
+                        gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
                 return gate
             gate = {"acceptance_analytics": analytics_evidence}
             if fix_plan_evidence:
@@ -5107,6 +5141,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                     gate["status"] = "failed"
                     gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
+            if planning_impact_evidence:
+                gate["planning_rule_impact"] = planning_impact_evidence
+                if planning_impact_evidence.get("status") == "failed":
+                    gate["status"] = "failed"
+                    gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
             if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = "Acceptance analytics readiness is blocked."
@@ -5165,6 +5204,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
                 gate["status"] = "failed"
                 gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
+        if planning_impact_evidence:
+            gate["planning_rule_impact"] = planning_impact_evidence
+            if planning_impact_evidence.get("status") == "failed":
+                gate["status"] = "failed"
+                gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
         return gate
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -5346,6 +5390,60 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return {**evidence, "status": "warning", "message": "Planning Rule Version mismatch was force-accepted."}
             return {**evidence, "status": "passed"}
         except PlanningRuleGovernanceError as exc:
+            return {"status": "failed" if require_gate else "warning", "message": str(exc)}
+
+    def _release_planning_rule_impact_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        report_id = str(payload.get("planning_rule_impact_report_id") or "").strip()
+        release_id = str(payload.get("release_id") or "").strip()
+        require_gate = bool(payload.get("require_planning_rule_impact", False))
+        force = bool(payload.get("force", False))
+        allow_warning = bool(payload.get("allow_impact_warning", False))
+        override_reason = str(payload.get("override_reason") or "").strip()
+        min_manual_reviews = max(0, int(payload.get("impact_min_manual_reviews") or 1))
+        try:
+            if report_id:
+                report = self.planning_rule_impact_store.get_report(report_id)
+            elif release_id:
+                summary = self.planning_rule_impact_store.latest_summary(release_id=release_id)
+                if summary.get("status") == "missing":
+                    return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Impact evidence is missing."}
+                report = self.planning_rule_impact_store.get_report(str(summary.get("report_id") or ""))
+            else:
+                return {}
+            raw_status = report.status
+            summary = planning_rule_impact_summary(report)
+            stale = self.planning_rule_impact_store.report_is_stale(report)
+            active = self.planning_rule_governance_store.active_version()
+            active_id = active.version_id if active else None
+            recommendation = str(summary.get("recommendation") or "")
+            evidence = {**summary, "stale": stale, "current_active_version_id": active_id}
+            if stale:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact report is stale. Refresh impact monitoring before signoff."}
+            if active_id and summary.get("active_version_id") != active_id:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact report does not match the current active Planning Rule Version."}
+            active_report_version = report.active_version if isinstance(report.active_version, dict) else {}
+            if active_report_version.get("integrity_ok") is False:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact active version integrity failed."}
+            if raw_status in {"archived", "stale"}:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact report is not ready."}
+            if recommendation == "rollback_recommended":
+                if not force or not override_reason:
+                    return {**evidence, "status": "failed", "message": "Planning Rule Impact recommends rollback."}
+                return {**evidence, "status": "warning", "message": "Planning Rule Impact rollback recommendation was force-accepted."}
+            if recommendation == "rollback_watch" and not (allow_warning or force):
+                return {**evidence, "status": "failed" if require_gate else "warning", "message": "Planning Rule Impact is on rollback watch."}
+            if recommendation == "increase_manual_review" and int(summary.get("manual_review_count") or 0) < min_manual_reviews:
+                if not force or not override_reason:
+                    return {**evidence, "status": "failed" if require_gate else "warning", "message": "Planning Rule Impact requires more manual review evidence."}
+                return {**evidence, "status": "warning", "message": "Planning Rule Impact manual review warning was force-accepted."}
+            if raw_status == "failed":
+                return {**evidence, "status": "failed", "message": "Planning Rule Impact report is not ready."}
+            if require_gate and raw_status == "missing":
+                return {**evidence, "status": "failed", "message": "Planning Rule Impact evidence is missing."}
+            return {**evidence, "status": "passed" if raw_status in {"ready", "warning"} else "warning"}
+        except PlanningRuleImpactNotFoundError:
+            return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Impact evidence is missing."}
+        except (PlanningRuleImpactError, PlanningRuleGovernanceError, ValueError) as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
     def _planning_simulation_reviews_match_release(self, simulation: Any, release_id: str) -> bool:
@@ -6556,6 +6654,66 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         limit = int(_query_value(query, "limit") or 50)
         events = self.planning_rule_governance_store.events(limit=limit)
         self._send_json({"ok": True, "events": events, "summary": {"event_count": len(events)}})
+
+    def _handle_planning_rule_impact_reports(self, method: str, query_string: str) -> None:
+        try:
+            if method == "GET":
+                query = parse_qs(query_string)
+                include_archived = _query_value(query, "include_archived") in {"1", "true", "yes"}
+                release_id = _query_value(query, "release_id") or None
+                project_id = _query_value(query, "project_id") or None
+                reports = self.planning_rule_impact_store.list_reports(include_archived=include_archived, release_id=release_id, project_id=project_id)
+                self._send_json({"ok": True, "reports": [report.to_dict() for report in reports], "summary": {"report_count": len(reports), "latest": planning_rule_impact_summary(reports[0]) if reports else {"status": "missing"}}})
+                return
+            if method == "POST":
+                report = self.planning_rule_impact_store.refresh(self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+        except PlanningRuleImpactStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleImpactError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_planning_rule_impact_latest(self, method: str, query_string: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        query = parse_qs(query_string)
+        summary = self.planning_rule_impact_store.latest_summary(release_id=_query_value(query, "release_id") or None, project_id=_query_value(query, "project_id") or None)
+        self._send_json({"ok": True, "summary": summary})
+
+    def _handle_planning_rule_impact_report_route(self, method: str, route: tuple[str, str]) -> None:
+        report_id, action = route
+        try:
+            if not action:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.planning_rule_impact_store.get_report(report_id)
+                self._send_json({"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report), "stale": self.planning_rule_impact_store.report_is_stale(report)})
+                return
+            if action == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.planning_rule_impact_store.refresh_report(report_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report)})
+                return
+            if action == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.planning_rule_impact_store.archive_report(report_id, now=_utc_now())
+                self._send_json({"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Planning Rule Impact route not found.")
+        except PlanningRuleImpactNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PlanningRuleImpactStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PlanningRuleImpactError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_acceptance_fix_plan_route(self, method: str, route: tuple[str, str]) -> None:
         plan_id, action = route
@@ -11354,6 +11512,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.planning_rule_simulation_store = PlanningRuleSimulationStore(review_store=self.acceptance_fix_plan_review_store, project_store=self.project_store)
         self.planning_rule_governance_store = PlanningRuleGovernanceStore(simulation_store=self.planning_rule_simulation_store, project_store=self.project_store)
         self.acceptance_fix_plan_store.planning_rule_governance_store = self.planning_rule_governance_store
+        self.planning_rule_impact_store = PlanningRuleImpactStore(governance_store=self.planning_rule_governance_store, plan_store=self.acceptance_fix_plan_store, review_store=self.acceptance_fix_plan_review_store, project_store=self.project_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
@@ -11940,6 +12099,18 @@ def _match_planning_rule_governance_promotion_route(path: str) -> tuple[str, str
     if len(parts) == 1:
         return parts[0], ""
     if len(parts) == 2 and parts[1] in {"approve", "reject", "promote"}:
+        return parts[0], parts[1]
+    return None
+
+
+def _match_planning_rule_impact_report_route(path: str) -> tuple[str, str] | None:
+    prefix = "/api/acceptance/planning-rule-impact/reports/"
+    if not path.startswith(prefix):
+        return None
+    parts = [unquote(part) for part in path[len(prefix) :].strip("/").split("/") if part]
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) == 2 and parts[1] in {"refresh", "archive"}:
         return parts[0], parts[1]
     return None
 

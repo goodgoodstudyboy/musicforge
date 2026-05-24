@@ -23,6 +23,7 @@ from song_agent.release_checks import (
     _v411_fix_plan_outcome_review_smoke,
     _v412_planning_rule_simulation_smoke,
     _v413_planning_rule_governance_smoke,
+    _v414_planning_rule_impact_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -242,6 +243,17 @@ def test_v413_planning_rule_governance_smoke(tmp_path: Path) -> None:
     assert "stale_guard=409" in detail
     assert "tampered_version=409" in detail
     assert "rollback=passed" in detail
+
+
+def test_v414_planning_rule_impact_smoke(tmp_path: Path) -> None:
+    ok, detail = _v414_planning_rule_impact_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "report=prgir-" in detail
+    assert "active=prgv-" in detail
+    assert "signoff=" in detail
+    assert "stale_guard=409" in detail
+    assert "rollback_watch=409/200" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

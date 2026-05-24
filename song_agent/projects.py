@@ -536,6 +536,7 @@ class ProjectStore:
             "acceptance_kb_summary": _collect_project_acceptance_kb_summary(document.state.project_id),
             "planning_rule_simulation_summary": _collect_project_planning_rule_simulation_summary(document.state.project_id),
             "planning_rule_governance_summary": _collect_project_planning_rule_governance_summary(document.state.project_id),
+            "planning_rule_impact_summary": _collect_project_planning_rule_impact_summary(document.state.project_id),
             "delivery_qa_summary": _collect_project_delivery_qa_summary(self.project_dir(project_id)),
             "delivery_signoff_summary": _collect_project_delivery_signoff_summary(self.project_dir(project_id)),
             "generated_at": now_iso(),
@@ -1294,6 +1295,15 @@ def _collect_project_planning_rule_governance_summary(project_id: str) -> dict[s
             used[version_id] = used.get(version_id, 0) + 1
         summary["used_rule_versions"] = [{"version_id": key, "plan_count": value} for key, value in sorted(used.items())]
         return summary
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {"status": "missing"}
+
+
+def _collect_project_planning_rule_impact_summary(project_id: str) -> dict[str, Any]:
+    from song_agent.planning_rule_impact import PlanningRuleImpactStore, latest_planning_rule_impact_summary
+
+    try:
+        return _sanitize_asset_metadata(latest_planning_rule_impact_summary(PlanningRuleImpactStore(), project_id=project_id))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {"status": "missing"}
 

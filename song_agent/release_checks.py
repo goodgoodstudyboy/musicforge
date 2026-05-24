@@ -217,6 +217,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.11 fix plan outcome review smoke", *_v411_fix_plan_outcome_review_smoke(root))
     report.add("v4.12 planning rule simulation smoke", *_v412_planning_rule_simulation_smoke(root))
     report.add("v4.13 planning rule governance smoke", *_v413_planning_rule_governance_smoke(root))
+    report.add("v4.14 planning rule impact smoke", *_v414_planning_rule_impact_smoke(root))
     return report
 
 
@@ -6583,6 +6584,185 @@ def _v413_planning_rule_governance_smoke(root: Path) -> tuple[bool, str]:
             f"promotion={promotion_id}, version={version_id}, active={active.get('summary', {}).get('active_version_id')}, "
             f"plan_rule={governed_source.get('planning_rule_version_id')}, signoff={signoff.get('signoff', {}).get('acceptance_gate', {}).get('planning_rule_governance', {}).get('status')}, "
             f"stale_guard={stale_sign_status}, tampered_version={tampered_version_status}, rollback=passed"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v414_planning_rule_impact_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v414-rule-impact-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "Planning Rule Impact Track")
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "Planning Rule Impact Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+
+        suite_status, suite = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v4.14 impact source", "profile_id": "developer_manual", "require_audio_if_renderer_configured": False})
+        suite_id = suite.get("suite", {}).get("suite_id")
+        case_status, case = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases", {"name": "Impact Source Case", "source_type": "project_version", "project_id": project_id, "version_id": "v001", "song_id": "impact_001", "request": {"title": "Impact Source", "language": "English", "style": "rap beat", "theme": "impact", "duration_seconds": 90}})
+        case_id = case.get("case", {}).get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+        review_status, _review = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 2, "status": "needs_fix", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Impact issue needs fix."})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+        analytics_status, analytics = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        analytics_report_id = analytics.get("analytics", {}).get("report_id")
+        seed_status, seed = _release_http_json(server, "POST", "/api/acceptance/fix-sprints", {"analytics_report_id": analytics_report_id, "scope": {"type": "release", "release_id": release_id}})
+        seed_sprint_id = seed.get("fix_sprint", {}).get("fix_sprint_id")
+        tasks_status, tasks = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/create-review-tasks")
+        task_id = (tasks.get("results") or [{}])[0].get("task_id")
+        task_path = base / ".musicforge" / "projects" / project_id / "review-tasks" / str(task_id) / "task.json"
+        task = read_json(task_path)
+        task["status"] = "resolved"
+        write_json(task_path, task)
+        _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/refresh-status")
+        recheck_status, recheck = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/create-recheck-suite", {"profile_id": "developer_manual"})
+        recheck_suite_id = recheck.get("suite", {}).get("suite_id")
+        detail_status, detail = _release_http_json(server, "GET", f"/api/acceptance/suites/{recheck_suite_id}")
+        recheck_case_id = (detail.get("cases") or [{}])[0].get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/health")
+        recheck_review_status, _ = _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/cases/{recheck_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual recheck accepted."})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{recheck_suite_id}/report")
+        delta_status, _delta = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/delta/refresh")
+        close_status, _closeout = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{seed_sprint_id}/close")
+        kb_status, kb = _release_http_json(server, "POST", "/api/acceptance/kb/refresh", {"type": "global"})
+        kb_report_id = kb.get("knowledge_report", {}).get("report_id")
+
+        analytics2_status, analytics2 = _release_http_json(server, "POST", f"/api/releases/{release_id}/acceptance-analytics/refresh")
+        analytics2_report_id = analytics2.get("analytics", {}).get("report_id")
+        legacy_plan_status, legacy_plan = _release_http_json(server, "POST", "/api/acceptance/fix-plans", {"analytics_report_id": analytics2_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}})
+        legacy_governance = legacy_plan.get("fix_plan", {}).get("source", {}).get("planning_rule_governance", {})
+        legacy_plan_id = legacy_plan.get("fix_plan", {}).get("plan_id")
+        sprint_status, sprint = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{legacy_plan_id}/create-fix-sprint", {"name": "Impact Legacy Sprint"})
+        planned_sprint_id = sprint.get("fix_sprint", {}).get("fix_sprint_id")
+        planned_item_id = (sprint.get("items") or [{}])[0].get("item_id")
+        waive_status, _waive = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/items/{planned_item_id}/waive", {"reason": "manual impact verification"})
+        planned_recheck_status, planned_recheck = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/create-recheck-suite", {"profile_id": "developer_manual"})
+        planned_suite_id = planned_recheck.get("suite", {}).get("suite_id")
+        planned_detail_status, planned_detail = _release_http_json(server, "GET", f"/api/acceptance/suites/{planned_suite_id}")
+        planned_case_id = (planned_detail.get("cases") or [{}])[0].get("case_id")
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/generate", {"render_audio": "never"})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/health")
+        planned_review_status, _planned_review = _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/cases/{planned_case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "midi", "notes": "Manual legacy recheck accepted."})
+        _release_http_json(server, "POST", f"/api/acceptance/suites/{planned_suite_id}/report")
+        planned_delta_status, _planned_delta = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/delta/refresh")
+        planned_close_status, _planned_closeout = _release_http_json(server, "POST", f"/api/acceptance/fix-sprints/{planned_sprint_id}/close", {"force": True, "override_reason": "waived issue was verified"})
+        review_refresh_status, review = _release_http_json(server, "POST", f"/api/acceptance/fix-plans/{legacy_plan_id}/outcome-review/refresh")
+        review_id = review.get("outcome_review", {}).get("review_id")
+
+        ruleset_status, ruleset = _release_http_json(server, "POST", "/api/acceptance/planning-rulesets", {"template": "synthetic_strict", "description": "Impact strict local-path-marker masked-key-marker"})
+        ruleset_id = ruleset.get("ruleset", {}).get("ruleset_id")
+        simulation_status, simulation = _release_http_json(server, "POST", "/api/acceptance/planning-simulations", {"ruleset_id": ruleset_id, "scope": {"type": "release", "release_id": release_id}, "review_ids": [review_id]})
+        simulation_id = simulation.get("simulation", {}).get("simulation_id")
+        promotion_status, promotion = _release_http_json(server, "POST", "/api/acceptance/planning-rule-governance/promotions", {"ruleset_id": ruleset_id, "simulation_id": simulation_id, "note": "Impact candidate"})
+        promotion_id = promotion.get("promotion", {}).get("promotion_id")
+        approve_status, _approved = _release_http_json(server, "POST", f"/api/acceptance/planning-rule-governance/promotions/{promotion_id}/approve", {"approved_by": "release-check", "approval_note": "Impact evidence accepted"})
+        promote_status, promoted = _release_http_json(server, "POST", f"/api/acceptance/planning-rule-governance/promotions/{promotion_id}/promote", {"promoted_by": "release-check"})
+        version_id = promoted.get("version", {}).get("version_id")
+
+        governed_plan_status, governed_plan = _release_http_json(server, "POST", "/api/acceptance/fix-plans", {"analytics_report_id": analytics2_report_id, "kb_report_id": kb_report_id, "scope": {"type": "release", "release_id": release_id}})
+        governed_source = governed_plan.get("fix_plan", {}).get("source", {}).get("planning_rule_governance", {})
+        impact_status, impact = _release_http_json(server, "POST", "/api/acceptance/planning-rule-impact/reports", {"scope": {"type": "release", "release_id": release_id}, "include_legacy": True, "include_superseded": True})
+        report_id = impact.get("impact_report", {}).get("report_id")
+        impact_summary = impact.get("summary", {})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        project_export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "impact remains warning in smoke", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
+        reset_status, _reset = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "verify impact stale guard"})
+
+        report_path = base / ".musicforge" / "planning-rule-impact" / "reports" / str(report_id) / "report.json"
+        report_doc = read_json(report_path)
+        report_doc["summary"]["recommendation"] = "rollback_recommended"
+        report_doc["summary"]["rollback_recommended"] = True
+        report_doc["status"] = "warning"
+        write_json(report_path, report_doc)
+        rollback_watch_status, _rollback_watch = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
+        rollback_force_status, _rollback_force = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "manual impact override", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "verify impact stale hard guard"})
+
+        delta_path = base / ".musicforge" / "acceptance-fix-sprints" / str(planned_sprint_id) / "delta-report.json"
+        polluted_delta = read_json(delta_path)
+        polluted_delta["summary"]["rating_delta"] = -9
+        write_json(delta_path, polluted_delta)
+        stale_guard_status, _stale_guard = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "cannot force stale impact", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
+
+        payload_text = json.dumps({"impact": impact, "export": export, "project_export": project_export, "final_export": final_export}, ensure_ascii=False)
+        ok = (
+            release_status == 201
+            and track_status == 200
+            and suite_status == 201
+            and case_status == 201
+            and review_status == 200
+            and analytics_status == 201
+            and seed_status == 201
+            and tasks_status == 201
+            and recheck_status == 201
+            and detail_status == 200
+            and recheck_review_status == 200
+            and delta_status == 200
+            and close_status == 200
+            and kb_status == 201
+            and analytics2_status == 201
+            and legacy_plan_status == 201
+            and legacy_governance.get("governance_status") == "legacy_default"
+            and sprint_status == 201
+            and waive_status == 200
+            and planned_recheck_status == 201
+            and planned_detail_status == 200
+            and planned_review_status == 200
+            and planned_delta_status == 200
+            and planned_close_status == 200
+            and review_refresh_status == 201
+            and ruleset_status == 201
+            and simulation_status == 201
+            and promotion_status == 201
+            and approve_status == 200
+            and promote_status == 201
+            and governed_plan_status == 201
+            and governed_source.get("planning_rule_version_id") == version_id
+            and impact_status == 201
+            and impact_summary.get("active_version_id") == version_id
+            and int(impact_summary.get("observed_plan_count") or 0) >= 2
+            and qa_status == 200
+            and export_status == 200
+            and export.get("manifest", {}).get("planning_rule_impact", {}).get("report_id") == report_id
+            and project_export_status == 200
+            and project_export.get("planning_rule_impact_summary", {}).get("report_id") == report_id
+            and final_export_status == 200
+            and final_export.get("final_export", {}).get("planning_rule_impact", {}).get("report_id") == report_id
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("planning_rule_impact", {}).get("status") in {"passed", "warning"}
+            and reset_status == 200
+            and rollback_watch_status == 409
+            and rollback_force_status == 200
+            and stale_guard_status == 409
+            and "masked-key-marker" not in payload_text
+            and "local-path-marker" not in payload_text
+        )
+        return ok, (
+            f"report={report_id}, active={version_id}, plans={impact_summary.get('observed_plan_count')}, "
+            f"reviews={impact_summary.get('observed_review_count')}, recommendation={impact_summary.get('recommendation')}, "
+            f"signoff={signoff.get('signoff', {}).get('acceptance_gate', {}).get('planning_rule_impact', {}).get('status')}, "
+            f"stale_guard={stale_guard_status}, rollback_watch={rollback_watch_status}/{rollback_force_status}"
         )
     except Exception as exc:
         return False, str(exc)

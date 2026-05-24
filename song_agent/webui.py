@@ -1256,6 +1256,11 @@ def panel_html() -> str:
           <button class="secondary" id="planning-governance-promote" type="button">Promote</button>
         </div>
         <div id="planning-rule-governance" class="release-detail"><div class="empty">No active planning rule version.</div></div>
+        <div class="panel-title subhead"><span>Planning Rule Impact</span></div>
+        <div class="actions">
+          <button class="secondary" id="planning-impact-refresh" type="button">Refresh Impact Report</button>
+        </div>
+        <div id="planning-rule-impact" class="release-detail"><div class="empty">No planning rule impact report yet.</div></div>
         <div class="panel-title subhead"><span>Knowledge Base</span></div>
         <div class="actions">
           <button class="secondary" id="acceptance-kb-refresh" type="button">Refresh KB</button>
@@ -1353,6 +1358,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let planningGovernance = null;
     let planningPromotions = [];
     let planningVersions = [];
+    let planningImpact = null;
+    let planningImpactReports = [];
     let acceptanceKb = null;
     let acceptanceKbRecommendation = null;
     let projects = [];
@@ -1450,6 +1457,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadAcceptanceKb();
       await loadPlanningSimulations();
       await loadPlanningGovernance();
+      await loadPlanningImpact();
       await loadAcceptanceSuites();
       await loadBatches();
       setInterval(() => {
@@ -1461,6 +1469,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadAcceptanceKb();
         loadPlanningSimulations();
         loadPlanningGovernance();
+        loadPlanningImpact();
         loadAcceptanceSuites();
         loadAssets();
         loadReferences();
@@ -1717,6 +1726,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     });
     $("planning-simulation-refresh").addEventListener("click", loadPlanningSimulations);
     $("planning-governance-refresh").addEventListener("click", loadPlanningGovernance);
+    $("planning-impact-refresh").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/acceptance/planning-rule-impact/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: { type: "global" }, include_legacy: true, include_superseded: true }) });
+        planningImpact = data.impact_report || null;
+        await loadPlanningImpact();
+      } catch (err) {
+        $("planning-rule-impact").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    });
     $("planning-governance-create").addEventListener("click", async () => {
       try {
         const simulation = planningSimulations[0];
@@ -2473,6 +2491,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         planningVersions = [];
       }
       renderPlanningGovernance();
+    }
+
+    async function loadPlanningImpact() {
+      try {
+        const data = await api("/api/acceptance/planning-rule-impact/reports");
+        planningImpactReports = data.reports || [];
+        planningImpact = planningImpactReports[0] || null;
+      } catch (err) {
+        planningImpactReports = [];
+        planningImpact = null;
+      }
+      renderPlanningImpact();
     }
 
     async function loadAcceptanceKb() {
@@ -3527,6 +3557,51 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <table>
           <thead><tr><th>Version</th><th>Status</th><th>Rule Set</th><th>Simulation</th></tr></thead>
           <tbody>${versionRows || "<tr><td colspan='4'>No versions.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
+    function renderPlanningImpact() {
+      const target = $("planning-rule-impact");
+      if (!target) return;
+      if (!planningImpact || !planningImpact.report_id) {
+        target.innerHTML = "<div class='empty'>No planning rule impact report yet.</div>";
+        return;
+      }
+      const summary = planningImpact.summary || {};
+      const adoption = planningImpact.adoption || {};
+      const risk = planningImpact.risk_drift || {};
+      const rows = (planningImpact.version_metrics || []).slice(0, 8).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.version_id || "-")}</td>
+          <td>${escapeHtml(item.plan_count ?? 0)}</td>
+          <td>${escapeHtml(item.review_count ?? 0)}</td>
+          <td>${escapeHtml(item.average_plan_effectiveness_score ?? "-")}</td>
+          <td>${escapeHtml(item.average_ranking_alignment_score ?? "-")}</td>
+          <td>${escapeHtml(item.synthetic_only_rate ?? 0)}%</td>
+          <td>${escapeHtml(item.waiver_rate ?? 0)}%</td>
+          <td>${escapeHtml(item.force_close_rate ?? 0)}%</td>
+        </tr>
+      `).join("");
+      target.innerHTML = `
+        <div class="grid3">
+          <div><b>Active Version</b><br>${escapeHtml(summary.active_version_id || "-")}</div>
+          <div><b>Adoption Rate</b><br>${escapeHtml(adoption.active_adoption_rate ?? 0)}%</div>
+          <div><b>Recommendation</b><br>${escapeHtml(summary.recommendation || "-")}</div>
+        </div>
+        <div class="grid3">
+          <div><b>Plans</b><br>${escapeHtml(summary.observed_plan_count ?? 0)}</div>
+          <div><b>Reviews</b><br>${escapeHtml(summary.observed_review_count ?? 0)}</div>
+          <div><b>Rollback Recommended</b><br>${summary.rollback_recommended ? "yes" : "-"}</div>
+        </div>
+        <div class="grid3">
+          <div><b>Manual Review</b><br>${escapeHtml(summary.manual_review_count ?? 0)}</div>
+          <div><b>Synthetic Review</b><br>${escapeHtml(summary.synthetic_review_count ?? 0)}</div>
+          <div><b>Risk Drift</b><br>${escapeHtml((risk.warnings || []).join(", ") || "-")}</div>
+        </div>
+        <table>
+          <thead><tr><th>Version</th><th>Plans</th><th>Reviews</th><th>Effectiveness</th><th>Ranking</th><th>Synthetic</th><th>Waiver</th><th>Force</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='8'>No version metrics.</td></tr>"}</tbody>
         </table>
       `;
     }

@@ -1,5 +1,16 @@
 # Changelog
 
+## v4.14.0 - 2026-05-24
+
+### Added
+- Planning Rule Impact Monitoring reports for active rule adoption, Outcome Review effectiveness, risk drift, and rollback recommendations.
+- Planning Rule Impact API, CLI commands, Studio panel, Project/Release/Final Export summaries, and Release Signoff evidence.
+- Release Signoff gate for `require_planning_rule_impact=true`, including stale hard-blocks and force-audited rollback recommendations.
+- release-check v4.14 smoke covering impact export summaries, signoff, stale guard, rollback recommendation handling, and redaction.
+
+### Verified
+- `python -m pytest tests\test_planning_rule_impact.py tests\test_server_planning_rule_impact.py tests\test_cli_planning_rule_impact.py tests\test_release_check.py::test_v414_planning_rule_impact_smoke -q`
+
 ## v4.13.1 - 2026-05-24
 
 ### Fixed

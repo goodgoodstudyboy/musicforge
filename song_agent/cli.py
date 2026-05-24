@@ -340,6 +340,38 @@ def build_planning_rule_governance_parser() -> argparse.ArgumentParser:
     return governance_parser
 
 
+def build_planning_rule_impact_parser() -> argparse.ArgumentParser:
+    impact_parser = argparse.ArgumentParser(description="Monitor active MusicForge Planning Rule impact.")
+    subparsers = impact_parser.add_subparsers(dest="action", required=True)
+
+    refresh = subparsers.add_parser("refresh", help="Refresh a Planning Rule Impact report.")
+    refresh.add_argument("--release-id", default=None)
+    refresh.add_argument("--project-id", default=None)
+    refresh.add_argument("--include-legacy", action="store_true", default=True)
+    refresh.add_argument("--exclude-legacy", action="store_true")
+    refresh.add_argument("--include-superseded", action="store_true", default=True)
+    refresh.add_argument("--exclude-superseded", action="store_true")
+
+    listing = subparsers.add_parser("list", help="List Planning Rule Impact reports.")
+    listing.add_argument("--include-archived", action="store_true")
+    listing.add_argument("--release-id", default=None)
+    listing.add_argument("--project-id", default=None)
+
+    show = subparsers.add_parser("show", help="Show one Planning Rule Impact report.")
+    show.add_argument("report_id")
+
+    refresh_existing = subparsers.add_parser("refresh-existing", help="Refresh an existing Planning Rule Impact report.")
+    refresh_existing.add_argument("report_id")
+
+    archive = subparsers.add_parser("archive", help="Archive a Planning Rule Impact report.")
+    archive.add_argument("report_id")
+
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write the command result as JSON.")
+    return impact_parser
+
+
 def build_acceptance_kb_parser() -> argparse.ArgumentParser:
     kb_parser = argparse.ArgumentParser(description="Manage the local MusicForge Acceptance Knowledge Base.")
     subparsers = kb_parser.add_subparsers(dest="action", required=True)
@@ -789,6 +821,37 @@ def _main() -> None:
         else:
             print_planning_rule_governance_result(result)
         raise SystemExit(0)
+    elif raw_args and raw_args[0] == "planning-rule-impact":
+        from song_agent.planning_rule_impact import PlanningRuleImpactStore, planning_rule_impact_summary
+
+        parser = build_planning_rule_impact_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = PlanningRuleImpactStore()
+        if args.action == "refresh":
+            scope = {"type": "release" if args.release_id else "project" if args.project_id else "global", "release_id": args.release_id, "project_id": args.project_id}
+            report = store.refresh({"scope": scope, "include_legacy": not args.exclude_legacy, "include_superseded": not args.exclude_superseded})
+            result = {"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report)}
+        elif args.action == "list":
+            reports = store.list_reports(include_archived=args.include_archived, release_id=args.release_id, project_id=args.project_id)
+            result = {"ok": True, "reports": [report.to_dict() for report in reports], "summary": {"report_count": len(reports), "latest": planning_rule_impact_summary(reports[0]) if reports else {"status": "missing"}}}
+        elif args.action == "show":
+            report = store.get_report(args.report_id)
+            result = {"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report), "stale": store.report_is_stale(report)}
+        elif args.action == "refresh-existing":
+            report = store.refresh_report(args.report_id)
+            result = {"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report)}
+        elif args.action == "archive":
+            report = store.archive_report(args.report_id)
+            result = {"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report)}
+        else:
+            parser.error("unknown planning-rule-impact action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_planning_rule_impact_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "acceptance-kb":
         from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
 
@@ -1094,6 +1157,22 @@ def print_planning_rule_governance_result(result: dict[str, Any]) -> None:
         print(f"promotions: {len(result.get('promotions') or [])}")
     if result.get("events") is not None:
         print(f"events: {len(result.get('events') or [])}")
+
+
+def print_planning_rule_impact_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    report = result.get("impact_report") if isinstance(result.get("impact_report"), dict) else {}
+    print("MusicForge planning-rule-impact")
+    print(f"report: {summary.get('report_id') or report.get('report_id') or '-'}")
+    print(f"status: {summary.get('status') or report.get('status') or '-'}")
+    print(f"active_version: {summary.get('active_version_id') or '-'}")
+    print(f"plans: {summary.get('observed_plan_count', 0)}")
+    print(f"reviews: {summary.get('observed_review_count', 0)}")
+    print(f"manual_reviews: {summary.get('manual_review_count', 0)}")
+    print(f"synthetic_reviews: {summary.get('synthetic_review_count', 0)}")
+    print(f"recommendation: {summary.get('recommendation') or '-'}")
+    if result.get("reports") is not None:
+        print(f"reports: {len(result.get('reports') or [])}")
 
 
 def print_acceptance_kb_result(result: dict[str, Any]) -> None:

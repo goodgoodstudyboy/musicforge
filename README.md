@@ -206,6 +206,23 @@ Release Signoff can require non-stale active governance evidence with
 Final Export include compact governance summaries and do not include the full
 frozen ruleset payload.
 
+Planning Rule Impact Monitoring observes what happens after an active Planning
+Rule Version is used by Fix Plans. It aggregates adoption, Outcome Review
+effectiveness, manual versus synthetic evidence, risk drift, and rollback
+recommendations. It is monitoring only: rollback recommendations never execute
+automatically and must still go through explicit Governance rollback.
+
+```powershell
+python -m song_agent.cli planning-rule-impact refresh --json
+python -m song_agent.cli planning-rule-impact list --json
+python -m song_agent.cli planning-rule-impact show prgir-000001 --json
+```
+
+Release Signoff can require non-stale impact evidence with
+`require_planning_rule_impact=true`. Stale reports, active-version mismatch, and
+integrity failures cannot be force-signed; rollback recommendations require
+`force=true` plus an audited `override_reason`.
+
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,
 `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are
