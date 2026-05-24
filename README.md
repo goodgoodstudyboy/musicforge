@@ -220,7 +220,9 @@ python -m song_agent.cli planning-rule-impact show prgir-000001 --json
 
 Release Signoff can require non-stale impact evidence with
 `require_planning_rule_impact=true`. Stale reports, active-version mismatch, and
-integrity failures cannot be force-signed; rollback recommendations require
+report integrity failures cannot be force-signed. Impact report conclusions are
+hash-bound with `integrity_hash`, so local edits to recommendation, warning, or
+manual evidence fields block signoff; rollback recommendations require
 `force=true` plus an audited `override_reason`.
 
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,

@@ -6695,6 +6695,15 @@ def _v414_planning_rule_impact_smoke(root: Path) -> tuple[bool, str]:
         report_doc["summary"]["rollback_recommended"] = True
         report_doc["status"] = "warning"
         write_json(report_path, report_doc)
+        tampered_report_status, _tampered_report = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "cannot force tampered impact", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
+
+        impact_refresh_status, impact_refresh = _release_http_json(server, "POST", f"/api/acceptance/planning-rule-impact/reports/{report_id}/refresh")
+        refreshed_report_doc = read_json(report_path)
+        refreshed_report_doc["summary"]["recommendation"] = "rollback_recommended"
+        refreshed_report_doc["summary"]["rollback_recommended"] = True
+        refreshed_report_doc["status"] = "warning"
+        refreshed_report_doc["integrity_hash"] = stable_hash({key: refreshed_report_doc.get(key) for key in ("status", "scope", "active_version", "source", "summary", "adoption", "before_after", "risk_drift", "version_metrics", "plan_samples", "review_samples", "warnings")})
+        write_json(report_path, refreshed_report_doc)
         rollback_watch_status, _rollback_watch = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
         rollback_force_status, _rollback_force = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "force": True, "override_reason": "manual impact override", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
         _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "verify impact stale hard guard"})
@@ -6752,6 +6761,9 @@ def _v414_planning_rule_impact_smoke(root: Path) -> tuple[bool, str]:
             and sign_status == 200
             and signoff.get("signoff", {}).get("acceptance_gate", {}).get("planning_rule_impact", {}).get("status") in {"passed", "warning"}
             and reset_status == 200
+            and tampered_report_status == 409
+            and impact_refresh_status == 200
+            and impact_refresh.get("summary", {}).get("integrity_ok") is True
             and rollback_watch_status == 409
             and rollback_force_status == 200
             and stale_guard_status == 409
@@ -6762,7 +6774,7 @@ def _v414_planning_rule_impact_smoke(root: Path) -> tuple[bool, str]:
             f"report={report_id}, active={version_id}, plans={impact_summary.get('observed_plan_count')}, "
             f"reviews={impact_summary.get('observed_review_count')}, recommendation={impact_summary.get('recommendation')}, "
             f"signoff={signoff.get('signoff', {}).get('acceptance_gate', {}).get('planning_rule_impact', {}).get('status')}, "
-            f"stale_guard={stale_guard_status}, rollback_watch={rollback_watch_status}/{rollback_force_status}"
+            f"tampered_report={tampered_report_status}, stale_guard={stale_guard_status}, rollback_watch={rollback_watch_status}/{rollback_force_status}"
         )
     except Exception as exc:
         return False, str(exc)

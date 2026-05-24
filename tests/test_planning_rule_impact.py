@@ -66,6 +66,7 @@ def test_planning_rule_impact_reports_adoption_and_manual_warning(tmp_path, monk
     assert summary["synthetic_review_count"] >= 1
     assert summary["recommendation"] in {"candidate_improving", "continue_monitoring", "increase_manual_review", "rollback_watch", "insufficient_data"}
     assert store.report_is_stale(report) is False
+    assert store.report_integrity_ok(report) is True
 
 
 def test_planning_rule_impact_stale_after_active_switch_and_source_pollution(tmp_path, monkeypatch) -> None:
@@ -80,6 +81,24 @@ def test_planning_rule_impact_stale_after_active_switch_and_source_pollution(tmp
     polluted["approval"]["approved_by"] = "tampered-impact-reviewer"
     write_json(version_path, polluted)
     assert store.report_is_stale(report) is True
+
+
+def test_planning_rule_impact_integrity_detects_derived_report_tampering(tmp_path, monkeypatch) -> None:
+    governance, review_store, plan_store, _version = _active_governance(tmp_path, monkeypatch)
+    _governed_review(tmp_path, monkeypatch, governance, review_mode="manual")
+    store = PlanningRuleImpactStore(tmp_path / ".musicforge" / "planning-rule-impact", governance_store=governance, plan_store=plan_store, review_store=review_store, project_store=review_store.project_store)
+    report = store.refresh({"scope": {"type": "global"}})
+    report_path = store.report_dir(report.report_id) / "report.json"
+    tampered = read_json(report_path)
+    tampered["summary"]["recommendation"] = "candidate_improving"
+    tampered["summary"]["manual_review_count"] = 99
+    tampered["warnings"] = []
+    write_json(report_path, tampered)
+    loaded = store.get_report(report.report_id)
+
+    assert store.report_is_stale(loaded) is False
+    assert store.report_integrity_ok(loaded) is False
+    assert planning_rule_impact_summary(loaded)["integrity_ok"] is False
 
 
 def test_planning_rule_impact_no_active_version_is_missing(tmp_path, monkeypatch) -> None:

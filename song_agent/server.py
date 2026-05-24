@@ -280,6 +280,7 @@ from song_agent.planning_rule_impact import (
     PlanningRuleImpactNotFoundError,
     PlanningRuleImpactStateError,
     PlanningRuleImpactStore,
+    planning_rule_impact_report_hash,
     planning_rule_impact_summary,
 )
 from song_agent.acceptance_diff import build_acceptance_diff
@@ -5413,10 +5414,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             raw_status = report.status
             summary = planning_rule_impact_summary(report)
             stale = self.planning_rule_impact_store.report_is_stale(report)
+            integrity_ok = self.planning_rule_impact_store.report_integrity_ok(report)
             active = self.planning_rule_governance_store.active_version()
             active_id = active.version_id if active else None
             recommendation = str(summary.get("recommendation") or "")
-            evidence = {**summary, "stale": stale, "current_active_version_id": active_id}
+            evidence = {
+                **summary,
+                "stale": stale,
+                "integrity_ok": integrity_ok,
+                "expected_integrity_hash": report.integrity_hash,
+                "actual_integrity_hash": planning_rule_impact_report_hash(report),
+                "current_active_version_id": active_id,
+            }
+            if not integrity_ok:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact report integrity failed. Refresh impact monitoring before signoff."}
             if stale:
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact report is stale. Refresh impact monitoring before signoff."}
             if active_id and summary.get("active_version_id") != active_id:
@@ -6691,7 +6702,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 report = self.planning_rule_impact_store.get_report(report_id)
-                self._send_json({"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report), "stale": self.planning_rule_impact_store.report_is_stale(report)})
+                integrity_ok = self.planning_rule_impact_store.report_integrity_ok(report)
+                self._send_json(
+                    {
+                        "ok": True,
+                        "impact_report": report.to_dict(),
+                        "summary": planning_rule_impact_summary(report),
+                        "stale": self.planning_rule_impact_store.report_is_stale(report),
+                        "integrity_ok": integrity_ok,
+                        "integrity": {
+                            "ok": integrity_ok,
+                            "expected_integrity_hash": report.integrity_hash,
+                            "actual_integrity_hash": planning_rule_impact_report_hash(report),
+                        },
+                    }
+                )
                 return
             if action == "refresh":
                 if method != "POST":

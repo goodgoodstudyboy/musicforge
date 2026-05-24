@@ -21,6 +21,20 @@ PLANNING_RULE_IMPACT_SCHEMA_VERSION = "planning_rule_impact_report.v1"
 PLANNING_RULE_IMPACT_ENGINE_VERSION = "planning_rule_impact.v1"
 IMPACT_REPORT_STATUSES = {"ready", "warning", "failed", "missing", "archived", "stale"}
 ROLLBACK_RECOMMENDATIONS = {"rollback_watch", "rollback_recommended"}
+IMPACT_REPORT_INTEGRITY_FIELDS = (
+    "status",
+    "scope",
+    "active_version",
+    "source",
+    "summary",
+    "adoption",
+    "before_after",
+    "risk_drift",
+    "version_metrics",
+    "plan_samples",
+    "review_samples",
+    "warnings",
+)
 
 
 class PlanningRuleImpactError(ValueError):
@@ -50,6 +64,7 @@ class PlanningRuleImpactReport:
     plan_samples: list[dict[str, Any]]
     review_samples: list[dict[str, Any]]
     warnings: list[str]
+    integrity_hash: str = ""
     created_at: str = ""
     updated_at: str = ""
     created_by: str = "developer"
@@ -71,6 +86,7 @@ class PlanningRuleImpactReport:
                 "plan_samples": self.plan_samples,
                 "review_samples": self.review_samples,
                 "warnings": self.warnings,
+                "integrity_hash": self.integrity_hash,
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
                 "created_by": self.created_by,
@@ -97,6 +113,7 @@ class PlanningRuleImpactReport:
             plan_samples=[_safe_dict(item) for item in data.get("plan_samples", []) if isinstance(item, dict)] if isinstance(data.get("plan_samples"), list) else [],
             review_samples=[_safe_dict(item) for item in data.get("review_samples", []) if isinstance(item, dict)] if isinstance(data.get("review_samples"), list) else [],
             warnings=[_bounded(item, 180) for item in data.get("warnings", []) if str(item).strip()] if isinstance(data.get("warnings"), list) else [],
+            integrity_hash=str(data.get("integrity_hash") or data.get("report_hash") or ""),
             created_at=str(data.get("created_at") or now),
             updated_at=str(data.get("updated_at") or data.get("created_at") or now),
             created_by=_bounded(data.get("created_by"), 120) or "developer",
@@ -159,6 +176,7 @@ class PlanningRuleImpactStore:
     def archive_report(self, report_id: str, *, now: str | None = None) -> PlanningRuleImpactReport:
         report = self.get_report(report_id)
         archived = PlanningRuleImpactReport.from_dict({**report.to_dict(), "status": "archived", "updated_at": now or now_iso()})
+        archived.integrity_hash = planning_rule_impact_report_hash(archived)
         self._write_report(archived)
         _append_event(self.report_dir(report_id) / "events.jsonl", "planning_rule_impact_report_archived", {"report_id": report_id}, now)
         return archived
@@ -219,6 +237,11 @@ class PlanningRuleImpactStore:
         keys = ("source_hash", "governance_active_hash", "active_version_source_hash")
         return any(str(current.get(key) or "") != str(source.get(key) or "") for key in keys) or current.get("plan_hashes") != source.get("plan_hashes") or current.get("review_hashes") != source.get("review_hashes") or current.get("version_hashes") != source.get("version_hashes") or bool(current.get("source_stale", False))
 
+    def report_integrity_ok(self, report: PlanningRuleImpactReport | dict[str, Any]) -> bool:
+        data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else report if isinstance(report, dict) else {}
+        expected = str(data.get("integrity_hash") or data.get("report_hash") or "")
+        return bool(expected and expected == planning_rule_impact_report_hash(data))
+
     def _build_report(self, report_id: str, payload: dict[str, Any], *, created_at: str, now: str) -> PlanningRuleImpactReport:
         state = self._source_state(payload)
         active = state.get("active_version") if isinstance(state.get("active_version"), dict) else {}
@@ -251,7 +274,7 @@ class PlanningRuleImpactStore:
             "readiness_status": _readiness_status(recommendation, warnings),
             "stale": bool(state.get("source_stale", False)),
         }
-        return PlanningRuleImpactReport(
+        report = PlanningRuleImpactReport(
             report_id=report_id,
             status=status,
             scope=state["scope"],
@@ -284,6 +307,8 @@ class PlanningRuleImpactStore:
             updated_at=now,
             created_by=_bounded(payload.get("created_by"), 120) or "developer",
         )
+        report.integrity_hash = planning_rule_impact_report_hash(report)
+        return report
 
     def _source_state(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
@@ -417,10 +442,13 @@ class PlanningRuleImpactStore:
             return report
         if not self.report_is_stale(report):
             return report
-        return PlanningRuleImpactReport.from_dict({**report.to_dict(), "status": "stale", "summary": {**report.summary, "status": "stale", "stale": True}, "warnings": sorted(set(report.warnings + ["source_changed"]))})
+        stale = PlanningRuleImpactReport.from_dict({**report.to_dict(), "status": "stale", "summary": {**report.summary, "status": "stale", "stale": True}, "warnings": sorted(set(report.warnings + ["source_changed"]))})
+        stale.integrity_hash = planning_rule_impact_report_hash(stale)
+        return stale
 
     def _write_report(self, report: PlanningRuleImpactReport) -> None:
         report_dir = self.report_dir(report.report_id)
+        report.integrity_hash = planning_rule_impact_report_hash(report)
         write_json(report_dir / "report.json", report.to_dict())
         write_json(report_dir / "source-summary.json", {"source": report.source, "summary": report.summary})
         write_json(self.latest_path(report.scope), report.to_dict())
@@ -443,6 +471,7 @@ def planning_rule_impact_summary(report: PlanningRuleImpactReport | dict[str, An
     data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else report if isinstance(report, dict) else {}
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     risk = data.get("risk_drift") if isinstance(data.get("risk_drift"), dict) else {}
+    integrity_hash = str(data.get("integrity_hash") or data.get("report_hash") or "")
     return sanitize_metadata(
         {
             "status": data.get("status") or summary.get("status") or "missing",
@@ -464,6 +493,8 @@ def planning_rule_impact_summary(report: PlanningRuleImpactReport | dict[str, An
             "stale": data.get("status") == "stale" or bool(summary.get("stale", False)),
             "warnings": data.get("warnings", []) if isinstance(data.get("warnings"), list) else [],
             "source_hash": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("source_hash"),
+            "integrity_hash": integrity_hash,
+            "integrity_ok": bool(integrity_hash and integrity_hash == planning_rule_impact_report_hash(data)),
         }
     )
 
@@ -476,6 +507,15 @@ def write_planning_rule_impact_summary(path: Path, store: PlanningRuleImpactStor
     summary = latest_planning_rule_impact_summary(store, release_id=release_id, project_id=project_id)
     write_json(path, summary)
     return summary
+
+
+def planning_rule_impact_report_hash(report: PlanningRuleImpactReport | dict[str, Any] | None) -> str:
+    if isinstance(report, PlanningRuleImpactReport):
+        data = {key: getattr(report, key) for key in IMPACT_REPORT_INTEGRITY_FIELDS}
+    else:
+        data = report if isinstance(report, dict) else {}
+    payload = {key: data.get(key) for key in IMPACT_REPORT_INTEGRITY_FIELDS}
+    return stable_hash(payload)
 
 
 def _version_metrics(plan_samples: list[dict[str, Any]], review_samples: list[dict[str, Any]]) -> list[dict[str, Any]]:

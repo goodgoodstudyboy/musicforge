@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.14.1 - 2026-05-24
+
+### Fixed
+- Planning Rule Impact Reports now bind derived evidence with `integrity_hash`, including status, summary, adoption, before/after metrics, risk drift, samples, and warnings.
+- Release Signoff with `require_planning_rule_impact=true` now hard-blocks tampered Impact Reports, even when `force=true`.
+
+### Added
+- Store, server, and release-check regressions for tampered Impact Report derived conclusions.
+
+### Verified
+- `python -m pytest tests\test_planning_rule_impact.py tests\test_server_planning_rule_impact.py tests\test_cli_planning_rule_impact.py tests\test_release_check.py::test_v414_planning_rule_impact_smoke -q`
+
 ## v4.14.0 - 2026-05-24
 
 ### Added

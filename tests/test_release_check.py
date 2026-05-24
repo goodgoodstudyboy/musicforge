@@ -252,6 +252,7 @@ def test_v414_planning_rule_impact_smoke(tmp_path: Path) -> None:
     assert "report=prgir-" in detail
     assert "active=prgv-" in detail
     assert "signoff=" in detail
+    assert "tampered_report=409" in detail
     assert "stale_guard=409" in detail
     assert "rollback_watch=409/200" in detail
 

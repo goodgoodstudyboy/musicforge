@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.projectio import read_json, write_json
+from song_agent.planning_rule_impact import planning_rule_impact_report_hash
 from tests.test_server_edits import request_json, start_test_server, stop_test_server
 from tests.test_server_planning_rule_governance import test_planning_rule_governance_api_fix_plan_export_and_signoff  # noqa: F401
 from tests.test_server_releases import _signed_project
@@ -93,6 +94,7 @@ def test_planning_rule_impact_signoff_blocks_stale_and_allows_forced_rollback_re
         report["summary"]["recommendation"] = "rollback_recommended"
         report["summary"]["rollback_recommended"] = True
         report["status"] = "warning"
+        report["integrity_hash"] = planning_rule_impact_report_hash(report)
         write_json(report_path, report)
         rollback_status, rollback = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
         forced_status, forced = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "force": True, "override_reason": "manual impact override", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
@@ -113,3 +115,32 @@ def test_planning_rule_impact_signoff_blocks_stale_and_allows_forced_rollback_re
     assert reset_status == 200
     assert stale_status == 409
     assert "stale" in stale["error"].lower()
+
+
+def test_planning_rule_impact_signoff_blocks_tampered_derived_report(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, _version_id, _project_id, _sprint_id = _impact_governed_release(server)
+        refresh_status, refreshed = request_json(server, "POST", "/api/acceptance/planning-rule-impact/reports", {"scope": {"type": "release", "release_id": release_id}})
+        report_id = refreshed["impact_report"]["report_id"]
+        report_path = tmp_path / ".musicforge" / "planning-rule-impact" / "reports" / report_id / "report.json"
+        report = read_json(report_path)
+        report["status"] = "ready"
+        report["summary"]["status"] = "ready"
+        report["summary"]["recommendation"] = "candidate_improving"
+        report["summary"]["rollback_recommended"] = False
+        report["summary"]["manual_review_count"] = 9
+        report["warnings"] = []
+        write_json(report_path, report)
+        detail_status, detail = request_json(server, "GET", f"/api/acceptance/planning-rule-impact/reports/{report_id}")
+        sign_status, signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "force": True, "override_reason": "cannot force tampered impact", "require_planning_rule_impact": True, "planning_rule_impact_report_id": report_id})
+    finally:
+        stop_test_server(server)
+
+    assert refresh_status == 201
+    assert detail_status == 200
+    assert detail["stale"] is False
+    assert detail["integrity_ok"] is False
+    assert sign_status == 409
+    assert "integrity" in signoff["error"].lower()

@@ -836,7 +836,7 @@ def _main() -> None:
             result = {"ok": True, "reports": [report.to_dict() for report in reports], "summary": {"report_count": len(reports), "latest": planning_rule_impact_summary(reports[0]) if reports else {"status": "missing"}}}
         elif args.action == "show":
             report = store.get_report(args.report_id)
-            result = {"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report), "stale": store.report_is_stale(report)}
+            result = {"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report), "stale": store.report_is_stale(report), "integrity_ok": store.report_integrity_ok(report)}
         elif args.action == "refresh-existing":
             report = store.refresh_report(args.report_id)
             result = {"ok": True, "impact_report": report.to_dict(), "summary": planning_rule_impact_summary(report)}
