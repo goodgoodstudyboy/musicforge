@@ -24,6 +24,7 @@ from song_agent.release_checks import (
     _v412_planning_rule_simulation_smoke,
     _v413_planning_rule_governance_smoke,
     _v414_planning_rule_impact_smoke,
+    _v50_real_audio_baseline_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -255,6 +256,16 @@ def test_v414_planning_rule_impact_smoke(tmp_path: Path) -> None:
     assert "tampered_report=409" in detail
     assert "stale_guard=409" in detail
     assert "rollback_watch=409/200" in detail
+
+
+def test_v50_real_audio_baseline_smoke(tmp_path: Path) -> None:
+    ok, detail = _v50_real_audio_baseline_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "audio=passed" in detail
+    assert "missing_audio=failed" in detail
+    assert "human_missing=409" in detail
+    assert "verify=" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

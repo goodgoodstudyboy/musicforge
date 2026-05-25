@@ -56,6 +56,7 @@ from song_agent.reference_analysis import analyze_reference, create_asset_from_s
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.release_verifier import verify_release_zip
+from song_agent.audio_artifacts import build_audio_artifact_manifest, write_audio_artifact_manifest
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.submission_verifier import verify_submission_package
 from song_agent.human_review_verifier import verify_human_review_pack
@@ -218,6 +219,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.12 planning rule simulation smoke", *_v412_planning_rule_simulation_smoke(root))
     report.add("v4.13 planning rule governance smoke", *_v413_planning_rule_governance_smoke(root))
     report.add("v4.14 planning rule impact smoke", *_v414_planning_rule_impact_smoke(root))
+    report.add("v5.0 real audio baseline smoke", *_v50_real_audio_baseline_smoke(root))
     return report
 
 
@@ -6785,6 +6787,131 @@ def _v414_planning_rule_impact_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
+
+
+def _v50_real_audio_baseline_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v50-real-audio-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        project_id = _v37_signed_project(server, "v5 Real Audio Track")
+        _v50_add_project_audio(server, project_id, duration_seconds=30)
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5 Real Audio Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        refresh_track_status, _refresh_track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks/track-000001/refresh")
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        missing_project = _v37_signed_project(server, "v5 Missing Audio Track")
+        missing_release_status, missing_release = _release_http_json(server, "POST", "/api/releases", {"name": "v5 Missing Audio Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        missing_release_id = missing_release.get("release", {}).get("release_id")
+        _release_http_json(server, "POST", f"/api/releases/{missing_release_id}/tracks", {"project_id": missing_project})
+        _release_http_json(server, "POST", f"/api/releases/{missing_release_id}/qa/refresh")
+        missing_audio_status, missing_audio = _release_http_json(server, "POST", f"/api/releases/{missing_release_id}/audio-qa", {"require_audio": True})
+        missing_sign_status, _missing_sign = _release_http_json(server, "POST", f"/api/releases/{missing_release_id}/signoff", {"signed_by": "release-check", "require_audio_health": True})
+
+        audio_status, audio = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        suite_id = _v50_manual_wav_acceptance_suite(server)
+        human_missing_status, _human_missing = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_audio_health": True, "require_human_audio_review": True})
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "acceptance_suite_id": suite_id, "require_audio_health": True, "require_human_audio_review": True})
+        zip_path = base / ".musicforge" / "releases" / str(release_id) / "release-export.zip"
+        external = base / "external"
+        external.mkdir()
+        external_zip = external / "release-export.zip"
+        shutil.copy2(zip_path, external_zip)
+        verify = verify_release_zip(external_zip, require_audio=True, require_human_review=True)
+
+        ok = (
+            release_status == 201
+            and track_status == 200
+            and refresh_track_status == 200
+            and qa_status == 200
+            and missing_audio_status == 200
+            and missing_audio.get("summary", {}).get("status") == "failed"
+            and missing_sign_status == 409
+            and audio_status == 200
+            and audio.get("summary", {}).get("status") == "passed"
+            and export_status == 200
+            and zip_status == 200
+            and human_missing_status == 409
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("audio", {}).get("status") == "passed"
+            and verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(verify, "human_audio_review_evidence") == "passed"
+        )
+        return ok, (
+            f"audio={audio.get('summary', {}).get('status')}, missing_audio={missing_audio.get('summary', {}).get('status')}, "
+            f"missing_sign={missing_sign_status}, human_missing={human_missing_status}, sign={sign_status}, verify={verify.get('status')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v50_add_project_audio(server: Any, project_id: str, *, duration_seconds: float = 30) -> None:
+    project_dir = Path(".musicforge") / "projects" / project_id
+    versions = read_json(project_dir / "versions.json")
+    output_dir = Path(versions["versions"][0]["output_dir"])
+    _v50_write_test_wav(output_dir / "renders" / "song.wav", duration_seconds=duration_seconds)
+    manifest = build_audio_artifact_manifest(
+        artifact_id=f"project-{project_id}-v001",
+        scope="project_version",
+        wav_path=output_dir / "renders" / "song.wav",
+        midi_path=output_dir / "renders" / "song.mid",
+        song_plan_path=output_dir / "data" / "song-plan.json",
+        renderer_config=RendererConfig(soundfont_path="fixture.sf2"),
+        extra_source={"project_id": project_id, "version_id": "v001"},
+    )
+    write_audio_artifact_manifest(output_dir / "renders" / "audio-artifact.json", manifest)
+    export_status, _export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False, "include_audio": True, "force": True})
+    zip_status, _zip = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
+    qa_status, _qa = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+    reset_status, _reset = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff/reset", {"reason": "v5 audio fixture"})
+    sign_status, _sign = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {"signed_by": "release-check"})
+    if not (export_status == 200 and zip_status == 200 and qa_status == 200 and reset_status == 200 and sign_status == 200):
+        raise RuntimeError(f"audio project refresh failed export={export_status} zip={zip_status} qa={qa_status} reset={reset_status} sign={sign_status}")
+
+
+def _v50_manual_wav_acceptance_suite(server: Any) -> str:
+    suite_status, suite = _release_http_json(server, "POST", "/api/acceptance/suites", {"name": "v5 Manual WAV Evidence", "profile_id": "developer_manual", "require_manual_review": True})
+    if suite_status != 201:
+        raise RuntimeError(f"acceptance suite failed: {suite_status} {suite}")
+    suite_id = str(suite.get("suite", {}).get("suite_id") or "")
+    case_status, case = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases", {"request": {"title": "v5 Manual WAV", "language": "English", "style": "pop", "theme": "real audio", "duration_seconds": 30}})
+    case_id = str(case.get("case", {}).get("case_id") or "")
+    generate_status, _generated = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/generate", {"render_audio": "never"})
+    _v50_write_test_wav(Path(".musicforge") / "acceptance" / suite_id / "cases" / case_id / "song.wav", duration_seconds=30)
+    health_status, _health = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/health")
+    review_status, _review = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/cases/{case_id}/review", {"rating": 5, "status": "accepted", "playback_confirmed": True, "review_mode": "manual", "audio_mode": "wav", "notes": "Manual WAV listening review confirms real audio playback."})
+    report_status, report = _release_http_json(server, "POST", f"/api/acceptance/suites/{suite_id}/report")
+    if not (case_status == 201 and generate_status == 200 and health_status == 200 and review_status == 200 and report_status == 200 and report.get("summary", {}).get("manual_audio_accepted_count") == 1):
+        raise RuntimeError(f"manual wav acceptance failed case={case_status} gen={generate_status} health={health_status} review={review_status} report={report_status}")
+    return suite_id
+
+
+def _v50_write_test_wav(path: Path, *, duration_seconds: float = 30.0, sample_rate: int = 44100) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        for index in range(int(duration_seconds * sample_rate)):
+            sample = int(0.25 * 32767 * __import__("math").sin(2 * __import__("math").pi * 440 * index / sample_rate))
+            frame = struct.pack("<hh", sample, sample)
+            wav.writeframesraw(frame)
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

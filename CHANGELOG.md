@@ -1,5 +1,18 @@
 # Changelog
 
+## v5.0.0 - 2026-05-25
+
+### Added
+- Real Audio Baseline: deterministic WAV health checks for duration, format, silence, RMS, clipping, and integrity hash.
+- Renderer Profile store/API/CLI with legacy `.musicforge/renderer.json` compatibility and redacted public summaries.
+- Acceptance reports now include WAV audio health summaries and manual WAV review evidence binding.
+- Release Audio QA endpoint and Release Signoff gates for `require_audio_health`, `require_human_audio_review`, and current audio evidence.
+- Release Export includes `audio-summary.json`, and `verify-release --require-audio --require-human-review` validates portable audio evidence.
+- `audio-health` CLI and v5.0 release-check smoke.
+
+### Verified
+- `python -m pytest tests\test_audio_health.py tests\test_music_acceptance.py tests\test_release_audio.py tests\test_release_verifier.py tests\test_release_check.py::test_v50_real_audio_baseline_smoke -q`
+
 ## v4.14.1 - 2026-05-24
 
 ### Fixed

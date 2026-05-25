@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from song_agent import __version__
+from song_agent.audio_health import analyze_wav_bytes, audio_health_allows_release
 from song_agent.projectio import write_json
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.releases import stable_hash
@@ -65,6 +66,7 @@ def verify_release_zip(
     *,
     strict: bool = False,
     require_audio: bool = False,
+    require_human_review: bool = False,
     require_stems: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
@@ -75,6 +77,7 @@ def verify_release_zip(
         Path(zip_path),
         strict=strict,
         require_audio=require_audio,
+        require_human_review=require_human_review,
         require_stems=require_stems,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
@@ -142,6 +145,7 @@ class _ReleaseZipVerifier:
         *,
         strict: bool,
         require_audio: bool,
+        require_human_review: bool,
         require_stems: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
@@ -151,6 +155,7 @@ class _ReleaseZipVerifier:
         self.zip_path = zip_path
         self.strict = strict
         self.require_audio = require_audio
+        self.require_human_review = require_human_review
         self.require_stems = require_stems
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
@@ -460,7 +465,12 @@ class _ReleaseZipVerifier:
                     self._add_track_check(track_id, "track_optional_audio", "failed", "blocking", "song.wav is required but missing.", path=wav_path)
                 else:
                     ok, message = self._check_wav_header(archive, self.entry_map[wav_path])
-                    self._add_track_check(track_id, "track_optional_audio", "passed" if ok else "failed", "blocking", message, path=wav_path)
+                    status = "passed" if ok else "failed"
+                    if ok:
+                        health = analyze_wav_bytes(archive.read(self.entry_map[wav_path]), filename=wav_path, source={"track_id": track_id, "path": wav_path}, report_id=f"ahr-verify-{track_id}", now=self.generated_at)
+                        status = "passed" if audio_health_allows_release(health) else "failed"
+                        message = "song.wav exists and passes baseline audio health." if status == "passed" else "song.wav failed baseline audio health."
+                    self._add_track_check(track_id, "track_optional_audio", status, "blocking", message, path=wav_path)
             if self.require_stems:
                 stems_manifest_path = f"{directory}/stems/manifest.json"
                 if stems_manifest_path not in self.entry_map:
@@ -510,6 +520,19 @@ class _ReleaseZipVerifier:
             "blocking",
             "Signoff qa_source_hash matches manifest." if qa_source and qa_source == manifest_qa_source else "Signoff qa_source_hash is missing or does not match manifest.",
         )
+        if self.require_human_review:
+            gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+            audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
+            manual_audio_count = int(audio_gate.get("manual_audio_accepted_count", 0) or 0)
+            status = "passed" if audio_gate.get("status") == "passed" and manual_audio_count > 0 else "failed"
+            self._add_check(
+                "signoff",
+                "human_audio_review_evidence",
+                status,
+                "blocking",
+                "Release signoff contains manual WAV review evidence." if status == "passed" else "Manual WAV review evidence is required but missing.",
+                count=manual_audio_count,
+            )
 
     def _verify_metadata(self, archive: zipfile.ZipFile) -> None:
         metadata_summary = self.manifest.get("metadata") if isinstance(self.manifest.get("metadata"), dict) else {}
@@ -716,6 +739,7 @@ class _ReleaseZipVerifier:
             "status": status,
             "strict": self.strict,
             "require_audio": self.require_audio,
+            "require_human_review": self.require_human_review,
             "require_stems": self.require_stems,
             "summary": {
                 "release_id": self.manifest.get("release_id"),

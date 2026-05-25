@@ -87,6 +87,7 @@ show up as failed.
 python -m song_agent.cli acceptance-check --profile midi_smoke --auto-review --render-audio never
 python -m song_agent.cli acceptance-check --profile developer_manual --render-audio auto --report-out runs\acceptance-v450.json
 python -m song_agent.cli acceptance-check --profile release_candidate --render-audio auto
+python -m song_agent.cli acceptance-check --profile audio_required --render-audio require --manual-required
 python -m song_agent.cli acceptance-diff runs\acceptance-baseline.json runs\acceptance-current.json --json
 python -m song_agent.cli acceptance-analytics --scope global --refresh --json
 python -m song_agent.cli acceptance-fix-sprint create --analytics-report-id analytics-20260520-example --json
@@ -225,6 +226,13 @@ hash-bound with `integrity_hash`, so local edits to recommendation, warning, or
 manual evidence fields block signoff; rollback recommendations require
 `force=true` plus an audited `override_reason`.
 
+Real Audio Baseline adds deterministic WAV health reports and manual WAV review
+evidence. Acceptance cases with WAV output write `audio-health.json` and bind
+manual `audio_mode=wav` reviews to the current WAV hash and health report hash.
+Release Audio QA checks every selected track's `song.wav` before signoff; use
+`require_audio_health=true` and `require_human_audio_review=true` on Release
+Signoff when real audio is a release gate.
+
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,
 `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are
@@ -236,6 +244,7 @@ verified outside the workspace:
 
 ```powershell
 python -m song_agent.cli verify-release path\to\release-export.zip --json --report-out release-verification-report.json
+python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review
 ```
 
 The verifier reads only the ZIP, checks entry safety, duplicate entries,
@@ -1112,6 +1121,17 @@ MUSICFORGE_AUDIO_SAMPLE_RATE
 MUSICFORGE_AUDIO_GAIN
 ```
 
+v5.0 also adds local renderer profiles under `.musicforge/audio-profiles/`.
+Public profile summaries redact engine and SoundFont paths and expose only
+hashes and render settings:
+
+```powershell
+python -m song_agent.cli audio-profile list
+python -m song_agent.cli audio-profile create --name "Local FluidSynth" --engine fluidsynth --soundfont D:\sf2\gm.sf2
+python -m song_agent.cli audio-profile test arp-000001
+python -m song_agent.cli audio-profile set-default arp-000001
+```
+
 Renderer APIs:
 
 ```text
@@ -1119,12 +1139,20 @@ GET  /api/renderer
 POST /api/renderer
 POST /api/renderer/reset
 POST /api/renderer/test
+GET  /api/audio/profiles
+POST /api/audio/profiles
+POST /api/audio/profiles/<profile-id>/test
 POST /api/jobs/<job-id>/render-audio
 GET  /api/jobs/<job-id>/audio
 ```
 
 In Studio, open a completed job and click `Render Audio`. When `song.wav`
 exists, the job detail shows a browser audio player and a WAV download link.
+For a standalone WAV check, run:
+
+```powershell
+python -m song_agent.cli audio-health runs\demo\renders\song.wav --json
+```
 
 ## Stem Export
 

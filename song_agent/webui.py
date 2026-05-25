@@ -778,6 +778,23 @@ def panel_html() -> str:
           </form>
         </div>
       </section>
+      <section id="audio-lab">
+        <div class="panel-title">
+          <span>Audio Lab</span>
+          <span class="status">Real Audio Baseline</span>
+        </div>
+        <div class="panel-body">
+          <div class="grid3">
+            <div>${metric("Renderer Profile", "local")}</div>
+            <div>${metric("WAV Health", "available")}</div>
+            <div>${metric("Manual Audio Review", "required when gated")}</div>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="audio-health-run" type="button">Run Audio Health</button>
+            <button class="secondary" id="release-refresh-audio-qa" type="button">Refresh Release Audio QA</button>
+          </div>
+        </div>
+      </section>
     <section>
       <div class="panel-title">
         <span>Song Request</span>
@@ -3909,6 +3926,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <button class="secondary" id="release-refresh-metadata-qa" type="button">Refresh Metadata QA</button>
         <button class="secondary" id="release-export-metadata" type="button">Export Metadata</button>
         <button class="secondary" id="release-refresh-qa" type="button">Refresh Release QA</button>
+        <button class="secondary" id="release-refresh-audio-qa" type="button">Refresh Release Audio QA</button>
         <button class="secondary" id="release-build-export" type="button" ${signed ? "disabled" : ""}>Build Release Export</button>
         <button class="secondary" id="release-build-zip" type="button">Build Release ZIP</button>
         <button id="release-signoff" type="button" ${signed ? "disabled" : ""}>Sign Release</button>
@@ -4134,6 +4152,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       bindAction("release-refresh-qa", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-refresh-audio-qa", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-qa`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ require_audio: true }) });
         await loadReleases();
       });
       bindAction("release-build-export", async () => {

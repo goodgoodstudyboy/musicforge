@@ -69,6 +69,7 @@ def build_verify_release_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
     verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict-order warnings as failures.")
     verify_parser.add_argument("--require-audio", action="store_true", help="Require each track to include song.wav.")
+    verify_parser.add_argument("--require-human-review", action="store_true", help="Require release signoff to include manual WAV review evidence.")
     verify_parser.add_argument("--require-stems", action="store_true", help="Require each track to include a stems manifest and declared stem MIDI files.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
@@ -122,12 +123,44 @@ def build_acceptance_check_parser() -> argparse.ArgumentParser:
     acceptance_parser.add_argument("--out", type=Path, default=Path(".musicforge") / "acceptance", help="Acceptance workspace directory.")
     acceptance_parser.add_argument("--profile", default="developer_manual", help="Acceptance profile: midi_smoke, developer_manual, release_candidate, or audio_required.")
     acceptance_parser.add_argument("--cases", type=int, default=6, help="Number of representative generated songs.")
-    acceptance_parser.add_argument("--render-audio", choices=["auto", "always", "never"], default="auto", help="Whether to render WAV audio.")
+    acceptance_parser.add_argument("--render-audio", choices=["auto", "always", "never", "require"], default="auto", help="Whether to render WAV audio.")
+    acceptance_parser.add_argument("--manual-required", action="store_true", help="Require manual reviews; auto-review will not be treated as release evidence.")
     acceptance_parser.add_argument("--auto-review", action="store_true", help="Write synthetic reviews for CI/smoke use.")
     acceptance_parser.add_argument("--min-rating", type=int, default=3, help="Minimum accepted review rating.")
     acceptance_parser.add_argument("--json", action="store_true", help="Print the full acceptance report as JSON.")
     acceptance_parser.add_argument("--report-out", type=Path, default=None, help="Write the acceptance report to this JSON file.")
     return acceptance_parser
+
+
+def build_audio_health_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run deterministic WAV audio health checks.")
+    parser.add_argument("wav_path", type=Path, help="Path to a WAV file.")
+    parser.add_argument("--json", action="store_true", help="Print the full audio health report as JSON.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write the audio health report to this JSON file.")
+    parser.add_argument("--expected-sample-rate", type=int, default=None, help="Expected WAV sample rate.")
+    parser.add_argument("--expected-channels", type=int, default=None, help="Expected channel count.")
+    parser.add_argument("--expected-bit-depth", type=int, default=None, help="Expected PCM bit depth.")
+    return parser
+
+
+def build_audio_profile_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage local renderer profiles.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    subparsers.add_parser("list", help="List audio profiles.").add_argument("--include-hidden", action="store_true")
+    create = subparsers.add_parser("create", help="Create or update an audio profile.")
+    create.add_argument("--profile-id", default=None)
+    create.add_argument("--name", required=True)
+    create.add_argument("--engine", default="fluidsynth")
+    create.add_argument("--engine-path", default="fluidsynth")
+    create.add_argument("--soundfont", default="")
+    create.add_argument("--sample-rate", type=int, default=44100)
+    create.add_argument("--gain", type=float, default=0.6)
+    create.add_argument("--default", action="store_true")
+    test = subparsers.add_parser("test", help="Test an audio profile.")
+    test.add_argument("profile_id")
+    default = subparsers.add_parser("set-default", help="Set the default audio profile.")
+    default.add_argument("profile_id")
+    return parser
 
 
 def build_acceptance_diff_parser() -> argparse.ArgumentParser:
@@ -489,6 +522,7 @@ def _main() -> None:
             args.zip_path,
             strict=args.strict,
             require_audio=args.require_audio,
+            require_human_review=args.require_human_review,
             require_stems=args.require_stems,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
@@ -588,6 +622,7 @@ def _main() -> None:
             render_audio_mode=args.render_audio,
             auto_review=args.auto_review,
             min_rating=args.min_rating,
+            manual_required=args.manual_required,
         )
         if args.report_out is not None:
             write_json(args.report_out, report)
@@ -596,6 +631,54 @@ def _main() -> None:
         else:
             print_acceptance_check_report(report)
         raise SystemExit(0 if report.get("status") in {"passed", "needs_review"} else 1)
+    elif raw_args and raw_args[0] == "audio-health":
+        from song_agent.audio_health import analyze_wav_health
+
+        parser = build_audio_health_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = analyze_wav_health(
+            args.wav_path,
+            expected_sample_rate=args.expected_sample_rate,
+            expected_channels=args.expected_channels,
+            expected_bit_depth=args.expected_bit_depth,
+        )
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge audio-health\nstatus: {report.get('status')}\nwav_sha256: {report.get('wav_sha256')}")
+        raise SystemExit(0 if report.get("status") in {"passed", "warning"} else 1)
+    elif raw_args and raw_args[0] == "audio-profile":
+        from song_agent.audio_profiles import AudioProfileStore
+
+        parser = build_audio_profile_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = AudioProfileStore()
+        if args.action == "list":
+            result = {"profiles": [profile.public_summary() for profile in store.list_profiles(include_hidden=args.include_hidden)]}
+        elif args.action == "create":
+            profile = store.upsert_profile(
+                {
+                    "profile_id": args.profile_id,
+                    "name": args.name,
+                    "engine": args.engine,
+                    "engine_path": args.engine_path,
+                    "soundfont_path": args.soundfont,
+                    "sample_rate": args.sample_rate,
+                    "gain": args.gain,
+                    "is_default": args.default,
+                }
+            )
+            result = {"profile": profile.public_summary()}
+        elif args.action == "test":
+            result = store.test_profile(args.profile_id)
+        elif args.action == "set-default":
+            result = {"profile": store.set_default(args.profile_id).public_summary()}
+        else:
+            result = {}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        raise SystemExit(0 if result.get("status") != "failed" else 1)
     elif raw_args and raw_args[0] == "acceptance-diff":
         from song_agent.acceptance_diff import build_acceptance_diff
 
@@ -967,6 +1050,7 @@ def run_acceptance_check(
     render_audio_mode: str,
     auto_review: bool,
     min_rating: int,
+    manual_required: bool = False,
 ) -> dict[str, Any]:
     from song_agent.acceptance_profiles import get_acceptance_profile
     from song_agent.music_acceptance import AcceptanceStore, build_acceptance_report, default_acceptance_song_cases
@@ -975,6 +1059,8 @@ def run_acceptance_check(
     profile = get_acceptance_profile(profile_id)
     if cases == 6 and profile.case_count != 6:
         cases = profile.case_count
+    if render_audio_mode == "require":
+        render_audio_mode = "always"
     render_audio_mode = render_audio_mode if render_audio_mode != "auto" or profile.render_audio == "auto" else profile.render_audio
     store = AcceptanceStore(out_dir)
     suite_payload = {
@@ -983,8 +1069,8 @@ def run_acceptance_check(
         "profile_id": profile.profile_id,
         "min_rating": max(min_rating, profile.min_rating),
         "require_audio_if_renderer_configured": profile.require_audio_if_renderer_configured,
-        "allow_synthetic_review": profile.allow_synthetic_review,
-        "require_manual_review": profile.require_manual_review,
+        "allow_synthetic_review": profile.allow_synthetic_review and not manual_required,
+        "require_manual_review": profile.require_manual_review or manual_required,
         "release_ready_profile": profile.release_ready,
     }
     if render_audio_mode == "never":

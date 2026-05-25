@@ -105,8 +105,10 @@ def build_final_export_bundle(
     _copy_optional(run_dir, export_dir, midi_path, "song.mid", "midi", files, required=True)
     if options.include_audio:
         _copy_optional(run_dir, export_dir, run_dir / "renders" / "song.wav", "song.wav", "audio", files)
+        _copy_optional(run_dir, export_dir, run_dir / "renders" / "audio-artifact.json", "audio-artifact.json", "audio_artifact", files)
     else:
         files.append({"kind": "audio", "path": "song.wav", "exists": False, "required": False, "skipped": "disabled"})
+        files.append({"kind": "audio_artifact", "path": "audio-artifact.json", "exists": False, "required": False, "skipped": "disabled"})
     if options.include_stems:
         _copy_stems(run_dir, export_dir, options, files, plan=plan)
     else:

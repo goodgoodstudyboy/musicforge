@@ -10,6 +10,7 @@ from typing import Any
 
 from song_agent.acceptance_profiles import AcceptanceProfile, get_acceptance_profile, profile_payload
 from song_agent.agent.pipeline import SongAgent
+from song_agent.audio_health import analyze_wav_health, audio_health_summary
 from song_agent.music_health import analyze_music_health, music_health_allows_review, music_health_summary
 from song_agent.projectio import read_json, slugify, write_json
 from song_agent.projects import ProjectStore, now_iso
@@ -407,7 +408,7 @@ class AcceptanceStore:
             self.append_event(suite_id, "case_generated", {"case_id": case_id, "audio_status": audio_status})
             return case
 
-    def render_audio(self, suite_id: str, case_id: str, *, mode: str = "auto", persist: bool = True) -> dict[str, Any]:
+    def render_audio(self, suite_id: str, case_id: str, *, mode: str = "auto", persist: bool = True, config: Any | None = None) -> dict[str, Any]:
         with self.lock:
             mode = str(mode or "auto")
             if mode not in {"auto", "always", "never"}:
@@ -418,7 +419,9 @@ class AcceptanceStore:
             case_dir = self.case_dir(suite_id, case_id)
             midi_path = case_dir / "song.mid"
             wav_path = case_dir / "song.wav"
-            config, sources = load_renderer_config()
+            sources = {}
+            if config is None:
+                config, sources = load_renderer_config()
             configured = renderer_configured(config)
             if mode == "never":
                 status = "skipped_renderer_not_configured" if not configured else "skipped_by_request"
@@ -452,6 +455,7 @@ class AcceptanceStore:
                 raise AcceptanceStateError("song-plan.json is missing. Generate the case first.")
             plan = SongPlan.from_dict(read_json(plan_path))
             config, _sources = load_renderer_config()
+            audio_required = _suite_requires_audio(suite) or (renderer_configured(config) and suite.require_audio_if_renderer_configured)
             report = analyze_music_health(
                 plan,
                 case_id=case_id,
@@ -459,10 +463,25 @@ class AcceptanceStore:
                 wav_path=case_dir / "song.wav",
                 validator_report=_read_optional_json(case_dir / "validator-report.json"),
                 quality_report=_read_optional_json(case_dir / "quality.json"),
-                renderer_configured=renderer_configured(config) and suite.require_audio_if_renderer_configured,
+                renderer_configured=audio_required,
                 audio_not_required_status=str(case.artifacts.get("audio_status") or "skipped_renderer_not_configured"),
                 now=now_iso(),
             )
+            wav_path = case_dir / "song.wav"
+            if wav_path.exists() and wav_path.is_file():
+                expected_duration = _request_duration_seconds(_read_optional_json(case_dir / "request.json") or case.request_summary)
+                audio_report = analyze_wav_health(
+                    wav_path,
+                    source={"suite_id": suite_id, "case_id": case_id, "song_id": case.song_id, "profile_id": suite.profile_id},
+                    expected_duration_seconds=expected_duration,
+                    report_id=f"ahr-{case_id}",
+                    now=now_iso(),
+                )
+                write_json(case_dir / "audio-health.json", audio_report)
+                report["audio_health"] = audio_health_summary(audio_report)
+                artifacts = report.get("artifacts") if isinstance(report.get("artifacts"), dict) else {}
+                artifacts["audio_health"] = f"cases/{case_id}/audio-health.json"
+                report["artifacts"] = artifacts
             write_json(self.health_path(suite_id, case_id), report)
             case.health_summary = music_health_summary(report)
             case.status = "needs_review" if music_health_allows_review(report) else "health_failed"
@@ -479,6 +498,17 @@ class AcceptanceStore:
             if not music_health_allows_review(health) and str(payload.get("status") or "") != "waived":
                 raise AcceptanceStateError("Case health has blocking failures. Use waived with a waiver reason or fix the case.")
             review = _review_payload(case_id, payload, min_rating=suite.min_rating)
+            if str(review.get("audio_mode") or "").lower() == "wav":
+                audio_health = health.get("audio_health") if isinstance(health.get("audio_health"), dict) else {}
+                if not audio_health or audio_health.get("status") not in {"passed", "warning"}:
+                    raise AcceptanceStateError("WAV review requires a passing audio health report.")
+                review["audio_evidence"] = sanitize_metadata(
+                    {
+                        "audio_health_report_id": audio_health.get("report_id"),
+                        "audio_health_hash": audio_health.get("integrity_hash"),
+                        "wav_sha256": audio_health.get("wav_sha256"),
+                    }
+                )
             write_json(self.review_path(suite_id, case_id), review)
             case.review_summary = listening_review_summary(review)
             case.status = _case_status_from_review(review)
@@ -743,6 +773,7 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
             blockers.append(f"{case.case_id}: manual review required")
         expectation_blockers = _expectation_blockers(case, health_summary)
         blockers.extend(expectation_blockers)
+        audio_summary = audio_health_summary(health.get("audio_health") if isinstance(health.get("audio_health"), dict) else {})
         case_rows.append(
             {
                 "case_id": case.case_id,
@@ -756,6 +787,10 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
                 "rating": rating,
                 "playback_confirmed": review_summary.get("playback_confirmed", False),
                 "audio_status": health_summary.get("audio_status"),
+                "audio_mode": review_summary.get("audio_mode"),
+                "audio_health_status": audio_summary.get("status"),
+                "audio_health_hash": audio_summary.get("integrity_hash"),
+                "audio_evidence_status": _audio_evidence_status(review, health),
                 "review_mode": review_mode,
                 "review_source_type": (review.get("source") or {}).get("source_type") if isinstance(review.get("source"), dict) else None,
                 "review_pack_id": (review.get("source") or {}).get("pack_id") if isinstance(review.get("source"), dict) else None,
@@ -777,6 +812,17 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
         blockers.append(f"redaction scan found {len(sensitive)} issue(s)")
     manual_accepted = sum(1 for row in case_rows if row.get("review_status") == "accepted" and row.get("review_mode") == "manual")
     synthetic_accepted = sum(1 for row in case_rows if row.get("review_status") == "accepted" and row.get("review_mode") == "synthetic")
+    audio_required = _suite_requires_audio(suite)
+    audio_passed = sum(1 for row in case_rows if row.get("audio_health_status") in {"passed", "warning"})
+    manual_audio_accepted = sum(1 for row in case_rows if row.get("review_status") == "accepted" and row.get("review_mode") == "manual" and row.get("audio_mode") == "wav" and row.get("audio_evidence_status") == "current")
+    if audio_required:
+        for row in case_rows:
+            if row.get("audio_health_status") not in {"passed", "warning"}:
+                blockers.append(f"{row.get('case_id')}: passing WAV audio health required")
+            if row.get("review_status") == "accepted" and row.get("audio_mode") != "wav":
+                blockers.append(f"{row.get('case_id')}: accepted review must bind WAV audio")
+            if row.get("review_status") == "accepted" and row.get("review_mode") == "manual" and row.get("audio_evidence_status") != "current":
+                blockers.append(f"{row.get('case_id')}: manual WAV review evidence is stale or missing")
     coverage = _songbook_coverage(case_rows, suite)
     coverage_blockers = _songbook_coverage_blockers(coverage, suite)
     blockers.extend(coverage_blockers)
@@ -808,6 +854,9 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
             "health_failed_count": sum(1 for row in case_rows if row.get("health_status") == "failed"),
             "manual_accepted_count": manual_accepted,
             "synthetic_accepted_count": synthetic_accepted,
+            "audio_required": audio_required,
+            "audio_passed_count": audio_passed,
+            "manual_audio_accepted_count": manual_audio_accepted,
             "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
             "renderer_status": "configured" if suite.renderer_snapshot.get("configured") else "not_configured",
             "blocking_count": len(blockers),
@@ -902,6 +951,9 @@ def acceptance_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "health_failed_count": summary.get("health_failed_count", 0),
             "manual_accepted_count": summary.get("manual_accepted_count", 0),
             "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
+            "audio_required": bool(summary.get("audio_required", False)),
+            "audio_passed_count": summary.get("audio_passed_count", 0),
+            "manual_audio_accepted_count": summary.get("manual_audio_accepted_count", 0),
             "average_rating": summary.get("average_rating"),
             "renderer_status": summary.get("renderer_status"),
             "blocking_count": summary.get("blocking_count", 0),
@@ -929,6 +981,7 @@ def listening_review_summary(review: dict[str, Any] | None) -> dict[str, Any]:
             "listened_by": data.get("listened_by"),
             "listened_at": data.get("listened_at"),
             "audio_mode": data.get("audio_mode"),
+            "audio_evidence": data.get("audio_evidence") if isinstance(data.get("audio_evidence"), dict) else {},
             "review_mode": data.get("review_mode") or "manual",
             "review_source_type": (data.get("source") or {}).get("source_type") if isinstance(data.get("source"), dict) else None,
             "review_pack_id": (data.get("source") or {}).get("pack_id") if isinstance(data.get("source"), dict) else None,
@@ -1103,6 +1156,33 @@ def _review_payload(case_id: str, payload: dict[str, Any], *, min_rating: int) -
 def _case_status_from_review(review: dict[str, Any]) -> str:
     status = str(review.get("status") or "")
     return {"accepted": "accepted", "waived": "waived", "rejected": "rejected", "needs_fix": "rejected"}.get(status, "rejected")
+
+
+def _suite_requires_audio(suite: AcceptanceSuite) -> bool:
+    profile = suite.profile if isinstance(suite.profile, dict) else {}
+    return suite.profile_id == "audio_required" or str(profile.get("profile_id") or "") == "audio_required" or str(profile.get("render_audio") or "") in {"always", "require"}
+
+
+def _request_duration_seconds(request: dict[str, Any]) -> float | None:
+    try:
+        value = float((request or {}).get("duration_seconds") or 0)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _audio_evidence_status(review: dict[str, Any], health: dict[str, Any]) -> str:
+    if not review:
+        return "missing"
+    if str(review.get("audio_mode") or "").lower() != "wav":
+        return "not_wav"
+    evidence = review.get("audio_evidence") if isinstance(review.get("audio_evidence"), dict) else {}
+    summary = audio_health_summary(health.get("audio_health") if isinstance(health.get("audio_health"), dict) else {})
+    if not evidence or not summary:
+        return "missing"
+    if evidence.get("audio_health_hash") != summary.get("integrity_hash") or evidence.get("wav_sha256") != summary.get("wav_sha256"):
+        return "stale"
+    return "current"
 
 
 def _profile_from_payload(payload: dict[str, Any]) -> AcceptanceProfile:

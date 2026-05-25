@@ -20,6 +20,15 @@ from urllib.parse import parse_qs
 from song_agent import __version__
 from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.auth import AuthConfig, validate_bearer_header
+from song_agent.audio_artifacts import (
+    AUDIO_ARTIFACT_FILENAME,
+    audio_artifact_current,
+    audio_artifact_summary,
+    audio_artifact_stale_reasons_for_profile,
+    build_audio_artifact_manifest,
+    read_audio_artifact_manifest,
+    write_audio_artifact_manifest,
+)
 from song_agent.assets import (
     AssetStore,
     apply_asset_refs_to_plan,
@@ -132,6 +141,15 @@ from song_agent.release_qa import (
     release_signoff_summary,
     release_source_hash,
     signoff_history_event as release_signoff_history_event,
+)
+from song_agent.release_audio import (
+    build_release_audio_qa_report,
+    read_release_audio_qa,
+    release_audio_allows_signoff,
+    release_audio_report_integrity_ok,
+    release_audio_source_hash,
+    release_audio_summary,
+    write_release_audio_qa,
 )
 from song_agent.releases import (
     ReleaseConflictError,
@@ -285,6 +303,7 @@ from song_agent.planning_rule_impact import (
 )
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
+from song_agent.audio_profiles import AudioProfileError, AudioProfileNotFoundError, AudioProfileStore
 from song_agent.music_acceptance import (
     AcceptanceNotFoundError,
     AcceptanceStateError,
@@ -976,7 +995,7 @@ class JobStore:
             self.jobs.pop(job_id, None)
             return True, HTTPStatus.OK, None
 
-    def render_job_audio(self, job_id: str) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    def render_job_audio(self, job_id: str, *, config: Any | None = None, audio_profile: Any | None = None) -> tuple[dict[str, Any], HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."
@@ -985,8 +1004,21 @@ class JobStore:
         if not midi_path.exists():
             return {}, HTTPStatus.CONFLICT, "song.mid is not available for this job yet."
         try:
-            config, _sources = load_renderer_config()
+            if config is None:
+                config, _sources = load_renderer_config()
             wav_path = render_audio(midi_path, run_dir / "renders" / "song.wav", config)
+            manifest = build_audio_artifact_manifest(
+                artifact_id=f"job-{job_id}",
+                scope="job",
+                wav_path=wav_path,
+                midi_path=midi_path,
+                song_plan_path=run_dir / "data" / "song-plan.json",
+                renderer_config=config,
+                profile=audio_profile,
+                extra_source={"job_id": job_id},
+                now=_utc_now(),
+            )
+            write_audio_artifact_manifest(run_dir / "renders" / AUDIO_ARTIFACT_FILENAME, manifest)
         except RendererError as exc:
             error_path = run_dir / "logs" / "audio-render-error.json"
             write_json(
@@ -1002,13 +1034,17 @@ class JobStore:
         if validator_report_path.exists():
             report = read_json(validator_report_path)
             report["audio"] = _audio_report(wav_path)
+            report["audio_artifact"] = audio_artifact_summary(manifest)
             write_json(validator_report_path, report)
         artifacts = dict(job.artifacts)
         artifacts["audio"] = str(wav_path)
+        artifacts["audio_artifact"] = str(run_dir / "renders" / AUDIO_ARTIFACT_FILENAME)
         self._update_job(job, artifacts=artifacts)
         return {
             "audio": str(wav_path),
             "artifact": _artifact_dict(wav_path),
+            "audio_artifact": manifest,
+            "audio_artifact_summary": audio_artifact_summary(manifest),
         }, HTTPStatus.OK, None
 
     def get_job_stems(self, job_id: str) -> tuple[dict[str, Any], HTTPStatus, str | None]:
@@ -2481,6 +2517,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.planning_rule_impact_store  # type: ignore[attr-defined]
 
     @property
+    def audio_profile_store(self) -> AudioProfileStore:
+        return self.server.audio_profile_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2554,6 +2594,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/renderer/test":
                 self._handle_renderer_test(method)
+                return
+            if path == "/api/audio/profiles" or path.startswith("/api/audio/profiles/"):
+                self._handle_audio_profiles_route(method, path)
                 return
             if path == "/api/jobs":
                 if method == "GET":
@@ -4806,6 +4849,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "release_id": release_id, "release_qa": report, "summary": release_qa_summary(report)})
                 return
 
+            if tail == "/audio-qa":
+                self._handle_release_audio_qa(method, release_id)
+                return
+
             if tail == "/metadata":
                 if method == "GET":
                     metadata = read_release_metadata(self.release_store, release_id, default={})
@@ -4996,6 +5043,105 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = build_release_metadata_qa_report(release=document, metadata=metadata, now=_utc_now())
         return write_release_metadata_qa(self.release_store, release_id, report)
 
+    def _handle_release_audio_qa(self, method: str, release_id: str) -> None:
+        if method == "GET":
+            report = read_release_audio_qa(self.release_store, release_id, default={})
+            self._send_json({"ok": True, "release_id": release_id, "audio_qa": report, "summary": release_audio_summary(report)})
+            return
+        if method == "POST":
+            payload = self._optional_json_body()
+            report = build_release_audio_qa_report(
+                release=self.release_store.get_release(release_id),
+                release_store=self.release_store,
+                project_store=self.project_store,
+                require_audio=bool(payload.get("require_audio", True)),
+                now=_utc_now(),
+            )
+            report = write_release_audio_qa(self.release_store, release_id, report)
+            self.release_store.append_event(release_id, "release_audio_qa_refreshed", {"status": report.get("status")})
+            self._send_json({"ok": True, "release_id": release_id, "audio_qa": report, "summary": release_audio_summary(report)})
+            return
+        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_audio_profiles_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/audio/profiles":
+                if method == "GET":
+                    profiles = [profile.public_summary() for profile in self.audio_profile_store.list_profiles(include_hidden=True)]
+                    self._send_json({"ok": True, "profiles": profiles})
+                    return
+                if method == "POST":
+                    profile = self.audio_profile_store.upsert_profile(self._read_json_body())
+                    self._send_json({"ok": True, "profile": profile.public_summary()}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            rest = path.removeprefix("/api/audio/profiles/").strip("/")
+            parts = rest.split("/") if rest else []
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Audio profile route not found.")
+                return
+            profile_id = parts[0]
+            if len(parts) == 1:
+                if method == "GET":
+                    profile = self.audio_profile_store.get_profile(profile_id)
+                    self._send_json({"ok": True, "profile": profile.public_summary()})
+                    return
+                if method == "POST":
+                    profile = self.audio_profile_store.upsert_profile({**self._read_json_body(), "profile_id": profile_id})
+                    self._send_json({"ok": True, "profile": profile.public_summary()})
+                    return
+            if len(parts) == 2 and method == "POST":
+                action = parts[1]
+                if action == "test":
+                    self._send_json({"ok": True, **self.audio_profile_store.test_profile(profile_id)})
+                    return
+                if action == "set-default":
+                    profile = self.audio_profile_store.set_default(profile_id)
+                    self._send_json({"ok": True, "profile": profile.public_summary()})
+                    return
+                if action == "hide":
+                    profile = self.audio_profile_store.hide(profile_id, hidden=True)
+                    self._send_json({"ok": True, "profile": profile.public_summary()})
+                    return
+                if action == "unhide":
+                    profile = self.audio_profile_store.hide(profile_id, hidden=False)
+                    self._send_json({"ok": True, "profile": profile.public_summary()})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio profile route not found.")
+        except AudioProfileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioProfileError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _renderer_profile_from_payload(self, payload: dict[str, Any] | None) -> Any | None:
+        profile_id = str((payload or {}).get("profile_id") or "").strip()
+        if not profile_id:
+            return None
+        return self.audio_profile_store.get_profile(profile_id)
+
+    def _renderer_config_from_payload(self, payload: dict[str, Any] | None) -> Any | None:
+        profile = self._renderer_profile_from_payload(payload)
+        if profile is None:
+            return None
+        return profile.to_renderer_config()
+
+    def _job_audio_artifact_stale_reasons(self, job: JobState) -> list[str]:
+        run_dir = Path(job.output_dir)
+        wav_path = run_dir / "renders" / "song.wav"
+        midi_path = run_dir / "renders" / "song.mid"
+        plan_path = run_dir / "data" / "song-plan.json"
+        manifest = read_audio_artifact_manifest(run_dir / "renders" / AUDIO_ARTIFACT_FILENAME, default={})
+        profile = None
+        renderer = manifest.get("renderer") if isinstance(manifest.get("renderer"), dict) else {}
+        profile_id = str(renderer.get("profile_id") or "")
+        if profile_id.startswith("arp-"):
+            try:
+                profile = self.audio_profile_store.get_profile(profile_id)
+            except AudioProfileError:
+                profile = None
+        return audio_artifact_stale_reasons_for_profile(manifest, wav_path=wav_path, midi_path=midi_path, song_plan_path=plan_path, profile=profile)
+
     def _ensure_release_export_mutable(self, release_id: str, *, document: Any | None = None) -> None:
         document = document or self.release_store.get_release(release_id)
         if document.status == "archived":
@@ -5020,6 +5166,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = self._get_or_refresh_release_qa(release_id, refresh=True, options={})
         force = bool(payload.get("force", False))
         acceptance_gate = self._release_acceptance_gate({**payload, "release_id": release_id, "force": force})
+        audio_gate = self._release_audio_gate(release_id, payload)
+        if audio_gate:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["audio"] = audio_gate
+            if audio_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(audio_gate.get("message") or "Release audio gate failed.")
+        if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
+            self._send_error(HTTPStatus.CONFLICT, str(audio_gate.get("message") or "Release audio gate failed."))
+            return
         hard_gate = acceptance_gate.get("planning_rule_impact") if isinstance(acceptance_gate.get("planning_rule_impact"), dict) else {}
         if hard_gate.get("hard_block") and hard_gate.get("status") == "failed":
             self._send_error(HTTPStatus.CONFLICT, str(hard_gate.get("message") or "Planning Rule Impact gate failed."))
@@ -5157,7 +5313,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         release_ready = bool(summary.get("release_ready", False))
         coverage_status = str(summary.get("songbook_coverage_status") or "not_applicable")
         human_review_pack = summary.get("human_review_pack") if isinstance(summary.get("human_review_pack"), dict) else {}
-        ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed" and coverage_status in {"complete", "not_applicable"}
+        require_release_ready = bool(payload.get("require_acceptance_release_ready", False)) or str(summary.get("profile_id") or "") in {"release_candidate", "audio_required"}
+        if require_release_ready:
+            ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed" and coverage_status in {"complete", "not_applicable"}
+            message = "Acceptance suite is not manual release-ready."
+        else:
+            ok = report.get("status") == "passed" and int(summary.get("manual_accepted_count", 0) or 0) > 0 and acceptance_status in {"manual_passed", "release_ready_passed", "passed"}
+            message = "Acceptance suite is not manually accepted."
         gate = {
             "status": "passed" if ok else "failed",
             "suite_id": suite_id,
@@ -5170,8 +5332,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "duplicate_song_ids": summary.get("duplicate_song_ids", []),
             "manual_accepted_count": summary.get("manual_accepted_count", 0),
             "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
+            "manual_audio_accepted_count": summary.get("manual_audio_accepted_count", 0),
+            "audio_passed_count": summary.get("audio_passed_count", 0),
+            "require_acceptance_release_ready": require_release_ready,
             "human_review_pack": human_review_pack,
-            "message": "Acceptance suite is not manual release-ready.",
+            "message": message,
         }
         if analytics_evidence:
             gate["acceptance_analytics"] = analytics_evidence
@@ -5211,6 +5376,49 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 gate["status"] = "failed"
                 gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
         return gate
+
+    def _release_audio_gate(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        require_health = bool(payload.get("require_audio_health", False))
+        require_human = bool(payload.get("require_human_audio_review", False))
+        require_current = bool(payload.get("require_audio_artifact_current", require_health))
+        if not (require_health or require_human or require_current):
+            return {}
+        try:
+            document = self.release_store.get_release(release_id)
+            current_hash = release_audio_source_hash(document, project_store=self.project_store, release_store=self.release_store)
+            report = read_release_audio_qa(self.release_store, release_id, default={})
+        except Exception as exc:
+            return {"status": "failed", "hard_block": True, "message": f"Release Audio QA is unavailable: {sanitize_sensitive_text(str(exc))}"}
+        summary = release_audio_summary(report)
+        evidence: dict[str, Any] = {
+            **summary,
+            "require_audio_health": require_health,
+            "require_human_audio_review": require_human,
+            "require_audio_artifact_current": require_current,
+        }
+        if require_health:
+            if not report:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA is missing. Refresh audio QA before signoff."}
+            if not release_audio_report_integrity_ok(report):
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA integrity failed. Refresh audio QA before signoff."}
+            if require_current and report.get("source_hash") != current_hash:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA is stale. Refresh audio QA before signoff.", "current_source_hash": current_hash}
+            if not release_audio_allows_signoff(report, current_source_hash=current_hash if require_current else None):
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA has blocking audio failures."}
+        if require_human:
+            suite_id = str(payload.get("acceptance_suite_id") or "").strip()
+            if not suite_id:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "require_human_audio_review needs acceptance_suite_id."}
+            try:
+                acceptance = self.acceptance_store.read_report(suite_id)
+            except Exception as exc:
+                return {**evidence, "status": "failed", "hard_block": True, "message": f"Acceptance report is unavailable: {sanitize_sensitive_text(str(exc))}"}
+            acceptance_summary = acceptance_report_summary(acceptance)
+            evidence["manual_audio_accepted_count"] = acceptance_summary.get("manual_audio_accepted_count", 0)
+            evidence["acceptance_status"] = acceptance_summary.get("acceptance_status")
+            if int(acceptance_summary.get("manual_audio_accepted_count", 0) or 0) <= 0:
+                return {**evidence, "status": "failed", "hard_block": True, "message": "Human WAV listening review evidence is missing."}
+        return {**evidence, "status": "passed", "message": "Release audio gate passed."}
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
         report_id = str(payload.get("acceptance_analytics_report_id") or "").strip()
@@ -6153,7 +6361,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                         return
                     payload = self._optional_json_body()
-                    result = self.acceptance_store.render_audio(suite_id, case_id, mode=str(payload.get("mode") or "auto"))
+                    profile = self._renderer_profile_from_payload(payload)
+                    config = profile.to_renderer_config() if profile is not None else None
+                    result = self.acceptance_store.render_audio(suite_id, case_id, mode=str(payload.get("mode") or "auto"), config=config)
                     self._send_json({"ok": True, "suite_id": suite_id, "case_id": case_id, **result})
                     return
                 if action == "review":
@@ -7736,13 +7946,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if not audio_path.exists():
                     self._send_error(HTTPStatus.NOT_FOUND, "Audio render is not available for this version.")
                     return
+                stale_reasons = self._job_audio_artifact_stale_reasons(job)
+                if stale_reasons:
+                    self._send_error(HTTPStatus.CONFLICT, f"Audio artifact is stale: {', '.join(stale_reasons)}.")
+                    return
                 self._send_file(audio_path, "audio/wav", filename=f"{project_id}-{version_id}.wav")
                 return
             if action == "render-audio":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                audio, status, error = self.store.render_job_audio(job.job_id)
+                payload = self._optional_json_body()
+                profile = self._renderer_profile_from_payload(payload)
+                config = profile.to_renderer_config() if profile is not None else None
+                audio, status, error = self.store.render_job_audio(job.job_id, config=config, audio_profile=profile)
                 if error is not None:
                     self._send_error(status, str(sanitize_metadata({"error": error}).get("error") or "Audio render failed."))
                     return
@@ -11145,7 +11362,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if method != "POST":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
-            audio, status, error = self.store.render_job_audio(job_id)
+            payload = self._optional_json_body()
+            profile = self._renderer_profile_from_payload(payload)
+            config = profile.to_renderer_config() if profile is not None else None
+            audio, status, error = self.store.render_job_audio(job_id, config=config, audio_profile=profile)
             if error is not None:
                 self._send_error(status, error)
                 return
@@ -11243,6 +11463,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             audio_path = run_dir / "renders" / "song.wav"
             if not audio_path.exists():
                 self._send_error(HTTPStatus.NOT_FOUND, "Audio render is not available for this job.")
+                return
+            stale_reasons = self._job_audio_artifact_stale_reasons(job)
+            if stale_reasons:
+                self._send_error(HTTPStatus.CONFLICT, f"Audio artifact is stale: {', '.join(stale_reasons)}.")
                 return
             self._send_file(audio_path, "audio/wav")
             return
@@ -11538,6 +11762,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.planning_rule_governance_store = PlanningRuleGovernanceStore(simulation_store=self.planning_rule_simulation_store, project_store=self.project_store)
         self.acceptance_fix_plan_store.planning_rule_governance_store = self.planning_rule_governance_store
         self.planning_rule_impact_store = PlanningRuleImpactStore(governance_store=self.planning_rule_governance_store, plan_store=self.acceptance_fix_plan_store, review_store=self.acceptance_fix_plan_review_store, project_store=self.project_store)
+        self.audio_profile_store = AudioProfileStore(self.release_store.root.parent / "audio-profiles")
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

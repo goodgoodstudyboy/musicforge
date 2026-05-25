@@ -8,6 +8,7 @@ from song_agent.projectio import read_json, write_json
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.music_acceptance import AcceptanceStateError, AcceptanceStore
 from song_agent.regression_songbook import BUILTIN_SONGBOOK_ID, BUILTIN_SONGBOOK_VERSION, list_regression_songs
+from tests.audio_fixtures import write_test_wav
 
 
 def test_acceptance_suite_generate_health_review_report_signoff(tmp_path: Path, monkeypatch) -> None:
@@ -70,6 +71,45 @@ def test_acceptance_review_requires_playback_and_notes(tmp_path: Path, monkeypat
 
     with pytest.raises(ValueError):
         store.write_review(suite.suite_id, case.case_id, {"rating": 4, "status": "accepted", "playback_confirmed": True, "notes": "short"})
+
+
+def test_audio_required_acceptance_requires_wav_and_binds_manual_review(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = AcceptanceStore(tmp_path / ".musicforge" / "acceptance")
+    suite = store.create_suite({"profile_id": "audio_required", "require_audio_if_renderer_configured": True})
+    case = store.add_case(
+        suite.suite_id,
+        {"request": {"title": "Audio Required", "language": "English", "style": "pop", "theme": "audio", "duration_seconds": 30}},
+    )
+    store.generate_case(suite.suite_id, case.case_id, render_audio_mode="never")
+    missing_health = store.run_health(suite.suite_id, case.case_id)
+    missing_report = store.build_report(suite.suite_id)
+    assert missing_health["status"] == "failed"
+    assert missing_report["status"] == "failed"
+    assert any("passing WAV audio health required" in blocker for blocker in missing_report["blockers"])
+
+    case_dir = store.case_dir(suite.suite_id, case.case_id)
+    write_test_wav(case_dir / "song.wav", duration_seconds=30)
+    health = store.run_health(suite.suite_id, case.case_id)
+    review = store.write_review(
+        suite.suite_id,
+        case.case_id,
+        {
+            "rating": 5,
+            "status": "accepted",
+            "playback_confirmed": True,
+            "notes": "Manual WAV review confirms rendered audio playback is acceptable.",
+            "audio_mode": "wav",
+            "review_mode": "manual",
+        },
+    )
+    report = store.build_report(suite.suite_id)
+
+    assert health["audio_health"]["status"] == "passed"
+    assert review["audio_evidence"]["audio_health_hash"]
+    assert report["summary"]["manual_audio_accepted_count"] == 1
+    assert report["summary"]["audio_passed_count"] == 1
+    assert any("complete regression songbook coverage" in blocker for blocker in report["blockers"])
 
 
 def test_acceptance_report_detects_source_and_report_tamper(tmp_path: Path, monkeypatch) -> None:
