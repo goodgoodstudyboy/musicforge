@@ -163,6 +163,35 @@ def build_audio_profile_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_release_audio_review_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage per-track Release audio review evidence.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    listing = subparsers.add_parser("list", help="List audio reviews for a Release.")
+    listing.add_argument("release_id")
+    summary = subparsers.add_parser("summary", help="Build the current per-track audio review summary.")
+    summary.add_argument("release_id")
+    summary.add_argument("--write", action="store_true", help="Persist release-audio-review-summary.json.")
+    add = subparsers.add_parser("add", help="Create a per-track audio review.")
+    add.add_argument("release_id")
+    add.add_argument("--track-id", required=True)
+    add.add_argument("--status", choices=["accepted", "needs_fix", "rejected", "waived"], default="accepted")
+    add.add_argument("--review-mode", choices=["manual", "synthetic"], default="manual")
+    add.add_argument("--rating", type=int, default=4)
+    add.add_argument("--reviewer", default="local-user")
+    add.add_argument("--notes", default="")
+    add.add_argument("--playback-confirmed", action="store_true", default=False)
+    task = subparsers.add_parser("create-task", help="Create a ReviewTask from an audio review marker.")
+    task.add_argument("release_id")
+    task.add_argument("review_id")
+    task.add_argument("marker_id")
+    task.add_argument("--title", default="")
+    task.add_argument("--instruction", default="")
+    for subparser in subparsers.choices.values():
+        subparser.add_argument("--json", action="store_true", help="Print JSON output.")
+        subparser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
 def build_acceptance_diff_parser() -> argparse.ArgumentParser:
     diff_parser = argparse.ArgumentParser(description="Compare two Music Acceptance reports by regression song id.")
     diff_parser.add_argument("left_report", type=Path, help="Baseline music-acceptance-report.json.")
@@ -679,6 +708,50 @@ def _main() -> None:
             result = {}
         print(json.dumps(result, ensure_ascii=False, indent=2))
         raise SystemExit(0 if result.get("status") != "failed" else 1)
+    elif raw_args and raw_args[0] == "release-audio-review":
+        from song_agent.audio_review_evidence import AudioReviewEvidenceStore, audio_review_summary_public
+        from song_agent.projects import ProjectStore
+        from song_agent.releases import ReleaseStore
+
+        parser = build_release_audio_review_parser()
+        args = parser.parse_args(raw_args[1:])
+        project_store = ProjectStore()
+        release_store = ReleaseStore(project_store=project_store)
+        store = AudioReviewEvidenceStore(release_store, project_store)
+        if args.action == "list":
+            reviews = store.list_reviews(args.release_id)
+            summary = store.build_summary(args.release_id)
+            result = {"ok": True, "release_id": args.release_id, "reviews": reviews, "summary": audio_review_summary_public(summary)}
+        elif args.action == "summary":
+            summary = store.write_summary(args.release_id) if args.write else store.build_summary(args.release_id)
+            result = {"ok": True, "release_id": args.release_id, "summary": audio_review_summary_public(summary), "audio_review_summary": summary}
+        elif args.action == "add":
+            review = store.create_review(
+                args.release_id,
+                {
+                    "track_id": args.track_id,
+                    "status": args.status,
+                    "review_mode": args.review_mode,
+                    "rating": args.rating,
+                    "reviewer": {"name": args.reviewer},
+                    "notes": args.notes,
+                    "playback_confirmed": args.playback_confirmed,
+                },
+            )
+            summary = store.build_summary(args.release_id)
+            result = {"ok": True, "release_id": args.release_id, "review": review, "summary": audio_review_summary_public(summary)}
+        elif args.action == "create-task":
+            payload = {key: value for key, value in {"title": args.title, "instruction": args.instruction}.items() if value}
+            result = {"ok": True, "release_id": args.release_id, **store.create_review_task_from_marker(args.release_id, args.review_id, args.marker_id, payload)}
+        else:
+            parser.error("unknown release-audio-review action")
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_audio_review_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "acceptance-diff":
         from song_agent.acceptance_diff import build_acceptance_diff
 
@@ -1137,6 +1210,25 @@ def print_acceptance_diff_report(report: dict[str, Any]) -> None:
     print(f"songs: {summary.get('song_count', 0)}")
     print(f"new_blockers: {summary.get('new_blocker_count', 0)}")
     print(f"rating_regressions: {summary.get('rating_regression_count', 0)}")
+
+
+def print_release_audio_review_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    review = result.get("review") if isinstance(result.get("review"), dict) else {}
+    print("MusicForge release-audio-review")
+    print(f"release: {result.get('release_id') or summary.get('release_id') or '-'}")
+    print(f"status: {summary.get('status') or review.get('status') or result.get('status') or '-'}")
+    print(f"tracks: {summary.get('track_count', 0)}")
+    print(f"manual accepted: {summary.get('manual_accepted_track_count', 0)}")
+    print(f"missing: {len(summary.get('missing_track_ids', []) or [])}")
+    print(f"stale: {summary.get('stale_review_count', 0)}")
+    print(f"needs_fix: {summary.get('needs_fix_track_count', 0)}")
+    if review:
+        print(f"review: {review.get('review_id')}")
+    if result.get("task_id"):
+        print(f"task: {result.get('task_id')}")
+    if result.get("reviews") is not None:
+        print(f"reviews: {len(result.get('reviews') or [])}")
 
 
 def print_acceptance_analytics_report(report: dict[str, Any]) -> None:

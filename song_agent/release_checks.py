@@ -220,6 +220,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.13 planning rule governance smoke", *_v413_planning_rule_governance_smoke(root))
     report.add("v4.14 planning rule impact smoke", *_v414_planning_rule_impact_smoke(root))
     report.add("v5.0 real audio baseline smoke", *_v50_real_audio_baseline_smoke(root))
+    report.add("v5.1 per-track audio review smoke", *_v51_per_track_audio_review_smoke(root))
     return report
 
 
@@ -6912,6 +6913,108 @@ def _v50_write_test_wav(path: Path, *, duration_seconds: float = 30.0, sample_ra
             sample = int(0.25 * 32767 * __import__("math").sin(2 * __import__("math").pi * 440 * index / sample_rate))
             frame = struct.pack("<hh", sample, sample)
             wav.writeframesraw(frame)
+
+
+def _v51_per_track_audio_review_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v51-audio-review-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        first_project = _v37_signed_project(server, "v5.1 Audio Review One")
+        second_project = _v37_signed_project(server, "v5.1 Audio Review Two")
+        _v50_add_project_audio(server, first_project, duration_seconds=30)
+        _v50_add_project_audio(server, second_project, duration_seconds=30)
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.1 Audio Review Release", "release_type": "ep", "primary_artist": "MusicForge"})
+        release_id = str(release.get("release", {}).get("release_id") or "")
+        first_track_status, _first_track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": first_project})
+        second_track_status, _second_track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": second_project})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        audio_status, audio = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        first_review_status, first_review = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual first track accepted.", "markers": [{"time_seconds": 2.0, "category": "mix_balance", "message": "kick balance"}]})
+        first_review_id = first_review.get("review", {}).get("review_id")
+        missing_gate_status, _missing_gate = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_audio_health": True, "require_per_track_audio_review": True})
+        synthetic_status, _synthetic = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000002", "status": "accepted", "review_mode": "synthetic", "rating": 5, "playback_confirmed": True, "notes": "Synthetic does not satisfy release gate."})
+        synthetic_gate_status, _synthetic_gate = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_audio_health": True, "require_per_track_audio_review": True})
+        second_review_status, second_review = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000002", "status": "accepted", "review_mode": "manual", "rating": 4, "playback_confirmed": True, "notes": "Manual second track accepted."})
+        summary_status, summary = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews/refresh-summary")
+        task_status, task = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews/{first_review_id}/markers/m-000001/create-review-task", {"title": "Review kick balance"})
+        duplicate_task_status, duplicate_task = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews/{first_review_id}/markers/m-000001/create-review-task", {"title": "Review kick balance again"})
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_audio_health": True, "require_human_audio_review": True, "require_per_track_audio_review": True})
+        zip_path = base / ".musicforge" / "releases" / release_id / "release-export.zip"
+        external_dir = base / "external-verify"
+        external_dir.mkdir(parents=True, exist_ok=True)
+        external_zip = external_dir / "release-export.zip"
+        shutil.copy2(zip_path, external_zip)
+        verify = verify_release_zip(external_zip, require_audio=True, require_human_review=True)
+
+        review_name = ""
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            review_name = next(name for name in archive.namelist() if name.startswith("audio-reviews/reviews/") and str(second_review.get("review", {}).get("review_id")) in name)
+
+        def tamper_review_sha(data: bytes) -> bytes:
+            payload = json.loads(data.decode("utf-8"))
+            payload["audio_evidence"]["wav_sha256"] = "0" * 64
+            return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        def pollute_review_notes(data: bytes) -> bytes:
+            payload = json.loads(data.decode("utf-8"))
+            payload["notes"] = r"Manual review leaked C:\Users\demo\secret.wav api_key=sk-secret-value"
+            return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        tampered = verify_release_zip(_v38_rewrite_zip(zip_path, base / "tampered-release-review.zip", transforms={review_name: tamper_review_sha}), require_audio=True, require_human_review=True)
+        redaction = verify_release_zip(_v38_rewrite_zip(zip_path, base / "polluted-release-review.zip", transforms={review_name: pollute_review_notes}), require_audio=True, require_human_review=True)
+        ok = (
+            release_status == 201
+            and first_track_status == 200
+            and second_track_status == 200
+            and qa_status == 200
+            and audio_status == 200
+            and audio.get("summary", {}).get("status") == "passed"
+            and first_review_status == 201
+            and missing_gate_status == 409
+            and synthetic_status == 201
+            and synthetic_gate_status == 409
+            and second_review_status == 201
+            and summary_status == 200
+            and summary.get("summary", {}).get("status") == "passed"
+            and task_status == 201
+            and duplicate_task_status == 200
+            and duplicate_task.get("status") == "existing"
+            and export_status == 200
+            and export.get("manifest", {}).get("audio_reviews", {}).get("status") == "passed"
+            and zip_status == 200
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("audio", {}).get("per_track_review", {}).get("manual_accepted_track_count") == 2
+            and verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(verify, "per_track_audio_review_evidence") == "passed"
+            and tampered.get("status") == "failed"
+            and _v38_check_status(tampered, "audio_review_payload_hash") == "failed"
+            and _v38_check_status(tampered, "audio_review_summary_hash") == "passed"
+            and redaction.get("status") == "failed"
+            and _v38_check_status(redaction, "redaction_scan") == "failed"
+        )
+        return ok, (
+            f"release={release_id}, tracks=2, missing_gate={missing_gate_status}, synthetic_gate={synthetic_gate_status}, "
+            f"sign={sign_status}, verify={verify.get('status')}, task={task.get('task_id')}, "
+            f"tampered={_v38_check_status(tampered, 'audio_review_payload_hash')}, redaction={_v38_check_status(redaction, 'redaction_scan')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

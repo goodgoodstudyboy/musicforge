@@ -25,6 +25,7 @@ from song_agent.release_checks import (
     _v413_planning_rule_governance_smoke,
     _v414_planning_rule_impact_smoke,
     _v50_real_audio_baseline_smoke,
+    _v51_per_track_audio_review_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -266,6 +267,18 @@ def test_v50_real_audio_baseline_smoke(tmp_path: Path) -> None:
     assert "missing_audio=failed" in detail
     assert "human_missing=409" in detail
     assert "verify=" in detail
+
+
+def test_v51_per_track_audio_review_smoke(tmp_path: Path) -> None:
+    ok, detail = _v51_per_track_audio_review_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "missing_gate=409" in detail
+    assert "synthetic_gate=409" in detail
+    assert "sign=200" in detail
+    assert "verify=" in detail
+    assert "tampered=failed" in detail
+    assert "redaction=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

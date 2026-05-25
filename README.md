@@ -233,6 +233,26 @@ Release Audio QA checks every selected track's `song.wav` before signoff; use
 `require_audio_health=true` and `require_human_audio_review=true` on Release
 Signoff when real audio is a release gate.
 
+Per-track Audio Review evidence tightens that gate for Release tracks. Each
+track can store a manual review under `.musicforge/releases/<release-id>/audio-
+reviews/`, bound to the current track WAV hash, audio artifact, audio health
+hash, and marker-to-section mapping. Release Signoff with
+`require_per_track_audio_review=true` requires every track to have a current
+manual accepted WAV review; synthetic-only, missing, stale, tampered, or
+redaction-failed reviews hard-block signoff. Release Export writes
+`audio-reviews/summary.json` and individual review JSON files into the ZIP, and
+`verify-release --require-audio --require-human-review` checks those per-track
+reviews against the packaged `song.wav` files offline.
+
+Useful local commands:
+
+```powershell
+python -m song_agent.cli release-audio-review list release-000001
+python -m song_agent.cli release-audio-review add release-000001 --track-id track-000001 --status accepted --rating 4 --reviewer local-user --playback-confirmed --notes "Manual WAV playback accepted."
+python -m song_agent.cli release-audio-review summary release-000001 --write
+python -m song_agent.cli release-audio-review create-task release-000001 arv-000001 m-000001
+```
+
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,
 `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are

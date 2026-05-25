@@ -1,5 +1,20 @@
 # Changelog
 
+## v5.1.0 - 2026-05-26
+
+### Added
+- Per-track Release Audio Review evidence store with source hash, integrity hash, stale detection, marker-to-section mapping, and marker-to-ReviewTask feedback.
+- Release Audio Review API and Studio Audio Review Board for creating manual track reviews and refreshing coverage summaries.
+- Release Signoff gate `require_per_track_audio_review=true`, requiring every Release track to have current manual accepted WAV review evidence.
+- Release Export now includes `audio-reviews/summary.json` and per-review JSON files in the manifest and ZIP.
+- `verify-release --require-audio --require-human-review` now validates per-track audio review hashes and WAV hash matching offline.
+- v5.1 release-check smoke covering missing review, synthetic-only review, successful signoff, portable verification, tamper detection, and marker task creation.
+
+### Verified
+- `python -m pytest -q`
+- `python -m song_agent.cli doctor`
+- `python -m song_agent.cli release-check`
+
 ## v5.0.0 - 2026-05-25
 
 ### Added

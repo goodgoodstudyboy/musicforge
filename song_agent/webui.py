@@ -3161,12 +3161,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let exportData = { summary: release.export_summary || {}, manifest: {} };
       let signoffData = { summary: release.signoff_summary || {}, signoff: {} };
       let metadataData = { summary: {}, metadata: {}, metadata_qa: { checks: [], track_checks: [] } };
+      let audioReviewData = { summary: {}, reviews: [] };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
       let releaseAnalyticsData = { summary: {}, analytics: null };
       try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
       try { signoffData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`); } catch (err) {}
+      try { audioReviewData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews`); } catch (err) {}
       try {
         metadataData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
         const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
@@ -3214,6 +3216,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         </div>
         ${releaseTrackTable(release)}
         ${releaseMetadataHtml(metadataData, release)}
+        ${releaseAudioReviewHtml(audioReviewData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4022,6 +4025,62 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseAudioReviewHtml(audioReviewData, release) {
+      const summary = (audioReviewData && audioReviewData.summary) || {};
+      const reviews = (audioReviewData && audioReviewData.reviews) || [];
+      const rows = (release.tracks || []).map((track) => {
+        const review = reviews.find((item) => item.track_id === track.track_id && item.status === "accepted" && item.review_mode === "manual" && !item.stale) || reviews.find((item) => item.track_id === track.track_id) || {};
+        return `
+          <tr>
+            <td>${escapeHtml(track.track_number || "-")}</td>
+            <td>${escapeHtml(track.title || "-")}</td>
+            <td>${escapeHtml(track.track_id || "-")}</td>
+            <td>${escapeHtml(review.status || "missing")}</td>
+            <td>${escapeHtml(review.review_mode || "-")}</td>
+            <td>${escapeHtml(review.rating || "-")}</td>
+            <td>${review.stale ? "yes" : "-"}</td>
+            <td>${escapeHtml(((review.markers || []).length) || 0)}</td>
+          </tr>
+        `;
+      }).join("");
+      return `
+        <div class="panel-title subhead"><span>Audio Review Board</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.status || "missing")}
+          ${metric("Manual Accepted", summary.manual_accepted_track_count || 0)}
+          ${metric("Missing", (summary.missing_track_ids || []).length)}
+          ${metric("Stale", summary.stale_review_count || 0)}
+        </div>
+        <div class="grid2">
+          <label>Review Track
+            <select id="release-audio-review-track">${(release.tracks || []).map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.track_number || "-")}. ${escapeHtml(track.title || track.track_id)}</option>`).join("")}</select>
+          </label>
+          <label>Reviewer
+            <input id="release-audio-reviewer" value="local-user">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Status
+            <select id="release-audio-review-status"><option value="accepted">accepted</option><option value="needs_fix">needs_fix</option><option value="rejected">rejected</option><option value="waived">waived</option></select>
+          </label>
+          <label>Rating
+            <input id="release-audio-review-rating" type="number" min="0" max="5" value="4">
+          </label>
+        </div>
+        <label>Notes
+          <textarea id="release-audio-review-notes" rows="2"></textarea>
+        </label>
+        <div class="actions">
+          <button class="secondary" id="release-refresh-audio-review-summary" type="button">Refresh Audio Review Summary</button>
+          <button class="secondary" id="release-add-audio-review" type="button">Add Track Review</button>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Title</th><th>Track</th><th>Review</th><th>Mode</th><th>Rating</th><th>Stale</th><th>Markers</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='8'>No release tracks yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
     function releaseExportHtml(exportData, release) {
       const manifest = (exportData && exportData.manifest) || {};
       const zip = manifest.zip || {};
@@ -4103,6 +4162,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <label>Override Reason
           <textarea id="release-override-reason" rows="2" placeholder="Required for force sign"></textarea>
         </label>
+        <label class="inline">
+          <input id="release-require-per-track-audio-review" type="checkbox">
+          Require per-track audio review
+        </label>
       `;
     }
 
@@ -4113,6 +4176,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         notes: $("release-signoff-notes").value.trim(),
         override_reason: $("release-override-reason").value.trim(),
         acceptance_suite_id: $("release-acceptance-suite").value,
+        require_per_track_audio_review: $("release-require-per-track-audio-review")?.checked || false,
       };
     }
 
@@ -4156,6 +4220,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       bindAction("release-refresh-audio-qa", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-qa`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ require_audio: true }) });
+        await loadReleases();
+      });
+      bindAction("release-refresh-audio-review-summary", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews/refresh-summary`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-add-audio-review", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            track_id: $("release-audio-review-track").value,
+            status: $("release-audio-review-status").value,
+            review_mode: "manual",
+            reviewer: { name: $("release-audio-reviewer").value.trim() || "local-user" },
+            rating: Number($("release-audio-review-rating").value || 0),
+            playback_confirmed: true,
+            notes: $("release-audio-review-notes").value,
+          }),
+        });
         await loadReleases();
       });
       bindAction("release-build-export", async () => {

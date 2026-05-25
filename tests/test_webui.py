@@ -499,6 +499,7 @@ def test_webui_contains_release_workspace_controls():
     assert "Release Signoff" in html
     assert "Audio Lab" in html
     assert "Release Audio QA" in html
+    assert "Audio Review Board" in html
     assert "Tracklist" in html
     assert "Add to Release" in html
     assert "/api/releases" in html
@@ -509,6 +510,9 @@ def test_webui_contains_release_workspace_controls():
     assert "/api/releases/${encodeURIComponent(release.release_id)}/qa" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/qa/refresh" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/audio-qa" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews/refresh-summary" in html
+    assert 'id="release-require-per-track-audio-review"' in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/init" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa" in html

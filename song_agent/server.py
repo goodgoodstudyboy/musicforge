@@ -151,6 +151,15 @@ from song_agent.release_audio import (
     release_audio_summary,
     write_release_audio_qa,
 )
+from song_agent.audio_review_evidence import (
+    AudioReviewEvidenceError,
+    AudioReviewEvidenceNotFoundError,
+    AudioReviewEvidenceStateError,
+    AudioReviewEvidenceStore,
+    audio_review_summary_allows_signoff,
+    audio_review_summary_public,
+    release_audio_review_gate,
+)
 from song_agent.releases import (
     ReleaseConflictError,
     ReleaseNotFoundError,
@@ -2467,6 +2476,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_store(self) -> ReleaseStore:
         return self.server.release_store  # type: ignore[attr-defined]
+
+    @property
+    def audio_review_store(self) -> AudioReviewEvidenceStore:
+        return self.server.audio_review_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -4853,6 +4866,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_release_audio_qa(method, release_id)
                 return
 
+            if tail == "/audio-reviews" or tail.startswith("/audio-reviews/"):
+                self._handle_release_audio_reviews(method, release_id, tail.removeprefix("/audio-reviews"))
+                return
+
             if tail == "/metadata":
                 if method == "GET":
                     metadata = read_release_metadata(self.release_store, release_id, default={})
@@ -5062,6 +5079,89 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "release_id": release_id, "audio_qa": report, "summary": release_audio_summary(report)})
             return
         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+
+    def _handle_release_audio_reviews(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    reviews = self.audio_review_store.list_reviews(release_id)
+                    summary = self.audio_review_store.build_summary(release_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "reviews": reviews, "summary": audio_review_summary_public(summary)})
+                    return
+                if method == "POST":
+                    review = self.audio_review_store.create_review(release_id, self._read_json_body(), now=_utc_now())
+                    summary = self.audio_review_store.build_summary(release_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": audio_review_summary_public(summary)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/summary":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                summary = self.audio_review_store.build_summary(release_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "summary": audio_review_summary_public(summary), "audio_review_summary": summary})
+                return
+            if tail == "/refresh-summary":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.audio_review_store._ensure_release_mutable(release_id)
+                summary = self.audio_review_store.write_summary(release_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "summary": audio_review_summary_public(summary), "audio_review_summary": summary})
+                return
+            if tail == "/import-human-review-pack":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_review_store.import_human_review_pack(release_id, self._read_json_body(), acceptance_store=self.acceptance_store, now=_utc_now())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Audio review route not found.")
+                return
+            review_id = parts[0]
+            if len(parts) == 1:
+                if method == "GET":
+                    review = self.audio_review_store.read_review(release_id, review_id)
+                    self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_utc_now()))})
+                    return
+                if method == "POST":
+                    review = self.audio_review_store.update_review(release_id, review_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_utc_now()))})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 2 and parts[1] == "delete":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_review_store.delete_review(release_id, review_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, **result})
+                return
+            if len(parts) == 2 and parts[1] == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review = self.audio_review_store.refresh_review(release_id, review_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_utc_now()))})
+                return
+            if len(parts) == 4 and parts[1] == "markers" and parts[3] == "create-review-task":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_review_store.create_review_task_from_marker(release_id, review_id, parts[2], self._optional_json_body(), now=_utc_now())
+                status = HTTPStatus.CREATED if result.get("status") == "created" else HTTPStatus.OK
+                self._send_json({"ok": True, "release_id": release_id, **result}, status=status)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio review route not found.")
+        except AudioReviewEvidenceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioReviewEvidenceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AudioReviewEvidenceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_audio_profiles_route(self, method: str, path: str) -> None:
         try:
@@ -5380,8 +5480,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def _release_audio_gate(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         require_health = bool(payload.get("require_audio_health", False))
         require_human = bool(payload.get("require_human_audio_review", False))
-        require_current = bool(payload.get("require_audio_artifact_current", require_health))
-        if not (require_health or require_human or require_current):
+        require_per_track_review = bool(payload.get("require_per_track_audio_review", False))
+        require_current = bool(payload.get("require_audio_artifact_current", require_health or require_per_track_review))
+        if not (require_health or require_human or require_per_track_review or require_current):
             return {}
         try:
             document = self.release_store.get_release(release_id)
@@ -5394,9 +5495,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             **summary,
             "require_audio_health": require_health,
             "require_human_audio_review": require_human,
+            "require_per_track_audio_review": require_per_track_review,
             "require_audio_artifact_current": require_current,
         }
-        if require_health:
+        if require_health or require_per_track_review:
             if not report:
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA is missing. Refresh audio QA before signoff."}
             if not release_audio_report_integrity_ok(report):
@@ -5405,19 +5507,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA is stale. Refresh audio QA before signoff.", "current_source_hash": current_hash}
             if not release_audio_allows_signoff(report, current_source_hash=current_hash if require_current else None):
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA has blocking audio failures."}
+        if require_per_track_review:
+            per_track_gate = release_audio_review_gate(self.release_store, self.project_store, release_id, now=_utc_now())
+            evidence["per_track_review"] = per_track_gate
+            if per_track_gate.get("status") != "passed":
+                return {**evidence, "status": "failed", "hard_block": True, "message": str(per_track_gate.get("message") or "Per-track audio review gate failed.")}
         if require_human:
-            suite_id = str(payload.get("acceptance_suite_id") or "").strip()
-            if not suite_id:
-                return {**evidence, "status": "failed", "hard_block": True, "message": "require_human_audio_review needs acceptance_suite_id."}
-            try:
-                acceptance = self.acceptance_store.read_report(suite_id)
-            except Exception as exc:
-                return {**evidence, "status": "failed", "hard_block": True, "message": f"Acceptance report is unavailable: {sanitize_sensitive_text(str(exc))}"}
-            acceptance_summary = acceptance_report_summary(acceptance)
-            evidence["manual_audio_accepted_count"] = acceptance_summary.get("manual_audio_accepted_count", 0)
-            evidence["acceptance_status"] = acceptance_summary.get("acceptance_status")
-            if int(acceptance_summary.get("manual_audio_accepted_count", 0) or 0) <= 0:
-                return {**evidence, "status": "failed", "hard_block": True, "message": "Human WAV listening review evidence is missing."}
+            if require_per_track_review:
+                per_track = evidence.get("per_track_review") if isinstance(evidence.get("per_track_review"), dict) else {}
+                evidence["manual_audio_accepted_count"] = per_track.get("manual_accepted_track_count", 0)
+            else:
+                suite_id = str(payload.get("acceptance_suite_id") or "").strip()
+                if not suite_id:
+                    return {**evidence, "status": "failed", "hard_block": True, "message": "require_human_audio_review needs acceptance_suite_id."}
+                try:
+                    acceptance = self.acceptance_store.read_report(suite_id)
+                except Exception as exc:
+                    return {**evidence, "status": "failed", "hard_block": True, "message": f"Acceptance report is unavailable: {sanitize_sensitive_text(str(exc))}"}
+                acceptance_summary = acceptance_report_summary(acceptance)
+                evidence["manual_audio_accepted_count"] = acceptance_summary.get("manual_audio_accepted_count", 0)
+                evidence["acceptance_status"] = acceptance_summary.get("acceptance_status")
+                if int(acceptance_summary.get("manual_audio_accepted_count", 0) or 0) <= 0:
+                    return {**evidence, "status": "failed", "hard_block": True, "message": "Human WAV listening review evidence is missing."}
         return {**evidence, "status": "passed", "message": "Release audio gate passed."}
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -11749,6 +11860,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.batch_store = BatchStore()
         self.project_store = ProjectStore()
         self.release_store = ReleaseStore(project_store=self.project_store)
+        self.audio_review_store = AudioReviewEvidenceStore(self.release_store, self.project_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.acceptance_store = AcceptanceStore(project_store=self.project_store)

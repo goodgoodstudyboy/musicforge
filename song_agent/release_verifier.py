@@ -8,6 +8,7 @@ import sys
 import zipfile
 import csv
 import io
+import wave
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -192,6 +193,7 @@ class _ReleaseZipVerifier:
                 self._verify_release_tracklist()
                 self._verify_tracks(archive)
                 self._verify_signoff()
+                self._verify_audio_reviews(archive)
                 self._verify_metadata(archive)
                 self._verify_redaction(archive)
         finally:
@@ -267,8 +269,7 @@ class _ReleaseZipVerifier:
         )
         self.entry_map = {}
         for info in self.entry_infos:
-            if info.filename not in self.entry_map:
-                self.entry_map[info.filename] = info
+            self.entry_map[info.filename] = info
         missing = sorted(REQUIRED_TOP_LEVEL_ENTRIES - set(self.entry_names))
         self._add_check(
             "zip",
@@ -523,16 +524,102 @@ class _ReleaseZipVerifier:
         if self.require_human_review:
             gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
             audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
-            manual_audio_count = int(audio_gate.get("manual_audio_accepted_count", 0) or 0)
+            per_track = audio_gate.get("per_track_review") if isinstance(audio_gate.get("per_track_review"), dict) else {}
+            manual_audio_count = int(per_track.get("manual_accepted_track_count", audio_gate.get("manual_audio_accepted_count", 0)) or 0)
+            require_per_track = bool(audio_gate.get("require_per_track_audio_review") or per_track.get("require_per_track_audio_review"))
+            message = "Release signoff contains manual WAV review evidence."
+            if require_per_track:
+                message = "Release signoff contains manual per-track WAV review evidence."
             status = "passed" if audio_gate.get("status") == "passed" and manual_audio_count > 0 else "failed"
             self._add_check(
                 "signoff",
                 "human_audio_review_evidence",
                 status,
                 "blocking",
-                "Release signoff contains manual WAV review evidence." if status == "passed" else "Manual WAV review evidence is required but missing.",
+                message if status == "passed" else "Manual WAV review evidence is required but missing.",
                 count=manual_audio_count,
             )
+
+    def _verify_audio_reviews(self, archive: zipfile.ZipFile) -> None:
+        enforce_per_track = self._requires_per_track_audio_review()
+        manifest_summary = self.manifest.get("audio_reviews") if isinstance(self.manifest.get("audio_reviews"), dict) else {}
+        summary_path = str(manifest_summary.get("summary_path") or "audio-reviews/summary.json")
+        if summary_path not in self.entry_map:
+            status = "failed" if enforce_per_track else "warning"
+            self._add_check("audio_reviews", "audio_review_summary_exists", status, "blocking" if status == "failed" else "warning", "audio-reviews/summary.json is missing.")
+            return
+        summary = self._read_json_entry(archive, summary_path, "audio_reviews", "audio_review_summary_parse")
+        expected_summary_hash = manifest_summary.get("summary_hash")
+        actual_summary_hash = _audio_review_summary_hash(summary)
+        self._add_check(
+            "audio_reviews",
+            "audio_review_summary_hash",
+            "passed" if expected_summary_hash == actual_summary_hash else "failed",
+            "blocking",
+            "Audio review summary hash matches manifest." if expected_summary_hash == actual_summary_hash else "Audio review summary hash does not match manifest.",
+        )
+        reviews = self._read_audio_review_files(archive, manifest_summary, enforce_per_track=enforce_per_track)
+        if not enforce_per_track and not reviews:
+            self._add_check("audio_reviews", "audio_review_files_present", "passed", "warning", "No per-track audio review files are required for this release.")
+            return
+        tracklist_tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        accepted_by_track: dict[str, dict[str, Any]] = {}
+        duplicate_tracks: list[str] = []
+        for path, review in reviews:
+            track_id = str(review.get("track_id") or "")
+            expected_review_hash = _manifest_review_hash(manifest_summary, path, review.get("review_id"))
+            if expected_review_hash and _review_payload_hash(review) != str(expected_review_hash):
+                self._add_check("audio_reviews", "audio_review_payload_hash", "failed", "blocking", f"Audio review payload hash mismatch for {path}.")
+            if not _audio_review_integrity_ok(review):
+                self._add_check("audio_reviews", "audio_review_integrity", "failed", "blocking", f"Audio review integrity failed for {path}.")
+            if review.get("status") == "accepted" and review.get("review_mode") == "manual" and bool(review.get("playback_confirmed", False)) and not review.get("stale"):
+                if track_id in accepted_by_track:
+                    duplicate_tracks.append(track_id)
+                accepted_by_track[track_id] = review
+        if duplicate_tracks:
+            self._add_check("audio_reviews", "audio_review_duplicate_track", "failed", "blocking", "Duplicate accepted manual audio reviews for tracks: " + ", ".join(sorted(set(duplicate_tracks))[:5]), count=len(set(duplicate_tracks)))
+        missing_track_ids: list[str] = []
+        mismatches: list[str] = []
+        marker_errors: list[str] = []
+        redaction_errors: list[str] = []
+        for item in tracklist_tracks:
+            if not isinstance(item, dict):
+                continue
+            track_id = str(item.get("track_id") or "")
+            directory = str(item.get("directory") or "").strip("/")
+            review = accepted_by_track.get(track_id)
+            if not review:
+                missing_track_ids.append(track_id)
+                continue
+            wav_entry = f"{directory}/song.wav"
+            info = self.entry_map.get(wav_entry)
+            if info is None:
+                mismatches.append(f"{track_id}: song.wav missing")
+                continue
+            actual_wav_sha = _sha256_entry(archive, info)
+            evidence = review.get("audio_evidence") if isinstance(review.get("audio_evidence"), dict) else {}
+            if evidence.get("wav_sha256") != actual_wav_sha:
+                mismatches.append(f"{track_id}: wav sha mismatch")
+            duration = _wav_duration(archive, info)
+            for marker in review.get("markers", []) if isinstance(review.get("markers"), list) else []:
+                if not isinstance(marker, dict):
+                    continue
+                seconds = float(marker.get("time_seconds") or 0.0)
+                if seconds < 0 or (duration > 0 and seconds > duration + 1.0):
+                    marker_errors.append(f"{track_id}: marker {marker.get('marker_id')} out of range")
+            redaction_errors.extend(_audio_review_value_findings(f"audio review {track_id}", review))
+        failures = [*mismatches, *marker_errors, *[item.get("message", "") for item in redaction_errors]]
+        if enforce_per_track:
+            failures = [*missing_track_ids, *failures]
+        status = "failed" if failures else "warning" if missing_track_ids else "passed"
+        self._add_check(
+            "audio_reviews",
+            "per_track_audio_review_evidence",
+            status,
+            "blocking" if status == "failed" else "warning",
+            "Per-track manual audio review evidence covers every track." if status == "passed" else "Per-track audio review evidence failed: " + "; ".join([*missing_track_ids[:3], *mismatches[:3], *marker_errors[:3], *[item.get("message", "") for item in redaction_errors[:3]]]),
+            count=len(missing_track_ids) + len(mismatches) + len(marker_errors) + len(redaction_errors),
+        )
 
     def _verify_metadata(self, archive: zipfile.ZipFile) -> None:
         metadata_summary = self.manifest.get("metadata") if isinstance(self.manifest.get("metadata"), dict) else {}
@@ -586,6 +673,34 @@ class _ReleaseZipVerifier:
                     "Metadata payload hash matches manifest summary." if expected_hash == actual_hash else "Metadata payload hash does not match manifest summary.",
                 )
 
+    def _read_audio_review_files(self, archive: zipfile.ZipFile, manifest_summary: dict[str, Any], *, enforce_per_track: bool) -> list[tuple[str, dict[str, Any]]]:
+        declared = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
+        paths = [str(item.get("path") or "") for item in declared if isinstance(item, dict) and str(item.get("path") or "").strip()]
+        if not paths:
+            paths = sorted(name for name in self.entry_names if name.startswith("audio-reviews/reviews/") and name.endswith(".json"))
+        reviews: list[tuple[str, dict[str, Any]]] = []
+        missing: list[str] = []
+        for path in paths:
+            if path not in self.entry_map:
+                missing.append(path)
+                continue
+            reviews.append((path, self._read_json_entry(archive, path, "audio_reviews", "audio_review_parse")))
+        self._add_check(
+            "audio_reviews",
+            "audio_review_files_present",
+            "failed" if missing or (enforce_per_track and not reviews) else "passed",
+            "blocking" if missing or enforce_per_track else "warning",
+            "Missing audio review files: " + ", ".join(missing[:5]) if missing else f"{len(reviews)} audio review file(s) present.",
+            count=len(missing),
+        )
+        return [(path, review) for path, review in reviews if review]
+
+    def _requires_per_track_audio_review(self) -> bool:
+        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
+        per_track = audio_gate.get("per_track_review") if isinstance(audio_gate.get("per_track_review"), dict) else {}
+        return bool(audio_gate.get("require_per_track_audio_review") or per_track.get("require_per_track_audio_review"))
+
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         scan_names = [
             name
@@ -594,6 +709,7 @@ class _ReleaseZipVerifier:
             or name.endswith(("/project-export.json", "/song-plan.json", "/manifest.json", "/README.txt"))
             or name in {"release-metadata.json", "platform-metadata.csv", "credits.csv"}
             or name.startswith("lyrics/")
+            or name.startswith("audio-reviews/")
         ]
         for name in scan_names:
             info = self.entry_map.get(name)
@@ -812,6 +928,57 @@ def _raw_zip_entry_names(path: Path) -> list[str]:
 
 def _release_signoff_hash_payload(signoff: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in signoff.items() if key not in SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
+
+
+def _review_payload_hash(review: dict[str, Any]) -> str:
+    return stable_hash(sanitize_metadata({key: value for key, value in review.items() if key not in {"integrity_hash", "stale", "stale_reasons", "current_source_hash", "current"}}, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS))
+
+
+def _audio_review_summary_hash(summary: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in summary.items() if key not in {"integrity_hash", "generated_at"}})
+
+
+def _audio_review_integrity_ok(review: dict[str, Any]) -> bool:
+    expected = str(review.get("integrity_hash") or "")
+    return bool(expected) and expected == _review_payload_hash(review)
+
+
+def _manifest_review_hash(manifest_summary: dict[str, Any], path: str, review_id: Any) -> str | None:
+    rows = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("path") == path or (review_id and row.get("review_id") == review_id):
+            return str(row.get("payload_hash") or "")
+    return None
+
+
+def _wav_duration(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> float:
+    try:
+        data = archive.read(info)
+        with wave.open(io.BytesIO(data), "rb") as wav:
+            rate = wav.getframerate()
+            return wav.getnframes() / rate if rate else 0.0
+    except (OSError, RuntimeError, wave.Error, EOFError):
+        return 0.0
+
+
+def _audio_review_value_findings(path: str, review: dict[str, Any]) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    text = json.dumps(
+        {
+            "reviewer": review.get("reviewer"),
+            "notes": review.get("notes"),
+            "tags": review.get("tags"),
+            "markers": review.get("markers"),
+            "imported_from": review.get("imported_from"),
+            "redaction_findings": review.get("redaction_findings"),
+        },
+        ensure_ascii=False,
+    )
+    findings.extend(_redaction_findings(path, text))
+    findings.extend(_blocked_key_findings(path, review))
+    return findings
 
 
 def _counts(values: list[str]) -> dict[str, int]:
