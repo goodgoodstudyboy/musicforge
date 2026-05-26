@@ -512,7 +512,10 @@ def test_webui_contains_release_workspace_controls():
     assert "/api/releases/${encodeURIComponent(release.release_id)}/audio-qa" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews/refresh-summary" in html
+    assert "/mix-patch-draft" in html
     assert 'id="release-require-per-track-audio-review"' in html
+    assert 'id="release-require-stem-audio-health"' in html
+    assert 'id="release-require-current-mix-state"' in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/init" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa" in html
@@ -716,6 +719,17 @@ def test_webui_candidate_review_layout_is_responsive():
     assert ".candidate-group" in html
     assert ".candidate-card" in html
     assert ".candidate-grid { grid-template-columns: 1fr; }" in html
+
+
+def test_webui_contains_mix_board_controls():
+    html = panel_html()
+
+    assert "Mix Board" in html
+    assert "/mix-state" in html
+    assert "/mix-preview" in html
+    assert "/mix-stems/render" in html
+    assert "Volume dB" in html
+    assert "Pan" in html
 
 
 def test_webui_calls_batch_apis():

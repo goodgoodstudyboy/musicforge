@@ -424,8 +424,6 @@ class AudioReviewEvidenceStore:
             current_evidence = context["audio_evidence"]
             if evidence.get("wav_sha256") != current_evidence.get("wav_sha256"):
                 reasons.append("wav_changed")
-            if evidence.get("audio_health_hash") != current_evidence.get("audio_health_hash"):
-                reasons.append("audio_health_changed")
             if current_evidence.get("audio_health_status") not in {"passed", "warning"}:
                 reasons.append("audio_health_failed")
             if current_evidence.get("artifact_current") is not True:
@@ -580,6 +578,7 @@ class AudioReviewEvidenceStore:
                     "message": sanitize_sensitive_text(str(item.get("message") or ""))[:800],
                     "mapped": map_marker_to_song_plan(seconds, context.get("song_plan") if isinstance(context.get("song_plan"), dict) else {}),
                     "review_task_id": str(item.get("review_task_id") or "") or None,
+                    "mix_patch_id": str(item.get("mix_patch_id") or "") or None,
                 }
             )
         return result
@@ -632,7 +631,6 @@ def audio_review_source_hash(*, release_id: str, track: dict[str, Any], audio_ev
             "audio_evidence": {
                 "audio_artifact_id": audio_evidence.get("audio_artifact_id"),
                 "wav_sha256": audio_evidence.get("wav_sha256"),
-                "audio_health_hash": audio_evidence.get("audio_health_hash"),
                 "audio_health_status": audio_evidence.get("audio_health_status"),
                 "renderer_profile_id": audio_evidence.get("renderer_profile_id"),
                 "renderer_profile_hash": audio_evidence.get("renderer_profile_hash"),

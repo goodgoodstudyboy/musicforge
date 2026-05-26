@@ -30,6 +30,7 @@ VARIANT_TYPES = {
     "arrangement_edit",
     "provider_edit",
     "manual_editor_edit",
+    "mix_control_edit",
 }
 QUALITY_GATE_STATUSES = {
     "not_evaluated",
@@ -702,6 +703,7 @@ class ProjectStore:
             "audio": str(output_dir / "renders" / "song.wav") if output_dir else None,
             "stem_manifest": str(output_dir / "stems" / "manifest.json") if output_dir else None,
             "edit": _edit_info(version),
+            "mix": _mix_info(version),
         }
 
 
@@ -818,6 +820,47 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
         "structure": metadata.get("structure") or {},
         "warnings": metadata.get("warnings") or [],
     }
+
+
+def _mix_info(version: ProjectVersion) -> dict[str, Any]:
+    run_dir = Path(version.output_dir)
+    summary: dict[str, Any] = {}
+    state_path = run_dir / "data" / "mix-state.json"
+    patch_path = run_dir / "data" / "mix-patch.json"
+    stem_health_path = run_dir / "stems" / "stem-health.json"
+    if state_path.exists():
+        try:
+            from song_agent.mix_controls import mix_state_hash, mix_state_integrity_ok
+
+            state = read_json(state_path)
+            ok = mix_state_integrity_ok(state)
+            summary["mix_state"] = {"exists": True, "integrity_ok": ok, "mix_state_hash": mix_state_hash(state) if ok else None}
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            summary["mix_state"] = {"exists": True, "integrity_ok": False}
+    if patch_path.exists():
+        try:
+            from song_agent.mix_controls import mix_patch_hash, mix_patch_integrity_ok
+
+            patch = read_json(patch_path)
+            ok = mix_patch_integrity_ok(patch)
+            summary["mix_patch"] = {
+                "exists": True,
+                "patch_id": patch.get("patch_id"),
+                "operation_count": len(patch.get("operations", [])) if isinstance(patch.get("operations"), list) else 0,
+                "integrity_ok": ok,
+                "mix_patch_hash": mix_patch_hash(patch) if ok else None,
+            }
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            summary["mix_patch"] = {"exists": True, "integrity_ok": False}
+    if stem_health_path.exists():
+        try:
+            from song_agent.stem_health import stem_health_integrity_ok, stem_health_summary
+
+            report = read_json(stem_health_path)
+            summary["stem_health"] = {**stem_health_summary(report), "integrity_ok": stem_health_integrity_ok(report)}
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            summary["stem_health"] = {"status": "invalid", "integrity_ok": False}
+    return summary
 
 
 def _section_info(version: ProjectVersion) -> dict[str, dict[str, Any]]:

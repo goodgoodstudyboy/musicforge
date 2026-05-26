@@ -4073,6 +4073,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <div class="actions">
           <button class="secondary" id="release-refresh-audio-review-summary" type="button">Refresh Audio Review Summary</button>
           <button class="secondary" id="release-add-audio-review" type="button">Add Track Review</button>
+          <button class="secondary release-marker-mix-patch-draft" data-endpoint="/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews/{review_id}/markers/{marker_id}/mix-patch-draft" type="button" disabled>Create Mix Patch Draft</button>
         </div>
         <table>
           <thead><tr><th>#</th><th>Title</th><th>Track</th><th>Review</th><th>Mode</th><th>Rating</th><th>Stale</th><th>Markers</th></tr></thead>
@@ -4166,6 +4167,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <input id="release-require-per-track-audio-review" type="checkbox">
           Require per-track audio review
         </label>
+        <label class="inline">
+          <input id="release-require-stem-audio-health" type="checkbox">
+          Require stem audio health
+        </label>
+        <label class="inline">
+          <input id="release-require-current-mix-state" type="checkbox">
+          Require current mix state
+        </label>
       `;
     }
 
@@ -4177,6 +4186,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         override_reason: $("release-override-reason").value.trim(),
         acceptance_suite_id: $("release-acceptance-suite").value,
         require_per_track_audio_review: $("release-require-per-track-audio-review")?.checked || false,
+        require_stem_audio_health: $("release-require-stem-audio-health")?.checked || false,
+        require_current_mix_state: $("release-require-current-mix-state")?.checked || false,
       };
     }
 
@@ -4647,7 +4658,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api(`/api/projects/${encodeURIComponent(projectId)}`);
       const project = data.project;
       const versions = data.versions || [];
-      const tabs = ["versions", "variation", "edit", "editor", "review-workbench", "review-sprints", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
+      const tabs = ["versions", "variation", "edit", "editor", "mix-board", "review-workbench", "review-sprints", "candidates", "quality-gate", "final-export", "references", "compare", "export", "events"];
       const target = $("project-detail");
       target.innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
@@ -4866,6 +4877,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await renderProjectEdit(project, versions, target);
       } else if (activeProjectTab === "editor") {
         await renderProjectEditor(project, versions, target);
+      } else if (activeProjectTab === "mix-board") {
+        await renderProjectMixBoard(project, versions, target);
       } else if (activeProjectTab === "review-workbench") {
         await renderProjectReviewWorkbench(project, versions, target);
       } else if (activeProjectTab === "review-sprints") {
@@ -4897,6 +4910,93 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/events`);
         target.innerHTML = `<pre>${escapeHtml(JSON.stringify(data.events, null, 2))}</pre>`;
       }
+    }
+
+    async function renderProjectMixBoard(project, versions, target) {
+      const versionId = (project.selected_version_id || project.final_version_id || (versions[versions.length - 1] || {}).version_id || "").trim();
+      let stateData = {};
+      let stemHealth = {};
+      if (versionId) {
+        try { stateData = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(versionId)}/mix-state`); } catch (err) { stateData = { error: err.message }; }
+        try { stemHealth = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(versionId)}/mix-stems/health`); } catch (err) { stemHealth = { summary: { status: "missing" } }; }
+      }
+      const state = stateData.mix_state || {};
+      const tracks = state.tracks || [];
+      const selectedOptions = versions.map((version) => `<option value="${escapeHtml(version.version_id)}" ${version.version_id === versionId ? "selected" : ""}>${escapeHtml(version.version_id)} · ${escapeHtml(version.name || version.job_id)}</option>`).join("");
+      target.innerHTML = `
+        <div class="panel-title subhead"><span>Mix Board</span></div>
+        <div class="summary-grid">
+          ${metric("Version", versionId || "-")}
+          ${metric("Mix State", stateData.summary ? "ready" : (stateData.error || "missing"))}
+          ${metric("Stem Health", (stemHealth.summary || {}).status || "missing")}
+          ${metric("Tracks", tracks.length || 0)}
+        </div>
+        <div class="grid2">
+          <label>Version
+            <select id="mix-board-version">${selectedOptions}</select>
+          </label>
+          <label>Patch Label
+            <input id="mix-patch-label" value="Mix Board preview">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Track
+            <select id="mix-track-id">${tracks.map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(track.track_id)} · ${escapeHtml(track.name)}</option>`).join("")}</select>
+          </label>
+          <label>Volume dB
+            <input id="mix-track-volume" type="number" min="-36" max="12" step="0.5" value="-2">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Pan
+            <input id="mix-track-pan" type="number" min="-100" max="100" step="1" value="0">
+          </label>
+          <label>Velocity Scale
+            <input id="mix-track-velocity" type="number" min="0" max="2" step="0.05" value="1">
+          </label>
+        </div>
+        <div class="actions">
+          <label class="inline"><input id="mix-track-mute" type="checkbox"> Mute</label>
+          <label class="inline"><input id="mix-track-solo" type="checkbox"> Solo</label>
+          <button class="secondary" id="mix-preview-create" type="button">Create Preview</button>
+          <button class="secondary" id="mix-stems-render" type="button">Render Stems</button>
+          <button class="secondary" id="mix-state-reset" type="button">Reset Mix State</button>
+        </div>
+        <pre id="mix-board-result">${escapeHtml(JSON.stringify({ mix_state: state, stem_health: stemHealth.summary || {} }, null, 2))}</pre>
+      `;
+      $("mix-board-version")?.addEventListener("change", async () => {
+        await renderProjectMixBoard(project, versions, target);
+      });
+      bindAction("mix-preview-create", async () => {
+        const selectedVersion = $("mix-board-version").value;
+        const operations = [
+          { op: "set_track_volume", track_id: $("mix-track-id").value, volume_db: Number($("mix-track-volume").value || 0) },
+          { op: "set_track_pan", track_id: $("mix-track-id").value, pan: Number($("mix-track-pan").value || 0) },
+          { op: "set_track_velocity_scale", track_id: $("mix-track-id").value, velocity_scale: Number($("mix-track-velocity").value || 1) },
+        ];
+        if ($("mix-track-mute").checked) operations.push({ op: "set_track_mute", track_id: $("mix-track-id").value, mute: true });
+        if ($("mix-track-solo").checked) operations.push({ op: "set_track_solo", track_id: $("mix-track-id").value, solo: true });
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(selectedVersion)}/mix-preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label: $("mix-patch-label").value.trim(), operations }),
+        });
+        $("mix-board-result").textContent = JSON.stringify(data, null, 2);
+      });
+      bindAction("mix-stems-render", async () => {
+        const selectedVersion = $("mix-board-version").value;
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(selectedVersion)}/mix-stems/render`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ require_wav: false }),
+        });
+        $("mix-board-result").textContent = JSON.stringify(data.summary || data, null, 2);
+      });
+      bindAction("mix-state-reset", async () => {
+        const selectedVersion = $("mix-board-version").value;
+        const data = await api(`/api/projects/${encodeURIComponent(project.project_id)}/versions/${encodeURIComponent(selectedVersion)}/mix-state/reset`, { method: "POST" });
+        $("mix-board-result").textContent = JSON.stringify(data.mix_state || data, null, 2);
+      });
     }
 
     async function projectReviewMetricsSummaryHtml(project) {
@@ -8535,6 +8635,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         edit: "Edit",
         editor: "Editor",
         "review-workbench": "Review Workbench",
+        "mix-board": "Mix Board",
         "review-sprints": "Review Sprints",
         candidates: "Candidates",
         "quality-gate": "Quality Gate",

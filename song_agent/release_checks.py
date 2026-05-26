@@ -221,6 +221,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v4.14 planning rule impact smoke", *_v414_planning_rule_impact_smoke(root))
     report.add("v5.0 real audio baseline smoke", *_v50_real_audio_baseline_smoke(root))
     report.add("v5.1 per-track audio review smoke", *_v51_per_track_audio_review_smoke(root))
+    report.add("v5.2 arrangement mix controls smoke", *_v52_arrangement_mix_controls_smoke(root))
     return report
 
 
@@ -7005,6 +7006,154 @@ def _v51_per_track_audio_review_smoke(root: Path) -> tuple[bool, str]:
             f"release={release_id}, tracks=2, missing_gate={missing_gate_status}, synthetic_gate={synthetic_gate_status}, "
             f"sign={sign_status}, verify={verify.get('status')}, task={task.get('task_id')}, "
             f"tampered={_v38_check_status(tampered, 'audio_review_payload_hash')}, redaction={_v38_check_status(redaction, 'redaction_scan')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v52_arrangement_mix_controls_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v52-mix-controls-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        project_id = _v37_signed_project(server, "v5.2 Mix Controls")
+        state_status, state = _release_http_json(server, "GET", f"/api/projects/{project_id}/versions/v001/mix-state")
+        preview_status, preview = _release_http_json(
+            server,
+            "POST",
+            f"/api/projects/{project_id}/versions/v001/mix-preview",
+            {
+                "label": "v5.2 lower melody and pan",
+                "operations": [
+                    {"op": "set_track_volume", "track_id": "track-001", "volume_db": -3},
+                    {"op": "set_track_pan", "track_id": "track-001", "pan": 30},
+                    {"op": "set_track_velocity_scale", "track_id": "track-002", "velocity_scale": 0.9},
+                ],
+            },
+        )
+        preview_id = str(preview.get("preview", {}).get("preview_id") or "")
+        preview_midi_status, preview_midi = _release_http_bytes(server, "GET", f"/api/projects/{project_id}/versions/v001/mix-preview/{preview_id}/midi")
+        apply_status, applied = _release_http_json(server, "POST", f"/api/projects/{project_id}/versions/v001/mix-preview/{preview_id}/apply", {"version_name": "v5.2 Mix Child"})
+        child_version = str(applied.get("version", {}).get("version_id") or "")
+        job_id = str(applied.get("job", {}).get("job_id") or "")
+        child_job = _release_wait_http_job(server, job_id)
+        stems_status, stems = _release_http_json(server, "POST", f"/api/projects/{project_id}/versions/{child_version}/mix-stems/render", {"require_wav": False, "force": True})
+        final_status, _final = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version})
+        export_status, export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stem_audio": False, "include_audio": True, "force": True})
+        project_export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
+        final_dir = base / ".musicforge" / "projects" / project_id / "final-export"
+        _v50_write_test_wav(final_dir / "song.wav", duration_seconds=30)
+        audio_manifest = build_audio_artifact_manifest(
+            artifact_id=f"project-{project_id}-{child_version}",
+            scope="project_final_export",
+            wav_path=final_dir / "song.wav",
+            midi_path=final_dir / "song.mid",
+            song_plan_path=final_dir / "song-plan.json",
+            renderer_config=RendererConfig(soundfont_path="fixture.sf2"),
+            extra_source={"project_id": project_id, "version_id": child_version, "source": "v5.2-release-check"},
+        )
+        write_audio_artifact_manifest(final_dir / "audio-artifact.json", audio_manifest)
+        final_zip_status, _final_zip = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip", {"force": True})
+        delivery_qa_status, _delivery_qa = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
+        delivery_reset_status, _delivery_reset = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff/reset", {"reason": "v5.2 audio fixture"})
+        delivery_sign_status, _delivery_sign = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {"signed_by": "release-check"})
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.2 Mix Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = str(release.get("release", {}).get("release_id") or "")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        audio_status, audio = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        review_status, review = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/audio-reviews",
+            {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual v5.2 mix review.", "markers": [{"time_seconds": 2.0, "category": "mix_balance", "message": "melody low"}]},
+        )
+        review_id = str(review.get("review", {}).get("review_id") or "")
+        patch_status, patch = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews/{review_id}/markers/m-000001/mix-patch-draft", {})
+        summary_status, summary = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews/refresh-summary")
+        audio_refresh_status, audio_refresh = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        release_export_status, release_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        missing_project = _v37_signed_project(server, "v5.2 Missing Mix Gate")
+        _v50_add_project_audio(server, missing_project, duration_seconds=30)
+        missing_release_status, missing_release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.2 Missing Mix Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        missing_release_id = str(missing_release.get("release", {}).get("release_id") or "")
+        missing_track_status, _missing_track = _release_http_json(server, "POST", f"/api/releases/{missing_release_id}/tracks", {"project_id": missing_project})
+        missing_qa_status, _missing_qa = _release_http_json(server, "POST", f"/api/releases/{missing_release_id}/qa/refresh")
+        missing_mix_status, _missing_mix = _release_http_json(server, "POST", f"/api/releases/{missing_release_id}/signoff", {"signed_by": "release-check", "require_current_mix_state": True, "require_stem_audio_health": True})
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_current_mix_state": True, "require_stem_audio_health": True, "require_audio_health": True, "require_per_track_audio_review": True, "require_human_audio_review": True})
+        zip_path = base / ".musicforge" / "releases" / release_id / "release-export.zip"
+        verify = verify_release_zip(zip_path, require_audio=True, require_human_review=True, require_stems=True)
+
+        def tamper_stem_health(data: bytes) -> bytes:
+            payload = json.loads(data.decode("utf-8"))
+            payload["status"] = "passed" if payload.get("status") != "passed" else "failed"
+            return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        stem_health_entry = next((item.get("path") for item in release_export.get("manifest", {}).get("files", []) if item.get("path", "").endswith("stems/stem-health.json")), "")
+        tampered = verify_release_zip(_v38_rewrite_zip(zip_path, base / "tampered-stem-health.zip", transforms={stem_health_entry: tamper_stem_health}), require_audio=True, require_human_review=True, require_stems=True) if stem_health_entry else {"status": "missing"}
+        child_mix = next((item.get("mix", {}) for item in project_export.get("versions", []) if item.get("version_id") == child_version), {})
+        ok = (
+            state_status == 200
+            and state.get("mix_state", {}).get("tracks")
+            and preview_status == 201
+            and preview_midi_status == 200
+            and preview_midi.startswith(b"MThd")
+            and apply_status == 201
+            and child_job.get("status") == "completed"
+            and stems_status == 200
+            and stems.get("summary", {}).get("status") in {"passed", "warning"}
+            and final_status == 200
+            and export_status == 200
+            and export.get("final_export", {}).get("mix", {}).get("mix_state_integrity_ok") is True
+            and project_export_status == 200
+            and child_mix.get("stem_health", {}).get("status") in {"passed", "warning"}
+            and final_zip_status == 200
+            and delivery_qa_status == 200
+            and delivery_reset_status == 200
+            and delivery_sign_status == 200
+            and release_status == 201
+            and track_status == 200
+            and qa_status == 200
+            and audio_status == 200
+            and audio.get("summary", {}).get("status") == "passed"
+            and review_status == 201
+            and patch_status == 201
+            and patch.get("patch", {}).get("source", {}).get("source_type") == "release_audio_review_marker"
+            and summary_status == 200
+            and summary.get("summary", {}).get("status") == "passed"
+            and audio_refresh_status == 200
+            and audio_refresh.get("summary", {}).get("status") == "passed"
+            and release_export_status == 200
+            and zip_status == 200
+            and missing_release_status == 201
+            and missing_track_status == 200
+            and missing_qa_status == 200
+            and missing_mix_status == 409
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("audio", {}).get("mix", {}).get("status") == "passed"
+            and verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(verify, "track_stem_audio_health") == "passed"
+            and tampered.get("status") == "failed"
+            and _v38_check_status(tampered, "track_stem_audio_health") == "failed"
+        )
+        return ok, (
+            f"preview={preview_status}, apply={apply_status}, stems={stems.get('summary', {}).get('status')}, "
+            f"missing_mix_gate={missing_mix_status}, sign={sign_status}, verify={verify.get('status')}, "
+            f"tampered_stem={_v38_check_status(tampered, 'track_stem_audio_health')}"
         )
     except Exception as exc:
         return False, str(exc)

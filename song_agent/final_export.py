@@ -113,6 +113,7 @@ def build_final_export_bundle(
         _copy_stems(run_dir, export_dir, options, files, plan=plan)
     else:
         files.append({"kind": "stem_manifest", "path": "stems/manifest.json", "exists": False, "required": False, "skipped": "disabled"})
+    mix_summary = _copy_mix_exports(run_dir, export_dir, files)
     asset_refs = _write_asset_ref_summaries(
         run_dir=run_dir,
         export_dir=export_dir,
@@ -175,6 +176,7 @@ def build_final_export_bundle(
         "planning_rule_impact": planning_rule_impact,
         "delivery_qa": delivery_qa,
         "delivery_signoff": delivery_signoff,
+        "mix": mix_summary,
         "files": files,
         "source": {
             "job_id": version.job_id,
@@ -304,6 +306,7 @@ def _copy_stems(
         return
 
     _copy_optional(run_dir, export_dir, run_dir / "stems" / "manifest.json", "stems/manifest.json", "stem_manifest", files)
+    _copy_optional(run_dir, export_dir, run_dir / "stems" / "stem-health.json", "stems/stem-health.json", "stem_health", files)
     for stem in manifest.stems:
         try:
             midi_source = stem_midi_path(run_dir, manifest, stem.stem_id)
@@ -324,6 +327,44 @@ def _copy_stems(
             _copy_optional(run_dir, export_dir, audio_source, audio_target, "stem_audio", files)
         else:
             files.append({"kind": "stem_audio", "path": stem.audio_path, "exists": False, "required": False, "skipped": "disabled"})
+
+
+def _copy_mix_exports(run_dir: Path, export_dir: Path, files: list[dict[str, Any]]) -> dict[str, Any]:
+    from song_agent.mix_controls import mix_patch_hash, mix_patch_integrity_ok, mix_state_hash, mix_state_integrity_ok
+    from song_agent.stem_health import read_stem_health_report, stem_health_integrity_ok, stem_health_summary
+
+    summary: dict[str, Any] = {}
+    state_path = run_dir / "data" / "mix-state.json"
+    patch_path = run_dir / "data" / "mix-patch.json"
+    if state_path.exists():
+        _copy_optional(run_dir, export_dir, state_path, "mix-state.json", "mix_state", files)
+        try:
+            state = read_json(state_path)
+            summary["mix_state_hash"] = mix_state_hash(state) if mix_state_integrity_ok(state) else None
+            summary["mix_state_integrity_ok"] = mix_state_integrity_ok(state)
+        except (OSError, ValueError, TypeError):
+            summary["mix_state_integrity_ok"] = False
+    else:
+        files.append({"kind": "mix_state", "path": "mix-state.json", "exists": False, "required": False})
+    if patch_path.exists():
+        _copy_optional(run_dir, export_dir, patch_path, "mix-patch.json", "mix_patch", files)
+        try:
+            patch = read_json(patch_path)
+            summary["mix_patch_hash"] = mix_patch_hash(patch) if mix_patch_integrity_ok(patch) else None
+            summary["mix_patch_integrity_ok"] = mix_patch_integrity_ok(patch)
+            summary["patch_id"] = patch.get("patch_id")
+        except (OSError, ValueError, TypeError):
+            summary["mix_patch_integrity_ok"] = False
+    else:
+        files.append({"kind": "mix_patch", "path": "mix-patch.json", "exists": False, "required": False})
+    try:
+        report = read_stem_health_report(run_dir, default={})
+    except (OSError, ValueError, TypeError):
+        report = {}
+    if report:
+        summary["stem_health"] = stem_health_summary(report)
+        summary["stem_health_integrity_ok"] = stem_health_integrity_ok(report)
+    return _drop_empty(_sanitize_asset_metadata(summary))
 
 
 def _write_quality_report(

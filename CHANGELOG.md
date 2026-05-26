@@ -1,5 +1,19 @@
 # Changelog
 
+## v5.2.0 - 2026-05-26
+
+### Added
+- Arrangement Mix Controls with Mix State, Mix Patch, preview MIDI rendering, and apply-to-child-version flow.
+- Track volume, pan, mute/solo, velocity scale, and section-level automation support with MIDI pan/volume controller output.
+- Mix stem rendering plus `stems/stem-health.json` evidence copied through Final Export and Release Export.
+- Release Audio Review marker-to-Mix-Patch draft endpoint.
+- Release Signoff gates for `require_current_mix_state` and `require_stem_audio_health`.
+- Studio Mix Board controls and Release signoff checkboxes for mix/stem evidence.
+- v5.2 release-check smoke covering preview, apply, stem health, marker draft, signoff, external verification, and stem-health tamper detection.
+
+### Verified
+- `python -m pytest tests\test_mix_controls.py tests\test_server_mix_controls.py tests\test_release_check.py::test_v52_arrangement_mix_controls_smoke tests\test_webui.py::test_webui_contains_mix_board_controls tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_server_audio_reviews.py tests\test_release_verifier.py -q`
+
 ## v5.1.0 - 2026-05-26
 
 ### Added

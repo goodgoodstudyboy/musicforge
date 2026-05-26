@@ -37,7 +37,7 @@ from song_agent.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseSt
 
 RELEASE_EXPORT_SCHEMA_VERSION = 1
 CORE_COPY_FILES = {"manifest.json", "README.txt", "project-export.json", "song-plan.json", "song.mid"}
-OPTIONAL_COPY_FILES = {"song.wav", "audio-artifact.json", "quality-report.json", "validator-report.json", "run-summary.json"}
+OPTIONAL_COPY_FILES = {"song.wav", "audio-artifact.json", "quality-report.json", "validator-report.json", "run-summary.json", "mix-state.json", "mix-patch.json"}
 OPTIONAL_COPY_PREFIXES = ("stems/", "assets/", "references/")
 RELEASE_EXPORT_BLOCKED_KEYS = BLOCKED_RELEASE_KEYS - {"path"}
 SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS = {"export_manifest_hash"}

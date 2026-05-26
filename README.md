@@ -253,6 +253,17 @@ python -m song_agent.cli release-audio-review summary release-000001 --write
 python -m song_agent.cli release-audio-review create-task release-000001 arv-000001 m-000001
 ```
 
+Arrangement Mix Controls add a local Mix Board for small, auditable corrections
+before a new Project Version is created. A Mix Patch can adjust track volume,
+pan, mute/solo, velocity scale, and section-level velocity/volume automation.
+Mix preview renders MIDI without mutating the parent version; apply creates a
+`mix_control_edit` child version with `mix-state.json` and `mix-patch.json`
+evidence. Stem rendering writes `stems/manifest.json` and `stems/stem-health.json`.
+Release Audio Review markers can create a Mix Patch draft, and Release Signoff
+can require `require_current_mix_state=true` plus
+`require_stem_audio_health=true`. Release Export and `verify-release
+--require-stems` carry and validate the stem health evidence offline.
+
 Release Metadata stores release-level fields, track-level ISRC/lyrics/credits,
 metadata QA, and export files for `release-metadata.json`,
 `platform-metadata.csv`, `credits.csv`, and `lyrics/*.txt`. Metadata exports are

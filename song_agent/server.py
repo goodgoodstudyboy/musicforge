@@ -323,6 +323,22 @@ from song_agent.music_acceptance import (
     acceptance_suite_summary,
     listening_review_summary,
 )
+from song_agent.mix_controls import (
+    MixControlError,
+    MixControlStateError,
+    MixControlStore,
+    mix_state_hash,
+    mix_state_integrity_ok,
+)
+from song_agent.mix_render import MixRenderStore, mix_preview_integrity_ok
+from song_agent.stem_health import (
+    read_stem_health_report,
+    stem_health_allows_signoff,
+    stem_health_integrity_ok,
+    stem_health_source_state,
+    stem_health_stale_reasons,
+    stem_health_summary,
+)
 from song_agent.human_review_pack import (
     HumanReviewPackNotFoundError,
     HumanReviewPackStateError,
@@ -4023,6 +4039,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_project_version_audio_route(method, project_id, version_id, action)
             return
 
+        mix_match = _match_project_mix_tail(tail)
+        if mix_match is not None:
+            version_id, action, resource_id = mix_match
+            self._handle_project_mix_route(method, project_id, version_id, action, resource_id)
+            return
+
         editor_preview_root = _match_project_editor_preview_root_tail(tail)
         if editor_preview_root is not None:
             self._handle_project_editor_preview_root(method, project_id, editor_preview_root)
@@ -5155,11 +5177,30 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 status = HTTPStatus.CREATED if result.get("status") == "created" else HTTPStatus.OK
                 self._send_json({"ok": True, "release_id": release_id, **result}, status=status)
                 return
+            if len(parts) == 4 and parts[1] == "markers" and parts[3] == "mix-patch-draft":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = MixRenderStore(self.project_store, self.store).marker_mix_patch_draft(
+                    release_store=self.release_store,
+                    audio_review_store=self.audio_review_store,
+                    release_id=release_id,
+                    review_id=review_id,
+                    marker_id=parts[2],
+                    payload=self._optional_json_body(),
+                    now=_utc_now(),
+                )
+                self._send_json({"ok": True, "release_id": release_id, **result}, status=HTTPStatus.CREATED)
+                return
             self._send_error(HTTPStatus.NOT_FOUND, "Audio review route not found.")
         except AudioReviewEvidenceNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except AudioReviewEvidenceStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except MixControlStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except MixControlError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except AudioReviewEvidenceError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -5481,8 +5522,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         require_health = bool(payload.get("require_audio_health", False))
         require_human = bool(payload.get("require_human_audio_review", False))
         require_per_track_review = bool(payload.get("require_per_track_audio_review", False))
+        require_stem_health = bool(payload.get("require_stem_audio_health", False))
+        require_current_mix = bool(payload.get("require_current_mix_state", False))
         require_current = bool(payload.get("require_audio_artifact_current", require_health or require_per_track_review))
-        if not (require_health or require_human or require_per_track_review or require_current):
+        if not (require_health or require_human or require_per_track_review or require_current or require_stem_health or require_current_mix):
             return {}
         try:
             document = self.release_store.get_release(release_id)
@@ -5497,7 +5540,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "require_human_audio_review": require_human,
             "require_per_track_audio_review": require_per_track_review,
             "require_audio_artifact_current": require_current,
+            "require_stem_audio_health": require_stem_health,
+            "require_current_mix_state": require_current_mix,
         }
+        mix_gate = self._release_mix_gate(release_id, require_stem_health=require_stem_health, require_current_mix=require_current_mix)
+        if mix_gate:
+            evidence["mix"] = mix_gate
+            if mix_gate.get("status") == "failed":
+                return {**evidence, "status": "failed", "hard_block": True, "message": str(mix_gate.get("message") or "Release mix gate failed.")}
         if require_health or require_per_track_review:
             if not report:
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Release Audio QA is missing. Refresh audio QA before signoff."}
@@ -5530,6 +5580,59 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if int(acceptance_summary.get("manual_audio_accepted_count", 0) or 0) <= 0:
                     return {**evidence, "status": "failed", "hard_block": True, "message": "Human WAV listening review evidence is missing."}
         return {**evidence, "status": "passed", "message": "Release audio gate passed."}
+
+    def _release_mix_gate(self, release_id: str, *, require_stem_health: bool, require_current_mix: bool) -> dict[str, Any]:
+        if not (require_stem_health or require_current_mix):
+            return {}
+        try:
+            document = self.release_store.get_release(release_id)
+        except Exception as exc:
+            return {"status": "failed", "message": f"Release is unavailable: {sanitize_sensitive_text(str(exc))}"}
+        tracks: list[dict[str, Any]] = []
+        blockers: list[str] = []
+        for track in document.tracks:
+            project_dir = self.project_store.project_dir(track.project_id)
+            export_dir = final_export_dir(project_dir)
+            mix_state_path = export_dir / "mix-state.json"
+            stem_health_path = export_dir / "stems" / "stem-health.json"
+            mix_state = read_json(mix_state_path) if mix_state_path.exists() else {}
+            stem_report = read_json(stem_health_path) if stem_health_path.exists() else {}
+            mix_ok = bool(mix_state) and mix_state_integrity_ok(mix_state)
+            if require_current_mix and not mix_ok:
+                blockers.append(f"{track.track_id}: current mix-state evidence is missing or tampered")
+            stem_ok = False
+            stem_summary = stem_health_summary(stem_report)
+            try:
+                current_source = None
+                if stem_report:
+                    plan = SongPlan.from_dict(read_json(export_dir / "song-plan.json"))
+                    current_source = stable_hash(stem_health_source_state(run_dir=export_dir, project_id=track.project_id, version_id=track.version_id, plan=plan, mix_state=mix_state if mix_ok else None))
+                stem_ok = stem_health_allows_signoff(stem_report, current_source_hash=current_source)
+            except Exception:
+                stem_ok = False
+            if require_stem_health and not stem_ok:
+                blockers.append(f"{track.track_id}: stem audio health is missing, stale, or failed")
+            tracks.append(
+                {
+                    "track_id": track.track_id,
+                    "project_id": track.project_id,
+                    "version_id": track.version_id,
+                    "mix_state_hash": mix_state_hash(mix_state) if mix_ok else None,
+                    "mix_state_integrity_ok": mix_ok,
+                    "stem_health": stem_summary,
+                    "stem_health_integrity_ok": stem_health_integrity_ok(stem_report) if stem_report else False,
+                    "stem_health_current": stem_ok,
+                }
+            )
+        return {
+            "status": "failed" if blockers else "passed",
+            "require_stem_audio_health": require_stem_health,
+            "require_current_mix_state": require_current_mix,
+            "track_count": len(tracks),
+            "tracks": tracks,
+            "blockers": blockers,
+            "message": "Release mix gate failed." if blockers else "Release mix gate passed.",
+        }
 
     def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
         report_id = str(payload.get("acceptance_analytics_report_id") or "").strip()
@@ -8095,6 +8198,152 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Project version audio route not found.")
+
+    def _handle_project_mix_route(self, method: str, project_id: str, version_id: str, action: str, resource_id: str | None = None) -> None:
+        mix_store = MixRenderStore(self.project_store, self.store)
+        control_store = MixControlStore(self.project_store.project_dir(project_id))
+        try:
+            if action == "mix-state":
+                document = self.project_store.sync_project(project_id, self.store.get_job)
+                version = next((item for item in document.versions if item.version_id == version_id), None)
+                if version is None:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+                    return
+                run_dir = Path(version.output_dir)
+                plan = SongPlan.from_dict(read_json(run_dir / "data" / "song-plan.json"))
+                if method == "GET":
+                    state = control_store.get_or_create_state(project_id=project_id, version_id=version.version_id, plan=plan, midi_path=run_dir / "renders" / "song.mid", now=_utc_now())
+                    self._send_json({"ok": True, "project_id": project_id, "version_id": version.version_id, "mix_state": state.to_dict(), "summary": {"mix_state_hash": mix_state_hash(state)}})
+                    return
+                if method == "POST":
+                    current = control_store.get_or_create_state(project_id=project_id, version_id=version.version_id, plan=plan, midi_path=run_dir / "renders" / "song.mid", now=_utc_now())
+                    state = control_store.write_state(type(current).from_dict({**self._read_json_body(), "project_id": project_id, "version_id": version.version_id, "updated_at": _utc_now()}))
+                    self.project_store.append_event(project_id, "mix_state_saved", {"version_id": version.version_id, "mix_state_hash": mix_state_hash(state)})
+                    self._send_json({"ok": True, "project_id": project_id, "version_id": version.version_id, "mix_state": state.to_dict()})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if action == "mix-state-reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                document = self.project_store.sync_project(project_id, self.store.get_job)
+                version = next((item for item in document.versions if item.version_id == version_id), None)
+                if version is None:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+                    return
+                run_dir = Path(version.output_dir)
+                plan = SongPlan.from_dict(read_json(run_dir / "data" / "song-plan.json"))
+                state = control_store.reset_state(project_id=project_id, version_id=version.version_id, plan=plan, midi_path=run_dir / "renders" / "song.mid", now=_utc_now())
+                self.project_store.append_event(project_id, "mix_state_reset", {"version_id": version.version_id})
+                self._send_json({"ok": True, "project_id": project_id, "version_id": version.version_id, "mix_state": state.to_dict()})
+                return
+            if action == "mix-preview-create":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preview, patch, _preview_dir = mix_store.create_preview(project_id=project_id, version_id=version_id, payload=self._read_json_body(), now=_utc_now())
+                self.project_store.append_event(project_id, "mix_preview_created", {"version_id": version_id, "preview_id": preview.preview_id, "patch_id": patch.patch_id})
+                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview": preview.to_dict(), "patch": patch.to_dict()}, status=HTTPStatus.CREATED)
+                return
+            if action == "mix-preview-detail" and resource_id:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preview = mix_store.read_preview(project_id, version_id, resource_id)
+                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview": preview.to_dict(), "integrity_ok": mix_preview_integrity_ok(preview)})
+                return
+            if action == "mix-preview-midi" and resource_id:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preview = mix_store.read_preview(project_id, version_id, resource_id)
+                if not mix_preview_integrity_ok(preview):
+                    self._send_error(HTTPStatus.CONFLICT, "Mix preview integrity failed.")
+                    return
+                self._send_file(mix_store.preview_dir(project_id, version_id, resource_id) / "song.mid", "audio/midi", filename=f"{project_id}-{resource_id}.mid")
+                return
+            if action == "mix-preview-audio" and resource_id:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preview = mix_store.read_preview(project_id, version_id, resource_id)
+                if not mix_preview_integrity_ok(preview):
+                    self._send_error(HTTPStatus.CONFLICT, "Mix preview integrity failed.")
+                    return
+                audio_path = mix_store.preview_dir(project_id, version_id, resource_id) / "song.wav"
+                if not audio_path.exists():
+                    self._send_error(HTTPStatus.NOT_FOUND, "Mix preview audio is not available.")
+                    return
+                self._send_file(audio_path, "audio/wav", filename=f"{project_id}-{resource_id}.wav")
+                return
+            if action == "mix-preview-render-audio" and resource_id:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preview = mix_store.render_preview_audio(project_id=project_id, version_id=version_id, preview_id=resource_id, now=_utc_now())
+                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview": preview.to_dict()})
+                return
+            if action == "mix-preview-apply" and resource_id:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                document, version, job = mix_store.apply_preview(project_id=project_id, version_id=version_id, preview_id=resource_id, payload=self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, **document, "version": version.to_dict(), "job": job.to_dict()}, status=HTTPStatus.CREATED)
+                return
+            if action == "mix-preview-delete" and resource_id:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preview = mix_store.read_preview(project_id, version_id, resource_id)
+                if preview.applied_version_id:
+                    self._send_error(HTTPStatus.CONFLICT, "Applied mix previews cannot be deleted.")
+                    return
+                preview_dir = mix_store.preview_dir(project_id, version_id, resource_id)
+                if preview_dir.exists():
+                    shutil.rmtree(preview_dir)
+                self.project_store.append_event(project_id, "mix_preview_deleted", {"version_id": version_id, "preview_id": resource_id})
+                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview_id": resource_id, "deleted": True})
+                return
+            if action == "mix-stems-render":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                result = mix_store.render_stems(project_id=project_id, version_id=version_id, require_wav=bool(payload.get("require_wav", False)), render_wav=bool(payload.get("render_audio", False)), force=bool(payload.get("force", False)), now=_utc_now())
+                self.project_store.append_event(project_id, "mix_stems_rendered", {"version_id": version_id, "status": result["summary"].get("status")})
+                self._send_json(result)
+                return
+            if action == "mix-stems-health":
+                document = self.project_store.sync_project(project_id, self.store.get_job)
+                version = next((item for item in document.versions if item.version_id == version_id), None)
+                if version is None:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+                    return
+                if method == "GET":
+                    report = read_stem_health_report(Path(version.output_dir))
+                    self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "stem_health": report, "summary": stem_health_summary(report)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    result = mix_store.render_stems(project_id=project_id, version_id=version_id, require_wav=bool(payload.get("require_wav", False)), render_wav=bool(payload.get("render_audio", False)), force=bool(payload.get("force", False)), now=_utc_now())
+                    self._send_json(result)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+        except StopIteration:
+            self._send_error(HTTPStatus.NOT_FOUND, "Version not found.")
+            return
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc) or "Mix resource not found.")
+            return
+        except MixControlStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except (MixControlError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Mix route not found.")
 
     def _handle_project_editor_preview_root(self, method: str, project_id: str, action: str) -> None:
         store = EditorPreviewStore(self.project_store.project_dir(project_id))
@@ -12831,6 +13080,27 @@ def _match_project_version_audio_tail(tail: str) -> tuple[str, str] | None:
     parts = tail.strip("/").split("/")
     if len(parts) == 3 and parts[0] == "versions" and parts[2] in {"audio", "render-audio"}:
         return unquote(parts[1]), parts[2]
+    return None
+
+
+def _match_project_mix_tail(tail: str) -> tuple[str, str, str | None] | None:
+    parts = tail.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "mix-state":
+        return unquote(parts[1]), "mix-state", None
+    if len(parts) == 4 and parts[0] == "versions" and parts[2] == "mix-state" and parts[3] == "reset":
+        return unquote(parts[1]), "mix-state-reset", None
+    if len(parts) == 3 and parts[0] == "versions" and parts[2] == "mix-preview":
+        return unquote(parts[1]), "mix-preview-create", None
+    if len(parts) == 5 and parts[0] == "versions" and parts[2] == "mix-preview":
+        action = parts[4]
+        if action in {"midi", "audio", "render-audio", "apply", "delete"}:
+            return unquote(parts[1]), f"mix-preview-{action}", unquote(parts[3])
+    if len(parts) == 4 and parts[0] == "versions" and parts[2] == "mix-previews":
+        return unquote(parts[1]), "mix-preview-detail", unquote(parts[3])
+    if len(parts) == 4 and parts[0] == "versions" and parts[2] == "mix-stems" and parts[3] == "render":
+        return unquote(parts[1]), "mix-stems-render", None
+    if len(parts) == 4 and parts[0] == "versions" and parts[2] == "mix-stems" and parts[3] == "health":
+        return unquote(parts[1]), "mix-stems-health", None
     return None
 
 

@@ -28,24 +28,32 @@ class MidiEvent:
     payload: bytes
 
 
-def render_midi(plan: SongPlan, output_path: Path) -> Path:
+def render_midi(
+    plan: SongPlan,
+    output_path: Path,
+    *,
+    track_pans: dict[int, int] | None = None,
+    track_volumes: dict[int, int] | None = None,
+) -> Path:
     """Render a SongPlan to a type-1 Standard MIDI file."""
     plan.validate()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     tracks = [_meta_track(plan)]
-    for track in plan.tracks:
+    track_pans = track_pans or {}
+    track_volumes = track_volumes or {}
+    for index, track in enumerate(plan.tracks):
         role = _track_role(track.name)
         channel = CHANNELS_BY_ROLE.get(role, 0)
         program = PROGRAMS_BY_ROLE.get(role)
-        tracks.append(_music_track(track.notes, channel=channel, program=program))
+        tracks.append(_music_track(track.notes, channel=channel, program=program, pan=track_pans.get(index), volume=track_volumes.get(index)))
 
     data = _header_chunk(len(tracks)) + b"".join(tracks)
     output_path.write_bytes(data)
     return output_path
 
 
-def render_midi_stem(plan: SongPlan, track_index: int, output_path: Path) -> Path:
+def render_midi_stem(plan: SongPlan, track_index: int, output_path: Path, *, pan: int | None = None, volume: int | None = None) -> Path:
     """Render one SongPlan track to a type-1 Standard MIDI stem file."""
     if track_index < 0 or track_index >= len(plan.tracks):
         raise ValueError("track_index is out of range.")
@@ -58,7 +66,7 @@ def render_midi_stem(plan: SongPlan, track_index: int, output_path: Path) -> Pat
     program = PROGRAMS_BY_ROLE.get(role)
     tracks = [
         _meta_track(plan),
-        _music_track(track.notes, channel=channel, program=program),
+        _music_track(track.notes, channel=channel, program=program, pan=pan, volume=volume),
     ]
     output_path.write_bytes(_header_chunk(len(tracks)) + b"".join(tracks))
     return output_path
@@ -84,10 +92,16 @@ def _music_track(
     *,
     channel: int,
     program: int | None,
+    pan: int | None = None,
+    volume: int | None = None,
 ) -> bytes:
     events: list[MidiEvent] = []
     if program is not None:
         events.append(MidiEvent(0, 0, bytes([0xC0 | channel, program])))
+    if pan is not None:
+        events.append(MidiEvent(0, 1, bytes([0xB0 | channel, 10, max(0, min(127, int(pan)))])))
+    if volume is not None:
+        events.append(MidiEvent(0, 1, bytes([0xB0 | channel, 7, max(0, min(127, int(volume)))])))
 
     for note in notes:
         start_tick = round(note.start_beat * TICKS_PER_BEAT)

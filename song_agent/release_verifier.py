@@ -18,6 +18,7 @@ from song_agent.audio_health import analyze_wav_bytes, audio_health_allows_relea
 from song_agent.projectio import write_json
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.releases import stable_hash
+from song_agent.stem_health import stem_health_integrity_ok
 
 
 REPORT_SCHEMA_VERSION = 1
@@ -478,6 +479,23 @@ class _ReleaseZipVerifier:
                     self._add_track_check(track_id, "track_optional_stems", "failed", "blocking", "stems/manifest.json is required but missing.", path=stems_manifest_path)
                 else:
                     self._verify_stems_manifest(archive, track_id, stems_manifest_path, directory)
+            stem_health_required = self.require_stems or self._requires_stem_audio_health()
+            if stem_health_required:
+                stem_health_path = f"{directory}/stems/stem-health.json"
+                if stem_health_path not in self.entry_map:
+                    self._add_track_check(track_id, "track_stem_audio_health", "failed", "blocking", "stems/stem-health.json is required but missing.", path=stem_health_path)
+                else:
+                    report = self._read_json_entry(archive, stem_health_path, "track", "track_stem_health_parse", track_id=track_id)
+                    status = str(report.get("status") or "")
+                    ok = bool(report) and stem_health_integrity_ok(report) and status in {"passed", "warning"}
+                    self._add_track_check(
+                        track_id,
+                        "track_stem_audio_health",
+                        "passed" if ok else "failed",
+                        "blocking",
+                        "Stem audio health report is present and allows release." if ok else "Stem audio health report is missing, tampered, or failed.",
+                        path=stem_health_path,
+                    )
 
     def _verify_signoff(self) -> None:
         if not self.signoff:
@@ -701,6 +719,12 @@ class _ReleaseZipVerifier:
         per_track = audio_gate.get("per_track_review") if isinstance(audio_gate.get("per_track_review"), dict) else {}
         return bool(audio_gate.get("require_per_track_audio_review") or per_track.get("require_per_track_audio_review"))
 
+    def _requires_stem_audio_health(self) -> bool:
+        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
+        mix_gate = audio_gate.get("mix") if isinstance(audio_gate.get("mix"), dict) else {}
+        return bool(audio_gate.get("require_stem_audio_health") or mix_gate.get("require_stem_audio_health"))
+
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         scan_names = [
             name
@@ -745,8 +769,8 @@ class _ReleaseZipVerifier:
             rel = stem.get("midi") or stem.get("midi_path") or stem.get("path")
             if not rel:
                 continue
-            stem_path = str(rel).replace("\\", "/")
-            full = stem_path if stem_path.startswith(f"{directory}/") else f"{directory}/stems/{stem_path}"
+            stem_path = str(rel).replace("\\", "/").lstrip("/")
+            full = stem_path if stem_path.startswith(f"{directory}/") else f"{directory}/{stem_path}"
             if full not in self.entry_map:
                 missing.append(full)
         self._add_track_check(track_id, "track_optional_stems", "failed" if missing else "passed", "blocking", "Missing stem files: " + ", ".join(missing[:5]) if missing else "Stem manifest files exist.", path=path, count=len(missing))
