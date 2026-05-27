@@ -27,6 +27,7 @@ from song_agent.release_checks import (
     _v50_real_audio_baseline_smoke,
     _v51_per_track_audio_review_smoke,
     _v52_arrangement_mix_controls_smoke,
+    _v53_audio_revision_workbench_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -291,6 +292,18 @@ def test_v52_arrangement_mix_controls_smoke(tmp_path: Path) -> None:
     assert "missing_mix_gate=409" in detail
     assert "sign=200" in detail
     assert "tampered_stem=failed" in detail
+
+
+def test_v53_audio_revision_workbench_smoke(tmp_path: Path) -> None:
+    ok, detail = _v53_audio_revision_workbench_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "session=201" in detail
+    assert "apply=200" in detail
+    assert "close=200" in detail
+    assert "sign=200" in detail
+    assert "verify=" in detail
+    assert "candidate_tamper=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

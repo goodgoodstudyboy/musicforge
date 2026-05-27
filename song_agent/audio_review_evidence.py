@@ -142,9 +142,15 @@ class AudioReviewEvidenceStore:
         warnings: list[str] = []
         for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
             track_reviews = by_track.get(track.track_id, [])
-            accepted_manual = [
+            current_track_reviews = [
                 review
                 for review in track_reviews
+                if str(review.get("project_id") or "") == str(track.project_id)
+                and str(review.get("version_id") or "") == str(track.version_id)
+            ]
+            accepted_manual = [
+                review
+                for review in current_track_reviews
                 if review.get("status") == "accepted"
                 and review.get("review_mode") == "manual"
                 and bool(review.get("playback_confirmed", False))
@@ -153,12 +159,13 @@ class AudioReviewEvidenceStore:
                 and not _review_redaction_findings(review)
             ]
             duplicate_manual_count = max(0, len(accepted_manual) - 1)
-            synthetic_count = len([review for review in track_reviews if review.get("status") == "accepted" and review.get("review_mode") == "synthetic"])
-            needs_fix_count = len([review for review in track_reviews if review.get("status") == "needs_fix"])
-            rejected_count = len([review for review in track_reviews if review.get("status") == "rejected"])
-            stale_count = len([review for review in track_reviews if review.get("stale")])
-            tampered_count = len([review for review in track_reviews if not review_integrity_ok(review)])
-            sensitive_count = len([review for review in track_reviews if _review_redaction_findings(review)])
+            synthetic_count = len([review for review in current_track_reviews if review.get("status") == "accepted" and review.get("review_mode") == "synthetic"])
+            needs_fix_count = len([review for review in current_track_reviews if review.get("status") == "needs_fix"])
+            rejected_count = len([review for review in current_track_reviews if review.get("status") == "rejected"])
+            stale_count = len([review for review in current_track_reviews if review.get("stale")])
+            tampered_count = len([review for review in current_track_reviews if not review_integrity_ok(review)])
+            sensitive_count = len([review for review in current_track_reviews if _review_redaction_findings(review)])
+            historical_review_count = max(0, len(track_reviews) - len(current_track_reviews))
             status = "accepted" if accepted_manual else "missing"
             if duplicate_manual_count:
                 status = "duplicate_manual"
@@ -198,6 +205,8 @@ class AudioReviewEvidenceStore:
                     "version_id": track.version_id,
                     "status": status,
                     "review_count": len(track_reviews),
+                    "current_review_count": len(current_track_reviews),
+                    "historical_review_count": historical_review_count,
                     "manual_accepted_count": len(accepted_manual),
                     "duplicate_manual_accepted_count": duplicate_manual_count,
                     "synthetic_accepted_count": synthetic_count,

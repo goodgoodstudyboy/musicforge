@@ -516,6 +516,13 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-require-per-track-audio-review"' in html
     assert 'id="release-require-stem-audio-health"' in html
     assert 'id="release-require-current-mix-state"' in html
+    assert "Audio Revision Workbench" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions" in html
+    assert "/candidates/generate" in html
+    assert 'id="release-audio-revision-session"' in html
+    assert 'id="release-generate-audio-revision-candidates"' in html
+    assert 'id="release-apply-audio-revision-candidate"' in html
+    assert 'id="release-require-audio-revision-closeout"' in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/init" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa" in html

@@ -244,6 +244,18 @@ redaction-failed reviews hard-block signoff. Release Export writes
 `verify-release --require-audio --require-human-review` checks those per-track
 reviews against the packaged `song.wav` files offline.
 
+Audio Revision Workbench closes the loop from a `needs_fix` audio marker to a
+reviewed mix correction. A Release audio review marker can create an audio
+revision issue, generate deterministic Mix Patch candidates, render MIDI/WAV
+previews for A/B listening, require a manual accepted candidate review, and
+apply the selected candidate as a new `mix_control_edit` Project Version. The
+Release track is explicitly moved to that applied version, old audio reviews
+become historical/stale, and the issue must be manually rechecked before the
+session closeout can pass. Release Signoff can require
+`require_audio_revision_closeout=true`, and portable verification can require
+the exported session/issue/candidate evidence with
+`verify-release --require-audio-revisions`.
+
 Useful local commands:
 
 ```powershell
@@ -276,6 +288,7 @@ verified outside the workspace:
 ```powershell
 python -m song_agent.cli verify-release path\to\release-export.zip --json --report-out release-verification-report.json
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review
+python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review --require-audio-revisions
 ```
 
 The verifier reads only the ZIP, checks entry safety, duplicate entries,

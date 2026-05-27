@@ -23,6 +23,7 @@ from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.release_audio import read_release_audio_qa, release_audio_summary
 from song_agent.audio_review_evidence import export_audio_reviews
+from song_agent.audio_revision import export_audio_revisions
 from song_agent.release_metadata import (
     attach_metadata_export_to_manifest,
     export_release_metadata_files,
@@ -110,6 +111,7 @@ def build_release_export_bundle(
     planning_impact_summary = _release_planning_rule_impact_summary(release_store, release.release_id, export_dir)
     audio_summary = _release_audio_qa_summary(release_store, release.release_id, export_dir)
     audio_reviews_summary = _release_audio_reviews_summary(release_store, release.release_id, export_dir)
+    audio_revisions_summary = _release_audio_revisions_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
     if (export_dir / "acceptance-analytics-summary.json").exists():
@@ -134,6 +136,9 @@ def build_release_export_bundle(
         copied_files.append(_file_record(export_dir, export_dir / "audio-reviews" / "summary.json"))
     for review_file in sorted((export_dir / "audio-reviews" / "reviews").glob("*.json")) if (export_dir / "audio-reviews" / "reviews").exists() else []:
         copied_files.append(_file_record(export_dir, review_file))
+    if (export_dir / "audio-revisions" / "summary.json").exists():
+        for revision_file in sorted((export_dir / "audio-revisions").rglob("*.json")):
+            copied_files.append(_file_record(export_dir, revision_file))
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -156,6 +161,7 @@ def build_release_export_bundle(
         "planning_rule_impact": planning_impact_summary,
         "audio": audio_summary,
         "audio_reviews": audio_reviews_summary,
+        "audio_revisions": audio_revisions_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -513,6 +519,17 @@ def _release_audio_reviews_summary(release_store: ReleaseStore, release_id: str,
     except Exception:
         summary = {"status": "missing", "track_count": 0, "manual_accepted_track_count": 0, "missing_track_ids": []}
         target = export_dir / "audio-reviews"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "summary.json", summary)
+        return summary
+
+
+def _release_audio_revisions_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        return export_audio_revisions(release_store, release_id, export_dir, project_store=release_store.project_store)
+    except Exception:
+        summary = {"status": "missing", "session_count": 0, "open_issue_count": 0}
+        target = export_dir / "audio-revisions"
         target.mkdir(parents=True, exist_ok=True)
         write_json(target / "summary.json", summary)
         return summary

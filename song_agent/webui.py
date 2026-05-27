@@ -3162,6 +3162,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let signoffData = { summary: release.signoff_summary || {}, signoff: {} };
       let metadataData = { summary: {}, metadata: {}, metadata_qa: { checks: [], track_checks: [] } };
       let audioReviewData = { summary: {}, reviews: [] };
+      let audioRevisionData = { summary: {}, sessions: [] };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
       let releaseAnalyticsData = { summary: {}, analytics: null };
@@ -3169,6 +3170,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
       try { signoffData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/signoff`); } catch (err) {}
       try { audioReviewData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-reviews`); } catch (err) {}
+      try {
+        audioRevisionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions`);
+        const firstRevisionSession = ((audioRevisionData.sessions || [])[0] || {}).session_id;
+        if (firstRevisionSession) {
+          audioRevisionData.detail = await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(firstRevisionSession)}`);
+        }
+      } catch (err) {}
       try {
         metadataData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
         const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
@@ -3217,6 +3225,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseTrackTable(release)}
         ${releaseMetadataHtml(metadataData, release)}
         ${releaseAudioReviewHtml(audioReviewData, release)}
+        ${releaseAudioRevisionHtml(audioRevisionData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4082,6 +4091,104 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseAudioRevisionHtml(audioRevisionData, release) {
+      const summary = (audioRevisionData && audioRevisionData.summary) || {};
+      const sessions = (audioRevisionData && audioRevisionData.sessions) || [];
+      const detail = (audioRevisionData && audioRevisionData.detail) || {};
+      const issues = detail.issues || [];
+      const candidates = detail.candidates || [];
+      const latest = sessions[0] || {};
+      const sessionId = latest.session_id || "";
+      const rows = sessions.map((session) => `
+        <tr>
+          <td>${escapeHtml(session.session_id || "-")}</td>
+          <td>${escapeHtml(session.status || "-")}</td>
+          <td>${escapeHtml(session.issue_count || 0)}</td>
+          <td>${escapeHtml(session.open_issue_count || 0)}</td>
+          <td>${escapeHtml(session.applied_candidate_count || 0)}</td>
+          <td>${session.stale ? "yes" : "-"}</td>
+        </tr>
+      `).join("");
+      const issueRows = issues.map((issue) => `
+        <tr>
+          <td>${escapeHtml(issue.issue_id || "-")}</td>
+          <td><span class="status ${escapeHtml(issue.status || "")}">${escapeHtml(issue.status || "-")}</span></td>
+          <td>${escapeHtml(issue.track_id || "-")}</td>
+          <td>${escapeHtml(issue.category || "-")}</td>
+          <td>${escapeHtml(issue.severity || "-")}</td>
+          <td>${escapeHtml(issue.selected_candidate_id || "-")}</td>
+          <td>${escapeHtml(issue.applied_version_id || "-")}</td>
+        </tr>
+      `).join("");
+      const candidateRows = candidates.map((candidate) => {
+        const candidateId = candidate.candidate_id || "";
+        const previewBase = `/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/candidates/${encodeURIComponent(candidateId)}`;
+        return `
+          <tr>
+            <td>${escapeHtml(candidateId || "-")}</td>
+            <td><span class="status ${escapeHtml(candidate.status || "")}">${escapeHtml(candidate.status || "-")}</span></td>
+            <td>${candidate.selected ? "yes" : "-"}</td>
+            <td>${escapeHtml(candidate.score || 0)}</td>
+            <td>${escapeHtml((candidate.review || {}).status || "-")}</td>
+            <td>${escapeHtml(candidate.applied_version_id || "-")}</td>
+            <td>${candidateId ? `<a href="${previewBase}/midi" target="_blank" rel="noreferrer">MIDI</a> · <a href="${previewBase}/audio" target="_blank" rel="noreferrer">WAV</a>` : "-"}</td>
+          </tr>
+        `;
+      }).join("");
+      const issueControl = issues.length
+        ? `<select id="release-audio-revision-issue">${issues.map((issue) => `<option value="${escapeHtml(issue.issue_id || "")}">${escapeHtml(issue.issue_id || "-")} · ${escapeHtml(issue.status || "-")} · ${escapeHtml(issue.severity || "-")}</option>`).join("")}</select>`
+        : `<input id="release-audio-revision-issue" placeholder="ari-000001">`;
+      const candidateControl = candidates.length
+        ? `<select id="release-audio-revision-candidate">${candidates.map((candidate) => `<option value="${escapeHtml(candidate.candidate_id || "")}">${escapeHtml(candidate.candidate_id || "-")} · ${escapeHtml(candidate.status || "-")}${candidate.selected ? " · selected" : ""}</option>`).join("")}</select>`
+        : `<input id="release-audio-revision-candidate" placeholder="arc-000001">`;
+      return `
+        <div class="panel-title subhead"><span>Audio Revision Workbench</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.status || "missing")}
+          ${metric("Sessions", summary.session_count || sessions.length || 0)}
+          ${metric("Open Issues", summary.open_issue_count || 0)}
+          ${metric("Rechecked", summary.rechecked_issue_count || 0)}
+        </div>
+        <div class="grid2">
+          <label>Session
+            <select id="release-audio-revision-session">${sessions.map((session) => `<option value="${escapeHtml(session.session_id || "")}">${escapeHtml(session.session_id || "-")} · ${escapeHtml(session.status || "-")}</option>`).join("")}</select>
+          </label>
+          <label>Issue
+            ${issueControl}
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Candidate
+            ${candidateControl}
+          </label>
+          <label>Session Title
+            <input id="release-audio-revision-title" value="Audio revision pass">
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-create-audio-revision" type="button">Create Revision Session</button>
+          <button class="secondary" id="release-generate-audio-revision-candidates" type="button" ${sessionId ? "" : "disabled"}>Generate Candidates</button>
+          <button class="secondary" id="release-review-audio-revision-candidate" type="button" ${sessionId ? "" : "disabled"}>Accept Candidate</button>
+          <button class="secondary" id="release-select-audio-revision-candidate" type="button" ${sessionId ? "" : "disabled"}>Select Candidate</button>
+          <button class="secondary" id="release-apply-audio-revision-candidate" type="button" ${sessionId ? "" : "disabled"}>Apply Candidate</button>
+          <button class="secondary" id="release-refresh-audio-revision" type="button" ${sessionId ? "" : "disabled"}>Refresh Recheck</button>
+          <button class="secondary" id="release-close-audio-revision" type="button" ${sessionId ? "" : "disabled"}>Close Session</button>
+        </div>
+        <table>
+          <thead><tr><th>Issue</th><th>Status</th><th>Track</th><th>Category</th><th>Severity</th><th>Selected Candidate</th><th>Applied Version</th></tr></thead>
+          <tbody>${issueRows || "<tr><td colspan='7'>No audio revision issues yet.</td></tr>"}</tbody>
+        </table>
+        <table>
+          <thead><tr><th>Candidate</th><th>Status</th><th>Selected</th><th>Score</th><th>Review</th><th>Applied Version</th><th>A/B Preview</th></tr></thead>
+          <tbody>${candidateRows || "<tr><td colspan='7'>No audio revision candidates yet.</td></tr>"}</tbody>
+        </table>
+        <table>
+          <thead><tr><th>Session</th><th>Status</th><th>Issues</th><th>Open</th><th>Applied</th><th>Stale</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='6'>No audio revision sessions yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
     function releaseExportHtml(exportData, release) {
       const manifest = (exportData && exportData.manifest) || {};
       const zip = manifest.zip || {};
@@ -4175,6 +4282,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <input id="release-require-current-mix-state" type="checkbox">
           Require current mix state
         </label>
+        <label class="inline">
+          <input id="release-require-audio-revision-closeout" type="checkbox">
+          Require audio revision closeout
+        </label>
       `;
     }
 
@@ -4188,6 +4299,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         require_per_track_audio_review: $("release-require-per-track-audio-review")?.checked || false,
         require_stem_audio_health: $("release-require-stem-audio-health")?.checked || false,
         require_current_mix_state: $("release-require-current-mix-state")?.checked || false,
+        require_audio_revision_closeout: $("release-require-audio-revision-closeout")?.checked || false,
       };
     }
 
@@ -4251,6 +4363,60 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             notes: $("release-audio-review-notes").value,
           }),
         });
+        await loadReleases();
+      });
+      bindAction("release-create-audio-revision", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: $("release-audio-revision-title").value.trim() || "Audio revision pass" }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-generate-audio-revision-candidates", async () => {
+        const sessionId = $("release-audio-revision-session").value;
+        const issueId = $("release-audio-revision-issue").value.trim();
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/issues/${encodeURIComponent(issueId)}/candidates/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ max_candidates: 3 }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-review-audio-revision-candidate", async () => {
+        const sessionId = $("release-audio-revision-session").value;
+        const candidateId = $("release-audio-revision-candidate").value.trim();
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/candidates/${encodeURIComponent(candidateId)}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "accepted", review_mode: "manual", rating: 4, playback_confirmed: true }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-select-audio-revision-candidate", async () => {
+        const sessionId = $("release-audio-revision-session").value;
+        const candidateId = $("release-audio-revision-candidate").value.trim();
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/candidates/${encodeURIComponent(candidateId)}/select`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-apply-audio-revision-candidate", async () => {
+        const sessionId = $("release-audio-revision-session").value;
+        const candidateId = $("release-audio-revision-candidate").value.trim();
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/candidates/${encodeURIComponent(candidateId)}/apply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version_name: "Audio Revision Applied" }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-refresh-audio-revision", async () => {
+        const sessionId = $("release-audio-revision-session").value;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-close-audio-revision", async () => {
+        const sessionId = $("release-audio-revision-session").value;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/close`, { method: "POST" });
         await loadReleases();
       });
       bindAction("release-build-export", async () => {

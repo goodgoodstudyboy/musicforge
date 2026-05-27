@@ -1,5 +1,23 @@
 # Changelog
 
+## v5.3.0 - 2026-05-28
+
+### Added
+- Audio Revision Workbench for Release tracks, turning per-track audio review markers into auditable revision issues and deterministic mix candidates.
+- Candidate preview rendering with MIDI/WAV, audio health, stem health, manual A/B review, single-candidate selection, and apply-as-child-version flow.
+- Audio revision session closeout with recheck evidence, high/critical issue blockers, force-close guardrails, and Release Signoff `require_audio_revision_closeout=true`.
+- Release Export and `verify-release --require-audio-revisions` evidence for sessions, issues, selected candidates, closeouts, hashes, and applied Release Track version matching.
+- Studio Release workspace panel for creating revision sessions, listing issues/candidates, reviewing/selecting/applying candidates, refreshing recheck status, and closing sessions.
+- v5.3 release-check smoke covering marker-to-issue, candidate generation, artifact path pollution, manual candidate review, apply, stale old review, recheck, closeout, signoff, external verify, and ZIP candidate tamper.
+
+### Fixed
+- Per-track audio review evidence now separates current track-version reviews from historical reviews so an old stale `needs_fix` review does not block the newly applied and rechecked Release track.
+- Audio revision closeout refuses `force=true` when stale/tampered evidence or unresolved high/critical issues are present.
+
+### Verified
+- `python -m pytest tests\test_audio_revision.py tests\test_release_check.py::test_v53_audio_revision_workbench_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m pytest tests\test_audio_review_evidence.py tests\test_release_audio.py tests\test_mix_controls.py tests\test_server_mix_controls.py -q`
+
 ## v5.2.1 - 2026-05-27
 
 ### Fixed

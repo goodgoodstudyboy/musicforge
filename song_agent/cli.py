@@ -70,6 +70,7 @@ def build_verify_release_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict-order warnings as failures.")
     verify_parser.add_argument("--require-audio", action="store_true", help="Require each track to include song.wav.")
     verify_parser.add_argument("--require-human-review", action="store_true", help="Require release signoff to include manual WAV review evidence.")
+    verify_parser.add_argument("--require-audio-revisions", action="store_true", help="Require Audio Revision Workbench closeout evidence.")
     verify_parser.add_argument("--require-stems", action="store_true", help="Require each track to include a stems manifest and declared stem MIDI files.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
@@ -552,6 +553,7 @@ def _main() -> None:
             strict=args.strict,
             require_audio=args.require_audio,
             require_human_review=args.require_human_review,
+            require_audio_revisions=args.require_audio_revisions,
             require_stems=args.require_stems,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,

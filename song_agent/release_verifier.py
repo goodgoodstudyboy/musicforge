@@ -15,6 +15,13 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.audio_health import analyze_wav_bytes, audio_health_allows_release
+from song_agent.audio_revision import (
+    audio_revision_summary_integrity_ok,
+    candidate_integrity_ok as audio_revision_candidate_integrity_ok,
+    closeout_integrity_ok as audio_revision_closeout_integrity_ok,
+    issue_integrity_ok as audio_revision_issue_integrity_ok,
+    session_integrity_ok as audio_revision_session_integrity_ok,
+)
 from song_agent.mix_controls import (
     mix_state_integrity_ok,
     song_plan_hash,
@@ -77,6 +84,7 @@ def verify_release_zip(
     strict: bool = False,
     require_audio: bool = False,
     require_human_review: bool = False,
+    require_audio_revisions: bool = False,
     require_stems: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
@@ -88,6 +96,7 @@ def verify_release_zip(
         strict=strict,
         require_audio=require_audio,
         require_human_review=require_human_review,
+        require_audio_revisions=require_audio_revisions,
         require_stems=require_stems,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
@@ -156,6 +165,7 @@ class _ReleaseZipVerifier:
         strict: bool,
         require_audio: bool,
         require_human_review: bool,
+        require_audio_revisions: bool,
         require_stems: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
@@ -166,6 +176,7 @@ class _ReleaseZipVerifier:
         self.strict = strict
         self.require_audio = require_audio
         self.require_human_review = require_human_review
+        self.require_audio_revisions = require_audio_revisions
         self.require_stems = require_stems
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
@@ -203,6 +214,7 @@ class _ReleaseZipVerifier:
                 self._verify_tracks(archive)
                 self._verify_signoff()
                 self._verify_audio_reviews(archive)
+                self._verify_audio_revisions(archive)
                 self._verify_metadata(archive)
                 self._verify_redaction(archive)
         finally:
@@ -788,6 +800,73 @@ class _ReleaseZipVerifier:
         mix_gate = audio_gate.get("mix") if isinstance(audio_gate.get("mix"), dict) else {}
         return bool(audio_gate.get("require_current_mix_state") or mix_gate.get("require_current_mix_state"))
 
+    def _requires_audio_revisions(self) -> bool:
+        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
+        revision_gate = audio_gate.get("audio_revision") if isinstance(audio_gate.get("audio_revision"), dict) else {}
+        return bool(self.require_audio_revisions or audio_gate.get("require_audio_revision_closeout") or revision_gate.get("session_count"))
+
+    def _verify_audio_revisions(self, archive: zipfile.ZipFile) -> None:
+        required = self._requires_audio_revisions()
+        manifest_summary = self.manifest.get("audio_revisions") if isinstance(self.manifest.get("audio_revisions"), dict) else {}
+        summary_path = str(manifest_summary.get("summary_path") or "audio-revisions/summary.json")
+        if summary_path not in self.entry_map:
+            status = "failed" if required else "warning"
+            self._add_check("audio_revisions", "audio_revision_summary_exists", status, "blocking" if status == "failed" else "warning", "audio-revisions/summary.json is missing.")
+            return
+        summary = self._read_json_entry(archive, summary_path, "audio_revisions", "audio_revision_summary_parse")
+        expected_hash = manifest_summary.get("summary_hash")
+        actual_hash = summary.get("integrity_hash")
+        self._add_check(
+            "audio_revisions",
+            "audio_revision_summary_hash",
+            "passed" if expected_hash == actual_hash and audio_revision_summary_integrity_ok(summary) else "failed",
+            "blocking",
+            "Audio revision summary hash and integrity match manifest." if expected_hash == actual_hash and audio_revision_summary_integrity_ok(summary) else "Audio revision summary hash or integrity failed.",
+        )
+        file_rows = manifest_summary.get("files") if isinstance(manifest_summary.get("files"), list) else []
+        paths = [str(item.get("path") or "") for item in file_rows if isinstance(item, dict) and str(item.get("path") or "").startswith("audio-revisions/") and str(item.get("path") or "").endswith(".json")]
+        if not paths:
+            paths = sorted(name for name in self.entry_names if name.startswith("audio-revisions/") and name.endswith(".json"))
+        missing = [path for path in paths if path not in self.entry_map]
+        tampered: list[str] = []
+        applied_mismatches: list[str] = []
+        track_versions = {str(item.get("track_id") or ""): str(item.get("version_id") or "") for item in self.tracklist.get("tracks", []) if isinstance(item, dict)}
+        for path in paths:
+            if path in missing or path == summary_path:
+                continue
+            payload = self._read_json_entry(archive, path, "audio_revisions", "audio_revision_payload_parse")
+            if not payload:
+                tampered.append(path)
+                continue
+            if path.startswith("audio-revisions/sessions/") and path.endswith("-closeout.json"):
+                if not audio_revision_closeout_integrity_ok(payload):
+                    tampered.append(path)
+            elif path.startswith("audio-revisions/sessions/"):
+                if not audio_revision_session_integrity_ok(payload):
+                    tampered.append(path)
+            elif path.startswith("audio-revisions/issues/"):
+                if not audio_revision_issue_integrity_ok(payload):
+                    tampered.append(path)
+            elif path.startswith("audio-revisions/selected-candidates/"):
+                if not audio_revision_candidate_integrity_ok(payload):
+                    tampered.append(path)
+                track_id = str(payload.get("track_id") or "")
+                applied_version = str(payload.get("applied_version_id") or "")
+                if applied_version and track_versions.get(track_id) != applied_version:
+                    applied_mismatches.append(f"{track_id}:{applied_version}")
+        failures = [*missing, *tampered, *applied_mismatches]
+        if required and summary.get("status") not in {"passed", "warning"}:
+            failures.append(f"summary_status:{summary.get('status')}")
+        self._add_check(
+            "audio_revisions",
+            "audio_revision_evidence",
+            "failed" if failures else "passed",
+            "blocking" if required or failures else "warning",
+            "Audio revision evidence is present, intact, and matches tracklist." if not failures else "Audio revision evidence failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         scan_names = [
             name
@@ -797,6 +876,7 @@ class _ReleaseZipVerifier:
             or name in {"release-metadata.json", "platform-metadata.csv", "credits.csv"}
             or name.startswith("lyrics/")
             or name.startswith("audio-reviews/")
+            or name.startswith("audio-revisions/")
         ]
         for name in scan_names:
             info = self.entry_map.get(name)
@@ -943,6 +1023,7 @@ class _ReleaseZipVerifier:
             "strict": self.strict,
             "require_audio": self.require_audio,
             "require_human_review": self.require_human_review,
+            "require_audio_revisions": self.require_audio_revisions,
             "require_stems": self.require_stems,
             "summary": {
                 "release_id": self.manifest.get("release_id"),

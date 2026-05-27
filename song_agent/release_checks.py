@@ -56,6 +56,7 @@ from song_agent.reference_analysis import analyze_reference, create_asset_from_s
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.release_verifier import verify_release_zip
+from song_agent.audio_revision import CANDIDATE_INTEGRITY_EXCLUDE, _object_hash as _audio_revision_object_hash
 from song_agent.audio_artifacts import build_audio_artifact_manifest, write_audio_artifact_manifest
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.submission_verifier import verify_submission_package
@@ -222,6 +223,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.0 real audio baseline smoke", *_v50_real_audio_baseline_smoke(root))
     report.add("v5.1 per-track audio review smoke", *_v51_per_track_audio_review_smoke(root))
     report.add("v5.2 arrangement mix controls smoke", *_v52_arrangement_mix_controls_smoke(root))
+    report.add("v5.3 audio revision workbench smoke", *_v53_audio_revision_workbench_smoke(root))
     return report
 
 
@@ -7177,6 +7179,147 @@ def _v52_arrangement_mix_controls_smoke(root: Path) -> tuple[bool, str]:
             f"sign={sign_status}, verify={verify.get('status')}, "
             f"tampered_stem={_v38_check_status(tampered, 'track_stem_audio_health')}, "
             f"tampered_mix={_v38_check_status(tampered_mix, 'track_mix_state_current')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v53-audio-revision-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        project_id = _v37_signed_project(server, "v5.3 Audio Revision")
+        _v50_add_project_audio(server, project_id, duration_seconds=30)
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.3 Audio Revision Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = str(release.get("release", {}).get("release_id") or "")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        audio_status, audio = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        review_status, review = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/audio-reviews",
+            {
+                "track_id": "track-000001",
+                "status": "needs_fix",
+                "review_mode": "manual",
+                "rating": 2,
+                "playback_confirmed": True,
+                "notes": "Drums overpower the hook.",
+                "markers": [{"time_seconds": 2.0, "category": "mix_balance", "severity": "high", "message": "drums loud in hook"}],
+            },
+        )
+        review_id = str(review.get("review", {}).get("review_id") or "")
+        session_status, session = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions", {"title": "v5.3 smoke revision"})
+        session_id = str(session.get("session", {}).get("session_id") or "")
+        detail_status, detail = _release_http_json(server, "GET", f"/api/releases/{release_id}/audio-revisions/{session_id}")
+        issue = next((item for item in detail.get("issues", []) if item.get("source_review_id") == review_id), detail.get("issues", [{}])[0] if detail.get("issues") else {})
+        issue_id = str(issue.get("issue_id") or "")
+        unresolved_force_status, unresolved_force = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/close", {"force": True, "override_reason": "high issue must be rechecked first"})
+        after_unresolved_force_status, after_unresolved_force = _release_http_json(server, "GET", f"/api/releases/{release_id}/audio-revisions/{session_id}")
+        generate_status, generated = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/issues/{issue_id}/candidates/generate", {"max_candidates": 2})
+        candidate_id = str((generated.get("candidates") or [{}])[0].get("candidate_id") or "")
+        candidate_path = base / ".musicforge" / "releases" / release_id / "audio-revisions" / session_id / "candidates" / candidate_id / "candidate.json"
+        original_candidate = read_json(candidate_path) if candidate_path.exists() else {}
+        unsafe_candidate = json.loads(json.dumps(original_candidate))
+        unsafe_candidate.setdefault("preview", {})["midi_path"] = "../outside.mid"
+        unsafe_candidate["integrity_hash"] = _audio_revision_object_hash(unsafe_candidate, CANDIDATE_INTEGRITY_EXCLUDE)
+        write_json(candidate_path, unsafe_candidate)
+        unsafe_download_status, unsafe_download = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate_id}/midi")
+        if original_candidate:
+            write_json(candidate_path, original_candidate)
+        midi_status, preview_midi = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate_id}/midi")
+        candidate_review_status, candidate_review = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 4, "playback_confirmed": True, "notes": "A/B preview improves balance."})
+        select_status, selected = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate_id}/select")
+        apply_status, applied = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate_id}/apply", {"version_name": "v5.3 Audio Revision Applied"})
+        applied_version = str(applied.get("applied_version_id") or "")
+        old_review_status, old_review = _release_http_json(server, "GET", f"/api/releases/{release_id}/audio-reviews/{review_id}")
+        recheck_status, recheck = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual recheck accepted after revision."})
+        refresh_status, refreshed = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/refresh")
+        close_status, closeout = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/close")
+        delivery_reset_status, _delivery_reset = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff/reset", {"reason": "v5.3 audio revision applied"})
+        delivery_sign_status, _delivery_sign = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {"signed_by": "release-check"})
+        qa_refresh_status, _qa_refresh = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        audio_refresh_status, audio_refresh = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_audio_health": True, "require_per_track_audio_review": True, "require_audio_revision_closeout": True})
+        zip_path = base / ".musicforge" / "releases" / release_id / "release-export.zip"
+        verify = verify_release_zip(zip_path, require_audio=True, require_human_review=True, require_audio_revisions=True)
+        candidate_entry = next((item.get("path") for item in export.get("manifest", {}).get("audio_revisions", {}).get("files", []) if str(item.get("path") or "").startswith("audio-revisions/selected-candidates/")), "")
+
+        def tamper_candidate(data: bytes) -> bytes:
+            payload = json.loads(data.decode("utf-8"))
+            payload["applied_version_id"] = "v999"
+            return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        tampered = verify_release_zip(_v38_rewrite_zip(zip_path, base / "tampered-audio-revision.zip", transforms={candidate_entry: tamper_candidate}), require_audio=True, require_human_review=True, require_audio_revisions=True) if candidate_entry else {"status": "missing"}
+        ok = (
+            release_status == 201
+            and track_status == 200
+            and qa_status == 200
+            and audio_status == 200
+            and audio.get("summary", {}).get("status") == "passed"
+            and review_status == 201
+            and session_status == 201
+            and detail_status == 200
+            and issue.get("severity") == "high"
+            and unresolved_force_status == 409
+            and "high_issue_unresolved" in " ".join(after_unresolved_force.get("closeout", {}).get("force_blockers", []))
+            and after_unresolved_force.get("session", {}).get("status") != "closed"
+            and generate_status == 201
+            and unsafe_download_status == 409
+            and b"error" in unsafe_download
+            and midi_status == 200
+            and preview_midi.startswith(b"MThd")
+            and candidate_review_status == 200
+            and candidate_review.get("candidate", {}).get("review", {}).get("status") == "accepted"
+            and select_status == 200
+            and selected.get("candidate", {}).get("selected") is True
+            and apply_status == 200
+            and applied_version
+            and old_review_status == 200
+            and old_review.get("review", {}).get("stale") is True
+            and recheck_status == 201
+            and recheck.get("review", {}).get("version_id") == applied_version
+            and recheck.get("review", {}).get("stale") is False
+            and refresh_status == 200
+            and refreshed.get("rechecked_count") == 1
+            and close_status == 200
+            and closeout.get("closeout", {}).get("status") == "passed"
+            and delivery_reset_status == 200
+            and delivery_sign_status == 200
+            and qa_refresh_status == 200
+            and audio_refresh_status == 200
+            and audio_refresh.get("summary", {}).get("status") == "passed"
+            and export_status == 200
+            and export.get("manifest", {}).get("audio_revisions", {}).get("status") == "passed"
+            and zip_status == 200
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("audio", {}).get("audio_revision", {}).get("status") == "passed"
+            and verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(verify, "audio_revision_evidence") == "passed"
+            and tampered.get("status") == "failed"
+            and _v38_check_status(tampered, "audio_revision_evidence") == "failed"
+        )
+        return ok, (
+            f"session={session_status}, generate={generate_status}, apply={apply_status}, close={close_status}, "
+            f"force_unresolved={unresolved_force_status}, path_pollution={unsafe_download_status}, sign={sign_status}, verify={verify.get('status')}, "
+            f"candidate_tamper={_v38_check_status(tampered, 'audio_revision_evidence')}"
         )
     except Exception as exc:
         return False, str(exc)

@@ -160,6 +160,12 @@ from song_agent.audio_review_evidence import (
     audio_review_summary_public,
     release_audio_review_gate,
 )
+from song_agent.audio_revision import (
+    AudioRevisionError,
+    AudioRevisionNotFoundError,
+    AudioRevisionStateError,
+    AudioRevisionStore,
+)
 from song_agent.releases import (
     ReleaseConflictError,
     ReleaseNotFoundError,
@@ -2497,6 +2503,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
         return self.server.audio_review_store  # type: ignore[attr-defined]
+
+    @property
+    def audio_revision_store(self) -> AudioRevisionStore:
+        return self.server.audio_revision_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -4862,6 +4872,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     document = self.release_store.remove_track(release_id, track_id)
                 elif action == "refresh":
                     document = self.release_store.refresh_track(release_id, track_id)
+                elif action == "replace-version":
+                    self.audio_revision_store.replace_release_track_version(release_id, track_id, self._read_json_body(), now=_utc_now())
+                    document = self.release_store.get_release(release_id)
                 else:
                     self._send_error(HTTPStatus.NOT_FOUND, "Release track route not found.")
                     return
@@ -4891,6 +4904,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if tail == "/audio-reviews" or tail.startswith("/audio-reviews/"):
                 self._handle_release_audio_reviews(method, release_id, tail.removeprefix("/audio-reviews"))
+                return
+
+            if tail == "/audio-revisions" or tail.startswith("/audio-revisions/"):
+                self._handle_release_audio_revisions(method, release_id, tail.removeprefix("/audio-revisions"))
                 return
 
             if tail == "/metadata":
@@ -5203,6 +5220,148 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except MixControlError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except AudioReviewEvidenceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_release_audio_revisions(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    sessions = self.audio_revision_store.list_sessions(release_id)
+                    summary = self.audio_revision_store.gate(release_id, required=False, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "sessions": sessions, "summary": summary})
+                    return
+                if method == "POST":
+                    session = self.audio_revision_store.create_session(release_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "session": session, "summary": self.audio_revision_store.gate(release_id, required=False, now=_utc_now())}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/summary":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                summary = self.audio_revision_store.gate(release_id, required=False, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "summary": summary})
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Audio revision route not found.")
+                return
+            session_id = parts[0]
+            if len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                session = self.audio_revision_store.read_session(release_id, session_id)
+                issues = self.audio_revision_store.list_issues(release_id, session_id)
+                candidates = self.audio_revision_store.list_candidates(release_id, session_id)
+                closeout = self.audio_revision_store.read_closeout(release_id, session_id, default={})
+                self._send_json({"ok": True, "release_id": release_id, "session": session, "issues": issues, "candidates": candidates, "closeout": closeout})
+                return
+            if len(parts) == 2 and parts[1] == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_revision_store.refresh_recheck_status(release_id, session_id, now=_utc_now())
+                self._send_json({"ok": True, **result})
+                return
+            if len(parts) == 2 and parts[1] == "close":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_revision_store.close_session(release_id, session_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, **result})
+                return
+            if len(parts) == 2 and parts[1] == "archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                session = self.audio_revision_store.archive_session(release_id, session_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "session": session})
+                return
+            if len(parts) >= 2 and parts[1] == "issues":
+                if len(parts) == 2:
+                    if method == "GET":
+                        self._send_json({"ok": True, "release_id": release_id, "session_id": session_id, "issues": self.audio_revision_store.list_issues(release_id, session_id)})
+                        return
+                    if method == "POST":
+                        issue = self.audio_revision_store.create_issue(release_id, session_id, self._read_json_body(), now=_utc_now())
+                        self._send_json({"ok": True, "release_id": release_id, "issue": issue}, status=HTTPStatus.CREATED)
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                issue_id = parts[2]
+                if len(parts) == 3:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    issue = self.audio_revision_store.read_issue(release_id, session_id, issue_id)
+                    self._send_json({"ok": True, "release_id": release_id, "issue": issue})
+                    return
+                if len(parts) == 4 and parts[3] in {"waive", "reopen"}:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    if parts[3] == "waive":
+                        issue = self.audio_revision_store.waive_issue(release_id, session_id, issue_id, self._optional_json_body(), now=_utc_now())
+                    else:
+                        issue = self.audio_revision_store.reopen_issue(release_id, session_id, issue_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "issue": issue})
+                    return
+                if len(parts) == 5 and parts[3] == "candidates" and parts[4] == "generate":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_revision_store.generate_candidates(release_id, session_id, issue_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                    return
+            if len(parts) >= 2 and parts[1] == "candidates":
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_json({"ok": True, "release_id": release_id, "session_id": session_id, "candidates": self.audio_revision_store.list_candidates(release_id, session_id)})
+                    return
+                candidate_id = parts[2]
+                if len(parts) == 3:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    candidate = self.audio_revision_store.read_candidate(release_id, session_id, candidate_id)
+                    self._send_json({"ok": True, "release_id": release_id, "candidate": candidate})
+                    return
+                if len(parts) == 4 and parts[3] in {"midi", "audio"}:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    path, media_type, filename = self.audio_revision_store.download_candidate_artifact(release_id, session_id, candidate_id, "midi" if parts[3] == "midi" else "audio")
+                    self._send_file(path, media_type, filename=filename)
+                    return
+                if len(parts) == 4 and parts[3] in {"review", "select", "apply"}:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    if parts[3] == "review":
+                        candidate = self.audio_revision_store.review_candidate(release_id, session_id, candidate_id, self._read_json_body(), now=_utc_now())
+                        self._send_json({"ok": True, "release_id": release_id, "candidate": candidate})
+                        return
+                    if parts[3] == "select":
+                        candidate = self.audio_revision_store.select_candidate(release_id, session_id, candidate_id, now=_utc_now())
+                        self._send_json({"ok": True, "release_id": release_id, "candidate": candidate})
+                        return
+                    result = self.audio_revision_store.apply_candidate(release_id, session_id, candidate_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, **result})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio revision route not found.")
+        except AudioRevisionNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioRevisionStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AudioRevisionError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except (MixControlStateError, ReleaseStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (MixControlError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_audio_profiles_route(self, method: str, path: str) -> None:
@@ -5531,8 +5690,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         require_per_track_review = bool(payload.get("require_per_track_audio_review", False))
         require_stem_health = bool(payload.get("require_stem_audio_health", False))
         require_current_mix = bool(payload.get("require_current_mix_state", False))
+        require_audio_revision = bool(payload.get("require_audio_revision_closeout", False))
         require_current = bool(payload.get("require_audio_artifact_current", require_health or require_per_track_review))
-        if not (require_health or require_human or require_per_track_review or require_current or require_stem_health or require_current_mix):
+        if not (require_health or require_human or require_per_track_review or require_current or require_stem_health or require_current_mix or require_audio_revision):
             return {}
         try:
             document = self.release_store.get_release(release_id)
@@ -5549,7 +5709,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "require_audio_artifact_current": require_current,
             "require_stem_audio_health": require_stem_health,
             "require_current_mix_state": require_current_mix,
+            "require_audio_revision_closeout": require_audio_revision,
         }
+        revision_gate = self.audio_revision_store.gate(release_id, required=require_audio_revision, now=_utc_now())
+        if require_audio_revision or revision_gate.get("session_count"):
+            evidence["audio_revision"] = revision_gate
+            if revision_gate.get("status") == "failed":
+                return {**evidence, "status": "failed", "hard_block": True, "message": str(revision_gate.get("message") or "Audio revision closeout gate failed.")}
         mix_gate = self._release_mix_gate(release_id, require_stem_health=require_stem_health, require_current_mix=require_current_mix)
         if mix_gate:
             evidence["mix"] = mix_gate
@@ -12138,6 +12304,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.project_store = ProjectStore()
         self.release_store = ReleaseStore(project_store=self.project_store)
         self.audio_review_store = AudioReviewEvidenceStore(self.release_store, self.project_store)
+        self.audio_revision_store = AudioRevisionStore(self.release_store, project_store=self.project_store, job_store=self.job_store, audio_review_store=self.audio_review_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.acceptance_store = AcceptanceStore(project_store=self.project_store)
