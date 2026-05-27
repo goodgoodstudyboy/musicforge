@@ -7105,6 +7105,20 @@ def _v52_arrangement_mix_controls_smoke(root: Path) -> tuple[bool, str]:
 
         stem_health_entry = next((item.get("path") for item in release_export.get("manifest", {}).get("files", []) if item.get("path", "").endswith("stems/stem-health.json")), "")
         tampered = verify_release_zip(_v38_rewrite_zip(zip_path, base / "tampered-stem-health.zip", transforms={stem_health_entry: tamper_stem_health}), require_audio=True, require_human_review=True, require_stems=True) if stem_health_entry else {"status": "missing"}
+        midi_entry = next((item.get("path") for item in release_export.get("manifest", {}).get("files", []) if item.get("path", "").endswith("/song.mid")), "")
+        tampered_mix = verify_release_zip(_v38_rewrite_zip(zip_path, base / "tampered-mix-source.zip", transforms={midi_entry: lambda data: data + b"\x00"}), require_audio=True, require_human_review=True, require_stems=True) if midi_entry else {"status": "missing"}
+        plan_payload = json.loads((final_dir / "song-plan.json").read_text(encoding="utf-8"))
+        plan_payload["title"] = f"{plan_payload.get('title', 'Song')} stale"
+        (final_dir / "song-plan.json").write_text(json.dumps(plan_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        stale_release_status, stale_release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.2 Stale Mix Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        stale_release_id = str(stale_release.get("release", {}).get("release_id") or "")
+        stale_track_status, _stale_track = _release_http_json(server, "POST", f"/api/releases/{stale_release_id}/tracks", {"project_id": project_id})
+        stale_mix_status, stale_mix = _release_http_json(server, "POST", f"/api/releases/{stale_release_id}/signoff", {"signed_by": "release-check", "require_current_mix_state": True})
+        stale_mix_reasons = []
+        try:
+            stale_mix_reasons = stale_mix.get("acceptance_gate", {}).get("audio", {}).get("mix", {}).get("tracks", [])[0].get("mix_state_stale_reasons", [])
+        except Exception:
+            stale_mix_reasons = []
         child_mix = next((item.get("mix", {}) for item in project_export.get("versions", []) if item.get("version_id") == child_version), {})
         ok = (
             state_status == 200
@@ -7143,17 +7157,26 @@ def _v52_arrangement_mix_controls_smoke(root: Path) -> tuple[bool, str]:
             and missing_track_status == 200
             and missing_qa_status == 200
             and missing_mix_status == 409
+            and stale_release_status == 201
+            and stale_track_status == 200
+            and stale_mix_status == 409
+            and "base_song_plan_hash" in stale_mix_reasons
             and sign_status == 200
             and signoff.get("signoff", {}).get("acceptance_gate", {}).get("audio", {}).get("mix", {}).get("status") == "passed"
             and verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(verify, "track_mix_state_current") == "passed"
             and _v38_check_status(verify, "track_stem_audio_health") == "passed"
             and tampered.get("status") == "failed"
             and _v38_check_status(tampered, "track_stem_audio_health") == "failed"
+            and tampered_mix.get("status") == "failed"
+            and _v38_check_status(tampered_mix, "track_mix_state_current") == "failed"
         )
         return ok, (
             f"preview={preview_status}, apply={apply_status}, stems={stems.get('summary', {}).get('status')}, "
-            f"missing_mix_gate={missing_mix_status}, sign={sign_status}, verify={verify.get('status')}, "
-            f"tampered_stem={_v38_check_status(tampered, 'track_stem_audio_health')}"
+            f"missing_mix_gate={missing_mix_status}, stale_mix_gate={stale_mix_status}/{stale_mix_reasons}, "
+            f"sign={sign_status}, verify={verify.get('status')}, "
+            f"tampered_stem={_v38_check_status(tampered, 'track_stem_audio_health')}, "
+            f"tampered_mix={_v38_check_status(tampered_mix, 'track_mix_state_current')}"
         )
     except Exception as exc:
         return False, str(exc)

@@ -1,5 +1,17 @@
 # Changelog
 
+## v5.2.1 - 2026-05-27
+
+### Fixed
+- Release Signoff `require_current_mix_state=true` now hard-blocks stale `mix-state.json` evidence when the current Final Export `song-plan.json` or `song.mid` no longer matches the mix source hashes.
+- `verify-release` now validates packaged `mix-state.json` against the ZIP's own `song-plan.json` and `song.mid` when current mix evidence is required.
+
+### Added
+- Server and v5.2 release-check regressions for tampered MIDI/current mix source mismatch.
+
+### Verified
+- `python -m pytest tests\test_server_mix_controls.py tests\test_release_check.py::test_v52_arrangement_mix_controls_smoke -q`
+
 ## v5.2.0 - 2026-05-26
 
 ### Added

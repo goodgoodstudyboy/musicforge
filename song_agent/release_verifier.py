@@ -15,10 +15,18 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.audio_health import analyze_wav_bytes, audio_health_allows_release
+from song_agent.mix_controls import (
+    mix_state_integrity_ok,
+    song_plan_hash,
+    stable_hash as mix_control_stable_hash,
+    track_role,
+)
 from song_agent.projectio import write_json
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.releases import stable_hash
+from song_agent.schemas.song import SongPlan
 from song_agent.stem_health import stem_health_integrity_ok
+from song_agent.song_editor import section_id_for_index, track_id_for_index
 
 
 REPORT_SCHEMA_VERSION = 1
@@ -461,6 +469,7 @@ class _ReleaseZipVerifier:
             if midi_path in self.entry_map:
                 ok, message = self._check_midi_header(archive, self.entry_map[midi_path])
                 self._add_track_check(track_id, "track_midi_header", "passed" if ok else "failed", "blocking", message, path=midi_path)
+            self._verify_track_mix_state(archive, track_id=track_id, directory=directory, plan_payload=plan, midi_path=midi_path)
             if self.require_audio:
                 wav_path = f"{directory}/song.wav"
                 if wav_path not in self.entry_map:
@@ -496,6 +505,54 @@ class _ReleaseZipVerifier:
                         "Stem audio health report is present and allows release." if ok else "Stem audio health report is missing, tampered, or failed.",
                         path=stem_health_path,
                     )
+
+    def _verify_track_mix_state(self, archive: zipfile.ZipFile, *, track_id: str, directory: str, plan_payload: dict[str, Any], midi_path: str) -> None:
+        mix_state_required = self._requires_current_mix_state()
+        mix_state_path = f"{directory}/mix-state.json"
+        if mix_state_path not in self.entry_map:
+            if mix_state_required:
+                self._add_track_check(track_id, "track_mix_state_current", "failed", "blocking", "mix-state.json is required but missing.", path=mix_state_path)
+            return
+        mix_state = self._read_json_entry(archive, mix_state_path, "track", "track_mix_state_parse", track_id=track_id)
+        if not mix_state:
+            self._add_track_check(track_id, "track_mix_state_current", "failed", "blocking", "mix-state.json is missing or invalid.", path=mix_state_path)
+            return
+        reasons: list[str] = []
+        if not mix_state_integrity_ok(mix_state):
+            reasons.append("mix_state_integrity")
+        try:
+            plan = SongPlan.from_dict(plan_payload)
+        except Exception:
+            plan = None
+            reasons.append("song_plan_unavailable")
+        midi_info = self.entry_map.get(midi_path)
+        if midi_info is None:
+            reasons.append("song_midi_missing")
+            midi_sha = ""
+        else:
+            midi_sha = _sha256_entry(archive, midi_info)
+        if plan is not None:
+            if mix_state.get("base_song_plan_hash") != song_plan_hash(plan):
+                reasons.append("base_song_plan_hash")
+            if mix_state.get("base_midi_hash") != midi_sha:
+                reasons.append("base_midi_hash")
+        source = mix_state.get("source") if isinstance(mix_state.get("source"), dict) else {}
+        if plan is not None:
+            expected_source = _mix_source_state_for_zip(plan=plan, midi_sha=midi_sha, project_id=str(mix_state.get("project_id") or ""), version_id=str(mix_state.get("version_id") or ""))
+            if any(source.get(key) != value for key, value in expected_source.items()):
+                reasons.append("source_state")
+        if mix_state.get("source_hash") != mix_control_stable_hash(source):
+            reasons.append("source_hash")
+        reasons = sorted(set(reasons))
+        self._add_track_check(
+            track_id,
+            "track_mix_state_current",
+            "failed" if reasons else "passed",
+            "blocking",
+            "mix-state.json matches package song-plan.json and song.mid." if not reasons else "mix-state.json is stale or tampered: " + ", ".join(reasons),
+            path=mix_state_path,
+            count=len(reasons),
+        )
 
     def _verify_signoff(self) -> None:
         if not self.signoff:
@@ -724,6 +781,12 @@ class _ReleaseZipVerifier:
         audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
         mix_gate = audio_gate.get("mix") if isinstance(audio_gate.get("mix"), dict) else {}
         return bool(audio_gate.get("require_stem_audio_health") or mix_gate.get("require_stem_audio_health"))
+
+    def _requires_current_mix_state(self) -> bool:
+        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
+        mix_gate = audio_gate.get("mix") if isinstance(audio_gate.get("mix"), dict) else {}
+        return bool(audio_gate.get("require_current_mix_state") or mix_gate.get("require_current_mix_state"))
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         scan_names = [
@@ -965,6 +1028,18 @@ def _audio_review_summary_hash(summary: dict[str, Any]) -> str:
 def _audio_review_integrity_ok(review: dict[str, Any]) -> bool:
     expected = str(review.get("integrity_hash") or "")
     return bool(expected) and expected == _review_payload_hash(review)
+
+
+def _mix_source_state_for_zip(*, plan: SongPlan, midi_sha: str, project_id: str, version_id: str) -> dict[str, Any]:
+    return {
+        "project_id": project_id,
+        "version_id": version_id,
+        "song_plan_hash": song_plan_hash(plan),
+        "midi_sha256": midi_sha,
+        "track_count": len(plan.tracks),
+        "tracks": [{"track_id": track_id_for_index(index), "name": track.name, "role": track_role(track.name), "note_count": len(track.notes)} for index, track in enumerate(plan.tracks)],
+        "sections": [{"section_id": section_id_for_index(index), "name": section.name, "start_bar": section.start_bar, "bars": section.bars} for index, section in enumerate(plan.sections)],
+    }
 
 
 def _manifest_review_hash(manifest_summary: dict[str, Any], path: str, review_id: Any) -> str | None:

@@ -54,6 +54,9 @@ def test_server_mix_preview_apply_stem_health_and_marker_draft(tmp_path: Path, m
         request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": False})
         review_status, review = request_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "markers": [{"time_seconds": 1, "category": "mix_balance", "message": "melody low"}]})
         marker_status, marker = request_json(server, "POST", f"/api/releases/{release_id}/audio-reviews/{review['review']['review_id']}/markers/m-000001/mix-patch-draft", {})
+        plan = read_json(final_dir / "song-plan.json")
+        write_json(final_dir / "song-plan.json", {**plan, "title": f"{plan['title']} stale"})
+        stale_sign_status, stale_signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_current_mix_state": True})
     finally:
         stop_test_server(server)
 
@@ -77,6 +80,9 @@ def test_server_mix_preview_apply_stem_health_and_marker_draft(tmp_path: Path, m
     assert review_status == 201
     assert marker_status == 201
     assert marker["patch"]["source"]["source_type"] == "release_audio_review_marker"
+    assert stale_sign_status == 409
+    assert stale_signoff["error"] == "Release mix gate failed."
+    assert "base_song_plan_hash" in stale_signoff["acceptance_gate"]["audio"]["mix"]["tracks"][0]["mix_state_stale_reasons"]
 
 
 def _project(server):

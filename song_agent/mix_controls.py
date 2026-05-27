@@ -514,7 +514,10 @@ def mix_state_stale_reasons(state: MixState | dict[str, Any], *, plan: SongPlan,
         reasons.append("base_song_plan_hash")
     if data.get("base_midi_hash") != file_sha256(midi_path):
         reasons.append("base_midi_hash")
-    source = _source_state(plan=plan, midi_path=midi_path, project_id=str(data.get("project_id") or ""), version_id=str(data.get("version_id") or ""))
+    source = data.get("source") if isinstance(data.get("source"), dict) else {}
+    expected_source = _source_state(plan=plan, midi_path=midi_path, project_id=str(data.get("project_id") or ""), version_id=str(data.get("version_id") or ""))
+    if any(source.get(key) != value for key, value in expected_source.items()):
+        reasons.append("source_state")
     if data.get("source_hash") != stable_hash(source):
         reasons.append("source_hash")
     return reasons

@@ -329,6 +329,7 @@ from song_agent.mix_controls import (
     MixControlStore,
     mix_state_hash,
     mix_state_integrity_ok,
+    mix_state_stale_reasons,
 )
 from song_agent.mix_render import MixRenderStore, mix_preview_integrity_ok
 from song_agent.stem_health import (
@@ -5315,7 +5316,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(audio_gate.get("message") or "Release audio gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
-            self._send_error(HTTPStatus.CONFLICT, str(audio_gate.get("message") or "Release audio gate failed."))
+            self._send_json(
+                {
+                    "error": str(audio_gate.get("message") or "Release audio gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
             return
         hard_gate = acceptance_gate.get("planning_rule_impact") if isinstance(acceptance_gate.get("planning_rule_impact"), dict) else {}
         if hard_gate.get("hard_block") and hard_gate.get("status") == "failed":
@@ -5594,19 +5601,38 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             project_dir = self.project_store.project_dir(track.project_id)
             export_dir = final_export_dir(project_dir)
             mix_state_path = export_dir / "mix-state.json"
+            song_plan_path = export_dir / "song-plan.json"
+            midi_path = export_dir / "song.mid"
             stem_health_path = export_dir / "stems" / "stem-health.json"
             mix_state = read_json(mix_state_path) if mix_state_path.exists() else {}
             stem_report = read_json(stem_health_path) if stem_health_path.exists() else {}
             mix_ok = bool(mix_state) and mix_state_integrity_ok(mix_state)
-            if require_current_mix and not mix_ok:
-                blockers.append(f"{track.track_id}: current mix-state evidence is missing or tampered")
+            mix_stale_reasons: list[str] = []
+            plan: SongPlan | None = None
+            try:
+                plan = SongPlan.from_dict(read_json(song_plan_path))
+            except Exception:
+                if require_current_mix or stem_report:
+                    mix_stale_reasons.append("song_plan_unavailable")
+            if not mix_state:
+                mix_stale_reasons.append("mix_state_missing")
+            elif not mix_ok:
+                mix_stale_reasons.append("mix_state_integrity")
+            elif plan is not None:
+                try:
+                    mix_stale_reasons.extend(mix_state_stale_reasons(mix_state, plan=plan, midi_path=midi_path))
+                except Exception:
+                    mix_stale_reasons.append("mix_state_source_unavailable")
+            mix_stale_reasons = sorted(set(mix_stale_reasons))
+            mix_current = mix_ok and not mix_stale_reasons
+            if require_current_mix and not mix_current:
+                blockers.append(f"{track.track_id}: current mix-state evidence is missing, tampered, or stale")
             stem_ok = False
             stem_summary = stem_health_summary(stem_report)
             try:
                 current_source = None
-                if stem_report:
-                    plan = SongPlan.from_dict(read_json(export_dir / "song-plan.json"))
-                    current_source = stable_hash(stem_health_source_state(run_dir=export_dir, project_id=track.project_id, version_id=track.version_id, plan=plan, mix_state=mix_state if mix_ok else None))
+                if stem_report and plan is not None:
+                    current_source = stable_hash(stem_health_source_state(run_dir=export_dir, project_id=track.project_id, version_id=track.version_id, plan=plan, mix_state=mix_state if mix_current else None))
                 stem_ok = stem_health_allows_signoff(stem_report, current_source_hash=current_source)
             except Exception:
                 stem_ok = False
@@ -5619,6 +5645,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     "version_id": track.version_id,
                     "mix_state_hash": mix_state_hash(mix_state) if mix_ok else None,
                     "mix_state_integrity_ok": mix_ok,
+                    "mix_state_current": mix_current,
+                    "mix_state_stale_reasons": mix_stale_reasons,
                     "stem_health": stem_summary,
                     "stem_health_integrity_ok": stem_health_integrity_ok(stem_report) if stem_report else False,
                     "stem_health_current": stem_ok,
