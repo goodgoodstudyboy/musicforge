@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import shutil
-import struct
 import threading
-import wave
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +37,7 @@ from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.release_audio import build_release_audio_qa_report, write_release_audio_qa
 from song_agent.releases import BLOCKED_RELEASE_KEYS, ReleaseNotFoundError, ReleaseStateError, ReleaseStore, build_release_track_snapshot
-from song_agent.renderers.audio import RendererConfig
+from song_agent.renderers.audio import RendererConfig, RendererError, load_renderer_config, render_audio
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import SongPlan
 from song_agent.stem_health import build_stem_health_report, stem_health_summary, write_stem_health_report
@@ -150,11 +147,24 @@ class AudioRevisionStore:
 
     def list_issues(self, release_id: str, session_id: str) -> list[dict[str, Any]]:
         self.read_session(release_id, session_id)
+        issues = []
+        for issue in self._list_raw_issues(release_id, session_id):
+            try:
+                issues.append(self._with_issue_current_state(issue))
+            except Exception:
+                continue
+        return issues
+
+    def _list_raw_issues(self, release_id: str, session_id: str) -> list[dict[str, Any]]:
         issues_dir = self.session_dir(release_id, session_id) / "issues"
         issues = []
+        if not issues_dir.exists():
+            return issues
         for path in sorted(issues_dir.glob("ari-*.json")):
             try:
-                issues.append(self.read_issue(release_id, session_id, path.stem))
+                issue = read_json(path)
+                if isinstance(issue, dict):
+                    issues.append(issue)
             except Exception:
                 continue
         return issues
@@ -271,7 +281,7 @@ class AudioRevisionStore:
             write_json(candidate_dir / "mix-patch.json", patch.to_dict())
             write_json(preview_dir / "song-plan.json", result.plan.to_dict())
             render_midi(result.plan, preview_dir / "song.mid", track_pans=result.track_pans, track_volumes=result.track_volumes)
-            _write_preview_wav(preview_dir / "song.wav", duration_seconds=8.0)
+            audio_status, audio_error, renderer_config = _render_revision_audio(preview_dir / "song.mid", preview_dir / "song.wav")
             audio_health = analyze_wav_health(preview_dir / "song.wav", source={"release_id": release_id, "session_id": session_id, "issue_id": issue_id, "candidate_id": candidate_id}, report_id=f"arh-{candidate_id}", now=now)
             write_json(preview_dir / "audio-health.json", audio_health)
             stem_health = _candidate_stem_health(project_id=str(issue["project_id"]), version_id=str(issue["version_id"]), plan=result.plan, midi_path=preview_dir / "song.mid", mix_state=result.state.to_dict(), candidate_dir=candidate_dir, now=now)
@@ -286,7 +296,7 @@ class AudioRevisionStore:
                 "track_id": issue.get("track_id"),
                 "project_id": issue.get("project_id"),
                 "version_id": issue.get("version_id"),
-                "status": "ready_for_review" if audio_health_allows_release(audio_health) else "rendered",
+                "status": "ready_for_review" if audio_status == "completed" and audio_health_allows_release(audio_health) else "rendered",
                 "strategy": strategy["strategy"],
                 "patch": patch.to_dict(),
                 "patch_hash": mix_patch_hash(patch),
@@ -294,8 +304,10 @@ class AudioRevisionStore:
                     "midi_path": "preview/song.mid",
                     "midi_sha256": file_sha256(preview_dir / "song.mid"),
                     "wav_path": "preview/song.wav",
-                    "wav_sha256": file_sha256(preview_dir / "song.wav"),
-                    "audio_status": "completed",
+                    "wav_sha256": file_sha256(preview_dir / "song.wav") if (preview_dir / "song.wav").exists() else None,
+                    "audio_status": audio_status,
+                    "audio_error": audio_error,
+                    "renderer": _renderer_summary(renderer_config),
                 },
                 "health": {
                     "audio_health_status": audio_health.get("status"),
@@ -353,6 +365,10 @@ class AudioRevisionStore:
         candidate = self.read_candidate(release_id, session_id, candidate_id)
         if candidate.get("stale") or not candidate_integrity_ok(candidate):
             raise AudioRevisionStateError("Audio revision candidate is stale or tampered.")
+        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
+        health = candidate.get("health") if isinstance(candidate.get("health"), dict) else {}
+        if preview.get("audio_status") != "completed" or health.get("audio_health_status") not in {"passed", "warning"}:
+            raise AudioRevisionStateError("Candidate audio preview must be rendered and pass audio health before manual review.")
         status = str(payload.get("status") or payload.get("review_status") or "accepted")
         if status not in {"accepted", "rejected", "needs_tweak"}:
             raise AudioRevisionError("Candidate review status must be accepted, rejected, or needs_tweak.")
@@ -389,6 +405,10 @@ class AudioRevisionStore:
         review = candidate.get("review") if isinstance(candidate.get("review"), dict) else {}
         if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
             raise AudioRevisionStateError("Only manually accepted and playback-confirmed candidates can be selected.")
+        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
+        health = candidate.get("health") if isinstance(candidate.get("health"), dict) else {}
+        if preview.get("audio_status") != "completed" or health.get("audio_health_status") not in {"passed", "warning"}:
+            raise AudioRevisionStateError("Only candidates with rendered passing audio can be selected.")
         issue = self.read_issue(release_id, session_id, str(candidate["issue_id"]))
         for other in self.list_candidates(release_id, session_id, issue_id=str(issue["issue_id"])):
             other_data = {key: value for key, value in other.items() if key not in CANDIDATE_INTEGRITY_EXCLUDE}
@@ -418,6 +438,10 @@ class AudioRevisionStore:
         review = candidate.get("review") if isinstance(candidate.get("review"), dict) else {}
         if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
             raise AudioRevisionStateError("Candidate must have a manual accepted review before apply.")
+        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
+        health = candidate.get("health") if isinstance(candidate.get("health"), dict) else {}
+        if preview.get("audio_status") != "completed" or health.get("audio_health_status") not in {"passed", "warning"}:
+            raise AudioRevisionStateError("Candidate audio preview must be rendered and pass audio health before apply.")
         issue = self.read_issue(release_id, session_id, str(candidate["issue_id"]))
         if issue.get("applied_version_id"):
             raise AudioRevisionStateError("This issue already has an applied candidate.")
@@ -461,14 +485,16 @@ class AudioRevisionStore:
         write_json(paths.data / "mix-patch.json", patch.to_dict())
         write_json(paths.data / "song-plan.json", result.plan.to_dict())
         render_midi(result.plan, paths.renders / "song.mid", track_pans=result.track_pans, track_volumes=result.track_volumes)
-        _write_preview_wav(paths.renders / "song.wav", duration_seconds=_duration_from_plan(result.plan))
+        audio_status, audio_error, renderer_config = _render_revision_audio(paths.renders / "song.mid", paths.renders / "song.wav")
+        if audio_status != "completed":
+            raise AudioRevisionStateError("Audio revision apply could not render real WAV audio: " + str(audio_error or "renderer unavailable"))
         audio_artifact = build_audio_artifact_manifest(
             artifact_id=f"audio-revision-{candidate_id}-{now.replace(':', '').replace('-', '')}",
             scope="project_version",
             wav_path=paths.renders / "song.wav",
             midi_path=paths.renders / "song.mid",
             song_plan_path=paths.data / "song-plan.json",
-            renderer_config=RendererConfig(soundfont_path="fixture.sf2"),
+            renderer_config=renderer_config,
             extra_source={
                 "release_id": release_id,
                 "session_id": session_id,
@@ -495,7 +521,7 @@ class AudioRevisionStore:
             name=run_title,
             note=sanitize_sensitive_text(str(payload.get("version_note") or "Audio revision candidate apply"))[:500],
             parent_version_id=str(candidate["version_id"]),
-            variant_type="mix_control_edit",
+            variant_type="audio_revision_mix_edit",
             change_summary=f"Applied audio revision candidate {candidate_id}",
         )
         version = next(item for item in document.versions if item.job_id == job.job_id)
@@ -756,10 +782,10 @@ class AudioRevisionStore:
             if closeout:
                 write_json(sessions_dir / f"{session_id}-closeout.json", closeout)
             for issue in self.list_issues(release_id, session_id):
-                write_json(issues_dir / f"{issue.get('issue_id')}.json", issue)
+                write_json(issues_dir / f"{session_id}-{issue.get('issue_id')}.json", issue)
             for candidate in self.list_candidates(release_id, session_id):
                 if candidate.get("selected") or candidate.get("applied_version_id"):
-                    write_json(candidates_dir / f"{candidate.get('candidate_id')}.json", candidate)
+                    write_json(candidates_dir / f"{session_id}-{candidate.get('candidate_id')}.json", candidate)
         return summary
 
     def gate(self, release_id: str, *, required: bool = False, now: str | None = None) -> dict[str, Any]:
@@ -916,6 +942,8 @@ class AudioRevisionStore:
         preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
         root = self.candidate_dir(str(candidate.get("release_id") or ""), str(candidate.get("session_id") or ""), str(candidate.get("candidate_id") or ""))
         for key, hash_key, reason in (("midi_path", "midi_sha256", "preview_midi_hash"), ("wav_path", "wav_sha256", "preview_wav_hash")):
+            if key == "wav_path" and preview.get("audio_status") != "completed" and not preview.get(hash_key):
+                continue
             rel = str(preview.get(key) or "")
             try:
                 path = (root / _safe_relative_path(rel)).resolve()
@@ -1208,6 +1236,14 @@ def build_audio_revision_summary(store: AudioRevisionStore, release_id: str, *, 
                 "closeout_hash": closeout.get("integrity_hash") if closeout else None,
             }
         )
+    active_markers = _active_revision_markers(store.audio_review_store, release_id)
+    active_marker_ids = {str(item.get("marker_key") or "") for item in active_markers if str(item.get("marker_key") or "")}
+    covered_marker_ids: set[str] = set()
+    for session in sessions:
+        covered_marker_ids.update(_covered_marker_ids(store._list_raw_issues(release_id, str(session.get("session_id") or ""))))
+    uncovered_marker_ids = sorted(active_marker_ids - covered_marker_ids)
+    if uncovered_marker_ids:
+        blockers.append("active_markers_uncovered")
     status = "failed" if blockers else "warning" if warnings else "passed" if sessions else "missing"
     summary = {
         "schema_version": AUDIO_REVISION_SCHEMA_VERSION,
@@ -1216,6 +1252,10 @@ def build_audio_revision_summary(store: AudioRevisionStore, release_id: str, *, 
         "generated_at": now,
         "session_count": len(sessions),
         "source_marker_count": source_marker_count,
+        "active_marker_count": len(active_markers),
+        "covered_active_marker_count": len(active_marker_ids) - len(uncovered_marker_ids),
+        "uncovered_marker_ids": uncovered_marker_ids,
+        "active_marker_hash": stable_hash(active_markers),
         "latest_session_id": latest_session_id,
         "open_issue_count": sum(int(item.get("open_issue_count") or 0) for item in session_rows),
         "applied_candidate_count": sum(int(item.get("applied_candidate_count") or 0) for item in session_rows),
@@ -1378,24 +1418,73 @@ def _candidate_stem_health(*, project_id: str, version_id: str, plan: SongPlan, 
         return {"status": "failed", "warnings": [sanitize_sensitive_text(str(exc))[:160]], "integrity_hash": stable_hash(str(exc))}
 
 
-def _write_preview_wav(path: Path, *, duration_seconds: float = 8.0, sample_rate: int = 22050) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    duration_seconds = max(8.0, min(12.0, float(duration_seconds or 8.0)))
-    frame_count = int(duration_seconds * sample_rate)
-    with wave.open(str(path), "wb") as wav:
-        wav.setnchannels(2)
-        wav.setsampwidth(2)
-        wav.setframerate(sample_rate)
-        for index in range(frame_count):
-            value = int(0.2 * 32767 * math.sin(2 * math.pi * 440 * (index / sample_rate)))
-            wav.writeframesraw(struct.pack("<hh", value, value))
+def _active_revision_markers(audio_review_store: AudioReviewEvidenceStore, release_id: str) -> list[dict[str, Any]]:
+    markers: list[dict[str, Any]] = []
+    for review in audio_review_store.list_reviews(release_id):
+        if review.get("stale") or not review_integrity_ok(review):
+            continue
+        if review.get("status") not in {"needs_fix", "rejected"}:
+            continue
+        for marker in review.get("markers", []) if isinstance(review.get("markers"), list) else []:
+            if not isinstance(marker, dict):
+                continue
+            category = str(marker.get("category") or "")
+            if category not in REVISION_CATEGORIES:
+                continue
+            marker_id = str(marker.get("marker_id") or "")
+            marker_key = _marker_key(str(review.get("review_id") or ""), marker_id)
+            markers.append(
+                {
+                    "marker_key": marker_key,
+                    "review_id": review.get("review_id"),
+                    "marker_id": marker_id,
+                    "track_id": review.get("track_id"),
+                    "project_id": review.get("project_id"),
+                    "version_id": review.get("version_id"),
+                    "status": review.get("status"),
+                    "category": category,
+                    "severity": str(marker.get("severity") or "medium"),
+                    "review_hash": review_payload_hash(review),
+                    "marker_hash": stable_hash(marker),
+                }
+            )
+    return sorted(markers, key=lambda item: str(item.get("marker_key") or ""))
 
 
-def _duration_from_plan(plan: SongPlan) -> float:
-    beats = 0.0
-    for section in plan.sections:
-        beats = max(beats, (float(section.start_bar or 1) - 1) * 4 + float(section.bars or 0) * 4)
-    return max(8.0, min(60.0, beats * 60.0 / max(1, int(plan.tempo_bpm or 120))))
+def _covered_marker_ids(issues: list[dict[str, Any]]) -> set[str]:
+    covered: set[str] = set()
+    for issue in issues:
+        review_id = str(issue.get("source_review_id") or "")
+        marker_id = str(issue.get("source_marker_id") or "")
+        if review_id and marker_id and issue.get("status") != "stale":
+            covered.add(_marker_key(review_id, marker_id))
+    return covered
+
+
+def _marker_key(review_id: str, marker_id: str) -> str:
+    return f"{review_id}:{marker_id}"
+
+
+def _render_revision_audio(midi_path: Path, wav_path: Path) -> tuple[str, str | None, RendererConfig]:
+    try:
+        config, _sources = load_renderer_config()
+        render_audio(midi_path, wav_path, config)
+        return "completed", None, config
+    except RendererError as exc:
+        return "failed", sanitize_sensitive_text(str(exc))[:500], RendererConfig()
+
+
+def _renderer_summary(config: RendererConfig) -> dict[str, Any]:
+    return sanitize_metadata(
+        {
+            "renderer_type": config.renderer_type,
+            "sample_rate": config.sample_rate,
+            "output_format": config.output_format,
+            "gain": config.gain,
+            "configured": bool(config.soundfont_path),
+        },
+        blocked_keys=BLOCKED_RELEASE_KEYS,
+    )
 
 
 def _object_hash(value: dict[str, Any], exclude: set[str]) -> str:

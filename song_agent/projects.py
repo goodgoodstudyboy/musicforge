@@ -31,6 +31,7 @@ VARIANT_TYPES = {
     "provider_edit",
     "manual_editor_edit",
     "mix_control_edit",
+    "audio_revision_mix_edit",
 }
 QUALITY_GATE_STATUSES = {
     "not_evaluated",

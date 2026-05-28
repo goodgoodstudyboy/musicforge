@@ -831,6 +831,8 @@ class _ReleaseZipVerifier:
         missing = [path for path in paths if path not in self.entry_map]
         tampered: list[str] = []
         applied_mismatches: list[str] = []
+        applied_versions_by_track: dict[str, set[str]] = {}
+        candidate_track_by_issue: dict[str, str] = {}
         track_versions = {str(item.get("track_id") or ""): str(item.get("version_id") or "") for item in self.tracklist.get("tracks", []) if isinstance(item, dict)}
         for path in paths:
             if path in missing or path == summary_path:
@@ -839,6 +841,11 @@ class _ReleaseZipVerifier:
             if not payload:
                 tampered.append(path)
                 continue
+            track_id = str(payload.get("track_id") or "")
+            applied_version = str(payload.get("applied_version_id") or "")
+            if applied_version:
+                if track_id:
+                    applied_versions_by_track.setdefault(track_id, set()).add(applied_version)
             if path.startswith("audio-revisions/sessions/") and path.endswith("-closeout.json"):
                 if not audio_revision_closeout_integrity_ok(payload):
                     tampered.append(path)
@@ -853,8 +860,24 @@ class _ReleaseZipVerifier:
                     tampered.append(path)
                 track_id = str(payload.get("track_id") or "")
                 applied_version = str(payload.get("applied_version_id") or "")
-                if applied_version and track_versions.get(track_id) != applied_version:
-                    applied_mismatches.append(f"{track_id}:{applied_version}")
+                issue_id = str(payload.get("issue_id") or "")
+                if track_id and issue_id:
+                    candidate_track_by_issue[issue_id] = track_id
+                if applied_version:
+                    applied_versions_by_track.setdefault(track_id, set()).add(applied_version)
+        for path in paths:
+            if path in missing or not path.startswith("audio-revisions/issues/"):
+                continue
+            payload = self._read_json_entry(archive, path, "audio_revisions", "audio_revision_payload_parse")
+            issue_id = str(payload.get("issue_id") or "")
+            applied_version = str(payload.get("applied_version_id") or "")
+            track_id = str(payload.get("track_id") or "") or candidate_track_by_issue.get(issue_id, "")
+            if track_id and applied_version:
+                applied_versions_by_track.setdefault(track_id, set()).add(applied_version)
+        for track_id, version_id in track_versions.items():
+            versions = applied_versions_by_track.get(track_id, set())
+            if versions and version_id not in versions:
+                applied_mismatches.append(f"{track_id}:{sorted(versions)[-1] if versions else ''}")
         failures = [*missing, *tampered, *applied_mismatches]
         if required and summary.get("status") not in {"passed", "warning"}:
             failures.append(f"summary_status:{summary.get('status')}")

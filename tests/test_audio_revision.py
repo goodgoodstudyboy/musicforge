@@ -2,15 +2,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import song_agent.audio_revision as audio_revision_module
 from song_agent.audio_revision import CANDIDATE_INTEGRITY_EXCLUDE, _object_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.release_verifier import verify_release_zip
 from tests.test_audio_review_evidence import _signed_audio_project
+from tests.audio_fixtures import write_test_wav
 from tests.test_server_edits import request_bytes, request_json, start_test_server, stop_test_server
+
+
+def _fake_revision_render(midi_path: Path, wav_path: Path, config) -> Path:
+    return write_test_wav(Path(wav_path), duration_seconds=9, amplitude=0.18)
 
 
 def test_audio_revision_workbench_full_loop_and_verifier(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(audio_revision_module, "render_audio", _fake_revision_render)
     server = start_test_server()
     try:
         project_id = _signed_audio_project(server, "Audio Revision Loop")
@@ -48,6 +55,7 @@ def test_audio_revision_workbench_full_loop_and_verifier(tmp_path: Path, monkeyp
         assert apply_status == 200, applied
         applied_version = applied["applied_version_id"]
         release_track = applied["release"]["tracks"][0]
+        project_detail_status, project_detail = request_json(server, "GET", f"/api/projects/{project_id}")
 
         old_review_status, old_review = request_json(server, "GET", f"/api/releases/{release_id}/audio-reviews/{review['review']['review_id']}")
         recheck_status, recheck = request_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Recheck accepted."})
@@ -80,6 +88,8 @@ def test_audio_revision_workbench_full_loop_and_verifier(tmp_path: Path, monkeyp
     assert selected["candidate"]["selected"] is True
     assert apply_status == 200
     assert release_track["version_id"] == applied_version
+    assert project_detail_status == 200
+    assert next(item for item in project_detail["versions"] if item["version_id"] == applied_version)["variant_type"] == "audio_revision_mix_edit"
     assert old_review_status == 200
     assert old_review["review"]["stale"] is True
     assert recheck_status == 201, recheck
@@ -103,6 +113,7 @@ def test_audio_revision_workbench_full_loop_and_verifier(tmp_path: Path, monkeyp
 
 def test_audio_revision_candidate_tamper_and_signed_guard(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(audio_revision_module, "render_audio", _fake_revision_render)
     server = start_test_server()
     try:
         project_id = _signed_audio_project(server, "Audio Revision Guard")
@@ -153,6 +164,7 @@ def test_audio_revision_candidate_tamper_and_signed_guard(tmp_path: Path, monkey
 
 def test_audio_revision_high_issue_force_close_is_blocked(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(audio_revision_module, "render_audio", _fake_revision_render)
     server = start_test_server()
     try:
         project_id = _signed_audio_project(server, "Audio Revision Force Guard")
@@ -186,6 +198,75 @@ def test_audio_revision_high_issue_force_close_is_blocked(tmp_path: Path, monkey
     assert detail_status == 200
     assert detail["session"]["status"] != "closed"
     assert "high_issue_unresolved" in " ".join(detail["closeout"]["force_blockers"])
+
+
+def test_audio_revision_new_marker_after_closeout_blocks_signoff(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(audio_revision_module, "render_audio", _fake_revision_render)
+    server = start_test_server()
+    try:
+        project_id = _signed_audio_project(server, "Audio Revision Marker Coverage")
+        _status, created = request_json(server, "POST", "/api/releases", {"name": "Marker Coverage Release", "release_type": "single_pack", "primary_artist": "QA"})
+        release_id = created["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        review = request_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "needs_fix", "review_mode": "manual", "rating": 2, "playback_confirmed": True, "markers": [{"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "first issue"}]})[1]
+        session = request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions", {})[1]["session"]
+        session_id = session["session_id"]
+        issue = request_json(server, "GET", f"/api/releases/{release_id}/audio-revisions/{session_id}")[1]["issues"][0]
+        candidate = request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/issues/{issue['issue_id']}/candidates/generate", {})[1]["candidates"][0]
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate['candidate_id']}/review", {"status": "accepted", "review_mode": "manual", "rating": 4, "playback_confirmed": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate['candidate_id']}/select")
+        applied = request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate['candidate_id']}/apply", {})[1]
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "rechecked"})
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/refresh")
+        close_status, closed = request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/close")
+        new_marker_status, _new_marker = request_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "needs_fix", "review_mode": "manual", "rating": 2, "playback_confirmed": True, "markers": [{"time_seconds": 2.0, "category": "mix_balance", "severity": "high", "message": "new issue after closeout"}]})
+        summary_status, summary = request_json(server, "GET", f"/api/releases/{release_id}/audio-revisions/summary")
+        sign_status, signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_audio_revision_closeout": True})
+    finally:
+        stop_test_server(server)
+
+    assert review["review"]["review_id"]
+    assert applied["applied_version_id"]
+    assert close_status == 200, closed
+    assert new_marker_status == 201
+    assert summary_status == 200
+    assert "active_markers_uncovered" in summary["summary"]["blockers"]
+    assert summary["summary"]["uncovered_marker_ids"]
+    assert sign_status == 409
+    assert "Audio revision closeout gate failed" in signoff["error"]
+
+
+def test_audio_revision_renderer_failure_blocks_candidate_review(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    def failing_render(_midi_path: Path, _wav_path: Path, _config) -> Path:
+        raise audio_revision_module.RendererError("renderer unavailable")
+
+    monkeypatch.setattr(audio_revision_module, "render_audio", failing_render)
+    server = start_test_server()
+    try:
+        project_id = _signed_audio_project(server, "Audio Revision Renderer Guard")
+        _status, created = request_json(server, "POST", "/api/releases", {"name": "Renderer Guard Release", "release_type": "single_pack", "primary_artist": "QA"})
+        release_id = created["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "needs_fix", "review_mode": "manual", "rating": 2, "playback_confirmed": True, "markers": [{"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "balance"}]})
+        session = request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions", {})[1]["session"]
+        session_id = session["session_id"]
+        issue = request_json(server, "GET", f"/api/releases/{release_id}/audio-revisions/{session_id}")[1]["issues"][0]
+        generated = request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/issues/{issue['issue_id']}/candidates/generate", {})[1]
+        candidate = generated["candidates"][0]
+        review_status, review = request_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/candidates/{candidate['candidate_id']}/review", {"status": "accepted", "review_mode": "manual", "rating": 4, "playback_confirmed": True})
+    finally:
+        stop_test_server(server)
+
+    assert generated["candidates"][0]["preview"]["audio_status"] == "failed"
+    assert review_status == 409
+    assert "audio preview" in review["error"]
 
 
 def _check(report: dict, check_id: str) -> dict:

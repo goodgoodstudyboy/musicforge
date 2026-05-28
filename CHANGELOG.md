@@ -1,5 +1,17 @@
 # Changelog
 
+## v5.3.1 - 2026-05-28
+
+### Fixed
+- Release Signoff `require_audio_revision_closeout=true` now hard-blocks newly added active `needs_fix`/`rejected` audio review markers that are not covered by a non-stale Audio Revision issue/session.
+- Audio Revision candidate preview and apply now use the configured renderer path for real WAV output; renderer failures leave candidates unreviewable/unselectable/unappliable instead of writing placeholder audio.
+- Audio Revision apply now creates child Project Versions with `audio_revision_mix_edit`.
+- Release Export now keeps selected candidates/issues from multiple Audio Revision sessions under session-prefixed filenames so later sessions do not overwrite earlier evidence.
+- `verify-release --require-audio-revisions` now accepts multi-session revision history when at least one applied revision candidate matches the current track version, while still failing tampered or mismatched evidence.
+
+### Verified
+- `python -m pytest tests\test_audio_revision.py tests\test_release_check.py::test_v53_audio_revision_workbench_smoke -q`
+
 ## v5.3.0 - 2026-05-28
 
 ### Added

@@ -4257,6 +4257,13 @@ def _v38_check_status(report: dict[str, Any], check_id: str) -> str | None:
     return None
 
 
+def _v38_check_message(report: dict[str, Any], check_id: str) -> str | None:
+    for check in [*report.get("checks", []), *report.get("track_checks", [])]:
+        if isinstance(check, dict) and check.get("check_id") == check_id:
+            return str(check.get("message"))
+    return None
+
+
 def _v39_release_metadata_smoke(root: Path) -> tuple[bool, str]:
     base = (root / ".release-check" / "v39-release-metadata").resolve()
     if base.exists():
@@ -7195,10 +7202,19 @@ def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
     base = Path(tempfile.mkdtemp(prefix="mf-v53-audio-revision-")).resolve()
     old_cwd = Path.cwd()
     server = None
+    original_revision_render = None
     try:
         os.chdir(base)
+        import song_agent.audio_revision as audio_revision_module
         from song_agent.server import create_server
 
+        original_revision_render = audio_revision_module.render_audio
+
+        def fake_revision_render(_midi_path: Path, wav_path: Path, _config: RendererConfig) -> Path:
+            _v50_write_test_wav(Path(wav_path), duration_seconds=30)
+            return Path(wav_path)
+
+        audio_revision_module.render_audio = fake_revision_render
         server = create_server("127.0.0.1", 0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -7251,6 +7267,36 @@ def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
         recheck_status, recheck = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual recheck accepted after revision."})
         refresh_status, refreshed = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/refresh")
         close_status, closeout = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{session_id}/close")
+        marker_guard_review_status, marker_guard_review = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/audio-reviews",
+            {
+                "track_id": "track-000001",
+                "status": "needs_fix",
+                "review_mode": "manual",
+                "rating": 2,
+                "playback_confirmed": True,
+                "notes": "New high-priority marker after closeout.",
+                "markers": [{"time_seconds": 4.0, "category": "mix_balance", "severity": "high", "message": "new balance issue after closeout"}],
+            },
+        )
+        marker_gate_status, marker_gate = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_audio_revision_closeout": True})
+        marker_session_status, marker_session = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions", {"title": "v5.3 marker coverage"})
+        marker_session_id = str(marker_session.get("session", {}).get("session_id") or "")
+        marker_review_id = str(marker_guard_review.get("review", {}).get("review_id") or "")
+        marker_detail_status, marker_detail = _release_http_json(server, "GET", f"/api/releases/{release_id}/audio-revisions/{marker_session_id}")
+        marker_issue = next((item for item in marker_detail.get("issues", []) if item.get("source_review_id") == marker_review_id), marker_detail.get("issues", [{}])[0] if marker_detail.get("issues") else {})
+        marker_issue_id = str(marker_issue.get("issue_id") or "")
+        marker_generate_status, marker_generated = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{marker_session_id}/issues/{marker_issue_id}/candidates/generate", {"max_candidates": 1})
+        marker_candidate_id = str((marker_generated.get("candidates") or [{}])[0].get("candidate_id") or "")
+        marker_candidate_review_status, _marker_candidate_review = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{marker_session_id}/candidates/{marker_candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 4, "playback_confirmed": True, "notes": "Second A/B preview is acceptable."})
+        marker_select_status, _marker_select = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{marker_session_id}/candidates/{marker_candidate_id}/select")
+        marker_apply_status, marker_applied = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{marker_session_id}/candidates/{marker_candidate_id}/apply", {"version_name": "v5.3 Marker Coverage Applied"})
+        marker_applied_version = str(marker_applied.get("applied_version_id") or "")
+        marker_recheck_status, marker_recheck = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-reviews", {"track_id": "track-000001", "status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual recheck accepted after marker guard revision."})
+        marker_refresh_status, marker_refreshed = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{marker_session_id}/refresh")
+        marker_close_status, marker_closeout = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-revisions/{marker_session_id}/close")
         delivery_reset_status, _delivery_reset = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff/reset", {"reason": "v5.3 audio revision applied"})
         delivery_sign_status, _delivery_sign = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-signoff", {"signed_by": "release-check"})
         qa_refresh_status, _qa_refresh = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
@@ -7301,6 +7347,22 @@ def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
             and refreshed.get("rechecked_count") == 1
             and close_status == 200
             and closeout.get("closeout", {}).get("status") == "passed"
+            and marker_guard_review_status == 201
+            and marker_gate_status == 409
+            and "Audio revision closeout gate failed" in str(marker_gate.get("error") or "")
+            and marker_session_status == 201
+            and marker_detail_status == 200
+            and marker_generate_status == 201
+            and marker_candidate_review_status == 200
+            and marker_select_status == 200
+            and marker_apply_status == 200
+            and marker_applied_version
+            and marker_recheck_status == 201
+            and marker_recheck.get("review", {}).get("version_id") == marker_applied_version
+            and marker_refresh_status == 200
+            and marker_refreshed.get("rechecked_count") == 1
+            and marker_close_status == 200
+            and marker_closeout.get("closeout", {}).get("status") == "passed"
             and delivery_reset_status == 200
             and delivery_sign_status == 200
             and qa_refresh_status == 200
@@ -7318,7 +7380,8 @@ def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"session={session_status}, generate={generate_status}, apply={apply_status}, close={close_status}, "
-            f"force_unresolved={unresolved_force_status}, path_pollution={unsafe_download_status}, sign={sign_status}, verify={verify.get('status')}, "
+            f"force_unresolved={unresolved_force_status}, path_pollution={unsafe_download_status}, marker_gate={marker_gate_status}, sign={sign_status}, verify={verify.get('status')}, "
+            f"revision_verify={_v38_check_status(verify, 'audio_revision_evidence')}, "
             f"candidate_tamper={_v38_check_status(tampered, 'audio_revision_evidence')}"
         )
     except Exception as exc:
@@ -7327,6 +7390,8 @@ def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
         if server is not None:
             server.shutdown()
             server.server_close()
+        if original_revision_render is not None:
+            audio_revision_module.render_audio = original_revision_render
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
