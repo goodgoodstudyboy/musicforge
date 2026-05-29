@@ -296,9 +296,7 @@ class MasteringStore:
             return {"status": "failed", "hard_block": True, "require_mastering_qa": True, "message": "Mastering analysis is stale or tampered.", "stale_reasons": analysis.get("stale_reasons", [])}
         selected = self.read_selected_candidate(release_id, default={})
         if not selected:
-            if analysis.get("status") == "passed":
-                return {**mastering_analysis_summary(analysis), "require_mastering_qa": True, "status": "passed", "message": "Mastering analysis passed without requiring a candidate."}
-            return {**mastering_analysis_summary(analysis), "require_mastering_qa": True, "status": "failed", "hard_block": True, "message": "Mastering candidate selection is required before signoff."}
+            return {**mastering_analysis_summary(analysis), "require_mastering_qa": True, "status": "failed", "hard_block": True, "message": "Selected mastered candidate is required before signoff."}
         if selected.get("stale") or not mastering_candidate_integrity_ok(selected):
             return {"status": "failed", "hard_block": True, "require_mastering_qa": True, "message": "Selected mastered candidate is stale or tampered.", "candidate_id": selected.get("candidate_id"), "stale_reasons": selected.get("stale_reasons", [])}
         review = selected.get("review") if isinstance(selected.get("review"), dict) else {}
@@ -347,7 +345,7 @@ class MasteringStore:
             else:
                 after = selected.get("after_analysis") if isinstance(selected.get("after_analysis"), dict) else {}
                 status = str(after.get("status") or status or "failed")
-        elif analysis and status != "passed":
+        elif analysis:
             warnings.append("selected_candidate_missing")
         summary = {
             "schema_version": MASTERING_SCHEMA_VERSION,

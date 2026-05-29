@@ -5636,13 +5636,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if audio_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(audio_gate.get("message") or "Release audio gate failed.")
+        require_mastering_qa = bool(payload.get("require_mastering_qa", False))
         mastering_gate = self.mastering_store.gate(
             release_id,
-            required=bool(payload.get("require_mastering_qa", False)),
+            required=require_mastering_qa,
             profile_id=str(payload.get("mastering_profile_id") or "") or None,
             force=force,
         )
-        if mastering_gate and bool(payload.get("require_mastering_qa", False)):
+        if mastering_gate and require_mastering_qa:
             acceptance_gate = dict(acceptance_gate or {})
             acceptance_gate["mastering"] = mastering_gate
             if mastering_gate.get("status") == "failed":
@@ -5683,6 +5684,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             export_manifest = read_release_export_manifest(self.release_store, release_id)
         except FileNotFoundError:
             export_manifest = {}
+        if require_mastering_qa:
+            if not export_manifest:
+                self._send_json(
+                    {
+                        "error": "Release Export has not been generated.",
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+            mastering_export_gate = self._release_mastering_export_gate(export_manifest, mastering_gate)
+            if mastering_export_gate.get("status") == "failed":
+                acceptance_gate = dict(acceptance_gate or {})
+                acceptance_gate["mastering_export"] = mastering_export_gate
+                self._send_json(
+                    {
+                        "error": str(mastering_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
         if not export_manifest and not force:
             self._send_error(HTTPStatus.CONFLICT, "Release Export has not been generated.")
             return
@@ -5716,6 +5739,30 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         document = self.release_store.update_signoff_summary(release_id, release_signoff_summary(signoff))
         self.release_store.append_event(release_id, "release_force_signed" if force else "release_signed", {"status": report.get("status"), "forced": force})
         self._send_json({"ok": True, "release": document.to_dict(), "signoff": signoff, "summary": release_signoff_summary(signoff)})
+
+    def _release_mastering_export_gate(self, export_manifest: dict[str, Any], mastering_gate: dict[str, Any]) -> dict[str, Any]:
+        manifest_mastering = export_manifest.get("mastering") if isinstance(export_manifest.get("mastering"), dict) else {}
+        required_fields = ("analysis_hash", "plan_hash", "selected_candidate_id", "selected_candidate_hash")
+        missing_fields = [field for field in required_fields if not manifest_mastering.get(field)]
+        mismatched_fields = [
+            field
+            for field in required_fields
+            if str(manifest_mastering.get(field) or "") != str(mastering_gate.get(field) or "")
+        ]
+        manifest_status = str(manifest_mastering.get("status") or "")
+        if manifest_status not in {"passed", "warning"}:
+            mismatched_fields.append("status")
+        failed = bool(missing_fields or mismatched_fields)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": "Release Export is stale. Rebuild export before signoff." if failed else "Release Export contains current Mastering QA evidence.",
+            "missing_fields": sorted(set(missing_fields)),
+            "mismatched_fields": sorted(set(mismatched_fields)),
+            "manifest_selected_candidate_id": manifest_mastering.get("selected_candidate_id"),
+            "current_selected_candidate_id": mastering_gate.get("selected_candidate_id"),
+            "manifest_status": manifest_status or "missing",
+        }
 
     def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
         suite_id = str(payload.get("acceptance_suite_id") or "").strip()

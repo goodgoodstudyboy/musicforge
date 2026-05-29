@@ -129,6 +129,74 @@ def test_mastering_signoff_blocks_stale_candidate_after_track_audio_changes(tmp_
     assert "stale" in stale["error"].lower()
 
 
+def test_mastering_signoff_requires_selected_candidate_after_analysis(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _signed_project(server, "Mastering Analysis Only Track")
+        _add_final_export_audio(server, project_id, duration_seconds=30)
+        release_status, release = request_json(server, "POST", "/api/releases", {"name": "Mastering Analysis Only Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        analyze_status, analyze = request_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        export_status, _export = request_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_mastering_qa": True})
+    finally:
+        stop_test_server(server)
+
+    assert release_status == 201
+    assert analyze_status == 200
+    assert analyze["summary"]["status"] in {"passed", "warning"}
+    assert export_status == 200
+    assert zip_status == 200
+    assert sign_status == 409
+    assert "selected mastered candidate" in signoff["error"].lower()
+
+
+def test_mastering_signoff_blocks_export_built_before_mastering_selection(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _signed_project(server, "Mastering Stale Export Track")
+        _add_final_export_audio(server, project_id, duration_seconds=30)
+        release_status, release = request_json(server, "POST", "/api/releases", {"name": "Mastering Stale Export Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        early_export_status, early_export = request_json(server, "POST", f"/api/releases/{release_id}/export")
+        early_zip_status, _early_zip = request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
+        candidate_status, candidate = request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
+        candidate_id = candidate["candidate"]["candidate_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
+        stale_sign_status, stale_sign = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_mastering_qa": True})
+        rebuilt_export_status, rebuilt_export = request_json(server, "POST", f"/api/releases/{release_id}/export")
+        rebuilt_zip_status, _rebuilt_zip = request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_mastering_qa": True})
+    finally:
+        stop_test_server(server)
+
+    assert release_status == 201
+    assert early_export_status == 200
+    assert early_export["manifest"]["mastering"]["selected_candidate_id"] is None
+    assert early_zip_status == 200
+    assert candidate_status == 201
+    assert stale_sign_status == 409
+    assert "release export is stale" in stale_sign["error"].lower()
+    assert stale_sign["acceptance_gate"]["mastering_export"]["status"] == "failed"
+    assert rebuilt_export_status == 200
+    assert rebuilt_export["manifest"]["mastering"]["selected_candidate_id"] == candidate_id
+    assert rebuilt_zip_status == 200
+    assert sign_status == 200
+    assert signoff["signoff"]["acceptance_gate"]["mastering"]["status"] == "passed"
+
+
 def test_mastering_profile_crud_blocks_builtin_update(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     store = MasteringProfileStore(Path(".musicforge") / "mastering-profiles")

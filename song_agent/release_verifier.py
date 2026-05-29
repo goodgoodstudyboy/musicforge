@@ -850,7 +850,7 @@ class _ReleaseZipVerifier:
             failures.append("analysis_integrity")
         if plan and not mastering_plan_integrity_ok(plan):
             failures.append("plan_integrity")
-        if required and not selected and summary.get("status") != "passed":
+        if required and not selected:
             failures.append("selected_candidate_missing")
         if selected:
             if not mastering_candidate_integrity_ok(selected):

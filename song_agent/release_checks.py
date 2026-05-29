@@ -7422,12 +7422,16 @@ def _v54_mastering_qa_smoke(root: Path) -> tuple[bool, str]:
         missing_mastering_status, _missing_mastering = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_mastering_qa": True})
         profile_status, profiles = _release_http_json(server, "GET", "/api/mastering/profiles")
         analyze_status, analyze = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        analysis_export_status, _analysis_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        analysis_zip_status, _analysis_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        analysis_only_sign_status, analysis_only_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_mastering_qa": True})
         plan_status, plan = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
         candidate_status, candidate = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
         candidate_id = str(candidate.get("candidate", {}).get("candidate_id") or "")
         review_status, review = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual A/B mastering accepted."})
         select_status, selected = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
         audio_download_status, audio_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/tracks/track-000001/audio")
+        stale_export_sign_status, stale_export_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_mastering_qa": True})
         export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
         zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
         sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_mastering_qa": True})
@@ -7460,6 +7464,10 @@ def _v54_mastering_qa_smoke(root: Path) -> tuple[bool, str]:
             and any(item.get("profile_id") == "demo_review" for item in profiles.get("profiles", []))
             and analyze_status == 200
             and analyze.get("summary", {}).get("status") in {"passed", "warning"}
+            and analysis_export_status == 200
+            and analysis_zip_status == 200
+            and analysis_only_sign_status == 409
+            and "selected mastered candidate" in str(analysis_only_sign.get("error") or "").lower()
             and plan_status == 200
             and plan.get("plan", {}).get("summary", {}).get("track_count") == 2
             and candidate_status == 201
@@ -7469,6 +7477,8 @@ def _v54_mastering_qa_smoke(root: Path) -> tuple[bool, str]:
             and selected.get("candidate", {}).get("selected") is True
             and audio_download_status == 200
             and audio_bytes.startswith(b"RIFF")
+            and stale_export_sign_status == 409
+            and "release export is stale" in str(stale_export_sign.get("error") or "").lower()
             and export_status == 200
             and export.get("manifest", {}).get("mastering", {}).get("selected_candidate_id") == candidate_id
             and zip_status == 200
@@ -7484,7 +7494,8 @@ def _v54_mastering_qa_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"missing={missing_mastering_status}, analyze={analyze_status}/{analyze.get('summary', {}).get('status')}, "
-            f"candidate={candidate_status}, select={select_status}, sign={sign_status}, verify={verify.get('status')}, "
+            f"analysis_only={analysis_only_sign_status}, candidate={candidate_status}, select={select_status}, "
+            f"stale_export={stale_export_sign_status}, sign={sign_status}, verify={verify.get('status')}, "
             f"signed_mutation={signed_mutation_status}, tamper_wav={_v38_check_status(tampered_wav, 'mastering_evidence')}, "
             f"tamper_selected={_v38_check_status(tampered_selected, 'mastering_evidence')}"
         )

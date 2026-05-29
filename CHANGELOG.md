@@ -1,5 +1,16 @@
 # Changelog
 
+## v5.4.1 - 2026-05-29
+
+### Fixed
+- Release Signoff `require_mastering_qa=true` now requires a selected mastered candidate with accepted manual A/B review; analysis-only mastering no longer satisfies the gate.
+- Release Signoff now rejects stale Release Exports when current Mastering QA evidence was created or selected after export generation.
+- `verify-release --require-mastering` now requires selected candidate evidence instead of accepting a passed analysis summary alone.
+- v5.4 release-check smoke now covers analysis-only signoff rejection and export-before-mastering stale rejection.
+
+### Verified
+- `python -m pytest tests\test_mastering_qa.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v54_mastering_qa_smoke -q`
+
 ## v5.4.0 - 2026-05-29
 
 ### Added
