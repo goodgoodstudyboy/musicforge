@@ -3164,6 +3164,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let audioReviewData = { summary: {}, reviews: [] };
       let audioRevisionData = { summary: {}, sessions: [] };
       let masteringData = { summary: {}, analysis: {}, plan: {}, candidates: [], selected_candidate: {} };
+      let encodedAudioData = { summary: {}, profiles: [] };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
       let releaseAnalyticsData = { summary: {}, analytics: null };
@@ -3179,6 +3180,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         }
       } catch (err) {}
       try { masteringData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering`); } catch (err) {}
+      try { encodedAudioData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio`); } catch (err) {}
       try {
         metadataData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
         const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
@@ -3229,6 +3231,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseAudioReviewHtml(audioReviewData, release)}
         ${releaseAudioRevisionHtml(audioRevisionData, release)}
         ${releaseMasteringHtml(masteringData, release)}
+        ${releaseEncodedAudioHtml(encodedAudioData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4248,6 +4251,51 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseEncodedAudioHtml(encodedAudioData, release) {
+      const summary = (encodedAudioData && encodedAudioData.summary) || {};
+      const profiles = (encodedAudioData && encodedAudioData.profiles) || [];
+      const profileRows = profiles.map((profile) => `
+        <tr>
+          <td>${escapeHtml(profile.profile_id || "-")}</td>
+          <td><span class="status ${escapeHtml(profile.status || "")}">${escapeHtml(profile.status || "-")}</span></td>
+          <td>${escapeHtml(profile.format || "-")}</td>
+          <td>${escapeHtml(profile.extension || "-")}</td>
+          <td>${escapeHtml(profile.completed_count || 0)}/${escapeHtml(profile.track_count || 0)}</td>
+          <td>${profile.current === false ? "stale" : "current"}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="panel-title subhead"><span>Encoded Audio Formats</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.status || "missing")}
+          ${metric("Profiles", summary.profile_count || 0)}
+          ${metric("Completed", (summary.completed_profiles || []).length || 0)}
+          ${metric("Failed", (summary.failed_profiles || []).length || 0)}
+        </div>
+        <div class="grid2">
+          <label>Format Profiles
+            <input id="release-encoded-audio-profiles" value="mp3_320,flac_lossless">
+          </label>
+          <label>Encoder Mode
+            <select id="release-encoded-audio-runner">
+              <option value="ffmpeg">FFmpeg</option>
+              <option value="fake">Fake Runner</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-save-encoded-audio-config" type="button">Save Encoder Config</button>
+          <button class="secondary" id="release-render-encoded-audio" type="button">Render Encoded Audio</button>
+          <button class="secondary" id="release-verify-encoded-audio" type="button">Verify Encoded Audio</button>
+          <button class="secondary" id="release-reset-encoded-audio" type="button">Reset Encoded Audio</button>
+        </div>
+        <table>
+          <thead><tr><th>Profile</th><th>Status</th><th>Format</th><th>Ext</th><th>Tracks</th><th>Current</th></tr></thead>
+          <tbody>${profileRows || "<tr><td colspan='6'>No encoded audio profiles yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
     function releaseExportHtml(exportData, release) {
       const manifest = (exportData && exportData.manifest) || {};
       const zip = manifest.zip || {};
@@ -4349,6 +4397,13 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <input id="release-require-mastering-qa" type="checkbox">
           Require mastering QA
         </label>
+        <label class="inline">
+          <input id="release-require-encoded-audio" type="checkbox">
+          Require encoded audio
+        </label>
+        <label>Required Audio Formats
+          <input id="release-required-audio-formats" value="mp3_320">
+        </label>
       `;
     }
 
@@ -4364,6 +4419,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         require_current_mix_state: $("release-require-current-mix-state")?.checked || false,
         require_audio_revision_closeout: $("release-require-audio-revision-closeout")?.checked || false,
         require_mastering_qa: $("release-require-mastering-qa")?.checked || false,
+        require_encoded_audio: $("release-require-encoded-audio")?.checked || false,
+        required_audio_format_profiles: ($("release-required-audio-formats")?.value || "").split(",").map((item) => item.trim()).filter(Boolean),
         mastering_profile_id: $("release-mastering-profile")?.value || "",
       };
     }
@@ -4522,6 +4579,38 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         });
         await loadReleases();
       });
+      bindAction("release-save-encoded-audio-config", async () => {
+        await api(`/api/audio-encoding/config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fake_runner: $("release-encoded-audio-runner").value === "fake" }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-render-encoded-audio", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio/render`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile_ids: $("release-encoded-audio-profiles").value.split(",").map((item) => item.trim()).filter(Boolean) }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-verify-encoded-audio", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ require_encoded_audio: true, required_audio_format_profiles: $("release-encoded-audio-profiles").value.split(",").map((item) => item.trim()).filter(Boolean) }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-reset-encoded-audio", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Studio encoded audio reset" }),
+        });
+        await loadReleases();
+      });
       bindAction("release-build-export", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`, { method: "POST" });
         await loadReleases();
@@ -4647,6 +4736,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </select>
         </label>
         <div class="grid2">
+          <label>Primary Audio Format
+            <select id="distribution-primary-audio-format">
+              <option value="wav_master">WAV Master</option>
+              <option value="mp3_320">MP3 320</option>
+              <option value="flac_lossless">FLAC Lossless</option>
+              <option value="aac_256">AAC 256</option>
+            </select>
+          </label>
+          <label>Audio Format Profiles
+            <input id="distribution-audio-format-profiles" value="wav_master">
+          </label>
+        </div>
+        <div class="grid2">
           <label>Artwork Filename
             <input id="distribution-artwork-filename" value="cover.png">
           </label>
@@ -4699,7 +4801,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/distribution/targets`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile_id: $("distribution-profile").value, template_pack_id: $("distribution-template-pack").value, name: $("distribution-target-name").value.trim() }),
+          body: JSON.stringify({
+            profile_id: $("distribution-profile").value,
+            template_pack_id: $("distribution-template-pack").value,
+            name: $("distribution-target-name").value.trim(),
+            options: {
+              require_encoded_audio: $("distribution-primary-audio-format").value !== "wav_master",
+              primary_audio_format: $("distribution-primary-audio-format").value,
+              audio_format_profiles: $("distribution-audio-format-profiles").value.split(",").map((item) => item.trim()).filter(Boolean),
+            },
+          }),
         });
         await loadReleases();
       });

@@ -270,6 +270,20 @@ WAV as each track's `song.wav` plus `mastering/` analysis, plan, summary, and
 selected-candidate evidence; `verify-release --require-mastering` validates that
 evidence offline.
 
+Distribution Audio Formats add local MP3/FLAC/AAC/WAV derivative generation from
+the selected mastered WAV, with built-in encoding profiles and a redacted local
+encoder config. Tests and release-check can use the deterministic fake runner,
+while real use can point to FFmpeg through local config or environment variables.
+Release Signoff with `require_encoded_audio=true` requires current encoded
+profile manifests and a rebuilt Release Export; signed releases cannot render or
+reset encoded audio without resetting signoff. Release Export writes
+`encoded-audio-summary.json`, and `verify-release --require-encoded-audio
+--require-audio-formats mp3_320` validates encoded evidence offline. Distribution
+Targets can choose a primary audio format such as `mp3_320`; Distribution Export
+packages the encoded track audio plus `encoded-audio/` manifests, and
+`verify-distribution-package --require-encoded-audio` catches hash or header
+tampering such as fake MP3 files.
+
 Useful local commands:
 
 ```powershell
@@ -277,6 +291,7 @@ python -m song_agent.cli release-audio-review list release-000001
 python -m song_agent.cli release-audio-review add release-000001 --track-id track-000001 --status accepted --rating 4 --reviewer local-user --playback-confirmed --notes "Manual WAV playback accepted."
 python -m song_agent.cli release-audio-review summary release-000001 --write
 python -m song_agent.cli release-audio-review create-task release-000001 arv-000001 m-000001
+python -m song_agent.cli release-encode release-000001 --profiles mp3_320,flac_lossless --json
 ```
 
 Arrangement Mix Controls add a local Mix Board for small, auditable corrections
@@ -304,6 +319,7 @@ python -m song_agent.cli verify-release path\to\release-export.zip --json --repo
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review --require-audio-revisions
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-mastering
+python -m song_agent.cli verify-release path\to\release-export.zip --require-encoded-audio --require-audio-formats mp3_320
 ```
 
 The verifier reads only the ZIP, checks entry safety, duplicate entries,
@@ -350,7 +366,7 @@ python -m song_agent.cli verify-submission-package path\to\submission-package.zi
 ```
 
 ```powershell
-python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --json --report-out distribution-verification-report.json
+python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --json --require-encoded-audio --report-out distribution-verification-report.json
 ```
 
 v0.6.0 adds local access control for Studio. Loopback hosts can still run without

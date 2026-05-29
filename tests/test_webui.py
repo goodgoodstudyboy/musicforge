@@ -531,6 +531,14 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-mastering-profile"' in html
     assert 'id="release-render-mastering-candidate"' in html
     assert 'id="release-require-mastering-qa"' in html
+    assert "Encoded Audio Formats" in html
+    assert "/api/audio-encoding/config" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio" in html
+    assert "/encoded-audio/render" in html
+    assert "/encoded-audio/verify" in html
+    assert "/encoded-audio/reset" in html
+    assert 'id="release-require-encoded-audio"' in html
+    assert 'id="release-required-audio-formats"' in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/init" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa" in html
@@ -554,6 +562,8 @@ def test_webui_contains_release_workspace_controls():
     assert "Platform Template Packs" in html
     assert 'id="distribution-template-packs"' in html
     assert 'id="distribution-template-pack"' in html
+    assert 'id="distribution-primary-audio-format"' in html
+    assert 'id="distribution-audio-format-profiles"' in html
     assert 'id="distribution-create-template"' in html
     assert 'id="distribution-clone-template"' in html
     assert "/api/distribution/template-packs" in html

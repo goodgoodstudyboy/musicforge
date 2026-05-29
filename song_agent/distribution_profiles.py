@@ -47,6 +47,9 @@ BUILTIN_DISTRIBUTION_PROFILES: dict[str, DistributionProfile] = {
             "require_upc": True,
             "require_isrc": True,
             "require_audio": True,
+            "require_encoded_audio": False,
+            "primary_audio_format": "wav_master",
+            "audio_format_profiles": ["wav_master"],
         },
     ),
     "demo_pitch": DistributionProfile(
@@ -64,6 +67,9 @@ BUILTIN_DISTRIBUTION_PROFILES: dict[str, DistributionProfile] = {
             "require_upc": False,
             "require_isrc": False,
             "require_audio": False,
+            "require_encoded_audio": False,
+            "primary_audio_format": "wav_master",
+            "audio_format_profiles": ["wav_master"],
         },
     ),
     "internal_archive": DistributionProfile(
@@ -81,6 +87,9 @@ BUILTIN_DISTRIBUTION_PROFILES: dict[str, DistributionProfile] = {
             "require_upc": False,
             "require_isrc": False,
             "require_audio": False,
+            "require_encoded_audio": False,
+            "primary_audio_format": "wav_master",
+            "audio_format_profiles": ["wav_master"],
         },
     ),
 }
@@ -106,5 +115,7 @@ def merge_profile_options(profile: dict[str, Any], overrides: dict[str, Any] | N
         if key not in allowed:
             continue
         if isinstance(value, (str, int, float, bool)) or value is None:
+            base[key] = value
+        elif isinstance(value, list) and all(isinstance(item, (str, int, float, bool)) or item is None for item in value):
             base[key] = value
     return sanitize_metadata(base, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)

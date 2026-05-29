@@ -166,6 +166,8 @@ from song_agent.audio_revision import (
     AudioRevisionStateError,
     AudioRevisionStore,
 )
+from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles
+from song_agent.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
 from song_agent.releases import (
     ReleaseConflictError,
     ReleaseNotFoundError,
@@ -2571,6 +2573,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.mastering_store  # type: ignore[attr-defined]
 
     @property
+    def audio_encoding_profile_store(self) -> AudioEncodingProfileStore:
+        return self.server.audio_encoding_profile_store  # type: ignore[attr-defined]
+
+    @property
+    def audio_encoding_store(self) -> AudioEncodingStore:
+        return self.server.audio_encoding_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2650,6 +2660,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/mastering/profiles" or path.startswith("/api/mastering/profiles/"):
                 self._handle_mastering_profiles_route(method, path)
+                return
+            if path == "/api/audio-encoding/config" or path.startswith("/api/audio-encoding/config/") or path == "/api/audio-encoding/profiles" or path.startswith("/api/audio-encoding/profiles/"):
+                self._handle_audio_encoding_route(method, path)
                 return
             if path == "/api/jobs":
                 if method == "GET":
@@ -4927,6 +4940,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_release_mastering(method, release_id, tail.removeprefix("/mastering"))
                 return
 
+            if tail == "/encoded-audio" or tail.startswith("/encoded-audio/"):
+                self._handle_release_encoded_audio(method, release_id, tail.removeprefix("/encoded-audio"))
+                return
+
             if tail == "/metadata":
                 if method == "GET":
                     metadata = read_release_metadata(self.release_store, release_id, default={})
@@ -5479,6 +5496,69 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except (MasteringQAError, MasteringProfileError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_encoded_audio(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "release_id": release_id, "summary": self.audio_encoding_store.get_summary(release_id, now=_utc_now()), "formats": self.audio_encoding_store.list_manifests(release_id)})
+                return
+            if tail == "/render":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_encoding_store.render(release_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/render-format":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                profile_id = str(payload.get("profile_id") or "").strip()
+                if not profile_id:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "profile_id is required.")
+                    return
+                manifest = self.audio_encoding_store.render_format(release_id, profile_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "manifest": manifest, "summary": self.audio_encoding_store.get_summary(release_id, now=_utc_now())}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_encoding_store.verify(release_id, self._optional_json_body())
+                self._send_json({"ok": True, **result})
+                return
+            if tail == "/reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_encoding_store.reset(release_id, self._optional_json_body())
+                self._send_json({"ok": True, **result})
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if len(parts) == 2 and parts[0] == "formats" and method == "GET":
+                manifest = self.audio_encoding_store.read_manifest(release_id, parts[1])
+                self._send_json({"ok": True, "release_id": release_id, "manifest": manifest})
+                return
+            if len(parts) == 5 and parts[0] == "formats" and parts[2] == "tracks" and parts[4] == "audio" and method == "GET":
+                manifest = self.audio_encoding_store.read_manifest(release_id, parts[1])
+                track = next((row for row in manifest.get("tracks", []) if isinstance(row, dict) and row.get("track_id") == parts[3]), None)
+                if not track:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Encoded track audio not found.")
+                    return
+                path = self.audio_encoding_store.track_audio_path(release_id, parts[1], parts[3])
+                self._send_file(path, "application/octet-stream", filename=path.name)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Encoded audio route not found.")
+        except (ReleaseNotFoundError, AudioEncodingNotFoundError, FileNotFoundError) as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (ReleaseStateError, AudioEncodingStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (AudioEncodingError, AudioEncodingProfileError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_audio_profiles_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/audio/profiles":
@@ -5577,6 +5657,75 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except MasteringProfileError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_audio_encoding_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/audio-encoding/config":
+                if method == "GET":
+                    self._send_json({"ok": True, "config": self.audio_encoding_store.read_config().public_summary()})
+                    return
+                if method == "POST":
+                    config = self.audio_encoding_store.write_config(self._read_json_body())
+                    self._send_json({"ok": True, "config": config})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if path == "/api/audio-encoding/config/test":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.audio_encoding_store.test_config()})
+                return
+            if path == "/api/audio-encoding/config/reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "config": self.audio_encoding_store.reset_config()})
+                return
+            if path == "/api/audio-encoding/profiles":
+                if method == "GET":
+                    profiles = [profile.to_dict() for profile in self.audio_encoding_profile_store.list_profiles(include_builtins=True)]
+                    self._send_json({"ok": True, "profiles": profiles})
+                    return
+                if method == "POST":
+                    profile = self.audio_encoding_profile_store.create_profile(self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "profile": profile.to_dict()}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            rest = path.removeprefix("/api/audio-encoding/profiles/").strip("/")
+            parts = rest.split("/") if rest else []
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Audio encoding profile route not found.")
+                return
+            profile_id = parts[0]
+            if len(parts) == 1:
+                if method == "GET":
+                    profile = self.audio_encoding_profile_store.get_profile(profile_id)
+                    self._send_json({"ok": True, "profile": profile.to_dict()})
+                    return
+                if method == "PATCH":
+                    profile = self.audio_encoding_profile_store.update_profile(profile_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "profile": profile.to_dict()})
+                    return
+                if method == "DELETE":
+                    self.audio_encoding_profile_store.delete_profile(profile_id)
+                    self._send_json({"ok": True, "deleted": True, "profile_id": profile_id})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 2 and parts[1] == "clone":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                profile = self.audio_encoding_profile_store.clone_profile(profile_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "profile": profile.to_dict()}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio encoding profile route not found.")
+        except AudioEncodingProfileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioEncodingProfileError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _renderer_profile_from_payload(self, payload: dict[str, Any] | None) -> Any | None:
         profile_id = str((payload or {}).get("profile_id") or "").strip()
         if not profile_id:
@@ -5649,6 +5798,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if mastering_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(mastering_gate.get("message") or "Mastering QA gate failed.")
+        require_encoded_audio = bool(payload.get("require_encoded_audio", False))
+        required_encoded_profiles = normalize_required_profiles(payload.get("required_audio_format_profiles") or payload.get("audio_format_profiles") or [])
+        encoded_gate = encoded_audio_gate(
+            self.audio_encoding_store,
+            release_id,
+            required_profiles=required_encoded_profiles,
+            required=require_encoded_audio,
+            force=force,
+        )
+        if encoded_gate and require_encoded_audio:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["encoded_audio"] = encoded_gate
+            if encoded_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(encoded_gate.get("message") or "Encoded audio gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -5662,6 +5826,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(mastering_gate.get("message") or "Mastering QA gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if encoded_gate.get("hard_block") and encoded_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(encoded_gate.get("message") or "Encoded audio gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -5701,6 +5874,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {
                         "error": str(mastering_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+        if require_encoded_audio:
+            if not export_manifest:
+                self._send_json(
+                    {
+                        "error": "Release Export has not been generated.",
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+            encoded_export_gate = self._release_encoded_audio_export_gate(export_manifest, encoded_gate)
+            if encoded_export_gate.get("status") == "failed":
+                acceptance_gate = dict(acceptance_gate or {})
+                acceptance_gate["encoded_audio_export"] = encoded_export_gate
+                self._send_json(
+                    {
+                        "error": str(encoded_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
                         "acceptance_gate": acceptance_gate,
                     },
                     status=HTTPStatus.CONFLICT,
@@ -5762,6 +5957,34 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "manifest_selected_candidate_id": manifest_mastering.get("selected_candidate_id"),
             "current_selected_candidate_id": mastering_gate.get("selected_candidate_id"),
             "manifest_status": manifest_status or "missing",
+        }
+
+    def _release_encoded_audio_export_gate(self, export_manifest: dict[str, Any], encoded_gate: dict[str, Any]) -> dict[str, Any]:
+        manifest_encoded = export_manifest.get("encoded_audio") if isinstance(export_manifest.get("encoded_audio"), dict) else {}
+        manifest_profiles = manifest_encoded.get("profiles") if isinstance(manifest_encoded.get("profiles"), list) else []
+        by_profile = {str(row.get("profile_id") or ""): row for row in manifest_profiles if isinstance(row, dict)}
+        missing: list[str] = []
+        mismatched: list[str] = []
+        for row in encoded_gate.get("profiles", []) if isinstance(encoded_gate.get("profiles"), list) else []:
+            if not isinstance(row, dict):
+                continue
+            profile_id = str(row.get("profile_id") or "")
+            manifest_row = by_profile.get(profile_id)
+            if not manifest_row:
+                missing.append(profile_id)
+                continue
+            for field in ("source_hash", "manifest_hash"):
+                if str(manifest_row.get(field) or "") != str(row.get(field) or ""):
+                    mismatched.append(f"{profile_id}:{field}")
+            if str(manifest_row.get("status") or "") != "completed":
+                mismatched.append(f"{profile_id}:status")
+        failed = bool(missing or mismatched)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": "Release Export is stale. Rebuild export before signoff." if failed else "Release Export contains current encoded audio evidence.",
+            "missing_profiles": missing,
+            "mismatched_profiles": sorted(set(mismatched)),
         }
 
     def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -6540,6 +6763,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     strict=bool(payload.get("strict", False)),
                     require_audio=bool(payload.get("require_audio", False)),
                     require_artwork=bool(payload.get("require_artwork", False)),
+                    require_encoded_audio=bool(payload.get("require_encoded_audio", False)),
                 )
                 write_distribution_verification_report(report, self.distribution_store.package_dir(release_id, package_id) / "verification-report.json")
                 self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "verification": report, "summary": distribution_verification_summary(report)})
@@ -12551,6 +12775,8 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_profile_store = AudioProfileStore(self.release_store.root.parent / "audio-profiles")
         self.mastering_profile_store = MasteringProfileStore(self.release_store.root.parent / "mastering-profiles")
         self.mastering_store = MasteringStore(self.release_store, project_store=self.project_store, profile_store=self.mastering_profile_store)
+        self.audio_encoding_profile_store = AudioEncodingProfileStore(self.release_store.root.parent / "audio-encoding-profiles")
+        self.audio_encoding_store = AudioEncodingStore(self.release_store, project_store=self.project_store, profile_store=self.audio_encoding_profile_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

@@ -56,6 +56,8 @@ from song_agent.reference_analysis import analyze_reference, create_asset_from_s
 from song_agent.renderers.audio import RendererConfig
 from song_agent.renderers.midi import render_midi
 from song_agent.release_verifier import verify_release_zip
+from song_agent.release_metadata import attach_metadata_export_to_manifest, export_release_metadata_files, initialize_release_metadata, write_release_metadata, write_release_metadata_qa
+from song_agent.release_metadata_qa import build_release_metadata_qa_report
 from song_agent.audio_revision import CANDIDATE_INTEGRITY_EXCLUDE, _object_hash as _audio_revision_object_hash
 from song_agent.audio_artifacts import build_audio_artifact_manifest, write_audio_artifact_manifest
 from song_agent.distribution_verifier import verify_distribution_package
@@ -225,6 +227,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.2 arrangement mix controls smoke", *_v52_arrangement_mix_controls_smoke(root))
     report.add("v5.3 audio revision workbench smoke", *_v53_audio_revision_workbench_smoke(root))
     report.add("v5.4 mastering qa smoke", *_v54_mastering_qa_smoke(root))
+    report.add("v5.5 distribution audio formats smoke", *_v55_distribution_audio_formats_smoke(root))
     return report
 
 
@@ -7508,6 +7511,141 @@ def _v54_mastering_qa_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
+
+
+def _v55_distribution_audio_formats_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v55-audio-formats-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        project_id = _v37_signed_project(server, "v5.5 Encoded Audio")
+        _v50_add_project_audio(server, project_id, duration_seconds=30)
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.5 Audio Formats Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = str(release.get("release", {}).get("release_id") or "")
+        track_status, _track = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        audio_status, _audio = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        analyze_status, _analysis = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        plan_status, _plan = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
+        candidate_status, candidate = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
+        candidate_id = str(candidate.get("candidate", {}).get("candidate_id") or "")
+        review_status, _review = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True})
+        select_status, _selected = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
+        export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        missing_encoded_sign_status, _missing_encoded = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "required_audio_format_profiles": ["mp3_320"]})
+        config_status, config = _release_http_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
+        encode_status, encoded = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320", "flac_lossless"]})
+        stale_export_sign_status, stale_export_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "required_audio_format_profiles": ["mp3_320"]})
+        export2_status, export2 = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        _v55_export_metadata(server, release_id)
+        zip2_status, _zip2 = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "required_audio_format_profiles": ["mp3_320"]})
+        signed_encode_status, _signed_encode = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320"]})
+        release_zip = base / ".musicforge" / "releases" / release_id / "release-export.zip"
+        release_verify = verify_release_zip(release_zip, require_encoded_audio=True, required_audio_format_profiles=["mp3_320"])
+
+        target_payload = {
+            "profile_id": "demo_pitch",
+            "name": "MP3 Distribution",
+            "options": {
+                "require_release_signed": False,
+                "require_release_zip_verified": False,
+                "require_artwork": False,
+                "require_encoded_audio": True,
+                "primary_audio_format": "mp3_320",
+                "audio_format_profiles": ["mp3_320"],
+            },
+        }
+        target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", target_payload)
+        target_id = str(target.get("target", {}).get("target_id") or "")
+        dist_qa_status, dist_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        dist_export_status, dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        dist_zip_status, _dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, _dist_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        package_id = str(dist_export.get("manifest", {}).get("package_id") or "")
+        dist_zip = base / ".musicforge" / "releases" / release_id / "distribution" / "packages" / package_id / "distribution-package.zip"
+        dist_verify = verify_distribution_package(dist_zip, require_encoded_audio=True)
+        with zipfile.ZipFile(dist_zip, "r") as archive:
+            mp3_name = next((name for name in archive.namelist() if name.startswith("audio/") and name.endswith(".mp3")), "")
+
+        tampered_dist = verify_distribution_package(
+            _v38_rewrite_zip(dist_zip, base / "tampered-distribution-mp3.zip", transforms={mp3_name: lambda _data: b"RIFFxxxxWAVEfake"} if mp3_name else {}),
+            require_encoded_audio=True,
+        )
+        ok = (
+            release_status == 201
+            and track_status == 200
+            and qa_status == 200
+            and audio_status == 200
+            and analyze_status == 200
+            and plan_status == 200
+            and candidate_status == 201
+            and review_status == 200
+            and select_status == 200
+            and export_status == 200
+            and zip_status == 200
+            and missing_encoded_sign_status == 409
+            and config_status == 200
+            and config.get("config", {}).get("fake_runner") is True
+            and encode_status == 201
+            and encoded.get("summary", {}).get("status") == "completed"
+            and stale_export_sign_status == 409
+            and "release export is stale" in str(stale_export_sign.get("error") or "").lower()
+            and export2_status == 200
+            and zip2_status == 200
+            and export2.get("manifest", {}).get("encoded_audio", {}).get("status") == "completed"
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("encoded_audio", {}).get("status") == "passed"
+            and signed_encode_status == 409
+            and release_verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(release_verify, "encoded_audio_evidence") == "passed"
+            and target_status == 201
+            and dist_qa_status == 200
+            and dist_qa.get("summary", {}).get("status") in {"passed", "warning"}
+            and dist_export_status == 201
+            and dist_zip_status == 200
+            and dist_sign_status == 200
+            and dist_verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(dist_verify, "distribution_encoded_audio_evidence") == "passed"
+            and tampered_dist.get("status") == "failed"
+            and _v38_check_status(tampered_dist, "distribution_encoded_audio_evidence") == "failed"
+        )
+        return ok, (
+            f"missing={missing_encoded_sign_status}, encode={encode_status}/{encoded.get('summary', {}).get('status')}, "
+            f"stale_export={stale_export_sign_status}, sign={sign_status}, release_verify={release_verify.get('status')}, "
+            f"dist={dist_qa_status}/{dist_export_status}/{dist_sign_status}, dist_verify={dist_verify.get('status')}, "
+            f"tampered={_v38_check_status(tampered_dist, 'distribution_encoded_audio_evidence')}, signed_guard={signed_encode_status}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v55_export_metadata(server: Any, release_id: str) -> None:
+    release = server.release_store.get_release(release_id)
+    metadata = initialize_release_metadata(server.release_store, release_id)
+    metadata["release"].update({"copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+    for index, track in enumerate(metadata.get("tracks", []) if isinstance(metadata.get("tracks"), list) else [], start=1):
+        if isinstance(track, dict):
+            track.update({"isrc": f"USABC260{index:04d}", "credits": [{"role": "composer", "name": "MusicForge"}], "confirmed": True})
+    metadata = write_release_metadata(server.release_store, release_id, metadata)
+    metadata_qa = write_release_metadata_qa(server.release_store, release_id, build_release_metadata_qa_report(release=release, metadata=metadata))
+    metadata_export = export_release_metadata_files(release_store=server.release_store, release_id=release_id, qa_report=metadata_qa)
+    attach_metadata_export_to_manifest(server.release_store, release_id, metadata_export)
 
 
 def _v37_signed_project(server: Any, title: str) -> str:

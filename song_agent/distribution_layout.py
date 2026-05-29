@@ -41,7 +41,7 @@ RESERVED_LAYOUT_PATHS = {
     "layout/file-tree.txt",
 }
 
-AUDIO_VARIABLES = {"track_number", "track_number:02d", "disc_number", "slug_title", "track_id", "isrc", "ext"}
+AUDIO_VARIABLES = {"track_number", "track_number:02d", "disc_number", "slug_title", "track_id", "isrc", "ext", "format", "profile_id", "codec", "bitrate_kbps"}
 LYRICS_VARIABLES = AUDIO_VARIABLES | {"language"}
 ARTWORK_VARIABLES = {"release_slug", "release_id", "upc", "profile_id", "target_id", "ext"}
 KIND_VARIABLES = {"audio": AUDIO_VARIABLES, "lyrics": LYRICS_VARIABLES, "artwork": ARTWORK_VARIABLES}
@@ -71,6 +71,8 @@ def build_distribution_layout_plan(
     template: dict[str, Any] | None = None,
     artwork: dict[str, Any] | None = None,
     release_export_dir: Path | None = None,
+    encoded_audio_summary: dict[str, Any] | None = None,
+    encoded_audio_root: Path | None = None,
 ) -> dict[str, Any]:
     release_metadata = release_metadata if isinstance(release_metadata, dict) else {}
     release_info = _release_info(release, release_metadata)
@@ -99,15 +101,18 @@ def build_distribution_layout_plan(
             continue
         metadata_track = metadata_by_id.get(str(track.get("track_id") or ""))
         context = _track_context(track, metadata_track, release_info)
-        audio_rel, audio_ext = _audio_source_rel(release_export_dir, track)
-        audio_exists = _source_exists(release_export_dir, audio_rel)
+        audio_rel, audio_ext, audio_source_kind, audio_format = _audio_source_rel(release_export_dir, track, target_info=target_info, encoded_audio_summary=encoded_audio_summary, encoded_audio_root=encoded_audio_root)
+        audio_root = encoded_audio_root if audio_source_kind == "encoded_audio" else release_export_dir
+        audio_exists = _source_exists(audio_root, audio_rel)
         if audio_exists or bool(rules.get("require_audio")) or bool(target_info["options"].get("require_audio", False)):
             entry = _entry(
                 kind="audio",
                 track=context,
                 pattern=naming["audio"],
                 source_rel=audio_rel,
+                source_kind=audio_source_kind,
                 ext=audio_ext,
+                audio_format=audio_format,
                 required=bool(rules.get("require_audio")) or bool(target_info["options"].get("require_audio", False)),
                 exists=audio_exists,
                 release_info=release_info,
@@ -124,7 +129,9 @@ def build_distribution_layout_plan(
                 track=context,
                 pattern=naming["lyrics"],
                 source_rel=lyrics_rel,
+                source_kind="release_export",
                 ext="txt",
+                audio_format={},
                 required=bool(rules.get("require_lyrics")),
                 exists=lyrics_exists or (has_lyrics and release_export_dir is None),
                 release_info=release_info,
@@ -140,7 +147,9 @@ def build_distribution_layout_plan(
             track=None,
             pattern=naming["artwork"],
             source_rel=_artwork_source_rel(artwork),
+            source_kind="artwork",
             ext=suffix,
+            audio_format={},
             required=bool(rules.get("require_artwork")) or bool(target_info["options"].get("require_artwork", False)),
             exists=artwork_exists,
             release_info=release_info,
@@ -224,12 +233,14 @@ def layout_manifest_payload(plan: dict[str, Any], file_records: list[dict[str, A
             "kind": entry.get("kind"),
             "track_id": entry.get("track_id"),
             "source_rel": entry.get("source_rel"),
+            "source_kind": entry.get("source_kind"),
             "path": path,
             "pattern": entry.get("pattern"),
             "original_path": entry.get("original_path"),
             "collision": bool(entry.get("collision", False)),
             "collision_index": entry.get("collision_index"),
             "ext": entry.get("ext"),
+            "audio_format": entry.get("audio_format") if isinstance(entry.get("audio_format"), dict) else {},
             "required": bool(entry.get("required", False)),
             "exists": bool(entry.get("exists", False)),
             "status": entry.get("status") or "planned",
@@ -304,7 +315,9 @@ def _entry(
     track: dict[str, Any] | None,
     pattern: str,
     source_rel: str,
+    source_kind: str,
     ext: str,
+    audio_format: dict[str, Any],
     required: bool,
     exists: bool,
     release_info: dict[str, Any],
@@ -313,7 +326,7 @@ def _entry(
     track_id = str((track or {}).get("track_id") or "")
     entry_id = f"{kind}:{track_id}" if track_id else f"{kind}:cover"
     try:
-        path = _render_pattern(kind, pattern, track=track, release_info=release_info, target_info=target_info, ext=ext)
+        path = _render_pattern(kind, pattern, track=track, release_info=release_info, target_info=target_info, ext=ext, audio_format=audio_format)
         status = "planned" if exists else "missing"
         error = None
     except ValueError as exc:
@@ -325,9 +338,11 @@ def _entry(
         "kind": kind,
         "track_id": track_id or None,
         "source_rel": source_rel,
+        "source_kind": source_kind,
         "path": path,
         "pattern": pattern,
         "ext": ext,
+        "audio_format": audio_format if kind == "audio" else {},
         "required": required,
         "exists": exists,
         "status": status,
@@ -365,14 +380,18 @@ def _add_entry(entries: list[dict[str, Any]], warnings: list[dict[str, Any]], er
     entries.append(entry)
 
 
-def _render_pattern(kind: str, pattern: str, *, track: dict[str, Any] | None, release_info: dict[str, Any], target_info: dict[str, Any], ext: str) -> str:
+def _render_pattern(kind: str, pattern: str, *, track: dict[str, Any] | None, release_info: dict[str, Any], target_info: dict[str, Any], ext: str, audio_format: dict[str, Any] | None = None) -> str:
     _ensure_variables_allowed(kind, pattern)
+    audio_format = audio_format if isinstance(audio_format, dict) else {}
     values: dict[str, Any] = {
         "ext": ext.strip(".").lower(),
+        "format": _slug_value(audio_format.get("format"), ext.strip(".").lower() or "audio"),
+        "profile_id": _slug_value(audio_format.get("profile_id") or target_info.get("profile_id"), "profile"),
+        "codec": _slug_value(audio_format.get("codec"), "codec"),
+        "bitrate_kbps": int(audio_format.get("bitrate_kbps") or 0),
         "release_slug": slugify(str(release_info.get("name") or release_info.get("release_id") or "release"))[:80],
         "release_id": _slug_value(release_info.get("release_id"), "release"),
         "upc": _slug_value(release_info.get("upc"), "upc"),
-        "profile_id": _slug_value(target_info.get("profile_id"), "profile"),
         "target_id": _slug_value(target_info.get("target_id"), "target"),
     }
     if track:
@@ -488,14 +507,30 @@ def _track_context(track: dict[str, Any], metadata: dict[str, Any] | None, relea
     return merged
 
 
-def _audio_source_rel(root: Path | None, track: dict[str, Any]) -> tuple[str, str]:
+def _audio_source_rel(root: Path | None, track: dict[str, Any], *, target_info: dict[str, Any], encoded_audio_summary: dict[str, Any] | None, encoded_audio_root: Path | None) -> tuple[str, str, str, dict[str, Any]]:
+    profile_id = str((target_info.get("options") or {}).get("primary_audio_format") or "").strip()
+    if profile_id and profile_id != "wav_master":
+        profile = _encoded_profile_summary(encoded_audio_summary, profile_id)
+        ext = str(profile.get("extension") or "").strip(".").lower()
+        if ext:
+            track_id = str(track.get("track_id") or "")
+            rel = validate_layout_path(f"formats/{profile_id}/tracks/{track_id}/song.{ext}")
+            return rel, ext, "encoded_audio", profile
     directory = str(track.get("directory") or "").strip("/")
     candidates = [f"{directory}/song.wav" if directory else "song.wav", f"{directory}/song.mid" if directory else "song.mid"]
     for rel in candidates:
         if _source_exists(root, rel):
-            return validate_layout_path(rel), Path(rel).suffix.lower().lstrip(".") or "wav"
+            return validate_layout_path(rel), Path(rel).suffix.lower().lstrip(".") or "wav", "release_export", {"profile_id": "wav_master", "format": "wav", "extension": "wav", "codec": "pcm_s16le"}
     fallback = candidates[0]
-    return validate_layout_path(fallback), Path(fallback).suffix.lower().lstrip(".") or "wav"
+    return validate_layout_path(fallback), Path(fallback).suffix.lower().lstrip(".") or "wav", "release_export", {"profile_id": "wav_master", "format": "wav", "extension": "wav", "codec": "pcm_s16le"}
+
+
+def _encoded_profile_summary(summary: dict[str, Any] | None, profile_id: str) -> dict[str, Any]:
+    profiles = summary.get("profiles") if isinstance(summary, dict) and isinstance(summary.get("profiles"), list) else []
+    for row in profiles:
+        if isinstance(row, dict) and row.get("profile_id") == profile_id:
+            return row
+    return {"profile_id": profile_id, "format": profile_id.split("_", 1)[0], "extension": profile_id.split("_", 1)[0], "codec": ""}
 
 
 def _lyrics_source_rel(track: dict[str, Any]) -> str:
@@ -529,7 +564,7 @@ def _attr(value: Any, name: str) -> Any:
 
 
 def _entry_hash_payload(entry: dict[str, Any]) -> dict[str, Any]:
-    return {key: entry.get(key) for key in ("entry_id", "kind", "track_id", "source_rel", "path", "pattern", "ext", "required", "exists", "status", "collision", "original_path", "collision_index")}
+    return {key: entry.get(key) for key in ("entry_id", "kind", "track_id", "source_rel", "source_kind", "path", "pattern", "ext", "audio_format", "required", "exists", "status", "collision", "original_path", "collision_index")}
 
 
 def _layout_hash_payload(plan: dict[str, Any]) -> dict[str, Any]:

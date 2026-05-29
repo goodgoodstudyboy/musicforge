@@ -25,6 +25,7 @@ from song_agent.release_audio import read_release_audio_qa, release_audio_summar
 from song_agent.audio_review_evidence import export_audio_reviews
 from song_agent.audio_revision import export_audio_revisions
 from song_agent.mastering_qa import export_mastering, selected_mastering_track_sources
+from song_agent.audio_encoding import export_encoded_audio_summary
 from song_agent.release_metadata import (
     attach_metadata_export_to_manifest,
     export_release_metadata_files,
@@ -115,6 +116,7 @@ def build_release_export_bundle(
     audio_reviews_summary = _release_audio_reviews_summary(release_store, release.release_id, export_dir)
     audio_revisions_summary = _release_audio_revisions_summary(release_store, release.release_id, export_dir)
     mastering_summary = _release_mastering_summary(release_store, release.release_id, export_dir)
+    encoded_audio_summary = _release_encoded_audio_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
     if (export_dir / "acceptance-analytics-summary.json").exists():
@@ -146,6 +148,8 @@ def build_release_export_bundle(
         for mastering_file in sorted((export_dir / "mastering").rglob("*")):
             if mastering_file.is_file():
                 copied_files.append(_file_record(export_dir, mastering_file))
+    if (export_dir / "encoded-audio-summary.json").exists():
+        copied_files.append(_file_record(export_dir, export_dir / "encoded-audio-summary.json"))
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -170,6 +174,7 @@ def build_release_export_bundle(
         "audio_reviews": audio_reviews_summary,
         "audio_revisions": audio_revisions_summary,
         "mastering": mastering_summary,
+        "encoded_audio": encoded_audio_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -558,6 +563,15 @@ def _release_mastering_summary(release_store: ReleaseStore, release_id: str, exp
         target = export_dir / "mastering"
         target.mkdir(parents=True, exist_ok=True)
         write_json(target / "summary.json", summary)
+        return summary
+
+
+def _release_encoded_audio_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        return export_encoded_audio_summary(release_store, release_id, export_dir)
+    except Exception:
+        summary = {"status": "missing", "profile_count": 0}
+        write_json(export_dir / "encoded-audio-summary.json", summary)
         return summary
 
 

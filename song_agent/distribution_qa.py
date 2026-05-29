@@ -20,6 +20,7 @@ from song_agent.release_metadata import read_release_metadata, read_release_meta
 from song_agent.release_metadata_qa import mark_release_metadata_qa_stale
 from song_agent.release_verifier import verify_release_zip, verification_summary
 from song_agent.releases import ReleaseDocument, stable_hash
+from song_agent.audio_encoding import AudioEncodingStore, encoded_audio_gate, resolve_target_audio_format_profiles
 
 
 DISTRIBUTION_QA_SCHEMA_VERSION = 1
@@ -77,6 +78,10 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
     profile = get_distribution_profile(target.profile_id)
     template = store.resolve_target_template(target)
     checklist = reconcile_distribution_checklist(store, release.release_id, target, template, write=False) if template else {}
+    encoded_profiles = resolve_target_audio_format_profiles(target, template)
+    encoded_required_profiles = [profile for profile in encoded_profiles if profile != "wav_master"]
+    encoded_required = bool(target.options.get("require_encoded_audio", False)) or bool(encoded_required_profiles)
+    encoded_summary = _encoded_audio_summary_for_layout(store, release.release_id, encoded_required_profiles)
     layout = build_distribution_layout_plan(
         release_id=release.release_id,
         target=target,
@@ -86,7 +91,10 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
         template=template,
         artwork=artwork,
         release_export_dir=store.release_store.export_dir(release.release_id),
+        encoded_audio_summary=encoded_summary,
+        encoded_audio_root=store.release_store.release_dir(release.release_id) / "encoded-audio",
     )
+    encoded_gate = _distribution_encoded_audio_gate(store, release.release_id, encoded_required_profiles, required=encoded_required)
     return sanitize_metadata(
         {
             "release": {
@@ -108,6 +116,7 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
             "template": template_summary(template),
             "checklist": checklist_summary(checklist) if checklist else {},
             "layout": layout_summary(layout),
+            "encoded_audio": encoded_gate,
             "release_export_manifest_hash": stable_hash({key: value for key, value in export_manifest.items() if key != "zip"}) if export_manifest else None,
             "release_zip_sha256": _sha256_file(release_zip_path),
             "release_signoff_hash": stable_hash(release_signoff) if release_signoff else None,
@@ -195,6 +204,19 @@ def raw_metadata_formula_findings(value: Any) -> list[dict[str, Any]]:
     return sanitize_metadata(findings, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
+def _distribution_encoded_audio_gate(store: DistributionStore, release_id: str, profile_ids: list[str], *, required: bool) -> dict[str, Any]:
+    if not required:
+        return {"status": "not_required", "require_encoded_audio": False, "required_audio_format_profiles": []}
+    encoding_store = AudioEncodingStore(store.release_store, project_store=store.release_store.project_store)
+    return encoded_audio_gate(encoding_store, release_id, required_profiles=profile_ids, required=True)
+
+
+def _encoded_audio_summary_for_layout(store: DistributionStore, release_id: str, profile_ids: list[str]) -> dict[str, Any]:
+    if not profile_ids:
+        return {}
+    return AudioEncodingStore(store.release_store, project_store=store.release_store.project_store).get_summary(release_id)
+
+
 def _checks(store: DistributionStore, release: ReleaseDocument, target: DistributionTarget, source: dict[str, Any]) -> list[dict[str, Any]]:
     options = target.options if isinstance(target.options, dict) else {}
     checks: list[dict[str, Any]] = []
@@ -205,6 +227,10 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
     metadata_qa = read_release_metadata_qa(store.release_store, release.release_id, default={}) if metadata else {}
     template = store.resolve_target_template(target)
     checklist = reconcile_distribution_checklist(store, release.release_id, target, template, write=False) if template else {}
+    encoded_profiles = resolve_target_audio_format_profiles(target, template)
+    encoded_required_profiles = [profile for profile in encoded_profiles if profile != "wav_master"]
+    encoded_required = bool(options.get("require_encoded_audio", False)) or bool(encoded_required_profiles)
+    encoded_summary = _encoded_audio_summary_for_layout(store, release.release_id, encoded_required_profiles)
     layout = build_distribution_layout_plan(
         release_id=release.release_id,
         target=target,
@@ -214,15 +240,21 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
         template=template,
         artwork=_selected_artwork(store, release.release_id, target),
         release_export_dir=store.release_store.export_dir(release.release_id),
+        encoded_audio_summary=encoded_summary,
+        encoded_audio_root=store.release_store.release_dir(release.release_id) / "encoded-audio",
     )
+    encoded_gate = _distribution_encoded_audio_gate(store, release.release_id, encoded_required_profiles, required=encoded_required)
 
     checks.append(_check("release_exists", False, "blocking", "Release exists."))
     checks.append(_check("release_not_hidden", bool(release.hidden), "blocking", "Release must not be hidden."))
     signed_ok = release.status == "signed" and release_signoff.get("status") in {"signed", "force_signed"}
-    checks.append(_check("release_signed", not signed_ok, "blocking", "Release Signoff must exist and be current."))
+    if bool(options.get("require_release_signed", False)):
+        checks.append(_check("release_signed", not signed_ok, "blocking", "Release Signoff must exist and be current."))
+    else:
+        checks.append(_check("release_signed", False, "warning", "Release Signoff is not required for this target."))
     checks.append(_check("release_export_exists", not bool(export_manifest), "blocking", "Signed Release Export must exist."))
     checks.append(_check("release_zip_exists", not release_zip_path.exists(), "blocking", "Signed Release ZIP must exist."))
-    if release_zip_path.exists():
+    if bool(options.get("require_release_zip_verified", False)) and release_zip_path.exists():
         verify = verify_release_zip(release_zip_path, require_audio=bool(options.get("require_audio", False)))
         status = verify.get("status")
         checks.append(
@@ -234,14 +266,17 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
                 extra={"verification_summary": verification_summary(verify)},
             )
         )
+    elif not bool(options.get("require_release_zip_verified", False)):
+        checks.append(_check("release_zip_verify", False, "warning", "Release ZIP verification is not required for this target."))
     metadata_summary = export_manifest.get("metadata") if isinstance(export_manifest.get("metadata"), dict) else {}
-    checks.append(_check("metadata_exists", not bool(metadata), "blocking", "Release metadata must exist."))
+    require_metadata = bool(options.get("require_metadata_export", False))
+    checks.append(_check("metadata_exists", require_metadata and not bool(metadata), "blocking", "Release metadata must exist."))
     if metadata:
         current_meta_hash = release_metadata_source_hash(release, metadata)
         if metadata_qa and metadata_qa.get("source_hash") != current_meta_hash:
             metadata_qa = mark_release_metadata_qa_stale(metadata_qa, current_source_hash=current_meta_hash)
-        checks.append(_check("metadata_qa_current", not metadata_qa or metadata_qa.get("status") not in {"passed", "warning"}, "blocking", "Release Metadata QA must be passed or warning and current."))
-        checks.append(_check("metadata_export_present", not metadata_summary.get("exists"), "blocking", "Release Metadata Export must be present in signed Release Export."))
+        checks.append(_check("metadata_qa_current", require_metadata and (not metadata_qa or metadata_qa.get("status") not in {"passed", "warning"}), "blocking", "Release Metadata QA must be passed or warning and current."))
+        checks.append(_check("metadata_export_present", require_metadata and not metadata_summary.get("exists"), "blocking", "Release Metadata Export must be present in signed Release Export."))
         checks.extend(_identifier_checks(metadata, options))
         if template:
             checks.extend(_mapping_checks(metadata, template))
@@ -258,6 +293,8 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
     if bool(options.get("require_audio", False)):
         missing_audio = _missing_release_export_audio(store, release.release_id, export_manifest)
         checks.append(_check("audio_wav_present", bool(missing_audio), "blocking", "Each track must include song.wav for this profile.", count=len(missing_audio), extra={"missing": missing_audio[:20]}))
+    if encoded_required:
+        checks.append(_check("encoded_audio_current", encoded_gate.get("status") != "passed", "blocking", "Required encoded audio profiles must be current.", extra={"encoded_audio": encoded_gate}))
     artwork = _selected_artwork(store, release.release_id, target)
     require_artwork = bool(options.get("require_artwork", False))
     checks.append(_check("artwork_exists", require_artwork and not artwork, "blocking", "Artwork is required for this profile."))

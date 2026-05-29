@@ -36,6 +36,7 @@ from song_agent.release_export import read_release_export_manifest
 from song_agent.release_metadata import read_release_metadata
 from song_agent.release_qa import scan_release_payload_for_sensitive_values
 from song_agent.releases import stable_hash
+from song_agent.audio_encoding import AudioEncodingStore, resolve_target_audio_format_profiles
 
 
 DISTRIBUTION_EXPORT_SCHEMA_VERSION = 1
@@ -85,6 +86,8 @@ def build_distribution_export_package(
         template=template,
         artwork=artwork,
         release_export_dir=release_export_dir,
+        encoded_audio_summary=AudioEncodingStore(store.release_store, project_store=store.release_store.project_store).get_summary(release_id),
+        encoded_audio_root=store.release_store.release_dir(release_id) / "encoded-audio",
     )
     if layout_plan.get("summary", {}).get("status") == "failed":
         errors = layout_plan.get("errors") if isinstance(layout_plan.get("errors"), list) else []
@@ -105,6 +108,7 @@ def build_distribution_export_package(
             copied_files.append(_file_record(export_dir, mapped_csv))
     layout_records = _copy_layout_entries(store, release_id, release_export_dir, export_dir, layout_plan, artwork=artwork)
     copied_files.extend(layout_records)
+    encoded_audio_summary = _write_encoded_audio_sidecars(store, release_id, target, export_dir, copied_files)
     artwork_record = _artwork_record(artwork, layout_plan)
     wrote_checklist_doc = _write_docs(export_dir, release, target, package_id, qa_report, artwork_record, checklist=checklist, write_checklist=not bool(template))
     _write_readme(export_dir, release, target, package_id, qa_report)
@@ -153,6 +157,7 @@ def build_distribution_export_package(
             "release_zip_sha256": _sha256_file(store.release_store.zip_path(release_id)),
         },
         "artwork": artwork_record,
+        "encoded_audio": encoded_audio_summary,
         "layout": layout_payload,
         "sidecars": {
             "distribution_signoff": _distribution_signoff_sidecar_record(signoff_public),
@@ -360,6 +365,7 @@ def _selected_artwork(store: DistributionStore, release_id: str, target: Distrib
 
 def _copy_layout_entries(store: DistributionStore, release_id: str, release_export_dir: Path, export_dir: Path, layout_plan: dict[str, Any], *, artwork: dict[str, Any]) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    encoded_root = store.release_store.release_dir(release_id).resolve() / "encoded-audio"
     for entry in layout_plan.get("entries", []) if isinstance(layout_plan.get("entries"), list) else []:
         if not isinstance(entry, dict) or not entry.get("exists") or entry.get("status") == "failed":
             continue
@@ -372,8 +378,10 @@ def _copy_layout_entries(store: DistributionStore, release_id: str, release_expo
         target.parent.mkdir(parents=True, exist_ok=True)
         if kind in {"audio", "lyrics"}:
             source_rel = _validate_relative_path(str(entry.get("source_rel") or ""))
-            source = (release_export_dir / source_rel).resolve()
-            _ensure_within(release_export_dir, source)
+            source_kind = str(entry.get("source_kind") or "release_export")
+            source_root = encoded_root if source_kind == "encoded_audio" else release_export_dir
+            source = (source_root / source_rel).resolve()
+            _ensure_within(source_root, source)
             if not source.exists() or not source.is_file() or source.is_symlink():
                 if entry.get("required"):
                     raise DistributionExportError(f"Required layout source is missing: {source_rel}.")
@@ -392,6 +400,28 @@ def _copy_layout_entries(store: DistributionStore, release_id: str, release_expo
             shutil.copy2(source, target)
             records.append(_file_record(export_dir, target))
     return records
+
+
+def _write_encoded_audio_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+    template = store.resolve_target_template(target)
+    profile_ids = [profile_id for profile_id in resolve_target_audio_format_profiles(target, template) if profile_id != "wav_master"]
+    encoding_store = AudioEncodingStore(store.release_store, project_store=store.release_store.project_store)
+    summary = encoding_store.get_summary(release_id)
+    if not profile_ids:
+        return {"status": "not_required", "profiles": []}
+    target_dir = export_dir / "encoded-audio"
+    manifests_dir = target_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(target_dir / "summary.json", summary)
+    records.append(_file_record(export_dir, target_dir / "summary.json"))
+    copied_profiles: list[dict[str, Any]] = []
+    for profile_id in profile_ids:
+        manifest = encoding_store.read_manifest(release_id, profile_id)
+        manifest_path = manifests_dir / f"{profile_id}.json"
+        _write_json(manifest_path, sanitize_metadata(manifest, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
+        records.append(_file_record(export_dir, manifest_path))
+        copied_profiles.append({"profile_id": profile_id, "manifest_path": f"encoded-audio/manifests/{profile_id}.json", "manifest_hash": manifest.get("integrity_hash"), "source_hash": manifest.get("source_hash")})
+    return sanitize_metadata({"status": "included", "profiles": copied_profiles, "summary_path": "encoded-audio/summary.json"}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def _artwork_record(artwork: dict[str, Any], layout_plan: dict[str, Any]) -> dict[str, Any]:

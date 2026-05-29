@@ -29,6 +29,7 @@ from song_agent.release_checks import (
     _v52_arrangement_mix_controls_smoke,
     _v53_audio_revision_workbench_smoke,
     _v54_mastering_qa_smoke,
+    _v55_distribution_audio_formats_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -315,6 +316,18 @@ def test_v54_mastering_qa_smoke(tmp_path: Path) -> None:
     assert "stale_export=409" in detail
     assert "sign=200" in detail
     assert "tamper_selected=failed" in detail
+
+
+def test_v55_distribution_audio_formats_smoke(tmp_path: Path) -> None:
+    ok, detail = _v55_distribution_audio_formats_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "encode=201/completed" in detail
+    assert "stale_export=409" in detail
+    assert "sign=200" in detail
+    assert "dist_verify=" in detail
+    assert "tampered=failed" in detail
+    assert "signed_guard=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

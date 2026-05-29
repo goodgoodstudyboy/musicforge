@@ -1,5 +1,20 @@
 # Changelog
 
+## v5.5.0 - 2026-05-29
+
+### Added
+- Distribution Audio Formats with built-in `wav_master`, `mp3_320`, `mp3_v0`, `flac_lossless`, and `aac_256` encoding profiles.
+- Local audio encoder config plus deterministic fake runner support for tests and release-check without requiring real FFmpeg.
+- Release encoded audio API/CLI for rendering, verifying, resetting, downloading per-track outputs, and managing profile evidence.
+- Release Signoff gate `require_encoded_audio=true`, including stale Release Export detection after encoded audio is rendered.
+- Release Export and `verify-release --require-encoded-audio --require-audio-formats ...` support for encoded audio summaries.
+- Distribution Target audio format options, encoded layout packaging, encoded sidecar manifests, and `verify-distribution-package --require-encoded-audio`.
+- Studio controls for encoded audio render/verify/reset, encoded signoff requirement, and Distribution primary audio format selection.
+- v5.5 release-check smoke covering missing encoded signoff block, fake-runner MP3/FLAC render, stale export guard, signed-release mutation guard, Distribution MP3 package verification, and fake MP3 tamper failure.
+
+### Verified
+- `python -m pytest tests\test_audio_encoding.py tests\test_server_audio_encoding.py tests\test_distribution_encoded_audio.py tests\test_release_check.py::test_v55_distribution_audio_formats_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+
 ## v5.4.1 - 2026-05-29
 
 ### Fixed

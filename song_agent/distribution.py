@@ -655,6 +655,8 @@ def _merge_target_options(profile: dict[str, Any], rules: dict[str, Any], overri
             continue
         if isinstance(value, (str, int, float, bool)) or value is None:
             base[key] = value
+        elif isinstance(value, list) and all(isinstance(item, (str, int, float, bool)) or item is None for item in value):
+            base[key] = value
     return sanitize_metadata(base, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 

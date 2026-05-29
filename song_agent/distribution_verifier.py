@@ -21,6 +21,7 @@ from song_agent.distribution_templates import DistributionTemplateError, templat
 from song_agent.projectio import write_json
 from song_agent.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
+from song_agent.audio_encoding import detect_audio_format_bytes, encoded_manifest_integrity_ok, encoded_audio_summary_integrity_ok
 from song_agent.releases import stable_hash
 
 
@@ -41,6 +42,7 @@ def verify_distribution_package(
     strict: bool = False,
     require_audio: bool = False,
     require_artwork: bool = False,
+    require_encoded_audio: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -51,6 +53,7 @@ def verify_distribution_package(
         strict=strict,
         require_audio=require_audio,
         require_artwork=require_artwork,
+        require_encoded_audio=require_encoded_audio,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -118,6 +121,7 @@ class _DistributionPackageVerifier:
         strict: bool,
         require_audio: bool,
         require_artwork: bool,
+        require_encoded_audio: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -127,6 +131,7 @@ class _DistributionPackageVerifier:
         self.strict = strict
         self.require_audio = require_audio
         self.require_artwork = require_artwork
+        self.require_encoded_audio = require_encoded_audio
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -143,6 +148,8 @@ class _DistributionPackageVerifier:
         self.template_summary_doc: dict[str, Any] = {}
         self.checklist: dict[str, Any] = {}
         self.layout: dict[str, Any] = {}
+        self.encoded_audio_summary: dict[str, Any] = {}
+        self.encoded_audio_manifests: dict[str, dict[str, Any]] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -166,6 +173,7 @@ class _DistributionPackageVerifier:
                 self._verify_template_and_checklist()
                 self._verify_layout(archive)
                 self._verify_metadata_and_artwork(archive)
+                self._verify_encoded_audio(archive)
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -281,6 +289,16 @@ class _DistributionPackageVerifier:
             self.checklist = self._read_json_entry(archive, "docs/checklist.json", "checklist", "distribution_checklist_parse")
         if "layout/manifest-layout.json" in self.entry_map:
             self.layout = self._read_json_entry(archive, "layout/manifest-layout.json", "layout", "distribution_layout_sidecar_parse")
+        if "encoded-audio/summary.json" in self.entry_map:
+            self.encoded_audio_summary = self._read_json_entry(archive, "encoded-audio/summary.json", "encoded_audio", "distribution_encoded_audio_summary_parse")
+        encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        for row in encoded.get("profiles", []) if isinstance(encoded.get("profiles"), list) else []:
+            if not isinstance(row, dict):
+                continue
+            profile_id = str(row.get("profile_id") or "")
+            path = str(row.get("manifest_path") or f"encoded-audio/manifests/{profile_id}.json")
+            if path in self.entry_map:
+                self.encoded_audio_manifests[profile_id] = self._read_json_entry(archive, path, "encoded_audio", "distribution_encoded_audio_manifest_parse")
 
     def _verify_package_release(self) -> None:
         errors: list[str] = []
@@ -458,6 +476,55 @@ class _DistributionPackageVerifier:
             failed = not audio_entries or missing_audio or bad_audio
             self._add_check("audio", "distribution_audio_file_valid", "failed" if failed else "passed", "blocking", "Audio files are missing or invalid." if failed else "Audio layout files are present and valid.", count=len(missing_audio) + len(bad_audio) if audio_entries else 1)
 
+    def _verify_encoded_audio(self, archive: zipfile.ZipFile) -> None:
+        encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
+        encoded_entries = [entry for entry in layout_entries if isinstance(entry, dict) and entry.get("kind") == "audio" and entry.get("source_kind") == "encoded_audio"]
+        required = self.require_encoded_audio or bool(encoded_entries)
+        if not required:
+            self._add_check("encoded_audio", "distribution_encoded_audio_optional", "passed", "warning", "Encoded audio is not required.")
+            return
+        failures: list[str] = []
+        if not self.encoded_audio_summary:
+            failures.append("summary_missing")
+        elif not encoded_audio_summary_integrity_ok(self.encoded_audio_summary):
+            failures.append("summary_integrity")
+        for entry in encoded_entries:
+            audio_format = entry.get("audio_format") if isinstance(entry.get("audio_format"), dict) else {}
+            profile_id = str(audio_format.get("profile_id") or "")
+            manifest = self.encoded_audio_manifests.get(profile_id)
+            if not manifest:
+                failures.append(f"{profile_id}:manifest_missing")
+                continue
+            if not encoded_manifest_integrity_ok(manifest):
+                failures.append(f"{profile_id}:manifest_integrity")
+            track_id = str(entry.get("track_id") or "")
+            row = next((item for item in manifest.get("tracks", []) if isinstance(item, dict) and item.get("track_id") == track_id), None)
+            path = str(entry.get("path") or "")
+            info = self.entry_map.get(path)
+            if info is None:
+                failures.append(f"{path}:missing")
+                continue
+            data = archive.read(info)
+            detected = detect_audio_format_bytes(data[:32])
+            expected_format = str(manifest.get("format") or audio_format.get("format") or "")
+            if detected != expected_format and not (expected_format == "aac" and detected == "aac"):
+                failures.append(f"{path}:header")
+            if row:
+                actual_sha = hashlib.sha256(data).hexdigest()
+                if actual_sha != row.get("output_sha256"):
+                    failures.append(f"{path}:hash")
+            else:
+                failures.append(f"{profile_id}:{track_id}:track_missing")
+        self._add_check(
+            "encoded_audio",
+            "distribution_encoded_audio_evidence",
+            "failed" if failures else "passed",
+            "blocking",
+            "Distribution encoded audio evidence matches package files." if not failures else "Distribution encoded audio failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
         layout_lyrics = {str(entry.get("path") or "") for entry in layout_entries if isinstance(entry, dict) and entry.get("kind") == "lyrics"}
@@ -521,6 +588,7 @@ class _DistributionPackageVerifier:
             "strict": self.strict,
             "require_audio": self.require_audio,
             "require_artwork": self.require_artwork,
+            "require_encoded_audio": self.require_encoded_audio,
             "summary": {
                 "package_id": self.manifest.get("package_id"),
                 "release_id": self.manifest.get("release_id"),
