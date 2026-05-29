@@ -319,6 +319,8 @@ from song_agent.planning_rule_impact import (
 from song_agent.acceptance_diff import build_acceptance_diff
 from song_agent.acceptance_profiles import list_acceptance_profiles
 from song_agent.audio_profiles import AudioProfileError, AudioProfileNotFoundError, AudioProfileStore
+from song_agent.mastering_profiles import MasteringProfileError, MasteringProfileNotFoundError, MasteringProfileStore
+from song_agent.mastering_qa import MasteringNotFoundError, MasteringQAError, MasteringStateError, MasteringStore
 from song_agent.music_acceptance import (
     AcceptanceNotFoundError,
     AcceptanceStateError,
@@ -2561,6 +2563,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.audio_profile_store  # type: ignore[attr-defined]
 
     @property
+    def mastering_profile_store(self) -> MasteringProfileStore:
+        return self.server.mastering_profile_store  # type: ignore[attr-defined]
+
+    @property
+    def mastering_store(self) -> MasteringStore:
+        return self.server.mastering_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -2637,6 +2647,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/audio/profiles" or path.startswith("/api/audio/profiles/"):
                 self._handle_audio_profiles_route(method, path)
+                return
+            if path == "/api/mastering/profiles" or path.startswith("/api/mastering/profiles/"):
+                self._handle_mastering_profiles_route(method, path)
                 return
             if path == "/api/jobs":
                 if method == "GET":
@@ -4910,6 +4923,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_release_audio_revisions(method, release_id, tail.removeprefix("/audio-revisions"))
                 return
 
+            if tail == "/mastering" or tail.startswith("/mastering/"):
+                self._handle_release_mastering(method, release_id, tail.removeprefix("/mastering"))
+                return
+
             if tail == "/metadata":
                 if method == "GET":
                     metadata = read_release_metadata(self.release_store, release_id, default={})
@@ -5364,6 +5381,104 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except (MixControlError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_mastering(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json(
+                    {
+                        "ok": True,
+                        "release_id": release_id,
+                        "summary": self.mastering_store.get_summary(release_id, now=_utc_now()),
+                        "analysis": self.mastering_store.read_analysis(release_id, default={}),
+                        "plan": self.mastering_store.read_plan(release_id, default={}),
+                        "candidates": self.mastering_store.list_candidates(release_id),
+                        "selected_candidate": self.mastering_store.read_selected_candidate(release_id, default={}),
+                    }
+                )
+                return
+            if tail == "/analyze":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                analysis = self.mastering_store.analyze(release_id, self._optional_json_body(), now=_utc_now())
+                self.release_store.append_event(release_id, "release_mastering_analyzed", {"status": analysis.get("status"), "profile_id": analysis.get("profile_id")})
+                self._send_json({"ok": True, "release_id": release_id, "analysis": analysis, "summary": self.mastering_store.get_summary(release_id, now=_utc_now())})
+                return
+            if tail == "/plan":
+                if method == "GET":
+                    plan = self.mastering_store.read_plan(release_id, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "plan": plan, "summary": self.mastering_store.get_summary(release_id, now=_utc_now())})
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.mastering_store.build_plan(release_id, self._optional_json_body(), now=_utc_now())
+                self.release_store.append_event(release_id, "release_mastering_plan_created", {"action_count": plan.get("summary", {}).get("action_count")})
+                self._send_json({"ok": True, "release_id": release_id, "plan": plan, "summary": self.mastering_store.get_summary(release_id, now=_utc_now())})
+                return
+            if tail == "/candidates":
+                if method == "GET":
+                    self._send_json({"ok": True, "release_id": release_id, "candidates": self.mastering_store.list_candidates(release_id), "summary": self.mastering_store.get_summary(release_id, now=_utc_now())})
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                candidate = self.mastering_store.render_candidate(release_id, self._optional_json_body(), now=_utc_now())
+                self.release_store.append_event(release_id, "release_mastering_candidate_rendered", {"candidate_id": candidate.get("candidate_id"), "status": candidate.get("status")})
+                self._send_json({"ok": True, "release_id": release_id, "candidate": candidate, "summary": self.mastering_store.get_summary(release_id, now=_utc_now())}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.mastering_store.refresh(release_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, **result})
+                return
+            if tail == "/reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.mastering_store.reset(release_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, **result})
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if len(parts) >= 2 and parts[0] == "candidates":
+                candidate_id = parts[1]
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    candidate = self.mastering_store.read_candidate(release_id, candidate_id)
+                    self._send_json({"ok": True, "release_id": release_id, "candidate": candidate})
+                    return
+                if len(parts) == 5 and parts[2] == "tracks" and parts[4] == "audio":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    path = self.mastering_store.candidate_audio_path(release_id, candidate_id, parts[3])
+                    self._send_file(path, "audio/wav", filename=f"{parts[3]}-mastered.wav")
+                    return
+                if len(parts) == 3 and parts[2] in {"review", "select"}:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    if parts[2] == "review":
+                        candidate = self.mastering_store.review_candidate(release_id, candidate_id, self._read_json_body(), now=_utc_now())
+                    else:
+                        candidate = self.mastering_store.select_candidate(release_id, candidate_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "candidate": candidate, "summary": self.mastering_store.get_summary(release_id, now=_utc_now())})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Mastering route not found.")
+        except MasteringNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (MasteringStateError, ReleaseStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (MasteringQAError, MasteringProfileError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_audio_profiles_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/audio/profiles":
@@ -5413,6 +5528,53 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AudioProfileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except AudioProfileError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/mastering/profiles":
+                if method == "GET":
+                    profiles = [profile.to_dict() for profile in self.mastering_profile_store.list_profiles(include_builtins=True)]
+                    self._send_json({"ok": True, "profiles": profiles})
+                    return
+                if method == "POST":
+                    profile = self.mastering_profile_store.create_profile(self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "profile": profile.to_dict()}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            rest = path.removeprefix("/api/mastering/profiles/").strip("/")
+            parts = rest.split("/") if rest else []
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Mastering profile route not found.")
+                return
+            profile_id = parts[0]
+            if len(parts) == 1:
+                if method == "GET":
+                    profile = self.mastering_profile_store.get_profile(profile_id)
+                    self._send_json({"ok": True, "profile": profile.to_dict()})
+                    return
+                if method == "PATCH":
+                    profile = self.mastering_profile_store.update_profile(profile_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "profile": profile.to_dict()})
+                    return
+                if method == "DELETE":
+                    self.mastering_profile_store.delete_profile(profile_id)
+                    self._send_json({"ok": True, "deleted": True, "profile_id": profile_id})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 2 and parts[1] == "clone":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                profile = self.mastering_profile_store.clone_profile(profile_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "profile": profile.to_dict()}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Mastering profile route not found.")
+        except MasteringProfileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except MasteringProfileError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _renderer_profile_from_payload(self, payload: dict[str, Any] | None) -> Any | None:
@@ -5474,10 +5636,31 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if audio_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(audio_gate.get("message") or "Release audio gate failed.")
+        mastering_gate = self.mastering_store.gate(
+            release_id,
+            required=bool(payload.get("require_mastering_qa", False)),
+            profile_id=str(payload.get("mastering_profile_id") or "") or None,
+            force=force,
+        )
+        if mastering_gate and bool(payload.get("require_mastering_qa", False)):
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["mastering"] = mastering_gate
+            if mastering_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(mastering_gate.get("message") or "Mastering QA gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
                     "error": str(audio_gate.get("message") or "Release audio gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if mastering_gate.get("hard_block") and mastering_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(mastering_gate.get("message") or "Mastering QA gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -12319,6 +12502,8 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.acceptance_fix_plan_store.planning_rule_governance_store = self.planning_rule_governance_store
         self.planning_rule_impact_store = PlanningRuleImpactStore(governance_store=self.planning_rule_governance_store, plan_store=self.acceptance_fix_plan_store, review_store=self.acceptance_fix_plan_review_store, project_store=self.project_store)
         self.audio_profile_store = AudioProfileStore(self.release_store.root.parent / "audio-profiles")
+        self.mastering_profile_store = MasteringProfileStore(self.release_store.root.parent / "mastering-profiles")
+        self.mastering_store = MasteringStore(self.release_store, project_store=self.project_store, profile_store=self.mastering_profile_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

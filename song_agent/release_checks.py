@@ -224,6 +224,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.1 per-track audio review smoke", *_v51_per_track_audio_review_smoke(root))
     report.add("v5.2 arrangement mix controls smoke", *_v52_arrangement_mix_controls_smoke(root))
     report.add("v5.3 audio revision workbench smoke", *_v53_audio_revision_workbench_smoke(root))
+    report.add("v5.4 mastering qa smoke", *_v54_mastering_qa_smoke(root))
     return report
 
 
@@ -7392,6 +7393,107 @@ def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
             server.server_close()
         if original_revision_render is not None:
             audio_revision_module.render_audio = original_revision_render
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v54_mastering_qa_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v54-mastering-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        first_project = _v37_signed_project(server, "v5.4 Mastering One")
+        second_project = _v37_signed_project(server, "v5.4 Mastering Two")
+        _v50_add_project_audio(server, first_project, duration_seconds=30)
+        _v50_add_project_audio(server, second_project, duration_seconds=30)
+        release_status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.4 Mastering Release", "release_type": "ep", "primary_artist": "MusicForge"})
+        release_id = str(release.get("release", {}).get("release_id") or "")
+        first_track_status, _first = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": first_project})
+        second_track_status, _second = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": second_project})
+        qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        audio_status, audio = _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        missing_mastering_status, _missing_mastering = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_mastering_qa": True})
+        profile_status, profiles = _release_http_json(server, "GET", "/api/mastering/profiles")
+        analyze_status, analyze = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        plan_status, plan = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
+        candidate_status, candidate = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
+        candidate_id = str(candidate.get("candidate", {}).get("candidate_id") or "")
+        review_status, review = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual A/B mastering accepted."})
+        select_status, selected = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
+        audio_download_status, audio_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/tracks/track-000001/audio")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_mastering_qa": True})
+        signed_mutation_status, _signed_mutation = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        zip_path = base / ".musicforge" / "releases" / release_id / "release-export.zip"
+        verify = verify_release_zip(zip_path, require_audio=True, require_mastering=True)
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            track_wav = next(name for name in archive.namelist() if name.startswith("tracks/") and name.endswith("/song.wav"))
+            selected_path = "mastering/selected-candidate.json"
+
+        def tamper_track_wav(_data: bytes) -> bytes:
+            return b"not-a-real-wav"
+
+        def tamper_selected(data: bytes) -> bytes:
+            payload = json.loads(data.decode("utf-8"))
+            payload.setdefault("review", {})["reviewed_by"] = "tampered-reviewer"
+            return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        tampered_wav = verify_release_zip(_v38_rewrite_zip(zip_path, base / "tampered-mastering-wav.zip", transforms={track_wav: tamper_track_wav}), require_audio=True, require_mastering=True)
+        tampered_selected = verify_release_zip(_v38_rewrite_zip(zip_path, base / "tampered-mastering-selected.zip", transforms={selected_path: tamper_selected}), require_audio=True, require_mastering=True)
+        ok = (
+            release_status == 201
+            and first_track_status == 200
+            and second_track_status == 200
+            and qa_status == 200
+            and audio_status == 200
+            and audio.get("summary", {}).get("status") == "passed"
+            and missing_mastering_status == 409
+            and profile_status == 200
+            and any(item.get("profile_id") == "demo_review" for item in profiles.get("profiles", []))
+            and analyze_status == 200
+            and analyze.get("summary", {}).get("status") in {"passed", "warning"}
+            and plan_status == 200
+            and plan.get("plan", {}).get("summary", {}).get("track_count") == 2
+            and candidate_status == 201
+            and review_status == 200
+            and review.get("candidate", {}).get("review", {}).get("status") == "accepted"
+            and select_status == 200
+            and selected.get("candidate", {}).get("selected") is True
+            and audio_download_status == 200
+            and audio_bytes.startswith(b"RIFF")
+            and export_status == 200
+            and export.get("manifest", {}).get("mastering", {}).get("selected_candidate_id") == candidate_id
+            and zip_status == 200
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("mastering", {}).get("status") == "passed"
+            and signed_mutation_status == 409
+            and verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(verify, "mastering_evidence") == "passed"
+            and tampered_wav.get("status") == "failed"
+            and _v38_check_status(tampered_wav, "mastering_evidence") == "failed"
+            and tampered_selected.get("status") == "failed"
+            and _v38_check_status(tampered_selected, "mastering_evidence") == "failed"
+        )
+        return ok, (
+            f"missing={missing_mastering_status}, analyze={analyze_status}/{analyze.get('summary', {}).get('status')}, "
+            f"candidate={candidate_status}, select={select_status}, sign={sign_status}, verify={verify.get('status')}, "
+            f"signed_mutation={signed_mutation_status}, tamper_wav={_v38_check_status(tampered_wav, 'mastering_evidence')}, "
+            f"tamper_selected={_v38_check_status(tampered_selected, 'mastering_evidence')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)

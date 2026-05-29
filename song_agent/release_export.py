@@ -24,6 +24,7 @@ from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.release_audio import read_release_audio_qa, release_audio_summary
 from song_agent.audio_review_evidence import export_audio_reviews
 from song_agent.audio_revision import export_audio_revisions
+from song_agent.mastering_qa import export_mastering, selected_mastering_track_sources
 from song_agent.release_metadata import (
     attach_metadata_export_to_manifest,
     export_release_metadata_files,
@@ -70,6 +71,7 @@ def build_release_export_bundle(
     copied_files: list[dict[str, Any]] = []
     tracklist: list[dict[str, Any]] = []
     used_slugs: set[str] = set()
+    mastered_track_sources = selected_mastering_track_sources(release_store, release.release_id, project_store=project_store)
     for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
         source_dir = final_export_dir(project_store.project_dir(track.project_id)).resolve()
         _ensure_within(project_store.project_dir(track.project_id).resolve(), source_dir)
@@ -77,7 +79,7 @@ def build_release_export_bundle(
         target_dir = (export_dir / "tracks" / track_dir_name).resolve()
         _ensure_within(export_dir, target_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
-        track_files = _copy_track_files(source_dir, target_dir, track_dir_name)
+        track_files = _copy_track_files(source_dir, target_dir, track_dir_name, mastered_wav=mastered_track_sources.get(track.track_id))
         copied_files.extend(track_files)
         tracklist.append(
             {
@@ -112,6 +114,7 @@ def build_release_export_bundle(
     audio_summary = _release_audio_qa_summary(release_store, release.release_id, export_dir)
     audio_reviews_summary = _release_audio_reviews_summary(release_store, release.release_id, export_dir)
     audio_revisions_summary = _release_audio_revisions_summary(release_store, release.release_id, export_dir)
+    mastering_summary = _release_mastering_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
     if (export_dir / "acceptance-analytics-summary.json").exists():
@@ -139,6 +142,10 @@ def build_release_export_bundle(
     if (export_dir / "audio-revisions" / "summary.json").exists():
         for revision_file in sorted((export_dir / "audio-revisions").rglob("*.json")):
             copied_files.append(_file_record(export_dir, revision_file))
+    if (export_dir / "mastering" / "summary.json").exists():
+        for mastering_file in sorted((export_dir / "mastering").rglob("*")):
+            if mastering_file.is_file():
+                copied_files.append(_file_record(export_dir, mastering_file))
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -162,6 +169,7 @@ def build_release_export_bundle(
         "audio": audio_summary,
         "audio_reviews": audio_reviews_summary,
         "audio_revisions": audio_revisions_summary,
+        "mastering": mastering_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -275,7 +283,7 @@ def release_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _copy_track_files(source_dir: Path, target_dir: Path, track_dir_name: str) -> list[dict[str, Any]]:
+def _copy_track_files(source_dir: Path, target_dir: Path, track_dir_name: str, *, mastered_wav: Path | None = None) -> list[dict[str, Any]]:
     if not source_dir.exists() or not source_dir.is_dir() or source_dir.is_symlink():
         raise ReleaseExportError("Project Final Export directory is missing.")
     records: list[dict[str, Any]] = []
@@ -287,10 +295,17 @@ def _copy_track_files(source_dir: Path, target_dir: Path, track_dir_name: str) -
         rel = _validate_relative_path(resolved.relative_to(source_dir).as_posix())
         if not _copy_allowed(rel):
             continue
+        if rel == "song.wav" and mastered_wav is not None:
+            continue
         target = (target_dir / rel).resolve()
         _ensure_within(target_dir, target)
         target.parent.mkdir(parents=True, exist_ok=True)
         _copy_release_export_file(resolved, target)
+        records.append(_file_record(target_dir.parent.parent, target))
+    if mastered_wav is not None:
+        target = (target_dir / "song.wav").resolve()
+        _ensure_within(target_dir, target)
+        _copy_release_export_file(mastered_wav.resolve(), target)
         records.append(_file_record(target_dir.parent.parent, target))
     for required in CORE_COPY_FILES:
         if not (target_dir / required).exists():
@@ -530,6 +545,17 @@ def _release_audio_revisions_summary(release_store: ReleaseStore, release_id: st
     except Exception:
         summary = {"status": "missing", "session_count": 0, "open_issue_count": 0}
         target = export_dir / "audio-revisions"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "summary.json", summary)
+        return summary
+
+
+def _release_mastering_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        return export_mastering(release_store, release_id, export_dir, project_store=release_store.project_store)
+    except Exception:
+        summary = {"status": "missing", "track_count": 0}
+        target = export_dir / "mastering"
         target.mkdir(parents=True, exist_ok=True)
         write_json(target / "summary.json", summary)
         return summary

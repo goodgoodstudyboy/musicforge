@@ -3163,6 +3163,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let metadataData = { summary: {}, metadata: {}, metadata_qa: { checks: [], track_checks: [] } };
       let audioReviewData = { summary: {}, reviews: [] };
       let audioRevisionData = { summary: {}, sessions: [] };
+      let masteringData = { summary: {}, analysis: {}, plan: {}, candidates: [], selected_candidate: {} };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
       let releaseAnalyticsData = { summary: {}, analytics: null };
@@ -3177,6 +3178,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           audioRevisionData.detail = await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(firstRevisionSession)}`);
         }
       } catch (err) {}
+      try { masteringData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering`); } catch (err) {}
       try {
         metadataData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
         const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
@@ -3226,6 +3228,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseMetadataHtml(metadataData, release)}
         ${releaseAudioReviewHtml(audioReviewData, release)}
         ${releaseAudioRevisionHtml(audioRevisionData, release)}
+        ${releaseMasteringHtml(masteringData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4189,6 +4192,62 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseMasteringHtml(masteringData, release) {
+      const summary = (masteringData && masteringData.summary) || {};
+      const analysis = (masteringData && masteringData.analysis) || {};
+      const plan = (masteringData && masteringData.plan) || {};
+      const candidates = (masteringData && masteringData.candidates) || [];
+      const selectedId = ((masteringData && masteringData.selected_candidate) || {}).candidate_id || "";
+      const candidateOptions = candidates.map((candidate) => `<option value="${escapeHtml(candidate.candidate_id || "")}" ${candidate.candidate_id === selectedId ? "selected" : ""}>${escapeHtml(candidate.candidate_id || "-")} · ${escapeHtml(candidate.status || "-")}${candidate.selected ? " · selected" : ""}</option>`).join("");
+      const rows = (analysis.tracks || []).map((track) => `
+        <tr>
+          <td>${escapeHtml(track.track_id || "-")}</td>
+          <td><span class="status ${escapeHtml(track.status || "")}">${escapeHtml(track.status || "-")}</span></td>
+          <td>${escapeHtml(((track.metrics || {}).loudness_proxy_db ?? "-"))}</td>
+          <td>${escapeHtml(((track.metrics || {}).peak_dbfs ?? "-"))}</td>
+          <td>${escapeHtml(((track.metrics || {}).clipping_ratio ?? "-"))}</td>
+          <td>${escapeHtml(((track.metrics || {}).leading_silence_seconds ?? "-"))}</td>
+          <td>${escapeHtml(((track.metrics || {}).trailing_silence_seconds ?? "-"))}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="panel-title subhead"><span>Mastering QA</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.status || "missing")}
+          ${metric("Profile", summary.profile_id || "demo_review")}
+          ${metric("Avg Loudness", summary.average_loudness_proxy_db ?? "-")}
+          ${metric("Max Delta", summary.max_track_loudness_delta_db ?? "-")}
+          ${metric("Candidate", summary.selected_candidate_id || "-")}
+          ${metric("Actions", (plan.summary || {}).action_count || 0)}
+        </div>
+        <div class="grid2">
+          <label>Mastering Profile
+            <select id="release-mastering-profile">
+              <option value="demo_review">demo_review</option>
+              <option value="streaming_balanced">streaming_balanced</option>
+              <option value="album_consistency">album_consistency</option>
+              <option value="podcast_music_bed">podcast_music_bed</option>
+            </select>
+          </label>
+          <label>Candidate
+            <select id="release-mastering-candidate">${candidateOptions || "<option value=''>none</option>"}</select>
+          </label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-mastering-analyze" type="button">Analyze Mastering</button>
+          <button class="secondary" id="release-mastering-plan" type="button">Create Mastering Plan</button>
+          <button class="secondary" id="release-render-mastering-candidate" type="button">Render Mastered Candidate</button>
+          <button class="secondary" id="release-mastering-review" type="button">Accept Mastered Candidate</button>
+          <button class="secondary" id="release-mastering-select" type="button">Select Mastered Candidate</button>
+          <button class="secondary" id="release-mastering-reset" type="button">Reset Mastering</button>
+        </div>
+        <table>
+          <thead><tr><th>Track</th><th>Status</th><th>Loudness Proxy</th><th>Peak dBFS</th><th>Clip</th><th>Lead Silence</th><th>Tail Silence</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='7'>No mastering analysis yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
     function releaseExportHtml(exportData, release) {
       const manifest = (exportData && exportData.manifest) || {};
       const zip = manifest.zip || {};
@@ -4286,6 +4345,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <input id="release-require-audio-revision-closeout" type="checkbox">
           Require audio revision closeout
         </label>
+        <label class="inline">
+          <input id="release-require-mastering-qa" type="checkbox">
+          Require mastering QA
+        </label>
       `;
     }
 
@@ -4300,6 +4363,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         require_stem_audio_health: $("release-require-stem-audio-health")?.checked || false,
         require_current_mix_state: $("release-require-current-mix-state")?.checked || false,
         require_audio_revision_closeout: $("release-require-audio-revision-closeout")?.checked || false,
+        require_mastering_qa: $("release-require-mastering-qa")?.checked || false,
+        mastering_profile_id: $("release-mastering-profile")?.value || "",
       };
     }
 
@@ -4417,6 +4482,44 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("release-close-audio-revision", async () => {
         const sessionId = $("release-audio-revision-session").value;
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/audio-revisions/${encodeURIComponent(sessionId)}/close`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-mastering-analyze", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile_id: $("release-mastering-profile").value || "demo_review" }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-mastering-plan", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering/plan`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-render-mastering-candidate", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering/candidates`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-mastering-review", async () => {
+        const candidateId = $("release-mastering-candidate").value;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering/candidates/${encodeURIComponent(candidateId)}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "accepted", review_mode: "manual", rating: 4, playback_confirmed: true }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-mastering-select", async () => {
+        const candidateId = $("release-mastering-candidate").value;
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering/candidates/${encodeURIComponent(candidateId)}/select`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-mastering-reset", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Studio mastering reset" }),
+        });
         await loadReleases();
       });
       bindAction("release-build-export", async () => {

@@ -258,6 +258,18 @@ require current active marker coverage with
 the exported session/issue/candidate evidence with
 `verify-release --require-audio-revisions`.
 
+Mastering QA adds a deterministic release-level audio consistency pass after
+track audio revision and mix work. Built-in Mastering Profiles define target
+sample format, peak ceiling, clipping tolerance, loudness proxy target, album
+track delta, and head/tail silence thresholds. A Release can run Mastering
+Analysis, create a local gain/trim plan, render mastered candidates, collect a
+manual A/B accepted review, and select one mastered candidate for export. Release
+Signoff with `require_mastering_qa=true` blocks missing, stale, tampered, or
+synthetic-only mastering evidence. Release Export packages the selected mastered
+WAV as each track's `song.wav` plus `mastering/` analysis, plan, summary, and
+selected-candidate evidence; `verify-release --require-mastering` validates that
+evidence offline.
+
 Useful local commands:
 
 ```powershell
@@ -291,6 +303,7 @@ verified outside the workspace:
 python -m song_agent.cli verify-release path\to\release-export.zip --json --report-out release-verification-report.json
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review --require-audio-revisions
+python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-mastering
 ```
 
 The verifier reads only the ZIP, checks entry safety, duplicate entries,

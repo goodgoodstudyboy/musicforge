@@ -22,6 +22,12 @@ from song_agent.audio_revision import (
     issue_integrity_ok as audio_revision_issue_integrity_ok,
     session_integrity_ok as audio_revision_session_integrity_ok,
 )
+from song_agent.mastering_qa import (
+    mastering_analysis_integrity_ok,
+    mastering_candidate_integrity_ok,
+    mastering_plan_integrity_ok,
+    mastering_summary_hash,
+)
 from song_agent.mix_controls import (
     mix_state_integrity_ok,
     song_plan_hash,
@@ -86,6 +92,7 @@ def verify_release_zip(
     require_human_review: bool = False,
     require_audio_revisions: bool = False,
     require_stems: bool = False,
+    require_mastering: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -98,6 +105,7 @@ def verify_release_zip(
         require_human_review=require_human_review,
         require_audio_revisions=require_audio_revisions,
         require_stems=require_stems,
+        require_mastering=require_mastering,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -167,6 +175,7 @@ class _ReleaseZipVerifier:
         require_human_review: bool,
         require_audio_revisions: bool,
         require_stems: bool,
+        require_mastering: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -178,6 +187,7 @@ class _ReleaseZipVerifier:
         self.require_human_review = require_human_review
         self.require_audio_revisions = require_audio_revisions
         self.require_stems = require_stems
+        self.require_mastering = require_mastering
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -215,6 +225,7 @@ class _ReleaseZipVerifier:
                 self._verify_signoff()
                 self._verify_audio_reviews(archive)
                 self._verify_audio_revisions(archive)
+                self._verify_mastering(archive)
                 self._verify_metadata(archive)
                 self._verify_redaction(archive)
         finally:
@@ -806,6 +817,79 @@ class _ReleaseZipVerifier:
         revision_gate = audio_gate.get("audio_revision") if isinstance(audio_gate.get("audio_revision"), dict) else {}
         return bool(self.require_audio_revisions or audio_gate.get("require_audio_revision_closeout") or revision_gate.get("session_count"))
 
+    def _requires_mastering(self) -> bool:
+        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+        mastering_gate = gate.get("mastering") if isinstance(gate.get("mastering"), dict) else {}
+        return bool(self.require_mastering or mastering_gate.get("require_mastering_qa"))
+
+    def _verify_mastering(self, archive: zipfile.ZipFile) -> None:
+        required = self._requires_mastering()
+        manifest_summary = self.manifest.get("mastering") if isinstance(self.manifest.get("mastering"), dict) else {}
+        summary_path = str(manifest_summary.get("summary_path") or "mastering/summary.json")
+        if summary_path not in self.entry_map:
+            status = "failed" if required else "warning"
+            self._add_check("mastering", "mastering_summary_exists", status, "blocking" if status == "failed" else "warning", "mastering/summary.json is missing.")
+            return
+        summary = self._read_json_entry(archive, summary_path, "mastering", "mastering_summary_parse")
+        expected_summary_hash = manifest_summary.get("summary_hash")
+        actual_summary_hash = mastering_summary_hash(summary)
+        self._add_check(
+            "mastering",
+            "mastering_summary_hash",
+            "passed" if expected_summary_hash == actual_summary_hash else "failed",
+            "blocking",
+            "Mastering summary hash matches manifest." if expected_summary_hash == actual_summary_hash else "Mastering summary hash does not match manifest.",
+        )
+        analysis = self._read_json_entry(archive, "mastering/analysis.json", "mastering", "mastering_analysis_parse") if "mastering/analysis.json" in self.entry_map else {}
+        plan = self._read_json_entry(archive, "mastering/plan.json", "mastering", "mastering_plan_parse") if "mastering/plan.json" in self.entry_map else {}
+        selected = self._read_json_entry(archive, "mastering/selected-candidate.json", "mastering", "mastering_selected_candidate_parse") if "mastering/selected-candidate.json" in self.entry_map else {}
+        failures: list[str] = []
+        if required and not analysis:
+            failures.append("analysis_missing")
+        if analysis and not mastering_analysis_integrity_ok(analysis):
+            failures.append("analysis_integrity")
+        if plan and not mastering_plan_integrity_ok(plan):
+            failures.append("plan_integrity")
+        if required and not selected and summary.get("status") != "passed":
+            failures.append("selected_candidate_missing")
+        if selected:
+            if not mastering_candidate_integrity_ok(selected):
+                failures.append("selected_candidate_integrity")
+            review = selected.get("review") if isinstance(selected.get("review"), dict) else {}
+            if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
+                failures.append("manual_review_missing")
+            tracks = selected.get("tracks") if isinstance(selected.get("tracks"), list) else []
+            by_track = {str(item.get("track_id") or ""): item for item in tracks if isinstance(item, dict)}
+            for item in self.tracklist.get("tracks", []) if isinstance(self.tracklist.get("tracks"), list) else []:
+                if not isinstance(item, dict):
+                    continue
+                track_id = str(item.get("track_id") or "")
+                directory = str(item.get("directory") or "").strip("/")
+                row = by_track.get(track_id)
+                if not row:
+                    failures.append(f"{track_id}:candidate_track_missing")
+                    continue
+                mastered_path = f"mastering/tracks/{track_id}/song.wav"
+                package_path = f"{directory}/song.wav"
+                for path, expected_sha in ((mastered_path, row.get("candidate_wav_sha256")), (package_path, row.get("candidate_wav_sha256"))):
+                    info = self.entry_map.get(path)
+                    if info is None:
+                        failures.append(f"{path}:missing")
+                        continue
+                    actual_sha = _sha256_entry(archive, info)
+                    if actual_sha != expected_sha:
+                        failures.append(f"{path}:hash_mismatch")
+        if required and summary.get("status") not in {"passed", "warning"}:
+            failures.append(f"summary_status:{summary.get('status')}")
+        self._add_check(
+            "mastering",
+            "mastering_evidence",
+            "failed" if failures else "passed",
+            "blocking" if required or failures else "warning",
+            "Mastering evidence is present, intact, and matches track audio." if not failures else "Mastering evidence failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
     def _verify_audio_revisions(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_audio_revisions()
         manifest_summary = self.manifest.get("audio_revisions") if isinstance(self.manifest.get("audio_revisions"), dict) else {}
@@ -900,6 +984,7 @@ class _ReleaseZipVerifier:
             or name.startswith("lyrics/")
             or name.startswith("audio-reviews/")
             or name.startswith("audio-revisions/")
+            or name.startswith("mastering/")
         ]
         for name in scan_names:
             info = self.entry_map.get(name)
@@ -1048,6 +1133,7 @@ class _ReleaseZipVerifier:
             "require_human_review": self.require_human_review,
             "require_audio_revisions": self.require_audio_revisions,
             "require_stems": self.require_stems,
+            "require_mastering": self.require_mastering,
             "summary": {
                 "release_id": self.manifest.get("release_id"),
                 "release_name": self.manifest.get("release_name"),

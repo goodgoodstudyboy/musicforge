@@ -523,6 +523,14 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-generate-audio-revision-candidates"' in html
     assert 'id="release-apply-audio-revision-candidate"' in html
     assert 'id="release-require-audio-revision-closeout"' in html
+    assert "Mastering QA" in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/mastering" in html
+    assert "/mastering/analyze" in html
+    assert "/mastering/plan" in html
+    assert "/mastering/candidates" in html
+    assert 'id="release-mastering-profile"' in html
+    assert 'id="release-render-mastering-candidate"' in html
+    assert 'id="release-require-mastering-qa"' in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/init" in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa" in html

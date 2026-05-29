@@ -1,5 +1,19 @@
 # Changelog
 
+## v5.4.0 - 2026-05-29
+
+### Added
+- Mastering QA with built-in Mastering Profiles, Release-level analysis, deterministic gain/trim planning, mastered candidate rendering, manual candidate review, and selected mastered WAV evidence.
+- Release Signoff gate `require_mastering_qa=true`, blocking missing, stale, tampered, or non-manual mastering evidence.
+- Release Export now uses the selected mastered candidate WAV as each track's packaged `song.wav` and writes `mastering/summary.json`, analysis, plan, selected candidate, and mastered track WAV evidence.
+- `verify-release --require-mastering` validates Mastering QA summaries, selected candidate integrity, manual review evidence, and packaged mastered WAV hashes offline.
+- Studio Release workspace controls for Mastering QA analysis, plan creation, candidate rendering, manual acceptance, selection, reset, and signoff requirement.
+- v5.4 release-check smoke covering missing mastering signoff block, profile lookup, analyze/plan/candidate/review/select, export, signoff, external verification, signed-release mutation block, and ZIP tamper failures.
+
+### Verified
+- `python -m pytest tests\test_mastering_qa.py tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check`
+
 ## v5.3.1 - 2026-05-28
 
 ### Fixed
