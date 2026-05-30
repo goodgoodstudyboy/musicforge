@@ -5,6 +5,7 @@ from typing import Any
 import hashlib
 import json
 
+from song_agent.audio_encoding import normalize_required_profiles
 from song_agent.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
 from song_agent.distribution_templates import DistributionTemplateError, template_file_naming, template_summary
 from song_agent.projectio import slugify
@@ -96,15 +97,19 @@ def build_distribution_layout_plan(
         errors.extend(_pattern_errors(kind, pattern))
 
     tracks = release_manifest.get("tracks") if isinstance(release_manifest.get("tracks"), list) else []
+    audio_profile_ids = _target_audio_profile_ids(target_info, rules)
     for track in tracks:
         if not isinstance(track, dict):
             continue
         metadata_track = metadata_by_id.get(str(track.get("track_id") or ""))
         context = _track_context(track, metadata_track, release_info)
-        audio_rel, audio_ext, audio_source_kind, audio_format = _audio_source_rel(release_export_dir, track, target_info=target_info, encoded_audio_summary=encoded_audio_summary, encoded_audio_root=encoded_audio_root)
-        audio_root = encoded_audio_root if audio_source_kind == "encoded_audio" else release_export_dir
-        audio_exists = _source_exists(audio_root, audio_rel)
-        if audio_exists or bool(rules.get("require_audio")) or bool(target_info["options"].get("require_audio", False)):
+        for profile_id in audio_profile_ids:
+            audio_rel, audio_ext, audio_source_kind, audio_format = _audio_source_rel(release_export_dir, track, target_info=target_info, encoded_audio_summary=encoded_audio_summary, encoded_audio_root=encoded_audio_root, profile_id=profile_id)
+            audio_root = encoded_audio_root if audio_source_kind == "encoded_audio" else release_export_dir
+            audio_exists = _source_exists(audio_root, audio_rel)
+            audio_required = bool(rules.get("require_audio")) or bool(target_info["options"].get("require_audio", False)) or bool(target_info["options"].get("require_encoded_audio", False)) or profile_id != "wav_master"
+            if not (audio_exists or audio_required):
+                continue
             entry = _entry(
                 kind="audio",
                 track=context,
@@ -113,7 +118,7 @@ def build_distribution_layout_plan(
                 source_kind=audio_source_kind,
                 ext=audio_ext,
                 audio_format=audio_format,
-                required=bool(rules.get("require_audio")) or bool(target_info["options"].get("require_audio", False)),
+                required=audio_required,
                 exists=audio_exists,
                 release_info=release_info,
                 target_info=target_info,
@@ -324,7 +329,10 @@ def _entry(
     target_info: dict[str, Any],
 ) -> dict[str, Any]:
     track_id = str((track or {}).get("track_id") or "")
+    profile_id = str(audio_format.get("profile_id") or "") if kind == "audio" and isinstance(audio_format, dict) else ""
     entry_id = f"{kind}:{track_id}" if track_id else f"{kind}:cover"
+    if kind == "audio" and track_id and profile_id and profile_id != "wav_master":
+        entry_id = f"{entry_id}:{profile_id}"
     try:
         path = _render_pattern(kind, pattern, track=track, release_info=release_info, target_info=target_info, ext=ext, audio_format=audio_format)
         status = "planned" if exists else "missing"
@@ -507,9 +515,9 @@ def _track_context(track: dict[str, Any], metadata: dict[str, Any] | None, relea
     return merged
 
 
-def _audio_source_rel(root: Path | None, track: dict[str, Any], *, target_info: dict[str, Any], encoded_audio_summary: dict[str, Any] | None, encoded_audio_root: Path | None) -> tuple[str, str, str, dict[str, Any]]:
-    profile_id = str((target_info.get("options") or {}).get("primary_audio_format") or "").strip()
-    if profile_id and profile_id != "wav_master":
+def _audio_source_rel(root: Path | None, track: dict[str, Any], *, target_info: dict[str, Any], encoded_audio_summary: dict[str, Any] | None, encoded_audio_root: Path | None, profile_id: str) -> tuple[str, str, str, dict[str, Any]]:
+    profile_id = _validate_profile_id(profile_id or "wav_master")
+    if profile_id != "wav_master":
         profile = _encoded_profile_summary(encoded_audio_summary, profile_id)
         ext = str(profile.get("extension") or "").strip(".").lower()
         if ext:
@@ -531,6 +539,24 @@ def _encoded_profile_summary(summary: dict[str, Any] | None, profile_id: str) ->
         if isinstance(row, dict) and row.get("profile_id") == profile_id:
             return row
     return {"profile_id": profile_id, "format": profile_id.split("_", 1)[0], "extension": profile_id.split("_", 1)[0], "codec": ""}
+
+
+def _target_audio_profile_ids(target_info: dict[str, Any], rules: dict[str, Any]) -> list[str]:
+    options = target_info.get("options") if isinstance(target_info.get("options"), dict) else {}
+    profiles = _normalize_profile_ids(options.get("audio_format_profiles"))
+    if not profiles:
+        profiles = _normalize_profile_ids(rules.get("required_audio_formats"))
+    if not profiles:
+        profiles = _normalize_profile_ids(options.get("primary_audio_format") or rules.get("primary_audio_format"))
+    return profiles or ["wav_master"]
+
+
+def _normalize_profile_ids(value: Any) -> list[str]:
+    return normalize_required_profiles(value)
+
+
+def _validate_profile_id(value: str) -> str:
+    return normalize_required_profiles([value])[0]
 
 
 def _lyrics_source_rel(track: dict[str, Any]) -> str:

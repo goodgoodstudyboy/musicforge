@@ -55,7 +55,7 @@ class AudioEncoderConfig:
     fake_runner: bool = False
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any] | None) -> "AudioEncoderConfig":
+    def from_dict(cls, data: dict[str, Any] | None, *, allow_fake_runner: bool = False) -> "AudioEncoderConfig":
         data = data if isinstance(data, dict) else {}
         return cls(
             engine=str(data.get("engine") or "ffmpeg").strip().lower(),
@@ -63,7 +63,7 @@ class AudioEncoderConfig:
             ffprobe_path=str(os.environ.get("MUSICFORGE_FFPROBE_PATH") or data.get("ffprobe_path") or "ffprobe").strip(),
             timeout_seconds=_int_range(os.environ.get("MUSICFORGE_AUDIO_ENCODER_TIMEOUT") or data.get("timeout_seconds") or 300, "timeout_seconds", 1, 3600),
             max_parallel=_int_range(data.get("max_parallel") or 2, "max_parallel", 1, 16),
-            fake_runner=bool(data.get("fake_runner", False)),
+            fake_runner=bool(data.get("fake_runner", False)) if allow_fake_runner else False,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -73,7 +73,6 @@ class AudioEncoderConfig:
             "ffprobe_path": self.ffprobe_path,
             "timeout_seconds": self.timeout_seconds,
             "max_parallel": self.max_parallel,
-            "fake_runner": self.fake_runner,
         }
 
     def public_summary(self) -> dict[str, Any]:
@@ -84,7 +83,6 @@ class AudioEncoderConfig:
                 "ffprobe": {"basename": Path(self.ffprobe_path).name, "configured": bool(self.ffprobe_path), "exists": _executable_exists(self.ffprobe_path)},
                 "timeout_seconds": self.timeout_seconds,
                 "max_parallel": self.max_parallel,
-                "fake_runner": self.fake_runner,
                 "paths_redacted": True,
             },
             blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
@@ -185,6 +183,8 @@ class AudioEncodingStore:
         return AudioEncoderConfig.from_dict(read_json(self.config_path))
 
     def write_config(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if isinstance(payload, dict) and bool(payload.get("fake_runner", False)):
+            raise AudioEncodingError("fake_runner is test-only and cannot be persisted through the public audio encoding config.")
         config = AudioEncoderConfig.from_dict(payload)
         write_json(self.config_path, config.to_dict())
         return config.public_summary()
@@ -197,7 +197,7 @@ class AudioEncodingStore:
     def test_config(self) -> dict[str, Any]:
         config = self.read_config()
         ffmpeg_ok = _executable_exists(config.ffmpeg_path)
-        status = "passed" if ffmpeg_ok or config.fake_runner else "failed"
+        status = "passed" if ffmpeg_ok else "failed"
         message = "Encoder config is usable." if status == "passed" else "Encoder executable was not found."
         return {"status": status, "message": message, "config": config.public_summary()}
 
@@ -269,7 +269,9 @@ class AudioEncodingStore:
             write_json(self.source_snapshot_path(release_id), source_snapshot)
             tracks = []
             config = self.read_config()
-            runner = self.runner or (FakeEncoderRunner() if config.fake_runner or profile.engine == "fake" else FfmpegEncoderRunner())
+            runner = self.runner or (FakeEncoderRunner() if profile.engine == "fake" else FfmpegEncoderRunner())
+            runner_kind = encoder_runner_kind(runner=runner, profile=profile)
+            fake_evidence = encoder_runner_is_fake(runner=runner, profile=profile)
             for row in source.get("tracks", []) if isinstance(source.get("tracks"), list) else []:
                 tracks.append(self._render_track(release_id, profile, row, config=config, runner=runner, now=now))
             failed_count = sum(1 for row in tracks if row.get("status") == "failed")
@@ -285,7 +287,7 @@ class AudioEncodingStore:
                 "generated_at": now,
                 "source": source_snapshot,
                 "source_hash": stable_hash(source_snapshot),
-                "encoder": encoder_manifest_payload(profile, config),
+                "encoder": encoder_manifest_payload(profile, config, runner_kind=runner_kind, fake_evidence=fake_evidence),
                 "tracks": tracks,
                 "summary": {
                     "status": status,
@@ -506,6 +508,9 @@ def build_encoded_audio_summary(release_id: str, manifests: list[dict[str, Any]]
             "status": "stale" if manifest.get("stale") else summary.get("status") or "missing",
             "format": manifest.get("format"),
             "extension": manifest.get("extension"),
+            "encoder_engine": (manifest.get("encoder") or {}).get("engine") if isinstance(manifest.get("encoder"), dict) else None,
+            "encoder_runner_kind": ((manifest.get("encoder") or {}).get("runner") or {}).get("kind") if isinstance((manifest.get("encoder") or {}).get("runner"), dict) else None,
+            "fake_evidence": encoded_manifest_uses_fake(manifest),
             "track_count": summary.get("track_count", 0),
             "completed_count": summary.get("completed_count", 0),
             "failed_count": summary.get("failed_count", 0),
@@ -578,6 +583,7 @@ def encoded_audio_gate(store: AudioEncodingStore, release_id: str, *, required_p
     missing: list[str] = []
     stale: list[str] = []
     failed: list[str] = []
+    fake: list[str] = []
     warnings: list[str] = []
     profile_summaries: list[dict[str, Any]] = []
     for profile_id in required_profiles:
@@ -590,15 +596,20 @@ def encoded_audio_gate(store: AudioEncodingStore, release_id: str, *, required_p
             "status": "stale" if manifest.get("stale") else (manifest.get("summary") or {}).get("status"),
             "source_hash": manifest.get("source_hash"),
             "manifest_hash": manifest.get("integrity_hash"),
+            "encoder_engine": (manifest.get("encoder") or {}).get("engine") if isinstance(manifest.get("encoder"), dict) else None,
+            "encoder_runner_kind": ((manifest.get("encoder") or {}).get("runner") or {}).get("kind") if isinstance((manifest.get("encoder") or {}).get("runner"), dict) else None,
+            "fake_evidence": encoded_manifest_uses_fake(manifest),
         }
         profile_summaries.append(row)
         if manifest.get("stale") or not encoded_manifest_integrity_ok(manifest):
             stale.append(profile_id)
+        if encoded_manifest_uses_fake(manifest):
+            fake.append(profile_id)
         if (manifest.get("summary") or {}).get("status") == "failed":
             failed.append(profile_id)
         elif (manifest.get("summary") or {}).get("status") == "warning":
             warnings.append(profile_id)
-    hard = bool(missing or stale or failed)
+    hard = bool(missing or stale or failed or fake)
     warning_block = bool(warnings and not force)
     return sanitize_metadata(
         {
@@ -610,6 +621,7 @@ def encoded_audio_gate(store: AudioEncodingStore, release_id: str, *, required_p
             "missing_profiles": missing,
             "stale_profiles": stale,
             "failed_profiles": failed,
+            "fake_profiles": fake,
             "warning_profiles": warnings,
             "message": "Encoded audio gate failed." if hard or warning_block else "Encoded audio gate passed.",
         },
@@ -705,7 +717,7 @@ def build_ffmpeg_command(*, source: Path, target: Path, profile: AudioEncodingPr
     return argv
 
 
-def encoder_manifest_payload(profile: AudioEncodingProfile, config: AudioEncoderConfig) -> dict[str, Any]:
+def encoder_manifest_payload(profile: AudioEncodingProfile, config: AudioEncoderConfig, *, runner_kind: str | None = None, fake_evidence: bool = False) -> dict[str, Any]:
     command_template = build_ffmpeg_command(source=Path("{source}"), target=Path("{target}"), profile=profile, config=AudioEncoderConfig(ffmpeg_path="{ffmpeg}", ffprobe_path="{ffprobe}", timeout_seconds=config.timeout_seconds, max_parallel=config.max_parallel))
     return sanitize_metadata(
         {
@@ -715,9 +727,41 @@ def encoder_manifest_payload(profile: AudioEncodingProfile, config: AudioEncoder
             "command_template_hash": stable_hash(command_template),
             "command_policy_version": COMMAND_POLICY_VERSION,
             "ffmpeg": {"basename": Path(config.ffmpeg_path).name if profile.engine == "ffmpeg" else None},
+            "runner": {"kind": runner_kind or "unknown", "fake": bool(fake_evidence)},
         },
         blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
     )
+
+
+def encoder_runner_kind(*, runner: EncoderRunner, profile: AudioEncodingProfile) -> str:
+    if profile.engine == "passthrough":
+        return "passthrough"
+    if profile.engine == "fake":
+        return "fake"
+    if isinstance(runner, FakeEncoderRunner):
+        return "fake"
+    if isinstance(runner, FfmpegEncoderRunner):
+        return "ffmpeg"
+    return "custom"
+
+
+def encoder_runner_is_fake(*, runner: EncoderRunner | None = None, profile: AudioEncodingProfile | None = None, manifest: dict[str, Any] | None = None, summary_row: dict[str, Any] | None = None) -> bool:
+    if manifest is not None:
+        encoder = manifest.get("encoder") if isinstance(manifest.get("encoder"), dict) else {}
+        runner_doc = encoder.get("runner") if isinstance(encoder.get("runner"), dict) else {}
+        return bool(encoder.get("engine") == "fake" or runner_doc.get("kind") == "fake" or runner_doc.get("fake"))
+    if summary_row is not None:
+        return bool(summary_row.get("fake_evidence") or summary_row.get("encoder_engine") == "fake" or summary_row.get("encoder_runner_kind") == "fake")
+    return bool((profile and profile.engine == "fake") or isinstance(runner, FakeEncoderRunner))
+
+
+def encoded_manifest_uses_fake(manifest: dict[str, Any]) -> bool:
+    return encoder_runner_is_fake(manifest=manifest)
+
+
+def encoded_audio_summary_uses_fake(summary: dict[str, Any]) -> bool:
+    profiles = summary.get("profiles") if isinstance(summary.get("profiles"), list) else []
+    return any(encoder_runner_is_fake(summary_row=row) for row in profiles if isinstance(row, dict))
 
 
 def detect_audio_header(path: Path, *, expected_format: str | None = None) -> dict[str, Any]:

@@ -272,15 +272,16 @@ evidence offline.
 
 Distribution Audio Formats add local MP3/FLAC/AAC/WAV derivative generation from
 the selected mastered WAV, with built-in encoding profiles and a redacted local
-encoder config. Tests and release-check can use the deterministic fake runner,
-while real use can point to FFmpeg through local config or environment variables.
+encoder config. Real use points to FFmpeg through local config or environment
+variables; deterministic fake runners are test-only injection helpers and cannot
+be persisted through the public API or Studio.
 Release Signoff with `require_encoded_audio=true` requires current encoded
 profile manifests and a rebuilt Release Export; signed releases cannot render or
 reset encoded audio without resetting signoff. Release Export writes
 `encoded-audio-summary.json`, and `verify-release --require-encoded-audio
 --require-audio-formats mp3_320` validates encoded evidence offline. Distribution
-Targets can choose a primary audio format such as `mp3_320`; Distribution Export
-packages the encoded track audio plus `encoded-audio/` manifests, and
+Targets can require audio format profiles such as `mp3_320`; Distribution Export
+packages matching encoded track audio plus `encoded-audio/` manifests, and
 `verify-distribution-package --require-encoded-audio` catches hash or header
 tampering such as fake MP3 files.
 

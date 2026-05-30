@@ -28,7 +28,7 @@ from song_agent.mastering_qa import (
     mastering_plan_integrity_ok,
     mastering_summary_hash,
 )
-from song_agent.audio_encoding import encoded_audio_summary_hash, encoded_audio_summary_integrity_ok
+from song_agent.audio_encoding import encoded_audio_summary_hash, encoded_audio_summary_integrity_ok, encoded_audio_summary_uses_fake
 from song_agent.mix_controls import (
     mix_state_integrity_ok,
     song_plan_hash,
@@ -936,6 +936,8 @@ class _ReleaseZipVerifier:
         failures: list[str] = []
         if summary and not encoded_audio_summary_integrity_ok(summary):
             failures.append("summary_integrity")
+        if summary and encoded_audio_summary_uses_fake(summary):
+            failures.append("fake_encoder_evidence")
         profiles = summary.get("profiles") if isinstance(summary.get("profiles"), list) else []
         by_profile = {str(row.get("profile_id") or ""): row for row in profiles if isinstance(row, dict)}
         for profile_id in self._encoded_audio_required_profiles():

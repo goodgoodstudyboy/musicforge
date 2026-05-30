@@ -532,7 +532,8 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-render-mastering-candidate"' in html
     assert 'id="release-require-mastering-qa"' in html
     assert "Encoded Audio Formats" in html
-    assert "/api/audio-encoding/config" in html
+    assert 'id="release-save-encoded-audio-config"' not in html
+    assert "Fake Runner" not in html
     assert "/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio" in html
     assert "/encoded-audio/render" in html
     assert "/encoded-audio/verify" in html

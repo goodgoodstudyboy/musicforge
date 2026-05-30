@@ -1,5 +1,15 @@
 # Changelog
 
+## v5.5.1 - 2026-05-30
+
+### Fixed
+- Public audio encoder config and Studio no longer persist `fake_runner`; fake encoder evidence is rejected by encoded audio gates and offline verifiers.
+- Distribution layout now packages required encoded audio profiles even when `primary_audio_format` is omitted.
+- Distribution package verifier now requires encoded layout entries and per-track/profile package evidence when `--require-encoded-audio` is used.
+
+### Verified
+- `python -m pytest tests\test_audio_encoding.py tests\test_server_audio_encoding.py tests\test_distribution_encoded_audio.py tests\test_distribution_layout.py tests\test_release_check.py::test_v55_distribution_audio_formats_smoke -q`
+
 ## v5.5.0 - 2026-05-29
 
 ### Added

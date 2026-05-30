@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import zipfile
+import shutil
 from pathlib import Path
 
+from song_agent.audio_encoding import AudioEncoderConfig
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.release_metadata import attach_metadata_export_to_manifest, export_release_metadata_files, initialize_release_metadata, write_release_metadata, write_release_metadata_qa
 from song_agent.release_metadata_qa import build_release_metadata_qa_report
@@ -29,14 +31,14 @@ def test_distribution_package_uses_encoded_mp3_and_verifier_catches_tamper(tmp_p
                     "require_metadata_export": False,
                     "require_artwork": False,
                     "require_encoded_audio": True,
-                    "primary_audio_format": "mp3_320",
                     "audio_format_profiles": ["mp3_320"],
                 },
             },
         )
         target_id = target["target"]["target_id"]
         missing_qa_status, missing_qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
-        request_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
+        fake_config_status, fake_config = request_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
+        server.audio_encoding_store.runner = _FixtureEncoderRunner()
         request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320"]})
         request_json(server, "POST", f"/api/releases/{release_id}/export")
         request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
@@ -57,6 +59,8 @@ def test_distribution_package_uses_encoded_mp3_and_verifier_catches_tamper(tmp_p
         stop_test_server(server)
 
     assert target_status == 201
+    assert fake_config_status == 400
+    assert "test-only" in fake_config["error"]
     assert missing_qa_status == 200
     assert missing_qa["summary"]["status"] == "failed"
     assert qa_status == 200
@@ -72,6 +76,50 @@ def test_distribution_package_uses_encoded_mp3_and_verifier_catches_tamper(tmp_p
     assert _check(verify, "distribution_encoded_audio_evidence")["status"] == "passed"
     assert tampered["status"] == "failed"
     assert _check(tampered, "distribution_encoded_audio_evidence")["status"] == "failed"
+
+
+def test_distribution_verifier_requires_encoded_layout_entries(tmp_path) -> None:
+    zip_path = tmp_path / "wav-only-package.zip"
+    manifest = {
+        "schema_version": 1,
+        "package_id": "pkg-000001",
+        "release_id": "rel-000001",
+        "target_id": "target-000001",
+        "profile_id": "demo_pitch",
+        "target": {"options": {"require_encoded_audio": True, "audio_format_profiles": ["mp3_320"]}},
+        "encoded_audio": {"status": "included", "profiles": [], "summary_path": "encoded-audio/summary.json"},
+        "layout": {
+            "entries": [
+                {
+                    "entry_id": "audio:track-000001",
+                    "kind": "audio",
+                    "track_id": "track-000001",
+                    "source_kind": "release_export",
+                    "path": "audio/01-song.wav",
+                    "ext": "wav",
+                    "audio_format": {"profile_id": "wav_master", "format": "wav", "extension": "wav"},
+                    "size_bytes": 12,
+                    "sha256": "fake",
+                }
+            ]
+        },
+        "files": [{"path": "audio/01-song.wav", "size_bytes": 12, "sha256": "fake"}],
+    }
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("distribution-manifest.json", json_dumps(manifest))
+        archive.writestr("distribution-signoff.json", "{}")
+        archive.writestr("package.json", "{}")
+        archive.writestr("release.json", "{}")
+        archive.writestr("tracklist.json", '{"tracks":[{"track_id":"track-000001"}]}')
+        archive.writestr("README.txt", "test")
+        archive.writestr("encoded-audio/summary.json", "{}")
+        archive.writestr("audio/01-song.wav", b"RIFFxxxxWAVE")
+
+    report = verify_distribution_package(zip_path, require_encoded_audio=True)
+
+    assert report["status"] == "failed"
+    assert _check(report, "distribution_encoded_audio_evidence")["status"] == "failed"
+    assert "encoded_layout_entries_missing" in _check(report, "distribution_encoded_audio_evidence")["message"]
 
 
 def _export_metadata(server, release_id: str) -> None:
@@ -121,3 +169,25 @@ def _check(report: dict, check_id: str) -> dict:
         if item.get("check_id") == check_id:
             return item
     raise AssertionError(check_id)
+
+
+class _FixtureEncoderRunner:
+    def encode(self, *, source: Path, target: Path, profile, config: AudioEncoderConfig) -> dict:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if profile.format == "mp3":
+            target.write_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x15MusicForgeFixtureMP3")
+        elif profile.format == "flac":
+            target.write_bytes(b"fLaC\x00\x00\x00\"MusicForgeFixtureFLAC")
+        elif profile.format == "aac":
+            target.write_bytes(b"\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00M4A isommp42")
+        elif profile.format == "wav":
+            shutil.copy2(source, target)
+        else:
+            return {"status": "failed", "returncode": None, "message": "Unsupported fixture format."}
+        return {"status": "completed", "returncode": 0, "message": "Fixture encoder completed."}
+
+
+def json_dumps(value: dict) -> str:
+    import json
+
+    return json.dumps(value)

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
 from song_agent.release_verifier import verify_release_zip
+from song_agent.audio_encoding import AudioEncoderConfig
 from tests.test_mastering_qa import _signed_project
 from tests.test_release_audio import _add_final_export_audio
 from tests.test_server_edits import request_json, start_test_server, stop_test_server
@@ -26,7 +30,8 @@ def test_server_encoded_audio_release_signoff_gate_and_verifier(tmp_path, monkey
         request_json(server, "POST", f"/api/releases/{release_id}/export")
         request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
         missing_status, missing = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_encoded_audio": True, "required_audio_format_profiles": ["mp3_320"]})
-        config_status, _config = request_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
+        fake_config_status, fake_config = request_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
+        server.audio_encoding_store.runner = _FixtureEncoderRunner()
         render_status, render = request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320"]})
         stale_export_status, stale_export = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_encoded_audio": True, "required_audio_format_profiles": ["mp3_320"]})
         export_status, export = request_json(server, "POST", f"/api/releases/{release_id}/export")
@@ -41,7 +46,8 @@ def test_server_encoded_audio_release_signoff_gate_and_verifier(tmp_path, monkey
     assert candidate_status == 201
     assert missing_status == 409
     assert "encoded audio" in missing["error"].lower()
-    assert config_status == 200
+    assert fake_config_status == 400
+    assert "test-only" in fake_config["error"]
     assert render_status == 201
     assert render["summary"]["status"] == "completed"
     assert stale_export_status == 409
@@ -62,3 +68,19 @@ def _check(report: dict, check_id: str) -> dict:
         if item.get("check_id") == check_id:
             return item
     raise AssertionError(check_id)
+
+
+class _FixtureEncoderRunner:
+    def encode(self, *, source: Path, target: Path, profile, config: AudioEncoderConfig) -> dict:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if profile.format == "mp3":
+            target.write_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x15MusicForgeFixtureMP3")
+        elif profile.format == "flac":
+            target.write_bytes(b"fLaC\x00\x00\x00\"MusicForgeFixtureFLAC")
+        elif profile.format == "aac":
+            target.write_bytes(b"\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00M4A isommp42")
+        elif profile.format == "wav":
+            shutil.copy2(source, target)
+        else:
+            return {"status": "failed", "returncode": None, "message": "Unsupported fixture format."}
+        return {"status": "completed", "returncode": 0, "message": "Fixture encoder completed."}

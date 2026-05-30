@@ -7540,7 +7540,8 @@ def _v55_distribution_audio_formats_smoke(root: Path) -> tuple[bool, str]:
         export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
         zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
         missing_encoded_sign_status, _missing_encoded = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "required_audio_format_profiles": ["mp3_320"]})
-        config_status, config = _release_http_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
+        fake_config_status, fake_config = _release_http_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
+        server.audio_encoding_store.runner = _V55FixtureEncoderRunner()
         encode_status, encoded = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320", "flac_lossless"]})
         stale_export_sign_status, stale_export_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "required_audio_format_profiles": ["mp3_320"]})
         export2_status, export2 = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
@@ -7559,7 +7560,6 @@ def _v55_distribution_audio_formats_smoke(root: Path) -> tuple[bool, str]:
                 "require_release_zip_verified": False,
                 "require_artwork": False,
                 "require_encoded_audio": True,
-                "primary_audio_format": "mp3_320",
                 "audio_format_profiles": ["mp3_320"],
             },
         }
@@ -7593,8 +7593,8 @@ def _v55_distribution_audio_formats_smoke(root: Path) -> tuple[bool, str]:
             and export_status == 200
             and zip_status == 200
             and missing_encoded_sign_status == 409
-            and config_status == 200
-            and config.get("config", {}).get("fake_runner") is True
+            and fake_config_status == 400
+            and "test-only" in str(fake_config.get("error") or "")
             and encode_status == 201
             and encoded.get("summary", {}).get("status") == "completed"
             and stale_export_sign_status == 409
@@ -7621,7 +7621,7 @@ def _v55_distribution_audio_formats_smoke(root: Path) -> tuple[bool, str]:
         return ok, (
             f"missing={missing_encoded_sign_status}, encode={encode_status}/{encoded.get('summary', {}).get('status')}, "
             f"stale_export={stale_export_sign_status}, sign={sign_status}, release_verify={release_verify.get('status')}, "
-            f"dist={dist_qa_status}/{dist_export_status}/{dist_sign_status}, dist_verify={dist_verify.get('status')}, "
+            f"fake_config={fake_config_status}, dist={dist_qa_status}/{dist_export_status}/{dist_sign_status}, dist_verify={dist_verify.get('status')}, "
             f"tampered={_v38_check_status(tampered_dist, 'distribution_encoded_audio_evidence')}, signed_guard={signed_encode_status}"
         )
     except Exception as exc:
@@ -7633,6 +7633,22 @@ def _v55_distribution_audio_formats_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
+
+
+class _V55FixtureEncoderRunner:
+    def encode(self, *, source: Path, target: Path, profile: Any, config: Any) -> dict[str, Any]:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if profile.format == "mp3":
+            target.write_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x15MusicForgeFixtureMP3")
+        elif profile.format == "flac":
+            target.write_bytes(b"fLaC\x00\x00\x00\"MusicForgeFixtureFLAC")
+        elif profile.format == "aac":
+            target.write_bytes(b"\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00M4A isommp42")
+        elif profile.format == "wav":
+            shutil.copy2(source, target)
+        else:
+            return {"status": "failed", "returncode": None, "message": "Unsupported fixture format."}
+        return {"status": "completed", "returncode": 0, "message": "Fixture encoder completed."}
 
 
 def _v55_export_metadata(server: Any, release_id: str) -> None:

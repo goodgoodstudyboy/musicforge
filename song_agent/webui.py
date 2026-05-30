@@ -4276,15 +4276,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <label>Format Profiles
             <input id="release-encoded-audio-profiles" value="mp3_320,flac_lossless">
           </label>
-          <label>Encoder Mode
-            <select id="release-encoded-audio-runner">
-              <option value="ffmpeg">FFmpeg</option>
-              <option value="fake">Fake Runner</option>
-            </select>
-          </label>
         </div>
         <div class="actions">
-          <button class="secondary" id="release-save-encoded-audio-config" type="button">Save Encoder Config</button>
           <button class="secondary" id="release-render-encoded-audio" type="button">Render Encoded Audio</button>
           <button class="secondary" id="release-verify-encoded-audio" type="button">Verify Encoded Audio</button>
           <button class="secondary" id="release-reset-encoded-audio" type="button">Reset Encoded Audio</button>
@@ -4576,14 +4569,6 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: "Studio mastering reset" }),
-        });
-        await loadReleases();
-      });
-      bindAction("release-save-encoded-audio-config", async () => {
-        await api(`/api/audio-encoding/config`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fake_runner: $("release-encoded-audio-runner").value === "fake" }),
         });
         await loadReleases();
       });

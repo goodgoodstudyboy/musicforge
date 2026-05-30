@@ -21,7 +21,7 @@ from song_agent.distribution_templates import DistributionTemplateError, templat
 from song_agent.projectio import write_json
 from song_agent.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
-from song_agent.audio_encoding import detect_audio_format_bytes, encoded_manifest_integrity_ok, encoded_audio_summary_integrity_ok
+from song_agent.audio_encoding import detect_audio_format_bytes, encoded_manifest_integrity_ok, encoded_audio_summary_integrity_ok, encoded_audio_summary_uses_fake, encoded_manifest_uses_fake
 from song_agent.releases import stable_hash
 
 
@@ -489,16 +489,26 @@ class _DistributionPackageVerifier:
             failures.append("summary_missing")
         elif not encoded_audio_summary_integrity_ok(self.encoded_audio_summary):
             failures.append("summary_integrity")
+        elif encoded_audio_summary_uses_fake(self.encoded_audio_summary):
+            failures.append("fake_encoder_evidence")
+        if self.require_encoded_audio and not encoded_entries:
+            failures.append("encoded_layout_entries_missing")
+        required_profiles = self._required_encoded_profile_ids(encoded_entries)
+        entries_by_profile_track: set[tuple[str, str]] = set()
         for entry in encoded_entries:
             audio_format = entry.get("audio_format") if isinstance(entry.get("audio_format"), dict) else {}
             profile_id = str(audio_format.get("profile_id") or "")
+            track_id = str(entry.get("track_id") or "")
+            if profile_id and track_id:
+                entries_by_profile_track.add((profile_id, track_id))
             manifest = self.encoded_audio_manifests.get(profile_id)
             if not manifest:
                 failures.append(f"{profile_id}:manifest_missing")
                 continue
             if not encoded_manifest_integrity_ok(manifest):
                 failures.append(f"{profile_id}:manifest_integrity")
-            track_id = str(entry.get("track_id") or "")
+            if encoded_manifest_uses_fake(manifest):
+                failures.append(f"{profile_id}:fake_encoder_evidence")
             row = next((item for item in manifest.get("tracks", []) if isinstance(item, dict) and item.get("track_id") == track_id), None)
             path = str(entry.get("path") or "")
             info = self.entry_map.get(path)
@@ -516,6 +526,15 @@ class _DistributionPackageVerifier:
                     failures.append(f"{path}:hash")
             else:
                 failures.append(f"{profile_id}:{track_id}:track_missing")
+        expected_track_ids = self._track_ids()
+        for profile_id in required_profiles:
+            manifest = self.encoded_audio_manifests.get(profile_id)
+            if not manifest:
+                failures.append(f"{profile_id}:manifest_missing")
+                continue
+            for track_id in expected_track_ids:
+                if (profile_id, track_id) not in entries_by_profile_track:
+                    failures.append(f"{profile_id}:{track_id}:layout_entry_missing")
         self._add_check(
             "encoded_audio",
             "distribution_encoded_audio_evidence",
@@ -524,6 +543,53 @@ class _DistributionPackageVerifier:
             "Distribution encoded audio evidence matches package files." if not failures else "Distribution encoded audio failed: " + "; ".join(failures[:5]),
             count=len(failures),
         )
+
+    def _required_encoded_profile_ids(self, encoded_entries: list[dict[str, Any]]) -> list[str]:
+        target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
+        options = target.get("options") if isinstance(target.get("options"), dict) else {}
+        raw = options.get("audio_format_profiles")
+        if isinstance(raw, str):
+            profiles = [item.strip() for item in raw.split(",")]
+        elif isinstance(raw, list):
+            profiles = [str(item).strip() for item in raw]
+        else:
+            profiles = []
+        if not profiles and self.require_encoded_audio:
+            profiles = [
+                str(audio_format.get("profile_id") or "")
+                for entry in encoded_entries
+                for audio_format in [entry.get("audio_format")]
+                if isinstance(audio_format, dict)
+            ]
+        result: list[str] = []
+        for profile_id in profiles:
+            if profile_id and profile_id != "wav_master" and profile_id not in result:
+                result.append(profile_id)
+        encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        for row in encoded.get("profiles", []) if isinstance(encoded.get("profiles"), list) else []:
+            profile_id = str(row.get("profile_id") or "")
+            if profile_id and profile_id != "wav_master" and profile_id not in result and self.require_encoded_audio:
+                result.append(profile_id)
+        return result
+
+    def _track_ids(self) -> list[str]:
+        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        result: list[str] = []
+        for row in tracks:
+            if not isinstance(row, dict):
+                continue
+            track_id = str(row.get("track_id") or "")
+            if track_id and track_id not in result:
+                result.append(track_id)
+        if result:
+            return result
+        layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
+        for entry in layout_entries:
+            if isinstance(entry, dict) and entry.get("kind") == "audio":
+                track_id = str(entry.get("track_id") or "")
+                if track_id and track_id not in result:
+                    result.append(track_id)
+        return result
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []

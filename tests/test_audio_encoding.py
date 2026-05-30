@@ -8,6 +8,7 @@ from song_agent.audio_encoding import (
     FakeEncoderRunner,
     build_ffmpeg_command,
     detect_audio_format_bytes,
+    encoded_audio_gate,
     encoded_manifest_integrity_ok,
 )
 from song_agent.audio_encoding_profiles import AudioEncodingProfileStore, audio_encoding_profile_integrity_ok
@@ -67,3 +68,33 @@ def test_release_encoded_audio_fake_runner_manifest_and_stale(tmp_path, monkeypa
     assert encoded_manifest_integrity_ok(manifest)
     assert stale["stale"] is True
     assert "track-000001:output_hash" in stale["stale_reasons"]
+
+
+def test_fake_encoder_evidence_is_not_valid_for_required_gate(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _signed_project(server, "Fake Evidence Track")
+        _add_final_export_audio(server, project_id, duration_seconds=30)
+        _, release = request_json(server, "POST", "/api/releases", {"name": "Fake Evidence Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
+        _, candidate = request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
+        candidate_id = candidate["candidate"]["candidate_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
+        request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        store = AudioEncodingStore(server.release_store, project_store=server.project_store, profile_store=server.audio_encoding_profile_store, runner=FakeEncoderRunner())
+        manifest = store.render_format(release_id, "mp3_320")
+        gate = encoded_audio_gate(store, release_id, required_profiles=["mp3_320"], required=True)
+    finally:
+        stop_test_server(server)
+
+    assert manifest["encoder"]["runner"]["fake"] is True
+    assert gate["status"] == "failed"
+    assert gate["fake_profiles"] == ["mp3_320"]
