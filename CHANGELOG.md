@@ -1,5 +1,16 @@
 # Changelog
 
+## v5.6.1 - 2026-06-01
+
+### Fixed
+- Release Signoff `require_encoded_audio_review=true` now accepts full Release Export encoded acceptance evidence when the signoff only requires a profile subset such as `mp3_320`.
+- Release encoded audio acceptance export gate now verifies required profile/track coverage from the exported sidecar instead of comparing the full-export summary hash to a profile-scoped gate summary.
+- `verify-release --require-encoded-audio-review --require-audio-formats ...` now honors explicit required profile subsets instead of treating every exported encoded profile as required.
+- v5.6 release-check smoke now covers MP3+FLAC full export with MP3-only encoded audio review signoff.
+
+### Verified
+- `python -m pytest tests\test_server_audio_encoding.py tests\test_release_check.py::test_v56_encoded_audio_acceptance_smoke -q`
+
 ## v5.6.0 - 2026-05-31
 
 ### Added

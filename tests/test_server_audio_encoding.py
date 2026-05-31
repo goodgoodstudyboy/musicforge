@@ -82,6 +82,52 @@ def test_server_encoded_audio_release_signoff_gate_and_verifier(tmp_path, monkey
     assert _check(verify, "encoded_audio_acceptance_evidence")["status"] == "passed"
 
 
+def test_release_signoff_accepts_profile_subset_from_full_encoded_acceptance_export(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        project_id = _signed_project(server, "Encoded Subset Track")
+        _add_final_export_audio(server, project_id, duration_seconds=30)
+        _status, release = request_json(server, "POST", "/api/releases", {"name": "Encoded Subset Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
+        _candidate_status, candidate = request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
+        candidate_id = candidate["candidate"]["candidate_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
+        request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        server.audio_encoding_store.runner = _FixtureEncoderRunner()
+        encode_status, encoded = request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320", "flac_lossless"]})
+        health_status, health = request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/health", {"profile_ids": ["mp3_320", "flac_lossless"]})
+        mp3_review_status, _mp3_review = request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/reviews", {"profile_id": "mp3_320", "track_id": "track-000001", "status": "accepted", "review_mode": "manual", "reviewer": {"name": "mp3 reviewer"}, "rating": 5, "playback_confirmed": True})
+        flac_review_status, _flac_review = request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/reviews", {"profile_id": "flac_lossless", "track_id": "track-000001", "status": "accepted", "review_mode": "manual", "reviewer": {"name": "flac reviewer"}, "rating": 5, "playback_confirmed": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/acceptance/refresh", {"profile_ids": ["mp3_320", "flac_lossless"]})
+        export_status, export = request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_encoded_audio": True, "require_encoded_audio_review": True, "required_audio_format_profiles": ["mp3_320"]})
+        verify = verify_release_zip(server.release_store.zip_path(release_id), require_encoded_audio=True, require_encoded_audio_review=True, required_audio_format_profiles=["mp3_320"])
+    finally:
+        stop_test_server(server)
+
+    assert encode_status == 201
+    assert encoded["summary"]["status"] == "completed"
+    assert health_status == 200
+    assert health["summary"]["status"] == "passed"
+    assert mp3_review_status == 201
+    assert flac_review_status == 201
+    assert export_status == 200
+    assert export["manifest"]["encoded_audio_acceptance"]["required_profiles"] == ["flac_lossless", "mp3_320"]
+    assert sign_status == 200
+    assert signoff["signoff"]["acceptance_gate"]["encoded_audio_acceptance"]["required_profiles"] == ["mp3_320"]
+    assert verify["status"] in {"passed", "warning"}
+    assert _check(verify, "encoded_audio_acceptance_evidence")["status"] == "passed"
+
+
 def _check(report: dict, check_id: str) -> dict:
     for item in [*report.get("checks", []), *report.get("track_checks", [])]:
         if item.get("check_id") == check_id:

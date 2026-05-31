@@ -7663,13 +7663,14 @@ def _v56_encoded_audio_acceptance_smoke(root: Path) -> tuple[bool, str]:
         export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
         zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
         server.audio_encoding_store.runner = _V55FixtureEncoderRunner()
-        encode_status, encoded = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320"]})
-        health_status, health = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/health", {"profile_ids": ["mp3_320"]})
+        encode_status, encoded = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320", "flac_lossless"]})
+        health_status, health = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/health", {"profile_ids": ["mp3_320", "flac_lossless"]})
         missing_review_status, _missing_review = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "require_encoded_audio_review": True, "required_audio_format_profiles": ["mp3_320"]})
         synthetic_status, _synthetic = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/reviews", {"profile_id": "mp3_320", "track_id": "track-000001", "status": "accepted", "review_mode": "synthetic", "rating": 4, "playback_confirmed": True})
         synthetic_gate_status, _synthetic_gate = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "require_encoded_audio_review": True, "required_audio_format_profiles": ["mp3_320"]})
         manual_status, manual = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/reviews", {"profile_id": "mp3_320", "track_id": "track-000001", "status": "accepted", "review_mode": "manual", "reviewer": {"name": "release-check"}, "rating": 5, "playback_confirmed": True})
-        acceptance_status, acceptance = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/acceptance/refresh", {"profile_ids": ["mp3_320"]})
+        flac_manual_status, _flac_manual = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/reviews", {"profile_id": "flac_lossless", "track_id": "track-000001", "status": "accepted", "review_mode": "manual", "reviewer": {"name": "release-check"}, "rating": 5, "playback_confirmed": True})
+        acceptance_status, acceptance = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/acceptance/refresh", {"profile_ids": ["mp3_320", "flac_lossless"]})
         stale_export_status, stale_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "require_encoded_audio_review": True, "required_audio_format_profiles": ["mp3_320"]})
         export2_status, export2 = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
         _v55_export_metadata(server, release_id)
@@ -7715,6 +7716,7 @@ def _v56_encoded_audio_acceptance_smoke(root: Path) -> tuple[bool, str]:
             and synthetic_gate_status == 409
             and manual_status == 201
             and manual.get("review", {}).get("review_mode") == "manual"
+            and flac_manual_status == 201
             and acceptance_status == 200
             and acceptance.get("summary", {}).get("status") == "passed"
             and stale_export_status == 409
@@ -7741,7 +7743,7 @@ def _v56_encoded_audio_acceptance_smoke(root: Path) -> tuple[bool, str]:
         return ok, (
             f"health={health_status}/{health.get('summary', {}).get('status')}, missing_review={missing_review_status}, "
             f"synthetic_gate={synthetic_gate_status}, manual={manual_status}, acceptance={acceptance_status}/{acceptance.get('summary', {}).get('status')}, "
-            f"stale_export={stale_export_status}, sign={sign_status}, verify={_v38_check_status(release_verify, 'encoded_audio_acceptance_evidence')}, "
+            f"flac_manual={flac_manual_status}, stale_export={stale_export_status}, sign={sign_status}, verify={_v38_check_status(release_verify, 'encoded_audio_acceptance_evidence')}, "
             f"dist={dist_qa_status}/{dist_export_status}/{dist_sign_status}, dist_verify={_v38_check_status(dist_verify, 'distribution_encoded_audio_acceptance_evidence')}, "
             f"tampered_review={_v38_check_status(tampered_review, 'distribution_encoded_audio_acceptance_evidence')}"
         )

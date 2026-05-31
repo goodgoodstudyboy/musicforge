@@ -929,15 +929,15 @@ class _ReleaseZipVerifier:
     def _requires_encoded_audio_review(self) -> bool:
         gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
         review_gate = gate.get("encoded_audio_acceptance") if isinstance(gate.get("encoded_audio_acceptance"), dict) else {}
-        manifest_summary = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
-        return bool(self.require_encoded_audio_review or review_gate.get("require_encoded_audio_review") or manifest_summary.get("status") == "passed")
+        return bool(self.require_encoded_audio_review or review_gate.get("require_encoded_audio_review"))
 
     def _encoded_audio_review_required_profiles(self) -> list[str]:
         result = self._encoded_audio_required_profiles()
         gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
         review_gate = gate.get("encoded_audio_acceptance") if isinstance(gate.get("encoded_audio_acceptance"), dict) else {}
         manifest_summary = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
-        for source in (review_gate, manifest_summary):
+        sources = (review_gate,) if result else (review_gate, manifest_summary)
+        for source in sources:
             for value in source.get("required_profiles", []) if isinstance(source.get("required_profiles"), list) else []:
                 text = str(value or "")
                 if text and text not in result:
@@ -1013,17 +1013,21 @@ class _ReleaseZipVerifier:
         failures: list[str] = []
         if not encoded_audio_acceptance_summary_integrity_ok(summary):
             failures.append("summary_integrity")
-        if required and summary.get("status") != "passed":
-            failures.append(f"summary_status:{summary.get('status')}")
         by_profile_track = {
             (str(row.get("profile_id") or ""), str(row.get("track_id") or "")): row
             for row in summary.get("tracks", [])
             if isinstance(row, dict)
         }
         accepted_review_ids = {str(row.get("accepted_review_id") or "") for row in by_profile_track.values() if str(row.get("accepted_review_id") or "")}
-        for profile_id in self._encoded_audio_review_required_profiles():
-            if not any(key[0] == profile_id for key in by_profile_track):
-                failures.append(f"{profile_id}:tracks_missing")
+        if required:
+            for profile_id in self._encoded_audio_review_required_profiles():
+                profile_rows = [row for key, row in by_profile_track.items() if key[0] == profile_id]
+                if not profile_rows:
+                    failures.append(f"{profile_id}:tracks_missing")
+                    continue
+                for row in profile_rows:
+                    if row.get("status") != "accepted":
+                        failures.append(f"{profile_id}/{row.get('track_id')}:status:{row.get('status')}")
         exported_reviews = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
         for row in exported_reviews:
             if not isinstance(row, dict):
@@ -1037,6 +1041,8 @@ class _ReleaseZipVerifier:
             if payload_hash != row.get("payload_hash") or not encoded_audio_review_integrity_ok(review):
                 failures.append(f"{path}:integrity")
             if str(review.get("review_id") or "") not in accepted_review_ids:
+                continue
+            if not required:
                 continue
             if review.get("status") != "accepted":
                 failures.append(f"{path}:status")

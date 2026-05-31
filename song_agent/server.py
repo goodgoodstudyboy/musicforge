@@ -173,6 +173,9 @@ from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceStateError,
     EncodedAudioAcceptanceStore,
     encoded_audio_acceptance_summary_hash,
+    encoded_audio_acceptance_summary_integrity_ok,
+    encoded_audio_review_integrity_hash,
+    encoded_audio_review_integrity_ok,
 )
 from song_agent.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
 from song_agent.releases import (
@@ -6108,14 +6111,66 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         mismatched: list[str] = []
         if not manifest_acceptance:
             missing.append("encoded_audio_acceptance")
-        for field in ("source_hash", "summary_hash", "status"):
-            manifest_value = str(manifest_acceptance.get(field) or "")
-            gate_value = str(acceptance_gate.get(field) or "")
-            if not manifest_value or manifest_value != gate_value:
-                mismatched.append(field)
-        manifest_profiles = {str(item) for item in manifest_acceptance.get("required_profiles", []) if str(item).strip()} if isinstance(manifest_acceptance.get("required_profiles"), list) else set()
+        summary: dict[str, Any] = {}
+        release_id = str(export_manifest.get("release_id") or "")
+        export_dir = self.release_store.export_dir(release_id)
+        summary_path = str(manifest_acceptance.get("summary_path") or "encoded-audio-acceptance-summary.json")
+        if manifest_acceptance:
+            try:
+                candidate = read_json(export_dir / summary_path)
+                summary = candidate if isinstance(candidate, dict) else {}
+            except Exception:
+                missing.append(summary_path)
+        if summary:
+            expected_hash = str(manifest_acceptance.get("summary_hash") or "")
+            actual_hash = encoded_audio_acceptance_summary_hash(summary)
+            if not expected_hash or expected_hash != actual_hash or not encoded_audio_acceptance_summary_integrity_ok(summary):
+                mismatched.append("summary_hash")
+        elif manifest_acceptance:
+            mismatched.append("summary")
+        manifest_profiles = {str(item) for item in summary.get("required_profiles", []) if str(item).strip()} if isinstance(summary.get("required_profiles"), list) else {str(item) for item in manifest_acceptance.get("required_profiles", []) if str(item).strip()} if isinstance(manifest_acceptance.get("required_profiles"), list) else set()
         gate_profiles = {str(item) for item in acceptance_gate.get("required_profiles", []) if str(item).strip()} if isinstance(acceptance_gate.get("required_profiles"), list) else set()
         missing_profiles = sorted(gate_profiles - manifest_profiles)
+        summary_tracks = summary.get("tracks") if isinstance(summary.get("tracks"), list) else []
+        by_profile_track = {
+            (str(row.get("profile_id") or ""), str(row.get("track_id") or "")): row
+            for row in summary_tracks
+            if isinstance(row, dict)
+        }
+        gate_summary = self.encoded_audio_acceptance_store.build_summary(release_id, required_profiles=sorted(gate_profiles), now=_utc_now())
+        gate_tracks = gate_summary.get("tracks") if isinstance(gate_summary.get("tracks"), list) else []
+        review_hashes = {
+            str(row.get("review_id") or ""): {"path": str(row.get("path") or ""), "payload_hash": str(row.get("payload_hash") or "")}
+            for row in manifest_acceptance.get("review_hashes", [])
+            if isinstance(row, dict) and str(row.get("review_id") or "")
+        }
+        for row in gate_tracks:
+            if not isinstance(row, dict):
+                continue
+            profile_id = str(row.get("profile_id") or "")
+            track_id = str(row.get("track_id") or "")
+            manifest_row = by_profile_track.get((profile_id, track_id))
+            if not manifest_row:
+                missing.append(f"{profile_id}/{track_id}")
+                continue
+            for field in ("status", "manifest_hash", "health_hash", "encoded_track_hash", "accepted_review_id"):
+                if str(manifest_row.get(field) or "") != str(row.get(field) or ""):
+                    mismatched.append(f"{profile_id}/{track_id}:{field}")
+            review_id = str(row.get("accepted_review_id") or "")
+            review_record = review_hashes.get(review_id) or {}
+            review_path = str(review_record.get("path") or "")
+            if not review_path:
+                missing.append(f"{profile_id}/{track_id}:review")
+                continue
+            try:
+                review = read_json(export_dir / review_path)
+            except Exception:
+                missing.append(review_path)
+                continue
+            if not isinstance(review, dict) or not encoded_audio_review_integrity_ok(review):
+                mismatched.append(f"{profile_id}/{track_id}:review_integrity")
+            if encoded_audio_review_integrity_hash(review if isinstance(review, dict) else {}) != str(review_record.get("payload_hash") or ""):
+                mismatched.append(f"{profile_id}/{track_id}:review_hash")
         failed = bool(missing or mismatched or missing_profiles)
         return {
             "status": "failed" if failed else "passed",
