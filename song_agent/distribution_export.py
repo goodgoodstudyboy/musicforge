@@ -37,6 +37,7 @@ from song_agent.release_metadata import read_release_metadata
 from song_agent.release_qa import scan_release_payload_for_sensitive_values
 from song_agent.releases import stable_hash
 from song_agent.audio_encoding import AudioEncodingStore, resolve_target_audio_format_profiles
+from song_agent.encoded_audio_acceptance import export_distribution_encoded_audio_acceptance
 
 
 DISTRIBUTION_EXPORT_SCHEMA_VERSION = 1
@@ -109,6 +110,7 @@ def build_distribution_export_package(
     layout_records = _copy_layout_entries(store, release_id, release_export_dir, export_dir, layout_plan, artwork=artwork)
     copied_files.extend(layout_records)
     encoded_audio_summary = _write_encoded_audio_sidecars(store, release_id, target, export_dir, copied_files)
+    encoded_audio_acceptance_summary = _write_encoded_audio_acceptance_sidecars(store, release_id, target, export_dir, copied_files)
     artwork_record = _artwork_record(artwork, layout_plan)
     wrote_checklist_doc = _write_docs(export_dir, release, target, package_id, qa_report, artwork_record, checklist=checklist, write_checklist=not bool(template))
     _write_readme(export_dir, release, target, package_id, qa_report)
@@ -158,6 +160,7 @@ def build_distribution_export_package(
         },
         "artwork": artwork_record,
         "encoded_audio": encoded_audio_summary,
+        "encoded_audio_acceptance": encoded_audio_acceptance_summary,
         "layout": layout_payload,
         "sidecars": {
             "distribution_signoff": _distribution_signoff_sidecar_record(signoff_public),
@@ -422,6 +425,24 @@ def _write_encoded_audio_sidecars(store: DistributionStore, release_id: str, tar
         records.append(_file_record(export_dir, manifest_path))
         copied_profiles.append({"profile_id": profile_id, "manifest_path": f"encoded-audio/manifests/{profile_id}.json", "manifest_hash": manifest.get("integrity_hash"), "source_hash": manifest.get("source_hash")})
     return sanitize_metadata({"status": "included", "profiles": copied_profiles, "summary_path": "encoded-audio/summary.json"}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+
+
+def _write_encoded_audio_acceptance_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+    template = store.resolve_target_template(target)
+    profile_ids = [profile_id for profile_id in resolve_target_audio_format_profiles(target, template) if profile_id != "wav_master"]
+    if not profile_ids:
+        return {"status": "not_required", "required_profiles": []}
+    try:
+        return export_distribution_encoded_audio_acceptance(
+            store=store,
+            release_id=release_id,
+            target=target,
+            export_dir=export_dir,
+            required_profiles=profile_ids,
+            records=records,
+        )
+    except Exception:
+        return {"status": "missing", "required_profiles": profile_ids}
 
 
 def _artwork_record(artwork: dict[str, Any], layout_plan: dict[str, Any]) -> dict[str, Any]:

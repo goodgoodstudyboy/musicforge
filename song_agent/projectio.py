@@ -64,7 +64,7 @@ def slugify(value: str) -> str:
 
 def write_json(path: Path, data: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp_path = path.with_name(f".tmp-{os.getpid()}-{threading.get_ident()}.json")
     tmp_path.write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

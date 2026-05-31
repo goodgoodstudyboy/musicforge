@@ -1,5 +1,22 @@
 # Changelog
 
+## v5.6.0 - 2026-05-31
+
+### Added
+- Encoded Audio Acceptance store for per-profile health reports, per-track listening reviews, source hashes, integrity hashes, stale checks, and redaction scanning.
+- Release encoded audio acceptance APIs plus CLI summary command for refreshing health and writing acceptance reports.
+- Release Signoff gate `require_encoded_audio_review=true`, blocking missing, synthetic-only, stale, tampered, duplicate, or non-manual encoded review evidence.
+- Release Export sidecars for `encoded-audio-acceptance-summary.json`, `encoded-audio-health/`, and `encoded-audio-reviews/`, with `verify-release --require-encoded-audio-review` offline validation.
+- Distribution Signoff and Export support for encoded audio acceptance evidence under `encoded-audio-acceptance/`, with `verify-distribution-package --require-encoded-audio-review` offline validation.
+- Studio controls for encoded audio acceptance health refresh and encoded review signoff requirement.
+- v5.6 release-check smoke covering missing review blocks, synthetic-only rejection, manual accepted review, Release/Distribution export evidence, offline verification, encoded file tamper, review sidecar tamper, and fake-runner rejection.
+
+### Fixed
+- Deep Windows export paths now use a shorter atomic JSON temp filename, avoiding sidecar write failures in nested Release/Distribution package directories.
+
+### Verified
+- `python -m pytest tests\test_audio_encoding.py tests\test_server_audio_encoding.py tests\test_distribution_encoded_audio.py tests\test_encoded_audio_acceptance.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v55_distribution_audio_formats_smoke tests\test_release_check.py::test_v56_encoded_audio_acceptance_smoke -q`
+
 ## v5.5.1 - 2026-05-30
 
 ### Fixed

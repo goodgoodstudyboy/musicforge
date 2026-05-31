@@ -285,6 +285,19 @@ packages matching encoded track audio plus `encoded-audio/` manifests, and
 `verify-distribution-package --require-encoded-audio` catches hash or header
 tampering such as fake MP3 files.
 
+Encoded Audio Acceptance adds per-format health reports and per-track listening
+reviews for encoded delivery files. Health checks reject stale manifests, fake
+encoder evidence, bad headers, missing hashes, and tiny placeholder outputs.
+Release and Distribution Signoff can require
+`require_encoded_audio_review=true`, which means every required encoded
+profile/track needs one current manual or external-import accepted review bound
+to the exact encoded file hash. Synthetic-only reviews, stale source hashes,
+duplicate accepted reviews, redaction findings, or stale exports block signoff.
+Release Export writes `encoded-audio-acceptance-summary.json`,
+`encoded-audio-health/`, and `encoded-audio-reviews/`; Distribution Export writes
+the same evidence under `encoded-audio-acceptance/`. Offline verifiers can enforce
+the evidence with `--require-encoded-audio-review`.
+
 Useful local commands:
 
 ```powershell
@@ -293,6 +306,7 @@ python -m song_agent.cli release-audio-review add release-000001 --track-id trac
 python -m song_agent.cli release-audio-review summary release-000001 --write
 python -m song_agent.cli release-audio-review create-task release-000001 arv-000001 m-000001
 python -m song_agent.cli release-encode release-000001 --profiles mp3_320,flac_lossless --json
+python -m song_agent.cli encoded-audio-acceptance release-000001 --profiles mp3_320 --refresh-health --write --json
 ```
 
 Arrangement Mix Controls add a local Mix Board for small, auditable corrections
@@ -321,6 +335,7 @@ python -m song_agent.cli verify-release path\to\release-export.zip --require-aud
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-human-review --require-audio-revisions
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-mastering
 python -m song_agent.cli verify-release path\to\release-export.zip --require-encoded-audio --require-audio-formats mp3_320
+python -m song_agent.cli verify-release path\to\release-export.zip --require-encoded-audio --require-encoded-audio-review --require-audio-formats mp3_320
 ```
 
 The verifier reads only the ZIP, checks entry safety, duplicate entries,

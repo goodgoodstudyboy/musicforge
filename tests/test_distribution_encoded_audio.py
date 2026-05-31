@@ -40,27 +40,37 @@ def test_distribution_package_uses_encoded_mp3_and_verifier_catches_tamper(tmp_p
         fake_config_status, fake_config = request_json(server, "POST", "/api/audio-encoding/config", {"fake_runner": True})
         server.audio_encoding_store.runner = _FixtureEncoderRunner()
         request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320"]})
+        request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/health", {"profile_ids": ["mp3_320"]})
+        missing_review_status, _missing_review = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "encoded-audio-test", "require_encoded_audio_review": True})
+        review_status, review = request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/reviews", {"profile_id": "mp3_320", "track_id": "track-000001", "status": "accepted", "review_mode": "manual", "reviewer": {"name": "encoded reviewer"}, "rating": 5, "playback_confirmed": True})
+        request_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/acceptance/refresh", {"profile_ids": ["mp3_320"]})
         request_json(server, "POST", f"/api/releases/{release_id}/export")
         request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
         _export_metadata(server, release_id)
         qa_status, qa = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
         export_status, export = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
         zip_status, _zip = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
-        sign_status, _sign = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "encoded-audio-test"})
+        sign_status, _sign = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "encoded-audio-test", "require_encoded_audio_review": True})
         request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
         package_id = export["manifest"]["package_id"]
         zip_path = Path(".musicforge") / "releases" / release_id / "distribution" / "packages" / package_id / "distribution-package.zip"
-        verify = verify_distribution_package(zip_path, require_encoded_audio=True)
+        verify = verify_distribution_package(zip_path, require_encoded_audio=True, require_encoded_audio_review=True)
         with zipfile.ZipFile(zip_path) as archive:
             mp3_name = next(name for name in archive.namelist() if name.startswith("audio/") and name.endswith(".mp3"))
         tampered_zip = _rewrite_zip(zip_path, tmp_path / "tampered-encoded.zip", {mp3_name: lambda _data: b"RIFFxxxxWAVEfake"})
-        tampered = verify_distribution_package(tampered_zip, require_encoded_audio=True)
+        tampered = verify_distribution_package(tampered_zip, require_encoded_audio=True, require_encoded_audio_review=True)
+        review_name = next(name for name in zipfile.ZipFile(zip_path).namelist() if name.startswith("encoded-audio-acceptance/reviews/") and name.endswith(".json"))
+        tampered_review_zip = _rewrite_zip(zip_path, tmp_path / "tampered-encoded-review.zip", {review_name: lambda data: data.replace(b'"status": "accepted"', b'"status": "rejected"')})
+        tampered_review = verify_distribution_package(tampered_review_zip, require_encoded_audio=True, require_encoded_audio_review=True)
     finally:
         stop_test_server(server)
 
     assert target_status == 201
     assert fake_config_status == 400
     assert "test-only" in fake_config["error"]
+    assert missing_review_status == 409
+    assert review_status == 201
+    assert review["review"]["review_mode"] == "manual"
     assert missing_qa_status == 200
     assert missing_qa["summary"]["status"] == "failed"
     assert qa_status == 200
@@ -70,12 +80,16 @@ def test_distribution_package_uses_encoded_mp3_and_verifier_catches_tamper(tmp_p
     assert audio_entries[0]["source_kind"] == "encoded_audio"
     assert audio_entries[0]["path"].endswith(".mp3")
     assert export["manifest"]["encoded_audio"]["profiles"][0]["profile_id"] == "mp3_320"
+    assert export["manifest"]["encoded_audio_acceptance"]["status"] == "passed"
     assert zip_status == 200
     assert sign_status == 200
     assert verify["status"] in {"passed", "warning"}
     assert _check(verify, "distribution_encoded_audio_evidence")["status"] == "passed"
+    assert _check(verify, "distribution_encoded_audio_acceptance_evidence")["status"] == "passed"
     assert tampered["status"] == "failed"
     assert _check(tampered, "distribution_encoded_audio_evidence")["status"] == "failed"
+    assert tampered_review["status"] == "failed"
+    assert _check(tampered_review, "distribution_encoded_audio_acceptance_evidence")["status"] == "failed"
 
 
 def test_distribution_verifier_requires_encoded_layout_entries(tmp_path) -> None:
@@ -175,11 +189,11 @@ class _FixtureEncoderRunner:
     def encode(self, *, source: Path, target: Path, profile, config: AudioEncoderConfig) -> dict:
         target.parent.mkdir(parents=True, exist_ok=True)
         if profile.format == "mp3":
-            target.write_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x15MusicForgeFixtureMP3")
+            target.write_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x15MusicForgeFixtureMP3" + (b"\0" * 20000))
         elif profile.format == "flac":
-            target.write_bytes(b"fLaC\x00\x00\x00\"MusicForgeFixtureFLAC")
+            target.write_bytes(b"fLaC\x00\x00\x00\"MusicForgeFixtureFLAC" + (b"\0" * 20000))
         elif profile.format == "aac":
-            target.write_bytes(b"\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00M4A isommp42")
+            target.write_bytes(b"\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00M4A isommp42" + (b"\0" * 20000))
         elif profile.format == "wav":
             shutil.copy2(source, target)
         else:

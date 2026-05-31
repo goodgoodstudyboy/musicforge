@@ -80,6 +80,16 @@ def test_webui_contains_acceptance_workspace():
     assert "/signoff" in html
 
 
+def test_webui_contains_encoded_audio_acceptance_controls():
+    html = panel_html()
+
+    assert 'id="release-require-encoded-audio-review"' in html
+    assert "Require encoded audio review" in html
+    assert 'id="release-refresh-encoded-audio-health"' in html
+    assert "/encoded-audio/health" in html
+    assert "/encoded-audio/acceptance/refresh" in html
+
+
 def test_webui_contains_runtime_tabs():
     html = panel_html()
 

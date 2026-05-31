@@ -4280,6 +4280,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <div class="actions">
           <button class="secondary" id="release-render-encoded-audio" type="button">Render Encoded Audio</button>
           <button class="secondary" id="release-verify-encoded-audio" type="button">Verify Encoded Audio</button>
+          <button class="secondary" id="release-refresh-encoded-audio-health" type="button">Refresh Encoded Health</button>
           <button class="secondary" id="release-reset-encoded-audio" type="button">Reset Encoded Audio</button>
         </div>
         <table>
@@ -4394,6 +4395,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <input id="release-require-encoded-audio" type="checkbox">
           Require encoded audio
         </label>
+        <label class="inline">
+          <input id="release-require-encoded-audio-review" type="checkbox">
+          Require encoded audio review
+        </label>
         <label>Required Audio Formats
           <input id="release-required-audio-formats" value="mp3_320">
         </label>
@@ -4413,6 +4418,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         require_audio_revision_closeout: $("release-require-audio-revision-closeout")?.checked || false,
         require_mastering_qa: $("release-require-mastering-qa")?.checked || false,
         require_encoded_audio: $("release-require-encoded-audio")?.checked || false,
+        require_encoded_audio_review: $("release-require-encoded-audio-review")?.checked || false,
         required_audio_format_profiles: ($("release-required-audio-formats")?.value || "").split(",").map((item) => item.trim()).filter(Boolean),
         mastering_profile_id: $("release-mastering-profile")?.value || "",
       };
@@ -4585,6 +4591,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ require_encoded_audio: true, required_audio_format_profiles: $("release-encoded-audio-profiles").value.split(",").map((item) => item.trim()).filter(Boolean) }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-refresh-encoded-audio-health", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio/health`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile_ids: $("release-encoded-audio-profiles").value.split(",").map((item) => item.trim()).filter(Boolean) }),
+        });
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio/acceptance/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile_ids: $("release-encoded-audio-profiles").value.split(",").map((item) => item.trim()).filter(Boolean) }),
         });
         await loadReleases();
       });

@@ -56,6 +56,7 @@ def test_release_encoded_audio_fake_runner_manifest_and_stale(tmp_path, monkeypa
         store = AudioEncodingStore(server.release_store, project_store=server.project_store, profile_store=server.audio_encoding_profile_store, runner=FakeEncoderRunner())
         manifest = store.render_format(release_id, "mp3_320")
         track_path = store.track_audio_path(release_id, "mp3_320", "track-000001")
+        assert track_path.stat().st_size < 16 * 1024
         track_path.write_bytes(b"RIFFxxxxWAVEfake")
         stale = store.read_manifest(release_id, "mp3_320")
     finally:

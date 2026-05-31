@@ -166,7 +166,14 @@ from song_agent.audio_revision import (
     AudioRevisionStateError,
     AudioRevisionStore,
 )
-from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles
+from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
+from song_agent.encoded_audio_acceptance import (
+    EncodedAudioAcceptanceError,
+    EncodedAudioAcceptanceNotFoundError,
+    EncodedAudioAcceptanceStateError,
+    EncodedAudioAcceptanceStore,
+    encoded_audio_acceptance_summary_hash,
+)
 from song_agent.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
 from song_agent.releases import (
     ReleaseConflictError,
@@ -2579,6 +2586,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def audio_encoding_store(self) -> AudioEncodingStore:
         return self.server.audio_encoding_store  # type: ignore[attr-defined]
+
+    @property
+    def encoded_audio_acceptance_store(self) -> EncodedAudioAcceptanceStore:
+        return self.server.encoded_audio_acceptance_store  # type: ignore[attr-defined]
 
     @property
     def distribution_template_store(self) -> TemplatePackStore:
@@ -5538,6 +5549,64 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, **result})
                 return
             parts = [part for part in tail.strip("/").split("/") if part]
+            if len(parts) == 1 and parts[0] == "health":
+                if method == "GET":
+                    self._send_json({"ok": True, "release_id": release_id, "health": self.encoded_audio_acceptance_store.list_health(release_id)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    result = self.encoded_audio_acceptance_store.refresh_health(release_id, normalize_required_profiles(payload.get("profile_ids") or payload.get("profiles") or payload.get("required_audio_format_profiles") or []), now=_utc_now())
+                    self._send_json({"ok": True, **result})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 2 and parts[0] == "health" and method == "GET":
+                report = self.encoded_audio_acceptance_store.read_health(release_id, parts[1])
+                self._send_json({"ok": True, "release_id": release_id, "profile_id": parts[1], "health": report})
+                return
+            if len(parts) == 1 and parts[0] == "reviews":
+                if method == "GET":
+                    reviews = self.encoded_audio_acceptance_store.list_reviews(release_id)
+                    self._send_json({"ok": True, "release_id": release_id, "reviews": reviews})
+                    return
+                if method == "POST":
+                    review = self.encoded_audio_acceptance_store.create_review(release_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "review": review}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 2 and parts[0] == "reviews":
+                review_id = parts[1]
+                if method == "GET":
+                    review = self.encoded_audio_acceptance_store.read_review(release_id, review_id)
+                    self._send_json({"ok": True, "release_id": release_id, "review": review})
+                    return
+                if method in {"POST", "PATCH"}:
+                    review = self.encoded_audio_acceptance_store.update_review(release_id, review_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "review": review})
+                    return
+                if method == "DELETE":
+                    result = self.encoded_audio_acceptance_store.delete_review(release_id, review_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, **result})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 1 and parts[0] == "acceptance":
+                if method == "GET":
+                    payload_profiles = []
+                    summary = self.encoded_audio_acceptance_store.build_summary(release_id, required_profiles=payload_profiles, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "summary": summary})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 2 and parts[0] == "acceptance" and parts[1] == "refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                summary = self.encoded_audio_acceptance_store.write_summary(release_id, required_profiles=normalize_required_profiles(payload.get("profile_ids") or payload.get("profiles") or payload.get("required_audio_format_profiles") or []), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "summary": summary})
+                return
             if len(parts) == 2 and parts[0] == "formats" and method == "GET":
                 manifest = self.audio_encoding_store.read_manifest(release_id, parts[1])
                 self._send_json({"ok": True, "release_id": release_id, "manifest": manifest})
@@ -5554,9 +5623,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Encoded audio route not found.")
         except (ReleaseNotFoundError, AudioEncodingNotFoundError, FileNotFoundError) as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except (ReleaseStateError, AudioEncodingStateError) as exc:
+        except (EncodedAudioAcceptanceNotFoundError,) as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (ReleaseStateError, AudioEncodingStateError, EncodedAudioAcceptanceStateError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except (AudioEncodingError, AudioEncodingProfileError, ValueError) as exc:
+        except (AudioEncodingError, AudioEncodingProfileError, EncodedAudioAcceptanceError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_audio_profiles_route(self, method: str, path: str) -> None:
@@ -5813,6 +5884,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if encoded_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(encoded_gate.get("message") or "Encoded audio gate failed.")
+        require_encoded_audio_review = bool(payload.get("require_encoded_audio_review", False))
+        encoded_acceptance_gate = self.encoded_audio_acceptance_store.gate(
+            release_id,
+            required_profiles=required_encoded_profiles,
+            required=require_encoded_audio_review,
+            now=_utc_now(),
+        )
+        if encoded_acceptance_gate and require_encoded_audio_review:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["encoded_audio_acceptance"] = encoded_acceptance_gate
+            if encoded_acceptance_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(encoded_acceptance_gate.get("message") or "Encoded audio acceptance gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -5835,6 +5919,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(encoded_gate.get("message") or "Encoded audio gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if encoded_acceptance_gate.get("hard_block") and encoded_acceptance_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(encoded_acceptance_gate.get("message") or "Encoded audio acceptance gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -5896,6 +5989,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {
                         "error": str(encoded_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+        if require_encoded_audio_review:
+            if not export_manifest:
+                self._send_json(
+                    {
+                        "error": "Release Export has not been generated.",
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+            encoded_acceptance_export_gate = self._release_encoded_audio_acceptance_export_gate(export_manifest, encoded_acceptance_gate)
+            if encoded_acceptance_export_gate.get("status") == "failed":
+                acceptance_gate = dict(acceptance_gate or {})
+                acceptance_gate["encoded_audio_acceptance_export"] = encoded_acceptance_export_gate
+                self._send_json(
+                    {
+                        "error": str(encoded_acceptance_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
                         "acceptance_gate": acceptance_gate,
                     },
                     status=HTTPStatus.CONFLICT,
@@ -5985,6 +6100,54 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "message": "Release Export is stale. Rebuild export before signoff." if failed else "Release Export contains current encoded audio evidence.",
             "missing_profiles": missing,
             "mismatched_profiles": sorted(set(mismatched)),
+        }
+
+    def _release_encoded_audio_acceptance_export_gate(self, export_manifest: dict[str, Any], acceptance_gate: dict[str, Any]) -> dict[str, Any]:
+        manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
+        missing: list[str] = []
+        mismatched: list[str] = []
+        if not manifest_acceptance:
+            missing.append("encoded_audio_acceptance")
+        for field in ("source_hash", "summary_hash", "status"):
+            manifest_value = str(manifest_acceptance.get(field) or "")
+            gate_value = str(acceptance_gate.get(field) or "")
+            if not manifest_value or manifest_value != gate_value:
+                mismatched.append(field)
+        manifest_profiles = {str(item) for item in manifest_acceptance.get("required_profiles", []) if str(item).strip()} if isinstance(manifest_acceptance.get("required_profiles"), list) else set()
+        gate_profiles = {str(item) for item in acceptance_gate.get("required_profiles", []) if str(item).strip()} if isinstance(acceptance_gate.get("required_profiles"), list) else set()
+        missing_profiles = sorted(gate_profiles - manifest_profiles)
+        failed = bool(missing or mismatched or missing_profiles)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": "Release Export is stale. Rebuild export before signoff." if failed else "Release Export contains current encoded audio acceptance evidence.",
+            "missing": missing,
+            "mismatched_fields": sorted(set(mismatched)),
+            "missing_profiles": missing_profiles,
+        }
+
+    def _distribution_encoded_audio_acceptance_export_gate(self, export_manifest: dict[str, Any], acceptance_gate: dict[str, Any]) -> dict[str, Any]:
+        manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
+        missing: list[str] = []
+        mismatched: list[str] = []
+        if not manifest_acceptance:
+            missing.append("encoded_audio_acceptance")
+        for field in ("source_hash", "summary_hash", "status"):
+            manifest_value = str(manifest_acceptance.get(field) or "")
+            gate_value = str(acceptance_gate.get(field) or "")
+            if not manifest_value or manifest_value != gate_value:
+                mismatched.append(field)
+        manifest_profiles = {str(item) for item in manifest_acceptance.get("required_profiles", []) if str(item).strip()} if isinstance(manifest_acceptance.get("required_profiles"), list) else set()
+        gate_profiles = {str(item) for item in acceptance_gate.get("required_profiles", []) if str(item).strip()} if isinstance(acceptance_gate.get("required_profiles"), list) else set()
+        missing_profiles = sorted(gate_profiles - manifest_profiles)
+        failed = bool(missing or mismatched or missing_profiles)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": "Distribution Export is stale. Rebuild export before signoff." if failed else "Distribution Export contains current encoded audio acceptance evidence.",
+            "missing": missing,
+            "mismatched_fields": sorted(set(mismatched)),
+            "missing_profiles": missing_profiles,
         }
 
     def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -6764,6 +6927,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     require_audio=bool(payload.get("require_audio", False)),
                     require_artwork=bool(payload.get("require_artwork", False)),
                     require_encoded_audio=bool(payload.get("require_encoded_audio", False)),
+                    require_encoded_audio_review=bool(payload.get("require_encoded_audio_review", False)),
                 )
                 write_distribution_verification_report(report, self.distribution_store.package_dir(release_id, package_id) / "verification-report.json")
                 self._send_json({"ok": True, "release_id": release_id, "target_id": target_id, "verification": report, "summary": distribution_verification_summary(report)})
@@ -6776,7 +6940,38 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method == "POST":
                     self.distribution_store.ensure_target_mutable(release_id, target)
                     report = self._get_or_refresh_distribution_qa(release_id, target, refresh=True)
-                    signoff = sign_distribution_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, payload=self._optional_json_body(), now=_utc_now())
+                    payload = self._optional_json_body()
+                    require_encoded_review = bool(payload.get("require_encoded_audio_review", False) or (target.options or {}).get("require_encoded_audio_review", False))
+                    if require_encoded_review:
+                        template = self.distribution_store.resolve_target_template(target)
+                        required_profiles = [
+                            profile_id
+                            for profile_id in resolve_target_audio_format_profiles(target, template)
+                            if profile_id != "wav_master"
+                        ]
+                        encoded_acceptance_gate = self.encoded_audio_acceptance_store.gate(
+                            release_id,
+                            required_profiles=required_profiles,
+                            required=True,
+                            now=_utc_now(),
+                        )
+                        if encoded_acceptance_gate.get("hard_block") and encoded_acceptance_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(encoded_acceptance_gate.get("message") or "Encoded audio acceptance gate failed."), "encoded_audio_acceptance": encoded_acceptance_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        package_id = self.distribution_store.latest_package_id(target)
+                        export_manifest = read_distribution_export_manifest(self.distribution_store, release_id, package_id) if package_id else {}
+                        export_gate = self._distribution_encoded_audio_acceptance_export_gate(export_manifest, encoded_acceptance_gate)
+                        if export_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(export_gate.get("message") or "Distribution Export is stale. Rebuild export before signoff."), "encoded_audio_acceptance": encoded_acceptance_gate, "encoded_audio_acceptance_export": export_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        payload = {**payload, "require_encoded_audio_review": True, "encoded_audio_acceptance": encoded_acceptance_gate}
+                    signoff = sign_distribution_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, payload=payload, now=_utc_now())
                     target = self.distribution_store.get_target(release_id, target_id)
                     self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "signoff": signoff, "summary": distribution_signoff_summary(signoff)})
                     return
@@ -12777,6 +12972,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.mastering_store = MasteringStore(self.release_store, project_store=self.project_store, profile_store=self.mastering_profile_store)
         self.audio_encoding_profile_store = AudioEncodingProfileStore(self.release_store.root.parent / "audio-encoding-profiles")
         self.audio_encoding_store = AudioEncodingStore(self.release_store, project_store=self.project_store, profile_store=self.audio_encoding_profile_store)
+        self.encoded_audio_acceptance_store = EncodedAudioAcceptanceStore(self.release_store, project_store=self.project_store, audio_encoding_store=self.audio_encoding_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

@@ -22,6 +22,12 @@ from song_agent.projectio import write_json
 from song_agent.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
 from song_agent.audio_encoding import detect_audio_format_bytes, encoded_manifest_integrity_ok, encoded_audio_summary_integrity_ok, encoded_audio_summary_uses_fake, encoded_manifest_uses_fake
+from song_agent.encoded_audio_acceptance import (
+    encoded_audio_acceptance_summary_hash,
+    encoded_audio_acceptance_summary_integrity_ok,
+    encoded_audio_review_integrity_hash,
+    encoded_audio_review_integrity_ok,
+)
 from song_agent.releases import stable_hash
 
 
@@ -43,6 +49,7 @@ def verify_distribution_package(
     require_audio: bool = False,
     require_artwork: bool = False,
     require_encoded_audio: bool = False,
+    require_encoded_audio_review: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -54,6 +61,7 @@ def verify_distribution_package(
         require_audio=require_audio,
         require_artwork=require_artwork,
         require_encoded_audio=require_encoded_audio,
+        require_encoded_audio_review=require_encoded_audio_review,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -122,6 +130,7 @@ class _DistributionPackageVerifier:
         require_audio: bool,
         require_artwork: bool,
         require_encoded_audio: bool,
+        require_encoded_audio_review: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -132,6 +141,7 @@ class _DistributionPackageVerifier:
         self.require_audio = require_audio
         self.require_artwork = require_artwork
         self.require_encoded_audio = require_encoded_audio
+        self.require_encoded_audio_review = require_encoded_audio_review
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -150,6 +160,8 @@ class _DistributionPackageVerifier:
         self.layout: dict[str, Any] = {}
         self.encoded_audio_summary: dict[str, Any] = {}
         self.encoded_audio_manifests: dict[str, dict[str, Any]] = {}
+        self.encoded_audio_acceptance_summary: dict[str, Any] = {}
+        self.encoded_audio_acceptance_reviews: dict[str, dict[str, Any]] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -174,6 +186,7 @@ class _DistributionPackageVerifier:
                 self._verify_layout(archive)
                 self._verify_metadata_and_artwork(archive)
                 self._verify_encoded_audio(archive)
+                self._verify_encoded_audio_acceptance(archive)
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -291,6 +304,8 @@ class _DistributionPackageVerifier:
             self.layout = self._read_json_entry(archive, "layout/manifest-layout.json", "layout", "distribution_layout_sidecar_parse")
         if "encoded-audio/summary.json" in self.entry_map:
             self.encoded_audio_summary = self._read_json_entry(archive, "encoded-audio/summary.json", "encoded_audio", "distribution_encoded_audio_summary_parse")
+        if "encoded-audio-acceptance/summary.json" in self.entry_map:
+            self.encoded_audio_acceptance_summary = self._read_json_entry(archive, "encoded-audio-acceptance/summary.json", "encoded_audio_acceptance", "distribution_encoded_audio_acceptance_summary_parse")
         encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
         for row in encoded.get("profiles", []) if isinstance(encoded.get("profiles"), list) else []:
             if not isinstance(row, dict):
@@ -299,6 +314,13 @@ class _DistributionPackageVerifier:
             path = str(row.get("manifest_path") or f"encoded-audio/manifests/{profile_id}.json")
             if path in self.entry_map:
                 self.encoded_audio_manifests[profile_id] = self._read_json_entry(archive, path, "encoded_audio", "distribution_encoded_audio_manifest_parse")
+        acceptance = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
+        for row in acceptance.get("review_hashes", []) if isinstance(acceptance.get("review_hashes"), list) else []:
+            if not isinstance(row, dict):
+                continue
+            path = str(row.get("path") or "")
+            if path in self.entry_map:
+                self.encoded_audio_acceptance_reviews[path] = self._read_json_entry(archive, path, "encoded_audio_acceptance", "distribution_encoded_audio_review_parse")
 
     def _verify_package_release(self) -> None:
         errors: list[str] = []
@@ -544,6 +566,82 @@ class _DistributionPackageVerifier:
             count=len(failures),
         )
 
+    def _verify_encoded_audio_acceptance(self, archive: zipfile.ZipFile) -> None:
+        encoded_acceptance = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
+        target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
+        options = target.get("options") if isinstance(target.get("options"), dict) else {}
+        required = self.require_encoded_audio_review or bool(options.get("require_encoded_audio_review")) or bool(encoded_acceptance.get("review_count"))
+        if not required and str(encoded_acceptance.get("status") or "") in {"", "missing", "not_required"}:
+            self._add_check("encoded_audio_acceptance", "distribution_encoded_audio_acceptance_optional", "passed", "warning", "Encoded audio acceptance is not required.")
+            return
+        if not required:
+            self._add_check("encoded_audio_acceptance", "distribution_encoded_audio_acceptance_optional", "passed", "warning", "Encoded audio acceptance is not required.")
+            return
+        failures: list[str] = []
+        if not self.encoded_audio_acceptance_summary:
+            failures.append("summary_missing")
+        else:
+            if encoded_audio_acceptance_summary_hash(self.encoded_audio_acceptance_summary) != encoded_acceptance.get("summary_hash"):
+                failures.append("summary_hash")
+            if not encoded_audio_acceptance_summary_integrity_ok(self.encoded_audio_acceptance_summary):
+                failures.append("summary_integrity")
+            if self.encoded_audio_acceptance_summary.get("status") != "passed":
+                failures.append(f"summary_status:{self.encoded_audio_acceptance_summary.get('status')}")
+        layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
+        encoded_entries = [entry for entry in layout_entries if isinstance(entry, dict) and entry.get("kind") == "audio" and entry.get("source_kind") == "encoded_audio"]
+        review_rows = encoded_acceptance.get("review_hashes") if isinstance(encoded_acceptance.get("review_hashes"), list) else []
+        summary_tracks = self.encoded_audio_acceptance_summary.get("tracks") if isinstance(self.encoded_audio_acceptance_summary.get("tracks"), list) else []
+        accepted_review_ids = {str(row.get("accepted_review_id") or "") for row in summary_tracks if isinstance(row, dict) and str(row.get("accepted_review_id") or "")}
+        reviews_by_profile_track: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in review_rows:
+            if not isinstance(row, dict):
+                continue
+            path = str(row.get("path") or "")
+            review = self.encoded_audio_acceptance_reviews.get(path)
+            if not review:
+                failures.append(f"{path}:missing")
+                continue
+            if encoded_audio_review_integrity_hash(review) != row.get("payload_hash") or not encoded_audio_review_integrity_ok(review):
+                failures.append(f"{path}:integrity")
+            if str(review.get("review_id") or "") not in accepted_review_ids:
+                continue
+            if review.get("status") != "accepted":
+                failures.append(f"{path}:status")
+            if review.get("review_mode") == "synthetic":
+                failures.append(f"{path}:synthetic")
+            if not bool(review.get("playback_confirmed", False)):
+                failures.append(f"{path}:playback")
+            if review.get("stale"):
+                failures.append(f"{path}:stale")
+            reviews_by_profile_track[(str(review.get("profile_id") or ""), str(review.get("track_id") or ""))] = review
+        for entry in encoded_entries:
+            audio_format = entry.get("audio_format") if isinstance(entry.get("audio_format"), dict) else {}
+            profile_id = str(audio_format.get("profile_id") or "")
+            track_id = str(entry.get("track_id") or "")
+            review = reviews_by_profile_track.get((profile_id, track_id))
+            if not review:
+                failures.append(f"{profile_id}:{track_id}:review_missing")
+                continue
+            evidence = review.get("encoded_audio_evidence") if isinstance(review.get("encoded_audio_evidence"), dict) else {}
+            path = str(entry.get("path") or "")
+            info = self.entry_map.get(path)
+            if info is None:
+                failures.append(f"{path}:missing")
+                continue
+            actual_hash = hashlib.sha256(archive.read(info)).hexdigest()
+            if actual_hash != evidence.get("encoded_track_hash"):
+                failures.append(f"{path}:review_hash")
+        if required and not encoded_entries:
+            failures.append("encoded_layout_entries_missing")
+        self._add_check(
+            "encoded_audio_acceptance",
+            "distribution_encoded_audio_acceptance_evidence",
+            "failed" if failures else "passed",
+            "blocking",
+            "Distribution encoded audio acceptance evidence matches package audio." if not failures else "Distribution encoded audio acceptance failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
     def _required_encoded_profile_ids(self, encoded_entries: list[dict[str, Any]]) -> list[str]:
         target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
         options = target.get("options") if isinstance(target.get("options"), dict) else {}
@@ -655,6 +753,7 @@ class _DistributionPackageVerifier:
             "require_audio": self.require_audio,
             "require_artwork": self.require_artwork,
             "require_encoded_audio": self.require_encoded_audio,
+            "require_encoded_audio_review": self.require_encoded_audio_review,
             "summary": {
                 "package_id": self.manifest.get("package_id"),
                 "release_id": self.manifest.get("release_id"),
