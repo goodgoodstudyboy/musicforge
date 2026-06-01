@@ -177,6 +177,12 @@ from song_agent.encoded_audio_acceptance import (
     encoded_audio_review_integrity_hash,
     encoded_audio_review_integrity_ok,
 )
+from song_agent.format_decisions import (
+    FormatDecisionError,
+    FormatDecisionNotFoundError,
+    FormatDecisionStateError,
+    FormatDecisionStore,
+)
 from song_agent.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
 from song_agent.releases import (
     ReleaseConflictError,
@@ -2595,6 +2601,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.encoded_audio_acceptance_store  # type: ignore[attr-defined]
 
     @property
+    def format_decision_store(self) -> FormatDecisionStore:
+        return self.server.format_decision_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -4958,6 +4968,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_release_encoded_audio(method, release_id, tail.removeprefix("/encoded-audio"))
                 return
 
+            if tail == "/format-decisions" or tail.startswith("/format-decisions/"):
+                self._handle_release_format_decisions(method, release_id, tail.removeprefix("/format-decisions"))
+                return
+
             if tail == "/metadata":
                 if method == "GET":
                     metadata = read_release_metadata(self.release_store, release_id, default={})
@@ -5800,6 +5814,104 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AudioEncodingProfileError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_format_decisions(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    sessions = self.format_decision_store.list_sessions(release_id, include_archived=True)
+                    active = self.format_decision_store.read_active_session(release_id, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "sessions": sessions, "active_session": active})
+                    return
+                if method == "POST":
+                    session = self.format_decision_store.create_session(release_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "session": session}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Format decision route not found.")
+                return
+            session_id = parts[0]
+            if len(parts) == 1:
+                if method == "GET":
+                    session = self.format_decision_store.read_session(release_id, session_id)
+                    matrix = self.format_decision_store.read_matrix(release_id, session_id, default={})
+                    recommendation = self.format_decision_store.read_recommendation(release_id, session_id, default={})
+                    report = self.format_decision_store.read_report(release_id, session_id, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "session": session, "matrix": matrix, "recommendation": recommendation, "report": report})
+                    return
+                if method == "DELETE":
+                    session = self.format_decision_store.archive_session(release_id, session_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "session": session})
+                    return
+            if len(parts) == 2 and parts[1] == "matrix":
+                if method == "GET":
+                    matrix = self.format_decision_store.read_matrix(release_id, session_id)
+                    self._send_json({"ok": True, "release_id": release_id, "matrix": matrix})
+                    return
+                if method == "POST":
+                    matrix = self.format_decision_store.build_matrix(release_id, session_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "matrix": matrix})
+                    return
+            if len(parts) == 2 and parts[1] == "recommend":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                recommendation = self.format_decision_store.build_recommendation(release_id, session_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "recommendation": recommendation})
+                return
+            if len(parts) == 2 and parts[1] == "recommendation":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                recommendation = self.format_decision_store.read_recommendation(release_id, session_id)
+                self._send_json({"ok": True, "release_id": release_id, "recommendation": recommendation})
+                return
+            if len(parts) == 2 and parts[1] == "select":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                session = self.format_decision_store.select_profiles(release_id, session_id, self._read_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "session": session})
+                return
+            if len(parts) == 2 and parts[1] == "report":
+                if method == "GET":
+                    report = self.format_decision_store.read_report(release_id, session_id)
+                    self._send_json({"ok": True, "release_id": release_id, "report": report})
+                    return
+                if method == "POST":
+                    report = self.format_decision_store.build_report(release_id, session_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "report": report})
+                    return
+            if len(parts) == 2 and parts[1] == "activate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                active = self.format_decision_store.activate_session(release_id, session_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "active_session": active})
+                return
+            if len(parts) == 2 and parts[1] == "gate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                gate = self.format_decision_store.gate(
+                    release_id,
+                    required=True,
+                    session_id=session_id,
+                    required_profiles=normalize_required_profiles(payload.get("required_audio_format_profiles") or payload.get("profiles") or []),
+                )
+                self._send_json({"ok": True, "release_id": release_id, "gate": gate})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Format decision route not found.")
+        except (ReleaseNotFoundError, FormatDecisionNotFoundError, FileNotFoundError) as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (ReleaseStateError, FormatDecisionStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (FormatDecisionError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _renderer_profile_from_payload(self, payload: dict[str, Any] | None) -> Any | None:
         profile_id = str((payload or {}).get("profile_id") or "").strip()
         if not profile_id:
@@ -5900,6 +6012,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if encoded_acceptance_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(encoded_acceptance_gate.get("message") or "Encoded audio acceptance gate failed.")
+        require_format_decision = bool(payload.get("require_format_decision", False))
+        format_decision_gate = self.format_decision_store.gate(
+            release_id,
+            required=require_format_decision,
+            session_id=str(payload.get("format_decision_session_id") or "") or None,
+            required_profiles=required_encoded_profiles,
+        )
+        if format_decision_gate and require_format_decision:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["format_decision"] = format_decision_gate
+            if format_decision_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(format_decision_gate.get("message") or "Format decision gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -5931,6 +6056,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(encoded_acceptance_gate.get("message") or "Encoded audio acceptance gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if format_decision_gate.get("hard_block") and format_decision_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(format_decision_gate.get("message") or "Format decision gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -6002,6 +6136,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {
                         "error": "Release Export has not been generated.",
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+        if require_format_decision:
+            if not export_manifest:
+                self._send_json(
+                    {
+                        "error": "Release Export has not been generated.",
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+            format_decision_export_gate = self._release_format_decision_export_gate(export_manifest, format_decision_gate)
+            if format_decision_export_gate.get("status") == "failed":
+                acceptance_gate = dict(acceptance_gate or {})
+                acceptance_gate["format_decision_export"] = format_decision_export_gate
+                self._send_json(
+                    {
+                        "error": str(format_decision_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
                         "acceptance_gate": acceptance_gate,
                     },
                     status=HTTPStatus.CONFLICT,
@@ -6181,6 +6337,40 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "missing_profiles": missing_profiles,
         }
 
+    def _release_format_decision_export_gate(self, export_manifest: dict[str, Any], format_decision_gate: dict[str, Any]) -> dict[str, Any]:
+        manifest_decision = export_manifest.get("format_decision") if isinstance(export_manifest.get("format_decision"), dict) else {}
+        missing: list[str] = []
+        mismatched: list[str] = []
+        if not manifest_decision or manifest_decision.get("status") in {"", "missing"}:
+            missing.append("format_decision")
+        release_id = str(export_manifest.get("release_id") or "")
+        export_dir = self.release_store.export_dir(release_id)
+        report_path = str(manifest_decision.get("report_path") or "format-decision/decision-report.json")
+        report: dict[str, Any] = {}
+        try:
+            candidate = read_json(export_dir / report_path)
+            report = candidate if isinstance(candidate, dict) else {}
+        except Exception:
+            missing.append(report_path)
+        expected_report_hash = str(format_decision_gate.get("report_hash") or "")
+        manifest_report_hash = str(manifest_decision.get("report_hash") or "")
+        if expected_report_hash and manifest_report_hash != expected_report_hash:
+            mismatched.append("report_hash")
+        if report and str(report.get("integrity_hash") or "") != expected_report_hash:
+            mismatched.append("report_payload")
+        selected = set(manifest_decision.get("selected_profiles", []) if isinstance(manifest_decision.get("selected_profiles"), list) else [])
+        gate_required = set(format_decision_gate.get("required_profiles", []) if isinstance(format_decision_gate.get("required_profiles"), list) else [])
+        missing_profiles = sorted(gate_required - selected)
+        failed = bool(missing or mismatched or missing_profiles)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": "Release Export is stale. Rebuild export before signoff." if failed else "Release Export contains current format decision evidence.",
+            "missing": missing,
+            "mismatched_fields": sorted(set(mismatched)),
+            "missing_profiles": missing_profiles,
+        }
+
     def _distribution_encoded_audio_acceptance_export_gate(self, export_manifest: dict[str, Any], acceptance_gate: dict[str, Any]) -> dict[str, Any]:
         manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
         missing: list[str] = []
@@ -6200,6 +6390,27 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "status": "failed" if failed else "passed",
             "hard_block": failed,
             "message": "Distribution Export is stale. Rebuild export before signoff." if failed else "Distribution Export contains current encoded audio acceptance evidence.",
+            "missing": missing,
+            "mismatched_fields": sorted(set(mismatched)),
+            "missing_profiles": missing_profiles,
+        }
+
+    def _distribution_format_decision_export_gate(self, export_manifest: dict[str, Any], format_decision_gate: dict[str, Any]) -> dict[str, Any]:
+        manifest_decision = export_manifest.get("format_decision") if isinstance(export_manifest.get("format_decision"), dict) else {}
+        missing: list[str] = []
+        mismatched: list[str] = []
+        if not manifest_decision or manifest_decision.get("status") in {"", "missing"}:
+            missing.append("format_decision")
+        if str(manifest_decision.get("report_hash") or "") != str(format_decision_gate.get("report_hash") or ""):
+            mismatched.append("report_hash")
+        gate_required = set(format_decision_gate.get("required_profiles", []) if isinstance(format_decision_gate.get("required_profiles"), list) else [])
+        covered = set(manifest_decision.get("covered_profiles", []) if isinstance(manifest_decision.get("covered_profiles"), list) else [])
+        missing_profiles = sorted(gate_required - covered)
+        failed = bool(missing or mismatched or missing_profiles)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": "Distribution Export is stale. Rebuild export before signoff." if failed else "Distribution Export contains current format decision evidence.",
             "missing": missing,
             "mismatched_fields": sorted(set(mismatched)),
             "missing_profiles": missing_profiles,
@@ -6997,6 +7208,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     report = self._get_or_refresh_distribution_qa(release_id, target, refresh=True)
                     payload = self._optional_json_body()
                     require_encoded_review = bool(payload.get("require_encoded_audio_review", False) or (target.options or {}).get("require_encoded_audio_review", False))
+                    require_format_decision = bool(payload.get("require_format_decision", False) or (target.options or {}).get("require_format_decision", False))
                     if require_encoded_review:
                         template = self.distribution_store.resolve_target_template(target)
                         required_profiles = [
@@ -7026,6 +7238,29 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                             )
                             return
                         payload = {**payload, "require_encoded_audio_review": True, "encoded_audio_acceptance": encoded_acceptance_gate}
+                    if require_format_decision:
+                        format_decision_gate = self.format_decision_store.distribution_gate(
+                            release_id,
+                            target,
+                            required=True,
+                            session_id=str(payload.get("format_decision_session_id") or "") or None,
+                        )
+                        if format_decision_gate.get("hard_block") and format_decision_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(format_decision_gate.get("message") or "Format decision gate failed."), "format_decision": format_decision_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        package_id = self.distribution_store.latest_package_id(target)
+                        export_manifest = read_distribution_export_manifest(self.distribution_store, release_id, package_id) if package_id else {}
+                        export_gate = self._distribution_format_decision_export_gate(export_manifest, format_decision_gate)
+                        if export_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(export_gate.get("message") or "Distribution Export is stale. Rebuild export before signoff."), "format_decision": format_decision_gate, "format_decision_export": export_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        payload = {**payload, "require_format_decision": True, "format_decision": format_decision_gate}
                     signoff = sign_distribution_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, payload=payload, now=_utc_now())
                     target = self.distribution_store.get_target(release_id, target_id)
                     self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "signoff": signoff, "summary": distribution_signoff_summary(signoff)})
@@ -13028,6 +13263,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_encoding_profile_store = AudioEncodingProfileStore(self.release_store.root.parent / "audio-encoding-profiles")
         self.audio_encoding_store = AudioEncodingStore(self.release_store, project_store=self.project_store, profile_store=self.audio_encoding_profile_store)
         self.encoded_audio_acceptance_store = EncodedAudioAcceptanceStore(self.release_store, project_store=self.project_store, audio_encoding_store=self.audio_encoding_store)
+        self.format_decision_store = FormatDecisionStore(self.release_store, project_store=self.project_store, encoding_store=self.audio_encoding_store, distribution_store=self.distribution_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

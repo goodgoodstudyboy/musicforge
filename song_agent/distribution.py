@@ -539,6 +539,7 @@ def distribution_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any
             "export_manifest_hash": data.get("export_manifest_hash"),
             "forced": bool(data.get("forced", False)),
             "encoded_audio_acceptance": data.get("encoded_audio_acceptance") if isinstance(data.get("encoded_audio_acceptance"), dict) else {},
+            "format_decision": data.get("format_decision") if isinstance(data.get("format_decision"), dict) else {},
         },
         blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
     )
@@ -580,6 +581,7 @@ def build_distribution_signoff_record(
         "acknowledged_blockers": blockers if force else [],
         "acknowledged_warnings": warnings,
         "encoded_audio_acceptance": payload.get("encoded_audio_acceptance") if isinstance(payload.get("encoded_audio_acceptance"), dict) else {},
+        "format_decision": payload.get("format_decision") if isinstance(payload.get("format_decision"), dict) else {},
         "notes": _safe_text(payload.get("notes"), 2000),
     }
     return sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)

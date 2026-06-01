@@ -28,6 +28,7 @@ from song_agent.encoded_audio_acceptance import (
     encoded_audio_review_integrity_hash,
     encoded_audio_review_integrity_ok,
 )
+from song_agent.format_decisions import format_distribution_decision_summary_integrity_ok
 from song_agent.releases import stable_hash
 
 
@@ -50,6 +51,7 @@ def verify_distribution_package(
     require_artwork: bool = False,
     require_encoded_audio: bool = False,
     require_encoded_audio_review: bool = False,
+    require_format_decision: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -62,6 +64,7 @@ def verify_distribution_package(
         require_artwork=require_artwork,
         require_encoded_audio=require_encoded_audio,
         require_encoded_audio_review=require_encoded_audio_review,
+        require_format_decision=require_format_decision,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -131,6 +134,7 @@ class _DistributionPackageVerifier:
         require_artwork: bool,
         require_encoded_audio: bool,
         require_encoded_audio_review: bool,
+        require_format_decision: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -142,6 +146,7 @@ class _DistributionPackageVerifier:
         self.require_artwork = require_artwork
         self.require_encoded_audio = require_encoded_audio
         self.require_encoded_audio_review = require_encoded_audio_review
+        self.require_format_decision = require_format_decision
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -162,6 +167,7 @@ class _DistributionPackageVerifier:
         self.encoded_audio_manifests: dict[str, dict[str, Any]] = {}
         self.encoded_audio_acceptance_summary: dict[str, Any] = {}
         self.encoded_audio_acceptance_reviews: dict[str, dict[str, Any]] = {}
+        self.format_decision_summary: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -187,6 +193,7 @@ class _DistributionPackageVerifier:
                 self._verify_metadata_and_artwork(archive)
                 self._verify_encoded_audio(archive)
                 self._verify_encoded_audio_acceptance(archive)
+                self._verify_format_decision(archive)
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -306,6 +313,8 @@ class _DistributionPackageVerifier:
             self.encoded_audio_summary = self._read_json_entry(archive, "encoded-audio/summary.json", "encoded_audio", "distribution_encoded_audio_summary_parse")
         if "encoded-audio-acceptance/summary.json" in self.entry_map:
             self.encoded_audio_acceptance_summary = self._read_json_entry(archive, "encoded-audio-acceptance/summary.json", "encoded_audio_acceptance", "distribution_encoded_audio_acceptance_summary_parse")
+        if "format-decision/target-decision-summary.json" in self.entry_map:
+            self.format_decision_summary = self._read_json_entry(archive, "format-decision/target-decision-summary.json", "format_decision", "distribution_format_decision_summary_parse")
         encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
         for row in encoded.get("profiles", []) if isinstance(encoded.get("profiles"), list) else []:
             if not isinstance(row, dict):
@@ -642,6 +651,43 @@ class _DistributionPackageVerifier:
             count=len(failures),
         )
 
+    def _verify_format_decision(self, archive: zipfile.ZipFile) -> None:
+        manifest_decision = self.manifest.get("format_decision") if isinstance(self.manifest.get("format_decision"), dict) else {}
+        target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
+        options = target.get("options") if isinstance(target.get("options"), dict) else {}
+        required = self.require_format_decision or bool(options.get("require_format_decision")) or bool(manifest_decision.get("report_hash"))
+        if not required and str(manifest_decision.get("status") or "") in {"", "missing", "not_required"}:
+            self._add_check("format_decision", "distribution_format_decision_optional", "passed", "warning", "Format decision evidence is not required.")
+            return
+        failures: list[str] = []
+        if not self.format_decision_summary:
+            failures.append("target_summary_missing")
+        else:
+            expected_hash = str(manifest_decision.get("integrity_hash") or "")
+            actual_hash = str(self.format_decision_summary.get("integrity_hash") or "")
+            if expected_hash and expected_hash != actual_hash:
+                failures.append("target_summary_hash")
+            if not format_distribution_decision_summary_integrity_ok(self.format_decision_summary):
+                failures.append("target_summary_integrity")
+            if str(self.format_decision_summary.get("report_hash") or "") != str(manifest_decision.get("report_hash") or ""):
+                failures.append("report_hash")
+            required_profiles = set(self.format_decision_summary.get("required_profiles", []) if isinstance(self.format_decision_summary.get("required_profiles"), list) else [])
+            covered = set(self.format_decision_summary.get("covered_profiles", []) if isinstance(self.format_decision_summary.get("covered_profiles"), list) else [])
+            rejected = set(self.format_decision_summary.get("rejected_profiles", []) if isinstance(self.format_decision_summary.get("rejected_profiles"), list) else [])
+            failures.extend(f"{profile}:missing" for profile in sorted(required_profiles - covered))
+            failures.extend(f"{profile}:rejected" for profile in sorted(required_profiles & rejected))
+        signoff_decision = self.signoff.get("format_decision") if isinstance(self.signoff.get("format_decision"), dict) else {}
+        if signoff_decision and str(signoff_decision.get("report_hash") or "") != str(manifest_decision.get("report_hash") or ""):
+            failures.append("signoff_report_hash")
+        self._add_check(
+            "format_decision",
+            "distribution_format_decision_evidence",
+            "failed" if failures else "passed",
+            "blocking" if required or failures else "warning",
+            "Distribution format decision evidence covers target requirements." if not failures else "Distribution format decision failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
     def _required_encoded_profile_ids(self, encoded_entries: list[dict[str, Any]]) -> list[str]:
         target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
         options = target.get("options") if isinstance(target.get("options"), dict) else {}
@@ -754,6 +800,7 @@ class _DistributionPackageVerifier:
             "require_artwork": self.require_artwork,
             "require_encoded_audio": self.require_encoded_audio,
             "require_encoded_audio_review": self.require_encoded_audio_review,
+            "require_format_decision": self.require_format_decision,
             "summary": {
                 "package_id": self.manifest.get("package_id"),
                 "release_id": self.manifest.get("release_id"),

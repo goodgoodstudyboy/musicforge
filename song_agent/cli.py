@@ -75,6 +75,7 @@ def build_verify_release_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-mastering", action="store_true", help="Require Mastering QA and selected mastered WAV evidence.")
     verify_parser.add_argument("--require-encoded-audio", action="store_true", help="Require encoded audio summary evidence.")
     verify_parser.add_argument("--require-encoded-audio-review", action="store_true", help="Require manual encoded audio review evidence.")
+    verify_parser.add_argument("--require-format-decision", action="store_true", help="Require Release Format Decision evidence.")
     verify_parser.add_argument("--require-audio-formats", default="", help="Comma-separated encoded audio profile ids to require.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
@@ -92,6 +93,7 @@ def build_verify_distribution_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-artwork", action="store_true", help="Require exported package artwork.")
     verify_parser.add_argument("--require-encoded-audio", action="store_true", help="Require encoded audio evidence for package audio files.")
     verify_parser.add_argument("--require-encoded-audio-review", action="store_true", help="Require manual encoded audio review evidence for encoded package audio.")
+    verify_parser.add_argument("--require-format-decision", action="store_true", help="Require Distribution format decision evidence.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
@@ -215,6 +217,22 @@ def build_encoded_audio_acceptance_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profiles", default="", help="Comma-separated encoded audio profile ids.")
     parser.add_argument("--refresh-health", action="store_true", help="Refresh encoded audio health before building the summary.")
     parser.add_argument("--write", action="store_true", help="Persist encoded audio acceptance summary.")
+    parser.add_argument("--json", action="store_true", help="Print result JSON.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write result JSON.")
+    return parser
+
+
+def build_format_decision_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build a Release Format Decision session and report.")
+    parser.add_argument("release_id", help="Release id.")
+    parser.add_argument("--profiles", default="", help="Comma-separated candidate encoded audio profile ids.")
+    parser.add_argument("--select", default="", help="Comma-separated selected delivery profile ids.")
+    parser.add_argument("--archive", default="", help="Comma-separated archive profile ids.")
+    parser.add_argument("--fallback", default="", help="Comma-separated fallback profile ids.")
+    parser.add_argument("--reject", default="", help="Comma-separated rejected profile ids.")
+    parser.add_argument("--decided-by", default="local-user", help="Human decision owner.")
+    parser.add_argument("--reason", default="", help="Decision rationale.")
+    parser.add_argument("--activate", action="store_true", help="Set the generated session as active.")
     parser.add_argument("--json", action="store_true", help="Print result JSON.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write result JSON.")
     return parser
@@ -585,6 +603,7 @@ def _main() -> None:
             require_mastering=args.require_mastering,
             require_encoded_audio=args.require_encoded_audio,
             require_encoded_audio_review=args.require_encoded_audio_review,
+            require_format_decision=args.require_format_decision,
             required_audio_format_profiles=[item.strip() for item in str(args.require_audio_formats or "").split(",") if item.strip()],
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
@@ -614,6 +633,7 @@ def _main() -> None:
             require_artwork=args.require_artwork,
             require_encoded_audio=args.require_encoded_audio,
             require_encoded_audio_review=args.require_encoded_audio_review,
+            require_format_decision=args.require_format_decision,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -834,6 +854,51 @@ def _main() -> None:
         else:
             print(f"MusicForge encoded-audio-acceptance\nrelease: {args.release_id}\nstatus: {summary.get('status')}\nprofiles: {summary.get('profile_count', 0)}")
         raise SystemExit(0 if summary.get("status") == "passed" else 1)
+    elif raw_args and raw_args[0] == "format-decision":
+        from song_agent.audio_encoding import AudioEncodingStore, normalize_required_profiles
+        from song_agent.audio_encoding_profiles import AudioEncodingProfileStore
+        from song_agent.distribution import DistributionStore
+        from song_agent.format_decisions import FormatDecisionStore
+        from song_agent.projects import ProjectStore
+        from song_agent.releases import ReleaseStore
+
+        parser = build_format_decision_parser()
+        args = parser.parse_args(raw_args[1:])
+        project_store = ProjectStore()
+        release_store = ReleaseStore(project_store=project_store)
+        profile_store = AudioEncodingProfileStore(release_store.root.parent / "audio-encoding-profiles")
+        encoding_store = AudioEncodingStore(release_store, project_store=project_store, profile_store=profile_store)
+        distribution_store = DistributionStore(release_store)
+        store = FormatDecisionStore(release_store, project_store=project_store, encoding_store=encoding_store, distribution_store=distribution_store)
+        session = store.create_session(args.release_id, {"profiles": normalize_required_profiles(args.profiles)})
+        matrix = store.build_matrix(args.release_id, session["session_id"])
+        recommendation = store.build_recommendation(args.release_id, session["session_id"])
+        selected = normalize_required_profiles(args.select) or recommendation.get("selected_defaults", [])
+        archive = normalize_required_profiles(args.archive) or recommendation.get("archive_defaults", [])
+        fallback = normalize_required_profiles(args.fallback)
+        rejected = normalize_required_profiles(args.reject) or recommendation.get("rejected_defaults", [])
+        session = store.select_profiles(
+            args.release_id,
+            session["session_id"],
+            {
+                "selected_profiles": selected,
+                "archive_profiles": archive,
+                "fallback_profiles": fallback,
+                "rejected_profiles": rejected,
+                "decided_by": args.decided_by,
+                "reason": args.reason,
+            },
+        )
+        report = store.build_report(args.release_id, session["session_id"])
+        active = store.activate_session(args.release_id, session["session_id"]) if args.activate else {}
+        payload = {"ok": True, "release_id": args.release_id, "session": session, "matrix": matrix, "recommendation": recommendation, "report": report, "active_session": active}
+        if args.report_out is not None:
+            write_json(args.report_out, payload)
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge format-decision\nrelease: {args.release_id}\nstatus: {report.get('status')}\nselected: {', '.join(report.get('decision', {}).get('selected_profiles', []))}")
+        raise SystemExit(0 if report.get("status") in {"passed", "warning"} else 1)
     elif raw_args and raw_args[0] == "acceptance-diff":
         from song_agent.acceptance_diff import build_acceptance_diff
 

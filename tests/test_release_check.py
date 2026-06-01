@@ -31,6 +31,7 @@ from song_agent.release_checks import (
     _v54_mastering_qa_smoke,
     _v55_distribution_audio_formats_smoke,
     _v56_encoded_audio_acceptance_smoke,
+    _v57_release_format_decision_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -119,6 +120,14 @@ def test_v42_distribution_layout_contract_smoke(tmp_path: Path) -> None:
     assert "external=passed" in detail
     assert "layout_tamper=failed" in detail
     assert "artwork_path_tamper=failed" in detail
+
+
+def test_v57_release_format_decision_smoke(tmp_path: Path) -> None:
+    ok, detail = _v57_release_format_decision_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "verify=passed" in detail
+    assert "tampered=failed" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

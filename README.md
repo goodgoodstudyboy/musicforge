@@ -298,6 +298,20 @@ Release Export writes `encoded-audio-acceptance-summary.json`,
 the same evidence under `encoded-audio-acceptance/`. Offline verifiers can enforce
 the evidence with `--require-encoded-audio-review`.
 
+Release Format Decision Workbench explains why specific encoded profiles are
+delivered. A Release can create a format decision session, build a deterministic
+matrix for profiles such as `mp3_320`, `flac_lossless`, and `aac_256`, generate
+recommendations, and record a manual decision that selects delivery profiles,
+archives fallback profiles, and rejects unsuitable profiles. Release Signoff
+with `require_format_decision=true` requires selected profiles to cover the
+requested delivery formats and blocks stale, tampered, fake-runner, or rejected
+profile evidence. Release Export writes `format-decision/` sidecars, and
+`verify-release --require-format-decision` validates the decision report offline.
+Distribution Targets can also require format decision evidence; target packages
+write `format-decision/target-decision-summary.json`, and
+`verify-distribution-package --require-format-decision` validates the packaged
+decision evidence.
+
 Useful local commands:
 
 ```powershell
@@ -307,6 +321,7 @@ python -m song_agent.cli release-audio-review summary release-000001 --write
 python -m song_agent.cli release-audio-review create-task release-000001 arv-000001 m-000001
 python -m song_agent.cli release-encode release-000001 --profiles mp3_320,flac_lossless --json
 python -m song_agent.cli encoded-audio-acceptance release-000001 --profiles mp3_320 --refresh-health --write --json
+python -m song_agent.cli format-decision release-000001 --profiles mp3_320,flac_lossless --select mp3_320 --archive flac_lossless --reason "MP3 delivery with FLAC archive" --activate --json
 ```
 
 Arrangement Mix Controls add a local Mix Board for small, auditable corrections
@@ -336,6 +351,7 @@ python -m song_agent.cli verify-release path\to\release-export.zip --require-aud
 python -m song_agent.cli verify-release path\to\release-export.zip --require-audio --require-mastering
 python -m song_agent.cli verify-release path\to\release-export.zip --require-encoded-audio --require-audio-formats mp3_320
 python -m song_agent.cli verify-release path\to\release-export.zip --require-encoded-audio --require-encoded-audio-review --require-audio-formats mp3_320
+python -m song_agent.cli verify-release path\to\release-export.zip --require-format-decision --require-audio-formats mp3_320
 ```
 
 The verifier reads only the ZIP, checks entry safety, duplicate entries,
@@ -382,7 +398,7 @@ python -m song_agent.cli verify-submission-package path\to\submission-package.zi
 ```
 
 ```powershell
-python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --json --require-encoded-audio --report-out distribution-verification-report.json
+python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --json --require-encoded-audio --require-format-decision --report-out distribution-verification-report.json
 ```
 
 v0.6.0 adds local access control for Studio. Loopback hosts can still run without

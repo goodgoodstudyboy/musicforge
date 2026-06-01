@@ -3165,6 +3165,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let audioRevisionData = { summary: {}, sessions: [] };
       let masteringData = { summary: {}, analysis: {}, plan: {}, candidates: [], selected_candidate: {} };
       let encodedAudioData = { summary: {}, profiles: [] };
+      let formatDecisionData = { sessions: [], active_session: {} };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
       let releaseAnalyticsData = { summary: {}, analytics: null };
@@ -3181,6 +3182,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } catch (err) {}
       try { masteringData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering`); } catch (err) {}
       try { encodedAudioData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio`); } catch (err) {}
+      try { formatDecisionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions`); } catch (err) {}
       try {
         metadataData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
         const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
@@ -3232,6 +3234,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseAudioRevisionHtml(audioRevisionData, release)}
         ${releaseMasteringHtml(masteringData, release)}
         ${releaseEncodedAudioHtml(encodedAudioData, release)}
+        ${releaseFormatDecisionHtml(formatDecisionData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4290,6 +4293,41 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseFormatDecisionHtml(formatDecisionData, release) {
+      const sessions = (formatDecisionData && formatDecisionData.sessions) || [];
+      const active = (formatDecisionData && formatDecisionData.active_session) || {};
+      const latest = sessions[0] || {};
+      return `
+        <div class="panel-title subhead"><span>Format Decision Workbench</span></div>
+        <div class="summary-grid">
+          ${metric("Sessions", sessions.length || 0)}
+          ${metric("Active", active.session_id || "-")}
+          ${metric("Latest", latest.session_id || "-")}
+          ${metric("Status", latest.status || "missing")}
+        </div>
+        <div class="grid2">
+          <label>Candidate Profiles
+            <input id="release-format-decision-profiles" value="mp3_320,flac_lossless">
+          </label>
+          <label>Selected Profiles
+            <input id="release-format-decision-selected" value="mp3_320">
+          </label>
+          <label>Archive Profiles
+            <input id="release-format-decision-archive" value="flac_lossless">
+          </label>
+          <label>Rejected Profiles
+            <input id="release-format-decision-rejected" value="">
+          </label>
+        </div>
+        <label>Decision Reason
+          <textarea id="release-format-decision-reason" rows="2"></textarea>
+        </label>
+        <div class="actions">
+          <button class="secondary" id="release-create-format-decision" type="button">Create Format Decision</button>
+        </div>
+      `;
+    }
+
     function releaseExportHtml(exportData, release) {
       const manifest = (exportData && exportData.manifest) || {};
       const zip = manifest.zip || {};
@@ -4399,6 +4437,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <input id="release-require-encoded-audio-review" type="checkbox">
           Require encoded audio review
         </label>
+        <label class="inline">
+          <input id="release-require-format-decision" type="checkbox">
+          Require format decision
+        </label>
         <label>Required Audio Formats
           <input id="release-required-audio-formats" value="mp3_320">
         </label>
@@ -4419,6 +4461,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         require_mastering_qa: $("release-require-mastering-qa")?.checked || false,
         require_encoded_audio: $("release-require-encoded-audio")?.checked || false,
         require_encoded_audio_review: $("release-require-encoded-audio-review")?.checked || false,
+        require_format_decision: $("release-require-format-decision")?.checked || false,
         required_audio_format_profiles: ($("release-required-audio-formats")?.value || "").split(",").map((item) => item.trim()).filter(Boolean),
         mastering_profile_id: $("release-mastering-profile")?.value || "",
       };
@@ -4613,6 +4656,32 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: "Studio encoded audio reset" }),
         });
+        await loadReleases();
+      });
+      bindAction("release-create-format-decision", async () => {
+        const profileList = $("release-format-decision-profiles").value.split(",").map((item) => item.trim()).filter(Boolean);
+        const created = await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profiles: profileList }),
+        });
+        const sessionId = (created.session || {}).session_id;
+        if (sessionId) {
+          await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions/${encodeURIComponent(sessionId)}/matrix`, { method: "POST" });
+          await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions/${encodeURIComponent(sessionId)}/recommend`, { method: "POST" });
+          await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions/${encodeURIComponent(sessionId)}/select`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              selected_profiles: $("release-format-decision-selected").value.split(",").map((item) => item.trim()).filter(Boolean),
+              archive_profiles: $("release-format-decision-archive").value.split(",").map((item) => item.trim()).filter(Boolean),
+              rejected_profiles: $("release-format-decision-rejected").value.split(",").map((item) => item.trim()).filter(Boolean),
+              reason: $("release-format-decision-reason").value.trim(),
+            }),
+          });
+          await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions/${encodeURIComponent(sessionId)}/report`, { method: "POST" });
+          await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions/${encodeURIComponent(sessionId)}/activate`, { method: "POST" });
+        }
         await loadReleases();
       });
       bindAction("release-build-export", async () => {

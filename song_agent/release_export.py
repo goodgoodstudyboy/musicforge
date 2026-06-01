@@ -27,6 +27,7 @@ from song_agent.audio_revision import export_audio_revisions
 from song_agent.mastering_qa import export_mastering, selected_mastering_track_sources
 from song_agent.audio_encoding import export_encoded_audio_summary
 from song_agent.encoded_audio_acceptance import export_encoded_audio_acceptance
+from song_agent.format_decisions import FormatDecisionStore
 from song_agent.release_metadata import (
     attach_metadata_export_to_manifest,
     export_release_metadata_files,
@@ -119,6 +120,7 @@ def build_release_export_bundle(
     mastering_summary = _release_mastering_summary(release_store, release.release_id, export_dir)
     encoded_audio_summary = _release_encoded_audio_summary(release_store, release.release_id, export_dir)
     encoded_audio_acceptance_summary: dict[str, Any] = {"status": "pending", "required_profiles": [], "track_count": 0}
+    format_decision_summary: dict[str, Any] = {"status": "pending"}
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
     if (export_dir / "acceptance-analytics-summary.json").exists():
@@ -178,6 +180,7 @@ def build_release_export_bundle(
         "mastering": mastering_summary,
         "encoded_audio": encoded_audio_summary,
         "encoded_audio_acceptance": encoded_audio_acceptance_summary,
+        "format_decision": format_decision_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -208,6 +211,22 @@ def build_release_export_bundle(
     for encoded_acceptance_file in sorted(encoded_acceptance_files):
         copied_files.append(_file_record(export_dir, encoded_acceptance_file))
     manifest["encoded_audio_acceptance"] = encoded_audio_acceptance_summary
+    manifest["files"] = sorted(copied_files, key=lambda item: item["path"])
+    summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+    summary["file_count"] = len(copied_files)
+    summary["total_bytes"] = sum(int(item.get("size_bytes") or 0) for item in copied_files)
+    manifest["summary"] = summary
+    write_json(export_dir / "manifest.json", sanitize_metadata(manifest, blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS))
+
+    format_decision_summary = _release_format_decision_summary(release_store, release.release_id, export_dir)
+    copied_files = [
+        item
+        for item in copied_files
+        if isinstance(item, dict) and not str(item.get("path") or "").startswith("format-decision/")
+    ]
+    for decision_file in sorted((export_dir / "format-decision").glob("*.json")) if (export_dir / "format-decision").exists() else []:
+        copied_files.append(_file_record(export_dir, decision_file))
+    manifest["format_decision"] = format_decision_summary
     manifest["files"] = sorted(copied_files, key=lambda item: item["path"])
     summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
     summary["file_count"] = len(copied_files)
@@ -610,6 +629,17 @@ def _release_encoded_audio_acceptance_summary(release_store: ReleaseStore, relea
     except Exception:
         summary = {"status": "missing", "required_profiles": [], "track_count": 0}
         write_json(export_dir / "encoded-audio-acceptance-summary.json", summary)
+        return summary
+
+
+def _release_format_decision_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        return FormatDecisionStore(release_store, project_store=release_store.project_store).export_release(release_id, export_dir)
+    except Exception:
+        summary = {"status": "missing", "session_id": None}
+        target = export_dir / "format-decision"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "decision-report.json", summary)
         return summary
 
 

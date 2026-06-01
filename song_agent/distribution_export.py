@@ -38,6 +38,7 @@ from song_agent.release_qa import scan_release_payload_for_sensitive_values
 from song_agent.releases import stable_hash
 from song_agent.audio_encoding import AudioEncodingStore, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import export_distribution_encoded_audio_acceptance
+from song_agent.format_decisions import FormatDecisionStore
 
 
 DISTRIBUTION_EXPORT_SCHEMA_VERSION = 1
@@ -111,6 +112,7 @@ def build_distribution_export_package(
     copied_files.extend(layout_records)
     encoded_audio_summary = _write_encoded_audio_sidecars(store, release_id, target, export_dir, copied_files)
     encoded_audio_acceptance_summary = _write_encoded_audio_acceptance_sidecars(store, release_id, target, export_dir, copied_files)
+    format_decision_summary = _write_format_decision_sidecars(store, release_id, target, export_dir, copied_files)
     artwork_record = _artwork_record(artwork, layout_plan)
     wrote_checklist_doc = _write_docs(export_dir, release, target, package_id, qa_report, artwork_record, checklist=checklist, write_checklist=not bool(template))
     _write_readme(export_dir, release, target, package_id, qa_report)
@@ -161,6 +163,7 @@ def build_distribution_export_package(
         "artwork": artwork_record,
         "encoded_audio": encoded_audio_summary,
         "encoded_audio_acceptance": encoded_audio_acceptance_summary,
+        "format_decision": format_decision_summary,
         "layout": layout_payload,
         "sidecars": {
             "distribution_signoff": _distribution_signoff_sidecar_record(signoff_public),
@@ -443,6 +446,17 @@ def _write_encoded_audio_acceptance_sidecars(store: DistributionStore, release_i
         )
     except Exception:
         return {"status": "missing", "required_profiles": profile_ids}
+
+
+def _write_format_decision_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+    try:
+        summary = FormatDecisionStore(store.release_store, project_store=store.release_store.project_store, distribution_store=store).export_distribution(release_id, target, export_dir)
+    except Exception:
+        summary = {"status": "missing", "required_profiles": []}
+    target_path = export_dir / str(summary.get("summary_path") or "format-decision/target-decision-summary.json")
+    if target_path.exists():
+        records.append(_file_record(export_dir, target_path))
+    return sanitize_metadata(summary, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def _artwork_record(artwork: dict[str, Any], layout_plan: dict[str, Any]) -> dict[str, Any]:

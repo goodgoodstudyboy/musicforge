@@ -229,6 +229,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.4 mastering qa smoke", *_v54_mastering_qa_smoke(root))
     report.add("v5.5 distribution audio formats smoke", *_v55_distribution_audio_formats_smoke(root))
     report.add("v5.6 encoded audio acceptance smoke", *_v56_encoded_audio_acceptance_smoke(root))
+    report.add("v5.7 release format decision smoke", *_v57_release_format_decision_smoke(root))
     return report
 
 
@@ -7756,6 +7757,111 @@ def _v56_encoded_audio_acceptance_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
         if base.exists():
             shutil.rmtree(base)
+
+
+def _v57_release_format_decision_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v57-format-decision-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        project_id = _v37_signed_project(server, "v5.7 Format Decision")
+        _v50_add_project_audio(server, project_id, duration_seconds=30)
+        _status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.7 Format Decision Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = str(release.get("release", {}).get("release_id") or "")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
+        candidate_status, candidate = _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
+        candidate_id = str(candidate.get("candidate", {}).get("candidate_id") or "")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        server.audio_encoding_store.runner = _V55FixtureEncoderRunner()
+        encode_status, encoded = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/render", {"profile_ids": ["mp3_320", "flac_lossless", "aac_256"]})
+        health_status, health = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/health", {"profile_ids": ["mp3_320", "flac_lossless", "aac_256"]})
+        for profile_id in ("mp3_320", "flac_lossless", "aac_256"):
+            review_payload = {"profile_id": profile_id, "track_id": "track-000001", "status": "accepted", "review_mode": "manual", "reviewer": {"name": "release-check"}, "rating": 5, "playback_confirmed": True}
+            if profile_id == "aac_256":
+                review_payload["status"] = "rejected"
+                review_payload["rating"] = 2
+            _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/reviews", review_payload)
+        acceptance_status, _acceptance = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/acceptance/refresh", {"profile_ids": ["mp3_320", "flac_lossless"]})
+        session_status, session = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions", {"profiles": ["mp3_320", "flac_lossless", "aac_256"]})
+        session_id = str(session.get("session", {}).get("session_id") or "")
+        matrix_status, _matrix = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/matrix")
+        recommendation_status, _recommendation = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/recommend")
+        select_status, _selected = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/select", {"selected_profiles": ["mp3_320"], "archive_profiles": ["flac_lossless"], "rejected_profiles": ["aac_256"], "reason": "v5.7 smoke chooses MP3 delivery and FLAC archive."})
+        report_status, decision_report = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/report")
+        active_status, _active = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/activate")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        _v55_export_metadata(server, release_id)
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        rejected_sign_status, _rejected_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "require_encoded_audio_review": True, "require_format_decision": True, "required_audio_format_profiles": ["flac_lossless"]})
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_encoded_audio": True, "require_encoded_audio_review": True, "require_format_decision": True, "required_audio_format_profiles": ["mp3_320"]})
+        release_zip = base / ".musicforge" / "releases" / release_id / "release-export.zip"
+        release_verify = verify_release_zip(release_zip, require_encoded_audio=True, require_encoded_audio_review=True, require_format_decision=True, required_audio_format_profiles=["mp3_320"])
+        tampered = verify_release_zip(
+            _v38_rewrite_zip(release_zip, base / "tampered-v57-decision.zip", transforms={"format-decision/decision-report.json": _v57_tamper_decision_report}),
+            require_format_decision=True,
+            required_audio_format_profiles=["mp3_320"],
+        )
+        ok = (
+            candidate_status == 201
+            and encode_status == 201
+            and encoded.get("summary", {}).get("status") == "completed"
+            and health_status == 200
+            and health.get("summary", {}).get("status") == "passed"
+            and acceptance_status == 200
+            and session_status == 201
+            and matrix_status == 200
+            and recommendation_status == 200
+            and select_status == 200
+            and report_status == 200
+            and decision_report.get("report", {}).get("status") == "passed"
+            and active_status == 200
+            and export_status == 200
+            and export.get("manifest", {}).get("format_decision", {}).get("status") == "passed"
+            and zip_status == 200
+            and rejected_sign_status == 409
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("format_decision", {}).get("status") == "passed"
+            and release_verify.get("status") in {"passed", "warning"}
+            and _v38_check_status(release_verify, "format_decision_evidence") == "passed"
+            and tampered.get("status") == "failed"
+            and _v38_check_status(tampered, "format_decision_evidence") == "failed"
+        )
+        return ok, (
+            f"encode={encode_status}/{encoded.get('summary', {}).get('status')}, health={health_status}/{health.get('summary', {}).get('status')}, "
+            f"decision={session_status}/{matrix_status}/{recommendation_status}/{select_status}/{report_status}/{active_status}, "
+            f"export={export_status}/{zip_status}, rejected_sign={rejected_sign_status}, sign={sign_status}, "
+            f"verify={_v38_check_status(release_verify, 'format_decision_evidence')}, tampered={_v38_check_status(tampered, 'format_decision_evidence')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v57_tamper_decision_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    decision = payload.get("decision") if isinstance(payload.get("decision"), dict) else {}
+    decision["selected_profiles"] = ["flac_lossless"]
+    payload["decision"] = decision
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 class _V55FixtureEncoderRunner:

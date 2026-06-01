@@ -35,6 +35,7 @@ from song_agent.encoded_audio_acceptance import (
     encoded_audio_review_integrity_hash,
     encoded_audio_review_integrity_ok,
 )
+from song_agent.format_decisions import format_matrix_integrity_ok, format_recommendation_integrity_ok, format_report_hash, format_report_integrity_ok
 from song_agent.mix_controls import (
     mix_state_integrity_ok,
     song_plan_hash,
@@ -102,6 +103,7 @@ def verify_release_zip(
     require_mastering: bool = False,
     require_encoded_audio: bool = False,
     require_encoded_audio_review: bool = False,
+    require_format_decision: bool = False,
     required_audio_format_profiles: list[str] | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
@@ -118,6 +120,7 @@ def verify_release_zip(
         require_mastering=require_mastering,
         require_encoded_audio=require_encoded_audio,
         require_encoded_audio_review=require_encoded_audio_review,
+        require_format_decision=require_format_decision,
         required_audio_format_profiles=required_audio_format_profiles or [],
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
@@ -191,6 +194,7 @@ class _ReleaseZipVerifier:
         require_mastering: bool,
         require_encoded_audio: bool,
         require_encoded_audio_review: bool,
+        require_format_decision: bool,
         required_audio_format_profiles: list[str],
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
@@ -206,6 +210,7 @@ class _ReleaseZipVerifier:
         self.require_mastering = require_mastering
         self.require_encoded_audio = require_encoded_audio
         self.require_encoded_audio_review = require_encoded_audio_review
+        self.require_format_decision = require_format_decision
         self.required_audio_format_profiles = [str(item) for item in required_audio_format_profiles if str(item)]
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
@@ -247,6 +252,7 @@ class _ReleaseZipVerifier:
                 self._verify_mastering(archive)
                 self._verify_encoded_audio(archive)
                 self._verify_encoded_audio_acceptance(archive)
+                self._verify_format_decision(archive)
                 self._verify_metadata(archive)
                 self._verify_redaction(archive)
         finally:
@@ -944,6 +950,11 @@ class _ReleaseZipVerifier:
                     result.append(text)
         return result
 
+    def _requires_format_decision(self) -> bool:
+        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+        decision_gate = gate.get("format_decision") if isinstance(gate.get("format_decision"), dict) else {}
+        return bool(self.require_format_decision or decision_gate.get("require_format_decision"))
+
     def _verify_encoded_audio(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_encoded_audio()
         manifest_summary = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
@@ -1060,6 +1071,65 @@ class _ReleaseZipVerifier:
             "failed" if failures else "passed",
             "blocking" if required or failures else "warning",
             "Encoded audio acceptance evidence is present and manual." if not failures else "Encoded audio acceptance failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
+    def _verify_format_decision(self, archive: zipfile.ZipFile) -> None:
+        required = self._requires_format_decision()
+        manifest_summary = self.manifest.get("format_decision") if isinstance(self.manifest.get("format_decision"), dict) else {}
+        if not required and str(manifest_summary.get("status") or "") in {"", "missing", "not_required"}:
+            self._add_check("format_decision", "format_decision_optional", "passed", "warning", "Format decision evidence is not required.")
+            return
+        report_path = str(manifest_summary.get("report_path") or "format-decision/decision-report.json")
+        if report_path not in self.entry_map:
+            status = "failed" if required else "warning"
+            self._add_check("format_decision", "format_decision_report_exists", status, "blocking" if status == "failed" else "warning", "Format decision report is missing.")
+            return
+        report = self._read_json_entry(archive, report_path, "format_decision", "format_decision_report_parse")
+        matrix_path = str(manifest_summary.get("matrix_path") or "format-decision/matrix.json")
+        recommendation_path = str(manifest_summary.get("recommendation_path") or "format-decision/recommendation.json")
+        matrix = self._read_json_entry(archive, matrix_path, "format_decision", "format_decision_matrix_parse") if matrix_path in self.entry_map else {}
+        recommendation = self._read_json_entry(archive, recommendation_path, "format_decision", "format_decision_recommendation_parse") if recommendation_path in self.entry_map else {}
+        failures: list[str] = []
+        expected_report_hash = str(manifest_summary.get("report_hash") or "")
+        actual_report_hash = format_report_hash(report)
+        if not expected_report_hash or expected_report_hash != actual_report_hash or not format_report_integrity_ok(report):
+            failures.append("report_hash")
+        if matrix:
+            expected_matrix_hash = str(report.get("matrix_hash") or manifest_summary.get("matrix_hash") or "")
+            if expected_matrix_hash != str(matrix.get("integrity_hash") or "") or not format_matrix_integrity_ok(matrix):
+                failures.append("matrix_hash")
+        elif required:
+            failures.append("matrix_missing")
+        if recommendation:
+            expected_recommendation_hash = str(report.get("recommendation_hash") or manifest_summary.get("recommendation_hash") or "")
+            if expected_recommendation_hash != str(recommendation.get("integrity_hash") or "") or not format_recommendation_integrity_ok(recommendation):
+                failures.append("recommendation_hash")
+        decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
+        selected = set(decision.get("selected_profiles", []) if isinstance(decision.get("selected_profiles"), list) else [])
+        archive_profiles = set(decision.get("archive_profiles", []) if isinstance(decision.get("archive_profiles"), list) else [])
+        rejected = set(decision.get("rejected_profiles", []) if isinstance(decision.get("rejected_profiles"), list) else [])
+        if selected & rejected:
+            failures.append("selected_rejected_overlap")
+        if archive_profiles & rejected:
+            failures.append("archive_rejected_overlap")
+        required_profiles = set(self.required_audio_format_profiles or [])
+        failures.extend(f"{profile}:not_selected" for profile in sorted(required_profiles - selected))
+        encoded_summary = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        encoded_profiles = {str(row.get("profile_id") or "") for row in encoded_summary.get("profiles", []) if isinstance(row, dict)}
+        failures.extend(f"{profile}:encoded_summary_missing" for profile in sorted((selected | archive_profiles) - encoded_profiles))
+        if self._requires_encoded_audio_review():
+            acceptance = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
+            accepted_profiles = set(acceptance.get("required_profiles", []) if isinstance(acceptance.get("required_profiles"), list) else [])
+            failures.extend(f"{profile}:acceptance_missing" for profile in sorted(selected - accepted_profiles))
+        if report.get("status") == "failed":
+            failures.append("report_failed")
+        self._add_check(
+            "format_decision",
+            "format_decision_evidence",
+            "failed" if failures else "passed",
+            "blocking" if required or failures else "warning",
+            "Format decision evidence is present and current." if not failures else "Format decision evidence failed: " + "; ".join(failures[:5]),
             count=len(failures),
         )
 
@@ -1309,6 +1379,7 @@ class _ReleaseZipVerifier:
             "require_mastering": self.require_mastering,
             "require_encoded_audio": self.require_encoded_audio,
             "require_encoded_audio_review": self.require_encoded_audio_review,
+            "require_format_decision": self.require_format_decision,
             "required_audio_format_profiles": self.required_audio_format_profiles,
             "summary": {
                 "release_id": self.manifest.get("release_id"),

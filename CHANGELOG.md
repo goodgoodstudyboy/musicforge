@@ -1,5 +1,18 @@
 # Changelog
 
+## v5.7.0 - 2026-06-01
+
+### Added
+- Release Format Decision Workbench for comparing required encoded audio profiles, creating scoring matrices, recommendations, and manual decision reports.
+- Release Signoff gate `require_format_decision=true`, requiring selected delivery profiles to be covered by a current, integrity-checked decision report.
+- Release Export sidecars under `format-decision/` plus offline `verify-release --require-format-decision` validation.
+- Distribution Target format decision summaries, Distribution Signoff gate support, Distribution Export sidecar evidence, and `verify-distribution-package --require-format-decision`.
+- Studio Release workspace controls and CLI `format-decision` workflow for creating sessions, selecting/archive/rejecting profiles, activating reports, and writing report files.
+- v5.7 release-check smoke covering selected/archive/rejected profiles, signoff blocking for non-selected required profiles, export evidence, external verification, and report tamper detection.
+
+### Verified
+- `python -m pytest tests\test_format_decisions.py tests\test_server_audio_encoding.py tests\test_distribution_encoded_audio.py tests\test_release_check.py::test_v57_release_format_decision_smoke tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_webui.py::test_webui_contains_runtime_tabs -q`
+
 ## v5.6.1 - 2026-06-01
 
 ### Fixed
