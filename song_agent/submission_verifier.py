@@ -20,6 +20,7 @@ from song_agent.projectio import write_json
 from song_agent.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
 from song_agent.releases import stable_hash
+from song_agent.rights_clearance import verify_rights_summary_evidence
 from song_agent.submission_export import SUBMISSION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS
 
 
@@ -40,6 +41,7 @@ def verify_submission_package(
     strict: bool = False,
     require_submitted: bool = False,
     require_accepted: bool = False,
+    require_rights_clearance: bool = False,
     deep: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
@@ -51,6 +53,7 @@ def verify_submission_package(
         strict=strict,
         require_submitted=require_submitted,
         require_accepted=require_accepted,
+        require_rights_clearance=require_rights_clearance,
         deep=deep,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
@@ -117,6 +120,7 @@ class _SubmissionPackageVerifier:
         strict: bool,
         require_submitted: bool,
         require_accepted: bool,
+        require_rights_clearance: bool,
         deep: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
@@ -127,6 +131,7 @@ class _SubmissionPackageVerifier:
         self.strict = strict
         self.require_submitted = require_submitted
         self.require_accepted = require_accepted
+        self.require_rights_clearance = require_rights_clearance
         self.deep = deep
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
@@ -161,6 +166,7 @@ class _SubmissionPackageVerifier:
                 self._verify_items(archive)
                 self._verify_status_requirements()
                 self._verify_csv(archive)
+                self._verify_rights_clearance(archive)
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -339,6 +345,31 @@ class _SubmissionPackageVerifier:
                 if _formula_cell(cell):
                     issues.append(f"{row_index}:{col_index}")
         self._add_check("csv", "submission_targets_csv_formula_safe", "failed" if issues else "passed", "blocking", "CSV formula issues: " + ", ".join(issues[:5]) if issues else "Submission target CSV cells are formula-safe.", count=len(issues))
+
+    def _verify_rights_clearance(self, archive: zipfile.ZipFile) -> None:
+        manifest_rights = self.manifest.get("rights_clearance") if isinstance(self.manifest.get("rights_clearance"), dict) else {}
+        signoff_rights = self.signoff.get("rights_clearance") if isinstance(self.signoff.get("rights_clearance"), dict) else {}
+        required = bool(self.require_rights_clearance or signoff_rights.get("require_rights_clearance") or manifest_rights.get("report_hash"))
+        if not required and str(manifest_rights.get("status") or "") in {"", "missing", "not_required"}:
+            self._add_check("rights_clearance", "submission_rights_clearance_optional", "passed", "warning", "Rights clearance evidence is not required.")
+            return
+        summary_path = str(manifest_rights.get("summary_path") or "rights/summary.json")
+        if summary_path not in self.entry_map:
+            status = "failed" if required else "warning"
+            self._add_check("rights_clearance", "submission_rights_clearance_summary_exists", status, "blocking" if status == "failed" else "warning", "rights/summary.json is missing.")
+            return
+        summary = self._read_json_entry(archive, summary_path, "rights_clearance", "submission_rights_summary_parse")
+        failures = verify_rights_summary_evidence(manifest_summary=manifest_rights, summary=summary, required=required)
+        if signoff_rights and str(signoff_rights.get("report_hash") or "") != str(manifest_rights.get("report_hash") or ""):
+            failures.append("signoff_report_hash")
+        self._add_check(
+            "rights_clearance",
+            "submission_rights_clearance_evidence",
+            "failed" if failures else "passed",
+            "blocking" if required or failures else "warning",
+            "Submission rights clearance evidence is present." if not failures else "Submission rights clearance failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         scan_names = [

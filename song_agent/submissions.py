@@ -678,6 +678,7 @@ def submission_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
             "qa_source_hash": data.get("qa_source_hash"),
             "export_manifest_hash": data.get("export_manifest_hash"),
             "forced": bool(data.get("forced", False)),
+            "rights_clearance": data.get("rights_clearance") if isinstance(data.get("rights_clearance"), dict) else {},
         },
         blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
     )
@@ -714,6 +715,7 @@ def build_submission_signoff_record(
         "override_reason": _safe_text(payload.get("override_reason"), 500) if force else None,
         "acknowledged_blockers": blockers if force else [],
         "acknowledged_warnings": warnings,
+        "rights_clearance": payload.get("rights_clearance") if isinstance(payload.get("rights_clearance"), dict) else {},
         "notes": _safe_text(payload.get("notes"), 2000),
     }
     return sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)

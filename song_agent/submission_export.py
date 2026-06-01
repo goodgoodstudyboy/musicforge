@@ -18,6 +18,7 @@ from song_agent.distribution_verifier import distribution_verification_summary, 
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.releases import stable_hash
+from song_agent.rights_clearance import RightsClearanceStore
 from song_agent.submission_qa import submission_qa_allows_export, submission_source_state
 from song_agent.submissions import (
     SubmissionBatch,
@@ -103,6 +104,7 @@ def build_submission_export_bundle(
     _write_json(report_path, _submission_report_payload(submission, qa_report, now))
     _write_targets_csv(targets_path, target_rows)
     events_path.write_text(_events_jsonl(store.read_events(release_id, submission.submission_id)), encoding="utf-8")
+    rights_clearance_summary = _write_rights_clearance_sidecars(store, release_id, export_dir, files)
     _write_readme(export_dir, submission, qa_report, target_rows)
     files.extend(_file_record(export_dir, path) for path in [report_path, targets_path, events_path, export_dir / "README.txt"])
 
@@ -121,6 +123,7 @@ def build_submission_export_bundle(
         "sidecars": {
             "submission_signoff": _submission_signoff_sidecar_record(signoff_public),
         },
+        "rights_clearance": rights_clearance_summary,
         "files": sorted(files, key=lambda item: item["path"]),
         "summary": {
             "status": "exported",
@@ -297,6 +300,17 @@ def _write_readme(export_dir: Path, submission: SubmissionBatch, qa_report: dict
         lines.append(f"- {row.get('target_id')} {sanitize_sensitive_text(str(row.get('target_name') or 'Distribution Target'))} ({row.get('profile_id')})")
     lines.extend(["", "This package was prepared locally. It does not contain platform credentials or upload tokens."])
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_rights_clearance_sidecars(store: SubmissionStore, release_id: str, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+    try:
+        summary = RightsClearanceStore(store.release_store).export_package_summary(release_id, export_dir)
+    except Exception:
+        summary = {"status": "missing", "summary_path": "rights/summary.json"}
+    target_path = export_dir / str(summary.get("summary_path") or "rights/summary.json")
+    if target_path.exists():
+        records.append(_file_record(export_dir, target_path))
+    return sanitize_metadata(summary, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def _write_targets_csv(path: Path, rows: list[dict[str, Any]]) -> None:

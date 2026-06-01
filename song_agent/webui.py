@@ -3166,6 +3166,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let masteringData = { summary: {}, analysis: {}, plan: {}, candidates: [], selected_candidate: {} };
       let encodedAudioData = { summary: {}, profiles: [] };
       let formatDecisionData = { sessions: [], active_session: {} };
+      let rightsData = { report: {}, parties: [] };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
       let releaseAnalyticsData = { summary: {}, analytics: null };
@@ -3183,6 +3184,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { masteringData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/mastering`); } catch (err) {}
       try { encodedAudioData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/encoded-audio`); } catch (err) {}
       try { formatDecisionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions`); } catch (err) {}
+      try { rightsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/rights`); } catch (err) {}
       try {
         metadataData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata`);
         const metadataQa = await api(`/api/releases/${encodeURIComponent(release.release_id)}/metadata/qa`);
@@ -3235,6 +3237,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseMasteringHtml(masteringData, release)}
         ${releaseEncodedAudioHtml(encodedAudioData, release)}
         ${releaseFormatDecisionHtml(formatDecisionData, release)}
+        ${releaseRightsClearanceHtml(rightsData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4328,6 +4331,63 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseRightsClearanceHtml(rightsData, release) {
+      const report = (rightsData && rightsData.report) || {};
+      const parties = (rightsData && rightsData.parties) || [];
+      const rows = (report.tracks || []).map((track) => `
+        <tr>
+          <td>${escapeHtml(track.track_id || "-")}</td>
+          <td><span class="status ${escapeHtml(track.status || "")}">${escapeHtml(track.status || "-")}</span></td>
+          <td>${escapeHtml(track.manual_clearance_status || "-")}</td>
+          <td>${escapeHtml((track.failures || []).join(", ") || "-")}</td>
+        </tr>
+      `).join("");
+      const trackOptions = (release.tracks || []).map((track) => `<option value="${escapeHtml(track.track_id)}">${escapeHtml(`${track.track_number || ""} ${track.title || track.track_id}`)}</option>`).join("");
+      const partyOptions = parties.map((party) => `<option value="${escapeHtml(party.party_id || "")}">${escapeHtml(party.public_credit_name || party.display_name || party.party_id)}</option>`).join("");
+      return `
+        <div class="panel-title subhead"><span>Rights Clearance</span></div>
+        <div class="summary-grid">
+          ${metric("Status", report.status || "missing")}
+          ${metric("Tracks", report.track_count || 0)}
+          ${metric("Manual Cleared", report.manual_cleared_track_count || 0)}
+          ${metric("Parties", parties.length || 0)}
+        </div>
+        <div class="grid2">
+          <label>Party Name
+            <input id="rights-party-name" value="MusicForge">
+          </label>
+          <label>Public Credit
+            <input id="rights-party-credit" value="MusicForge">
+          </label>
+          <label>Track
+            <select id="rights-track-id">${trackOptions}</select>
+          </label>
+          <label>Contributor
+            <select id="rights-party-id">${partyOptions}</select>
+          </label>
+          <label>Role
+            <select id="rights-contributor-role"><option value="composer">composer</option><option value="lyricist">lyricist</option><option value="producer">producer</option><option value="performer">performer</option></select>
+          </label>
+          <label>Share
+            <input id="rights-contributor-share" type="number" value="100" min="0" max="100">
+          </label>
+        </div>
+        <label>Attestation
+          <textarea id="rights-attestation" rows="2">Original composition rights confirmed.</textarea>
+        </label>
+        <div class="actions">
+          <button class="secondary" id="rights-create-party" type="button">Create Party</button>
+          <button class="secondary" id="rights-save-track" type="button">Save Track Rights</button>
+          <button class="secondary" id="rights-review-track" type="button">Accept Rights</button>
+          <button class="secondary" id="rights-refresh-report" type="button">Refresh Rights Report</button>
+        </div>
+        <table>
+          <thead><tr><th>Track</th><th>Status</th><th>Manual</th><th>Failures</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='4'>No rights report yet.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
     function releaseExportHtml(exportData, release) {
       const manifest = (exportData && exportData.manifest) || {};
       const zip = manifest.zip || {};
@@ -4441,6 +4501,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <input id="release-require-format-decision" type="checkbox">
           Require format decision
         </label>
+        <label class="inline">
+          <input id="release-require-rights-clearance" type="checkbox">
+          Require rights clearance
+        </label>
         <label>Required Audio Formats
           <input id="release-required-audio-formats" value="mp3_320">
         </label>
@@ -4462,6 +4526,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         require_encoded_audio: $("release-require-encoded-audio")?.checked || false,
         require_encoded_audio_review: $("release-require-encoded-audio-review")?.checked || false,
         require_format_decision: $("release-require-format-decision")?.checked || false,
+        require_rights_clearance: $("release-require-rights-clearance")?.checked || false,
         required_audio_format_profiles: ($("release-required-audio-formats")?.value || "").split(",").map((item) => item.trim()).filter(Boolean),
         mastering_profile_id: $("release-mastering-profile")?.value || "",
       };
@@ -4682,6 +4747,38 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions/${encodeURIComponent(sessionId)}/report`, { method: "POST" });
           await api(`/api/releases/${encodeURIComponent(release.release_id)}/format-decisions/${encodeURIComponent(sessionId)}/activate`, { method: "POST" });
         }
+        await loadReleases();
+      });
+      bindAction("rights-create-party", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/rights/parties`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ display_name: $("rights-party-name").value.trim(), public_credit_name: $("rights-party-credit").value.trim() }),
+        });
+        await loadReleases();
+      });
+      bindAction("rights-save-track", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/rights/tracks/${encodeURIComponent($("rights-track-id").value)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            instrumental: true,
+            contributors: [{ party_id: $("rights-party-id").value, role: $("rights-contributor-role").value, share: Number($("rights-contributor-share").value || 100) }],
+            source_usages: [{ source_id: "original-1", name: "Original composition", status: "original", risk_level: "low" }],
+          }),
+        });
+        await loadReleases();
+      });
+      bindAction("rights-review-track", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/rights/tracks/${encodeURIComponent($("rights-track-id").value)}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "accepted", review_mode: "manual", confirmed_by: "local-user", attestation: $("rights-attestation").value.trim() }),
+        });
+        await loadReleases();
+      });
+      bindAction("rights-refresh-report", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/rights/refresh`, { method: "POST" });
         await loadReleases();
       });
       bindAction("release-build-export", async () => {

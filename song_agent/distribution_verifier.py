@@ -30,6 +30,7 @@ from song_agent.encoded_audio_acceptance import (
 )
 from song_agent.format_decisions import distribution_target_format_decision_coverage, format_distribution_decision_summary_integrity_ok
 from song_agent.releases import stable_hash
+from song_agent.rights_clearance import verify_rights_summary_evidence
 
 
 DISTRIBUTION_VERIFICATION_SCHEMA_VERSION = 1
@@ -52,6 +53,7 @@ def verify_distribution_package(
     require_encoded_audio: bool = False,
     require_encoded_audio_review: bool = False,
     require_format_decision: bool = False,
+    require_rights_clearance: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -65,6 +67,7 @@ def verify_distribution_package(
         require_encoded_audio=require_encoded_audio,
         require_encoded_audio_review=require_encoded_audio_review,
         require_format_decision=require_format_decision,
+        require_rights_clearance=require_rights_clearance,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -135,6 +138,7 @@ class _DistributionPackageVerifier:
         require_encoded_audio: bool,
         require_encoded_audio_review: bool,
         require_format_decision: bool,
+        require_rights_clearance: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -147,6 +151,7 @@ class _DistributionPackageVerifier:
         self.require_encoded_audio = require_encoded_audio
         self.require_encoded_audio_review = require_encoded_audio_review
         self.require_format_decision = require_format_decision
+        self.require_rights_clearance = require_rights_clearance
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -194,6 +199,7 @@ class _DistributionPackageVerifier:
                 self._verify_encoded_audio(archive)
                 self._verify_encoded_audio_acceptance(archive)
                 self._verify_format_decision(archive)
+                self._verify_rights_clearance(archive)
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -696,6 +702,31 @@ class _DistributionPackageVerifier:
             "failed" if failures else "passed",
             "blocking" if required or failures else "warning",
             "Distribution format decision evidence covers target requirements." if not failures else "Distribution format decision failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
+    def _verify_rights_clearance(self, archive: zipfile.ZipFile) -> None:
+        manifest_rights = self.manifest.get("rights_clearance") if isinstance(self.manifest.get("rights_clearance"), dict) else {}
+        signoff_rights = self.signoff.get("rights_clearance") if isinstance(self.signoff.get("rights_clearance"), dict) else {}
+        required = bool(self.require_rights_clearance or signoff_rights.get("require_rights_clearance") or manifest_rights.get("report_hash"))
+        if not required and str(manifest_rights.get("status") or "") in {"", "missing", "not_required"}:
+            self._add_check("rights_clearance", "distribution_rights_clearance_optional", "passed", "warning", "Rights clearance evidence is not required.")
+            return
+        summary_path = str(manifest_rights.get("summary_path") or "rights/summary.json")
+        if summary_path not in self.entry_map:
+            status = "failed" if required else "warning"
+            self._add_check("rights_clearance", "distribution_rights_clearance_summary_exists", status, "blocking" if status == "failed" else "warning", "rights/summary.json is missing.")
+            return
+        summary = self._read_json_entry(archive, summary_path, "rights_clearance", "distribution_rights_summary_parse")
+        failures = verify_rights_summary_evidence(manifest_summary=manifest_rights, summary=summary, required=required)
+        if signoff_rights and str(signoff_rights.get("report_hash") or "") != str(manifest_rights.get("report_hash") or ""):
+            failures.append("signoff_report_hash")
+        self._add_check(
+            "rights_clearance",
+            "distribution_rights_clearance_evidence",
+            "failed" if failures else "passed",
+            "blocking" if required or failures else "warning",
+            "Distribution rights clearance evidence is present." if not failures else "Distribution rights clearance failed: " + "; ".join(failures[:5]),
             count=len(failures),
         )
 

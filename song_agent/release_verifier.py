@@ -36,6 +36,7 @@ from song_agent.encoded_audio_acceptance import (
     encoded_audio_review_integrity_ok,
 )
 from song_agent.format_decisions import format_matrix_integrity_ok, format_recommendation_integrity_ok, format_report_hash, format_report_integrity_ok
+from song_agent.rights_clearance import verify_release_rights_package_evidence
 from song_agent.mix_controls import (
     mix_state_integrity_ok,
     song_plan_hash,
@@ -104,6 +105,7 @@ def verify_release_zip(
     require_encoded_audio: bool = False,
     require_encoded_audio_review: bool = False,
     require_format_decision: bool = False,
+    require_rights_clearance: bool = False,
     required_audio_format_profiles: list[str] | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
@@ -121,6 +123,7 @@ def verify_release_zip(
         require_encoded_audio=require_encoded_audio,
         require_encoded_audio_review=require_encoded_audio_review,
         require_format_decision=require_format_decision,
+        require_rights_clearance=require_rights_clearance,
         required_audio_format_profiles=required_audio_format_profiles or [],
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
@@ -195,6 +198,7 @@ class _ReleaseZipVerifier:
         require_encoded_audio: bool,
         require_encoded_audio_review: bool,
         require_format_decision: bool,
+        require_rights_clearance: bool,
         required_audio_format_profiles: list[str],
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
@@ -211,6 +215,7 @@ class _ReleaseZipVerifier:
         self.require_encoded_audio = require_encoded_audio
         self.require_encoded_audio_review = require_encoded_audio_review
         self.require_format_decision = require_format_decision
+        self.require_rights_clearance = require_rights_clearance
         self.required_audio_format_profiles = [str(item) for item in required_audio_format_profiles if str(item)]
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
@@ -253,6 +258,7 @@ class _ReleaseZipVerifier:
                 self._verify_encoded_audio(archive)
                 self._verify_encoded_audio_acceptance(archive)
                 self._verify_format_decision(archive)
+                self._verify_rights_clearance(archive)
                 self._verify_metadata(archive)
                 self._verify_redaction(archive)
         finally:
@@ -1130,6 +1136,49 @@ class _ReleaseZipVerifier:
             "failed" if failures else "passed",
             "blocking" if required or failures else "warning",
             "Format decision evidence is present and current." if not failures else "Format decision evidence failed: " + "; ".join(failures[:5]),
+            count=len(failures),
+        )
+
+    def _requires_rights_clearance(self) -> bool:
+        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
+        rights_gate = gate.get("rights_clearance") if isinstance(gate.get("rights_clearance"), dict) else {}
+        return bool(self.require_rights_clearance or rights_gate.get("require_rights_clearance"))
+
+    def _verify_rights_clearance(self, archive: zipfile.ZipFile) -> None:
+        required = self._requires_rights_clearance()
+        manifest_summary = self.manifest.get("rights_clearance") if isinstance(self.manifest.get("rights_clearance"), dict) else {}
+        if not required and str(manifest_summary.get("status") or "") in {"", "missing", "not_required"}:
+            self._add_check("rights_clearance", "rights_clearance_optional", "passed", "warning", "Rights clearance evidence is not required.")
+            return
+        summary_path = str(manifest_summary.get("summary_path") or "rights/summary.json")
+        report_path = str(manifest_summary.get("report_path") or "rights/report.json")
+        if summary_path not in self.entry_map:
+            status = "failed" if required else "warning"
+            self._add_check("rights_clearance", "rights_clearance_summary_exists", status, "blocking" if status == "failed" else "warning", "rights/summary.json is missing.")
+            return
+        summary = self._read_json_entry(archive, summary_path, "rights_clearance", "rights_summary_parse")
+        report = self._read_json_entry(archive, report_path, "rights_clearance", "rights_report_parse") if report_path in self.entry_map else {}
+        tracks: dict[str, dict[str, Any]] = {}
+        for row in summary.get("tracks", []) if isinstance(summary.get("tracks"), list) else []:
+            if not isinstance(row, dict):
+                continue
+            track_id = str(row.get("track_id") or "")
+            path = str(row.get("path") or "")
+            if track_id and path in self.entry_map:
+                tracks[track_id] = self._read_json_entry(archive, path, "rights_clearance", "rights_track_parse")
+        failures = verify_release_rights_package_evidence(
+            manifest_summary=manifest_summary,
+            summary=summary,
+            report=report,
+            tracks=tracks,
+            required=required,
+        )
+        self._add_check(
+            "rights_clearance",
+            "rights_clearance_evidence",
+            "failed" if failures else "passed",
+            "blocking" if required or failures else "warning",
+            "Rights clearance evidence is present and intact." if not failures else "Rights clearance evidence failed: " + "; ".join(failures[:5]),
             count=len(failures),
         )
 

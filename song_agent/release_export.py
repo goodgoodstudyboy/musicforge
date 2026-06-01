@@ -28,6 +28,7 @@ from song_agent.mastering_qa import export_mastering, selected_mastering_track_s
 from song_agent.audio_encoding import export_encoded_audio_summary
 from song_agent.encoded_audio_acceptance import export_encoded_audio_acceptance
 from song_agent.format_decisions import FormatDecisionStore
+from song_agent.rights_clearance import RightsClearanceStore
 from song_agent.release_metadata import (
     attach_metadata_export_to_manifest,
     export_release_metadata_files,
@@ -121,6 +122,7 @@ def build_release_export_bundle(
     encoded_audio_summary = _release_encoded_audio_summary(release_store, release.release_id, export_dir)
     encoded_audio_acceptance_summary: dict[str, Any] = {"status": "pending", "required_profiles": [], "track_count": 0}
     format_decision_summary: dict[str, Any] = {"status": "pending"}
+    rights_clearance_summary = _release_rights_clearance_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
     if (export_dir / "acceptance-analytics-summary.json").exists():
@@ -154,6 +156,9 @@ def build_release_export_bundle(
                 copied_files.append(_file_record(export_dir, mastering_file))
     if (export_dir / "encoded-audio-summary.json").exists():
         copied_files.append(_file_record(export_dir, export_dir / "encoded-audio-summary.json"))
+    if (export_dir / "rights" / "summary.json").exists():
+        for rights_file in sorted((export_dir / "rights").rglob("*.json")):
+            copied_files.append(_file_record(export_dir, rights_file))
 
     manifest = {
         "schema_version": RELEASE_EXPORT_SCHEMA_VERSION,
@@ -181,6 +186,7 @@ def build_release_export_bundle(
         "encoded_audio": encoded_audio_summary,
         "encoded_audio_acceptance": encoded_audio_acceptance_summary,
         "format_decision": format_decision_summary,
+        "rights_clearance": rights_clearance_summary,
         "files": sorted(copied_files, key=lambda item: item["path"]),
         "summary": {
             "track_count": len(tracklist),
@@ -640,6 +646,17 @@ def _release_format_decision_summary(release_store: ReleaseStore, release_id: st
         target = export_dir / "format-decision"
         target.mkdir(parents=True, exist_ok=True)
         write_json(target / "decision-report.json", summary)
+        return summary
+
+
+def _release_rights_clearance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+    try:
+        return RightsClearanceStore(release_store).export_release(release_id, export_dir)
+    except Exception:
+        summary = {"status": "missing", "summary_path": "rights/summary.json", "track_count": 0}
+        target = export_dir / "rights"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "summary.json", summary)
         return summary
 
 

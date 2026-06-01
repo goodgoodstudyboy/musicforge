@@ -1,5 +1,18 @@
 # Changelog
 
+## v5.8.0 - 2026-06-02
+
+### Added
+- Rights Clearance Workbench for Release parties, track contributor splits, source usage declarations, manual clearance reviews, current reports, and integrity hashes.
+- Release Signoff gate `require_rights_clearance=true`, blocking missing, stale, tampered, non-manual, incomplete split, uncleared source, metadata-credit mismatch, or redaction-polluted rights evidence.
+- Release Export sidecars under `rights/` plus offline `verify-release --require-rights-clearance` validation.
+- Distribution and Submission package rights summaries, signoff gates, and offline `verify-distribution-package --require-rights-clearance` / `verify-submission-package --require-rights-clearance`.
+- Studio Release workspace controls for creating rights parties, saving track rights, accepting manual clearance, refreshing the rights report, and requiring rights clearance at signoff.
+- v5.8 release-check smoke covering missing-rights block, manual clearance pass, Release/Distribution/Submission signoff, offline verification, and rights report tamper detection.
+
+### Verified
+- `python -m pytest tests\test_rights_clearance.py tests\test_release_check.py::test_v58_rights_clearance_smoke tests\test_cli_verify_release.py tests\test_cli_verify_distribution.py tests\test_cli_verify_submission.py -q`
+
 ## v5.7.1 - 2026-06-01
 
 ### Fixed

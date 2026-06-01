@@ -184,6 +184,12 @@ from song_agent.format_decisions import (
     FormatDecisionStore,
     distribution_target_format_decision_coverage,
 )
+from song_agent.rights_clearance import (
+    RightsClearanceError,
+    RightsClearanceNotFoundError,
+    RightsClearanceStateError,
+    RightsClearanceStore,
+)
 from song_agent.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
 from song_agent.releases import (
     ReleaseConflictError,
@@ -2606,6 +2612,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.format_decision_store  # type: ignore[attr-defined]
 
     @property
+    def rights_clearance_store(self) -> RightsClearanceStore:
+        return self.server.rights_clearance_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_template_store(self) -> TemplatePackStore:
         return self.server.distribution_template_store  # type: ignore[attr-defined]
 
@@ -4973,6 +4983,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._handle_release_format_decisions(method, release_id, tail.removeprefix("/format-decisions"))
                 return
 
+            if tail == "/rights" or tail.startswith("/rights/"):
+                self._handle_release_rights(method, release_id, tail.removeprefix("/rights"))
+                return
+
             if tail == "/metadata":
                 if method == "GET":
                     metadata = read_release_metadata(self.release_store, release_id, default={})
@@ -5913,6 +5927,104 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except (FormatDecisionError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_rights(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.rights_clearance_store.read_report(release_id, default={})
+                self._send_json({"ok": True, "release_id": release_id, "report": report, "parties": self.rights_clearance_store.list_parties(release_id)})
+                return
+            if parts == ["refresh"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.rights_clearance_store.refresh_report(release_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "report": report})
+                return
+            if parts == ["gate"]:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                gate = self.rights_clearance_store.gate(release_id, required=True, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "gate": gate})
+                return
+            if parts == ["parties"]:
+                if method == "GET":
+                    self._send_json({"ok": True, "release_id": release_id, "parties": self.rights_clearance_store.list_parties(release_id)})
+                    return
+                if method == "POST":
+                    party = self.rights_clearance_store.upsert_party(release_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "party": party}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if len(parts) == 2 and parts[0] == "parties":
+                if method not in {"POST", "PATCH"}:
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                party = self.rights_clearance_store.upsert_party(release_id, {**self._read_json_body(), "party_id": parts[1]}, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "party": party})
+                return
+            if len(parts) >= 2 and parts[0] == "tracks":
+                track_id = parts[1]
+                action = parts[2] if len(parts) >= 3 else ""
+                if not action:
+                    if method == "GET":
+                        record = self.rights_clearance_store.read_track(release_id, track_id, default={})
+                        self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
+                        return
+                    if method in {"POST", "PATCH"}:
+                        record = self.rights_clearance_store.upsert_track(release_id, track_id, self._optional_json_body(), now=_utc_now())
+                        self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
+                        return
+                if action == "contributors":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    contributors = payload.get("contributors") if isinstance(payload.get("contributors"), list) else payload if isinstance(payload, list) else []
+                    record = self.rights_clearance_store.upsert_track(release_id, track_id, {"contributors": contributors}, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
+                    return
+                if action == "sources":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    sources = payload.get("source_usages") if isinstance(payload.get("source_usages"), list) else payload.get("sources") if isinstance(payload.get("sources"), list) else payload if isinstance(payload, list) else []
+                    record = self.rights_clearance_store.upsert_track(release_id, track_id, {"source_usages": sources}, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
+                    return
+                if action == "review":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    record = self.rights_clearance_store.review_track(release_id, track_id, self._read_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
+                    return
+                if action == "reset-review":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    reason = str(payload.get("reason") or "").strip()
+                    if not reason:
+                        self._send_error(HTTPStatus.BAD_REQUEST, "reason is required.")
+                        return
+                    record = self.rights_clearance_store.reset_track_review(release_id, track_id, reason=reason, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Rights clearance route not found.")
+        except (ReleaseNotFoundError, RightsClearanceNotFoundError, FileNotFoundError) as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (ReleaseStateError, RightsClearanceStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (RightsClearanceError, ValueError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _renderer_profile_from_payload(self, payload: dict[str, Any] | None) -> Any | None:
         profile_id = str((payload or {}).get("profile_id") or "").strip()
         if not profile_id:
@@ -6026,6 +6138,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if format_decision_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(format_decision_gate.get("message") or "Format decision gate failed.")
+        require_rights_clearance = bool(payload.get("require_rights_clearance", False))
+        rights_gate = self.rights_clearance_store.gate(release_id, required=require_rights_clearance, now=_utc_now())
+        if rights_gate and require_rights_clearance:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["rights_clearance"] = rights_gate
+            if rights_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(rights_gate.get("message") or "Rights clearance gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -6066,6 +6186,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(format_decision_gate.get("message") or "Format decision gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if rights_gate.get("hard_block") and rights_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(rights_gate.get("message") or "Rights clearance gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -6171,6 +6300,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {
                         "error": str(encoded_acceptance_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+        if require_rights_clearance:
+            if not export_manifest:
+                self._send_json(
+                    {
+                        "error": "Release Export has not been generated.",
+                        "acceptance_gate": acceptance_gate,
+                    },
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+            rights_export_gate = self._release_rights_clearance_export_gate(export_manifest, rights_gate)
+            if rights_export_gate.get("status") == "failed":
+                acceptance_gate = dict(acceptance_gate or {})
+                acceptance_gate["rights_clearance_export"] = rights_export_gate
+                self._send_json(
+                    {
+                        "error": str(rights_export_gate.get("message") or "Release Export is stale. Rebuild export before signoff."),
                         "acceptance_gate": acceptance_gate,
                     },
                     status=HTTPStatus.CONFLICT,
@@ -6372,6 +6523,29 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "missing_profiles": missing_profiles,
         }
 
+    def _release_rights_clearance_export_gate(self, export_manifest: dict[str, Any], rights_gate: dict[str, Any]) -> dict[str, Any]:
+        manifest_rights = export_manifest.get("rights_clearance") if isinstance(export_manifest.get("rights_clearance"), dict) else {}
+        missing: list[str] = []
+        mismatched: list[str] = []
+        if not manifest_rights:
+            missing.append("rights_clearance")
+        for field in ("report_hash", "source_hash"):
+            manifest_value = str(manifest_rights.get(field) or "")
+            gate_value = str(rights_gate.get(field) or "")
+            if not manifest_value or manifest_value != gate_value:
+                mismatched.append(field)
+        if str(manifest_rights.get("status") or "") != "passed":
+            mismatched.append("status")
+        failed = bool(missing or mismatched)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": "Release Export is stale. Rebuild export before signoff." if failed else "Release Export contains current rights clearance evidence.",
+            "missing": missing,
+            "mismatched_fields": sorted(set(mismatched)),
+            "manifest_status": manifest_rights.get("status") or "missing",
+        }
+
     def _distribution_encoded_audio_acceptance_export_gate(self, export_manifest: dict[str, Any], acceptance_gate: dict[str, Any]) -> dict[str, Any]:
         manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
         missing: list[str] = []
@@ -6432,6 +6606,29 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "mismatched_fields": sorted(set(mismatched)),
             "missing_profiles": missing_profiles,
             "role_incompatible_profiles": role_incompatible,
+        }
+
+    def _package_rights_clearance_export_gate(self, export_manifest: dict[str, Any], rights_gate: dict[str, Any], *, package_label: str) -> dict[str, Any]:
+        manifest_rights = export_manifest.get("rights_clearance") if isinstance(export_manifest.get("rights_clearance"), dict) else {}
+        missing: list[str] = []
+        mismatched: list[str] = []
+        if not manifest_rights:
+            missing.append("rights_clearance")
+        for field in ("report_hash", "source_hash"):
+            manifest_value = str(manifest_rights.get(field) or "")
+            gate_value = str(rights_gate.get(field) or "")
+            if not manifest_value or manifest_value != gate_value:
+                mismatched.append(field)
+        if str(manifest_rights.get("status") or "") != "passed":
+            mismatched.append("status")
+        failed = bool(missing or mismatched)
+        return {
+            "status": "failed" if failed else "passed",
+            "hard_block": failed,
+            "message": f"{package_label} Export is stale. Rebuild export before signoff." if failed else f"{package_label} Export contains current rights clearance evidence.",
+            "missing": missing,
+            "mismatched_fields": sorted(set(mismatched)),
+            "manifest_status": manifest_rights.get("status") or "missing",
         }
 
     def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -7227,6 +7424,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     payload = self._optional_json_body()
                     require_encoded_review = bool(payload.get("require_encoded_audio_review", False) or (target.options or {}).get("require_encoded_audio_review", False))
                     require_format_decision = bool(payload.get("require_format_decision", False) or (target.options or {}).get("require_format_decision", False))
+                    require_rights_clearance = bool(payload.get("require_rights_clearance", False) or (target.options or {}).get("require_rights_clearance", False))
                     if require_encoded_review:
                         template = self.distribution_store.resolve_target_template(target)
                         required_profiles = [
@@ -7279,6 +7477,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                             )
                             return
                         payload = {**payload, "require_format_decision": True, "format_decision": format_decision_gate}
+                    if require_rights_clearance:
+                        rights_gate = self.rights_clearance_store.gate(release_id, required=True, now=_utc_now())
+                        if rights_gate.get("hard_block") and rights_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(rights_gate.get("message") or "Rights clearance gate failed."), "rights_clearance": rights_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        package_id = self.distribution_store.latest_package_id(target)
+                        export_manifest = read_distribution_export_manifest(self.distribution_store, release_id, package_id) if package_id else {}
+                        export_gate = self._package_rights_clearance_export_gate(export_manifest, rights_gate, package_label="Distribution")
+                        if export_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(export_gate.get("message") or "Distribution Export is stale. Rebuild export before signoff."), "rights_clearance": rights_gate, "rights_clearance_export": export_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        payload = {**payload, "require_rights_clearance": True, "rights_clearance": rights_gate}
                     signoff = sign_distribution_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=report, payload=payload, now=_utc_now())
                     target = self.distribution_store.get_target(release_id, target_id)
                     self._send_json({"ok": True, "release_id": release_id, "target": target.to_dict(), "signoff": signoff, "summary": distribution_signoff_summary(signoff)})
@@ -7457,7 +7673,28 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method == "POST":
                     self.submission_store.ensure_mutable(batch)
                     report = self._get_or_refresh_submission_qa(release_id, batch, refresh=True)
-                    signoff = sign_submission_package(store=self.submission_store, release_id=release_id, submission=batch, qa_report=report, payload=self._optional_json_body(), now=_utc_now())
+                    payload = self._optional_json_body()
+                    if bool(payload.get("require_rights_clearance", False)):
+                        rights_gate = self.rights_clearance_store.gate(release_id, required=True, now=_utc_now())
+                        if rights_gate.get("hard_block") and rights_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(rights_gate.get("message") or "Rights clearance gate failed."), "rights_clearance": rights_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        try:
+                            export_manifest = read_submission_export_manifest(self.submission_store, release_id, submission_id)
+                        except FileNotFoundError:
+                            export_manifest = {}
+                        export_gate = self._package_rights_clearance_export_gate(export_manifest, rights_gate, package_label="Submission")
+                        if export_gate.get("status") == "failed":
+                            self._send_json(
+                                {"error": str(export_gate.get("message") or "Submission Export is stale. Rebuild export before signoff."), "rights_clearance": rights_gate, "rights_clearance_export": export_gate},
+                                status=HTTPStatus.CONFLICT,
+                            )
+                            return
+                        payload = {**payload, "require_rights_clearance": True, "rights_clearance": rights_gate}
+                    signoff = sign_submission_package(store=self.submission_store, release_id=release_id, submission=batch, qa_report=report, payload=payload, now=_utc_now())
                     batch = self.submission_store.get_submission(release_id, submission_id)
                     self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "signoff": signoff, "summary": submission_signoff_summary(signoff)})
                     return
@@ -13282,6 +13519,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_encoding_store = AudioEncodingStore(self.release_store, project_store=self.project_store, profile_store=self.audio_encoding_profile_store)
         self.encoded_audio_acceptance_store = EncodedAudioAcceptanceStore(self.release_store, project_store=self.project_store, audio_encoding_store=self.audio_encoding_store)
         self.format_decision_store = FormatDecisionStore(self.release_store, project_store=self.project_store, encoding_store=self.audio_encoding_store, distribution_store=self.distribution_store)
+        self.rights_clearance_store = RightsClearanceStore(self.release_store)
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

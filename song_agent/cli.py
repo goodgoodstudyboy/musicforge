@@ -76,6 +76,7 @@ def build_verify_release_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-encoded-audio", action="store_true", help="Require encoded audio summary evidence.")
     verify_parser.add_argument("--require-encoded-audio-review", action="store_true", help="Require manual encoded audio review evidence.")
     verify_parser.add_argument("--require-format-decision", action="store_true", help="Require Release Format Decision evidence.")
+    verify_parser.add_argument("--require-rights-clearance", action="store_true", help="Require Rights Clearance evidence.")
     verify_parser.add_argument("--require-audio-formats", default="", help="Comma-separated encoded audio profile ids to require.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
@@ -94,6 +95,7 @@ def build_verify_distribution_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-encoded-audio", action="store_true", help="Require encoded audio evidence for package audio files.")
     verify_parser.add_argument("--require-encoded-audio-review", action="store_true", help="Require manual encoded audio review evidence for encoded package audio.")
     verify_parser.add_argument("--require-format-decision", action="store_true", help="Require Distribution format decision evidence.")
+    verify_parser.add_argument("--require-rights-clearance", action="store_true", help="Require Rights Clearance evidence.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
@@ -108,6 +110,7 @@ def build_verify_submission_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
     verify_parser.add_argument("--require-submitted", action="store_true", help="Require every item to have submitted-or-later status.")
     verify_parser.add_argument("--require-accepted", action="store_true", help="Require every item to be accepted.")
+    verify_parser.add_argument("--require-rights-clearance", action="store_true", help="Require Rights Clearance evidence.")
     verify_parser.add_argument("--deep", action="store_true", help="Run the Distribution Package verifier on nested target ZIP files.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=1024, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=4096, help="Maximum total uncompressed entry size in MiB.")
@@ -604,6 +607,7 @@ def _main() -> None:
             require_encoded_audio=args.require_encoded_audio,
             require_encoded_audio_review=args.require_encoded_audio_review,
             require_format_decision=args.require_format_decision,
+            require_rights_clearance=args.require_rights_clearance,
             required_audio_format_profiles=[item.strip() for item in str(args.require_audio_formats or "").split(",") if item.strip()],
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
@@ -634,6 +638,7 @@ def _main() -> None:
             require_encoded_audio=args.require_encoded_audio,
             require_encoded_audio_review=args.require_encoded_audio_review,
             require_format_decision=args.require_format_decision,
+            require_rights_clearance=args.require_rights_clearance,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -660,6 +665,7 @@ def _main() -> None:
             strict=args.strict,
             require_submitted=args.require_submitted,
             require_accepted=args.require_accepted,
+            require_rights_clearance=args.require_rights_clearance,
             deep=args.deep,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,

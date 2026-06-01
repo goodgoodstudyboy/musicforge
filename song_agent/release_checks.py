@@ -230,6 +230,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.5 distribution audio formats smoke", *_v55_distribution_audio_formats_smoke(root))
     report.add("v5.6 encoded audio acceptance smoke", *_v56_encoded_audio_acceptance_smoke(root))
     report.add("v5.7 release format decision smoke", *_v57_release_format_decision_smoke(root))
+    report.add("v5.8 rights clearance smoke", *_v58_rights_clearance_smoke(root))
     return report
 
 
@@ -7926,6 +7927,133 @@ def _v57_tamper_decision_report(data: bytes) -> bytes:
     decision = payload.get("decision") if isinstance(payload.get("decision"), dict) else {}
     decision["selected_profiles"] = ["flac_lossless"]
     payload["decision"] = decision
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v58_rights_clearance_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v58-rights-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        project_id = _v37_signed_project(server, "v5.8 Rights Track")
+        _v50_add_project_audio(server, project_id, duration_seconds=30)
+        _status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.8 Rights Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = str(release.get("release", {}).get("release_id") or "")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        _v55_export_metadata(server, release_id)
+        missing_status, _missing = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_rights_clearance": True})
+        party_status, party = _release_http_json(server, "POST", f"/api/releases/{release_id}/rights/parties", {"display_name": "MusicForge", "public_credit_name": "MusicForge"})
+        party_id = str(party.get("party", {}).get("party_id") or "")
+        track_status, _track = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/rights/tracks/track-000001",
+            {
+                "instrumental": True,
+                "contributors": [{"party_id": party_id, "role": "composer", "share": 100}],
+                "source_usages": [{"source_id": "original-1", "name": "Original composition", "status": "original", "risk_level": "low"}],
+            },
+        )
+        review_status, _review = _release_http_json(server, "POST", f"/api/releases/{release_id}/rights/tracks/track-000001/review", {"status": "accepted", "review_mode": "manual", "confirmed_by": "release-check", "attestation": "Original work clearance confirmed."})
+        report_status, rights_report = _release_http_json(server, "POST", f"/api/releases/{release_id}/rights/refresh")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_rights_clearance": True})
+        release_zip = base / ".musicforge" / "releases" / release_id / "release-export.zip"
+        release_verify = verify_release_zip(release_zip, require_rights_clearance=True)
+        tampered = verify_release_zip(_v38_rewrite_zip(release_zip, base / "tampered-v58-rights.zip", transforms={"rights/report.json": _v58_tamper_rights_report}), require_rights_clearance=True)
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff/reset", {"reason": "v5.8 distribution smoke"})
+        target_status, target = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/distribution/targets",
+            {
+                "profile_id": "demo_pitch",
+                "name": "Rights Target",
+                "options": {
+                    "require_release_signed": False,
+                    "require_release_zip_verified": False,
+                    "require_metadata_export": False,
+                    "require_artwork": False,
+                    "require_rights_clearance": True,
+                },
+            },
+        )
+        target_id = str(target.get("target", {}).get("target_id") or "")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        dist_export_status, dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, dist_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check", "require_rights_clearance": True})
+        package_id = str(dist_export.get("manifest", {}).get("package_id") or "")
+        dist_verify = verify_distribution_package(base / ".musicforge" / "releases" / release_id / "distribution" / "packages" / package_id / "distribution-package.zip", require_rights_clearance=True)
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_rights_clearance": True})
+        sub_status, sub = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions", {"name": "Rights Submission", "target_ids": [target_id]})
+        submission_id = str(sub.get("submission", {}).get("submission_id") or "")
+        sub_qa_status, _sub_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/qa/refresh")
+        sub_export_status, _sub_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
+        sub_zip_status, _sub_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export/zip")
+        sub_sign_status, sub_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/signoff", {"signed_by": "release-check", "require_rights_clearance": True})
+        sub_verify = verify_submission_package(base / ".musicforge" / "releases" / release_id / "submissions" / submission_id / "submission-package.zip", require_rights_clearance=True)
+        ok = (
+            missing_status == 409
+            and party_status == 201
+            and track_status == 200
+            and review_status == 200
+            and report_status == 200
+            and rights_report.get("report", {}).get("status") == "passed"
+            and export_status == 200
+            and export.get("manifest", {}).get("rights_clearance", {}).get("status") == "passed"
+            and zip_status == 200
+            and sign_status == 200
+            and signoff.get("signoff", {}).get("acceptance_gate", {}).get("rights_clearance", {}).get("status") == "passed"
+            and _v38_check_status(release_verify, "rights_clearance_evidence") == "passed"
+            and _v38_check_status(tampered, "rights_clearance_evidence") == "failed"
+            and target_status == 201
+            and dist_export_status == 201
+            and dist_sign_status == 200
+            and dist_sign.get("signoff", {}).get("rights_clearance", {}).get("status") == "passed"
+            and _v38_check_status(dist_verify, "distribution_rights_clearance_evidence") == "passed"
+            and sub_status == 201
+            and sub_qa_status == 200
+            and sub_export_status == 201
+            and sub_zip_status == 200
+            and sub_sign_status == 200
+            and sub_sign.get("signoff", {}).get("rights_clearance", {}).get("status") == "passed"
+            and _v38_check_status(sub_verify, "submission_rights_clearance_evidence") == "passed"
+        )
+        return ok, (
+            f"missing={missing_status}, rights={party_status}/{track_status}/{review_status}/{report_status}:{rights_report.get('report', {}).get('status')}, "
+            f"release={export_status}/{zip_status}/{sign_status}/{_v38_check_status(release_verify, 'rights_clearance_evidence')}, "
+            f"tampered={_v38_check_status(tampered, 'rights_clearance_evidence')}, "
+            f"distribution={dist_export_status}/{dist_sign_status}/{_v38_check_status(dist_verify, 'distribution_rights_clearance_evidence')}, "
+            f"submission={sub_export_status}/{sub_zip_status}/{sub_sign_status}/{_v38_check_status(sub_verify, 'submission_rights_clearance_evidence')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v58_tamper_rights_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["manual_cleared_track_count"] = 999
+    payload["warnings"] = []
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 

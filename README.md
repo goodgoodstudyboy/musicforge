@@ -312,6 +312,17 @@ write `format-decision/target-decision-summary.json`, and
 `verify-distribution-package --require-format-decision` validates the packaged
 decision evidence.
 
+Rights Clearance Workbench records local copyright and clearance evidence for a
+Release. It stores parties, per-track contributor splits, source usage
+declarations, and manual clearance reviews, then builds a signed
+`rights/report.json` with source and integrity hashes. Release Signoff can require
+`require_rights_clearance=true`; incomplete contributor splits, uncleared
+sources, stale reports, tampered evidence, synthetic review modes, metadata credit
+mismatches, or redaction findings block signoff. Release Export writes
+`rights/summary.json`, `rights/report.json`, and per-track rights records.
+Distribution and Submission packages carry rights summaries, and offline
+verifiers support `--require-rights-clearance`.
+
 Useful local commands:
 
 ```powershell
@@ -322,6 +333,9 @@ python -m song_agent.cli release-audio-review create-task release-000001 arv-000
 python -m song_agent.cli release-encode release-000001 --profiles mp3_320,flac_lossless --json
 python -m song_agent.cli encoded-audio-acceptance release-000001 --profiles mp3_320 --refresh-health --write --json
 python -m song_agent.cli format-decision release-000001 --profiles mp3_320,flac_lossless --select mp3_320 --archive flac_lossless --reason "MP3 delivery with FLAC archive" --activate --json
+python -m song_agent.cli verify-release path\to\release-export.zip --require-rights-clearance
+python -m song_agent.cli verify-distribution-package path\to\distribution-package.zip --require-rights-clearance
+python -m song_agent.cli verify-submission-package path\to\submission-package.zip --require-rights-clearance
 ```
 
 Arrangement Mix Controls add a local Mix Board for small, auditable corrections

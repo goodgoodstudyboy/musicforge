@@ -87,6 +87,12 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "Require encoded audio review" in html
     assert 'id="release-require-format-decision"' in html
     assert "Require format decision" in html
+    assert 'id="release-require-rights-clearance"' in html
+    assert "Require rights clearance" in html
+    assert "Rights Clearance" in html
+    assert "/rights/parties" in html
+    assert "/rights/refresh" in html
+    assert "/rights/tracks/${encodeURIComponent" in html
     assert "Format Decision Workbench" in html
     assert "/format-decisions" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
