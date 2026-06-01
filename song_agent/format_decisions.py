@@ -26,6 +26,7 @@ FORMAT_RECOMMENDATION_INTEGRITY_EXCLUDE = {"integrity_hash", "stale", "stale_rea
 FORMAT_REPORT_INTEGRITY_EXCLUDE = {"integrity_hash", "stale", "stale_reasons", "current_source_hash", "current"}
 SESSION_STATUSES = {"draft", "recommended", "selected", "signed", "archived", "stale"}
 PROFILE_ROLES = {"selected", "archive", "fallback", "rejected"}
+ARCHIVE_COMPATIBLE_DISTRIBUTION_PROFILES = {"internal_archive"}
 
 
 class FormatDecisionError(ValueError):
@@ -523,14 +524,20 @@ class FormatDecisionStore:
         rejected = set(report.get("decision", {}).get("rejected_profiles", []) if isinstance(report.get("decision"), dict) else [])
         rejected_required = sorted(set(profiles) & rejected)
         decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
-        covered = set(decision.get("selected_profiles", []) if isinstance(decision.get("selected_profiles"), list) else [])
-        covered |= set(decision.get("archive_profiles", []) if isinstance(decision.get("archive_profiles"), list) else [])
-        missing_required = sorted(set(profiles) - covered)
+        coverage = distribution_target_format_decision_coverage(target, profiles, decision)
+        missing_required = list(coverage["missing_profiles"])
+        role_incompatible = list(coverage["role_incompatible_profiles"])
         if rejected_required:
             gate = {**gate, "status": "failed", "hard_block": True, "message": "Format decision rejects a required distribution profile.", "rejected_required_profiles": rejected_required}
         if missing_required:
             gate = {**gate, "status": "failed", "hard_block": True, "message": "Format decision does not cover required distribution profiles.", "missing_profiles": missing_required}
+        if role_incompatible:
+            gate = {**gate, "status": "failed", "hard_block": True, "message": "Format decision role is not compatible with this distribution target.", "role_incompatible_profiles": role_incompatible}
         gate["required_profiles"] = profiles
+        gate["target_profile_id"] = target.profile_id
+        gate["allowed_format_decision_roles"] = coverage["allowed_roles"]
+        gate["covered_profiles"] = coverage["covered_profiles"]
+        gate["archive_allowed"] = coverage["archive_allowed"]
         return gate
 
     def export_release(self, release_id: str, export_dir: Path, *, session_id: str | None = None) -> dict[str, Any]:
@@ -558,20 +565,25 @@ class FormatDecisionStore:
         report = self.read_report(release_id, sid)
         required_profiles = [profile for profile in resolve_target_audio_format_profiles(target, self.distribution_store.resolve_target_template(target)) if profile != "wav_master"]
         decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
-        covered = sorted(set(required_profiles) & (set(decision.get("selected_profiles", [])) | set(decision.get("archive_profiles", []))))
-        missing = sorted(set(required_profiles) - set(covered))
+        coverage = distribution_target_format_decision_coverage(target, required_profiles, decision)
+        missing = list(coverage["missing_profiles"])
+        incompatible = list(coverage["role_incompatible_profiles"])
         summary = {
             "schema_version": 1,
             "target_id": target.target_id,
+            "target_profile_id": target.profile_id,
             "session_id": sid,
             "required_profiles": required_profiles,
-            "covered_profiles": covered,
+            "covered_profiles": coverage["covered_profiles"],
             "missing_profiles": missing,
+            "role_incompatible_profiles": incompatible,
+            "allowed_roles": coverage["allowed_roles"],
+            "archive_allowed": coverage["archive_allowed"],
             "selected_profiles": decision.get("selected_profiles", []),
             "archive_profiles": decision.get("archive_profiles", []),
             "rejected_profiles": decision.get("rejected_profiles", []),
             "report_hash": report.get("integrity_hash"),
-            "status": "failed" if missing else "passed",
+            "status": "failed" if missing or incompatible else "passed",
         }
         summary["integrity_hash"] = format_distribution_decision_summary_hash(summary)
         root = export_dir / "format-decision"
@@ -928,6 +940,35 @@ def format_distribution_decision_summary_integrity_ok(summary: dict[str, Any]) -
     return bool(expected) and expected == format_distribution_decision_summary_hash(summary)
 
 
+def distribution_target_format_decision_coverage(target: DistributionTarget | dict[str, Any], required_profiles: list[str], decision: dict[str, Any]) -> dict[str, Any]:
+    target_profile_id = _target_profile_id(target)
+    required = normalize_required_profiles(required_profiles)
+    selected = set(normalize_required_profiles(decision.get("selected_profiles", []) if isinstance(decision.get("selected_profiles"), list) else []))
+    archive = set(normalize_required_profiles(decision.get("archive_profiles", []) if isinstance(decision.get("archive_profiles"), list) else []))
+    archive_allowed = target_profile_id in ARCHIVE_COMPATIBLE_DISTRIBUTION_PROFILES
+    covered: list[str] = []
+    missing: list[str] = []
+    role_incompatible: list[str] = []
+    for profile_id in required:
+        if profile_id in selected:
+            covered.append(profile_id)
+        elif profile_id in archive:
+            if archive_allowed:
+                covered.append(profile_id)
+            else:
+                role_incompatible.append(profile_id)
+        else:
+            missing.append(profile_id)
+    return {
+        "target_profile_id": target_profile_id,
+        "allowed_roles": ["selected", "archive"] if archive_allowed else ["selected"],
+        "archive_allowed": archive_allowed,
+        "covered_profiles": sorted(covered),
+        "missing_profiles": sorted(missing),
+        "role_incompatible_profiles": sorted(role_incompatible),
+    }
+
+
 def _validate_session_id(value: str) -> str:
     text = str(value or "").strip()
     if not text.startswith("fds-") or not text[4:].isdigit():
@@ -947,6 +988,14 @@ def _decision_relevant_target_options(options: Any) -> dict[str, Any]:
         for key in ("audio_format_profiles", "primary_audio_format", "require_encoded_audio", "require_encoded_audio_review", "require_format_decision")
         if key in data
     }
+
+
+def _target_profile_id(target: DistributionTarget | dict[str, Any]) -> str:
+    if isinstance(target, DistributionTarget):
+        return str(target.profile_id or "")
+    if isinstance(target, dict):
+        return str(target.get("profile_id") or "")
+    return ""
 
 
 def format_decision_redaction_findings(payload: dict[str, Any]) -> list[dict[str, Any]]:

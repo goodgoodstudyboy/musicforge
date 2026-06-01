@@ -182,6 +182,7 @@ from song_agent.format_decisions import (
     FormatDecisionNotFoundError,
     FormatDecisionStateError,
     FormatDecisionStore,
+    distribution_target_format_decision_coverage,
 )
 from song_agent.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
 from song_agent.releases import (
@@ -6406,7 +6407,23 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         gate_required = set(format_decision_gate.get("required_profiles", []) if isinstance(format_decision_gate.get("required_profiles"), list) else [])
         covered = set(manifest_decision.get("covered_profiles", []) if isinstance(manifest_decision.get("covered_profiles"), list) else [])
         missing_profiles = sorted(gate_required - covered)
-        failed = bool(missing or mismatched or missing_profiles)
+        if isinstance(manifest_decision.get("missing_profiles"), list):
+            missing_profiles = sorted(set(missing_profiles) | {str(item) for item in manifest_decision.get("missing_profiles", []) if str(item).strip()})
+        role_incompatible = sorted({str(item) for item in manifest_decision.get("role_incompatible_profiles", []) if str(item).strip()}) if isinstance(manifest_decision.get("role_incompatible_profiles"), list) else []
+        target = export_manifest.get("target") if isinstance(export_manifest.get("target"), dict) else {}
+        coverage = distribution_target_format_decision_coverage(
+            target,
+            sorted(gate_required),
+            {
+                "selected_profiles": manifest_decision.get("selected_profiles", []),
+                "archive_profiles": manifest_decision.get("archive_profiles", []),
+            },
+        )
+        if sorted(covered) != list(coverage.get("covered_profiles", [])):
+            mismatched.append("covered_profiles")
+        role_incompatible = sorted(set(role_incompatible) | set(coverage.get("role_incompatible_profiles", [])))
+        missing_profiles = sorted(set(missing_profiles) | set(coverage.get("missing_profiles", [])))
+        failed = bool(missing or mismatched or missing_profiles or role_incompatible)
         return {
             "status": "failed" if failed else "passed",
             "hard_block": failed,
@@ -6414,6 +6431,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             "missing": missing,
             "mismatched_fields": sorted(set(mismatched)),
             "missing_profiles": missing_profiles,
+            "role_incompatible_profiles": role_incompatible,
         }
 
     def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, Any]:

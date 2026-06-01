@@ -28,7 +28,7 @@ from song_agent.encoded_audio_acceptance import (
     encoded_audio_review_integrity_hash,
     encoded_audio_review_integrity_ok,
 )
-from song_agent.format_decisions import format_distribution_decision_summary_integrity_ok
+from song_agent.format_decisions import distribution_target_format_decision_coverage, format_distribution_decision_summary_integrity_ok
 from song_agent.releases import stable_hash
 
 
@@ -676,6 +676,17 @@ class _DistributionPackageVerifier:
             rejected = set(self.format_decision_summary.get("rejected_profiles", []) if isinstance(self.format_decision_summary.get("rejected_profiles"), list) else [])
             failures.extend(f"{profile}:missing" for profile in sorted(required_profiles - covered))
             failures.extend(f"{profile}:rejected" for profile in sorted(required_profiles & rejected))
+            decision = {
+                "selected_profiles": self.format_decision_summary.get("selected_profiles", []),
+                "archive_profiles": self.format_decision_summary.get("archive_profiles", []),
+            }
+            coverage = distribution_target_format_decision_coverage(target, sorted(required_profiles), decision)
+            failures.extend(f"{profile}:role_incompatible" for profile in coverage.get("role_incompatible_profiles", []))
+            failures.extend(f"{profile}:missing_by_role" for profile in coverage.get("missing_profiles", []))
+            if sorted(covered) != list(coverage.get("covered_profiles", [])):
+                failures.append("covered_profiles_role_policy")
+            if self.format_decision_summary.get("allowed_roles") and list(self.format_decision_summary.get("allowed_roles") or []) != list(coverage.get("allowed_roles", [])):
+                failures.append("allowed_roles")
         signoff_decision = self.signoff.get("format_decision") if isinstance(self.signoff.get("format_decision"), dict) else {}
         if signoff_decision and str(signoff_decision.get("report_hash") or "") != str(manifest_decision.get("report_hash") or ""):
             failures.append("signoff_report_hash")

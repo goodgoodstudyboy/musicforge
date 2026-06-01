@@ -7797,6 +7797,46 @@ def _v57_release_format_decision_smoke(root: Path) -> tuple[bool, str]:
         acceptance_status, _acceptance = _release_http_json(server, "POST", f"/api/releases/{release_id}/encoded-audio/acceptance/refresh", {"profile_ids": ["mp3_320", "flac_lossless"]})
         session_status, session = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions", {"profiles": ["mp3_320", "flac_lossless", "aac_256"]})
         session_id = str(session.get("session", {}).get("session_id") or "")
+        pitch_status, pitch = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/distribution/targets",
+            {
+                "profile_id": "demo_pitch",
+                "name": "FLAC Pitch Target",
+                "options": {
+                    "require_release_signed": False,
+                    "require_release_zip_verified": False,
+                    "require_metadata_export": False,
+                    "require_artwork": False,
+                    "require_encoded_audio": True,
+                    "require_encoded_audio_review": True,
+                    "require_format_decision": True,
+                    "audio_format_profiles": ["flac_lossless"],
+                },
+            },
+        )
+        pitch_id = str(pitch.get("target", {}).get("target_id") or "")
+        archive_status, archive_target = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/distribution/targets",
+            {
+                "profile_id": "internal_archive",
+                "name": "FLAC Archive Target",
+                "options": {
+                    "require_release_signed": False,
+                    "require_release_zip_verified": False,
+                    "require_metadata_export": False,
+                    "require_artwork": False,
+                    "require_encoded_audio": True,
+                    "require_encoded_audio_review": True,
+                    "require_format_decision": True,
+                    "audio_format_profiles": ["flac_lossless"],
+                },
+            },
+        )
+        archive_id = str(archive_target.get("target", {}).get("target_id") or "")
         matrix_status, _matrix = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/matrix")
         recommendation_status, _recommendation = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/recommend")
         select_status, _selected = _release_http_json(server, "POST", f"/api/releases/{release_id}/format-decisions/{session_id}/select", {"selected_profiles": ["mp3_320"], "archive_profiles": ["flac_lossless"], "rejected_profiles": ["aac_256"], "reason": "v5.7 smoke chooses MP3 delivery and FLAC archive."})
@@ -7814,6 +7854,18 @@ def _v57_release_format_decision_smoke(root: Path) -> tuple[bool, str]:
             require_format_decision=True,
             required_audio_format_profiles=["mp3_320"],
         )
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/qa/refresh")
+        pitch_export_status, pitch_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/export")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/export/zip")
+        pitch_sign_status, _pitch_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/signoff", {"signed_by": "release-check", "require_encoded_audio_review": True, "require_format_decision": True})
+        pitch_package_id = str(pitch_export.get("manifest", {}).get("package_id") or "")
+        pitch_verify = verify_distribution_package(base / ".musicforge" / "releases" / release_id / "distribution" / "packages" / pitch_package_id / "distribution-package.zip", require_encoded_audio=True, require_encoded_audio_review=True, require_format_decision=True)
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/qa/refresh")
+        archive_export_status, archive_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/export")
+        _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/export/zip")
+        archive_sign_status, archive_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/signoff", {"signed_by": "release-check", "require_encoded_audio_review": True, "require_format_decision": True})
+        archive_package_id = str(archive_export.get("manifest", {}).get("package_id") or "")
+        archive_verify = verify_distribution_package(base / ".musicforge" / "releases" / release_id / "distribution" / "packages" / archive_package_id / "distribution-package.zip", require_encoded_audio=True, require_encoded_audio_review=True, require_format_decision=True)
         ok = (
             candidate_status == 201
             and encode_status == 201
@@ -7838,12 +7890,25 @@ def _v57_release_format_decision_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(release_verify, "format_decision_evidence") == "passed"
             and tampered.get("status") == "failed"
             and _v38_check_status(tampered, "format_decision_evidence") == "failed"
+            and pitch_status == 201
+            and pitch_export_status == 201
+            and pitch_export.get("manifest", {}).get("format_decision", {}).get("status") == "failed"
+            and pitch_sign_status == 409
+            and _v38_check_status(pitch_verify, "distribution_format_decision_evidence") == "failed"
+            and archive_status == 201
+            and archive_export_status == 201
+            and archive_export.get("manifest", {}).get("format_decision", {}).get("status") == "passed"
+            and archive_sign_status == 200
+            and archive_sign.get("signoff", {}).get("format_decision", {}).get("status") == "passed"
+            and _v38_check_status(archive_verify, "distribution_format_decision_evidence") == "passed"
         )
         return ok, (
             f"encode={encode_status}/{encoded.get('summary', {}).get('status')}, health={health_status}/{health.get('summary', {}).get('status')}, "
             f"decision={session_status}/{matrix_status}/{recommendation_status}/{select_status}/{report_status}/{active_status}, "
             f"export={export_status}/{zip_status}, rejected_sign={rejected_sign_status}, sign={sign_status}, "
-            f"verify={_v38_check_status(release_verify, 'format_decision_evidence')}, tampered={_v38_check_status(tampered, 'format_decision_evidence')}"
+            f"verify={_v38_check_status(release_verify, 'format_decision_evidence')}, tampered={_v38_check_status(tampered, 'format_decision_evidence')}, "
+            f"pitch_archive_only={pitch_sign_status}/{_v38_check_status(pitch_verify, 'distribution_format_decision_evidence')}, "
+            f"internal_archive={archive_sign_status}/{_v38_check_status(archive_verify, 'distribution_format_decision_evidence')}"
         )
     except Exception as exc:
         return False, str(exc)

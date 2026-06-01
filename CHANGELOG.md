@@ -1,5 +1,15 @@
 # Changelog
 
+## v5.7.1 - 2026-06-01
+
+### Fixed
+- Distribution Format Decision gates now enforce target role compatibility: delivery targets such as `demo_pitch` require selected profiles, while `internal_archive` may use archive profiles.
+- Distribution Export and `verify-distribution-package --require-format-decision` now recompute target role coverage instead of trusting selected-plus-archive coverage.
+- v5.7 release-check smoke now covers `demo_pitch` archive-only rejection and `internal_archive` archive-profile acceptance.
+
+### Verified
+- `python -m pytest tests\test_format_decisions.py tests\test_release_check.py::test_v57_release_format_decision_smoke -q`
+
 ## v5.7.0 - 2026-06-01
 
 ### Added

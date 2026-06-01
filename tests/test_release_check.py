@@ -128,6 +128,8 @@ def test_v57_release_format_decision_smoke(tmp_path: Path) -> None:
     assert ok is True, detail
     assert "verify=passed" in detail
     assert "tampered=failed" in detail
+    assert "pitch_archive_only=409/failed" in detail
+    assert "internal_archive=200/passed" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

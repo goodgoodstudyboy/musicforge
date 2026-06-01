@@ -157,6 +157,82 @@ def test_format_decision_distribution_target_gate_and_verifier(tmp_path, monkeyp
     assert "format decision" in bad_sign["error"].lower()
 
 
+def test_distribution_format_decision_role_policy(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id = _prepared_release(server, profiles=["mp3_320", "flac_lossless"])
+        _export_metadata(server, release_id)
+        pitch_status, pitch = request_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/distribution/targets",
+            {
+                "profile_id": "demo_pitch",
+                "name": "Pitch FLAC",
+                "options": {
+                    "require_release_signed": False,
+                    "require_release_zip_verified": False,
+                    "require_metadata_export": False,
+                    "require_artwork": False,
+                    "require_encoded_audio": True,
+                    "require_encoded_audio_review": True,
+                    "require_format_decision": True,
+                    "audio_format_profiles": ["flac_lossless"],
+                },
+            },
+        )
+        pitch_id = pitch["target"]["target_id"]
+        archive_status, archive_target = request_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/distribution/targets",
+            {
+                "profile_id": "internal_archive",
+                "name": "Archive FLAC",
+                "options": {
+                    "require_release_signed": False,
+                    "require_release_zip_verified": False,
+                    "require_metadata_export": False,
+                    "require_artwork": False,
+                    "require_encoded_audio": True,
+                    "require_encoded_audio_review": True,
+                    "require_format_decision": True,
+                    "audio_format_profiles": ["flac_lossless"],
+                },
+            },
+        )
+        archive_id = archive_target["target"]["target_id"]
+        _activate_decision(server, release_id, selected=["mp3_320"], archive=["flac_lossless"], rejected=[])
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/qa/refresh")
+        pitch_export_status, pitch_export = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/export/zip")
+        pitch_sign_status, pitch_sign = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{pitch_id}/signoff", {"signed_by": "tester", "require_encoded_audio_review": True, "require_format_decision": True})
+        pitch_verify = verify_distribution_package(server.distribution_store.package_zip_path(release_id, pitch_export["manifest"]["package_id"]), require_encoded_audio=True, require_encoded_audio_review=True, require_format_decision=True)
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/qa/refresh")
+        archive_export_status, archive_export = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/export/zip")
+        archive_sign_status, archive_sign = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{archive_id}/signoff", {"signed_by": "tester", "require_encoded_audio_review": True, "require_format_decision": True})
+        archive_verify = verify_distribution_package(server.distribution_store.package_zip_path(release_id, archive_export["manifest"]["package_id"]), require_encoded_audio=True, require_encoded_audio_review=True, require_format_decision=True)
+    finally:
+        stop_test_server(server)
+
+    assert pitch_status == 201
+    assert pitch_export_status == 201
+    assert pitch_export["manifest"]["format_decision"]["status"] == "failed"
+    assert pitch_export["manifest"]["format_decision"]["role_incompatible_profiles"] == ["flac_lossless"]
+    assert pitch_sign_status == 409
+    assert "format decision" in pitch_sign["error"].lower()
+    assert _verify_check(pitch_verify, "distribution_format_decision_evidence")["status"] == "failed"
+    assert archive_status == 201
+    assert archive_export_status == 201
+    assert archive_export["manifest"]["format_decision"]["status"] == "passed"
+    assert archive_export["manifest"]["format_decision"]["covered_profiles"] == ["flac_lossless"]
+    assert archive_sign_status == 200
+    assert archive_sign["signoff"]["format_decision"]["status"] == "passed"
+    assert _verify_check(archive_verify, "distribution_format_decision_evidence")["status"] == "passed"
+
+
 def _prepared_release(server, *, profiles: list[str]) -> str:
     project_id = _signed_project(server, "Format Decision Track")
     _add_final_export_audio(server, project_id, duration_seconds=30)
