@@ -274,6 +274,19 @@ from song_agent.submission_verifier import (
     verify_submission_package,
     write_submission_verification_report,
 )
+from song_agent.submission_evidence import (
+    SubmissionEvidenceNotFoundError,
+    SubmissionEvidenceStateError,
+    SubmissionEvidenceStore,
+    SubmissionEvidenceValidationError,
+    submission_evidence_report_summary,
+    submission_evidence_signoff_summary,
+)
+from song_agent.submission_evidence_verifier import (
+    submission_evidence_verification_summary,
+    verify_submission_evidence_package,
+    write_submission_evidence_verification_report,
+)
 from song_agent.acceptance_analytics import (
     AcceptanceAnalyticsError,
     AcceptanceAnalyticsNotFoundError,
@@ -2542,6 +2555,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def submission_store(self) -> SubmissionStore:
         return self.server.submission_store  # type: ignore[attr-defined]
+
+    @property
+    def submission_evidence_store(self) -> SubmissionEvidenceStore:
+        return self.server.submission_evidence_store  # type: ignore[attr-defined]
 
     @property
     def acceptance_store(self) -> AcceptanceStore:
@@ -7540,7 +7557,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if tail in {"", "/"}:
                 if method == "GET":
                     batches = self.submission_store.list_submissions(release_id)
-                    self._send_json({"ok": True, "release_id": release_id, "submissions": [batch.to_dict() for batch in batches], "summary": self.submission_store.summary(release_id)})
+                    self._send_json({"ok": True, "release_id": release_id, "submissions": [self._submission_payload_with_evidence_summary(release_id, batch) for batch in batches], "summary": self.submission_store.summary(release_id)})
                     return
                 if method == "POST":
                     batch = self.submission_store.create_submission(release_id, self._optional_json_body())
@@ -7552,7 +7569,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if tail == "/batches" or tail == "":
                 if method == "GET":
                     batches = self.submission_store.list_submissions(release_id)
-                    self._send_json({"ok": True, "release_id": release_id, "submissions": [batch.to_dict() for batch in batches], "summary": self.submission_store.summary(release_id)})
+                    self._send_json({"ok": True, "release_id": release_id, "submissions": [self._submission_payload_with_evidence_summary(release_id, batch) for batch in batches], "summary": self.submission_store.summary(release_id)})
                     return
                 if method == "POST":
                     batch = self.submission_store.create_submission(release_id, self._optional_json_body())
@@ -7571,7 +7588,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method == "GET":
                     signoff = self.submission_store.read_signoff(release_id, submission_id, default={})
                     qa = self._get_or_refresh_submission_qa(release_id, batch, refresh=False)
-                    self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch), "qa_summary": submission_qa_summary(qa), "signoff_summary": submission_signoff_summary(signoff), "events": self.submission_store.read_events(release_id, submission_id)})
+                    self._send_json({"ok": True, "release_id": release_id, "submission": self._submission_payload_with_evidence_summary(release_id, batch), "summary": submission_batch_summary(batch), "qa_summary": submission_qa_summary(qa), "signoff_summary": submission_signoff_summary(signoff), "events": self.submission_store.read_events(release_id, submission_id)})
                     return
                 if method in {"POST", "PATCH"}:
                     batch = self.submission_store.update_submission(release_id, submission_id, self._optional_json_body())
@@ -7730,28 +7747,154 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "verification": report, "summary": submission_verification_summary(report)})
                 return
 
+            if action == "evidence":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                overview = self.submission_evidence_store.overview(release_id, submission_id)
+                self._send_json({"ok": True, **overview})
+                return
+
+            if action == "evidence-report-refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.submission_evidence_store.refresh_report(release_id, submission_id)
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "evidence_report": report, "summary": submission_evidence_report_summary(report)})
+                return
+
+            if action == "evidence-export":
+                if method == "GET":
+                    try:
+                        manifest = self.submission_evidence_store.read_export_manifest(release_id, submission_id)
+                    except SubmissionEvidenceNotFoundError:
+                        self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "manifest": {}, "summary": {"status": "missing"}})
+                        return
+                    self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "manifest": manifest, "summary": manifest.get("summary", {})})
+                    return
+                if method == "POST":
+                    manifest = self.submission_evidence_store.export_evidence(release_id, submission_id, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if action == "evidence-export-zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.submission_evidence_store.build_zip(release_id, submission_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "zip": zip_info})
+                return
+
+            if action == "evidence-export-zip-download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.submission_evidence_store.package_zip_path(release_id, submission_id), "application/zip", filename=f"musicforge-{release_id}-{submission_id}-submission-evidence.zip")
+                return
+
+            if action == "evidence-signoff":
+                if method == "GET":
+                    signoff = self.submission_evidence_store.read_signoff(release_id, submission_id, default={})
+                    self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "signoff": signoff, "summary": submission_evidence_signoff_summary(signoff)})
+                    return
+                if method == "POST":
+                    signoff = self.submission_evidence_store.signoff_evidence(release_id, submission_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "signoff": signoff, "summary": submission_evidence_signoff_summary(signoff)})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+
+            if action == "evidence-signoff-reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                reason = str(payload.get("reason") or "").strip()
+                event = self.submission_evidence_store.reset_signoff(release_id, submission_id, reason)
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "summary": {"status": "reset"}, "history_event": event})
+                return
+
+            if action == "evidence-verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_submission_evidence_package(
+                    self.submission_evidence_store.package_zip_path(release_id, submission_id),
+                    strict=bool(payload.get("strict", False)),
+                    deep=bool(payload.get("deep", False)),
+                    require_submitted=bool(payload.get("require_submitted", False)),
+                    require_accepted=bool(payload.get("require_accepted", False)),
+                    require_rights_clearance=bool(payload.get("require_rights_clearance", False)),
+                )
+                write_submission_evidence_verification_report(report, self.submission_store.submission_dir(release_id, submission_id) / "submission-evidence-verification-report.json")
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "verification": report, "summary": submission_evidence_verification_summary(report)})
+                return
+
+            if action == "evidence-upload-attachment":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                attachment = self.submission_evidence_store.upload_attachment(release_id, submission_id, item_id or "", self._read_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "item_id": item_id, "attachment": attachment}, status=HTTPStatus.CREATED)
+                return
+
+            if action == "evidence-submission-receipt":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch, evidence = self.submission_evidence_store.record_submission(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "evidence": evidence, "summary": submission_batch_summary(batch)}, status=HTTPStatus.CREATED)
+                return
+
+            if action == "evidence-feedback":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch, evidence = self.submission_evidence_store.record_feedback(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "evidence": evidence, "summary": submission_batch_summary(batch)}, status=HTTPStatus.CREATED)
+                return
+
+            if action == "evidence-acceptance":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                batch, evidence = self.submission_evidence_store.mark_accepted(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "evidence": evidence, "summary": submission_batch_summary(batch)}, status=HTTPStatus.CREATED)
+                return
+
+            if action == "evidence-resubmission-round":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                round_record = self.submission_evidence_store.create_resubmission_round(release_id, submission_id, item_id or "", self._read_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission_id": submission_id, "item_id": item_id, "round": round_record}, status=HTTPStatus.CREATED)
+                return
+
             if action == "record-submission":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                batch = self.submission_store.record_submission(release_id, submission_id, item_id or "", self._optional_json_body())
-                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                batch, evidence = self.submission_evidence_store.record_submission(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "evidence": evidence, "summary": submission_batch_summary(batch)})
                 return
 
             if action == "record-feedback":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                batch = self.submission_store.record_feedback(release_id, submission_id, item_id or "", self._optional_json_body())
-                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                batch, evidence = self.submission_evidence_store.record_feedback(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "evidence": evidence, "summary": submission_batch_summary(batch)})
                 return
 
             if action == "mark-accepted":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                batch = self.submission_store.mark_accepted(release_id, submission_id, item_id or "", self._optional_json_body())
-                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "summary": submission_batch_summary(batch)})
+                batch, evidence = self.submission_evidence_store.mark_accepted(release_id, submission_id, item_id or "", self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "submission": batch.to_dict(), "evidence": evidence, "summary": submission_batch_summary(batch)})
                 return
 
             if action == "archive":
@@ -7763,11 +7906,11 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
 
             self._send_error(HTTPStatus.NOT_FOUND, "Submission route not found.")
-        except (ReleaseNotFoundError, SubmissionNotFoundError, FileNotFoundError) as exc:
+        except (ReleaseNotFoundError, SubmissionNotFoundError, SubmissionEvidenceNotFoundError, FileNotFoundError) as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except (SubmissionStateError, SubmissionExportError, ReleaseStateError) as exc:
+        except (SubmissionStateError, SubmissionEvidenceStateError, SubmissionExportError, ReleaseStateError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except (SubmissionValidationError, ValueError) as exc:
+        except (SubmissionValidationError, SubmissionEvidenceValidationError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_acceptance_route(self, method: str, suite_id: str, tail: str) -> None:
@@ -8856,6 +8999,23 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         report = self.submission_store.write_qa(release_id, batch.submission_id, report)
         self.submission_store.update_qa_summary(release_id, batch.submission_id, submission_qa_summary(report))
         return report
+
+    def _submission_payload_with_evidence_summary(self, release_id: str, batch: Any) -> dict[str, Any]:
+        payload = batch.to_dict()
+        try:
+            overview = self.submission_evidence_store.overview(release_id, batch.submission_id)
+            summary = overview.get("summary") if isinstance(overview.get("summary"), dict) else {}
+            report_summary = overview.get("report_summary") if isinstance(overview.get("report_summary"), dict) else {}
+            signoff_summary = overview.get("signoff_summary") if isinstance(overview.get("signoff_summary"), dict) else {}
+            payload["latest_evidence_summary"] = {
+                **summary,
+                "status": report_summary.get("status") or summary.get("status") or "not_started",
+                "signoff_status": signoff_summary.get("status") or summary.get("signoff_status") or "not_signed",
+                "report_hash": report_summary.get("integrity_hash"),
+            }
+        except Exception:
+            payload["latest_evidence_summary"] = {"status": "not_started", "signoff_status": "not_signed"}
+        return payload
 
     def _build_distribution_layout(self, release_id: str, target: Any) -> dict[str, Any]:
         release = self.release_store.get_release(release_id)
@@ -13501,6 +13661,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_revision_store = AudioRevisionStore(self.release_store, project_store=self.project_store, job_store=self.job_store, audio_review_store=self.audio_review_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
+        self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)
         self.acceptance_store = AcceptanceStore(project_store=self.project_store)
         self.human_review_pack_store = HumanReviewPackStore(self.acceptance_store, project_store=self.project_store)
         self.acceptance_analytics_store = AcceptanceAnalyticsStore(acceptance_store=self.acceptance_store, project_store=self.project_store, release_store=self.release_store)
@@ -14250,8 +14411,37 @@ def _match_submission_tail(tail: str) -> tuple[str, str, str | None] | None:
         return submission_id, "signoff-reset", None
     if rest == ["verify"]:
         return submission_id, "verify", None
+    if rest == ["evidence"]:
+        return submission_id, "evidence", None
+    if rest == ["evidence", "report", "refresh"]:
+        return submission_id, "evidence-report-refresh", None
+    if rest == ["evidence", "export"]:
+        return submission_id, "evidence-export", None
+    if rest == ["evidence", "export", "zip"]:
+        return submission_id, "evidence-export-zip", None
+    if rest == ["evidence", "export.zip"]:
+        return submission_id, "evidence-export-zip-download", None
+    if rest == ["evidence", "signoff"]:
+        return submission_id, "evidence-signoff", None
+    if rest == ["evidence", "signoff", "reset"]:
+        return submission_id, "evidence-signoff-reset", None
+    if rest == ["evidence", "verify"]:
+        return submission_id, "evidence-verify", None
     if rest == ["archive"]:
         return submission_id, "archive", None
+    if len(rest) == 4 and rest[0] == "items" and rest[2] == "evidence":
+        item_id = rest[1]
+        action = rest[3]
+        if action == "attachments":
+            return submission_id, "evidence-upload-attachment", item_id
+        if action == "submission-receipt":
+            return submission_id, "evidence-submission-receipt", item_id
+        if action == "feedback":
+            return submission_id, "evidence-feedback", item_id
+        if action == "acceptance":
+            return submission_id, "evidence-acceptance", item_id
+        if action == "resubmission-round":
+            return submission_id, "evidence-resubmission-round", item_id
     if len(rest) == 3 and rest[0] == "items":
         item_id = rest[1]
         action = rest[2]

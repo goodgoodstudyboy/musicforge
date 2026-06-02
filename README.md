@@ -411,8 +411,21 @@ item state: pending or stale items cannot be marked submitted or accepted. This
 is local tracking only; it does not upload to platforms or store platform
 credentials.
 
+Submission Evidence Archive records what happens after a signed Submission
+Package leaves MusicForge: platform submission receipts, feedback, needs-change
+notices, acceptance confirmations, resubmission rounds, and uploaded evidence
+attachments. Legacy submitted/feedback/accepted APIs now create evidence records
+automatically. Evidence attachments accept uploaded base64 content only and
+reject `source_path`, `local_path`, or `file_path`. Evidence Export/ZIP and
+Evidence Signoff are independent from the original signed Submission Package, so
+post-submission evidence can be audited without rebuilding the submitted package.
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
+```
+
+```powershell
+python -m song_agent.cli verify-submission-evidence-package path\to\submission-evidence-package.zip --json --deep --require-accepted --report-out submission-evidence-verification-report.json
 ```
 
 ```powershell

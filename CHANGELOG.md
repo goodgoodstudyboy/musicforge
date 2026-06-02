@@ -1,5 +1,22 @@
 # Changelog
 
+## v5.9.0 - 2026-06-02
+
+### Added
+- Submission Evidence Archive for signed Submission Packages, including platform receipt, feedback, needs-changes, acceptance, rejection, round, attachment, report, export, ZIP, and signoff evidence.
+- Existing Submission external status APIs now create evidence records behind `record-submission`, `record-feedback`, and `accepted` while preserving the old API shape.
+- Submission Evidence API routes under `/api/releases/<release>/submissions/<submission>/evidence`, including attachment upload, report refresh, export/ZIP, verifier, signoff, and reset.
+- Offline `verify-submission-evidence-package` CLI with ZIP path safety, duplicate entry detection, manifest hash checks, signoff sidecar checks, evidence/report/attachment integrity checks, nested Submission Package deep verification, and redaction scanning.
+- Studio Submission Evidence controls for report refresh, evidence export/ZIP/verify/sign/reset.
+- v5.9 release-check smoke covering upload-only attachment safety, automatic evidence from legacy status endpoints, evidence signoff immutability, external verifier, and signoff/report/duplicate ZIP tamper guards.
+
+### Security
+- Evidence attachments reject `source_path`, `local_path`, `file_path`, unsafe filenames, unsupported content types, oversized uploads, and text attachments containing sensitive values.
+- Evidence records bind signed Submission Package source snapshots, distribution package hashes, submission signoff hashes, item snapshot hashes, and attachment hashes.
+
+### Verified
+- `python -m pytest tests\test_submission_evidence.py tests\test_server_submission_evidence.py tests\test_cli_verify_submission_evidence.py tests\test_release_check.py::test_v59_submission_evidence_archive_smoke -q`
+
 ## v5.8.1 - 2026-06-02
 
 ### Fixed

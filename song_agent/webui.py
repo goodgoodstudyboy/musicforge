@@ -5054,6 +5054,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const rows = submissions.map((submission) => {
         const signoff = submission.latest_signoff_summary || {};
         const exportSummary = submission.latest_export_summary || {};
+        const evidenceSummary = submission.latest_evidence_summary || {};
         return `
           <tr>
             <td>${escapeHtml(submission.submission_id)}</td>
@@ -5061,6 +5062,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <td>${escapeHtml(submission.status || "")}</td>
             <td>${escapeHtml((submission.items || []).length)}</td>
             <td>${escapeHtml(signoff.status || "not_signed")}</td>
+            <td>${escapeHtml(evidenceSummary.status || "not_started")} / ${escapeHtml(evidenceSummary.signoff_status || "not_signed")}</td>
             <td>
               <button class="secondary submission-refresh" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Refresh</button>
               <button class="secondary submission-qa" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">QA</button>
@@ -5068,6 +5070,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               <button class="secondary submission-zip" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">ZIP</button>
               <button class="secondary submission-verify" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Verify</button>
               <button class="secondary submission-sign" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Sign</button>
+              <button class="secondary submission-evidence-report" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Evidence Report</button>
+              <button class="secondary submission-evidence-export" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Evidence Export</button>
+              <button class="secondary submission-evidence-zip" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Evidence ZIP</button>
+              <button class="secondary submission-evidence-verify" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Evidence Verify</button>
+              <button class="secondary submission-evidence-sign" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Evidence Sign</button>
+              <button class="secondary submission-evidence-reset" data-submission-id="${escapeHtml(submission.submission_id)}" type="button">Reset Evidence</button>
               ${exportSummary.zip_filename ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(submission.submission_id)}/export.zip">Download</a>` : ""}
             </td>
           </tr>
@@ -5093,9 +5101,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             <button class="secondary" id="submission-record-feedback" type="button">Record Feedback</button>
             <button class="secondary" id="submission-mark-accepted" type="button">Mark Accepted</button>
           </div>
+          <div id="submission-evidence" class="inline-note">Submission Evidence · upload-only attachments · no source_path</div>
           <table>
-            <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Items</th><th>Signoff</th><th>Actions</th></tr></thead>
-            <tbody>${rows || "<tr><td colspan='6'>No submission batches yet.</td></tr>"}</tbody>
+            <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Items</th><th>Signoff</th><th>Evidence</th><th>Actions</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='7'>No submission batches yet.</td></tr>"}</tbody>
           </table>
         </div>
       `;
@@ -5160,6 +5169,42 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ signed_by: "local-user" }),
+        });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-evidence-report").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/evidence/report/refresh`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-evidence-export").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/evidence/export`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-evidence-zip").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/evidence/export/zip`, { method: "POST" });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-evidence-verify").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/evidence/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deep: true, require_submitted: true }),
+        });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-evidence-sign").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/evidence/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signed_by: "local-user", require_submitted: true }),
+        });
+        await loadReleases();
+      }));
+      document.querySelectorAll(".submission-evidence-reset").forEach((button) => button.addEventListener("click", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions/${encodeURIComponent(button.dataset.submissionId)}/evidence/signoff/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "New submission evidence" }),
         });
         await loadReleases();
       }));

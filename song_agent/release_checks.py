@@ -62,6 +62,7 @@ from song_agent.audio_revision import CANDIDATE_INTEGRITY_EXCLUDE, _object_hash 
 from song_agent.audio_artifacts import build_audio_artifact_manifest, write_audio_artifact_manifest
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.submission_verifier import verify_submission_package
+from song_agent.submission_evidence_verifier import verify_submission_evidence_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -231,6 +232,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.6 encoded audio acceptance smoke", *_v56_encoded_audio_acceptance_smoke(root))
     report.add("v5.7 release format decision smoke", *_v57_release_format_decision_smoke(root))
     report.add("v5.8 rights clearance smoke", *_v58_rights_clearance_smoke(root))
+    report.add("v5.9 submission evidence archive smoke", *_v59_submission_evidence_archive_smoke(root))
     return report
 
 
@@ -8101,6 +8103,157 @@ def _v58_tamper_rights_report(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload["manual_cleared_track_count"] = 999
     payload["warnings"] = []
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v59_submission_evidence_archive_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v59-submission-evidence-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "v5.9 Evidence Track")
+        _status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.9 Evidence Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        _add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "Evidence Track"})
+        _init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized.get("metadata", {})
+        if isinstance(metadata.get("release"), dict):
+            metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+            metadata["tracks"][0].update({"title": "Evidence Track", "isrc": "USABC2600590", "lyrics": "Evidence lyric", "credits": [{"role": "composer", "name": "Evidence Writer"}], "confirmed": True})
+        _save_status, _saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        _metadata_qa_status, _metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        _qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        _export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        _metadata_export_status, _metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        _sign_status, _signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+
+        target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Evidence DSP Target"})
+        target_id = target.get("target", {}).get("target_id")
+        artwork_status, artwork = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")})
+        artwork_id = artwork.get("artwork", {}).get("artwork_id")
+        _update_status, _updated = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork_id}})
+        _dist_qa_status, _dist_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        _dist_export_status, _dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        _dist_zip_status, _dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, _dist_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        if dist_sign_status != 200:
+            return False, f"distribution signoff failed: target={target_status}, artwork={artwork_status}, qa={_dist_qa_status}, export={_dist_export_status}, zip={_dist_zip_status}, sign={dist_sign_status}:{_dist_sign.get('error')}"
+
+        sub_status, sub = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions", {"name": "Evidence Submission", "target_ids": [target_id]})
+        submission_id = sub.get("submission", {}).get("submission_id")
+        item_id = (sub.get("submission", {}).get("items") or [{}])[0].get("item_id")
+        _sub_qa_status, _sub_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/qa/refresh")
+        _sub_export_status, _sub_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
+        _sub_zip_status, _sub_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export/zip")
+        sub_sign_status, _sub_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/signoff", {"signed_by": "release-check"})
+        if sub_sign_status != 200:
+            return False, f"submission signoff failed: qa={_sub_qa_status}, export={_sub_export_status}, zip={_sub_zip_status}, sign={sub_sign_status}:{_sub_sign.get('error')}"
+
+        source_path_status, source_path = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/evidence/attachments", {"filename": "receipt.txt", "content_type": "text/plain", "source_path": "C:\\Users\\demo\\receipt.txt"})
+        attachment_status, attachment = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/evidence/attachments", {"filename": "receipt.txt", "content_type": "text/plain", "content_base64": base64.b64encode(b"receipt ok").decode("ascii")})
+        attachment_id = attachment.get("attachment", {}).get("attachment_id")
+        submitted_status, submitted = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-submission", {"external_reference": "DSP-EV-1", "attachment_ids": [attachment_id], "message": "Submitted"})
+        feedback_status, feedback = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-feedback", {"status": "needs_changes", "message": "Metadata note"})
+        accepted_status, accepted = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/accepted", {"external_reference": "DSP-EV-1"})
+        report_status, report = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/report/refresh")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/export")
+        zip_status, zip_info = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/export/zip")
+        signoff_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/signoff", {"signed_by": "release-check", "require_submitted": True, "require_accepted": True})
+        verify_status, verified = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/verify", {"deep": True, "require_submitted": True, "require_accepted": True})
+        blocked_status, blocked = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-feedback", {"status": "needs_changes", "message": "late"})
+        zip_download_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/export.zip")
+        if zip_download_status != 200 or not zip_bytes.startswith(b"PK"):
+            return False, (
+                f"evidence zip download failed: download={zip_download_status}, "
+                f"report={report_status}/{report.get('summary', {}).get('status')}:{report.get('error')}, export={export_status}:{export.get('error')}, zip={zip_status}:{zip_info.get('error')}, "
+                f"signoff={signoff_status}/{signoff.get('summary', {}).get('status')}:{signoff.get('error')}, verify={verify_status}/{verified.get('summary', {}).get('status')}:{verified.get('error')}, "
+                f"body={zip_bytes[:120]!r}"
+            )
+        zip_path = base / "submission-evidence-package.zip"
+        zip_path.write_bytes(zip_bytes)
+        external_dir = base / "external-clean"
+        external_dir.mkdir()
+        external_zip = external_dir / "submission-evidence-package.zip"
+        shutil.copy2(zip_path, external_zip)
+        old_external_cwd = Path.cwd()
+        os.chdir(external_dir)
+        external_report = verify_submission_evidence_package(external_zip, deep=True, require_submitted=True, require_accepted=True)
+        os.chdir(old_external_cwd)
+        tampered_signoff = verify_submission_evidence_package(_v38_rewrite_zip(zip_path, base / "tampered-v59-signoff.zip", transforms={"submission-evidence-signoff.json": _v59_tamper_evidence_signoff}))
+        tampered_report = verify_submission_evidence_package(_v38_rewrite_zip(zip_path, base / "tampered-v59-report.zip", transforms={"submission-evidence-report.json": _v59_tamper_evidence_report}))
+        duplicate_report = verify_submission_evidence_package(_v43_duplicate_submission_zip(zip_path, base / "duplicate-v59.zip"))
+        serialized = json.dumps({"submitted": submitted, "feedback": feedback, "accepted": accepted, "verified": verified}, ensure_ascii=False)
+        ok = (
+            target_status == 201
+            and artwork_status == 201
+            and dist_sign_status == 200
+            and sub_status == 201
+            and sub_sign_status == 200
+            and source_path_status == 400
+            and "source_path" in source_path.get("error", "")
+            and attachment_status == 201
+            and submitted_status == 200
+            and submitted.get("evidence", {}).get("evidence_type") == "submission_receipt"
+            and feedback_status == 200
+            and feedback.get("evidence", {}).get("evidence_type") == "needs_changes_notice"
+            and accepted_status == 200
+            and accepted.get("evidence", {}).get("evidence_type") == "acceptance_confirmation"
+            and report_status == 200
+            and report.get("summary", {}).get("status") == "passed"
+            and export_status == 201
+            and export.get("summary", {}).get("accepted_count") == 1
+            and zip_status == 200
+            and zip_info.get("zip", {}).get("sha256")
+            and signoff_status == 200
+            and signoff.get("summary", {}).get("status") == "signed"
+            and verify_status == 200
+            and verified.get("summary", {}).get("status") == "passed"
+            and blocked_status == 409
+            and "signed" in blocked.get("error", "").lower()
+            and zip_download_status == 200
+            and zip_bytes.startswith(b"PK")
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tampered_signoff, "submission_evidence_signoff_sidecar_payload_hash") == "failed"
+            and _v38_check_status(tampered_report, "submission_evidence_report_hash") == "failed"
+            and _v38_check_status(duplicate_report, "zip_duplicate_entries") == "failed"
+            and "C:\\Users" not in serialized
+            and "api_key" not in serialized
+        )
+        return ok, (
+            f"submission={submission_id}, evidence_sign={signoff.get('summary', {}).get('status')}, "
+            f"verify={verified.get('summary', {}).get('status')}, external={external_report.get('status')}, "
+            f"source_path={source_path_status}, blocked_after_sign={blocked_status}, "
+            f"signoff_tamper={_v38_check_status(tampered_signoff, 'submission_evidence_signoff_sidecar_payload_hash')}, "
+            f"report_tamper={_v38_check_status(tampered_report, 'submission_evidence_report_hash')}, duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v59_tamper_evidence_signoff(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["signed_by"] = "tampered-reviewer"
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v59_tamper_evidence_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["summary"]["accepted_count"] = 99
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
