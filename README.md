@@ -318,7 +318,11 @@ declarations, and manual clearance reviews, then builds a signed
 `rights/report.json` with source and integrity hashes. Release Signoff can require
 `require_rights_clearance=true`; incomplete contributor splits, uncleared
 sources, stale reports, tampered evidence, synthetic review modes, metadata credit
-mismatches, or redaction findings block signoff. Release Export writes
+mismatches, or redaction findings block signoff. Rights reports also aggregate
+required source provenance from Project versions, Final Export, job artifacts,
+asset/reference refs, context packs, editor clips/templates, and provider
+summaries, so original-only declarations do not cover external references or
+assets. Release Export writes
 `rights/summary.json`, `rights/report.json`, and per-track rights records.
 Distribution and Submission packages carry rights summaries, and offline
 verifiers support `--require-rights-clearance`.

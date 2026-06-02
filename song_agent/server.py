@@ -13519,7 +13519,12 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_encoding_store = AudioEncodingStore(self.release_store, project_store=self.project_store, profile_store=self.audio_encoding_profile_store)
         self.encoded_audio_acceptance_store = EncodedAudioAcceptanceStore(self.release_store, project_store=self.project_store, audio_encoding_store=self.audio_encoding_store)
         self.format_decision_store = FormatDecisionStore(self.release_store, project_store=self.project_store, encoding_store=self.audio_encoding_store, distribution_store=self.distribution_store)
-        self.rights_clearance_store = RightsClearanceStore(self.release_store)
+        self.rights_clearance_store = RightsClearanceStore(
+            self.release_store,
+            asset_store=self.asset_store,
+            reference_store=self.reference_store,
+            context_pack_store=self.context_pack_store,
+        )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()

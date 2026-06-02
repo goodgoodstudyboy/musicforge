@@ -7942,6 +7942,36 @@ def _v58_rights_clearance_smoke(root: Path) -> tuple[bool, str]:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         project_id = _v37_signed_project(server, "v5.8 Rights Track")
+        reference = server.reference_store.import_reference(
+            {
+                "reference_type": "style_note",
+                "filename": "rights-reference.md",
+                "title": "Rights Reference",
+                "content_base64": base64.b64encode(b"Rights reference style note.").decode("ascii"),
+            }
+        )[0]
+        document = server.project_store.get_project(project_id)
+        version = document.versions[-1]
+        write_json(
+            Path(version.output_dir) / "data" / "reference-refs.json",
+            {
+                "schema_version": 1,
+                "reference_refs": [
+                    {
+                        "reference_id": reference.reference_id,
+                        "reference_type": reference.reference_type,
+                        "title": reference.title,
+                        "role": "style",
+                        "strength": 0.7,
+                        "sha256": reference.sha256,
+                        "metadata_summary": {"license_note": "manual clearance required"},
+                    }
+                ],
+            },
+        )
+        server.reference_store.mark_used([{"reference_id": reference.reference_id, "role": "style", "strength": 0.7}], {"usage_type": "release_check_rights", "project_id": project_id})
+        _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_stems": False, "include_stem_audio": False})
+        _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export/zip")
         _v50_add_project_audio(server, project_id, duration_seconds=30)
         _status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v5.8 Rights Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
         release_id = str(release.get("release", {}).get("release_id") or "")
@@ -7964,6 +7994,19 @@ def _v58_rights_clearance_smoke(root: Path) -> tuple[bool, str]:
             },
         )
         review_status, _review = _release_http_json(server, "POST", f"/api/releases/{release_id}/rights/tracks/track-000001/review", {"status": "accepted", "review_mode": "manual", "confirmed_by": "release-check", "attestation": "Original work clearance confirmed."})
+        missing_reference_status, missing_reference_report = _release_http_json(server, "POST", f"/api/releases/{release_id}/rights/refresh")
+        missing_reference_sign_status, _missing_reference_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check", "require_rights_clearance": True})
+        track_status, _track = _release_http_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/rights/tracks/track-000001/sources",
+            {
+                "source_usages": [
+                    {"source_id": "original-1", "name": "Original composition", "source_type": "original", "status": "original", "risk_level": "low"},
+                    {"source_id": reference.reference_id, "name": reference.title, "source_type": "reference", "status": "cleared", "risk_level": "medium", "license_ref": "release-check-manual-clearance"},
+                ]
+            },
+        )
         report_status, rights_report = _release_http_json(server, "POST", f"/api/releases/{release_id}/rights/refresh")
         export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
         zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
@@ -8010,6 +8053,9 @@ def _v58_rights_clearance_smoke(root: Path) -> tuple[bool, str]:
             and party_status == 201
             and track_status == 200
             and review_status == 200
+            and missing_reference_status == 200
+            and missing_reference_report.get("report", {}).get("status") == "failed"
+            and missing_reference_sign_status == 409
             and report_status == 200
             and rights_report.get("report", {}).get("status") == "passed"
             and export_status == 200
@@ -8033,7 +8079,8 @@ def _v58_rights_clearance_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(sub_verify, "submission_rights_clearance_evidence") == "passed"
         )
         return ok, (
-            f"missing={missing_status}, rights={party_status}/{track_status}/{review_status}/{report_status}:{rights_report.get('report', {}).get('status')}, "
+            f"missing={missing_status}, missing_reference={missing_reference_status}/{missing_reference_sign_status}:{missing_reference_report.get('report', {}).get('status')}, "
+            f"rights={party_status}/{track_status}/{review_status}/{report_status}:{rights_report.get('report', {}).get('status')}, "
             f"release={export_status}/{zip_status}/{sign_status}/{_v38_check_status(release_verify, 'rights_clearance_evidence')}, "
             f"tampered={_v38_check_status(tampered, 'rights_clearance_evidence')}, "
             f"distribution={dist_export_status}/{dist_sign_status}/{_v38_check_status(dist_verify, 'distribution_rights_clearance_evidence')}, "

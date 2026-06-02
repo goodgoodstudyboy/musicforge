@@ -5,9 +5,13 @@ import re
 from pathlib import Path
 from typing import Any
 
+from song_agent.assets import AssetStore
+from song_agent.context_packs import ContextPackStore
+from song_agent.library_index import asset_source_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
+from song_agent.references import ReferenceStore
 from song_agent.release_metadata import read_release_metadata
 from song_agent.releases import BLOCKED_RELEASE_KEYS, ReleaseStateError, ReleaseStore, stable_hash
 
@@ -20,6 +24,7 @@ RIGHTS_SUMMARY_INTEGRITY_EXCLUDE = {"summary_hash"}
 CONTRIBUTOR_ROLES_REQUIRING_SPLITS = {"composer", "lyricist"}
 SOURCE_BLOCKING_STATUSES = {"uncleared", "blocked", "unknown", "pending"}
 SOURCE_SAFE_STATUSES = {"cleared", "waived", "owned", "public_domain", "original"}
+SOURCE_COVERAGE_SAFE_STATUSES = SOURCE_SAFE_STATUSES - {"original"}
 
 
 class RightsClearanceError(ValueError):
@@ -35,8 +40,19 @@ class RightsClearanceStateError(RightsClearanceError):
 
 
 class RightsClearanceStore:
-    def __init__(self, release_store: ReleaseStore) -> None:
+    def __init__(
+        self,
+        release_store: ReleaseStore,
+        *,
+        asset_store: AssetStore | None = None,
+        reference_store: ReferenceStore | None = None,
+        context_pack_store: ContextPackStore | None = None,
+    ) -> None:
         self.release_store = release_store
+        base_root = release_store.root.parent
+        self.asset_store = asset_store or AssetStore(base_root / "assets")
+        self.reference_store = reference_store or ReferenceStore(base_root / "references")
+        self.context_pack_store = context_pack_store or ContextPackStore(base_root / "context-packs")
 
     def rights_dir(self, release_id: str) -> Path:
         return self.release_store.release_dir(release_id) / "rights"
@@ -126,6 +142,7 @@ class RightsClearanceStore:
             "updated_at": now,
             "track_snapshot": _track_snapshot(track),
             "metadata_snapshot": _metadata_snapshot(metadata),
+            "required_source_usages": self._required_source_usages(track),
         }
         if "contributors" in payload:
             merged["contributors"] = [_normalize_contributor(item) for item in _list(payload.get("contributors"))]
@@ -174,6 +191,12 @@ class RightsClearanceStore:
             raise RightsClearanceError("waiver_reason is required when rights clearance is waived.")
         record["manual_clearance"] = review
         record["updated_at"] = now
+        track = _release_track(self.release_store.get_release(release_id), track_id)
+        if track is not None:
+            record["track_snapshot"] = _track_snapshot(track)
+            record["required_source_usages"] = self._required_source_usages(track)
+            metadata = _metadata_track(self.release_store, release_id, track_id)
+            record["metadata_snapshot"] = _metadata_snapshot(metadata)
         record["source_hash"] = rights_track_source_hash(record)
         record["stale"] = False
         record["stale_reasons"] = []
@@ -190,6 +213,10 @@ class RightsClearanceStore:
         record = self.read_track(release_id, track_id)
         record.pop("manual_clearance", None)
         record["updated_at"] = now
+        track = _release_track(self.release_store.get_release(release_id), track_id)
+        if track is not None:
+            record["track_snapshot"] = _track_snapshot(track)
+            record["required_source_usages"] = self._required_source_usages(track)
         record["reset_reason"] = _text(reason, 1000)
         record["source_hash"] = rights_track_source_hash(record)
         record["integrity_hash"] = rights_track_integrity_hash(record)
@@ -216,13 +243,14 @@ class RightsClearanceStore:
                 rows.append(row)
                 continue
             metadata_track = _metadata_track_from_doc(metadata, track.track_id)
-            current_hash = rights_track_source_hash({**record, "track_snapshot": _track_snapshot(track), "metadata_snapshot": _metadata_snapshot(metadata_track)})
+            required_sources = self._required_source_usages(track)
+            current_hash = rights_track_source_hash({**record, "track_snapshot": _track_snapshot(track), "metadata_snapshot": _metadata_snapshot(metadata_track), "required_source_usages": required_sources})
             stale_reasons = []
             if str(record.get("source_hash") or "") != current_hash:
                 stale_reasons.append("source_changed")
             if not rights_track_integrity_ok(record):
                 stale_reasons.append("track_integrity_failed")
-            track_failures, track_warnings = _evaluate_track(record, party_map=party_map, metadata_track=metadata_track)
+            track_failures, track_warnings = _evaluate_track({**record, "required_source_usages": required_sources}, party_map=party_map, metadata_track=metadata_track)
             if stale_reasons:
                 track_failures.extend(stale_reasons)
             row_status = "failed" if track_failures else "warning" if track_warnings else "passed"
@@ -235,6 +263,8 @@ class RightsClearanceStore:
                 "manual_clearance_status": (record.get("manual_clearance") or {}).get("status") if isinstance(record.get("manual_clearance"), dict) else None,
                 "source_hash": record.get("source_hash"),
                 "rights_track_hash": record.get("integrity_hash"),
+                "required_source_count": len(required_sources),
+                "required_sources": required_sources,
                 "failures": sorted(set(track_failures)),
                 "warnings": sorted(set(track_warnings)),
             }
@@ -379,10 +409,20 @@ class RightsClearanceStore:
         for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
             record = self.read_track(release_id, track.track_id, default={})
             metadata_track = _metadata_track_from_doc(metadata, track.track_id)
-            current_hash = rights_track_source_hash({**record, "track_snapshot": _track_snapshot(track), "metadata_snapshot": _metadata_snapshot(metadata_track)}) if record else ""
+            required_sources = self._required_source_usages(track)
+            current_hash = rights_track_source_hash({**record, "track_snapshot": _track_snapshot(track), "metadata_snapshot": _metadata_snapshot(metadata_track), "required_source_usages": required_sources}) if record else ""
             row = next((item for item in report.get("tracks", []) if isinstance(item, dict) and item.get("track_id") == track.track_id), {})
             rows.append({"track_id": track.track_id, "status": row.get("status"), "source_hash": current_hash, "rights_track_hash": record.get("integrity_hash") if record else None})
         return rights_report_source_hash(release.to_dict(), metadata, rows, parties)
+
+    def _required_source_usages(self, track: Any) -> list[dict[str, Any]]:
+        return required_source_usages_for_track(
+            track,
+            release_store=self.release_store,
+            asset_store=self.asset_store,
+            reference_store=self.reference_store,
+            context_pack_store=self.context_pack_store,
+        )
 
 
 def rights_track_source_hash(record: dict[str, Any]) -> str:
@@ -395,6 +435,7 @@ def rights_track_source_hash(record: dict[str, Any]) -> str:
                 "metadata_snapshot": record.get("metadata_snapshot"),
                 "contributors": record.get("contributors", []),
                 "source_usages": record.get("source_usages", []),
+                "required_source_usages": record.get("required_source_usages", []),
                 "instrumental": record.get("instrumental"),
                 "metadata_credits_waived": record.get("metadata_credits_waived"),
                 "manual_clearance": record.get("manual_clearance"),
@@ -571,6 +612,112 @@ def verify_rights_summary_evidence(*, manifest_summary: dict[str, Any], summary:
     return sorted(set(failures))
 
 
+def required_source_usages_for_track(
+    track: Any,
+    *,
+    release_store: ReleaseStore,
+    asset_store: AssetStore,
+    reference_store: ReferenceStore,
+    context_pack_store: ContextPackStore,
+) -> list[dict[str, Any]]:
+    project_id = str(getattr(track, "project_id", "") or "")
+    version_id = str(getattr(track, "version_id", "") or "")
+    sources: dict[str, dict[str, Any]] = {}
+
+    def add(source: dict[str, Any]) -> None:
+        normalized = _normalize_required_source(source)
+        key = _source_coverage_key(normalized)
+        if not key:
+            return
+        existing = sources.get(key)
+        if existing:
+            merged_detected = sorted(set(_list(existing.get("detected_in")) + _list(normalized.get("detected_in"))))
+            existing["detected_in"] = merged_detected
+            existing.setdefault("name", normalized.get("name"))
+            if existing.get("source_status") == "current" and normalized.get("source_status") != "current":
+                existing["source_status"] = normalized.get("source_status")
+                existing["stale_reasons"] = sorted(set(_list(existing.get("stale_reasons")) + _list(normalized.get("stale_reasons"))))
+            return
+        sources[key] = normalized
+
+    project_export = _project_export_snapshot(release_store, project_id)
+    final_manifest = _final_export_manifest(release_store, project_id)
+    version = _project_version(release_store, project_id, version_id)
+    version_run_dir = Path(getattr(version, "output_dir", "") or "") if version is not None else None
+
+    for ref in _list(final_manifest.get("asset_refs")):
+        if isinstance(ref, dict):
+            add(_asset_required_source(ref, asset_store=asset_store, detected_in="final_export.asset_refs", version_id=version_id))
+    for ref in _list(final_manifest.get("reference_refs")):
+        if isinstance(ref, dict):
+            add(_reference_required_source(ref, reference_store=reference_store, detected_in="final_export.reference_refs", version_id=version_id))
+    context_pack = final_manifest.get("context_pack") if isinstance(final_manifest.get("context_pack"), dict) else {}
+    if context_pack and context_pack.get("pack_id"):
+        add(_context_pack_required_source(context_pack, context_pack_store=context_pack_store, detected_in="final_export.context_pack", version_id=version_id))
+    edit = final_manifest.get("edit") if isinstance(final_manifest.get("edit"), dict) else {}
+    for item in _list(edit.get("clip_inserts")):
+        if isinstance(item, dict):
+            add(_metadata_required_source(item, source_type="editor_clip", detected_in="final_export.edit.clip_inserts", version_id=version_id))
+    for item in _list(edit.get("template_inserts")):
+        if isinstance(item, dict):
+            add(_metadata_required_source(item, source_type="template", detected_in="final_export.edit.template_inserts", version_id=version_id))
+    for key in ("review_provider_patch", "review_candidate_source", "review_candidate", "review_judge"):
+        value = edit.get(key)
+        if isinstance(value, dict) and value:
+            add(_metadata_required_source(value, source_type="provider_provenance", detected_in=f"final_export.edit.{key}", version_id=version_id))
+
+    for ref in _list(project_export.get("asset_refs")):
+        if isinstance(ref, dict) and _used_by_version(ref, version_id):
+            add(_asset_required_source(ref, asset_store=asset_store, detected_in="project_export.asset_refs", version_id=version_id))
+    for ref in _list(project_export.get("reference_refs")):
+        if isinstance(ref, dict) and (_used_by_version(ref, version_id) or ref.get("linked_to_project")):
+            add(_reference_required_source(ref, reference_store=reference_store, detected_in="project_export.reference_refs", version_id=version_id))
+    for pack in _list(project_export.get("context_packs")):
+        if isinstance(pack, dict) and _used_by_version(pack, version_id):
+            add(_context_pack_required_source(pack, context_pack_store=context_pack_store, detected_in="project_export.context_packs", version_id=version_id))
+    for exported_version in _list(project_export.get("versions")):
+        if not isinstance(exported_version, dict) or str(exported_version.get("version_id") or "") != version_id:
+            continue
+        exported_edit = exported_version.get("edit") if isinstance(exported_version.get("edit"), dict) else {}
+        for item in _list(exported_edit.get("clip_inserts")):
+            if isinstance(item, dict):
+                add(_metadata_required_source(item, source_type="editor_clip", detected_in="project_export.version.edit.clip_inserts", version_id=version_id))
+        for item in _list(exported_edit.get("template_inserts")):
+            if isinstance(item, dict):
+                add(_metadata_required_source(item, source_type="template", detected_in="project_export.version.edit.template_inserts", version_id=version_id))
+        for key in ("review_provider_patch", "review_candidate_source", "review_candidate", "review_judge"):
+            value = exported_edit.get(key)
+            if isinstance(value, dict) and value:
+                add(_metadata_required_source(value, source_type="provider_provenance", detected_in=f"project_export.version.edit.{key}", version_id=version_id))
+
+    if version_run_dir is not None:
+        data_dir = version_run_dir / "data"
+        asset_snapshot = _read_json_default(data_dir / "asset-refs.json", {})
+        for ref in _list(asset_snapshot.get("asset_refs")):
+            if isinstance(ref, dict):
+                add(_asset_required_source(ref, asset_store=asset_store, detected_in="job_artifacts.asset_refs", version_id=version_id))
+        reference_snapshot = _read_json_default(data_dir / "reference-refs.json", {})
+        for ref in _list(reference_snapshot.get("reference_refs")):
+            if isinstance(ref, dict):
+                add(_reference_required_source(ref, reference_store=reference_store, detected_in="job_artifacts.reference_refs", version_id=version_id))
+        context_snapshot = _read_json_default(data_dir / "context-pack.json", {})
+        if context_snapshot.get("pack_id"):
+            add(_context_pack_required_source(context_snapshot, context_pack_store=context_pack_store, detected_in="job_artifacts.context_pack", version_id=version_id))
+        edit_snapshot = _read_json_default(data_dir / "edit-metadata.json", {})
+        for item in _list(edit_snapshot.get("clip_inserts")):
+            if isinstance(item, dict):
+                add(_metadata_required_source(item, source_type="editor_clip", detected_in="job_artifacts.edit.clip_inserts", version_id=version_id))
+        for item in _list(edit_snapshot.get("template_inserts")):
+            if isinstance(item, dict):
+                add(_metadata_required_source(item, source_type="template", detected_in="job_artifacts.edit.template_inserts", version_id=version_id))
+        for key in ("provider_patch", "review_provider_patch", "review_candidate_source", "review_candidate", "review_judge"):
+            value = edit_snapshot.get(key)
+            if isinstance(value, dict) and value:
+                add(_metadata_required_source(value, source_type="provider_provenance", detected_in=f"job_artifacts.edit.{key}", version_id=version_id))
+
+    return [sources[key] for key in sorted(sources)]
+
+
 def _evaluate_track(record: dict[str, Any], *, party_map: dict[str, dict[str, Any]], metadata_track: dict[str, Any]) -> tuple[list[str], list[str]]:
     failures: list[str] = []
     warnings: list[str] = []
@@ -614,6 +761,23 @@ def _evaluate_track(record: dict[str, Any], *, party_map: dict[str, dict[str, An
             failures.append(f"source_uncleared:{source.get('source_id') or source.get('name') or 'source'}")
         if status not in SOURCE_SAFE_STATUSES and status not in SOURCE_BLOCKING_STATUSES:
             warnings.append(f"source_unknown_status:{status}")
+    declared_sources = _declared_source_coverage(record.get("source_usages"))
+    for required in _list(record.get("required_source_usages")):
+        if not isinstance(required, dict):
+            continue
+        source_id = str(required.get("source_id") or "").strip()
+        source_type = str(required.get("source_type") or "source").strip().lower()
+        source_status = str(required.get("source_status") or "current").strip().lower()
+        key = _source_coverage_key(required)
+        declared = declared_sources.get(key)
+        if source_status in {"missing", "hidden", "stale", "blocked"}:
+            failures.append(f"required_source_{source_status}:{source_id or source_type}")
+        if not declared:
+            failures.append(f"required_source_missing:{source_type}:{source_id or 'source'}")
+            continue
+        declared_status = str(declared.get("status") or "unknown").strip().lower()
+        if declared_status not in SOURCE_COVERAGE_SAFE_STATUSES:
+            failures.append(f"required_source_uncleared:{source_type}:{source_id or 'source'}")
     manual = record.get("manual_clearance") if isinstance(record.get("manual_clearance"), dict) else {}
     if manual.get("status") not in {"accepted", "waived"}:
         failures.append("manual_clearance_missing")
@@ -624,6 +788,189 @@ def _evaluate_track(record: dict[str, Any], *, party_map: dict[str, dict[str, An
     if manual.get("status") == "waived" and not _text(manual.get("waiver_reason"), 1000):
         failures.append("waiver_reason_missing")
     return failures, warnings
+
+
+def _declared_source_coverage(sources: Any) -> dict[str, dict[str, Any]]:
+    coverage: dict[str, dict[str, Any]] = {}
+    for source in _list(sources):
+        if not isinstance(source, dict):
+            continue
+        key = _source_coverage_key(source)
+        if key:
+            coverage[key] = source
+    return coverage
+
+
+def _source_coverage_key(source: dict[str, Any]) -> str:
+    source_id = str(source.get("source_id") or "").strip().lower()
+    source_type = str(source.get("source_type") or source.get("type") or "").strip().lower()
+    if not source_id:
+        return ""
+    return f"{source_type}:{source_id}"
+
+
+def _project_export_snapshot(release_store: ReleaseStore, project_id: str) -> dict[str, Any]:
+    if not project_id:
+        return {}
+    try:
+        return release_store.project_store.project_export_snapshot(project_id)
+    except (OSError, ValueError, TypeError, FileNotFoundError):
+        return {}
+
+
+def _final_export_manifest(release_store: ReleaseStore, project_id: str) -> dict[str, Any]:
+    if not project_id:
+        return {}
+    try:
+        project_dir = release_store.project_store.project_dir(project_id)
+        path = project_dir / "final-export" / "manifest.json"
+        if path.exists():
+            data = read_json(path)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError, TypeError, FileNotFoundError):
+        return {}
+    return {}
+
+
+def _project_version(release_store: ReleaseStore, project_id: str, version_id: str) -> Any | None:
+    if not project_id or not version_id:
+        return None
+    try:
+        document = release_store.project_store.get_project(project_id)
+    except (OSError, ValueError, TypeError, FileNotFoundError):
+        return None
+    return next((version for version in document.versions if getattr(version, "version_id", "") == version_id), None)
+
+
+def _asset_required_source(ref: dict[str, Any], *, asset_store: AssetStore, detected_in: str, version_id: str) -> dict[str, Any]:
+    asset_id = _safe_id(str(ref.get("asset_id") or ""), "asset")
+    status = "current"
+    stale_reasons: list[str] = []
+    current_hash = ""
+    try:
+        asset = asset_store.read_asset(asset_id)
+        current_hash = asset_source_hash(asset)
+        if asset.hidden:
+            status = "hidden"
+            stale_reasons.append("asset_hidden")
+        snapshot_hash = str(ref.get("source_hash") or "")
+        if snapshot_hash and snapshot_hash != current_hash:
+            status = "stale"
+            stale_reasons.append("asset_source_hash_changed")
+    except (OSError, ValueError, TypeError, FileNotFoundError):
+        status = "missing"
+        stale_reasons.append("asset_missing")
+    return {
+        "source_id": asset_id,
+        "source_type": "asset",
+        "name": _text(ref.get("name") or asset_id, 180),
+        "role": _text(ref.get("role") or ",".join(str(item) for item in _list(ref.get("roles")) if str(item).strip()), 120),
+        "source_status": status,
+        "source_hash": current_hash or str(ref.get("source_hash") or ""),
+        "detected_in": [detected_in],
+        "used_by_versions": sorted(set([version_id, *[str(item) for item in _list(ref.get("used_by_versions")) if str(item).strip()]])),
+        "stale_reasons": stale_reasons,
+    }
+
+
+def _reference_required_source(ref: dict[str, Any], *, reference_store: ReferenceStore, detected_in: str, version_id: str) -> dict[str, Any]:
+    reference_id = _safe_id(str(ref.get("reference_id") or ""), "ref")
+    status = "current"
+    stale_reasons: list[str] = []
+    current_hash = ""
+    try:
+        reference = reference_store.read_reference(reference_id)
+        current_hash = reference.sha256
+        if reference.hidden:
+            status = "hidden"
+            stale_reasons.append("reference_hidden")
+        snapshot_hash = str(ref.get("source_hash") or ref.get("sha256") or "")
+        if snapshot_hash and snapshot_hash != current_hash:
+            status = "stale"
+            stale_reasons.append("reference_sha256_changed")
+    except (OSError, ValueError, TypeError, FileNotFoundError):
+        status = "missing"
+        stale_reasons.append("reference_missing")
+    return {
+        "source_id": reference_id,
+        "source_type": "reference",
+        "name": _text(ref.get("title") or ref.get("name") or reference_id, 180),
+        "role": _text(ref.get("role") or ",".join(str(item) for item in _list(ref.get("roles")) if str(item).strip()), 120),
+        "source_status": status,
+        "source_hash": current_hash or str(ref.get("source_hash") or ref.get("sha256") or ""),
+        "detected_in": [detected_in],
+        "used_by_versions": sorted(set([version_id, *[str(item) for item in _list(ref.get("used_by_versions")) if str(item).strip()]])),
+        "stale_reasons": stale_reasons,
+    }
+
+
+def _context_pack_required_source(ref: dict[str, Any], *, context_pack_store: ContextPackStore, detected_in: str, version_id: str) -> dict[str, Any]:
+    pack_id = _safe_id(str(ref.get("pack_id") or ""), "pack")
+    status = "current"
+    stale_reasons: list[str] = []
+    try:
+        pack = context_pack_store.read_pack(pack_id)
+        if pack.hidden:
+            status = "hidden"
+            stale_reasons.append("context_pack_hidden")
+    except (OSError, ValueError, TypeError, FileNotFoundError):
+        status = "missing"
+        stale_reasons.append("context_pack_missing")
+    return {
+        "source_id": pack_id,
+        "source_type": "context_pack",
+        "name": _text(ref.get("name") or pack_id, 180),
+        "source_status": status,
+        "source_hash": str(ref.get("source_hash") or ""),
+        "detected_in": [detected_in],
+        "used_by_versions": sorted(set([version_id, *[str(item) for item in _list(ref.get("used_by_versions")) if str(item).strip()]])),
+        "stale_reasons": stale_reasons,
+    }
+
+
+def _metadata_required_source(ref: dict[str, Any], *, source_type: str, detected_in: str, version_id: str) -> dict[str, Any]:
+    source_id = _metadata_source_id(ref, source_type)
+    return {
+        "source_id": source_id,
+        "source_type": source_type,
+        "name": _text(ref.get("name") or ref.get("title") or ref.get("source_id") or source_id, 180),
+        "source_status": "current",
+        "source_hash": stable_hash(sanitize_metadata(ref, blocked_keys=RIGHTS_BLOCKED_KEYS)),
+        "detected_in": [detected_in],
+        "used_by_versions": [version_id] if version_id else [],
+        "stale_reasons": [],
+    }
+
+
+def _metadata_source_id(ref: dict[str, Any], source_type: str) -> str:
+    for key in ("source_id", "asset_id", "reference_id", "clip_id", "template_id", "candidate_id", "group_id", "preview_id", "task_id", "provider_id", "template_name"):
+        value = str(ref.get(key) or "").strip()
+        if value:
+            return _safe_id(value, source_type)
+    return _safe_id(stable_hash(ref)[:16], source_type)
+
+
+def _normalize_required_source(source: dict[str, Any]) -> dict[str, Any]:
+    return sanitize_metadata(
+        {
+            "source_id": _safe_id(str(source.get("source_id") or ""), "source") if str(source.get("source_id") or "").strip() else "",
+            "source_type": _text(source.get("source_type") or "source", 80).lower(),
+            "name": _text(source.get("name"), 180),
+            "role": _text(source.get("role"), 120),
+            "source_status": _text(source.get("source_status") or "current", 80).lower(),
+            "source_hash": _text(source.get("source_hash"), 128),
+            "detected_in": sorted(set(str(item)[:160] for item in _list(source.get("detected_in")) if str(item).strip())),
+            "used_by_versions": sorted(set(str(item)[:80] for item in _list(source.get("used_by_versions")) if str(item).strip())),
+            "stale_reasons": sorted(set(str(item)[:160] for item in _list(source.get("stale_reasons")) if str(item).strip())),
+        },
+        blocked_keys=RIGHTS_BLOCKED_KEYS,
+    )
+
+
+def _used_by_version(ref: dict[str, Any], version_id: str) -> bool:
+    if not version_id:
+        return False
+    return version_id in {str(item) for item in _list(ref.get("used_by_versions"))}
 
 
 def _normalize_contributor(item: Any) -> dict[str, Any]:

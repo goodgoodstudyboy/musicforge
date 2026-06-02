@@ -1,5 +1,16 @@
 # Changelog
 
+## v5.8.1 - 2026-06-02
+
+### Fixed
+- Rights Clearance reports now aggregate required source provenance from each Release track's Project version, Final Export, job artifacts, context pack, editor clip/template metadata, and provider provenance summaries.
+- `require_rights_clearance=true` now blocks signoff when required asset/reference/context/editor/provider sources are not explicitly covered by cleared, owned, public-domain, or waived rights source usages.
+- Hidden, missing, or stale asset/reference/context pack sources now fail the rights report instead of allowing original-only declarations to pass.
+- v5.8 release-check smoke now covers a project with `reference_refs`: original-only rights fails with 409, then passes only after the reference source is manually cleared.
+
+### Verified
+- `python -m pytest tests\test_rights_clearance.py tests\test_release_check.py::test_v58_rights_clearance_smoke -q`
+
 ## v5.8.0 - 2026-06-02
 
 ### Added
