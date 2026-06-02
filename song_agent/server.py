@@ -113,6 +113,12 @@ from song_agent.release_export import (
     refresh_release_export_signoff_summary,
     release_export_summary,
 )
+from song_agent.release_operations import ReleaseOperationsError, ReleaseOperationsStore, operations_report_summary
+from song_agent.release_operations_verifier import (
+    release_operations_verification_summary,
+    verify_release_operations_package,
+    write_release_operations_verification_report,
+)
 from song_agent.release_metadata import (
     ReleaseMetadataError,
     attach_metadata_export_to_manifest,
@@ -2539,6 +2545,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_store(self) -> ReleaseStore:
         return self.server.release_store  # type: ignore[attr-defined]
+
+    @property
+    def release_operations_store(self) -> ReleaseOperationsStore:
+        return self.server.release_operations_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5081,6 +5091,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_file(self.release_store.export_dir(release_id) / filename, "text/csv; charset=utf-8", filename=filename)
                 return
 
+            if tail == "/operations" or tail.startswith("/operations/"):
+                self._handle_release_operations(method, release_id, tail.removeprefix("/operations"))
+                return
+
             if tail.startswith("/distribution"):
                 self._handle_distribution_route(method, release_id, tail.removeprefix("/distribution"))
                 return
@@ -5159,10 +5173,70 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except (ReleaseValidationError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except (ReleaseConflictError, ReleaseStateError, ReleaseExportError) as exc:
+        except (ReleaseConflictError, ReleaseStateError, ReleaseExportError, ReleaseOperationsError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_release_operations(self, method: str, release_id: str, tail: str) -> None:
+        if tail in {"", "/"}:
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self._send_json(self.release_operations_store.overview(release_id))
+            return
+        if tail == "/refresh":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            report = self.release_operations_store.refresh(release_id, now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "report": report, "summary": operations_report_summary(report)})
+            return
+        if tail == "/export":
+            if method == "GET":
+                try:
+                    manifest = self.release_operations_store.read_export_manifest(release_id)
+                except FileNotFoundError:
+                    self._send_json({"ok": True, "release_id": release_id, "manifest": {}, "summary": {"status": "missing"}})
+                    return
+                self._send_json({"ok": True, "release_id": release_id, "manifest": manifest, "summary": manifest.get("summary", {})})
+                return
+            if method == "POST":
+                manifest = self.release_operations_store.export_operations(release_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        if tail == "/export/zip":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            zip_info = self.release_operations_store.build_zip(release_id, now=_utc_now())
+            manifest = self.release_operations_store.read_export_manifest(release_id)
+            self._send_json({"ok": True, "release_id": release_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+            return
+        if tail == "/export.zip":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self.release_store.get_release(release_id)
+            self._send_file(self.release_operations_store.zip_path(release_id), "application/zip", filename=f"musicforge-{release_id}-operations.zip")
+            return
+        if tail == "/verify":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            report = verify_release_operations_package(
+                self.release_operations_store.zip_path(release_id),
+                strict=bool(payload.get("strict", False)),
+                require_accepted=bool(payload.get("require_accepted", False)),
+                require_submission_evidence=bool(payload.get("require_submission_evidence", False)),
+            )
+            write_release_operations_verification_report(report, self.release_operations_store.operations_dir(release_id) / "operations-verification-report.json")
+            self._send_json({"ok": True, "release_id": release_id, "verification": report, "summary": release_operations_verification_summary(report)})
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Release Operations route not found.")
 
     def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: dict[str, Any]) -> dict[str, Any]:
         document = self.release_store.get_release(release_id)
@@ -13685,6 +13759,19 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             asset_store=self.asset_store,
             reference_store=self.reference_store,
             context_pack_store=self.context_pack_store,
+        )
+        self.release_operations_store = ReleaseOperationsStore(
+            release_store=self.release_store,
+            project_store=self.project_store,
+            distribution_store=self.distribution_store,
+            submission_store=self.submission_store,
+            submission_evidence_store=self.submission_evidence_store,
+            audio_review_store=self.audio_review_store,
+            mastering_store=self.mastering_store,
+            audio_encoding_store=self.audio_encoding_store,
+            encoded_audio_acceptance_store=self.encoded_audio_acceptance_store,
+            format_decision_store=self.format_decision_store,
+            rights_clearance_store=self.rights_clearance_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

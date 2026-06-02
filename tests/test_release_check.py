@@ -34,6 +34,7 @@ from song_agent.release_checks import (
     _v57_release_format_decision_smoke,
     _v58_rights_clearance_smoke,
     _v59_submission_evidence_archive_smoke,
+    _v60_release_operations_dashboard_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -154,6 +155,18 @@ def test_v59_submission_evidence_archive_smoke(tmp_path: Path) -> None:
     assert "blocked_after_sign=409" in detail
     assert "signoff_tamper=failed" in detail
     assert "report_tamper=failed" in detail
+
+
+def test_v60_release_operations_dashboard_smoke(tmp_path: Path) -> None:
+    ok, detail = _v60_release_operations_dashboard_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "stage=submission_ready->accepted" in detail
+    assert "verify=passed" in detail
+    assert "external=passed" in detail
+    assert "tamper=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "redaction=failed" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

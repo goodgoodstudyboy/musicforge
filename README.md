@@ -420,12 +420,24 @@ reject `source_path`, `local_path`, or `file_path`. Evidence Export/ZIP and
 Evidence Signoff are independent from the original signed Submission Package, so
 post-submission evidence can be audited without rebuilding the submitted package.
 
+Release Operations Dashboard aggregates Release, Metadata, Audio, Rights,
+Format Decision, Distribution, Submission, Submission Evidence, and verifier
+summaries into a read-only readiness report. It shows the current stage, next
+blocking actions, package/evidence status, and can export a portable Operations
+Package for offline verification. It does not sign, reset, upload, mark accepted,
+or mutate any existing Release/Distribution/Submission evidence.
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
 
 ```powershell
 python -m song_agent.cli verify-submission-evidence-package path\to\submission-evidence-package.zip --json --deep --require-accepted --report-out submission-evidence-verification-report.json
+```
+
+```powershell
+python -m song_agent.cli release-operations --release-id rel-000001 --refresh --export --zip --verify --require-submission-evidence --json
+python -m song_agent.cli verify-release-operations-package path\to\release-operations-package.zip --json --require-accepted --require-submission-evidence --report-out operations-verification-report.json
 ```
 
 ```powershell

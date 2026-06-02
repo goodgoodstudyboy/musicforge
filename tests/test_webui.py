@@ -95,6 +95,15 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/rights/tracks/${encodeURIComponent" in html
     assert "Format Decision Workbench" in html
     assert "/format-decisions" in html
+    assert "Release Operations" in html
+    assert 'id="release-operations-refresh"' in html
+    assert 'id="release-operations-export"' in html
+    assert 'id="release-operations-zip"' in html
+    assert 'id="release-operations-verify"' in html
+    assert "/api/releases/${encodeURIComponent(release.release_id)}/operations" in html
+    assert "/operations/refresh" in html
+    assert "/operations/export/zip" in html
+    assert "/operations/verify" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
     assert "/encoded-audio/health" in html
     assert "/encoded-audio/acceptance/refresh" in html

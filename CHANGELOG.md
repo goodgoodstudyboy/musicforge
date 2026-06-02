@@ -1,5 +1,18 @@
 # Changelog
 
+## v6.0.0 - 2026-06-03
+
+### Added
+- Release Operations Dashboard for read-only readiness aggregation across Release, Metadata, Audio, Rights, Format Decision, Distribution, Submission, Submission Evidence, package exports, and verifier summaries.
+- Operations API routes under `/api/releases/<release>/operations` for overview, refresh, export, ZIP, download, and verifier checks without signing, resetting, uploading, or mutating existing delivery evidence.
+- Portable Operations Export/ZIP with `operations-report.json`, `readiness-summary.json`, `evidence-graph.json`, `verifier-summaries.json`, `README.txt`, and `operations-manifest.json`.
+- Offline `verify-release-operations-package` CLI with ZIP path safety, duplicate entry detection, manifest/file hash checks, report integrity checks, stage requirement checks, and redaction scanning.
+- Studio Release Operations panel showing current stage, blockers, warnings, stage progress, next actions, and Operations export/verify controls.
+- v6.0 release-check smoke covering submission-ready to accepted stage progression, external Operations package verification, report tamper, duplicate ZIP entry, and redaction guards.
+
+### Verified
+- `python -m pytest tests\test_release_operations.py tests\test_server_release_operations.py tests\test_cli_release_operations.py tests\test_release_check.py::test_v60_release_operations_dashboard_smoke tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+
 ## v5.9.0 - 2026-06-02
 
 ### Added

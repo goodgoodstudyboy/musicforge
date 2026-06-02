@@ -3169,6 +3169,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let rightsData = { report: {}, parties: [] };
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
+      let operationsData = { summary: {}, report: {} };
       let releaseAnalyticsData = { summary: {}, analytics: null };
       try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
@@ -3199,6 +3200,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         distributionData.template_packs = templateData.template_packs || distributionData.template_packs || [];
       } catch (err) {}
       try { submissionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions`); } catch (err) {}
+      try { operationsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations`); } catch (err) {}
       try { releaseAnalyticsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/acceptance-analytics`); } catch (err) {}
       const target = $("release-detail");
       target.innerHTML = `
@@ -3238,6 +3240,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseEncodedAudioHtml(encodedAudioData, release)}
         ${releaseFormatDecisionHtml(formatDecisionData, release)}
         ${releaseRightsClearanceHtml(rightsData, release)}
+        ${releaseOperationsHtml(operationsData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4388,6 +4391,58 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
+    function releaseOperationsHtml(operationsData, release) {
+      const summary = (operationsData && operationsData.summary) || {};
+      const report = (operationsData && operationsData.report) || {};
+      const progress = report.stage_progress || {};
+      const manifest = operationsData.manifest || {};
+      const zip = operationsData.zip || manifest.zip || {};
+      const stageRows = (report.stage_statuses || []).map((stage) => `
+        <tr>
+          <td>${escapeHtml(stage.stage || "-")}</td>
+          <td><span class="status ${escapeHtml(stage.status || "")}">${escapeHtml(stage.status || "-")}</span></td>
+          <td>${escapeHtml(stage.blocker_count || 0)}</td>
+          <td>${escapeHtml(stage.warning_count || 0)}</td>
+        </tr>
+      `).join("");
+      const actionRows = (report.next_actions || []).slice(0, 8).map((action) => `
+        <tr>
+          <td>${escapeHtml(action.label || action.action_type || "-")}</td>
+          <td>${escapeHtml(action.entity_id || "-")}</td>
+          <td>${escapeHtml((action.blocked_by || []).join(", ") || "-")}</td>
+          <td>${escapeHtml((action.unblocks || []).join(", ") || "-")}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="panel-title subhead"><span>Release Operations</span></div>
+        <div class="summary-grid">
+          ${metric("Status", summary.status || report.status || "missing")}
+          ${metric("Stage", summary.current_stage || report.current_stage || "draft")}
+          ${metric("Next", summary.next_stage || report.next_stage || "-")}
+          ${metric("Progress", `${progress.completed_count || 0}/${progress.total_count || 0}`)}
+          ${metric("Blockers", summary.blocker_count || 0)}
+          ${metric("Warnings", summary.warning_count || 0)}
+          ${metric("Stale", operationsData.stale ? "yes" : "-")}
+          ${metric("Integrity", operationsData.integrity_ok === false ? "failed" : "ok")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-operations-refresh" type="button">Refresh Operations</button>
+          <button class="secondary" id="release-operations-export" type="button">Export Operations</button>
+          <button class="secondary" id="release-operations-zip" type="button">Build Operations ZIP</button>
+          <button class="secondary" id="release-operations-verify" type="button">Verify Operations ZIP</button>
+          ${(zip.filename || (manifest.zip || {}).filename) ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/operations/export.zip">Download Operations ZIP</a>` : ""}
+        </div>
+        <table>
+          <thead><tr><th>Stage</th><th>Status</th><th>Blockers</th><th>Warnings</th></tr></thead>
+          <tbody>${stageRows || "<tr><td colspan='4'>No Operations report yet.</td></tr>"}</tbody>
+        </table>
+        <table>
+          <thead><tr><th>Next Action</th><th>Entity</th><th>Blocked By</th><th>Unblocks</th></tr></thead>
+          <tbody>${actionRows || "<tr><td colspan='4'>No pending Operations actions.</td></tr>"}</tbody>
+        </table>
+      `;
+    }
+
     function releaseExportHtml(exportData, release) {
       const manifest = (exportData && exportData.manifest) || {};
       const zip = manifest.zip || {};
@@ -4779,6 +4834,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       bindAction("rights-refresh-report", async () => {
         await api(`/api/releases/${encodeURIComponent(release.release_id)}/rights/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-refresh", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-export", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/export`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-zip", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/export/zip`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-verify", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ require_submission_evidence: true }),
+        });
         await loadReleases();
       });
       bindAction("release-build-export", async () => {

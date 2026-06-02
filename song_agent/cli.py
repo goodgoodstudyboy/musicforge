@@ -134,6 +134,34 @@ def build_verify_submission_evidence_parser() -> argparse.ArgumentParser:
     return verify_parser
 
 
+def build_verify_release_operations_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release Operations Package ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release Operations ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--require-accepted", action="store_true", help="Require Operations current_stage to be accepted or archived.")
+    verify_parser.add_argument("--require-submission-evidence", action="store_true", help="Require the Submission Evidence domain to be ready.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=128, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_release_operations_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build local MusicForge Release Operations reports and packages.")
+    parser.add_argument("--release-id", required=True, help="Release id.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh and persist the Operations Report.")
+    parser.add_argument("--export", action="store_true", help="Build the Operations Export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Operations ZIP package.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Operations ZIP package.")
+    parser.add_argument("--require-accepted", action="store_true", help="When verifying, require accepted stage.")
+    parser.add_argument("--require-submission-evidence", action="store_true", help="When verifying, require Submission Evidence readiness.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
 def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")
     verify_parser.add_argument("zip_path", type=Path, help="Path to the Human Review Pack ZIP to verify.")
@@ -722,6 +750,73 @@ def _main() -> None:
         else:
             print_submission_evidence_verification_report(report)
         raise SystemExit(submission_evidence_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-operations-package":
+        from song_agent.release_operations_verifier import (
+            print_release_operations_verification_report,
+            release_operations_verification_exit_code,
+            verify_release_operations_package,
+        )
+
+        parser = build_verify_release_operations_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_operations_package(
+            args.zip_path,
+            strict=args.strict,
+            require_accepted=args.require_accepted,
+            require_submission_evidence=args.require_submission_evidence,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_operations_verification_report(report)
+        raise SystemExit(release_operations_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "release-operations":
+        from song_agent.distribution import DistributionStore
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
+        from song_agent.release_operations_verifier import release_operations_verification_summary, verify_release_operations_package
+        from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
+
+        parser = build_release_operations_parser()
+        args = parser.parse_args(raw_args[1:])
+        release_store = ReleaseStore()
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        store = ReleaseOperationsStore(
+            release_store=release_store,
+            distribution_store=distribution_store,
+            submission_store=submission_store,
+            submission_evidence_store=SubmissionEvidenceStore(submission_store),
+        )
+        result: dict[str, Any] = {"ok": True, "release_id": args.release_id}
+        if args.refresh:
+            report = store.refresh(args.release_id)
+            result.update({"report": report, "summary": operations_report_summary(report)})
+        else:
+            overview = store.overview(args.release_id)
+            result.update(overview)
+        if args.export:
+            manifest = store.export_operations(args.release_id)
+            result.update({"manifest": manifest, "export_summary": manifest.get("summary", {})})
+        if args.zip:
+            zip_info = store.build_zip(args.release_id)
+            result.update({"zip": zip_info})
+        if args.verify:
+            verification = verify_release_operations_package(store.zip_path(args.release_id), require_accepted=args.require_accepted, require_submission_evidence=args.require_submission_evidence)
+            result.update({"verification": verification, "verification_summary": release_operations_verification_summary(verification)})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_operations_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
             human_review_verification_exit_code,
@@ -1567,6 +1662,22 @@ def print_acceptance_kb_result(result: dict[str, Any]) -> None:
         print(f"matches: {recommendation.get('matching_entry_count', 0)}")
     if entry:
         print(f"entry: {entry.get('entry_id')}")
+
+
+def print_release_operations_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    report = result.get("report") if isinstance(result.get("report"), dict) else {}
+    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+    print("MusicForge release-operations")
+    print(f"release: {result.get('release_id') or report.get('release_id') or '-'}")
+    print(f"status: {summary.get('status') or report.get('status') or '-'}")
+    print(f"stage: {summary.get('current_stage') or report.get('current_stage') or '-'} -> {report.get('next_stage') or '-'}")
+    print(f"blockers: {summary.get('blocker_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
 
 
 def _acceptance_analytics_fail_on(readiness: str, fail_on: str | None) -> bool:

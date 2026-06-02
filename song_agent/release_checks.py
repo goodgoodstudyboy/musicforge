@@ -63,6 +63,7 @@ from song_agent.audio_artifacts import build_audio_artifact_manifest, write_audi
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.submission_verifier import verify_submission_package
 from song_agent.submission_evidence_verifier import verify_submission_evidence_package
+from song_agent.release_operations_verifier import verify_release_operations_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -233,6 +234,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.7 release format decision smoke", *_v57_release_format_decision_smoke(root))
     report.add("v5.8 rights clearance smoke", *_v58_rights_clearance_smoke(root))
     report.add("v5.9 submission evidence archive smoke", *_v59_submission_evidence_archive_smoke(root))
+    report.add("v6.0 release operations dashboard smoke", *_v60_release_operations_dashboard_smoke(root))
     return report
 
 
@@ -8254,6 +8256,149 @@ def _v59_tamper_evidence_signoff(data: bytes) -> bytes:
 def _v59_tamper_evidence_report(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload["summary"]["accepted_count"] = 99
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v60_release_operations_dashboard_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v60-release-operations-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        project_id = _v37_signed_project(server, "v6.0 Operations Track")
+        _status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v6.0 Operations Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        _add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "Operations Track"})
+        _init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+        metadata = initialized.get("metadata", {})
+        if isinstance(metadata.get("release"), dict):
+            metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+        if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+            metadata["tracks"][0].update({"title": "Operations Track", "isrc": "USABC2600600", "lyrics": "Operations lyric", "credits": [{"role": "composer", "name": "Operations Writer"}], "confirmed": True})
+        _save_status, _saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+        _metadata_qa_status, _metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+        _qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        _export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+        _metadata_export_status, _metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+        _sign_status, _signed = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+
+        target_status, target = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Operations DSP Target"})
+        target_id = target.get("target", {}).get("target_id")
+        artwork_status, artwork = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")})
+        artwork_id = artwork.get("artwork", {}).get("artwork_id")
+        _update_status, _updated = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork_id}})
+        _dist_qa_status, _dist_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        _dist_export_status, _dist_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        _dist_zip_status, _dist_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        dist_sign_status, dist_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "release-check"})
+        if dist_sign_status != 200:
+            return False, f"distribution signoff failed: {dist_sign_status}:{dist_sign.get('error')}"
+
+        sub_status, sub = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions", {"name": "Operations Submission", "target_ids": [target_id]})
+        submission_id = sub.get("submission", {}).get("submission_id")
+        item_id = (sub.get("submission", {}).get("items") or [{}])[0].get("item_id")
+        _sub_qa_status, _sub_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/qa/refresh")
+        _sub_export_status, _sub_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export")
+        _sub_zip_status, _sub_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/export/zip")
+        sub_sign_status, sub_sign = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/signoff", {"signed_by": "release-check"})
+        if sub_sign_status != 200:
+            return False, f"submission signoff failed: {sub_sign_status}:{sub_sign.get('error')}"
+
+        before_status, before = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/refresh")
+        before_stage = before.get("summary", {}).get("current_stage") or before.get("report", {}).get("current_stage")
+
+        attachment_status, attachment = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/evidence/attachments", {"filename": "receipt.txt", "content_type": "text/plain", "content_base64": base64.b64encode(b"receipt ok").decode("ascii")})
+        attachment_id = attachment.get("attachment", {}).get("attachment_id")
+        submitted_status, submitted = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/record-submission", {"external_reference": "DSP-OPS-1", "attachment_ids": [attachment_id], "message": "Submitted"})
+        accepted_status, accepted = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/items/{item_id}/accepted", {"external_reference": "DSP-OPS-1"})
+        evidence_report_status, evidence_report = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/report/refresh")
+        evidence_export_status, evidence_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/export")
+        evidence_zip_status, evidence_zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/export/zip")
+        evidence_signoff_status, evidence_signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/signoff", {"signed_by": "release-check", "require_submitted": True, "require_accepted": True})
+        evidence_verify_status, evidence_verify = _release_http_json(server, "POST", f"/api/releases/{release_id}/submissions/{submission_id}/evidence/verify", {"deep": True, "require_submitted": True, "require_accepted": True})
+
+        after_status, after = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/refresh")
+        after_stage = after.get("summary", {}).get("current_stage") or after.get("report", {}).get("current_stage")
+        export_status, export = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/export")
+        zip_status, zip_info = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/export/zip")
+        verify_status, verified = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/verify", {"require_accepted": True, "require_submission_evidence": True})
+        zip_download_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/operations/export.zip")
+        if zip_download_status != 200 or not zip_bytes.startswith(b"PK"):
+            return False, f"operations zip download failed: {zip_download_status}, zip={zip_status}:{zip_info.get('error')}, verify={verify_status}:{verified.get('error')}"
+
+        zip_path = base / "release-operations-package.zip"
+        zip_path.write_bytes(zip_bytes)
+        external_dir = base / "external-clean"
+        external_dir.mkdir()
+        external_zip = external_dir / "release-operations-package.zip"
+        shutil.copy2(zip_path, external_zip)
+        old_external_cwd = Path.cwd()
+        os.chdir(external_dir)
+        external_report = verify_release_operations_package(external_zip, require_accepted=True, require_submission_evidence=True)
+        os.chdir(old_external_cwd)
+        tampered_report = verify_release_operations_package(_v38_rewrite_zip(zip_path, base / "tampered-v60-report.zip", transforms={"operations-report.json": _v60_tamper_operations_report}))
+        duplicate_report = verify_release_operations_package(_v43_duplicate_submission_zip(zip_path, base / "duplicate-v60.zip"))
+        redaction_report = verify_release_operations_package(_v38_rewrite_zip(zip_path, base / "redaction-v60.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        serialized = json.dumps({"before": before, "after": after, "export": export, "zip": zip_info, "verified": verified}, ensure_ascii=False)
+        ok = (
+            before_status == 200
+            and before_stage == "submission_ready"
+            and attachment_status == 201
+            and submitted_status == 200
+            and accepted_status == 200
+            and evidence_report_status == 200
+            and evidence_report.get("summary", {}).get("status") == "passed"
+            and evidence_export_status == 201
+            and evidence_zip_status == 200
+            and evidence_signoff_status == 200
+            and evidence_signoff.get("summary", {}).get("status") == "signed"
+            and evidence_verify_status == 200
+            and evidence_verify.get("summary", {}).get("status") == "passed"
+            and after_status == 200
+            and after_stage == "accepted"
+            and export_status == 201
+            and export.get("summary", {}).get("blocker_count") == 0
+            and zip_status == 200
+            and zip_info.get("zip", {}).get("sha256")
+            and verify_status == 200
+            and verified.get("summary", {}).get("status") == "passed"
+            and zip_download_status == 200
+            and zip_bytes.startswith(b"PK")
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tampered_report, "operations_report_integrity") == "failed"
+            and _v38_check_status(duplicate_report, "zip_duplicate_entries") == "failed"
+            and _v38_check_status(redaction_report, "operations_redaction_scan") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"stage={before_stage}->{after_stage}, verify={verified.get('summary', {}).get('status')}, "
+            f"external={external_report.get('status')}, tamper={_v38_check_status(tampered_report, 'operations_report_integrity')}, "
+            f"duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}, redaction={_v38_check_status(redaction_report, 'operations_redaction_scan')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v60_tamper_operations_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["current_stage"] = "draft"
+    payload.setdefault("summary", {})["warning_count"] = 99
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
