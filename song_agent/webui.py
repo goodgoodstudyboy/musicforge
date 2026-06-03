@@ -3200,7 +3200,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         distributionData.template_packs = templateData.template_packs || distributionData.template_packs || [];
       } catch (err) {}
       try { submissionData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/submissions`); } catch (err) {}
-      try { operationsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations`); } catch (err) {}
+      try {
+        operationsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations`);
+        const runbookData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks`);
+        operationsData.runbooks = runbookData.runbooks || [];
+      } catch (err) {}
       try { releaseAnalyticsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/acceptance-analytics`); } catch (err) {}
       const target = $("release-detail");
       target.innerHTML = `
@@ -4397,6 +4401,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const progress = report.stage_progress || {};
       const manifest = operationsData.manifest || {};
       const zip = operationsData.zip || manifest.zip || {};
+      const runbooks = operationsData.runbooks || [];
+      const activeRunbook = runbooks[0] || {};
+      const runbookSummary = activeRunbook.summary || {};
       const stageRows = (report.stage_statuses || []).map((stage) => `
         <tr>
           <td>${escapeHtml(stage.stage || "-")}</td>
@@ -4413,6 +4420,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <td>${escapeHtml((action.unblocks || []).join(", ") || "-")}</td>
         </tr>
       `).join("");
+      const runbookOptions = runbooks.map((runbook) => `<option value="${escapeHtml(runbook.runbook_id || "")}">${escapeHtml(runbook.runbook_id || "-")} · ${escapeHtml(runbook.status || "-")}</option>`).join("");
+      const runbookRows = runbooks.slice(0, 8).map((runbook) => {
+        const itemSummary = runbook.summary || {};
+        return `
+          <tr>
+            <td>${escapeHtml(runbook.runbook_id || "-")}</td>
+            <td><span class="status ${escapeHtml(runbook.status || "")}">${escapeHtml(runbook.status || "-")}</span></td>
+            <td>${escapeHtml(itemSummary.safe_count || 0)}</td>
+            <td>${escapeHtml(itemSummary.manual_required_count || 0)}</td>
+            <td>${escapeHtml(itemSummary.failed_count || 0)}</td>
+          </tr>
+        `;
+      }).join("");
       return `
         <div class="panel-title subhead"><span>Release Operations</span></div>
         <div class="summary-grid">
@@ -4439,6 +4459,28 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         <table>
           <thead><tr><th>Next Action</th><th>Entity</th><th>Blocked By</th><th>Unblocks</th></tr></thead>
           <tbody>${actionRows || "<tr><td colspan='4'>No pending Operations actions.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Release Operations Runbook</span></div>
+        <div class="summary-grid">
+          ${metric("Runbook", activeRunbook.runbook_id || "missing")}
+          ${metric("Status", activeRunbook.status || "-")}
+          ${metric("Safe Actions", runbookSummary.safe_count || 0)}
+          ${metric("Manual Required", runbookSummary.manual_required_count || 0)}
+          ${metric("Failed", runbookSummary.failed_count || 0)}
+        </div>
+        <div class="actions">
+          <select id="release-runbook-id">${runbookOptions || "<option value=''>No runbook</option>"}</select>
+          <button class="secondary" id="release-runbook-create" type="button">Create Runbook</button>
+          <button class="secondary" id="release-runbook-run-safe" type="button">Run Safe Actions</button>
+          <button class="secondary" id="release-runbook-refresh-stale" type="button">Refresh Runbook Stale</button>
+          <button class="secondary" id="release-runbook-export" type="button">Export Runbook</button>
+          <button class="secondary" id="release-runbook-zip" type="button">Build Runbook ZIP</button>
+          <button class="secondary" id="release-runbook-verify" type="button">Verify Runbook ZIP</button>
+          ${activeRunbook.runbook_id ? `<a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks/${encodeURIComponent(activeRunbook.runbook_id)}/export.zip">Download Runbook ZIP</a>` : ""}
+        </div>
+        <table>
+          <thead><tr><th>Runbook</th><th>Status</th><th>Safe</th><th>Manual Required</th><th>Failed</th></tr></thead>
+          <tbody>${runbookRows || "<tr><td colspan='5'>No Operations Runbooks yet.</td></tr>"}</tbody>
         </table>
       `;
     }
@@ -4853,6 +4895,39 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ require_submission_evidence: true }),
+        });
+        await loadReleases();
+      });
+      const selectedRunbookId = () => {
+        const value = ($("release-runbook-id") || {}).value || "";
+        if (!value) throw new Error("Select a Release Operations Runbook first.");
+        return value;
+      };
+      bindAction("release-runbook-create", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-runbook-run-safe", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks/${encodeURIComponent(selectedRunbookId())}/run-safe`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-runbook-refresh-stale", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks/${encodeURIComponent(selectedRunbookId())}/refresh-stale`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-runbook-export", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks/${encodeURIComponent(selectedRunbookId())}/export`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-runbook-zip", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks/${encodeURIComponent(selectedRunbookId())}/export/zip`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-runbook-verify", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks/${encodeURIComponent(selectedRunbookId())}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ require_current: true }),
         });
         await loadReleases();
       });

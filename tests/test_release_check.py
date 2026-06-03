@@ -35,6 +35,7 @@ from song_agent.release_checks import (
     _v58_rights_clearance_smoke,
     _v59_submission_evidence_archive_smoke,
     _v60_release_operations_dashboard_smoke,
+    _v61_release_operations_runbook_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -167,6 +168,21 @@ def test_v60_release_operations_dashboard_smoke(tmp_path: Path) -> None:
     assert "tamper=failed" in detail
     assert "duplicate=failed" in detail
     assert "redaction=failed" in detail
+
+
+def test_v61_release_operations_runbook_smoke(tmp_path: Path) -> None:
+    ok, detail = _v61_release_operations_runbook_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "verify=passed" in detail
+    assert "external=passed" in detail
+    assert "stale=409" in detail
+    assert "tamper=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "redaction=failed" in detail
+    assert "dangerous=failed" in detail
+    assert "backslash=failed" in detail
+    assert "spoof=failed/warning" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

@@ -427,6 +427,13 @@ blocking actions, package/evidence status, and can export a portable Operations
 Package for offline verification. It does not sign, reset, upload, mark accepted,
 or mutate any existing Release/Distribution/Submission evidence.
 
+Release Operations Runbooks turn dashboard `next_actions` into an auditable
+local action queue. Only safe refresh/export/zip/verify actions can execute;
+signoff, reset, accepted/submitted status changes, external upload, provider
+work, and manual reviews remain `manual_required`. A Runbook binds to the
+Operations Report source hash, so stale Runbooks cannot execute safe actions
+after the Release state changes.
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -438,6 +445,9 @@ python -m song_agent.cli verify-submission-evidence-package path\to\submission-e
 ```powershell
 python -m song_agent.cli release-operations --release-id rel-000001 --refresh --export --zip --verify --require-submission-evidence --json
 python -m song_agent.cli verify-release-operations-package path\to\release-operations-package.zip --json --require-accepted --require-submission-evidence --report-out operations-verification-report.json
+python -m song_agent.cli release-operations-runbook rel-000001 --create --json
+python -m song_agent.cli release-operations-runbook rel-000001 --runbook-id orb-000001 --run-safe --export --zip --verify --require-current --json
+python -m song_agent.cli verify-release-operations-runbook-package path\to\runbook-export.zip --json --require-current --report-out runbook-verification-report.json
 ```
 
 ```powershell

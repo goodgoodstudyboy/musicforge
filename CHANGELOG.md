@@ -1,5 +1,19 @@
 # Changelog
 
+## v6.1.0 - 2026-06-03
+
+### Added
+- Release Operations Runbook store for turning Operations Dashboard `next_actions` into an audited local action queue.
+- Runbook execution supports only safe refresh/export/zip/verify actions; signoff, reset, submitted/accepted status changes, provider work, uploads, and manual reviews remain `manual_required`.
+- Runbook stale guard binds execution to the Operations Report source hash and blocks safe execution with 409 after Release state changes.
+- Runbook Export/ZIP with `runbook.json`, `execution-report.json`, before/after Operations reports, `README.txt`, and `runbook-manifest.json`.
+- Offline `verify-release-operations-runbook-package` CLI with unsafe path, raw backslash entry, duplicate entry, manifest spoof, file hash, integrity, stale, and redaction checks.
+- Studio Release Operations Runbook controls for create, run safe actions, refresh stale status, export, ZIP, verify, and download.
+- v6.1 release-check smoke covering manual-required non-execution, stale 409, external package verification, tamper, duplicate ZIP, dangerous path, backslash path, manifest spoof, and redaction guards.
+
+### Verified
+- `python -m pytest tests\test_release_operations_runbook.py tests\test_server_release_operations_runbook.py tests\test_release_check.py::test_v61_release_operations_runbook_smoke tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls -q`
+
 ## v6.0.0 - 2026-06-03
 
 ### Added

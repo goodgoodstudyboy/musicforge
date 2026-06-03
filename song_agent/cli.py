@@ -7,6 +7,7 @@ import sys
 import os
 from pathlib import Path
 from collections.abc import Callable
+from typing import Any
 
 from song_agent.agent.multinode_pipeline import generate_multinode_song_plan
 from song_agent.agent.pipeline import SongAgent
@@ -157,6 +158,39 @@ def build_release_operations_parser() -> argparse.ArgumentParser:
     parser.add_argument("--verify", action="store_true", help="Verify the Operations ZIP package.")
     parser.add_argument("--require-accepted", action="store_true", help="When verifying, require accepted stage.")
     parser.add_argument("--require-submission-evidence", action="store_true", help="When verifying, require Submission Evidence readiness.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_verify_release_operations_runbook_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release Operations Runbook Package ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release Operations Runbook ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--require-completed", action="store_true", help="Require completed or blocked runbook evidence with no failed auto-safe item.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require the exported runbook to be current.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=128, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_release_operations_runbook_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Create and run local MusicForge Release Operations Runbooks.")
+    parser.add_argument("release_id", help="Release id.")
+    parser.add_argument("--runbook-id", default="", help="Runbook id for detail/run/export actions.")
+    parser.add_argument("--create", action="store_true", help="Create a runbook from the current Operations Report.")
+    parser.add_argument("--list", action="store_true", help="List runbooks.")
+    parser.add_argument("--run-safe", action="store_true", help="Run auto-safe actions.")
+    parser.add_argument("--refresh-stale", action="store_true", help="Refresh stale status.")
+    parser.add_argument("--export", action="store_true", help="Export runbook evidence.")
+    parser.add_argument("--zip", action="store_true", help="Build runbook evidence ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify runbook ZIP.")
+    parser.add_argument("--archive", action="store_true", help="Archive the runbook.")
+    parser.add_argument("--require-completed", action="store_true", help="When verifying, require completed runbook evidence.")
+    parser.add_argument("--require-current", action="store_true", help="When verifying, require current runbook evidence.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -775,6 +809,32 @@ def _main() -> None:
         else:
             print_release_operations_verification_report(report)
         raise SystemExit(release_operations_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-operations-runbook-package":
+        from song_agent.release_operations_runbook_verifier import (
+            print_release_operations_runbook_verification_report,
+            release_operations_runbook_verification_exit_code,
+            verify_release_operations_runbook_package,
+            write_release_operations_runbook_verification_report,
+        )
+
+        parser = build_verify_release_operations_runbook_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_operations_runbook_package(
+            args.zip_path,
+            strict=args.strict,
+            require_completed=args.require_completed,
+            require_current=args.require_current,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_operations_runbook_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_operations_runbook_verification_report(report)
+        raise SystemExit(release_operations_runbook_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -816,6 +876,61 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_operations_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-operations-runbook":
+        from song_agent.distribution import DistributionStore
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_summary
+        from song_agent.release_operations_runbook_verifier import release_operations_runbook_verification_summary, verify_release_operations_runbook_package
+        from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
+
+        parser = build_release_operations_runbook_parser()
+        args = parser.parse_args(raw_args[1:])
+        release_store = ReleaseStore()
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        evidence_store = SubmissionEvidenceStore(submission_store)
+        operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        result: dict[str, Any] = {"ok": True, "release_id": args.release_id}
+        if args.list:
+            runbooks = store.list_runbooks(args.release_id, include_archived=True)
+            result.update({"runbooks": runbooks, "summary": {"count": len(runbooks)}})
+        elif args.create:
+            runbook = store.create_from_operations_report(args.release_id)
+            result.update({"runbook": runbook, "summary": runbook_summary(runbook)})
+        else:
+            if not args.runbook_id:
+                raise ValueError("--runbook-id is required unless --create or --list is used.")
+            runbook = store.get_runbook(args.release_id, args.runbook_id)
+            result.update({"runbook": runbook, "summary": runbook_summary(runbook)})
+            if args.run_safe:
+                runbook = store.run_safe_actions(args.release_id, args.runbook_id)
+                result.update({"runbook": runbook, "summary": runbook_summary(runbook)})
+            if args.refresh_stale:
+                stale_result = store.refresh_stale_status(args.release_id, args.runbook_id)
+                result.update(stale_result)
+                result["summary"] = runbook_summary(stale_result.get("runbook", {}))
+            if args.export:
+                manifest = store.export_runbook(args.release_id, args.runbook_id)
+                result.update({"manifest": manifest})
+            if args.zip:
+                zip_info = store.build_zip(args.release_id, args.runbook_id)
+                result.update({"zip": zip_info})
+            if args.verify:
+                verification = verify_release_operations_runbook_package(store.zip_path(args.release_id, args.runbook_id), require_completed=args.require_completed, require_current=args.require_current)
+                result.update({"verification": verification, "verification_summary": release_operations_runbook_verification_summary(verification)})
+            if args.archive:
+                runbook = store.archive_runbook(args.release_id, args.runbook_id)
+                result.update({"runbook": runbook, "summary": runbook_summary(runbook)})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_operations_runbook_result(result)
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
@@ -1674,6 +1789,25 @@ def print_release_operations_result(result: dict[str, Any]) -> None:
     print(f"stage: {summary.get('current_stage') or report.get('current_stage') or '-'} -> {report.get('next_stage') or '-'}")
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
+
+
+def print_release_operations_runbook_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+    manifest = result.get("manifest") if isinstance(result.get("manifest"), dict) else {}
+    print("MusicForge release-operations-runbook")
+    print(f"release: {result.get('release_id') or summary.get('release_id') or '-'}")
+    print(f"runbook: {summary.get('runbook_id') or '-'}")
+    print(f"status: {summary.get('status') or '-'}")
+    print(f"safe: {summary.get('safe_count', 0)}")
+    print(f"manual_required: {summary.get('manual_required_count', 0)}")
+    print(f"failed: {summary.get('failed_count', 0)}")
+    if manifest:
+        print(f"export: {'stale' if manifest.get('stale') else 'current'}")
     if result.get("zip"):
         print(f"zip: {(result.get('zip') or {}).get('filename')}")
     if verification:

@@ -114,6 +114,18 @@ from song_agent.release_export import (
     release_export_summary,
 )
 from song_agent.release_operations import ReleaseOperationsError, ReleaseOperationsStore, operations_report_summary
+from song_agent.release_operations_runbook import (
+    ReleaseOperationsRunbookError,
+    ReleaseOperationsRunbookNotFoundError,
+    ReleaseOperationsRunbookStateError,
+    ReleaseOperationsRunbookStore,
+    runbook_summary,
+)
+from song_agent.release_operations_runbook_verifier import (
+    release_operations_runbook_verification_summary,
+    verify_release_operations_runbook_package,
+    write_release_operations_runbook_verification_report,
+)
 from song_agent.release_operations_verifier import (
     release_operations_verification_summary,
     verify_release_operations_package,
@@ -2549,6 +2561,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_operations_store(self) -> ReleaseOperationsStore:
         return self.server.release_operations_store  # type: ignore[attr-defined]
+
+    @property
+    def release_operations_runbook_store(self) -> ReleaseOperationsRunbookStore:
+        return self.server.release_operations_runbook_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5171,14 +5187,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Release route not found.")
         except ReleaseNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (ReleaseConflictError, ReleaseStateError, ReleaseExportError, ReleaseOperationsError, ReleaseOperationsRunbookStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseOperationsRunbookNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except (ReleaseValidationError, ValueError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except (ReleaseConflictError, ReleaseStateError, ReleaseExportError, ReleaseOperationsError) as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_release_operations(self, method: str, release_id: str, tail: str) -> None:
+        if tail == "/runbooks" or tail.startswith("/runbooks/"):
+            self._handle_release_operations_runbooks(method, release_id, tail.removeprefix("/runbooks"))
+            return
         if tail in {"", "/"}:
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5237,6 +5258,104 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "release_id": release_id, "verification": report, "summary": release_operations_verification_summary(report)})
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Release Operations route not found.")
+
+    def _handle_release_operations_runbooks(self, method: str, release_id: str, tail: str) -> None:
+        if tail in {"", "/"}:
+            if method == "GET":
+                query = parse_qs(urlparse(self.path).query)
+                include_archived = str(query.get("include_archived", [""])[0]).lower() in {"1", "true", "yes"}
+                runbooks = self.release_operations_runbook_store.list_runbooks(release_id, include_archived=include_archived)
+                self._send_json({"ok": True, "release_id": release_id, "runbooks": runbooks, "summary": {"count": len(runbooks)}})
+                return
+            if method == "POST":
+                runbook = self.release_operations_runbook_store.create_from_operations_report(release_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "runbook": runbook, "summary": runbook_summary(runbook)}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        parts = [part for part in tail.strip("/").split("/") if part]
+        if not parts:
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Operations Runbook route not found.")
+            return
+        runbook_id = parts[0]
+        if len(parts) == 1:
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            runbook = self.release_operations_runbook_store.get_runbook(release_id, runbook_id)
+            self._send_json({"ok": True, "release_id": release_id, "runbook": runbook, "summary": runbook_summary(runbook)})
+            return
+        action = parts[1]
+        if len(parts) == 2 and action == "run-safe":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            runbook = self.release_operations_runbook_store.run_safe_actions(release_id, runbook_id, self._optional_json_body(), now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "runbook": runbook, "summary": runbook_summary(runbook)})
+            return
+        if len(parts) == 2 and action == "refresh-stale":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            result = self.release_operations_runbook_store.refresh_stale_status(release_id, runbook_id, now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, **result, "summary": runbook_summary(result.get("runbook", {}))})
+            return
+        if len(parts) == 2 and action == "archive":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            runbook = self.release_operations_runbook_store.archive_runbook(release_id, runbook_id, now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "runbook": runbook, "summary": runbook_summary(runbook)})
+            return
+        if len(parts) == 2 and action == "export":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            manifest = self.release_operations_runbook_store.export_runbook(release_id, runbook_id, now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "runbook_id": runbook_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+            return
+        if len(parts) == 3 and action == "export" and parts[2] == "zip":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            zip_info = self.release_operations_runbook_store.build_zip(release_id, runbook_id, now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "runbook_id": runbook_id, "zip": zip_info})
+            return
+        if len(parts) == 2 and action == "export.zip":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self._send_file(self.release_operations_runbook_store.zip_path(release_id, runbook_id), "application/zip", filename=f"musicforge-{release_id}-{runbook_id}-runbook.zip")
+            return
+        if len(parts) == 2 and action == "verify":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            report = verify_release_operations_runbook_package(
+                self.release_operations_runbook_store.zip_path(release_id, runbook_id),
+                strict=bool(payload.get("strict", False)),
+                require_completed=bool(payload.get("require_completed", False)),
+                require_current=bool(payload.get("require_current", False)),
+            )
+            write_release_operations_runbook_verification_report(report, self.release_operations_runbook_store.runbook_dir(release_id, runbook_id) / "runbook-verification-report.json")
+            self._send_json({"ok": True, "release_id": release_id, "runbook_id": runbook_id, "verification": report, "summary": release_operations_runbook_verification_summary(report)})
+            return
+        if len(parts) == 4 and action == "items" and parts[3] == "retry":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            runbook = self.release_operations_runbook_store.retry_item(release_id, runbook_id, parts[2], now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "runbook": runbook, "summary": runbook_summary(runbook)})
+            return
+        if len(parts) == 4 and action == "items" and parts[3] == "waive":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            runbook = self.release_operations_runbook_store.waive_item(release_id, runbook_id, parts[2], self._optional_json_body(), now=_utc_now())
+            self._send_json({"ok": True, "release_id": release_id, "runbook": runbook, "summary": runbook_summary(runbook)})
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Release Operations Runbook route not found.")
 
     def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: dict[str, Any]) -> dict[str, Any]:
         document = self.release_store.get_release(release_id)
@@ -13772,6 +13891,13 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             encoded_audio_acceptance_store=self.encoded_audio_acceptance_store,
             format_decision_store=self.format_decision_store,
             rights_clearance_store=self.rights_clearance_store,
+        )
+        self.release_operations_runbook_store = ReleaseOperationsRunbookStore(
+            operations_store=self.release_operations_store,
+            release_store=self.release_store,
+            distribution_store=self.distribution_store,
+            submission_store=self.submission_store,
+            submission_evidence_store=self.submission_evidence_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

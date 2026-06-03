@@ -64,6 +64,7 @@ from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.submission_verifier import verify_submission_package
 from song_agent.submission_evidence_verifier import verify_submission_evidence_package
 from song_agent.release_operations_verifier import verify_release_operations_package
+from song_agent.release_operations_runbook_verifier import verify_release_operations_runbook_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -235,6 +236,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.8 rights clearance smoke", *_v58_rights_clearance_smoke(root))
     report.add("v5.9 submission evidence archive smoke", *_v59_submission_evidence_archive_smoke(root))
     report.add("v6.0 release operations dashboard smoke", *_v60_release_operations_dashboard_smoke(root))
+    report.add("v6.1 release operations runbook smoke", *_v61_release_operations_runbook_smoke(root))
     return report
 
 
@@ -8417,6 +8419,118 @@ def _v60_tamper_operations_report(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload["current_stage"] = "draft"
     payload.setdefault("summary", {})["warning_count"] = 99
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v61_release_operations_runbook_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v61-release-runbook-")).resolve()
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        os.chdir(base)
+        from song_agent.server import create_server
+
+        server = create_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        _status, release = _release_http_json(server, "POST", "/api/releases", {"name": "v6.1 Runbook Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_id = release.get("release", {}).get("release_id")
+        create_status, created = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/runbooks", {})
+        runbook_id = created.get("runbook", {}).get("runbook_id")
+        run_status, ran = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/runbooks/{runbook_id}/run-safe", {})
+        export_status, exported = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/runbooks/{runbook_id}/export", {})
+        zip_status, zipped = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/runbooks/{runbook_id}/export/zip")
+        verify_status, verified = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/runbooks/{runbook_id}/verify", {"require_current": True})
+        download_status, zip_bytes = _release_http_bytes(server, "GET", f"/api/releases/{release_id}/operations/runbooks/{runbook_id}/export.zip")
+
+        stale_create_status, stale_created = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/runbooks", {})
+        stale_runbook_id = stale_created.get("runbook", {}).get("runbook_id")
+        server.release_store.update_release(release_id, {"name": "v6.1 Runbook Release Changed"})
+        stale_run_status, stale_run = _release_http_json(server, "POST", f"/api/releases/{release_id}/operations/runbooks/{stale_runbook_id}/run-safe", {})
+
+        zip_path = base / "release-operations-runbook.zip"
+        zip_path.write_bytes(zip_bytes)
+        external_dir = base / "external-clean-runbook"
+        external_dir.mkdir()
+        external_zip = external_dir / "release-operations-runbook.zip"
+        shutil.copy2(zip_path, external_zip)
+        old_external_cwd = Path.cwd()
+        os.chdir(external_dir)
+        external_report = verify_release_operations_runbook_package(external_zip, require_current=True)
+        os.chdir(old_external_cwd)
+
+        tampered_report = verify_release_operations_runbook_package(_v38_rewrite_zip(zip_path, base / "tampered-v61-runbook.zip", transforms={"runbook.json": _v61_tamper_runbook}))
+        duplicate_report = verify_release_operations_runbook_package(_v43_duplicate_submission_zip(zip_path, base / "duplicate-v61-runbook.zip"))
+        redaction_report = verify_release_operations_runbook_package(_v38_rewrite_zip(zip_path, base / "redaction-v61-runbook.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        dangerous_report = verify_release_operations_runbook_package(_v38_rewrite_zip(zip_path, base / "dangerous-v61-runbook.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_report = verify_release_operations_runbook_package(_v38_backslash_entry_zip(base / "backslash-v61-runbook.zip"), strict=True)
+
+        def spoof_runbook_manifest(data: bytes) -> bytes:
+            manifest = json.loads(data.decode("utf-8"))
+            manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+            return json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+
+        spoof_report = verify_release_operations_runbook_package(
+            _v38_rewrite_zip(zip_path, base / "spoofed-v61-runbook.zip", additions={"extra.txt": b"extra"}, transforms={"runbook-manifest.json": spoof_runbook_manifest}),
+            strict=True,
+        )
+        summary = ran.get("summary", {})
+        serialized = json.dumps({"created": created, "ran": ran, "exported": exported, "zipped": zipped, "verified": verified}, ensure_ascii=False)
+        ok = (
+            create_status == 201
+            and created.get("summary", {}).get("manual_required_count", 0) >= 1
+            and run_status == 200
+            and summary.get("manual_required_count", 0) >= 1
+            and summary.get("status") in {"failed", "blocked"}
+            and all(item.get("status") != "completed" for item in ran.get("runbook", {}).get("items", []) if isinstance(item, dict) and item.get("risk") == "manual_required")
+            and export_status == 201
+            and exported.get("manifest", {}).get("runbook", {}).get("integrity_hash")
+            and zip_status == 200
+            and zipped.get("zip", {}).get("sha256")
+            and verify_status == 200
+            and verified.get("summary", {}).get("status") == "passed"
+            and download_status == 200
+            and zip_bytes.startswith(b"PK")
+            and stale_create_status == 201
+            and stale_run_status == 409
+            and "stale" in str(stale_run.get("error", "")).lower()
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tampered_report, "runbook_integrity") == "failed"
+            and _v38_check_status(duplicate_report, "runbook_zip_duplicate_entries") == "failed"
+            and _v38_check_status(redaction_report, "runbook_redaction_scan") == "failed"
+            and _v38_check_status(dangerous_report, "runbook_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "runbook_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof_report, "runbook_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof_report, "runbook_manifest_zip_entries_reference_only") == "warning"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"runbook={runbook_id}, status={summary.get('status')}, safe={summary.get('safe_count')}, manual={summary.get('manual_required_count')}, "
+            f"verify={verified.get('summary', {}).get('status')}, external={external_report.get('status')}, stale={stale_run_status}, "
+            f"tamper={_v38_check_status(tampered_report, 'runbook_integrity')}, duplicate={_v38_check_status(duplicate_report, 'runbook_zip_duplicate_entries')}, "
+            f"redaction={_v38_check_status(redaction_report, 'runbook_redaction_scan')}, dangerous={_v38_check_status(dangerous_report, 'runbook_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash_report, 'runbook_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof_report, 'runbook_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'runbook_manifest_zip_entries_reference_only')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        os.chdir(old_cwd)
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v61_tamper_runbook(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["status"] = "completed"
+    payload.setdefault("summary", {})["manual_required_count"] = 0
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
