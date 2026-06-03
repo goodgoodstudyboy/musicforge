@@ -421,17 +421,20 @@ class ReleaseOperationsRunbookStore:
             write_release_metadata_qa(self.release_store, release_id, report)
             return release_metadata_qa_summary(report)
         if action == "metadata.export":
+            _ensure_release_export_mutable(self.release_store, release_id)
             report = read_release_metadata_qa(self.release_store, release_id, default={})
             manifest = export_release_metadata_files(release_store=self.release_store, release_id=release_id, qa_report=report)
             attach_metadata_export_to_manifest(self.release_store, release_id, manifest)
             return {"status": "exported", "file_count": len(manifest.get("files", [])) if isinstance(manifest.get("files"), list) else 0}
         if action == "release.export":
             release = self.release_store.get_release(release_id)
+            _ensure_release_export_mutable(self.release_store, release_id, release=release)
             qa = self.release_store.read_qa(release_id, default={})
             manifest = build_release_export_bundle(release=release, release_store=self.release_store, project_store=self.release_store.project_store, qa_report=qa)
             self.release_store.update_export_summary(release_id, {"status": "exported", "file_count": manifest.get("summary", {}).get("file_count", 0)})
             return {"status": "exported", "file_count": manifest.get("summary", {}).get("file_count", 0)}
         if action == "release.zip":
+            _ensure_release_export_mutable(self.release_store, release_id)
             return build_release_export_zip(self.release_store, release_id)
         if action == "release.verify":
             return verification_summary(verify_release_zip(self.release_store.zip_path(release_id)))
@@ -444,10 +447,12 @@ class ReleaseOperationsRunbookStore:
                 self.distribution_store.update_qa_summary(release_id, target.target_id, distribution_qa_summary(report))
                 return distribution_qa_summary(report)
             if action == "distribution.export":
+                self.distribution_store.ensure_target_mutable(release_id, target)
                 qa = self.distribution_store.read_qa(release_id, target.target_id, default={})
                 manifest = build_distribution_export_package(store=self.distribution_store, release_id=release_id, target=target, qa_report=qa)
                 return {"status": "exported", "package_id": manifest.get("package_id")}
             if action == "distribution.zip":
+                self.distribution_store.ensure_target_mutable(release_id, target)
                 return build_distribution_package_zip(self.distribution_store, release_id, target)
             if action == "distribution.verify":
                 package_id = self.distribution_store.latest_package_id(target)
@@ -663,7 +668,17 @@ def _find_item(runbook: dict[str, Any], item_id: str) -> dict[str, Any]:
 
 def _signed_or_mutation_error(exc: Exception) -> bool:
     text = str(exc).lower()
-    return "signed" in text or "reset" in text or "cannot be modified" in text
+    return "signed" in text or "reset" in text or "cannot be modified" in text or "archived" in text or "read-only" in text or "read only" in text
+
+
+def _ensure_release_export_mutable(release_store: ReleaseStore, release_id: str, *, release: Any | None = None) -> None:
+    document = release or release_store.get_release(release_id)
+    signoff = release_store.read_signoff(release_id, default={})
+    signoff_status = str(signoff.get("status") or document.latest_signoff_summary.get("status") or "")
+    if document.status == "archived":
+        raise ReleaseOperationsRunbookStateError("Archived release export is read-only.")
+    if document.status == "signed" or signoff_status in {"signed", "force_signed"}:
+        raise ReleaseOperationsRunbookStateError("Release is already signed off. Reset signoff before rebuilding export or ZIP.")
 
 
 def _validate_runbook_id(value: str) -> str:

@@ -8465,6 +8465,45 @@ def _v61_release_operations_runbook_smoke(root: Path) -> tuple[bool, str]:
         redaction_report = verify_release_operations_runbook_package(_v38_rewrite_zip(zip_path, base / "redaction-v61-runbook.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
         dangerous_report = verify_release_operations_runbook_package(_v38_rewrite_zip(zip_path, base / "dangerous-v61-runbook.zip", additions={"../evil.txt": b"x"}), strict=True)
         backslash_report = verify_release_operations_runbook_package(_v38_backslash_entry_zip(base / "backslash-v61-runbook.zip"), strict=True)
+        signed_release_id = _v61_signed_release(server)
+        signed_release_zip = server.release_store.zip_path(signed_release_id)
+        signed_release_zip_before = signed_release_zip.read_bytes()
+        signed_target_status, signed_target = _release_http_json(server, "POST", f"/api/releases/{signed_release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "v6.1 Signed Target"})
+        signed_target_id = signed_target.get("target", {}).get("target_id")
+        signed_artwork_status, signed_artwork = _release_http_json(server, "POST", f"/api/releases/{signed_release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_v40_png(1400, 1400)).decode("ascii")})
+        signed_artwork_id = signed_artwork.get("artwork", {}).get("artwork_id")
+        _release_http_json(server, "POST", f"/api/releases/{signed_release_id}/distribution/targets/{signed_target_id}", {"options": {"artwork_id": signed_artwork_id}})
+        _release_http_json(server, "POST", f"/api/releases/{signed_release_id}/distribution/targets/{signed_target_id}/qa/refresh")
+        _release_http_json(server, "POST", f"/api/releases/{signed_release_id}/distribution/targets/{signed_target_id}/export")
+        _release_http_json(server, "POST", f"/api/releases/{signed_release_id}/distribution/targets/{signed_target_id}/export/zip")
+        signed_target_sign_status, signed_target_sign = _release_http_json(server, "POST", f"/api/releases/{signed_release_id}/distribution/targets/{signed_target_id}/signoff", {"signed_by": "release-check"})
+        signed_target_obj = server.distribution_store.get_target(signed_release_id, signed_target_id)
+        signed_package_id = (
+            server.distribution_store.latest_package_id(signed_target_obj)
+            or (signed_target_sign.get("signoff") if isinstance(signed_target_sign.get("signoff"), dict) else {}).get("package_id")
+            or (signed_target_sign.get("summary") if isinstance(signed_target_sign.get("summary"), dict) else {}).get("package_id")
+        )
+        if not signed_package_id:
+            raise RuntimeError(f"signed distribution package id missing: {signed_target_sign}")
+        signed_distribution_zip = server.distribution_store.package_zip_path(signed_release_id, signed_package_id)
+        signed_distribution_zip_before = signed_distribution_zip.read_bytes()
+        signed_runbook = server.release_operations_runbook_store.create_from_operations_report(signed_release_id)
+        signed_runbook["items"] = [
+            _v61_safe_item("orbi-signed-001", "metadata.export", signed_release_id),
+            _v61_safe_item("orbi-signed-002", "release.export", signed_release_id),
+            _v61_safe_item("orbi-signed-003", "release.zip", signed_release_id),
+            _v61_safe_item("orbi-signed-004", "distribution.export", signed_target_id),
+            _v61_safe_item("orbi-signed-005", "distribution.zip", signed_target_id),
+        ]
+        signed_runbook["status"] = "ready"
+        write_json(server.release_operations_runbook_store.runbook_path(signed_release_id, signed_runbook["runbook_id"]), signed_runbook)
+        signed_runbook_result = server.release_operations_runbook_store.run_safe_actions(signed_release_id, signed_runbook["runbook_id"])
+        signed_mutation_blocked = all(
+            isinstance(item, dict) and item.get("status") == "blocked" and "signed" in str(item.get("error") or "").lower()
+            for item in signed_runbook_result.get("items", [])
+        )
+        signed_release_zip_unchanged = signed_release_zip.read_bytes() == signed_release_zip_before
+        signed_distribution_zip_unchanged = signed_distribution_zip.read_bytes() == signed_distribution_zip_before
 
         def spoof_runbook_manifest(data: bytes) -> bytes:
             manifest = json.loads(data.decode("utf-8"))
@@ -8503,6 +8542,13 @@ def _v61_release_operations_runbook_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(backslash_report, "runbook_zip_entry_path_safe") == "failed"
             and _v38_check_status(spoof_report, "runbook_manifest_extra_entries") == "failed"
             and _v38_check_status(spoof_report, "runbook_manifest_zip_entries_reference_only") == "warning"
+            and signed_target_status == 201
+            and signed_artwork_status == 201
+            and signed_target_sign_status == 200
+            and signed_runbook_result.get("summary", {}).get("blocked_count") == 5
+            and signed_mutation_blocked
+            and signed_release_zip_unchanged
+            and signed_distribution_zip_unchanged
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -8514,7 +8560,8 @@ def _v61_release_operations_runbook_smoke(root: Path) -> tuple[bool, str]:
             f"tamper={_v38_check_status(tampered_report, 'runbook_integrity')}, duplicate={_v38_check_status(duplicate_report, 'runbook_zip_duplicate_entries')}, "
             f"redaction={_v38_check_status(redaction_report, 'runbook_redaction_scan')}, dangerous={_v38_check_status(dangerous_report, 'runbook_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash_report, 'runbook_zip_entry_path_safe')}, "
-            f"spoof={_v38_check_status(spoof_report, 'runbook_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'runbook_manifest_zip_entries_reference_only')}"
+            f"spoof={_v38_check_status(spoof_report, 'runbook_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'runbook_manifest_zip_entries_reference_only')}, "
+            f"signed_mutation={signed_runbook_result.get('summary', {}).get('blocked_count')}/{'unchanged' if signed_release_zip_unchanged and signed_distribution_zip_unchanged else 'changed'}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -8532,6 +8579,57 @@ def _v61_tamper_runbook(data: bytes) -> bytes:
     payload["status"] = "completed"
     payload.setdefault("summary", {})["manual_required_count"] = 0
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v61_safe_item(item_id: str, action_type: str, entity_id: str) -> dict[str, Any]:
+    return {
+        "item_id": item_id,
+        "action_type": action_type,
+        "domain": action_type.split(".", 1)[0],
+        "scope": action_type.split(".", 1)[0],
+        "entity_id": entity_id,
+        "label": action_type,
+        "description": action_type,
+        "risk": "auto_safe",
+        "status": "pending",
+        "priority": 10,
+        "depends_on": [],
+        "blocked_by": [],
+        "unblocks": [],
+        "source_hash": "release-check",
+        "attempt": 0,
+        "retry_count": 0,
+        "started_at": None,
+        "completed_at": None,
+        "result": {},
+        "error": None,
+        "waiver": None,
+    }
+
+
+def _v61_signed_release(server: Any) -> str:
+    project_id = _v37_signed_project(server, "v6.1 Signed Mutation Track")
+    created_status, created = _release_http_json(server, "POST", "/api/releases", {"name": "v6.1 Signed Mutation Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+    release_id = created.get("release", {}).get("release_id")
+    add_status, _added = _release_http_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id, "title": "v6.1 Signed Mutation Track"})
+    init_status, initialized = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/init")
+    metadata = initialized.get("metadata", {})
+    if isinstance(metadata.get("release"), dict):
+        metadata["release"].update({"upc": "123456789012", "copyright": "2026 MusicForge", "phonographic_copyright": "2026 MusicForge", "confirmed": True})
+    if isinstance(metadata.get("tracks"), list) and metadata["tracks"]:
+        metadata["tracks"][0].update({"isrc": "USABC2606100", "lyrics": "Runbook signed mutation lyric", "credits": [{"role": "composer", "name": "Runbook Writer"}], "confirmed": True})
+    save_status, _saved = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata", metadata)
+    metadata_qa_status, _metadata_qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/qa/refresh")
+    qa_status, _qa = _release_http_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+    export_status, _export = _release_http_json(server, "POST", f"/api/releases/{release_id}/export")
+    metadata_export_status, _metadata_export = _release_http_json(server, "POST", f"/api/releases/{release_id}/metadata/export")
+    zip_status, _zip = _release_http_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+    sign_status, signoff = _release_http_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "release-check"})
+    if not all(status == 200 or name == "created" and status == 201 for name, status in (("created", created_status), ("add", add_status), ("init", init_status), ("save", save_status), ("metadata_qa", metadata_qa_status), ("qa", qa_status), ("export", export_status), ("metadata_export", metadata_export_status), ("zip", zip_status), ("sign", sign_status))):
+        raise RuntimeError(f"signed release setup failed: created={created_status}, add={add_status}, init={init_status}, save={save_status}, metadata_qa={metadata_qa_status}, qa={qa_status}, export={export_status}, metadata_export={metadata_export_status}, zip={zip_status}, sign={sign_status}")
+    if signoff.get("summary", {}).get("status") != "signed":
+        raise RuntimeError(f"release signoff failed: {sign_status}:{signoff}")
+    return str(release_id)
 
 
 class _V55FixtureEncoderRunner:

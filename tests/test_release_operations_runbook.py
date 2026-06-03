@@ -6,6 +6,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_server_distribution import _signed_release
+from tests.test_server_edits import request_json, start_test_server, stop_test_server
+from tests.test_server_submissions import _png
+
+from song_agent.projectio import write_json
 from song_agent.release_operations import ReleaseOperationsStore
 from song_agent.release_operations_runbook import (
     ReleaseOperationsRunbookStateError,
@@ -13,6 +18,7 @@ from song_agent.release_operations_runbook import (
 )
 from song_agent.release_operations_runbook_verifier import verify_release_operations_runbook_package
 from song_agent.releases import ReleaseStore
+import base64
 
 
 def _store(tmp_path: Path) -> tuple[ReleaseStore, ReleaseOperationsRunbookStore]:
@@ -145,3 +151,74 @@ def test_release_operations_runbook_verifier_catches_zip_path_spoof_and_redactio
     assert any(item["check_id"] == "runbook_manifest_zip_entries_reference_only" for item in spoofed["warnings"])
     assert redaction["status"] == "failed"
     assert any(item["check_id"] == "runbook_redaction_scan" for item in redaction["blockers"])
+
+
+def test_release_operations_runbook_blocks_signed_release_and_distribution_mutations(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id = _signed_release(server)
+        release_zip = server.release_store.zip_path(release_id)
+        release_zip_before = release_zip.read_bytes()
+
+        target_status, target_data = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets", {"profile_id": "demo_pitch", "name": "Runbook Signed Target"})
+        target_id = target_data["target"]["target_id"]
+        artwork_status, artwork = request_json(server, "POST", f"/api/releases/{release_id}/distribution/artwork/import", {"filename": "cover.png", "content_base64": base64.b64encode(_png(1400, 1400)).decode("ascii")})
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}", {"options": {"artwork_id": artwork["artwork"]["artwork_id"]}})
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/export/zip")
+        sign_status, _signed = request_json(server, "POST", f"/api/releases/{release_id}/distribution/targets/{target_id}/signoff", {"signed_by": "runbook-test"})
+        target = server.distribution_store.get_target(release_id, target_id)
+        package_id = server.distribution_store.latest_package_id(target)
+        distribution_zip = server.distribution_store.package_zip_path(release_id, package_id)
+        distribution_zip_before = distribution_zip.read_bytes()
+
+        runbook = server.release_operations_runbook_store.create_from_operations_report(release_id)
+        runbook["items"] = [
+            _safe_item("orbi-test-001", "metadata.export", release_id),
+            _safe_item("orbi-test-002", "release.export", release_id),
+            _safe_item("orbi-test-003", "release.zip", release_id),
+            _safe_item("orbi-test-004", "distribution.export", target_id),
+            _safe_item("orbi-test-005", "distribution.zip", target_id),
+        ]
+        runbook["status"] = "ready"
+        write_json(server.release_operations_runbook_store.runbook_path(release_id, runbook["runbook_id"]), runbook)
+        ran = server.release_operations_runbook_store.run_safe_actions(release_id, runbook["runbook_id"])
+    finally:
+        stop_test_server(server)
+
+    assert target_status == 201
+    assert artwork_status == 201
+    assert sign_status == 200
+    assert ran["status"] == "blocked"
+    assert ran["summary"]["blocked_count"] == 5
+    assert all(item["status"] == "blocked" and "signed" in str(item.get("error", "")).lower() for item in ran["items"])
+    assert release_zip.read_bytes() == release_zip_before
+    assert distribution_zip.read_bytes() == distribution_zip_before
+
+
+def _safe_item(item_id: str, action_type: str, entity_id: str) -> dict:
+    return {
+        "item_id": item_id,
+        "action_type": action_type,
+        "domain": action_type.split(".", 1)[0],
+        "scope": action_type.split(".", 1)[0],
+        "entity_id": entity_id,
+        "label": action_type,
+        "description": action_type,
+        "risk": "auto_safe",
+        "status": "pending",
+        "priority": 10,
+        "depends_on": [],
+        "blocked_by": [],
+        "unblocks": [],
+        "source_hash": "test-source",
+        "attempt": 0,
+        "retry_count": 0,
+        "started_at": None,
+        "completed_at": None,
+        "result": {},
+        "error": None,
+        "waiver": None,
+    }

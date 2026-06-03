@@ -183,6 +183,7 @@ def test_v61_release_operations_runbook_smoke(tmp_path: Path) -> None:
     assert "dangerous=failed" in detail
     assert "backslash=failed" in detail
     assert "spoof=failed/warning" in detail
+    assert "signed_mutation=5/unchanged" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

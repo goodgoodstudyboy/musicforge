@@ -1,5 +1,15 @@
 # Changelog
 
+## v6.1.1 - 2026-06-03
+
+### Fixed
+- Release Operations Runbook safe export and ZIP actions now respect signed or archived Release immutability before rebuilding metadata, Release Export, or Release ZIP evidence.
+- Distribution Runbook export and ZIP actions now respect signed target immutability instead of bypassing Distribution route-level guards.
+- v6.1 release-check smoke now covers signed Release/Distribution mutation blocking and verifies existing export ZIP bytes remain unchanged.
+
+### Verified
+- `python -m pytest tests\test_release_operations_runbook.py tests\test_server_release_operations_runbook.py tests\test_cli_release_operations.py::test_release_operations_runbook_cli_create_export_verify tests\test_release_check.py::test_v61_release_operations_runbook_smoke -q`
+
 ## v6.1.0 - 2026-06-03
 
 ### Added
