@@ -75,3 +75,47 @@ def test_release_operations_verifier_catches_report_tamper_and_redaction(tmp_pat
     assert any(item["check_id"] == "operations_report_integrity" for item in tampered["blockers"])
     assert redaction["status"] == "failed"
     assert any(item["check_id"] == "operations_redaction_scan" for item in redaction["blockers"])
+
+
+def test_release_operations_verifier_catches_zip_path_and_spoofed_entries(tmp_path: Path) -> None:
+    release_store = ReleaseStore(tmp_path / "releases")
+    release = release_store.create_release({"name": "Ops Zip Guard", "release_type": "single_pack", "primary_artist": "MusicForge"})
+    store = ReleaseOperationsStore(release_store=release_store)
+    store.refresh(release.release_id)
+    store.export_operations(release.release_id)
+    store.build_zip(release.release_id)
+    source_zip = store.zip_path(release.release_id)
+
+    dangerous_zip = tmp_path / "dangerous.zip"
+    with zipfile.ZipFile(source_zip, "r") as src, zipfile.ZipFile(dangerous_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            dst.writestr(info.filename, src.read(info))
+        dst.writestr("../outside.txt", b"x")
+
+    backslash_zip = tmp_path / "backslash.zip"
+    with zipfile.ZipFile(backslash_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("extra/name.txt", b"x")
+    backslash_zip.write_bytes(backslash_zip.read_bytes().replace(b"extra/name.txt", b"extra\\name.txt"))
+
+    spoofed_zip = tmp_path / "spoofed.zip"
+    with zipfile.ZipFile(source_zip, "r") as src, zipfile.ZipFile(spoofed_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "operations-manifest.json":
+                manifest = json.loads(data.decode("utf-8"))
+                manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+                data = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+            dst.writestr(info.filename, data)
+        dst.writestr("extra.txt", b"extra")
+
+    dangerous = verify_release_operations_package(dangerous_zip, strict=True)
+    backslash = verify_release_operations_package(backslash_zip, strict=True)
+    spoofed = verify_release_operations_package(spoofed_zip, strict=True)
+
+    assert dangerous["status"] == "failed"
+    assert any(item["check_id"] == "zip_entry_path_safe" for item in dangerous["blockers"])
+    assert backslash["status"] == "failed"
+    assert any(item["check_id"] == "zip_entry_path_safe" for item in backslash["blockers"])
+    assert spoofed["status"] == "failed"
+    assert any(item["check_id"] == "operations_manifest_extra_entries" for item in spoofed["blockers"])
+    assert any(item["check_id"] == "operations_manifest_zip_entries_reference_only" for item in spoofed["warnings"])

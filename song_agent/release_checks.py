@@ -8345,6 +8345,18 @@ def _v60_release_operations_dashboard_smoke(root: Path) -> tuple[bool, str]:
         tampered_report = verify_release_operations_package(_v38_rewrite_zip(zip_path, base / "tampered-v60-report.zip", transforms={"operations-report.json": _v60_tamper_operations_report}))
         duplicate_report = verify_release_operations_package(_v43_duplicate_submission_zip(zip_path, base / "duplicate-v60.zip"))
         redaction_report = verify_release_operations_package(_v38_rewrite_zip(zip_path, base / "redaction-v60.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        dangerous_report = verify_release_operations_package(_v38_rewrite_zip(zip_path, base / "dangerous-v60.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_report = verify_release_operations_package(_v38_backslash_entry_zip(base / "backslash-v60.zip"), strict=True)
+
+        def spoof_operations_manifest(data: bytes) -> bytes:
+            manifest = json.loads(data.decode("utf-8"))
+            manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+            return json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+
+        spoof_report = verify_release_operations_package(
+            _v38_rewrite_zip(zip_path, base / "spoofed-v60.zip", additions={"extra.txt": b"extra"}, transforms={"operations-manifest.json": spoof_operations_manifest}),
+            strict=True,
+        )
         serialized = json.dumps({"before": before, "after": after, "export": export, "zip": zip_info, "verified": verified}, ensure_ascii=False)
         ok = (
             before_status == 200
@@ -8374,6 +8386,10 @@ def _v60_release_operations_dashboard_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(tampered_report, "operations_report_integrity") == "failed"
             and _v38_check_status(duplicate_report, "zip_duplicate_entries") == "failed"
             and _v38_check_status(redaction_report, "operations_redaction_scan") == "failed"
+            and _v38_check_status(dangerous_report, "zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof_report, "operations_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof_report, "operations_manifest_zip_entries_reference_only") == "warning"
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -8382,7 +8398,9 @@ def _v60_release_operations_dashboard_smoke(root: Path) -> tuple[bool, str]:
         return ok, (
             f"stage={before_stage}->{after_stage}, verify={verified.get('summary', {}).get('status')}, "
             f"external={external_report.get('status')}, tamper={_v38_check_status(tampered_report, 'operations_report_integrity')}, "
-            f"duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}, redaction={_v38_check_status(redaction_report, 'operations_redaction_scan')}"
+            f"duplicate={_v38_check_status(duplicate_report, 'zip_duplicate_entries')}, redaction={_v38_check_status(redaction_report, 'operations_redaction_scan')}, "
+            f"dangerous={_v38_check_status(dangerous_report, 'zip_entry_path_safe')}, backslash={_v38_check_status(backslash_report, 'zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof_report, 'operations_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'operations_manifest_zip_entries_reference_only')}"
         )
     except Exception as exc:
         return False, str(exc)
