@@ -58,6 +58,35 @@ def test_release_export_copies_two_tracks_and_builds_safe_zip(tmp_path: Path) ->
     assert str(tmp_path).replace("\\", "/") not in serialized
 
 
+def test_release_export_helpers_block_signed_release_mutations_by_default(tmp_path: Path) -> None:
+    project_store = ProjectStore(tmp_path / ".musicforge" / "projects")
+    project_id = _signed_project(tmp_path, project_store, "Signed Export Guard")
+    release_store = ReleaseStore(tmp_path / ".musicforge" / "releases", project_store=project_store)
+    release = release_store.create_release({"name": "Signed Export Pack", "release_type": "demo_pack", "primary_artist": "Local Artist"})
+    release = release_store.add_track(release.release_id, {"project_id": project_id})
+    qa = build_release_qa_report(release=release, release_store=release_store, project_store=project_store)
+    build_release_export_bundle(release=release, release_store=release_store, project_store=project_store, qa_report=qa)
+    build_release_export_zip(release_store, release.release_id)
+    zip_before = release_store.zip_path(release.release_id).read_bytes()
+
+    release_store.write_signoff(release.release_id, {"status": "signed", "signed_by": "test"})
+    release_store.update_signoff_summary(release.release_id, {"status": "signed"})
+    signed_release = release_store.get_release(release.release_id)
+
+    with pytest.raises(ReleaseExportError, match="Signed releases cannot rebuild export or ZIP"):
+        build_release_export_bundle(release=signed_release, release_store=release_store, project_store=project_store, qa_report=qa)
+    with pytest.raises(ReleaseExportError, match="Signed releases cannot rebuild export or ZIP"):
+        build_release_export_zip(release_store, release.release_id)
+
+    assert release_store.zip_path(release.release_id).read_bytes() == zip_before
+
+    allowed_zip = build_release_export_zip(release_store, release.release_id, allow_signed=True)
+
+    assert allowed_zip["sha256"]
+    assert release_store.zip_path(release.release_id).read_bytes() != b""
+    assert zip_before != b""
+
+
 def test_release_export_rejects_polluted_project_manifest_path(tmp_path: Path) -> None:
     project_store = ProjectStore(tmp_path / ".musicforge" / "projects")
     project_id = _signed_project(tmp_path, project_store, "Polluted Export")

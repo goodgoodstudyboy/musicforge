@@ -6564,7 +6564,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             signoff = {**pending_signoff, "export_manifest_hash": final_hash}
             signoff = self.release_store.write_signoff(release_id, signoff)
             refresh_release_export_signoff_summary(self.release_store, release_id)
-            build_release_export_zip(self.release_store, release_id, now=_utc_now())
+            build_release_export_zip(self.release_store, release_id, now=_utc_now(), allow_signed=True)
         except FileNotFoundError:
             signoff = self.release_store.write_signoff(release_id, pending_signoff)
         document = self.release_store.update_signoff_summary(release_id, release_signoff_summary(signoff))

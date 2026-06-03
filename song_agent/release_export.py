@@ -60,8 +60,11 @@ def build_release_export_bundle(
     project_store: ProjectStore,
     qa_report: dict[str, Any],
     now: str | None = None,
+    allow_signed: bool = False,
 ) -> dict[str, Any]:
     now = now or now_iso()
+    if not allow_signed:
+        _ensure_release_export_mutable(release_store, release.release_id, release=release)
     current_source_hash = release_source_hash(release, project_store=project_store, release_store=release_store)
     if not release_qa_allows_export(qa_report, current_source_hash=current_source_hash):
         raise ReleaseExportError("Release QA gate failed. Refresh QA before export.")
@@ -249,7 +252,9 @@ def build_release_export_bundle(
     return manifest
 
 
-def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, now: str | None = None) -> dict[str, Any]:
+def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, now: str | None = None, allow_signed: bool = False) -> dict[str, Any]:
+    if not allow_signed:
+        _ensure_release_export_mutable(release_store, release_id)
     refresh_release_export_signoff_summary(release_store, release_id)
     now = now or now_iso()
     release_dir = release_store.release_dir(release_id).resolve()
@@ -288,6 +293,16 @@ def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, no
         "entries": [entry for _path, entry in entries],
     }
     return sanitize_metadata(zip_info, blocked_keys=BLOCKED_RELEASE_KEYS)
+
+
+def _ensure_release_export_mutable(release_store: ReleaseStore, release_id: str, *, release: ReleaseDocument | None = None) -> None:
+    document = release or release_store.get_release(release_id)
+    signoff = release_store.read_signoff(release_id, default={})
+    signoff_status = str(signoff.get("status") or document.latest_signoff_summary.get("status") or "")
+    if document.status == "archived":
+        raise ReleaseExportError("Archived releases are read-only.")
+    if document.status == "signed" or signoff_status in {"signed", "force_signed"}:
+        raise ReleaseExportError("Signed releases cannot rebuild export or ZIP. Reset signoff before exporting again.")
 
 
 def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:
