@@ -8725,10 +8725,23 @@ def _v62_release_operations_signoff_archive_smoke(root: Path) -> tuple[bool, str
         except Exception:
             stale_export_status = 409
 
+        reset_without_cr_status = 409
+        try:
+            signoff_store.reset_signoff(release.release_id, {"reason": "Reset operations signoff without change request"})
+            reset_without_cr_status = 200
+        except Exception:
+            reset_without_cr_status = 409
         change = signoff_store.create_change_request(release.release_id, {"reason": "Refresh archived operations evidence after planned metadata update", "scope": ["operations", "release_export"], "created_by": "release-check"})
         signoff_store.update_change_request_status(release.release_id, change["change_request_id"], "submit")
         approved = signoff_store.update_change_request_status(release.release_id, change["change_request_id"], "approve", {"approved_by": "release-check", "notes": "approved for reset"})
         reset = signoff_store.reset_signoff(release.release_id, {"reason": "Reset operations signoff after approved change request", "change_request_id": change["change_request_id"]})
+        applied = signoff_store.get_change_request(release.release_id, change["change_request_id"])
+        reuse_status = 409
+        try:
+            signoff_store.reset_signoff(release.release_id, {"reason": "Reuse applied operations change request", "change_request_id": change["change_request_id"]})
+            reuse_status = 200
+        except Exception:
+            reuse_status = 409
 
         serialized = json.dumps({"gate": gate, "signed": signed, "manifest": manifest, "zip": zip_info, "verified": verified, "reset": reset}, ensure_ascii=False)
         ok = (
@@ -8750,6 +8763,9 @@ def _v62_release_operations_signoff_archive_smoke(root: Path) -> tuple[bool, str
             and _v38_check_status(spoof_report, "operations_archive_manifest_zip_entries_reference_only") == "warning"
             and approved.get("status") == "approved"
             and reset.get("status") == "reset"
+            and reset_without_cr_status == 409
+            and applied.get("status") == "applied"
+            and reuse_status == 409
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -8761,7 +8777,7 @@ def _v62_release_operations_signoff_archive_smoke(root: Path) -> tuple[bool, str
             f"duplicate_zip={_v38_check_status(duplicate_report, 'operations_archive_zip_duplicate_entries')}, redaction={_v38_check_status(redaction_report, 'operations_archive_redaction_scan')}, "
             f"dangerous={_v38_check_status(dangerous_report, 'operations_archive_zip_entry_path_safe')}, backslash={_v38_check_status(backslash_report, 'operations_archive_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof_report, 'operations_archive_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'operations_archive_manifest_zip_entries_reference_only')}, "
-            f"change_request={approved.get('status')}"
+            f"reset_guard={reset_without_cr_status}/{reuse_status}, change_request={applied.get('status')}"
         )
     except Exception as exc:
         return False, str(exc)

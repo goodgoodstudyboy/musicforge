@@ -457,6 +457,7 @@ python -m song_agent.cli verify-release-operations-runbook-package path\to\runbo
 python -m song_agent.cli release-operations-signoff rel-000001 --sign --signed-by local-user --json
 python -m song_agent.cli release-operations-archive rel-000001 --export --zip --verify --require-signed --json
 python -m song_agent.cli verify-release-operations-archive-package path\to\operations-archive.zip --json --require-signed --report-out operations-archive-verification-report.json
+python -m song_agent.cli release-operations-signoff rel-000001 --reset --reason "Approved operations evidence change" --change-request-id ocr-000001 --json
 ```
 
 ```powershell

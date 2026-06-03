@@ -58,11 +58,14 @@ def test_release_operations_signoff_archive_and_change_request_api(tmp_path, mon
 
         write_json(evidence_signoff_path, evidence_signoff)
         stale_overview_status, stale_overview = request_json(server, "GET", f"/api/releases/{release_id}/operations")
-        reset_missing_status, reset_missing = request_json(server, "POST", f"/api/releases/{release_id}/operations/signoff/reset", {"reason": "short"})
+        reset_short_status, reset_short = request_json(server, "POST", f"/api/releases/{release_id}/operations/signoff/reset", {"reason": "short"})
+        reset_missing_cr_status, reset_missing_cr = request_json(server, "POST", f"/api/releases/{release_id}/operations/signoff/reset", {"reason": "Reset without approved change request"})
         cr_status, cr = request_json(server, "POST", f"/api/releases/{release_id}/operations/change-requests", {"reason": "Fix metadata typo after archive", "scope": ["metadata", "release_export"], "created_by": "server-test"})
         cr_id = cr["change_request"]["change_request_id"]
         approve_status, approved = request_json(server, "POST", f"/api/releases/{release_id}/operations/change-requests/{cr_id}/approve", {"approved_by": "reviewer", "notes": "approved"})
         reset_status, reset = request_json(server, "POST", f"/api/releases/{release_id}/operations/signoff/reset", {"reason": "Reset for approved metadata change", "change_request_id": cr_id})
+        reuse_status, reuse = request_json(server, "POST", f"/api/releases/{release_id}/operations/signoff/reset", {"reason": "Reuse same approved change request", "change_request_id": cr_id})
+        cr_detail_status, cr_detail = request_json(server, "GET", f"/api/releases/{release_id}/operations/change-requests/{cr_id}")
     finally:
         stop_test_server(server)
 
@@ -97,10 +100,16 @@ def test_release_operations_signoff_archive_and_change_request_api(tmp_path, mon
     assert archive_bytes.startswith(b"PK")
     assert stale_overview_status == 200
     assert next(item for item in stale_overview["report"]["stage_statuses"] if item["stage"] == "archived")["status"] == "failed"
-    assert reset_missing_status == 409
-    assert "reason" in reset_missing["error"].lower()
+    assert reset_short_status == 409
+    assert "reason" in reset_short["error"].lower()
+    assert reset_missing_cr_status == 409
+    assert "change request" in reset_missing_cr["error"].lower()
     assert cr_status == 201
     assert approve_status == 200
     assert approved["change_request"]["status"] == "approved"
     assert reset_status == 200
     assert reset["summary"]["status"] == "reset"
+    assert reuse_status == 409
+    assert "approved" in reuse["error"].lower()
+    assert cr_detail_status == 200
+    assert cr_detail["change_request"]["status"] == "applied"

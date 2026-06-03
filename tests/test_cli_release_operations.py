@@ -195,3 +195,45 @@ def test_verify_release_operations_archive_cli_json_report_out_and_tamper(tmp_pa
 
     assert failed.returncode == 1
     assert any(item["check_id"] == "operations_archive_signoff_payload_hash" for item in json.loads(failed.stdout)["blockers"])
+
+    no_cr_reset = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "release-operations-signoff", release.release_id, "--reset", "--reason", "Reset without approved change request", "--json"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert no_cr_reset.returncode != 0
+    assert "Change Request" in (no_cr_reset.stderr + no_cr_reset.stdout)
+
+    change = signoff_store.create_change_request(release.release_id, {"reason": "Approved reset via CLI", "scope": ["operations"], "created_by": "cli-test"})
+    change = signoff_store.update_change_request_status(release.release_id, change["change_request_id"], "approve", {"approved_by": "reviewer"})
+    reset = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "release-operations-signoff", release.release_id, "--reset", "--reason", "Reset with approved change request", "--change-request-id", change["change_request_id"], "--json"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert reset.returncode == 0, reset.stderr
+    assert json.loads(reset.stdout)["summary"]["status"] == "reset"
+    assert signoff_store.get_change_request(release.release_id, change["change_request_id"])["status"] == "applied"
+
+    reuse = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "release-operations-signoff", release.release_id, "--reset", "--reason", "Reuse approved change request", "--change-request-id", change["change_request_id"], "--json"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert reuse.returncode != 0
+    assert "approved" in (reuse.stderr + reuse.stdout).lower()

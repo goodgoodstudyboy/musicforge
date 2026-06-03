@@ -1,5 +1,15 @@
 # Changelog
 
+## v6.2.1 - 2026-06-04
+
+### Fixed
+- Operations Signoff reset now requires an approved Operations Change Request; a reason alone can no longer reset archived Operations evidence.
+- Reset validates Change Request integrity and marks the approved Change Request as `applied` after reset, blocking reuse of the same request.
+- v6.2 release-check smoke now covers reset without Change Request and reuse of an applied Change Request.
+
+### Verified
+- `python -m pytest tests\test_release_operations_signoff.py tests\test_server_release_operations_signoff.py tests\test_cli_release_operations.py tests\test_release_check.py::test_v62_release_operations_signoff_archive_smoke -q`
+
 ## v6.2.0 - 2026-06-03
 
 ### Added

@@ -201,7 +201,8 @@ def test_v62_release_operations_signoff_archive_smoke(tmp_path: Path) -> None:
     assert "dangerous=failed" in detail
     assert "backslash=failed" in detail
     assert "spoof=failed/warning" in detail
-    assert "change_request=approved" in detail
+    assert "reset_guard=409/409" in detail
+    assert "change_request=applied" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

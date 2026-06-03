@@ -212,27 +212,38 @@ class ReleaseOperationsSignoffStore:
         if len(reason) < 8:
             raise ReleaseOperationsSignoffStateError("reason must be at least 8 characters.")
         change_request_id = str(payload.get("change_request_id") or "").strip()
-        if change_request_id:
+        if not change_request_id:
+            raise ReleaseOperationsSignoffStateError("Approved Operations Change Request is required before reset.")
+        with self.lock:
             request = self.get_change_request(release_id, change_request_id)
+            if not operations_change_request_integrity_ok(request):
+                raise ReleaseOperationsSignoffStateError("Operations Change Request integrity failed.")
             if request.get("status") != "approved":
                 raise ReleaseOperationsSignoffStateError("Operations Change Request must be approved before reset.")
-        with self.lock:
+            now = now or now_iso()
             existing = self.read_signoff(release_id, default={})
             reset = {
                 "schema_version": OPERATIONS_SIGNOFF_SCHEMA_VERSION,
                 "release_id": release_id,
                 "status": "reset",
-                "reset_at": now or now_iso(),
+                "reset_at": now,
                 "reason": reason,
-                "change_request_id": change_request_id or None,
+                "change_request_id": change_request_id,
                 "previous_status": existing.get("status") if existing else "not_signed",
                 "previous_payload_hash": existing.get("payload_hash") if existing else None,
             }
             reset["payload_hash"] = operations_signoff_hash(reset)
             self.operations_dir(release_id).mkdir(parents=True, exist_ok=True)
             _write_json(self.signoff_path(release_id), reset)
-            self._append_history(release_id, "reset", {"reason": reason, "change_request_id": change_request_id or None}, now=now)
-            self.release_store.append_event(release_id, "operations_signoff_reset", {"reason": reason, "change_request_id": change_request_id or None})
+            request["status"] = "applied"
+            request["updated_at"] = now
+            request["applied_at"] = now
+            request["applied_signoff_reset_hash"] = reset["payload_hash"]
+            request["integrity_hash"] = operations_change_request_hash(request)
+            _write_json(self.change_request_path(release_id, change_request_id), request)
+            self._append_change_event(release_id, "applied", request, now=now)
+            self._append_history(release_id, "reset", {"reason": reason, "change_request_id": change_request_id}, now=now)
+            self.release_store.append_event(release_id, "operations_signoff_reset", {"reason": reason, "change_request_id": change_request_id})
             self.operations_store.refresh(release_id, now=now)
             return reset
 
