@@ -65,6 +65,7 @@ from song_agent.submission_verifier import verify_submission_package
 from song_agent.submission_evidence_verifier import verify_submission_evidence_package
 from song_agent.release_operations_verifier import verify_release_operations_package
 from song_agent.release_operations_runbook_verifier import verify_release_operations_runbook_package
+from song_agent.release_operations_archive_verifier import verify_release_operations_archive_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -237,6 +238,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v5.9 submission evidence archive smoke", *_v59_submission_evidence_archive_smoke(root))
     report.add("v6.0 release operations dashboard smoke", *_v60_release_operations_dashboard_smoke(root))
     report.add("v6.1 release operations runbook smoke", *_v61_release_operations_runbook_smoke(root))
+    report.add("v6.2 release operations signoff archive smoke", *_v62_release_operations_signoff_archive_smoke(root))
     return report
 
 
@@ -8630,6 +8632,161 @@ def _v61_signed_release(server: Any) -> str:
     if signoff.get("summary", {}).get("status") != "signed":
         raise RuntimeError(f"release signoff failed: {sign_status}:{signoff}")
     return str(release_id)
+
+
+def _v62_release_operations_signoff_archive_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v62-operations-signoff-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_integrity_hash
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        release = release_store.create_release({"name": "v6.2 Operations Archive", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+
+        report = operations_store.refresh(release.release_id)
+        report["current_stage"] = "accepted"
+        report["next_stage"] = "archived"
+        report["summary"]["blocker_count"] = 0
+        report["summary"]["warning_count"] = 0
+        report["blockers"] = []
+        report["warnings"] = []
+        report["domains"] = {"submission_evidence": {"required": False, "status": "not_required", "summary": {}}}
+        report["verifier_summaries"] = {"release": {"status": "passed"}, "distribution": [], "submission": [], "submission_evidence": []}
+        report["package_summaries"] = {
+            "release_zip": {"exists": True, "status": "exists", "sha256": "0" * 64},
+            "distribution_packages": [],
+            "submission_packages": [],
+            "submission_evidence_packages": [],
+        }
+        report["source_hash"] = "v62-accepted-source"
+        report["source"] = {"fixture": "v6.2 accepted"}
+        report["integrity_hash"] = operations_report_integrity_hash(report)
+        write_json(operations_store.report_path(release.release_id), report)
+        operations_store.build_report = lambda release_id, persist=False, now=None: report  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: report  # type: ignore[method-assign]
+
+        runbook = runbook_store.create_from_operations_report(release.release_id)
+        runbook["status"] = "completed"
+        runbook["items"] = []
+        runbook["summary"] = {"total_count": 0, "safe_count": 0, "manual_count": 0, "completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0, "waived_count": 0, "pending_count": 0}
+        runbook["integrity_hash"] = runbook_integrity_hash(runbook)
+        write_json(runbook_store.runbook_path(release.release_id, runbook["runbook_id"]), runbook)
+
+        gate = signoff_store.gate(release.release_id, {})
+        signed = signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+        duplicate_status = 409
+        try:
+            signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+            duplicate_status = 200
+        except Exception:
+            duplicate_status = 409
+        overview_after_sign = operations_store.overview(release.release_id)
+        manifest = signoff_store.export_archive(release.release_id)
+        zip_info = signoff_store.build_archive_zip(release.release_id)
+        archive_zip = signoff_store.archive_zip_path(release.release_id)
+        verified = verify_release_operations_archive_package(archive_zip, require_signed=True)
+
+        external_dir = base / "external-clean-operations-archive"
+        external_dir.mkdir()
+        external_zip = external_dir / "operations-archive.zip"
+        shutil.copy2(archive_zip, external_zip)
+        external_report = verify_release_operations_archive_package(external_zip, require_signed=True)
+
+        tampered_signoff = verify_release_operations_archive_package(
+            _v38_rewrite_zip(archive_zip, base / "tampered-v62-signoff.zip", transforms={"operations-signoff.json": _v62_tamper_operations_signoff}),
+            require_signed=True,
+        )
+        tampered_report = verify_release_operations_archive_package(
+            _v38_rewrite_zip(archive_zip, base / "tampered-v62-report.zip", transforms={"operations-report.json": _v62_tamper_operations_archive_report}),
+            require_signed=True,
+        )
+        duplicate_report = verify_release_operations_archive_package(_v43_duplicate_submission_zip(archive_zip, base / "duplicate-v62-archive.zip"), require_signed=True)
+        redaction_report = verify_release_operations_archive_package(_v38_rewrite_zip(archive_zip, base / "redaction-v62-archive.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        dangerous_report = verify_release_operations_archive_package(_v38_rewrite_zip(archive_zip, base / "dangerous-v62-archive.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_report = verify_release_operations_archive_package(_v38_backslash_entry_zip(base / "backslash-v62-archive.zip"), strict=True)
+        spoof_report = verify_release_operations_archive_package(
+            _v38_rewrite_zip(archive_zip, base / "spoof-v62-archive.zip", additions={"extra.txt": b"extra"}, transforms={"operations-archive-manifest.json": _v62_spoof_operations_archive_manifest}),
+            strict=True,
+        )
+
+        stale_export_status = 409
+        stale_report = {**report, "source_hash": "v62-changed-source", "source": {"fixture": "v6.2 changed"}}
+        stale_report["integrity_hash"] = operations_report_integrity_hash(stale_report)
+        operations_store.build_report = lambda release_id, persist=False, now=None: stale_report  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: stale_report  # type: ignore[method-assign]
+        try:
+            signoff_store.export_archive(release.release_id)
+            stale_export_status = 200
+        except Exception:
+            stale_export_status = 409
+
+        change = signoff_store.create_change_request(release.release_id, {"reason": "Refresh archived operations evidence after planned metadata update", "scope": ["operations", "release_export"], "created_by": "release-check"})
+        signoff_store.update_change_request_status(release.release_id, change["change_request_id"], "submit")
+        approved = signoff_store.update_change_request_status(release.release_id, change["change_request_id"], "approve", {"approved_by": "release-check", "notes": "approved for reset"})
+        reset = signoff_store.reset_signoff(release.release_id, {"reason": "Reset operations signoff after approved change request", "change_request_id": change["change_request_id"]})
+
+        serialized = json.dumps({"gate": gate, "signed": signed, "manifest": manifest, "zip": zip_info, "verified": verified, "reset": reset}, ensure_ascii=False)
+        ok = (
+            gate.get("signable") is True
+            and signed.get("status") == "signed"
+            and duplicate_status == 409
+            and manifest.get("operations_signoff", {}).get("payload_hash") == signed.get("payload_hash")
+            and zip_info.get("sha256")
+            and verified.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and stale_export_status == 409
+            and _v38_check_status(tampered_signoff, "operations_archive_signoff_payload_hash") == "failed"
+            and _v38_check_status(tampered_report, "operations_archive_report_integrity") == "failed"
+            and _v38_check_status(duplicate_report, "operations_archive_zip_duplicate_entries") == "failed"
+            and _v38_check_status(redaction_report, "operations_archive_redaction_scan") == "failed"
+            and _v38_check_status(dangerous_report, "operations_archive_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "operations_archive_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof_report, "operations_archive_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof_report, "operations_archive_manifest_zip_entries_reference_only") == "warning"
+            and approved.get("status") == "approved"
+            and reset.get("status") == "reset"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"sign={signed.get('status')}, duplicate={duplicate_status}, archive={verified.get('status')}, external={external_report.get('status')}, "
+            f"stale={stale_export_status}, tamper={_v38_check_status(tampered_signoff, 'operations_archive_signoff_payload_hash')}/{_v38_check_status(tampered_report, 'operations_archive_report_integrity')}, "
+            f"duplicate_zip={_v38_check_status(duplicate_report, 'operations_archive_zip_duplicate_entries')}, redaction={_v38_check_status(redaction_report, 'operations_archive_redaction_scan')}, "
+            f"dangerous={_v38_check_status(dangerous_report, 'operations_archive_zip_entry_path_safe')}, backslash={_v38_check_status(backslash_report, 'operations_archive_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof_report, 'operations_archive_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'operations_archive_manifest_zip_entries_reference_only')}, "
+            f"change_request={approved.get('status')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v62_tamper_operations_signoff(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["signed_by"] = "tampered-reviewer"
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v62_tamper_operations_archive_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["current_stage"] = "draft"
+    payload.setdefault("summary", {})["blocker_count"] = 99
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v62_spoof_operations_archive_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 class _V55FixtureEncoderRunner:

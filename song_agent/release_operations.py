@@ -122,8 +122,11 @@ class ReleaseOperationsStore:
         if stored:
             stale = str(stored.get("source_hash") or "") != str(live_report.get("source_hash") or "")
             integrity_ok = operations_report_integrity_ok(stored)
+            signoff_changed = stable_hash(stored.get("operations_signoff", {})) != stable_hash(live_report.get("operations_signoff", {}))
         report = stored or live_report
-        if stored:
+        if stored and (stale or signoff_changed):
+            report = {**live_report, "stale": stale, "integrity_ok": operations_report_integrity_ok(live_report)}
+        elif stored:
             report = {**stored, "stale": stale, "integrity_ok": integrity_ok}
         return sanitize_metadata(
             {
@@ -154,6 +157,9 @@ class ReleaseOperationsStore:
         report_id = _next_report_id(self.operations_dir(release_id), existing=self.read_report(release_id, default={}).get("report_id"))
         source_hash = stable_hash(source)
         status = "failed" if blockers else "warning" if warnings else "passed"
+        operations_signoff = _operations_signoff_summary_for_report(self, release_id, source_hash)
+        stage_statuses = _apply_operations_signoff_stage(stage_statuses, operations_signoff)
+        current_stage, next_stage = _current_stage(stage_statuses)
         redaction_summary = _redaction_summary({"domains": domains, "source": source, "graph": evidence_graph})
         if redaction_summary.get("status") == "failed":
             blockers.append(
@@ -188,6 +194,7 @@ class ReleaseOperationsStore:
                 "warning_count": len(warnings),
                 "next_action_count": len(next_actions),
                 "package_summary_count": _package_summary_count(package_summaries),
+                "operations_signoff": operations_signoff,
             },
             "stage_progress": _stage_progress(stage_statuses),
             "stage_statuses": stage_statuses,
@@ -200,6 +207,7 @@ class ReleaseOperationsStore:
             "verifier_summaries": verifier_summaries,
             "redaction_summary": redaction_summary,
             "source": source,
+            "operations_signoff": operations_signoff,
         }
         report["integrity_hash"] = operations_report_integrity_hash(report)
         report = sanitize_metadata(report, blocked_keys=OPERATIONS_BLOCKED_KEYS)
@@ -833,6 +841,8 @@ def _current_stage(stage_statuses: list[dict[str, Any]]) -> tuple[str, str | Non
         if item.get("status") in {"passed", "warning"}:
             current = stage
             continue
+        if stage == "archived" and item.get("status") == "pending":
+            return current, stage
         return current, stage
     return current, None
 
@@ -895,6 +905,53 @@ def _rights_summary(report: dict[str, Any]) -> dict[str, Any]:
         },
         blocked_keys=OPERATIONS_BLOCKED_KEYS,
     )
+
+
+def _operations_signoff_summary_for_report(store: ReleaseOperationsStore, release_id: str, current_source_hash: str) -> dict[str, Any]:
+    path = store.operations_dir(release_id) / "operations-signoff.json"
+    if not path.exists():
+        return {"status": "not_signed", "integrity_ok": False, "stale": False}
+    try:
+        signoff = read_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {"status": "failed", "integrity_ok": False, "stale": True}
+    if not isinstance(signoff, dict):
+        return {"status": "failed", "integrity_ok": False, "stale": True}
+    payload_hash = str(signoff.get("payload_hash") or "")
+    actual_hash = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "export_manifest_hash", "updated_at"}})
+    integrity_ok = bool(payload_hash) and payload_hash == actual_hash
+    stale = bool(signoff.get("source_hash")) and str(signoff.get("source_hash")) != str(current_source_hash)
+    return sanitize_metadata(
+        {
+            "status": signoff.get("status") or "missing",
+            "signed_at": signoff.get("signed_at"),
+            "signed_by": signoff.get("signed_by"),
+            "force": bool(signoff.get("force")),
+            "payload_hash": signoff.get("payload_hash"),
+            "integrity_ok": integrity_ok,
+            "payload_hash_ok": integrity_ok,
+            "stale": stale,
+            "source_hash": signoff.get("source_hash"),
+            "current_source_hash": current_source_hash,
+        },
+        blocked_keys=OPERATIONS_BLOCKED_KEYS,
+    )
+
+
+def _apply_operations_signoff_stage(stage_statuses: list[dict[str, Any]], signoff_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = [dict(item) for item in stage_statuses]
+    for item in rows:
+        if item.get("stage") != "archived":
+            continue
+        status = str(signoff_summary.get("status") or "")
+        if status in {"signed", "force_signed"} and signoff_summary.get("integrity_ok") and not signoff_summary.get("stale"):
+            item.update({"status": "passed", "blocker_count": 0, "warning_count": 0})
+        elif status in {"signed", "force_signed"}:
+            item.update({"status": "failed", "blocker_count": 1, "warning_count": 0})
+        else:
+            item.update({"status": "pending", "blocker_count": 0, "warning_count": 0})
+        break
+    return rows
 
 
 def _redaction_summary(value: Any) -> dict[str, Any]:

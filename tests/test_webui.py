@@ -113,6 +113,20 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="release-runbook-verify"' in html
     assert "/operations/runbooks" in html
     assert "/run-safe" in html
+    assert "Release Operations Signoff" in html
+    assert 'id="release-operations-sign"' in html
+    assert 'id="release-operations-archive-export"' in html
+    assert 'id="release-operations-archive-zip"' in html
+    assert 'id="release-operations-archive-verify"' in html
+    assert 'id="release-operations-change-create"' in html
+    assert 'id="release-operations-reset-signoff"' in html
+    assert "/operations/signoff" in html
+    assert "/operations/signoff/reset" in html
+    assert "/operations/archive/export" in html
+    assert "/operations/archive/export/zip" in html
+    assert "/operations/archive/verify" in html
+    assert "/operations/archive.zip" in html
+    assert "/operations/change-requests" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
     assert "/encoded-audio/health" in html
     assert "/encoded-audio/acceptance/refresh" in html

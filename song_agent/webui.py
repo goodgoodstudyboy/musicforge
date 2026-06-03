@@ -4433,6 +4433,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           </tr>
         `;
       }).join("");
+      const operationsSignoff = report.operations_signoff || (summary.operations_signoff || {});
       return `
         <div class="panel-title subhead"><span>Release Operations</span></div>
         <div class="summary-grid">
@@ -4482,6 +4483,29 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <thead><tr><th>Runbook</th><th>Status</th><th>Safe</th><th>Manual Required</th><th>Failed</th></tr></thead>
           <tbody>${runbookRows || "<tr><td colspan='5'>No Operations Runbooks yet.</td></tr>"}</tbody>
         </table>
+        <div class="panel-title subhead"><span>Release Operations Signoff</span></div>
+        <div class="summary-grid">
+          ${metric("Signoff", operationsSignoff.status || "not_signed")}
+          ${metric("Signed By", operationsSignoff.signed_by || "-")}
+          ${metric("Stale", operationsSignoff.stale ? "yes" : "-")}
+          ${metric("Integrity", operationsSignoff.integrity_ok === false ? "failed" : "ok")}
+        </div>
+        <div class="grid2">
+          <label>Operations Signed By <input id="release-operations-signed-by" value="local-user"></label>
+          <label>Operations Reset Reason <input id="release-operations-reset-reason" value="Approved operations evidence change"></label>
+          <label>Change Request Reason <input id="release-operations-change-reason" value="Refresh archived operations evidence after approved change"></label>
+          <label>Change Request Scope <input id="release-operations-change-scope" value="operations,release_export"></label>
+          <label>Change Request ID <input id="release-operations-change-id" placeholder="ocr-000001"></label>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-operations-sign" type="button">Sign Operations</button>
+          <button class="secondary" id="release-operations-archive-export" type="button">Export Archive</button>
+          <button class="secondary" id="release-operations-archive-zip" type="button">Build Archive ZIP</button>
+          <button class="secondary" id="release-operations-archive-verify" type="button">Verify Archive ZIP</button>
+          <button class="secondary" id="release-operations-change-create" type="button">Create Change Request</button>
+          <button class="danger" id="release-operations-reset-signoff" type="button">Reset Operations Signoff</button>
+          <a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/operations/archive.zip">Download Archive ZIP</a>
+        </div>
       `;
     }
 
@@ -4928,6 +4952,47 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ require_current: true }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-operations-sign", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signed_by: ($("release-operations-signed-by") || {}).value || "local-user" }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-operations-archive-export", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/archive/export`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-archive-zip", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/archive/export/zip`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-archive-verify", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/archive/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ require_signed: true }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-operations-change-create", async () => {
+        const scope = (($("release-operations-change-scope") || {}).value || "operations").split(",").map((item) => item.trim()).filter(Boolean);
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/change-requests`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: ($("release-operations-change-reason") || {}).value || "Approved operations evidence change", scope, created_by: "local-user" }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-operations-reset-signoff", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/signoff/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: ($("release-operations-reset-reason") || {}).value || "Approved operations evidence change", change_request_id: (($("release-operations-change-id") || {}).value || "").trim() || null }),
         });
         await loadReleases();
       });

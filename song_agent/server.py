@@ -126,6 +126,19 @@ from song_agent.release_operations_runbook_verifier import (
     verify_release_operations_runbook_package,
     write_release_operations_runbook_verification_report,
 )
+from song_agent.release_operations_archive_verifier import (
+    release_operations_archive_verification_summary,
+    verify_release_operations_archive_package,
+    write_release_operations_archive_verification_report,
+)
+from song_agent.release_operations_signoff import (
+    ReleaseOperationsSignoffError,
+    ReleaseOperationsSignoffNotFoundError,
+    ReleaseOperationsSignoffStateError,
+    ReleaseOperationsSignoffStore,
+    operations_change_request_integrity_ok,
+    operations_signoff_summary,
+)
 from song_agent.release_operations_verifier import (
     release_operations_verification_summary,
     verify_release_operations_package,
@@ -2565,6 +2578,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_operations_runbook_store(self) -> ReleaseOperationsRunbookStore:
         return self.server.release_operations_runbook_store  # type: ignore[attr-defined]
+
+    @property
+    def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
+        return self.server.release_operations_signoff_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5200,6 +5217,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if tail == "/runbooks" or tail.startswith("/runbooks/"):
             self._handle_release_operations_runbooks(method, release_id, tail.removeprefix("/runbooks"))
             return
+        if tail == "/signoff" or tail == "/signoff/reset":
+            self._handle_release_operations_signoff(method, release_id, tail.removeprefix("/signoff"))
+            return
+        if tail == "/change-requests" or tail.startswith("/change-requests/"):
+            self._handle_release_operations_change_requests(method, release_id, tail.removeprefix("/change-requests"))
+            return
+        if tail == "/archive/export" or tail == "/archive/export/zip" or tail == "/archive/verify" or tail == "/archive.zip":
+            self._handle_release_operations_archive(method, release_id, tail.removeprefix("/archive"))
+            return
         if tail in {"", "/"}:
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5258,6 +5284,128 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "release_id": release_id, "verification": report, "summary": release_operations_verification_summary(report)})
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Release Operations route not found.")
+
+    def _handle_release_operations_signoff(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    signoff = self.release_operations_signoff_store.read_signoff(release_id, default={})
+                    gate = self.release_operations_signoff_store.gate(release_id, {}, now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "signoff": signoff, "summary": operations_signoff_summary(signoff, current_report=self.release_operations_store.build_report(release_id, persist=False)), "gate": gate})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    try:
+                        signoff = self.release_operations_signoff_store.signoff(release_id, payload, now=_utc_now())
+                    except ReleaseOperationsSignoffStateError as exc:
+                        gate = self.release_operations_signoff_store.gate(release_id, payload, now=_utc_now())
+                        self._send_json({"error": str(exc), "gate": gate}, status=HTTPStatus.CONFLICT)
+                        return
+                    self._send_json({"ok": True, "release_id": release_id, "signoff": signoff, "summary": operations_signoff_summary(signoff, current_report=self.release_operations_store.build_report(release_id, persist=False))})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                reset = self.release_operations_signoff_store.reset_signoff(release_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "signoff": reset, "summary": operations_signoff_summary(reset)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Operations Signoff route not found.")
+        except ReleaseOperationsSignoffNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseOperationsSignoffStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseOperationsSignoffError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_release_operations_change_requests(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    rows = self.release_operations_signoff_store.list_change_requests(release_id)
+                    self._send_json({"ok": True, "release_id": release_id, "change_requests": rows, "summary": self.release_operations_signoff_store.change_request_summary(release_id)})
+                    return
+                if method == "POST":
+                    item = self.release_operations_signoff_store.create_change_request(release_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "release_id": release_id, "change_request": item, "integrity_ok": operations_change_request_integrity_ok(item)}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Operations Change Request route not found.")
+                return
+            change_request_id = parts[0]
+            if len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                item = self.release_operations_signoff_store.get_change_request(release_id, change_request_id)
+                self._send_json({"ok": True, "release_id": release_id, "change_request": item, "integrity_ok": operations_change_request_integrity_ok(item)})
+                return
+            if len(parts) == 2 and parts[1] in {"submit", "approve", "reject", "cancel"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                item = self.release_operations_signoff_store.update_change_request_status(release_id, change_request_id, parts[1], self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "change_request": item, "integrity_ok": operations_change_request_integrity_ok(item)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Operations Change Request route not found.")
+        except ReleaseOperationsSignoffNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseOperationsSignoffStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseOperationsSignoffError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_release_operations_archive(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.release_operations_signoff_store.export_archive(release_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/export/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.release_operations_signoff_store.build_archive_zip(release_id, now=_utc_now())
+                manifest = self.release_operations_signoff_store.read_archive_manifest(release_id)
+                self._send_json({"ok": True, "release_id": release_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_release_operations_archive_package(
+                    self.release_operations_signoff_store.archive_zip_path(release_id),
+                    strict=bool(payload.get("strict", False)),
+                    require_signed=bool(payload.get("require_signed", False)),
+                )
+                write_release_operations_archive_verification_report(report, self.release_operations_signoff_store.operations_dir(release_id) / "operations-archive-verification-report.json")
+                self._send_json({"ok": True, "release_id": release_id, "verification": report, "summary": release_operations_archive_verification_summary(report)})
+                return
+            if tail == ".zip":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_store.get_release(release_id)
+                self._send_file(self.release_operations_signoff_store.archive_zip_path(release_id), "application/zip", filename=f"musicforge-{release_id}-operations-archive.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Operations Archive route not found.")
+        except ReleaseOperationsSignoffNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseOperationsSignoffStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseOperationsSignoffError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_release_operations_runbooks(self, method: str, release_id: str, tail: str) -> None:
         if tail in {"", "/"}:
@@ -13898,6 +14046,11 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             distribution_store=self.distribution_store,
             submission_store=self.submission_store,
             submission_evidence_store=self.submission_evidence_store,
+        )
+        self.release_operations_signoff_store = ReleaseOperationsSignoffStore(
+            operations_store=self.release_operations_store,
+            runbook_store=self.release_operations_runbook_store,
+            release_store=self.release_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

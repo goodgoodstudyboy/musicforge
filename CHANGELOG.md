@@ -1,5 +1,21 @@
 # Changelog
 
+## v6.2.0 - 2026-06-03
+
+### Added
+- Release Operations Signoff for archiving an accepted Operations Report after Runbook and package verifier evidence are clean.
+- Operations Archive Export/ZIP with `operations-signoff.json`, `operations-report.json`, Runbook summary, verifier summaries, package ledger, change request summary, and archive manifest.
+- Offline `verify-release-operations-archive-package` CLI with signed requirement, path safety, duplicate entry, manifest/file hash, signoff payload hash, report integrity, ledger hash, redaction, and spoof checks.
+- Operations Change Requests for audited reset control after Operations Signoff.
+- Studio Release Operations Signoff controls for sign, archive export/ZIP/verify, change request creation, and reset.
+- v6.2 release-check smoke covering signoff, archive verification, external verification, stale blocking, signoff/report tamper, duplicate ZIP, dangerous/backslash entries, manifest spoof, redaction, and approved change-request reset.
+
+### Fixed
+- Release Export helper functions now reject signed or archived Release rebuilds by default; internal signoff sidecar refresh uses the explicit `allow_signed=True` channel.
+
+### Verified
+- `python -m pytest tests\test_release_operations_signoff.py tests\test_server_release_operations_signoff.py tests\test_cli_release_operations.py tests\test_release_check.py::test_v62_release_operations_signoff_archive_smoke tests\test_release_export.py tests\test_release_operations.py tests\test_release_operations_runbook.py tests\test_server_release_operations.py tests\test_server_release_operations_runbook.py tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls -q`
+
 ## v6.1.1 - 2026-06-03
 
 ### Fixed

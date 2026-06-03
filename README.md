@@ -434,6 +434,12 @@ work, and manual reviews remain `manual_required`. A Runbook binds to the
 Operations Report source hash, so stale Runbooks cannot execute safe actions
 after the Release state changes.
 
+Release Operations Signoff archives the accepted Operations Report after the
+safe Runbook and package verifiers are clean. The archive ZIP contains summary
+evidence only and can be verified offline. After Operations Signoff, changes to
+the archived evidence require an approved Operations Change Request before the
+signoff can be reset.
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -448,6 +454,9 @@ python -m song_agent.cli verify-release-operations-package path\to\release-opera
 python -m song_agent.cli release-operations-runbook rel-000001 --create --json
 python -m song_agent.cli release-operations-runbook rel-000001 --runbook-id orb-000001 --run-safe --export --zip --verify --require-current --json
 python -m song_agent.cli verify-release-operations-runbook-package path\to\runbook-export.zip --json --require-current --report-out runbook-verification-report.json
+python -m song_agent.cli release-operations-signoff rel-000001 --sign --signed-by local-user --json
+python -m song_agent.cli release-operations-archive rel-000001 --export --zip --verify --require-signed --json
+python -m song_agent.cli verify-release-operations-archive-package path\to\operations-archive.zip --json --require-signed --report-out operations-archive-verification-report.json
 ```
 
 ```powershell
