@@ -166,4 +166,4 @@ def _sign_and_zip_release(release_store: ReleaseStore, release, release_qa: dict
     signoff = release_store.write_signoff(release.release_id, {**pending, "export_manifest_hash": stable_hash(final_manifest)})
     refresh_release_export_signoff_summary(release_store, release.release_id)
     release_store.update_signoff_summary(release.release_id, release_signoff_summary(signoff))
-    return build_release_export_zip(release_store, release.release_id, now=now)
+    return build_release_export_zip(release_store, release.release_id, now=now, allow_signed=True)
