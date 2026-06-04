@@ -9,6 +9,7 @@ from pathlib import Path
 
 from song_agent.release_operations import ReleaseOperationsStore
 from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
 from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
 from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
 from song_agent.releases import ReleaseStore
@@ -339,3 +340,41 @@ def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path
     payload = json.loads(command.stdout)
     assert payload["summary"]["entry_count"] >= 1
     assert payload["verification_summary"]["status"] in {"passed", "warning"}
+
+
+def test_release_operations_reviewer_pack_cli_create_export_verify(tmp_path: Path, monkeypatch) -> None:
+    from tests.test_release_operations_reviewer_pack import accepted_reviewer_fixture
+
+    monkeypatch.chdir(tmp_path)
+    release, _operations_store, _runbook_store, _signoff_store, _audit_store, reviewer_store = accepted_reviewer_fixture(Path(".musicforge"), monkeypatch)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    created = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "release-operations-reviewer-pack", release.release_id, "--refresh", "--export", "--zip", "--verify", "--strict", "--require-audit", "--require-signed", "--require-archive", "--json"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert created.returncode == 0, created.stderr
+    payload = json.loads(created.stdout)
+    assert payload["summary"]["status"] == "passed"
+    assert payload["verification_summary"]["status"] == "passed"
+
+    report_out = tmp_path / "reviewer-verification.json"
+    verified = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "verify-release-operations-reviewer-pack", str(reviewer_store.zip_path(release.release_id)), "--json", "--strict", "--require-audit", "--require-signed", "--require-archive", "--report-out", str(report_out)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(verified.stdout)["status"] == "passed"
+    assert json.loads(report_out.read_text(encoding="utf-8"))["status"] == "passed"

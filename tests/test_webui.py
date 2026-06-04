@@ -137,6 +137,18 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/operations/audit/export/zip" in html
     assert "/operations/audit/verify" in html
     assert "/operations/audit.zip" in html
+    assert "Reviewer Pack" in html
+    assert "Refresh Reviewer Report" in html
+    assert "Verify Reviewer ZIP" in html
+    assert "Retrospective" in html
+    assert "Risk hotspots" in html
+    assert 'id="release-reviewer-pack-refresh"' in html
+    assert 'id="release-reviewer-pack-export"' in html
+    assert 'id="release-reviewer-pack-zip"' in html
+    assert 'id="release-reviewer-pack-verify"' in html
+    assert "/operations/reviewer-pack" in html
+    assert "/operations/reviewer-pack/verify" in html
+    assert "/operations/reviewer-pack.zip" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
     assert "/encoded-audio/health" in html
     assert "/encoded-audio/acceptance/refresh" in html

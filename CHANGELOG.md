@@ -1,5 +1,17 @@
 # Changelog
 
+## v6.4.0 - 2026-06-04
+
+### Added
+- Release Operations Reviewer Pack with reviewer-facing report, retrospective report, Markdown guide, evidence index, risk summary, export directory, and portable ZIP.
+- Offline `verify-release-operations-reviewer-pack` CLI with strict ZIP path safety, duplicate entry, manifest spoof, report integrity, retrospective integrity, signed/archive/audit requirements, and Markdown/JSON redaction scanning.
+- API routes under `/api/releases/<release>/operations/reviewer-pack` for refresh, export, ZIP, verify, and download.
+- Studio Release Operations Reviewer Pack controls with Reviewer and Retrospective summary cards.
+- v6.4 release-check smoke covering external verification, reviewer report tamper, retrospective tamper, missing guide, duplicate ZIP, dangerous/backslash entries, manifest spoof, and Markdown redaction.
+
+### Verified
+- `python -m pytest tests\test_release_operations_reviewer_pack.py tests\test_server_release_operations_reviewer_pack.py tests\test_cli_release_operations.py::test_release_operations_reviewer_pack_cli_create_export_verify tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v64_release_operations_reviewer_pack_smoke -q`
+
 ## v6.3.1 - 2026-06-04
 
 ### Fixed

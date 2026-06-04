@@ -67,6 +67,7 @@ from song_agent.release_operations_verifier import verify_release_operations_pac
 from song_agent.release_operations_runbook_verifier import verify_release_operations_runbook_package
 from song_agent.release_operations_archive_verifier import verify_release_operations_archive_package
 from song_agent.release_operations_audit_verifier import verify_release_operations_audit_package
+from song_agent.release_operations_reviewer_pack_verifier import verify_release_operations_reviewer_pack
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -241,6 +242,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v6.1 release operations runbook smoke", *_v61_release_operations_runbook_smoke(root))
     report.add("v6.2 release operations signoff archive smoke", *_v62_release_operations_signoff_archive_smoke(root))
     report.add("v6.3 release operations audit ledger smoke", *_v63_release_operations_audit_ledger_smoke(root))
+    report.add("v6.4 release operations reviewer pack smoke", *_v64_release_operations_reviewer_pack_smoke(root))
     return report
 
 
@@ -8980,6 +8982,140 @@ def _v63_tamper_audit_change_request_reset(data: bytes) -> bytes:
     if requests and isinstance(requests[0], dict):
         requests[0]["applied_signoff_reset_hash"] = "f" * 64
         requests[0]["integrity_hash"] = "0" * 64
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v64_release_operations_reviewer_pack_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v64-reviewer-pack-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_audit_verifier import write_release_operations_audit_verification_report
+        from song_agent.release_operations_archive_verifier import write_release_operations_archive_verification_report
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore, reviewer_pack_manifest_integrity_ok, reviewer_report_integrity_ok
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_integrity_hash
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        release = release_store.create_release({"name": "v6.4 Reviewer Pack", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+        reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
+
+        report = operations_store.refresh(release.release_id)
+        report["current_stage"] = "accepted"
+        report["next_stage"] = "archived"
+        report["summary"]["blocker_count"] = 0
+        report["summary"]["warning_count"] = 0
+        report["blockers"] = []
+        report["warnings"] = []
+        report["domains"] = {"submission_evidence": {"required": False, "status": "not_required", "summary": {}}}
+        report["verifier_summaries"] = {"release": {"status": "passed"}, "distribution": [], "submission": [], "submission_evidence": []}
+        report["package_summaries"] = {"release_zip": {"exists": True, "status": "exists", "sha256": "0" * 64}, "distribution_packages": [], "submission_packages": [], "submission_evidence_packages": []}
+        report["source_hash"] = "v64-reviewer-source"
+        report["source"] = {"fixture": "v6.4 accepted"}
+        report["integrity_hash"] = operations_report_integrity_hash(report)
+        write_json(operations_store.report_path(release.release_id), report)
+        operations_store.build_report = lambda release_id, persist=False, now=None: report  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: report  # type: ignore[method-assign]
+
+        runbook = runbook_store.create_from_operations_report(release.release_id)
+        runbook["status"] = "completed"
+        runbook["items"] = []
+        runbook["summary"] = {"total_count": 0, "safe_count": 0, "manual_count": 0, "completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0, "waived_count": 0, "pending_count": 0}
+        runbook["integrity_hash"] = runbook_integrity_hash(runbook)
+        write_json(runbook_store.runbook_path(release.release_id, runbook["runbook_id"]), runbook)
+
+        signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+        signoff_store.export_archive(release.release_id)
+        signoff_store.build_archive_zip(release.release_id)
+        archive_verification = verify_release_operations_archive_package(signoff_store.archive_zip_path(release.release_id), require_signed=True)
+        write_release_operations_archive_verification_report(archive_verification, signoff_store.operations_dir(release.release_id) / "operations-archive-verification-report.json")
+        audit_store.refresh(release.release_id)
+        audit_store.export_audit(release.release_id)
+        audit_store.build_zip(release.release_id)
+        audit_verification = verify_release_operations_audit_package(audit_store.zip_path(release.release_id), require_current=True, require_signed=True, require_archive=True)
+        write_release_operations_audit_verification_report(audit_verification, audit_store.verification_report_path(release.release_id))
+
+        reviewer_report = reviewer_store.refresh(release.release_id)
+        reviewer_manifest = reviewer_store.export_pack(release.release_id)
+        reviewer_store.build_zip(release.release_id)
+        reviewer_zip = reviewer_store.zip_path(release.release_id)
+        verified = verify_release_operations_reviewer_pack(reviewer_zip, strict=True, require_audit=True, require_signed=True, require_archive=True)
+        external_dir = base / "external-clean-reviewer"
+        external_dir.mkdir()
+        external_zip = external_dir / "operations-reviewer-pack.zip"
+        shutil.copy2(reviewer_zip, external_zip)
+        external_report = verify_release_operations_reviewer_pack(external_zip, strict=True, require_audit=True, require_signed=True, require_archive=True)
+        tamper_report = verify_release_operations_reviewer_pack(_v38_rewrite_zip(reviewer_zip, base / "tamper-v64-reviewer.zip", transforms={"reviewer-report.json": _v64_tamper_reviewer_report}), require_audit=True, require_signed=True, require_archive=True)
+        retro_tamper = verify_release_operations_reviewer_pack(_v38_rewrite_zip(reviewer_zip, base / "retro-tamper-v64-reviewer.zip", transforms={"retrospective-report.json": _v64_tamper_retrospective_report}), require_audit=True)
+        missing_report = verify_release_operations_reviewer_pack(_v38_rewrite_zip(reviewer_zip, base / "missing-v64-reviewer.zip", remove={"REVIEWER_GUIDE.md"}), require_audit=True)
+        duplicate_report = verify_release_operations_reviewer_pack(_v43_duplicate_submission_zip(reviewer_zip, base / "duplicate-v64-reviewer.zip"), require_audit=True)
+        dangerous_report = verify_release_operations_reviewer_pack(_v38_rewrite_zip(reviewer_zip, base / "dangerous-v64-reviewer.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_report = verify_release_operations_reviewer_pack(_v38_backslash_entry_zip(base / "backslash-v64-reviewer.zip"), strict=True)
+        spoof_report = verify_release_operations_reviewer_pack(
+            _v38_rewrite_zip(reviewer_zip, base / "spoof-v64-reviewer.zip", additions={"extra.txt": b"extra"}, transforms={"reviewer-pack-manifest.json": _v64_spoof_reviewer_manifest}),
+            strict=True,
+        )
+        redaction_report = verify_release_operations_reviewer_pack(_v38_rewrite_zip(reviewer_zip, base / "redaction-v64-reviewer.zip", transforms={"REVIEWER_GUIDE.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+
+        serialized = json.dumps({"reviewer": reviewer_report, "manifest": reviewer_manifest}, ensure_ascii=False)
+        ok = (
+            reviewer_report.get("status") == "passed"
+            and reviewer_report_integrity_ok(reviewer_report)
+            and reviewer_pack_manifest_integrity_ok(reviewer_manifest)
+            and verified.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tamper_report, "reviewer_pack_report_integrity") == "failed"
+            and _v38_check_status(retro_tamper, "reviewer_pack_retrospective_integrity") == "failed"
+            and _v38_check_status(missing_report, "reviewer_pack_zip_required_entries") == "failed"
+            and _v38_check_status(duplicate_report, "reviewer_pack_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous_report, "reviewer_pack_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "reviewer_pack_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof_report, "reviewer_pack_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof_report, "reviewer_pack_manifest_zip_entries_reference_only") == "warning"
+            and _v38_check_status(redaction_report, "reviewer_pack_redaction_scan") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"reviewer={verified.get('status')}, external={external_report.get('status')}, "
+            f"tamper={_v38_check_status(tamper_report, 'reviewer_pack_report_integrity')}, "
+            f"retro_tamper={_v38_check_status(retro_tamper, 'reviewer_pack_retrospective_integrity')}, "
+            f"missing={_v38_check_status(missing_report, 'reviewer_pack_zip_required_entries')}, "
+            f"duplicate={_v38_check_status(duplicate_report, 'reviewer_pack_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous_report, 'reviewer_pack_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash_report, 'reviewer_pack_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof_report, 'reviewer_pack_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'reviewer_pack_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction_report, 'reviewer_pack_redaction_scan')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v64_tamper_reviewer_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("summary", {})["warning_count"] = 99
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v64_tamper_retrospective_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("recommendations", []).append({"recommendation": "tampered"})
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v64_spoof_reviewer_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 

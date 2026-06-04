@@ -466,6 +466,8 @@ python -m song_agent.cli verify-release-operations-archive-package path\to\opera
 python -m song_agent.cli release-operations-signoff rel-000001 --reset --reason "Approved operations evidence change" --change-request-id ocr-000001 --json
 python -m song_agent.cli release-operations-audit rel-000001 --refresh --export --zip --verify --require-current --require-signed --require-archive --json
 python -m song_agent.cli verify-release-operations-audit-package path\to\operations-audit.zip --json --strict --require-signed --require-archive --report-out operations-audit-verification-report.json
+python -m song_agent.cli release-operations-reviewer-pack rel-000001 --refresh --export --zip --verify --strict --require-audit --require-signed --require-archive --json
+python -m song_agent.cli verify-release-operations-reviewer-pack path\to\operations-reviewer-pack.zip --json --strict --require-audit --require-signed --require-archive --report-out reviewer-pack-verification-report.json
 ```
 
 ```powershell

@@ -3170,6 +3170,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       let distributionData = { summary: {}, targets: [], artwork: [] };
       let submissionData = { summary: {}, submissions: [] };
       let operationsData = { summary: {}, report: {} };
+      let operationsReviewerData = { summary: {}, report: {}, retrospective_summary: {} };
       let releaseAnalyticsData = { summary: {}, analytics: null };
       try { qaData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/qa`); } catch (err) {}
       try { exportData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/export`); } catch (err) {}
@@ -3206,6 +3207,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         operationsData.runbooks = runbookData.runbooks || [];
         const auditData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/audit`);
         operationsData.audit = auditData || {};
+        operationsReviewerData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/reviewer-pack`);
       } catch (err) {}
       try { releaseAnalyticsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/acceptance-analytics`); } catch (err) {}
       const target = $("release-detail");
@@ -3246,7 +3248,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         ${releaseEncodedAudioHtml(encodedAudioData, release)}
         ${releaseFormatDecisionHtml(formatDecisionData, release)}
         ${releaseRightsClearanceHtml(rightsData, release)}
-        ${releaseOperationsHtml(operationsData, release)}
+        ${releaseOperationsHtml(operationsData, operationsReviewerData, release)}
         ${releaseDistributionHtml(distributionData, release)}
         ${releaseSubmissionsHtml(submissionData, distributionData, release)}
         ${releaseAcceptanceAnalyticsHtml(releaseAnalyticsData, release)}
@@ -4397,7 +4399,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       `;
     }
 
-    function releaseOperationsHtml(operationsData, release) {
+    function releaseOperationsHtml(operationsData, reviewerPackData, release) {
       const summary = (operationsData && operationsData.summary) || {};
       const report = (operationsData && operationsData.report) || {};
       const progress = report.stage_progress || {};
@@ -4408,6 +4410,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const runbookSummary = activeRunbook.summary || {};
       const audit = operationsData.audit || {};
       const auditSummary = audit.summary || {};
+      const reviewerSummary = (reviewerPackData && reviewerPackData.summary) || {};
+      const reviewerReport = (reviewerPackData && reviewerPackData.report) || {};
+      const retrospectiveSummary = (reviewerPackData && reviewerPackData.retrospective_summary) || {};
+      const reviewerFindings = (reviewerReport.warnings || []).slice(0, 5).map((item) => `
+        <tr><td>${escapeHtml(item.check_id || "-")}</td><td>${escapeHtml(item.message || "-")}</td></tr>
+      `).join("");
       const stageRows = (report.stage_statuses || []).map((stage) => `
         <tr>
           <td>${escapeHtml(stage.stage || "-")}</td>
@@ -4525,6 +4533,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="release-operations-audit-verify" type="button">Verify Audit ZIP</button>
           <a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/operations/audit.zip">Download Audit ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Reviewer Pack</span></div>
+        <div class="summary-grid">
+          ${metric("Reviewer", reviewerSummary.status || "missing")}
+          ${metric("Readiness", reviewerSummary.readiness || "-")}
+          ${metric("Audit", reviewerSummary.audit_status || "-")}
+          ${metric("Archive", reviewerSummary.archive_verified ? "verified" : "-")}
+          ${metric("Warnings", reviewerSummary.warning_count || 0)}
+          ${metric("Retrospective", retrospectiveSummary.status || "missing")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-reviewer-pack-refresh" type="button">Refresh Reviewer Report</button>
+          <button class="secondary" id="release-reviewer-pack-export" type="button">Export Reviewer Pack</button>
+          <button class="secondary" id="release-reviewer-pack-zip" type="button">Build Reviewer ZIP</button>
+          <button class="secondary" id="release-reviewer-pack-verify" type="button">Verify Reviewer ZIP</button>
+          <a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/operations/reviewer-pack.zip">Download Reviewer ZIP</a>
+        </div>
+        <table>
+          <thead><tr><th>Risk hotspots</th><th>Reviewer note</th></tr></thead>
+          <tbody>${reviewerFindings || "<tr><td colspan='2'>No Reviewer Pack warnings.</td></tr>"}</tbody>
+        </table>
       `;
     }
 
@@ -5032,6 +5060,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ require_current: true, require_signed: true, require_archive: true }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-reviewer-pack-refresh", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/reviewer-pack/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-reviewer-pack-export", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/reviewer-pack/export`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-reviewer-pack-zip", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/reviewer-pack/export/zip`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-reviewer-pack-verify", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/reviewer-pack/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, require_audit: true, require_signed: true, require_archive: true }),
         });
         await loadReleases();
       });
