@@ -131,6 +131,18 @@ from song_agent.release_operations_archive_verifier import (
     verify_release_operations_archive_package,
     write_release_operations_archive_verification_report,
 )
+from song_agent.release_operations_audit import (
+    ReleaseOperationsAuditError,
+    ReleaseOperationsAuditNotFoundError,
+    ReleaseOperationsAuditStateError,
+    ReleaseOperationsAuditStore,
+    audit_summary,
+)
+from song_agent.release_operations_audit_verifier import (
+    release_operations_audit_verification_summary,
+    verify_release_operations_audit_package,
+    write_release_operations_audit_verification_report,
+)
 from song_agent.release_operations_signoff import (
     ReleaseOperationsSignoffError,
     ReleaseOperationsSignoffNotFoundError,
@@ -2582,6 +2594,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
         return self.server.release_operations_signoff_store  # type: ignore[attr-defined]
+
+    @property
+    def release_operations_audit_store(self) -> ReleaseOperationsAuditStore:
+        return self.server.release_operations_audit_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5226,6 +5242,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         if tail == "/archive/export" or tail == "/archive/export/zip" or tail == "/archive/verify" or tail == "/archive.zip":
             self._handle_release_operations_archive(method, release_id, tail.removeprefix("/archive"))
             return
+        if tail == "/audit" or tail.startswith("/audit/") or tail == "/audit.zip":
+            self._handle_release_operations_audit(method, release_id, tail.removeprefix("/audit"))
+            return
         if tail in {"", "/"}:
             if method != "GET":
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5403,6 +5422,89 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseOperationsSignoffStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleaseOperationsSignoffError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_release_operations_audit(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_operations_audit_store.read_report(release_id, default={})
+                self._send_json({"ok": True, "release_id": release_id, "report": report, "summary": audit_summary(report) if report else {"status": "missing", "entry_count": 0}})
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_operations_audit_store.refresh(release_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "report": report, "summary": audit_summary(report)})
+                return
+            if tail == "/entries":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                query = parse_qs(urlparse(self.path).query)
+                entries = self.release_operations_audit_store.entries(
+                    release_id,
+                    domain=query.get("domain", [None])[0],
+                    risk=query.get("risk", [None])[0],
+                    event_type=query.get("event_type", [None])[0],
+                    limit=int(query.get("limit", ["200"])[0] or 200),
+                )
+                self._send_json({"ok": True, "release_id": release_id, "entries": entries, "summary": {"entry_count": len(entries)}})
+                return
+            if tail == "/graph":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "release_id": release_id, "graph": self.release_operations_audit_store.graph(release_id)})
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.release_operations_audit_store.export_audit(release_id, now=_utc_now())
+                self._send_json({"ok": True, "release_id": release_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/export/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.release_operations_audit_store.build_zip(release_id, now=_utc_now())
+                manifest = self.release_operations_audit_store.read_export_manifest(release_id)
+                self._send_json({"ok": True, "release_id": release_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_release_operations_audit_package(
+                    self.release_operations_audit_store.zip_path(release_id),
+                    strict=bool(payload.get("strict", False)),
+                    require_current=bool(payload.get("require_current", False)),
+                    require_signed=bool(payload.get("require_signed", False)),
+                    require_archive=bool(payload.get("require_archive", False)),
+                )
+                write_release_operations_audit_verification_report(report, self.release_operations_audit_store.verification_report_path(release_id))
+                self._send_json({"ok": True, "release_id": release_id, "verification": report, "summary": release_operations_audit_verification_summary(report)})
+                return
+            if tail == ".zip":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_store.get_release(release_id)
+                self._send_file(self.release_operations_audit_store.zip_path(release_id), "application/zip", filename=f"musicforge-{release_id}-operations-audit.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Operations Audit route not found.")
+        except ReleaseOperationsAuditNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseOperationsAuditStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseOperationsAuditError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -14050,6 +14152,12 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_operations_signoff_store = ReleaseOperationsSignoffStore(
             operations_store=self.release_operations_store,
             runbook_store=self.release_operations_runbook_store,
+            release_store=self.release_store,
+        )
+        self.release_operations_audit_store = ReleaseOperationsAuditStore(
+            operations_store=self.release_operations_store,
+            runbook_store=self.release_operations_runbook_store,
+            signoff_store=self.release_operations_signoff_store,
             release_store=self.release_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")

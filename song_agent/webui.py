@@ -3204,6 +3204,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         operationsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations`);
         const runbookData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/runbooks`);
         operationsData.runbooks = runbookData.runbooks || [];
+        const auditData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/audit`);
+        operationsData.audit = auditData || {};
       } catch (err) {}
       try { releaseAnalyticsData = await api(`/api/releases/${encodeURIComponent(release.release_id)}/acceptance-analytics`); } catch (err) {}
       const target = $("release-detail");
@@ -4404,6 +4406,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const runbooks = operationsData.runbooks || [];
       const activeRunbook = runbooks[0] || {};
       const runbookSummary = activeRunbook.summary || {};
+      const audit = operationsData.audit || {};
+      const auditSummary = audit.summary || {};
       const stageRows = (report.stage_statuses || []).map((stage) => `
         <tr>
           <td>${escapeHtml(stage.stage || "-")}</td>
@@ -4505,6 +4509,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="release-operations-change-create" type="button">Create Change Request</button>
           <button class="danger" id="release-operations-reset-signoff" type="button">Reset Operations Signoff</button>
           <a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/operations/archive.zip">Download Archive ZIP</a>
+        </div>
+        <div class="panel-title subhead"><span>Release Operations Audit Ledger</span></div>
+        <div class="summary-grid">
+          ${metric("Audit", auditSummary.status || "missing")}
+          ${metric("Entries", auditSummary.entry_count || 0)}
+          ${metric("Blockers", auditSummary.blocker_count || 0)}
+          ${metric("Warnings", auditSummary.warning_count || 0)}
+          ${metric("Integrity", auditSummary.integrity_ok === false ? "failed" : "ok")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="release-operations-audit-refresh" type="button">Refresh Audit Ledger</button>
+          <button class="secondary" id="release-operations-audit-export" type="button">Export Audit Package</button>
+          <button class="secondary" id="release-operations-audit-zip" type="button">Build Audit ZIP</button>
+          <button class="secondary" id="release-operations-audit-verify" type="button">Verify Audit ZIP</button>
+          <a class="button-link secondary" href="/api/releases/${encodeURIComponent(release.release_id)}/operations/audit.zip">Download Audit ZIP</a>
         </div>
       `;
     }
@@ -4993,6 +5012,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: ($("release-operations-reset-reason") || {}).value || "Approved operations evidence change", change_request_id: (($("release-operations-change-id") || {}).value || "").trim() || null }),
+        });
+        await loadReleases();
+      });
+      bindAction("release-operations-audit-refresh", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/audit/refresh`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-audit-export", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/audit/export`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-audit-zip", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/audit/export/zip`, { method: "POST" });
+        await loadReleases();
+      });
+      bindAction("release-operations-audit-verify", async () => {
+        await api(`/api/releases/${encodeURIComponent(release.release_id)}/operations/audit/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ require_current: true, require_signed: true, require_archive: true }),
         });
         await loadReleases();
       });

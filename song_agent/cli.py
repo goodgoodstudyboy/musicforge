@@ -190,6 +190,21 @@ def build_verify_release_operations_archive_parser() -> argparse.ArgumentParser:
     return verify_parser
 
 
+def build_verify_release_operations_audit_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release Operations Audit ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release Operations Audit ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require current passed/warning Audit Report evidence.")
+    verify_parser.add_argument("--require-signed", action="store_true", help="Require signed Operations Signoff evidence.")
+    verify_parser.add_argument("--require-archive", action="store_true", help="Require Operations Archive evidence in the ledger.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=128, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_release_operations_runbook_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Create and run local MusicForge Release Operations Runbooks.")
     parser.add_argument("release_id", help="Release id.")
@@ -232,6 +247,24 @@ def build_release_operations_archive_parser() -> argparse.ArgumentParser:
     parser.add_argument("--verify", action="store_true", help="Verify Operations Archive ZIP.")
     parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as verifier failures.")
     parser.add_argument("--require-signed", action="store_true", help="Require signed Operations Signoff evidence when verifying.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_release_operations_audit_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build and verify local MusicForge Release Operations Audit ledger packages.")
+    parser.add_argument("release_id", help="Release id.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh the Operations Audit ledger and report.")
+    parser.add_argument("--entries", action="store_true", help="List ledger entries.")
+    parser.add_argument("--graph", action="store_true", help="Print graph summary.")
+    parser.add_argument("--export", action="store_true", help="Build Operations Audit export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build Operations Audit ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify Operations Audit ZIP.")
+    parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as verifier failures.")
+    parser.add_argument("--require-current", action="store_true", help="Require current Audit Report evidence when verifying.")
+    parser.add_argument("--require-signed", action="store_true", help="Require signed Operations Signoff evidence when verifying.")
+    parser.add_argument("--require-archive", action="store_true", help="Require Operations Archive evidence when verifying.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -901,6 +934,33 @@ def _main() -> None:
         else:
             print_release_operations_archive_verification_report(report)
         raise SystemExit(release_operations_archive_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-operations-audit-package":
+        from song_agent.release_operations_audit_verifier import (
+            print_release_operations_audit_verification_report,
+            release_operations_audit_verification_exit_code,
+            verify_release_operations_audit_package,
+            write_release_operations_audit_verification_report,
+        )
+
+        parser = build_verify_release_operations_audit_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_operations_audit_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_signed=args.require_signed,
+            require_archive=args.require_archive,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_operations_audit_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_operations_audit_verification_report(report)
+        raise SystemExit(release_operations_audit_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -1066,6 +1126,53 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_operations_archive_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-operations-audit":
+        from song_agent.distribution import DistributionStore
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore, audit_summary
+        from song_agent.release_operations_audit_verifier import release_operations_audit_verification_summary, verify_release_operations_audit_package
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
+
+        parser = build_release_operations_audit_parser()
+        args = parser.parse_args(raw_args[1:])
+        release_store = ReleaseStore()
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        evidence_store = SubmissionEvidenceStore(submission_store)
+        operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+        result: dict[str, Any] = {"ok": True, "release_id": args.release_id}
+        if args.refresh:
+            report = store.refresh(args.release_id)
+            result.update({"report": report, "summary": audit_summary(report)})
+        else:
+            report = store.read_report(args.release_id, default={})
+            result.update({"report": report, "summary": audit_summary(report) if report else {"status": "missing", "entry_count": 0}})
+        if args.entries:
+            entries = store.entries(args.release_id)
+            result.update({"entries": entries, "entry_summary": {"entry_count": len(entries)}})
+        if args.graph:
+            result["graph"] = store.graph(args.release_id)
+        if args.export:
+            result["manifest"] = store.export_audit(args.release_id)
+        if args.zip:
+            result["zip"] = store.build_zip(args.release_id)
+        if args.verify:
+            verification = verify_release_operations_audit_package(store.zip_path(args.release_id), strict=args.strict, require_current=args.require_current, require_signed=args.require_signed, require_archive=args.require_archive)
+            result.update({"verification": verification, "verification_summary": release_operations_audit_verification_summary(verification)})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_operations_audit_result(result)
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
@@ -1968,6 +2075,21 @@ def print_release_operations_archive_result(result: dict[str, Any]) -> None:
     print(f"release: {result.get('release_id') or manifest.get('release_id') or '-'}")
     if manifest:
         print(f"archive: {manifest.get('summary', {}).get('status') if isinstance(manifest.get('summary'), dict) else '-'}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
+
+
+def print_release_operations_audit_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+    print("MusicForge release-operations-audit")
+    print(f"release: {result.get('release_id') or '-'}")
+    print(f"status: {summary.get('status') or '-'}")
+    print(f"entries: {summary.get('entry_count', 0)}")
+    print(f"blockers: {summary.get('blocker_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
     if result.get("zip"):
         print(f"zip: {(result.get('zip') or {}).get('filename')}")
     if verification:

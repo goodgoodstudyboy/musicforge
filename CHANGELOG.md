@@ -1,5 +1,18 @@
 # Changelog
 
+## v6.3.0 - 2026-06-04
+
+### Added
+- Release Operations Audit Ledger with hash-chained entries covering Release events, Operations Reports, Runbooks, Operations Signoff, Change Requests, Archive evidence, package verifiers, and reset causality.
+- Operations Audit Export/ZIP with `operations-audit-report.json`, `operations-audit-ledger.jsonl`, Operations/Signoff/Runbook summaries, Change Request ledger, package verifier ledger, README, and manifest.
+- Offline `verify-release-operations-audit-package` CLI with ledger chain checks, report/manifest/file hash checks, reset Change Request causality, required signed/archive gates, duplicate/path/backslash/spoof guards, and redaction scanning.
+- API routes under `/api/releases/<release>/operations/audit` for refresh, entries, graph, export, ZIP, verify, and download.
+- Studio Release Operations Audit Ledger controls.
+- v6.3 release-check smoke covering audit/external verification, tamper, missing ledger, reordered ledger, duplicate ZIP, dangerous/backslash entries, manifest spoof, redaction, and applied Change Request reset evidence.
+
+### Verified
+- `python -m pytest tests\test_release_operations_audit.py tests\test_server_release_operations_audit.py tests\test_cli_release_operations.py tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v63_release_operations_audit_ledger_smoke -q`
+
 ## v6.2.1 - 2026-06-04
 
 ### Fixed

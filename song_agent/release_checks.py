@@ -66,6 +66,7 @@ from song_agent.submission_evidence_verifier import verify_submission_evidence_p
 from song_agent.release_operations_verifier import verify_release_operations_package
 from song_agent.release_operations_runbook_verifier import verify_release_operations_runbook_package
 from song_agent.release_operations_archive_verifier import verify_release_operations_archive_package
+from song_agent.release_operations_audit_verifier import verify_release_operations_audit_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -239,6 +240,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v6.0 release operations dashboard smoke", *_v60_release_operations_dashboard_smoke(root))
     report.add("v6.1 release operations runbook smoke", *_v61_release_operations_runbook_smoke(root))
     report.add("v6.2 release operations signoff archive smoke", *_v62_release_operations_signoff_archive_smoke(root))
+    report.add("v6.3 release operations audit ledger smoke", *_v63_release_operations_audit_ledger_smoke(root))
     return report
 
 
@@ -8800,6 +8802,153 @@ def _v62_tamper_operations_archive_report(data: bytes) -> bytes:
 
 
 def _v62_spoof_operations_archive_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v63_release_operations_audit_ledger_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v63-operations-audit-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore, audit_ledger_integrity_ok, audit_report_integrity_ok
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_integrity_hash
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        release = release_store.create_release({"name": "v6.3 Operations Audit", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+
+        report = operations_store.refresh(release.release_id)
+        report["current_stage"] = "accepted"
+        report["next_stage"] = "archived"
+        report["summary"]["blocker_count"] = 0
+        report["summary"]["warning_count"] = 0
+        report["blockers"] = []
+        report["warnings"] = []
+        report["domains"] = {"submission_evidence": {"required": False, "status": "not_required", "summary": {}}}
+        report["verifier_summaries"] = {"release": {"status": "passed"}, "distribution": [], "submission": [], "submission_evidence": []}
+        report["package_summaries"] = {
+            "release_zip": {"exists": True, "status": "exists", "sha256": "0" * 64},
+            "distribution_packages": [],
+            "submission_packages": [],
+            "submission_evidence_packages": [],
+        }
+        report["source_hash"] = "v63-accepted-source"
+        report["source"] = {"fixture": "v6.3 accepted"}
+        report["integrity_hash"] = operations_report_integrity_hash(report)
+        write_json(operations_store.report_path(release.release_id), report)
+        operations_store.build_report = lambda release_id, persist=False, now=None: report  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: report  # type: ignore[method-assign]
+
+        runbook = runbook_store.create_from_operations_report(release.release_id)
+        runbook["status"] = "completed"
+        runbook["items"] = []
+        runbook["summary"] = {"total_count": 0, "safe_count": 0, "manual_count": 0, "completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0, "waived_count": 0, "pending_count": 0}
+        runbook["integrity_hash"] = runbook_integrity_hash(runbook)
+        write_json(runbook_store.runbook_path(release.release_id, runbook["runbook_id"]), runbook)
+
+        signed = signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+        manifest = signoff_store.export_archive(release.release_id)
+        signoff_store.build_archive_zip(release.release_id)
+        change = signoff_store.create_change_request(release.release_id, {"reason": "Audit ledger reset evidence", "scope": ["operations"], "created_by": "release-check"})
+        signoff_store.update_change_request_status(release.release_id, change["change_request_id"], "approve", {"approved_by": "release-check"})
+        reset = signoff_store.reset_signoff(release.release_id, {"reason": "Reset for audit ledger evidence", "change_request_id": change["change_request_id"]})
+        applied = signoff_store.get_change_request(release.release_id, change["change_request_id"])
+
+        audit_report = audit_store.refresh(release.release_id)
+        ledger_entries = audit_store.read_ledger(release.release_id)
+        audit_manifest = audit_store.export_audit(release.release_id)
+        audit_store.build_zip(release.release_id)
+        audit_zip = audit_store.zip_path(release.release_id)
+        verified = verify_release_operations_audit_package(audit_zip, require_current=True, require_archive=True)
+        external_dir = base / "external-clean-audit"
+        external_dir.mkdir()
+        external_zip = external_dir / "operations-audit.zip"
+        shutil.copy2(audit_zip, external_zip)
+        external_report = verify_release_operations_audit_package(external_zip, require_current=True, require_archive=True)
+        tamper_report = verify_release_operations_audit_package(
+            _v38_rewrite_zip(audit_zip, base / "tamper-v63-audit.zip", transforms={"operations-audit-report.json": _v63_tamper_audit_report}),
+            require_current=True,
+            require_archive=True,
+        )
+        missing_report = verify_release_operations_audit_package(
+            _v38_rewrite_zip(audit_zip, base / "missing-v63-audit.zip", remove={"operations-audit-ledger.jsonl"}),
+            require_current=True,
+            require_archive=True,
+        )
+        reorder_report = verify_release_operations_audit_package(
+            _v38_rewrite_zip(audit_zip, base / "reorder-v63-audit.zip", transforms={"operations-audit-ledger.jsonl": _v63_reorder_audit_ledger}),
+            require_current=True,
+            require_archive=True,
+        )
+        duplicate_report = verify_release_operations_audit_package(_v43_duplicate_submission_zip(audit_zip, base / "duplicate-v63-audit.zip"), require_archive=True)
+        dangerous_report = verify_release_operations_audit_package(_v38_rewrite_zip(audit_zip, base / "dangerous-v63-audit.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_report = verify_release_operations_audit_package(_v38_backslash_entry_zip(base / "backslash-v63-audit.zip"), strict=True)
+        spoof_report = verify_release_operations_audit_package(
+            _v38_rewrite_zip(audit_zip, base / "spoof-v63-audit.zip", additions={"extra.txt": b"extra"}, transforms={"operations-audit-manifest.json": _v63_spoof_audit_manifest}),
+            strict=True,
+        )
+        redaction_report = verify_release_operations_audit_package(_v38_rewrite_zip(audit_zip, base / "redaction-v63-audit.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+
+        serialized = json.dumps({"signed": signed, "archive": manifest, "reset": reset, "audit": audit_report, "manifest": audit_manifest}, ensure_ascii=False)
+        ok = (
+            signed.get("status") == "signed"
+            and applied.get("status") == "applied"
+            and audit_report.get("status") == "passed"
+            and audit_report_integrity_ok(audit_report)
+            and audit_ledger_integrity_ok(ledger_entries)
+            and audit_manifest.get("audit_report", {}).get("ledger_hash") == audit_report.get("ledger_hash")
+            and verified.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tamper_report, "operations_audit_report_integrity") == "failed"
+            and _v38_check_status(missing_report, "operations_audit_zip_required_entries") == "failed"
+            and _v38_check_status(reorder_report, "operations_audit_ledger_chain") == "failed"
+            and _v38_check_status(duplicate_report, "operations_audit_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous_report, "operations_audit_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "operations_audit_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof_report, "operations_audit_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof_report, "operations_audit_manifest_zip_entries_reference_only") == "warning"
+            and _v38_check_status(redaction_report, "operations_audit_redaction_scan") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"audit={verified.get('status')}, external={external_report.get('status')}, "
+            f"tamper={_v38_check_status(tamper_report, 'operations_audit_report_integrity')}, "
+            f"missing={_v38_check_status(missing_report, 'operations_audit_zip_required_entries')}, "
+            f"reorder={_v38_check_status(reorder_report, 'operations_audit_ledger_chain')}, "
+            f"duplicate={_v38_check_status(duplicate_report, 'operations_audit_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous_report, 'operations_audit_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash_report, 'operations_audit_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof_report, 'operations_audit_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'operations_audit_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction_report, 'operations_audit_redaction_scan')}, cr={applied.get('status')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v63_tamper_audit_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("summary", {})["entry_count"] = 1
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v63_reorder_audit_ledger(data: bytes) -> bytes:
+    lines = [line for line in data.decode("utf-8").splitlines() if line.strip()]
+    return ("\n".join(reversed(lines)) + "\n").encode("utf-8")
+
+
+def _v63_spoof_audit_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")

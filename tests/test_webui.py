@@ -127,6 +127,16 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/operations/archive/verify" in html
     assert "/operations/archive.zip" in html
     assert "/operations/change-requests" in html
+    assert "Release Operations Audit Ledger" in html
+    assert 'id="release-operations-audit-refresh"' in html
+    assert 'id="release-operations-audit-export"' in html
+    assert 'id="release-operations-audit-zip"' in html
+    assert 'id="release-operations-audit-verify"' in html
+    assert "/operations/audit/refresh" in html
+    assert "/operations/audit/export" in html
+    assert "/operations/audit/export/zip" in html
+    assert "/operations/audit/verify" in html
+    assert "/operations/audit.zip" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
     assert "/encoded-audio/health" in html
     assert "/encoded-audio/acceptance/refresh" in html

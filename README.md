@@ -440,6 +440,12 @@ evidence only and can be verified offline. After Operations Signoff, changes to
 the archived evidence require an approved Operations Change Request before the
 signoff can be reset.
 
+Release Operations Audit Ledger links the Dashboard, Runbook, Signoff,
+Change Request, Archive, and verifier records into a deterministic hash-chained
+ledger. The audit ZIP contains summary evidence only and can be verified
+offline for ledger ordering, report integrity, reset Change Request causality,
+ZIP path safety, manifest spoofing, duplicate entries, and redaction issues.
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -458,6 +464,8 @@ python -m song_agent.cli release-operations-signoff rel-000001 --sign --signed-b
 python -m song_agent.cli release-operations-archive rel-000001 --export --zip --verify --require-signed --json
 python -m song_agent.cli verify-release-operations-archive-package path\to\operations-archive.zip --json --require-signed --report-out operations-archive-verification-report.json
 python -m song_agent.cli release-operations-signoff rel-000001 --reset --reason "Approved operations evidence change" --change-request-id ocr-000001 --json
+python -m song_agent.cli release-operations-audit rel-000001 --refresh --export --zip --verify --require-current --require-signed --require-archive --json
+python -m song_agent.cli verify-release-operations-audit-package path\to\operations-audit.zip --json --strict --require-signed --require-archive --report-out operations-audit-verification-report.json
 ```
 
 ```powershell
