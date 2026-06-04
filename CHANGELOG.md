@@ -1,5 +1,18 @@
 # Changelog
 
+## v6.5.0 - 2026-06-05
+
+### Added
+- Release Portfolio Audit for cross-release readiness, trend, risk, reviewer-pack, audit, archive, runbook, and change-control summaries.
+- Portfolio Export/ZIP with `portfolio-audit-report.json`, trend report, risk register, release index, reviewer/audit/runbook/change summaries, Markdown review docs, and manifest integrity binding.
+- Offline `verify-release-portfolio-audit-package` CLI with strict ZIP path safety, duplicate entry, manifest spoof, report/trend/risk integrity, reviewer/audit/archive requirements, and redaction scanning.
+- API routes under `/api/release-portfolio-audits` for create, list, refresh, report, trends, risks, export, ZIP, verify, download, and archive.
+- Studio Portfolio Audit workspace with release readiness ranking, Portfolio Risk Register, deterministic recommendations, trend report, and safe export/verify controls.
+- v6.5 release-check smoke covering passed portfolio verification, external clean-room verification, report/trend/risk tamper, missing required entry, duplicate ZIP, dangerous/backslash entries, manifest spoof, redaction, and missing required Reviewer Pack evidence.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_audit.py tests\test_server_release_portfolio_audit.py tests\test_cli_release_operations.py::test_release_portfolio_audit_cli_create_export_verify tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v65_release_portfolio_audit_smoke -q`
+
 ## v6.4.1 - 2026-06-04
 
 ### Fixed

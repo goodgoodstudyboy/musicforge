@@ -68,6 +68,7 @@ from song_agent.release_operations_runbook_verifier import verify_release_operat
 from song_agent.release_operations_archive_verifier import verify_release_operations_archive_package
 from song_agent.release_operations_audit_verifier import verify_release_operations_audit_package
 from song_agent.release_operations_reviewer_pack_verifier import verify_release_operations_reviewer_pack
+from song_agent.release_portfolio_audit_verifier import verify_release_portfolio_audit_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -243,6 +244,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v6.2 release operations signoff archive smoke", *_v62_release_operations_signoff_archive_smoke(root))
     report.add("v6.3 release operations audit ledger smoke", *_v63_release_operations_audit_ledger_smoke(root))
     report.add("v6.4 release operations reviewer pack smoke", *_v64_release_operations_reviewer_pack_smoke(root))
+    report.add("v6.5 release portfolio audit smoke", *_v65_release_portfolio_audit_smoke(root))
     return report
 
 
@@ -9130,6 +9132,203 @@ def _v64_tamper_retrospective_report(data: bytes) -> bytes:
 
 
 def _v64_spoof_reviewer_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v65_release_portfolio_audit_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v65-portfolio-audit-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_audit_verifier import write_release_operations_audit_verification_report
+        from song_agent.release_operations_archive_verifier import write_release_operations_archive_verification_report
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_reviewer_pack_verifier import write_release_operations_reviewer_pack_verification_report
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_integrity_hash
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import (
+            ReleasePortfolioAuditStore,
+            portfolio_manifest_integrity_ok,
+            portfolio_report_integrity_ok,
+            portfolio_risk_register_integrity_ok,
+            portfolio_trend_integrity_ok,
+        )
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+        reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(
+            release_store=release_store,
+            operations_store=operations_store,
+            runbook_store=runbook_store,
+            signoff_store=signoff_store,
+            audit_store=audit_store,
+            reviewer_pack_store=reviewer_store,
+        )
+        original_refresh = operations_store.refresh
+        reports: dict[str, dict[str, Any]] = {}
+
+        def make_release(index: int) -> Any:
+            release = release_store.create_release({"name": f"v6.5 Portfolio Release {index}", "release_type": "single_pack", "primary_artist": "MusicForge"})
+            report = original_refresh(release.release_id)
+            report["current_stage"] = "accepted"
+            report["next_stage"] = "archived"
+            report["summary"]["blocker_count"] = 0
+            report["summary"]["warning_count"] = 0
+            report["blockers"] = []
+            report["warnings"] = []
+            report["domains"] = {"submission_evidence": {"required": False, "status": "not_required", "summary": {}}}
+            report["verifier_summaries"] = {"release": {"status": "passed"}, "distribution": [], "submission": [], "submission_evidence": []}
+            report["package_summaries"] = {"release_zip": {"exists": True, "status": "exists", "sha256": f"{index}" * 64}, "distribution_packages": [], "submission_packages": [], "submission_evidence_packages": []}
+            report["source_hash"] = f"v65-portfolio-source-{index}"
+            report["source"] = {"fixture": "v6.5 accepted", "index": index}
+            report["integrity_hash"] = operations_report_integrity_hash(report)
+            write_json(operations_store.report_path(release.release_id), report)
+            reports[release.release_id] = report
+            return release
+
+        releases = [make_release(1), make_release(2)]
+
+        def build_report(release_id: str, persist: bool = False, now: str | None = None) -> dict[str, Any]:
+            return reports[release_id]
+
+        operations_store.build_report = build_report  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: reports[release_id]  # type: ignore[method-assign]
+
+        for release in releases:
+            runbook = runbook_store.create_from_operations_report(release.release_id)
+            runbook["status"] = "completed"
+            runbook["items"] = []
+            runbook["summary"] = {"total_count": 0, "safe_count": 0, "manual_count": 0, "completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0, "waived_count": 0, "pending_count": 0}
+            runbook["integrity_hash"] = runbook_integrity_hash(runbook)
+            write_json(runbook_store.runbook_path(release.release_id, runbook["runbook_id"]), runbook)
+            signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+            signoff_store.export_archive(release.release_id)
+            signoff_store.build_archive_zip(release.release_id)
+            archive_verification = verify_release_operations_archive_package(signoff_store.archive_zip_path(release.release_id), require_signed=True)
+            write_release_operations_archive_verification_report(archive_verification, signoff_store.operations_dir(release.release_id) / "operations-archive-verification-report.json")
+            audit_store.refresh(release.release_id)
+            audit_store.export_audit(release.release_id)
+            audit_store.build_zip(release.release_id)
+            audit_verification = verify_release_operations_audit_package(audit_store.zip_path(release.release_id), require_current=True, require_signed=True, require_archive=True)
+            write_release_operations_audit_verification_report(audit_verification, audit_store.verification_report_path(release.release_id))
+            reviewer_store.refresh(release.release_id)
+            reviewer_store.export_pack(release.release_id)
+            reviewer_store.build_zip(release.release_id)
+            reviewer_verification = verify_release_operations_reviewer_pack(reviewer_store.zip_path(release.release_id), strict=True, require_audit=True, require_signed=True, require_archive=True)
+            write_release_operations_reviewer_pack_verification_report(reviewer_verification, reviewer_store.verification_report_path(release.release_id))
+
+        release_ids = [release.release_id for release in releases]
+        portfolio = portfolio_store.create({"name": "v6.5 Portfolio Audit", "release_ids": release_ids, "require_reviewer_packs": True, "require_audit": True, "require_archive": True})
+        report = portfolio_store.refresh(portfolio["portfolio_id"])
+        trend = portfolio_store.read_trend_report(portfolio["portfolio_id"])
+        risks = portfolio_store.read_risk_register(portfolio["portfolio_id"])
+        manifest = portfolio_store.export_portfolio(portfolio["portfolio_id"])
+        portfolio_store.build_zip(portfolio["portfolio_id"])
+        portfolio_zip = portfolio_store.zip_path(portfolio["portfolio_id"])
+        verified = verify_release_portfolio_audit_package(portfolio_zip, strict=True, require_reviewer_packs=True, require_audit=True, require_archive=True)
+        external_dir = base / "external-clean-portfolio"
+        external_dir.mkdir()
+        external_zip = external_dir / "portfolio-audit.zip"
+        shutil.copy2(portfolio_zip, external_zip)
+        external_report = verify_release_portfolio_audit_package(external_zip, strict=True, require_reviewer_packs=True, require_audit=True, require_archive=True)
+        tamper_report = verify_release_portfolio_audit_package(_v38_rewrite_zip(portfolio_zip, base / "tamper-v65-portfolio.zip", transforms={"portfolio-audit-report.json": _v65_tamper_portfolio_report}), require_reviewer_packs=True, require_audit=True, require_archive=True)
+        trend_tamper = verify_release_portfolio_audit_package(_v38_rewrite_zip(portfolio_zip, base / "trend-tamper-v65-portfolio.zip", transforms={"portfolio-trend-report.json": _v65_tamper_portfolio_trend}))
+        risk_tamper = verify_release_portfolio_audit_package(_v38_rewrite_zip(portfolio_zip, base / "risk-tamper-v65-portfolio.zip", transforms={"portfolio-risks.json": _v65_tamper_portfolio_risks}))
+        missing_report = verify_release_portfolio_audit_package(_v38_rewrite_zip(portfolio_zip, base / "missing-v65-portfolio.zip", remove={"RISK_REGISTER.md"}))
+        duplicate_report = verify_release_portfolio_audit_package(_v43_duplicate_submission_zip(portfolio_zip, base / "duplicate-v65-portfolio.zip"))
+        dangerous_report = verify_release_portfolio_audit_package(_v38_rewrite_zip(portfolio_zip, base / "dangerous-v65-portfolio.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_report = verify_release_portfolio_audit_package(_v38_backslash_entry_zip(base / "backslash-v65-portfolio.zip"), strict=True)
+        spoof_report = verify_release_portfolio_audit_package(
+            _v38_rewrite_zip(portfolio_zip, base / "spoof-v65-portfolio.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v65_spoof_portfolio_manifest}),
+            strict=True,
+        )
+        redaction_report = verify_release_portfolio_audit_package(_v38_rewrite_zip(portfolio_zip, base / "redaction-v65-portfolio.zip", transforms={"PORTFOLIO_REVIEW.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+
+        second_verification_path = reviewer_store.verification_report_path(releases[1].release_id)
+        second_verification_bytes = second_verification_path.read_bytes()
+        second_verification_path.unlink()
+        try:
+            missing_required = portfolio_store.create({"name": "v6.5 Portfolio Missing Reviewer", "release_ids": release_ids, "require_reviewer_packs": True, "require_audit": True})
+            missing_required_report = portfolio_store.refresh(missing_required["portfolio_id"])
+            portfolio_store.export_portfolio(missing_required["portfolio_id"])
+            portfolio_store.build_zip(missing_required["portfolio_id"])
+            missing_required_verify = verify_release_portfolio_audit_package(portfolio_store.zip_path(missing_required["portfolio_id"]), require_reviewer_packs=True, require_audit=True)
+        finally:
+            second_verification_path.write_bytes(second_verification_bytes)
+
+        serialized = json.dumps({"report": report, "trend": trend, "risks": risks, "manifest": manifest}, ensure_ascii=False)
+        ok = (
+            report.get("status") == "passed"
+            and portfolio_report_integrity_ok(report)
+            and portfolio_trend_integrity_ok(trend)
+            and portfolio_risk_register_integrity_ok(risks)
+            and portfolio_manifest_integrity_ok(manifest)
+            and verified.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and _v38_check_status(tamper_report, "portfolio_audit_report_integrity") == "failed"
+            and _v38_check_status(trend_tamper, "portfolio_trend_report_integrity") == "failed"
+            and _v38_check_status(risk_tamper, "portfolio_risk_register_integrity") == "failed"
+            and _v38_check_status(missing_report, "portfolio_audit_zip_required_entries") == "failed"
+            and _v38_check_status(duplicate_report, "portfolio_audit_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous_report, "portfolio_audit_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "portfolio_audit_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof_report, "portfolio_audit_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof_report, "portfolio_audit_manifest_zip_entries_reference_only") == "warning"
+            and _v38_check_status(redaction_report, "portfolio_audit_redaction_scan") == "failed"
+            and missing_required_report.get("status") == "failed"
+            and _v38_check_status(missing_required_verify, "portfolio_audit_require_reviewer_packs") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"portfolio={verified.get('status')}, external={external_report.get('status')}, releases={report.get('summary', {}).get('release_count')}, "
+            f"risk_score={report.get('risk_score', {}).get('score')}, risks={len(risks.get('risks', []) if isinstance(risks.get('risks'), list) else [])}, "
+            f"tamper={_v38_check_status(tamper_report, 'portfolio_audit_report_integrity')}, "
+            f"trend_tamper={_v38_check_status(trend_tamper, 'portfolio_trend_report_integrity')}, "
+            f"risk_tamper={_v38_check_status(risk_tamper, 'portfolio_risk_register_integrity')}, "
+            f"missing={_v38_check_status(missing_report, 'portfolio_audit_zip_required_entries')}, "
+            f"duplicate={_v38_check_status(duplicate_report, 'portfolio_audit_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous_report, 'portfolio_audit_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash_report, 'portfolio_audit_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof_report, 'portfolio_audit_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'portfolio_audit_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction_report, 'portfolio_audit_redaction_scan')}, "
+            f"missing_reviewer={_v38_check_status(missing_required_verify, 'portfolio_audit_require_reviewer_packs')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v65_tamper_portfolio_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("summary", {})["release_count"] = 99
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v65_tamper_portfolio_trend(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("trend_findings", []).append({"finding_id": "tampered", "category": "tampered"})
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v65_tamper_portfolio_risks(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("risks", []).append({"risk_id": "tampered", "severity": "critical"})
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v65_spoof_portfolio_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")

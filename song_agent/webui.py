@@ -622,6 +622,7 @@ def panel_html() -> str:
       .summary-grid { grid-template-columns: 1fr 1fr; }
       .batch-layout { grid-template-columns: 1fr; }
       .project-layout { grid-template-columns: 1fr; }
+      .release-layout { grid-template-columns: 1fr; }
       .asset-layout { grid-template-columns: 1fr; }
       .compare-grid { grid-template-columns: 1fr; }
       .candidate-grid { grid-template-columns: 1fr; }
@@ -1182,6 +1183,54 @@ def panel_html() -> str:
     </section>
     <section style="grid-column: 1 / -1;">
       <div class="panel-title">
+        <span>Portfolio Audit</span>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-archived-portfolio-audits" type="checkbox" style="width:auto;margin:0;">
+            Archived
+          </label>
+          <button class="secondary" id="refresh-portfolio-audits" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="release-layout">
+          <form id="portfolio-audit-form">
+            <label>Portfolio Name
+              <input id="portfolio-audit-name" value="Release Portfolio Audit">
+            </label>
+            <label>Release IDs
+              <textarea id="portfolio-audit-release-ids" rows="3" placeholder="rel-000001, rel-000002"></textarea>
+            </label>
+            <div class="grid2">
+              <label>Max Releases
+                <input id="portfolio-audit-max-releases" type="number" min="1" max="500" value="50">
+              </label>
+              <label>Selection Flags
+                <span style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
+                  <label style="margin:0;"><input id="portfolio-audit-include-hidden-releases" type="checkbox"> hidden releases</label>
+                  <label style="margin:0;"><input id="portfolio-audit-include-archived-releases" type="checkbox" checked> archived releases</label>
+                </span>
+              </label>
+            </div>
+            <div class="grid3">
+              <label style="margin:0;"><input id="portfolio-audit-require-reviewer-packs" type="checkbox" checked> Require reviewer packs</label>
+              <label style="margin:0;"><input id="portfolio-audit-require-audit" type="checkbox" checked> Require audit</label>
+              <label style="margin:0;"><input id="portfolio-audit-require-archive" type="checkbox" checked> Require archive</label>
+            </div>
+            <div class="actions">
+              <button type="submit">New Portfolio Audit</button>
+              <span id="portfolio-audit-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div id="portfolio-audit-list" class="release-list"><div class="empty">No Portfolio Audits yet.</div></div>
+          </div>
+        </div>
+        <div id="portfolio-audit-detail" class="release-detail"><div class="empty">Select or create a Portfolio Audit.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
         <span>Acceptance</span>
         <button class="secondary" id="refresh-acceptance" type="button">Refresh</button>
       </div>
@@ -1362,6 +1411,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     let releases = [];
     let selectedReleaseId = null;
     let includeHiddenReleases = false;
+    let portfolioAudits = [];
+    let selectedPortfolioAuditId = null;
+    let includeArchivedPortfolioAudits = false;
     let acceptanceSuites = [];
     let acceptanceProfiles = [];
     let acceptanceSongbook = null;
@@ -1468,6 +1520,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       await loadJobs();
       await loadProjects();
       await loadReleases();
+      await loadPortfolioAudits();
       await loadAcceptanceReferenceData();
       await loadAcceptanceAnalytics();
       await loadAcceptanceFixSprints();
@@ -1481,6 +1534,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadJobs();
         loadProjects();
         loadReleases();
+        loadPortfolioAudits();
         loadAcceptanceAnalytics();
         loadAcceptanceFixSprints();
         loadAcceptanceKb();
@@ -1658,6 +1712,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await loadReleases();
       } catch (err) {
         $("release-message").textContent = err.message;
+      }
+    });
+    $("refresh-portfolio-audits").addEventListener("click", loadPortfolioAudits);
+    $("include-archived-portfolio-audits").addEventListener("change", async () => {
+      includeArchivedPortfolioAudits = $("include-archived-portfolio-audits").checked;
+      await loadPortfolioAudits();
+    });
+    $("portfolio-audit-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await api("/api/release-portfolio-audits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(portfolioAuditPayload()),
+        });
+        selectedPortfolioAuditId = (data.portfolio || {}).portfolio_id || null;
+        $("portfolio-audit-message").textContent = "created";
+        await loadPortfolioAudits();
+      } catch (err) {
+        $("portfolio-audit-message").textContent = err.message;
       }
     });
     $("refresh-acceptance").addEventListener("click", loadAcceptanceSuites);
@@ -2403,6 +2477,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
     }
 
+    async function loadPortfolioAudits() {
+      try {
+        const data = await api(includeArchivedPortfolioAudits ? "/api/release-portfolio-audits?include_archived=1" : "/api/release-portfolio-audits");
+        portfolioAudits = data.portfolios || [];
+        if (selectedPortfolioAuditId && !portfolioAudits.some((portfolio) => portfolio.portfolio_id === selectedPortfolioAuditId)) {
+          selectedPortfolioAuditId = null;
+          $("portfolio-audit-detail").innerHTML = "<div class='empty'>Select or create a Portfolio Audit.</div>";
+        }
+        renderPortfolioAudits();
+        if (selectedPortfolioAuditId) await renderPortfolioAuditDetail(selectedPortfolioAuditId);
+      } catch (err) {
+        $("portfolio-audit-list").innerHTML = `<div class="empty error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
     async function loadAcceptanceSuites() {
       try {
         const data = await api("/api/acceptance/suites");
@@ -3121,6 +3210,25 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       };
     }
 
+    function portfolioAuditPayload() {
+      const releaseIds = $("portfolio-audit-release-ids").value
+        .split(/[,\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const payload = {
+        name: $("portfolio-audit-name").value.trim() || "Release Portfolio Audit",
+        release_ids: releaseIds,
+        include_hidden: $("portfolio-audit-include-hidden-releases").checked,
+        include_archived: $("portfolio-audit-include-archived-releases").checked,
+        require_reviewer_packs: $("portfolio-audit-require-reviewer-packs").checked,
+        require_audit: $("portfolio-audit-require-audit").checked,
+        require_archive: $("portfolio-audit-require-archive").checked,
+      };
+      const maxReleases = Number($("portfolio-audit-max-releases").value || 0);
+      if (maxReleases > 0) payload.max_releases = maxReleases;
+      return payload;
+    }
+
     function renderReleases() {
       const list = $("release-list");
       if (!releases.length) {
@@ -3150,6 +3258,170 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           renderReleases();
           await renderReleaseDetail(selectedReleaseId);
         });
+      });
+    }
+
+    function renderPortfolioAudits() {
+      const list = $("portfolio-audit-list");
+      if (!portfolioAudits.length) {
+        list.innerHTML = "<div class='empty'>No Portfolio Audits yet.</div>";
+        return;
+      }
+      const rows = portfolioAudits.map((portfolio) => `
+        <tr class="${portfolio.portfolio_id === selectedPortfolioAuditId ? "active" : ""}">
+          <td><button class="secondary portfolio-audit-open" data-portfolio-id="${escapeHtml(portfolio.portfolio_id)}" type="button">Open</button></td>
+          <td>${escapeHtml(portfolio.name || portfolio.portfolio_id)}</td>
+          <td><span class="status ${escapeHtml(portfolio.status || "")}">${escapeHtml(portfolio.status || "-")}</span></td>
+          <td>${escapeHtml(portfolio.source_hash ? "current" : "draft")}</td>
+          <td>${escapeHtml(portfolio.latest_export_manifest_hash ? "built" : "missing")}</td>
+        </tr>
+      `).join("");
+      list.innerHTML = `
+        <table>
+          <thead><tr><th></th><th>Name</th><th>Status</th><th>Source</th><th>Export</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      list.querySelectorAll(".portfolio-audit-open").forEach((button) => {
+        button.addEventListener("click", async () => {
+          selectedPortfolioAuditId = button.dataset.portfolioId;
+          renderPortfolioAudits();
+          await renderPortfolioAuditDetail(selectedPortfolioAuditId);
+        });
+      });
+    }
+
+    async function renderPortfolioAuditDetail(portfolioId) {
+      const data = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}`);
+      const portfolio = data.portfolio || {};
+      let reportData = { report: data.report || {}, summary: data.summary || {} };
+      let trendData = { trend_report: {}, summary: {} };
+      let riskData = { risk_register: {}, summary: {} };
+      try { reportData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/report`); } catch (err) {}
+      try { trendData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/trends`); } catch (err) {}
+      try { riskData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/risks`); } catch (err) {}
+      const report = reportData.report || {};
+      const summary = report.summary || reportData.summary || {};
+      const score = report.risk_score || {};
+      const stale = Boolean(reportData.stale || (reportData.summary || {}).stale || (data.summary || {}).stale);
+      const trend = trendData.trend_report || {};
+      const risks = riskData.risk_register || {};
+      const selection = portfolio.selection || {};
+      const releaseRows = (report.release_readiness_ranking || []).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.release_id || "-")}</td>
+          <td>${escapeHtml(item.release_name || "-")}</td>
+          <td><span class="status ${escapeHtml(item.readiness_status || "")}">${escapeHtml(item.readiness_status || "-")}</span></td>
+          <td>${escapeHtml(item.coverage_score ?? "-")}</td>
+          <td>${escapeHtml(item.risk_score ?? "-")}</td>
+          <td>${escapeHtml(item.recommendation || "-")}</td>
+        </tr>
+      `).join("");
+      const riskRows = (risks.risks || []).slice(0, 12).map((risk) => `
+        <tr>
+          <td>${escapeHtml(risk.severity || "-")}</td>
+          <td>${escapeHtml(risk.category || "-")}</td>
+          <td class="wrap-cell">${escapeHtml(risk.title || "-")}</td>
+          <td>${escapeHtml((risk.release_ids || []).join(", ") || "-")}</td>
+        </tr>
+      `).join("");
+      const recommendationRows = (report.recommendations || []).slice(0, 12).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.severity || "-")}</td>
+          <td>${escapeHtml(item.category || "-")}</td>
+          <td class="wrap-cell">${escapeHtml(item.reason || "-")}</td>
+          <td class="wrap-cell">${escapeHtml(item.suggested_action || "-")}</td>
+        </tr>
+      `).join("");
+      const trendRows = (trend.trend_findings || []).slice(0, 12).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.category || "-")}</td>
+          <td>${escapeHtml(item.status || "-")}</td>
+          <td class="wrap-cell">${escapeHtml(item.message || item.title || "-")}</td>
+        </tr>
+      `).join("");
+      $("portfolio-audit-detail").innerHTML = `
+        <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
+          <span>Release Portfolio Audit · ${escapeHtml(portfolio.name || portfolio.portfolio_id)}</span>
+          <span class="status ${escapeHtml(report.status || portfolio.status || "")}">${escapeHtml(report.status || portfolio.status || "draft")}</span>
+        </div>
+        <div class="summary-grid">
+          ${metric("Portfolio", portfolio.portfolio_id || "-")}
+          ${metric("Releases", summary.release_count || 0)}
+          ${metric("Risk Score", score.score ?? "-")}
+          ${metric("Risk Status", score.status || "-")}
+          ${metric("Blockers", summary.blocker_count || 0)}
+          ${metric("Warnings", summary.warning_count || 0)}
+          ${metric("Stale", stale ? "yes" : "-")}
+          ${metric("Reviewer Packs", selection.require_reviewer_packs ? "required" : "optional")}
+          ${metric("Archive", selection.require_archive ? "required" : "optional")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-audit-refresh" type="button">Refresh Portfolio Audit</button>
+          <button class="secondary" id="portfolio-audit-export" type="button">Export Portfolio Audit</button>
+          <button class="secondary" id="portfolio-audit-zip" type="button">Build Portfolio ZIP</button>
+          <button class="secondary" id="portfolio-audit-verify" type="button">Verify Portfolio ZIP</button>
+          <button class="danger" id="portfolio-audit-archive" type="button">Archive Portfolio Audit</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/download">Download Portfolio ZIP</a>
+        </div>
+        <div class="panel-title subhead"><span>Release Readiness Ranking</span></div>
+        <table>
+          <thead><tr><th>Release</th><th>Name</th><th>Readiness</th><th>Coverage</th><th>Risk</th><th>Recommendation</th></tr></thead>
+          <tbody>${releaseRows || "<tr><td colspan='6'>Refresh Portfolio Audit to build release ranking.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Portfolio Risk Register</span></div>
+        <table>
+          <thead><tr><th>Severity</th><th>Category</th><th>Risk</th><th>Releases</th></tr></thead>
+          <tbody>${riskRows || "<tr><td colspan='4'>No portfolio risks.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Deterministic Recommendations</span></div>
+        <table>
+          <thead><tr><th>Severity</th><th>Category</th><th>Reason</th><th>Action</th></tr></thead>
+          <tbody>${recommendationRows || "<tr><td colspan='4'>No portfolio recommendations.</td></tr>"}</tbody>
+        </table>
+        <div class="panel-title subhead"><span>Portfolio Trend Report</span></div>
+        <table>
+          <thead><tr><th>Category</th><th>Status</th><th>Finding</th></tr></thead>
+          <tbody>${trendRows || "<tr><td colspan='3'>No trend findings.</td></tr>"}</tbody>
+        </table>
+      `;
+      wirePortfolioAuditActions(portfolio.portfolio_id);
+    }
+
+    function wirePortfolioAuditActions(portfolioId) {
+      const payload = () => ({
+        strict: true,
+        require_reviewer_packs: $("portfolio-audit-require-reviewer-packs").checked,
+        require_audit: $("portfolio-audit-require-audit").checked,
+        require_archive: $("portfolio-audit-require-archive").checked,
+      });
+      bindAction("portfolio-audit-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(portfolioAuditPayload()),
+        });
+        await loadPortfolioAudits();
+      });
+      bindAction("portfolio-audit-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export`, { method: "POST" });
+        await loadPortfolioAudits();
+      });
+      bindAction("portfolio-audit-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip`, { method: "POST" });
+        await loadPortfolioAudits();
+      });
+      bindAction("portfolio-audit-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload()),
+        });
+        await loadPortfolioAudits();
+      });
+      bindAction("portfolio-audit-archive", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/archive`, { method: "POST" });
+        await loadPortfolioAudits();
       });
     }
 

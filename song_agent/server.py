@@ -156,6 +156,18 @@ from song_agent.release_operations_reviewer_pack_verifier import (
     write_release_operations_reviewer_pack_verification_report,
 )
 from song_agent.release_operations_retrospective import retrospective_summary
+from song_agent.release_portfolio_audit import (
+    ReleasePortfolioAuditError,
+    ReleasePortfolioAuditNotFoundError,
+    ReleasePortfolioAuditStateError,
+    ReleasePortfolioAuditStore,
+    portfolio_audit_summary,
+)
+from song_agent.release_portfolio_audit_verifier import (
+    release_portfolio_audit_verification_summary,
+    verify_release_portfolio_audit_package,
+    write_release_portfolio_audit_verification_report,
+)
 from song_agent.release_operations_signoff import (
     ReleaseOperationsSignoffError,
     ReleaseOperationsSignoffNotFoundError,
@@ -2617,6 +2629,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.release_operations_reviewer_pack_store  # type: ignore[attr-defined]
 
     @property
+    def release_portfolio_audit_store(self) -> ReleasePortfolioAuditStore:
+        return self.server.release_portfolio_audit_store  # type: ignore[attr-defined]
+
+    @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
         return self.server.audio_review_store  # type: ignore[attr-defined]
 
@@ -2791,6 +2807,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/audio-encoding/config" or path.startswith("/api/audio-encoding/config/") or path == "/api/audio-encoding/profiles" or path.startswith("/api/audio-encoding/profiles/"):
                 self._handle_audio_encoding_route(method, path)
+                return
+            if path == "/api/release-portfolio-audits" or path.startswith("/api/release-portfolio-audits/"):
+                self._handle_release_portfolio_audits(method, path)
                 return
             if path == "/api/jobs":
                 if method == "GET":
@@ -5590,6 +5609,125 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseOperationsReviewerPackStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleaseOperationsReviewerPackError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_release_portfolio_audits(self, method: str, path: str) -> None:
+        prefix = "/api/release-portfolio-audits"
+        tail = path[len(prefix):]
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    query = parse_qs(urlparse(self.path).query)
+                    include_archived = str(query.get("include_archived", [""])[0]).lower() in {"1", "true", "yes"}
+                    portfolios = self.release_portfolio_audit_store.list_portfolios(include_archived=include_archived)
+                    self._send_json({"ok": True, "portfolios": portfolios, "summary": {"count": len(portfolios)}})
+                    return
+                if method == "POST":
+                    portfolio = self.release_portfolio_audit_store.create(self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "portfolio": portfolio, "summary": {"portfolio_id": portfolio.get("portfolio_id"), "status": portfolio.get("status")}}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Audit route not found.")
+                return
+            portfolio_id = parts[0]
+            action = parts[1] if len(parts) > 1 else ""
+            if len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                portfolio = self.release_portfolio_audit_store.get_portfolio(portfolio_id)
+                report = self.release_portfolio_audit_store.read_report(portfolio_id, default={})
+                stale = self.release_portfolio_audit_store.report_is_stale(portfolio_id, report) if report else False
+                summary = portfolio_audit_summary(report) if report else {"status": "missing"}
+                summary["stale"] = stale
+                self._send_json({"ok": True, "portfolio": portfolio, "report": report, "summary": summary, "stale": stale})
+                return
+            if action == "refresh" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_portfolio_audit_store.refresh(portfolio_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "report": report, "summary": portfolio_audit_summary(report)})
+                return
+            if action == "report" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_portfolio_audit_store.read_report(portfolio_id, default={})
+                stale = self.release_portfolio_audit_store.report_is_stale(portfolio_id, report) if report else False
+                summary = portfolio_audit_summary(report) if report else {"status": "missing"}
+                summary["stale"] = stale
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "report": report, "summary": summary, "stale": stale})
+                return
+            if action == "trends" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                trend = self.release_portfolio_audit_store.read_trend_report(portfolio_id, default={})
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "trend_report": trend, "summary": {"status": trend.get("status") or "missing", "finding_count": len(trend.get("trend_findings", []) if isinstance(trend.get("trend_findings"), list) else [])}})
+                return
+            if action == "risks" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                risks = self.release_portfolio_audit_store.read_risk_register(portfolio_id, default={})
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "risk_register": risks, "summary": {"risk_count": len(risks.get("risks", []) if isinstance(risks.get("risks"), list) else [])}})
+                return
+            if action == "export" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.release_portfolio_audit_store.export_portfolio(portfolio_id, now=_utc_now())
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                return
+            if action == "export" and len(parts) == 3 and parts[2] == "zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.release_portfolio_audit_store.build_zip(portfolio_id, now=_utc_now())
+                manifest = self.release_portfolio_audit_store.read_export_manifest(portfolio_id)
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+                return
+            if action == "verify" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_release_portfolio_audit_package(
+                    self.release_portfolio_audit_store.zip_path(portfolio_id),
+                    strict=bool(payload.get("strict", False)),
+                    require_reviewer_packs=bool(payload.get("require_reviewer_packs", False)),
+                    require_audit=bool(payload.get("require_audit", False)),
+                    require_archive=bool(payload.get("require_archive", False)),
+                )
+                write_release_portfolio_audit_verification_report(report, self.release_portfolio_audit_store.verification_report_path(portfolio_id))
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report, "summary": release_portfolio_audit_verification_summary(report)})
+                return
+            if action == "download" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_portfolio_audit_store.get_portfolio(portfolio_id)
+                self._send_file(self.release_portfolio_audit_store.zip_path(portfolio_id), "application/zip", filename=f"musicforge-{portfolio_id}-portfolio-audit.zip")
+                return
+            if action == "archive" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                portfolio = self.release_portfolio_audit_store.archive(portfolio_id, now=_utc_now())
+                self._send_json({"ok": True, "portfolio": portfolio, "summary": {"status": portfolio.get("status")}})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Audit route not found.")
+        except ReleasePortfolioAuditNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleasePortfolioAuditStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleasePortfolioAuditError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -14249,6 +14387,14 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             audit_store=self.release_operations_audit_store,
             signoff_store=self.release_operations_signoff_store,
             release_store=self.release_store,
+        )
+        self.release_portfolio_audit_store = ReleasePortfolioAuditStore(
+            release_store=self.release_store,
+            operations_store=self.release_operations_store,
+            runbook_store=self.release_operations_runbook_store,
+            signoff_store=self.release_operations_signoff_store,
+            audit_store=self.release_operations_audit_store,
+            reviewer_pack_store=self.release_operations_reviewer_pack_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

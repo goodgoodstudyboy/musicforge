@@ -149,6 +149,26 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/operations/reviewer-pack" in html
     assert "/operations/reviewer-pack/verify" in html
     assert "/operations/reviewer-pack.zip" in html
+    assert "Portfolio Audit" in html
+    assert 'id="portfolio-audit-list"' in html
+    assert 'id="portfolio-audit-detail"' in html
+    assert 'id="portfolio-audit-form"' in html
+    assert 'id="portfolio-audit-name"' in html
+    assert 'id="portfolio-audit-release-ids"' in html
+    assert 'id="portfolio-audit-require-reviewer-packs"' in html
+    assert 'id="portfolio-audit-require-audit"' in html
+    assert 'id="portfolio-audit-require-archive"' in html
+    assert 'id="portfolio-audit-refresh"' in html
+    assert 'id="portfolio-audit-export"' in html
+    assert 'id="portfolio-audit-zip"' in html
+    assert 'id="portfolio-audit-verify"' in html
+    assert "Release Readiness Ranking" in html
+    assert "Portfolio Risk Register" in html
+    assert "Deterministic Recommendations" in html
+    assert "/api/release-portfolio-audits" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/verify" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
     assert "/encoded-audio/health" in html
     assert "/encoded-audio/acceptance/refresh" in html

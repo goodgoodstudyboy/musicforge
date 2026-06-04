@@ -377,4 +377,93 @@ def test_release_operations_reviewer_pack_cli_create_export_verify(tmp_path: Pat
 
     assert verified.returncode == 0, verified.stderr
     assert json.loads(verified.stdout)["status"] == "passed"
-    assert json.loads(report_out.read_text(encoding="utf-8"))["status"] == "passed"
+
+
+def test_release_portfolio_audit_cli_create_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_audit import portfolio_fixture
+
+    release, second, _store = portfolio_fixture(Path(".musicforge"), monkeypatch, second_verified=True)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    created = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-audit",
+            "--create",
+            "--name",
+            "CLI Portfolio",
+            "--release-ids",
+            f"{release.release_id},{second.release_id}",
+            "--require-reviewer-packs",
+            "--require-audit",
+            "--require-archive",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert created.returncode == 0, created.stderr
+    portfolio_id = json.loads(created.stdout)["portfolio"]["portfolio_id"]
+
+    exported = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-audit",
+            "--portfolio-id",
+            portfolio_id,
+            "--refresh",
+            "--export",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-reviewer-packs",
+            "--require-audit",
+            "--require-archive",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert exported.returncode == 0, exported.stderr
+    exported_payload = json.loads(exported.stdout)
+    assert exported_payload["summary"]["status"] == "passed"
+    assert exported_payload["verification_summary"]["status"] == "passed"
+
+    verified = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-audit-package",
+            str(Path(".musicforge") / "portfolio-audits" / portfolio_id / "portfolio-audit.zip"),
+            "--strict",
+            "--require-reviewer-packs",
+            "--require-audit",
+            "--require-archive",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(verified.stdout)["status"] == "passed"

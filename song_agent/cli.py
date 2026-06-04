@@ -220,6 +220,21 @@ def build_verify_release_operations_reviewer_pack_parser() -> argparse.ArgumentP
     return verify_parser
 
 
+def build_verify_release_portfolio_audit_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release Portfolio Audit ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release Portfolio Audit ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--require-reviewer-packs", action="store_true", help="Require passed Reviewer Pack verification for every release.")
+    verify_parser.add_argument("--require-audit", action="store_true", help="Require passed Audit package verification for every release.")
+    verify_parser.add_argument("--require-archive", action="store_true", help="Require passed Operations Archive verification for every release.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=128, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_release_operations_runbook_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Create and run local MusicForge Release Operations Runbooks.")
     parser.add_argument("release_id", help="Release id.")
@@ -296,6 +311,30 @@ def build_release_operations_reviewer_pack_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-audit", action="store_true", help="Require usable Audit evidence when verifying.")
     parser.add_argument("--require-signed", action="store_true", help="Require signed Operations Signoff evidence when verifying.")
     parser.add_argument("--require-archive", action="store_true", help="Require verified Operations Archive evidence when verifying.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_release_portfolio_audit_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build and verify local MusicForge Release Portfolio Audits.")
+    parser.add_argument("--portfolio-id", default="", help="Portfolio Audit id.")
+    parser.add_argument("--list", action="store_true", help="List Portfolio Audits.")
+    parser.add_argument("--create", action="store_true", help="Create a Portfolio Audit.")
+    parser.add_argument("--name", default="", help="Portfolio name when creating.")
+    parser.add_argument("--release-ids", default="", help="Comma-separated Release ids to include. Empty means all releases.")
+    parser.add_argument("--include-hidden", action="store_true", help="Include hidden releases.")
+    parser.add_argument("--exclude-archived", action="store_true", help="Exclude archived releases.")
+    parser.add_argument("--max-releases", type=int, default=None, help="Maximum number of releases to include.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh Portfolio Audit reports.")
+    parser.add_argument("--export", action="store_true", help="Build Portfolio Audit export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build Portfolio Audit ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify Portfolio Audit ZIP.")
+    parser.add_argument("--archive", action="store_true", help="Archive the Portfolio Audit.")
+    parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as verifier failures.")
+    parser.add_argument("--require-reviewer-packs", action="store_true", help="Require passed Reviewer Pack verification.")
+    parser.add_argument("--require-audit", action="store_true", help="Require passed Audit package verification.")
+    parser.add_argument("--require-archive", action="store_true", help="Require passed Operations Archive verification.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -1019,6 +1058,33 @@ def _main() -> None:
         else:
             print_release_operations_reviewer_pack_verification_report(report)
         raise SystemExit(release_operations_reviewer_pack_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-portfolio-audit-package":
+        from song_agent.release_portfolio_audit_verifier import (
+            print_release_portfolio_audit_verification_report,
+            release_portfolio_audit_verification_exit_code,
+            verify_release_portfolio_audit_package,
+            write_release_portfolio_audit_verification_report,
+        )
+
+        parser = build_verify_release_portfolio_audit_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_portfolio_audit_package(
+            args.zip_path,
+            strict=args.strict,
+            require_reviewer_packs=args.require_reviewer_packs,
+            require_audit=args.require_audit,
+            require_archive=args.require_archive,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_portfolio_audit_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_audit_verification_report(report)
+        raise SystemExit(release_portfolio_audit_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -1279,6 +1345,87 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_operations_reviewer_pack_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-portfolio-audit":
+        from song_agent.distribution import DistributionStore
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore, portfolio_audit_summary
+        from song_agent.release_portfolio_audit_verifier import release_portfolio_audit_verification_summary, verify_release_portfolio_audit_package, write_release_portfolio_audit_verification_report
+        from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
+
+        parser = build_release_portfolio_audit_parser()
+        args = parser.parse_args(raw_args[1:])
+        release_store = ReleaseStore()
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        evidence_store = SubmissionEvidenceStore(submission_store)
+        operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+        reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
+        store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, audit_store=audit_store, reviewer_pack_store=reviewer_store)
+        result: dict[str, Any] = {"ok": True}
+        release_ids = [item.strip() for item in str(args.release_ids or "").split(",") if item.strip()]
+        payload = {
+            "name": args.name,
+            "release_ids": release_ids,
+            "include_hidden": args.include_hidden,
+            "include_archived": not args.exclude_archived,
+            "max_releases": args.max_releases,
+            "require_reviewer_packs": args.require_reviewer_packs,
+            "require_audit": args.require_audit,
+            "require_archive": args.require_archive,
+        }
+        if args.list:
+            portfolios = store.list_portfolios(include_archived=True)
+            result.update({"portfolios": portfolios, "summary": {"count": len(portfolios)}})
+        else:
+            if args.create:
+                portfolio = store.create(payload)
+                result.update({"portfolio": portfolio, "portfolio_id": portfolio.get("portfolio_id")})
+            else:
+                if not args.portfolio_id:
+                    raise ValueError("--portfolio-id is required unless --create or --list is used.")
+                portfolio = store.get_portfolio(args.portfolio_id)
+                result.update({"portfolio": portfolio, "portfolio_id": args.portfolio_id})
+            portfolio_id = str(result.get("portfolio_id") or args.portfolio_id)
+            if args.refresh:
+                report = store.refresh(portfolio_id, payload)
+                summary = portfolio_audit_summary(report)
+                summary["stale"] = store.report_is_stale(portfolio_id, report)
+                result.update({"report": report, "summary": summary, "stale": summary["stale"], "trend_report": store.read_trend_report(portfolio_id, default={}), "risk_register": store.read_risk_register(portfolio_id, default={})})
+            elif not args.create:
+                report = store.read_report(portfolio_id, default={})
+                summary = portfolio_audit_summary(report) if report else {"status": "missing"}
+                if report:
+                    summary["stale"] = store.report_is_stale(portfolio_id, report)
+                result.update({"report": report, "summary": summary, "stale": summary.get("stale", False)})
+            if args.export:
+                manifest = store.export_portfolio(portfolio_id)
+                result.update({"manifest": manifest})
+            if args.zip:
+                zip_info = store.build_zip(portfolio_id)
+                result.update({"zip": zip_info})
+            if args.verify:
+                verification = verify_release_portfolio_audit_package(store.zip_path(portfolio_id), strict=args.strict, require_reviewer_packs=args.require_reviewer_packs, require_audit=args.require_audit, require_archive=args.require_archive)
+                write_release_portfolio_audit_verification_report(verification, store.verification_report_path(portfolio_id))
+                result.update({"verification": verification, "verification_summary": release_portfolio_audit_verification_summary(verification)})
+            if args.archive:
+                portfolio = store.archive(portfolio_id)
+                result.update({"portfolio": portfolio})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_audit_result(result)
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
@@ -2211,6 +2358,25 @@ def print_release_operations_reviewer_pack_result(result: dict[str, Any]) -> Non
     print(f"readiness: {summary.get('readiness') or '-'}")
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
+
+
+def print_release_portfolio_audit_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+    portfolio = result.get("portfolio") if isinstance(result.get("portfolio"), dict) else {}
+    print("MusicForge release-portfolio-audit")
+    print(f"portfolio: {result.get('portfolio_id') or portfolio.get('portfolio_id') or '-'}")
+    print(f"status: {summary.get('status') or portfolio.get('status') or '-'}")
+    print(f"releases: {summary.get('release_count', 0)}")
+    print(f"risk_score: {summary.get('risk_score') if summary.get('risk_score') is not None else '-'}")
+    print(f"blockers: {summary.get('blocker_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
+    if result.get("portfolios") is not None:
+        print(f"portfolios: {len(result.get('portfolios') or [])}")
     if result.get("zip"):
         print(f"zip: {(result.get('zip') or {}).get('filename')}")
     if verification:

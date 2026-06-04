@@ -446,6 +446,17 @@ ledger. The audit ZIP contains summary evidence only and can be verified
 offline for ledger ordering, report integrity, reset Change Request causality,
 ZIP path safety, manifest spoofing, duplicate entries, and redaction issues.
 
+Release Portfolio Audit aggregates multiple Releases into a cross-release
+governance report. It produces release readiness ranking, Portfolio Risk Score,
+trend findings, risk register, deterministic recommendations, reviewer-pack
+coverage, Operations Audit verification, Operations Archive verification,
+Runbook summaries, and Change Request summaries. It is read-only governance:
+Portfolio Audit does not sign, reset, upload, mutate Release evidence, or bypass
+any per-Release gate. The portable Portfolio ZIP can be verified outside the
+workspace for manifest/file hashes, report/trend/risk integrity, path safety,
+duplicate entries, manifest spoofing, redaction, and required reviewer/audit/
+archive evidence.
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -468,6 +479,9 @@ python -m song_agent.cli release-operations-audit rel-000001 --refresh --export 
 python -m song_agent.cli verify-release-operations-audit-package path\to\operations-audit.zip --json --strict --require-signed --require-archive --report-out operations-audit-verification-report.json
 python -m song_agent.cli release-operations-reviewer-pack rel-000001 --refresh --export --zip --verify --strict --require-audit --require-signed --require-archive --json
 python -m song_agent.cli verify-release-operations-reviewer-pack path\to\operations-reviewer-pack.zip --json --strict --require-audit --require-signed --require-archive --report-out reviewer-pack-verification-report.json
+python -m song_agent.cli release-portfolio-audit --create --name "Q2 Portfolio Audit" --release-ids rel-000001,rel-000002 --require-reviewer-packs --require-audit --require-archive --json
+python -m song_agent.cli release-portfolio-audit --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --require-reviewer-packs --require-audit --require-archive --json
+python -m song_agent.cli verify-release-portfolio-audit-package path\to\portfolio-audit.zip --json --strict --require-reviewer-packs --require-audit --require-archive --report-out portfolio-audit-verification-report.json
 ```
 
 ```powershell
