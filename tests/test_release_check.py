@@ -212,6 +212,7 @@ def test_v63_release_operations_audit_ledger_smoke(tmp_path: Path) -> None:
     assert ok is True, detail
     assert "audit=passed" in detail
     assert "external=passed" in detail
+    assert "archive_verified_missing=failed" in detail
     assert "tamper=failed" in detail
     assert "missing=failed" in detail
     assert "reorder=failed" in detail
@@ -220,6 +221,7 @@ def test_v63_release_operations_audit_ledger_smoke(tmp_path: Path) -> None:
     assert "backslash=failed" in detail
     assert "spoof=failed/warning" in detail
     assert "redaction=failed" in detail
+    assert "history_reset=failed" in detail
     assert "cr=applied" in detail
 
 

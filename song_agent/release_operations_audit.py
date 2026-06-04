@@ -173,10 +173,33 @@ class ReleaseOperationsAuditStore:
         release_dict = release.to_dict()
         rows.append(_entry_seed(release_id, release_dict.get("created_at"), "release", "release_document_current", "local-user", "read_only", "refresh", "release", release_id, release_dict, source_hash=stable_hash(release_dict)))
         source["sources"].append({"type": "release", "hash": stable_hash(release_dict)})
+        reset_hash_by_change_request_id = _reset_hash_by_change_request_id(self.signoff_store, release_id)
         for event in self.release_store.read_events(release_id):
             if not isinstance(event, dict):
                 continue
-            rows.append(_entry_seed(release_id, event.get("at"), "release", f"release_event_{_slug(event.get('type') or 'unknown')}", "local-user", "read_only", "external_record", "release_event", str(event.get("event_id") or ""), event))
+            event_type = str(event.get("type") or "unknown")
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            change_request_id = str(payload.get("change_request_id") or "")
+            reset_payload_hash = payload.get("payload_hash") or reset_hash_by_change_request_id.get(change_request_id)
+            if event_type == "operations_signoff_reset":
+                rows.append(
+                    _entry_seed(
+                        release_id,
+                        event.get("at") or event.get("timestamp"),
+                        "release",
+                        "release_event_operations_signoff_reset",
+                        "local-user",
+                        "change_control",
+                        "reset",
+                        "release_event",
+                        str(event.get("event_id") or event_type),
+                        event,
+                        payload_hash=reset_payload_hash,
+                        causal_refs=[{"type": "change_request", "id": change_request_id}] if change_request_id else [],
+                    )
+                )
+            else:
+                rows.append(_entry_seed(release_id, event.get("at") or event.get("timestamp"), "release", f"release_event_{_slug(event_type)}", "local-user", "read_only", "external_record", "release_event", str(event.get("event_id") or ""), event))
 
         operations_report = self.operations_store.read_report(release_id, default={})
         if operations_report:
@@ -241,7 +264,24 @@ class ReleaseOperationsAuditStore:
         for event in _read_jsonl(self.signoff_store.history_path(release_id)):
             event_type = f"operations_signoff_history_{_slug(event.get('type') or 'event')}"
             summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
-            rows.append(_entry_seed(release_id, event.get("at"), "operations_signoff", event_type, "local-user", "change_control" if event.get("type") == "reset" else "manual_required", "reset" if event.get("type") == "reset" else "signoff", "operations_signoff_history", str(event.get("event_id") or ""), event, causal_refs=[{"type": "change_request", "id": summary.get("change_request_id")}] if summary.get("change_request_id") else []))
+            change_request_id = str(summary.get("change_request_id") or "")
+            reset_payload_hash = summary.get("payload_hash") or reset_hash_by_change_request_id.get(change_request_id)
+            rows.append(
+                _entry_seed(
+                    release_id,
+                    event.get("at"),
+                    "operations_signoff",
+                    event_type,
+                    "local-user",
+                    "change_control" if event.get("type") == "reset" else "manual_required",
+                    "reset" if event.get("type") == "reset" else "signoff",
+                    "operations_signoff_history",
+                    str(event.get("event_id") or ""),
+                    event,
+                    payload_hash=reset_payload_hash if event.get("type") == "reset" else None,
+                    causal_refs=[{"type": "change_request", "id": change_request_id}] if change_request_id else [],
+                )
+            )
 
         change_requests = self.signoff_store.list_change_requests(release_id)
         for request in sorted(change_requests, key=lambda item: str(item.get("created_at") or "")):
@@ -257,7 +297,7 @@ class ReleaseOperationsAuditStore:
             source["sources"].append({"type": "operations_archive", "hash": operations_archive_manifest_hash(archive_manifest), "source_hash": archive_manifest.get("source_hash")})
         archive_verification = _read_optional_json(self.signoff_store.operations_dir(release_id) / "operations-archive-verification-report.json")
         if archive_verification:
-            rows.append(_entry_seed(release_id, archive_verification.get("generated_at"), "operations_archive", "operations_archive_verified", "local-user", "auto_safe", "verify", "operations_archive_verifier", "operations-archive-verification-report", archive_verification))
+            rows.append(_entry_seed(release_id, archive_verification.get("generated_at"), "operations_archive", "operations_archive_verified", "local-user", "auto_safe", "verify", "operations_archive_verifier", "operations-archive-verification-report", archive_verification, integrity_ok=archive_verification.get("status") != "failed"))
 
         if operations_report:
             for domain, item in _verifier_entries_from_operations_report(release_id, operations_report):
@@ -404,6 +444,8 @@ class ReleaseOperationsAuditStore:
         if archive_manifest and not operations_archive_manifest_integrity_ok(archive_manifest):
             blockers.append(_blocker("operations_archive_manifest_integrity", "Operations Archive manifest integrity failed."))
         archive_verification = _read_optional_json(self.signoff_store.operations_dir(release_id) / "operations-archive-verification-report.json")
+        if archive_manifest and not archive_verification:
+            blockers.append(_blocker("operations_archive_verifier_missing", "Operations Archive export exists but verification report is missing."))
         if archive_verification and archive_verification.get("status") == "failed":
             blockers.append(_blocker("operations_archive_verifier", "Operations Archive verifier failed."))
         report = self.operations_store.read_report(release_id, default={})
@@ -541,6 +583,11 @@ def _finalize_entries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _bind_change_request_causal_refs(entries: list[dict[str, Any]]) -> None:
+    reset_event_types = {
+        "operations_signoff_reset",
+        "operations_signoff_history_reset",
+        "release_event_operations_signoff_reset",
+    }
     applied_by_id: dict[str, dict[str, Any]] = {}
     applied_by_reset_hash: dict[str, dict[str, Any]] = {}
     for entry in entries:
@@ -555,7 +602,7 @@ def _bind_change_request_causal_refs(entries: list[dict[str, Any]]) -> None:
                 applied_by_reset_hash[str(ref.get("payload_hash"))] = entry
     changed = False
     for entry in entries:
-        if entry.get("event_type") != "operations_signoff_reset":
+        if entry.get("event_type") not in reset_event_types:
             continue
         reset_hash = str((entry.get("evidence_ref") or {}).get("payload_hash") or "")
         refs = entry.get("causal_refs") if isinstance(entry.get("causal_refs"), list) else []
@@ -623,6 +670,18 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         if isinstance(value, dict):
             rows.append(sanitize_metadata(value, blocked_keys=OPERATIONS_AUDIT_BLOCKED_KEYS))
     return rows
+
+
+def _reset_hash_by_change_request_id(signoff_store: ReleaseOperationsSignoffStore, release_id: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for request in signoff_store.list_change_requests(release_id):
+        if not isinstance(request, dict) or request.get("status") != "applied":
+            continue
+        change_request_id = str(request.get("change_request_id") or "")
+        reset_hash = str(request.get("applied_signoff_reset_hash") or "")
+        if change_request_id and reset_hash:
+            result[change_request_id] = reset_hash
+    return result
 
 
 def _verifier_entries_from_operations_report(release_id: str, report: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:

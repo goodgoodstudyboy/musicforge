@@ -287,7 +287,12 @@ class _OperationsAuditVerifier:
     def _verify_change_request_causality(self) -> None:
         requests = self.change_request_ledger.get("change_requests") if isinstance(self.change_request_ledger.get("change_requests"), list) else []
         requests_by_id = {str(item.get("change_request_id") or ""): item for item in requests if isinstance(item, dict)}
-        reset_entries = [item for item in self.ledger_entries if item.get("event_type") == "operations_signoff_reset"]
+        reset_event_types = {
+            "operations_signoff_reset",
+            "operations_signoff_history_reset",
+            "release_event_operations_signoff_reset",
+        }
+        reset_entries = [item for item in self.ledger_entries if item.get("event_type") in reset_event_types]
         errors: list[str] = []
         for entry in reset_entries:
             causal_refs = entry.get("causal_refs") if isinstance(entry.get("causal_refs"), list) else []
@@ -308,6 +313,9 @@ class _OperationsAuditVerifier:
             if request.get("integrity_hash") != operations_change_request_hash(request):
                 errors.append(f"{change_request_id} integrity failed")
             reset_hash = (entry.get("evidence_ref") or {}).get("payload_hash")
+            if not reset_hash:
+                errors.append(f"{entry.get('entry_id')} missing reset payload hash")
+                continue
             if str(request.get("applied_signoff_reset_hash") or "") != str(reset_hash or ""):
                 errors.append(f"{change_request_id} reset hash mismatch")
         self._add_check("change_requests", "operations_audit_change_request_reset_causality", "failed" if errors else "passed", "blocking", "Invalid reset causality: " + "; ".join(errors[:5]) if errors else "Operations reset entries are bound to applied Change Requests.")
@@ -321,8 +329,17 @@ class _OperationsAuditVerifier:
             ok = status in {"signed", "force_signed"}
             self._add_check("requirements", "operations_audit_require_signed", "passed" if ok else "failed", "blocking", f"Operations Signoff status is {status!r}; signed required.")
         if self.require_archive:
-            ok = any(item.get("event_type") == "operations_archive_exported" for item in self.ledger_entries)
-            self._add_check("requirements", "operations_audit_require_archive", "passed" if ok else "failed", "blocking", "Operations Archive evidence exists." if ok else "Operations Archive evidence is required.")
+            exported = any(item.get("event_type") == "operations_archive_exported" for item in self.ledger_entries)
+            verified_entries = [item for item in self.ledger_entries if item.get("event_type") == "operations_archive_verified"]
+            verified = bool(verified_entries) and all(((item.get("evidence_ref") or {}).get("integrity_ok") is not False) for item in verified_entries)
+            ok = exported and verified
+            if ok:
+                message = "Operations Archive export and verification evidence exist."
+            elif not exported:
+                message = "Operations Archive export evidence is required."
+            else:
+                message = "Operations Archive verification evidence is required."
+            self._add_check("requirements", "operations_audit_require_archive", "passed" if ok else "failed", "blocking", message)
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:

@@ -277,6 +277,10 @@ def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path
     signoff_store.signoff(release.release_id, {"signed_by": "cli-test"})
     signoff_store.export_archive(release.release_id)
     signoff_store.build_archive_zip(release.release_id)
+    from song_agent.release_operations_archive_verifier import verify_release_operations_archive_package, write_release_operations_archive_verification_report
+
+    archive_report = verify_release_operations_archive_package(signoff_store.archive_zip_path(release.release_id), require_signed=True)
+    write_release_operations_archive_verification_report(archive_report, signoff_store.operations_dir(release.release_id) / "operations-archive-verification-report.json")
     audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
     audit_store.refresh(release.release_id)
     audit_store.export_audit(release.release_id)

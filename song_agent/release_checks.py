@@ -8855,10 +8855,20 @@ def _v63_release_operations_audit_ledger_smoke(root: Path) -> tuple[bool, str]:
         signed = signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
         manifest = signoff_store.export_archive(release.release_id)
         signoff_store.build_archive_zip(release.release_id)
+        audit_store.refresh(release.release_id)
+        audit_store.export_audit(release.release_id)
+        audit_store.build_zip(release.release_id)
+        missing_archive_verify_report = verify_release_operations_audit_package(audit_store.zip_path(release.release_id), require_current=True, require_archive=True)
+
         change = signoff_store.create_change_request(release.release_id, {"reason": "Audit ledger reset evidence", "scope": ["operations"], "created_by": "release-check"})
         signoff_store.update_change_request_status(release.release_id, change["change_request_id"], "approve", {"approved_by": "release-check"})
         reset = signoff_store.reset_signoff(release.release_id, {"reason": "Reset for audit ledger evidence", "change_request_id": change["change_request_id"]})
         applied = signoff_store.get_change_request(release.release_id, change["change_request_id"])
+        signed_again = signoff_store.signoff(release.release_id, {"signed_by": "release-check-again"})
+        manifest = signoff_store.export_archive(release.release_id)
+        signoff_store.build_archive_zip(release.release_id)
+        archive_verification = verify_release_operations_archive_package(signoff_store.archive_zip_path(release.release_id), require_signed=True)
+        write_json(signoff_store.operations_dir(release.release_id) / "operations-archive-verification-report.json", archive_verification)
 
         audit_report = audit_store.refresh(release.release_id)
         ledger_entries = audit_store.read_ledger(release.release_id)
@@ -8894,15 +8904,22 @@ def _v63_release_operations_audit_ledger_smoke(root: Path) -> tuple[bool, str]:
             strict=True,
         )
         redaction_report = verify_release_operations_audit_package(_v38_rewrite_zip(audit_zip, base / "redaction-v63-audit.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        history_reset_report = verify_release_operations_audit_package(
+            _v38_rewrite_zip(audit_zip, base / "history-reset-v63-audit.zip", transforms={"change-request-ledger.json": _v63_tamper_audit_change_request_reset}),
+            require_current=True,
+            require_archive=True,
+        )
 
-        serialized = json.dumps({"signed": signed, "archive": manifest, "reset": reset, "audit": audit_report, "manifest": audit_manifest}, ensure_ascii=False)
+        serialized = json.dumps({"signed": signed, "signed_again": signed_again, "archive": manifest, "reset": reset, "audit": audit_report, "manifest": audit_manifest}, ensure_ascii=False)
         ok = (
             signed.get("status") == "signed"
+            and signed_again.get("status") == "signed"
             and applied.get("status") == "applied"
             and audit_report.get("status") == "passed"
             and audit_report_integrity_ok(audit_report)
             and audit_ledger_integrity_ok(ledger_entries)
             and audit_manifest.get("audit_report", {}).get("ledger_hash") == audit_report.get("ledger_hash")
+            and _v38_check_status(missing_archive_verify_report, "operations_audit_require_archive") == "failed"
             and verified.get("status") == "passed"
             and external_report.get("status") == "passed"
             and _v38_check_status(tamper_report, "operations_audit_report_integrity") == "failed"
@@ -8914,6 +8931,7 @@ def _v63_release_operations_audit_ledger_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(spoof_report, "operations_audit_manifest_extra_entries") == "failed"
             and _v38_check_status(spoof_report, "operations_audit_manifest_zip_entries_reference_only") == "warning"
             and _v38_check_status(redaction_report, "operations_audit_redaction_scan") == "failed"
+            and _v38_check_status(history_reset_report, "operations_audit_change_request_reset_causality") == "failed"
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -8921,6 +8939,7 @@ def _v63_release_operations_audit_ledger_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"audit={verified.get('status')}, external={external_report.get('status')}, "
+            f"archive_verified_missing={_v38_check_status(missing_archive_verify_report, 'operations_audit_require_archive')}, "
             f"tamper={_v38_check_status(tamper_report, 'operations_audit_report_integrity')}, "
             f"missing={_v38_check_status(missing_report, 'operations_audit_zip_required_entries')}, "
             f"reorder={_v38_check_status(reorder_report, 'operations_audit_ledger_chain')}, "
@@ -8928,7 +8947,8 @@ def _v63_release_operations_audit_ledger_smoke(root: Path) -> tuple[bool, str]:
             f"dangerous={_v38_check_status(dangerous_report, 'operations_audit_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash_report, 'operations_audit_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof_report, 'operations_audit_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'operations_audit_manifest_zip_entries_reference_only')}, "
-            f"redaction={_v38_check_status(redaction_report, 'operations_audit_redaction_scan')}, cr={applied.get('status')}"
+            f"redaction={_v38_check_status(redaction_report, 'operations_audit_redaction_scan')}, "
+            f"history_reset={_v38_check_status(history_reset_report, 'operations_audit_change_request_reset_causality')}, cr={applied.get('status')}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -8951,6 +8971,15 @@ def _v63_reorder_audit_ledger(data: bytes) -> bytes:
 def _v63_spoof_audit_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v63_tamper_audit_change_request_reset(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    requests = payload.get("change_requests") if isinstance(payload.get("change_requests"), list) else []
+    if requests and isinstance(requests[0], dict):
+        requests[0]["applied_signoff_reset_hash"] = "f" * 64
+        requests[0]["integrity_hash"] = "0" * 64
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 

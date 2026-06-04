@@ -1,5 +1,17 @@
 # Changelog
 
+## v6.3.1 - 2026-06-04
+
+### Fixed
+- Operations Audit `require_archive` now requires both archive export evidence and a passed Operations Archive verification report.
+- Operations Audit reports now block when an Operations Archive manifest exists without corresponding archive verification evidence.
+- Operations Signoff reset history and Release reset events now persist the reset payload hash so re-sign cycles keep auditable Change Request causality.
+- Audit verifier now validates reset causality across current reset records, signoff history reset records, and Release event reset records.
+- v6.3 release-check smoke now covers missing archive verification and tampered historical reset Change Request evidence.
+
+### Verified
+- `python -m pytest tests\test_release_operations_audit.py tests\test_release_check.py::test_v63_release_operations_audit_ledger_smoke tests\test_server_release_operations_audit.py tests\test_cli_release_operations.py tests\test_release_operations_signoff.py tests\test_server_release_operations_signoff.py -q`
+
 ## v6.3.0 - 2026-06-04
 
 ### Added
