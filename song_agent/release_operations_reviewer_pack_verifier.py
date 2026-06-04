@@ -272,7 +272,15 @@ class _ReviewerPackVerifier:
         summary = self.reviewer_report.get("summary") if isinstance(self.reviewer_report.get("summary"), dict) else {}
         manifest_audit = self.manifest.get("audit_summary") if isinstance(self.manifest.get("audit_summary"), dict) else {}
         if self.require_audit:
-            ok = bool(self.reviewer_report) and self.reviewer_report.get("status") != "failed" and bool(manifest_audit.get("ledger_hash")) and summary.get("audit_status") != "failed"
+            report_integrity_ok = bool(self.reviewer_report) and self.reviewer_report.get("integrity_hash") == reviewer_report_integrity_hash(self.reviewer_report)
+            ok = bool(
+                self.reviewer_report
+                and report_integrity_ok
+                and self.reviewer_report.get("status") != "failed"
+                and bool(manifest_audit.get("ledger_hash"))
+                and summary.get("audit_status") != "failed"
+                and manifest_audit.get("audit_package_verification_status") == "passed"
+            )
             self._add_check("requirements", "reviewer_pack_require_audit", "passed" if ok else "failed", "blocking", "Reviewer Pack contains usable Audit evidence." if ok else "Usable Audit evidence is required.")
         if self.require_signed:
             status = str(summary.get("operations_signoff_status") or "")

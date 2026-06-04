@@ -1,5 +1,15 @@
 # Changelog
 
+## v6.4.1 - 2026-06-04
+
+### Fixed
+- Reviewer Pack `--require-audit` now requires a passed Operations Audit package verification report, not just Audit Report summary evidence.
+- Reviewer Pack refresh now marks missing or failed Operations Audit package verification as a blocking issue.
+- v6.4 release-check smoke now covers missing Audit package verification for Reviewer Pack external verification.
+
+### Verified
+- `python -m pytest tests\test_release_operations_reviewer_pack.py tests\test_release_operations_reviewer_pack_verifier.py tests\test_release_check.py::test_v64_release_operations_reviewer_pack_smoke -q`
+
 ## v6.4.0 - 2026-06-04
 
 ### Added

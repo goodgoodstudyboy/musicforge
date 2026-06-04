@@ -90,7 +90,36 @@ def test_reviewer_pack_requires_archive_verification(tmp_path: Path, monkeypatch
     report = reviewer_store.refresh(release.release_id)
 
     assert report["status"] == "failed"
+    assert any(item["check_id"] == "operations_audit_verification_missing" for item in report["blockers"])
     assert any(item["check_id"] == "operations_archive_verification_missing" for item in report["blockers"])
+
+
+def test_reviewer_pack_requires_audit_package_verification(tmp_path: Path, monkeypatch) -> None:
+    release, _operations_store, _runbook_store, _signoff_store, audit_store, reviewer_store = accepted_reviewer_fixture(tmp_path, monkeypatch, audit_verified=False)
+
+    report = reviewer_store.refresh(release.release_id)
+    reviewer_store.export_pack(release.release_id)
+    reviewer_store.build_zip(release.release_id)
+    verification = verify_release_operations_reviewer_pack(reviewer_store.zip_path(release.release_id), require_audit=True)
+
+    assert report["status"] == "failed"
+    assert report["summary"]["audit_package_verification_status"] == "missing"
+    assert any(item["check_id"] == "operations_audit_verification_missing" for item in report["blockers"])
+    assert any(item["check_id"] == "reviewer_pack_require_audit" and item["status"] == "failed" for item in verification["checks"])
+
+    failed_audit = verify_release_operations_audit_package(audit_store.zip_path(release.release_id), require_current=True, require_signed=True, require_archive=True)
+    failed_audit["status"] = "failed"
+    write_release_operations_audit_verification_report(failed_audit, audit_store.verification_report_path(release.release_id))
+
+    failed_report = reviewer_store.refresh(release.release_id)
+    reviewer_store.export_pack(release.release_id)
+    reviewer_store.build_zip(release.release_id)
+    failed_verification = verify_release_operations_reviewer_pack(reviewer_store.zip_path(release.release_id), require_audit=True)
+
+    assert failed_report["status"] == "failed"
+    assert failed_report["summary"]["audit_package_verification_status"] == "failed"
+    assert any(item["check_id"] == "operations_audit_verification_failed" for item in failed_report["blockers"])
+    assert any(item["check_id"] == "reviewer_pack_require_audit" and item["status"] == "failed" for item in failed_verification["checks"])
 
 
 def test_reviewer_pack_verifier_tamper_path_spoof_and_redaction(tmp_path: Path, monkeypatch) -> None:

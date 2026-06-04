@@ -9061,6 +9061,19 @@ def _v64_release_operations_reviewer_pack_smoke(root: Path) -> tuple[bool, str]:
             strict=True,
         )
         redaction_report = verify_release_operations_reviewer_pack(_v38_rewrite_zip(reviewer_zip, base / "redaction-v64-reviewer.zip", transforms={"REVIEWER_GUIDE.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        audit_verification_path = audit_store.verification_report_path(release.release_id)
+        audit_verification_bytes = audit_verification_path.read_bytes()
+        audit_verification_path.unlink()
+        try:
+            missing_audit_report = reviewer_store.refresh(release.release_id)
+            reviewer_store.export_pack(release.release_id)
+            reviewer_store.build_zip(release.release_id)
+            audit_verified_missing = verify_release_operations_reviewer_pack(reviewer_store.zip_path(release.release_id), require_audit=True)
+        finally:
+            audit_verification_path.write_bytes(audit_verification_bytes)
+            reviewer_store.refresh(release.release_id)
+            reviewer_store.export_pack(release.release_id)
+            reviewer_store.build_zip(release.release_id)
 
         serialized = json.dumps({"reviewer": reviewer_report, "manifest": reviewer_manifest}, ensure_ascii=False)
         ok = (
@@ -9078,6 +9091,8 @@ def _v64_release_operations_reviewer_pack_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(spoof_report, "reviewer_pack_manifest_extra_entries") == "failed"
             and _v38_check_status(spoof_report, "reviewer_pack_manifest_zip_entries_reference_only") == "warning"
             and _v38_check_status(redaction_report, "reviewer_pack_redaction_scan") == "failed"
+            and missing_audit_report.get("status") == "failed"
+            and _v38_check_status(audit_verified_missing, "reviewer_pack_require_audit") == "failed"
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -9092,7 +9107,8 @@ def _v64_release_operations_reviewer_pack_smoke(root: Path) -> tuple[bool, str]:
             f"dangerous={_v38_check_status(dangerous_report, 'reviewer_pack_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash_report, 'reviewer_pack_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof_report, 'reviewer_pack_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'reviewer_pack_manifest_zip_entries_reference_only')}, "
-            f"redaction={_v38_check_status(redaction_report, 'reviewer_pack_redaction_scan')}"
+            f"redaction={_v38_check_status(redaction_report, 'reviewer_pack_redaction_scan')}, "
+            f"audit_verified_missing={_v38_check_status(audit_verified_missing, 'reviewer_pack_require_audit')}"
         )
     except Exception as exc:
         return False, str(exc)

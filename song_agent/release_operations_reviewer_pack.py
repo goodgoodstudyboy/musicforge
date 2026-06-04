@@ -102,6 +102,7 @@ class ReleaseOperationsReviewerPackStore:
             audit_report = self.audit_store.read_report(release_id, default={})
             ledger_entries = self.audit_store.read_ledger(release_id)
             blockers, warnings = self._reviewer_findings(release_id, audit_report, ledger_entries)
+            audit_verification = _read_optional_json(self.audit_store.verification_report_path(release_id))
             retrospective = build_operations_retrospective_report(
                 release_id=release_id,
                 audit_report=audit_report,
@@ -117,6 +118,7 @@ class ReleaseOperationsReviewerPackStore:
                 "ledger_hash": audit_ledger_hash(ledger_entries) if ledger_entries else None,
                 "signoff_hash": signoff.get("payload_hash") if signoff else None,
                 "archive_verification_hash": stable_hash(archive_verification) if archive_verification else None,
+                "audit_verification_hash": stable_hash(audit_verification) if audit_verification else None,
                 "retrospective_hash": operations_retrospective_integrity_hash(retrospective),
             }
             report = {
@@ -131,6 +133,7 @@ class ReleaseOperationsReviewerPackStore:
                     "release_name": release.name,
                     "current_stage": self._current_stage(audit_report),
                     "audit_status": audit_report.get("status") if audit_report else "missing",
+                    "audit_package_verification_status": audit_verification.get("status") or "missing",
                     "operations_signoff_status": signoff.get("status") or "missing",
                     "archive_verified": bool(archive_verification and archive_verification.get("status") != "failed"),
                     "change_request_count": _count_events(ledger_entries, "operations_change_request"),
@@ -279,6 +282,11 @@ class ReleaseOperationsReviewerPackStore:
         if status == "force_signed":
             warnings.append(_warning("operations_signoff_force_signed", "Operations Signoff was force signed."))
         archive_verification = _read_optional_json(self.signoff_store.operations_dir(release_id) / "operations-archive-verification-report.json")
+        audit_verification = _read_optional_json(self.audit_store.verification_report_path(release_id))
+        if not audit_verification:
+            blockers.append(_blocker("operations_audit_verification_missing", "Operations Audit package verification report is missing."))
+        elif audit_verification.get("status") != "passed":
+            blockers.append(_blocker("operations_audit_verification_failed", "Operations Audit package verification failed."))
         if not archive_verification:
             blockers.append(_blocker("operations_archive_verification_missing", "Operations Archive verification report is missing."))
         elif archive_verification.get("status") == "failed":
