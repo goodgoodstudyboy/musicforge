@@ -9432,6 +9432,9 @@ def _v66_release_portfolio_governance_queue_smoke(root: Path) -> tuple[bool, str
         queue = governance_store.create_from_portfolio(portfolio["portfolio_id"])
         duplicate = governance_store.create_from_portfolio(portfolio["portfolio_id"])
         stale_queue = governance_store.create_from_portfolio(portfolio["portfolio_id"], {"force_new": True})
+        stale_export_queue = governance_store.create_from_portfolio(portfolio["portfolio_id"], {"force_new": True})
+        governance_store.export_queue(stale_export_queue["queue_id"])
+        governance_store.build_zip(stale_export_queue["queue_id"])
         plan = governance_store.read_action_plan(queue["queue_id"])
         manual = governance_store.read_manual_action_list(queue["queue_id"])
         ran = governance_store.run_safe_actions(queue["queue_id"])
@@ -9459,6 +9462,16 @@ def _v66_release_portfolio_governance_queue_smoke(root: Path) -> tuple[bool, str
             governance_store.run_safe_actions(stale_queue["queue_id"])
         except Exception as exc:
             stale_blocked = "stale" in str(exc).lower()
+        stale_export_blocked = False
+        stale_zip_blocked = False
+        try:
+            governance_store.export_queue(stale_export_queue["queue_id"])
+        except Exception as exc:
+            stale_export_blocked = "stale" in str(exc).lower()
+        try:
+            governance_store.build_zip(stale_export_queue["queue_id"])
+        except Exception as exc:
+            stale_zip_blocked = "stale" in str(exc).lower()
 
         serialized = json.dumps({"queue": ran, "plan": plan, "execution": execution, "manual": manual}, ensure_ascii=False)
         ok = (
@@ -9485,6 +9498,8 @@ def _v66_release_portfolio_governance_queue_smoke(root: Path) -> tuple[bool, str
             and _v38_check_status(spoof_report, "portfolio_governance_manifest_zip_entries_reference_only") == "warning"
             and _v38_check_status(redaction_report, "portfolio_governance_redaction_scan") == "failed"
             and stale_blocked
+            and stale_export_blocked
+            and stale_zip_blocked
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -9500,7 +9515,8 @@ def _v66_release_portfolio_governance_queue_smoke(root: Path) -> tuple[bool, str
             f"dangerous={_v38_check_status(dangerous_report, 'portfolio_governance_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash_report, 'portfolio_governance_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof_report, 'portfolio_governance_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'portfolio_governance_manifest_zip_entries_reference_only')}, "
-            f"redaction={_v38_check_status(redaction_report, 'portfolio_governance_redaction_scan')}, stale={stale_blocked}"
+            f"redaction={_v38_check_status(redaction_report, 'portfolio_governance_redaction_scan')}, stale={stale_blocked}, "
+            f"stale_export={stale_export_blocked}, stale_zip={stale_zip_blocked}"
         )
     except Exception as exc:
         return False, str(exc)

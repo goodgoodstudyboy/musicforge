@@ -463,7 +463,8 @@ refresh/export/zip/verify actions, such as Reviewer Pack, Operations Audit, and
 Operations Archive verification refreshes. Signoff, reset, approval, manual
 review, provider work, and external upload remain manual-required actions. A
 queue binds to the Portfolio Audit source hash; stale queues return 409 on
-`run-safe` and must be recreated from a refreshed Portfolio Audit.
+`run-safe`, export, and ZIP rebuild, and must be recreated from a refreshed
+Portfolio Audit.
 
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json

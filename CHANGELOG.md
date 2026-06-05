@@ -1,5 +1,14 @@
 # Changelog
 
+## v6.6.1 - 2026-06-05
+
+### Fixed
+- Governance Queue export and ZIP rebuild now block stale Portfolio Audit sources instead of allowing old queues to become external evidence packages.
+- v6.6 release-check smoke now covers stale export and stale ZIP rebuild guards.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance.py tests\test_server_release_portfolio_governance.py tests\test_release_check.py::test_v66_release_portfolio_governance_queue_smoke -q`
+
 ## v6.6.0 - 2026-06-05
 
 ### Added

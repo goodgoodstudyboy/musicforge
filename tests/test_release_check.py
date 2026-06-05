@@ -280,6 +280,8 @@ def test_v66_release_portfolio_governance_queue_smoke(tmp_path: Path) -> None:
     assert "spoof=failed/warning" in detail
     assert "redaction=failed" in detail
     assert "stale=True" in detail
+    assert "stale_export=True" in detail
+    assert "stale_zip=True" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

@@ -77,3 +77,34 @@ def test_server_release_portfolio_governance_stale_run_safe_returns_409(tmp_path
         assert "stale" in error["error"].lower()
     finally:
         stop_test_server(server)
+
+
+def test_server_release_portfolio_governance_stale_export_and_zip_return_409(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release, _second, portfolio, _store = governance_fixture(Path(".musicforge"), monkeypatch)
+        portfolio_id = portfolio["portfolio_id"]
+        create_status, created = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-queues", {})
+        queue_id = created["queue"]["queue_id"]
+
+        initial_export_status, _initial_export = request_json(server, "POST", f"/api/release-portfolio-governance-queues/{queue_id}/export")
+        initial_zip_status, _initial_zip = request_json(server, "POST", f"/api/release-portfolio-governance-queues/{queue_id}/export/zip")
+
+        verification_path = Path(".musicforge") / "releases" / release.release_id / "operations" / "reviewer-pack" / "reviewer-pack-verification-report.json"
+        verification = json.loads(verification_path.read_text(encoding="utf-8"))
+        verification["status"] = "failed"
+        verification_path.write_text(json.dumps(verification, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        export_status, export_error = request_json(server, "POST", f"/api/release-portfolio-governance-queues/{queue_id}/export")
+        zip_status, zip_error = request_json(server, "POST", f"/api/release-portfolio-governance-queues/{queue_id}/export/zip")
+
+        assert create_status == 201
+        assert initial_export_status == 201
+        assert initial_zip_status == 200
+        assert export_status == 409
+        assert "stale" in export_error["error"].lower()
+        assert zip_status == 409
+        assert "stale" in zip_error["error"].lower()
+    finally:
+        stop_test_server(server)

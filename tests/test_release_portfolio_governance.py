@@ -85,6 +85,31 @@ def test_portfolio_governance_stale_guard_blocks_run_safe(tmp_path: Path, monkey
         raise AssertionError("stale Governance Queue run-safe was not blocked")
 
 
+def test_portfolio_governance_stale_guard_blocks_export_and_zip(tmp_path: Path, monkeypatch) -> None:
+    release, _second, portfolio, store = governance_fixture(tmp_path, monkeypatch)
+    queue = store.create_from_portfolio(portfolio["portfolio_id"])
+    queue_id = queue["queue_id"]
+
+    store.export_queue(queue_id)
+    store.build_zip(queue_id)
+    zip_before = store.zip_path(queue_id).read_bytes()
+
+    verification_path = store.reviewer_pack_store.verification_report_path(release.release_id)
+    verification = json.loads(verification_path.read_text(encoding="utf-8"))
+    verification["status"] = "failed"
+    verification_path.write_text(json.dumps(verification, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    for operation in (store.export_queue, store.build_zip):
+        try:
+            operation(queue_id)
+        except Exception as exc:
+            assert "stale" in str(exc).lower()
+        else:
+            raise AssertionError(f"stale Governance Queue {operation.__name__} was not blocked")
+
+    assert store.zip_path(queue_id).read_bytes() == zip_before
+
+
 def test_portfolio_governance_verifier_tamper_path_spoof_and_redaction(tmp_path: Path, monkeypatch) -> None:
     _release, _second, portfolio, store = governance_fixture(tmp_path, monkeypatch)
     queue = store.create_from_portfolio(portfolio["portfolio_id"])

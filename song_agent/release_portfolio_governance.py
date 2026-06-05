@@ -31,6 +31,7 @@ from song_agent.releases import stable_hash
 PORTFOLIO_GOVERNANCE_SCHEMA_VERSION = 1
 PORTFOLIO_GOVERNANCE_EXPORT_SCHEMA_VERSION = 1
 PORTFOLIO_GOVERNANCE_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path"}
+PORTFOLIO_GOVERNANCE_STALE_MESSAGE = "Portfolio Governance Queue source is stale. Refresh Portfolio Audit and create a new queue."
 QUEUE_HASH_EXCLUDE_KEYS = {"integrity_hash", "updated_at", "latest_execution_report_hash", "latest_export_manifest_hash", "latest_zip_sha256", "existing"}
 ACTION_PLAN_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "updated_at"}
 EXECUTION_REPORT_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "updated_at"}
@@ -211,7 +212,7 @@ class ReleasePortfolioGovernanceStore:
                 queue["updated_at"] = now
                 queue["integrity_hash"] = queue_integrity_hash(queue)
                 _write_json(self.queue_path(queue_id), queue)
-                raise ReleasePortfolioGovernanceStateError("Portfolio Governance Queue source is stale. Refresh Portfolio Audit and create a new queue.")
+                raise ReleasePortfolioGovernanceStateError(PORTFOLIO_GOVERNANCE_STALE_MESSAGE)
             allowed_types = {str(item).strip() for item in payload.get("action_types", []) if str(item).strip()} if isinstance(payload.get("action_types"), list) else set()
             max_items = int(payload.get("max_items") or 500)
             max_items = max(1, min(500, max_items))
@@ -307,6 +308,7 @@ class ReleasePortfolioGovernanceStore:
                 raise ReleasePortfolioGovernanceStateError("Portfolio Governance Action Plan integrity failed.")
             if not execution_report_integrity_ok(execution):
                 raise ReleasePortfolioGovernanceStateError("Portfolio Governance Execution Report integrity failed.")
+            self._ensure_queue_current_for_export(queue, plan, execution, now=now)
             if not manual_action_list_integrity_ok(manual):
                 raise ReleasePortfolioGovernanceStateError("Portfolio Governance Manual Action List integrity failed.")
             export_dir = self.export_dir(queue_id).resolve()
@@ -356,6 +358,18 @@ class ReleasePortfolioGovernanceStore:
     def build_zip(self, queue_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
+            queue = self.get_queue(queue_id)
+            if queue.get("status") == "archived":
+                raise ReleasePortfolioGovernanceStateError("Archived Portfolio Governance Queue cannot be zipped.")
+            plan = self.read_action_plan(queue_id, default={})
+            execution = self.read_execution_report(queue_id, default={})
+            if not queue_integrity_ok(queue):
+                raise ReleasePortfolioGovernanceStateError("Portfolio Governance Queue integrity failed.")
+            if not action_plan_integrity_ok(plan):
+                raise ReleasePortfolioGovernanceStateError("Portfolio Governance Action Plan integrity failed.")
+            if not execution_report_integrity_ok(execution):
+                raise ReleasePortfolioGovernanceStateError("Portfolio Governance Execution Report integrity failed.")
+            self._ensure_queue_current_for_export(queue, plan, execution, now=now)
             queue_dir = self.queue_dir(queue_id).resolve()
             export_dir = self.export_dir(queue_id).resolve()
             zip_path = self.zip_path(queue_id).resolve()
@@ -499,12 +513,42 @@ class ReleasePortfolioGovernanceStore:
         )
 
     def _is_stale(self, queue: dict[str, Any], plan: dict[str, Any]) -> bool:
+        if queue.get("status") == "stale":
+            return True
         if not queue_integrity_ok(queue):
             return True
         if not action_plan_integrity_ok(plan):
             return True
         current = self._current_source(str(queue.get("portfolio_id") or ""))
         return bool(current.get("stale")) or stable_hash(current) != str(queue.get("source_hash") or "") or str(plan.get("integrity_hash") or "") != str(queue.get("action_plan_hash") or "")
+
+    def _ensure_queue_current_for_export(self, queue: dict[str, Any], plan: dict[str, Any], execution: dict[str, Any], *, now: str) -> None:
+        if queue.get("status") == "stale":
+            self._mark_stale_and_raise(queue, now=now)
+        if str(plan.get("integrity_hash") or "") != str(queue.get("action_plan_hash") or ""):
+            self._mark_stale_and_raise(queue, now=now)
+        current = self._current_source(str(queue.get("portfolio_id") or ""))
+        current_hash = stable_hash(current)
+        if not bool(current.get("stale")) and current_hash == str(queue.get("source_hash") or ""):
+            return
+        post = execution.get("post_conditions") if isinstance(execution.get("post_conditions"), dict) else {}
+        documented_run_drift = (
+            execution_report_integrity_ok(execution)
+            and str(execution.get("integrity_hash") or "") == str(queue.get("latest_execution_report_hash") or "")
+            and str(post.get("pre_source_hash") or "") == str(queue.get("source_hash") or "")
+            and str(post.get("post_source_hash") or "") == current_hash
+            and bool(post.get("portfolio_refresh_required"))
+        )
+        if documented_run_drift:
+            return
+        self._mark_stale_and_raise(queue, now=now)
+
+    def _mark_stale_and_raise(self, queue: dict[str, Any], *, now: str) -> None:
+        queue["status"] = "stale"
+        queue["updated_at"] = now
+        queue["integrity_hash"] = queue_integrity_hash(queue)
+        _write_json(self.queue_path(str(queue.get("queue_id") or "")), queue)
+        raise ReleasePortfolioGovernanceStateError(PORTFOLIO_GOVERNANCE_STALE_MESSAGE)
 
     def _find_open_queue(self, portfolio_id: str, source_hash: str) -> dict[str, Any] | None:
         for queue in self.list_queues(portfolio_id=portfolio_id, include_archived=True):
