@@ -165,10 +165,19 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "Release Readiness Ranking" in html
     assert "Portfolio Risk Register" in html
     assert "Deterministic Recommendations" in html
+    assert "Portfolio Governance Queue" in html
+    assert 'id="portfolio-governance-create"' in html
+    assert "portfolio-governance-run-safe" in html
+    assert "portfolio-governance-export" in html
+    assert "portfolio-governance-zip" in html
+    assert "portfolio-governance-verify" in html
     assert "/api/release-portfolio-audits" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/verify" in html
+    assert "/api/release-portfolio-governance-queues" in html
+    assert "/governance-queues" in html
+    assert "/run-safe" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
     assert "/encoded-audio/health" in html
     assert "/encoded-audio/acceptance/refresh" in html

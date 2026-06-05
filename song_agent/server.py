@@ -168,6 +168,18 @@ from song_agent.release_portfolio_audit_verifier import (
     verify_release_portfolio_audit_package,
     write_release_portfolio_audit_verification_report,
 )
+from song_agent.release_portfolio_governance import (
+    ReleasePortfolioGovernanceError,
+    ReleasePortfolioGovernanceNotFoundError,
+    ReleasePortfolioGovernanceStateError,
+    ReleasePortfolioGovernanceStore,
+    queue_summary,
+)
+from song_agent.release_portfolio_governance_verifier import (
+    release_portfolio_governance_verification_summary,
+    verify_release_portfolio_governance_package,
+    write_release_portfolio_governance_verification_report,
+)
 from song_agent.release_operations_signoff import (
     ReleaseOperationsSignoffError,
     ReleaseOperationsSignoffNotFoundError,
@@ -2633,6 +2645,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.release_portfolio_audit_store  # type: ignore[attr-defined]
 
     @property
+    def release_portfolio_governance_store(self) -> ReleasePortfolioGovernanceStore:
+        return self.server.release_portfolio_governance_store  # type: ignore[attr-defined]
+
+    @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
         return self.server.audio_review_store  # type: ignore[attr-defined]
 
@@ -2810,6 +2826,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/release-portfolio-audits" or path.startswith("/api/release-portfolio-audits/"):
                 self._handle_release_portfolio_audits(method, path)
+                return
+            if path == "/api/release-portfolio-governance-queues" or path.startswith("/api/release-portfolio-governance-queues/"):
+                self._handle_release_portfolio_governance_queues(method, path)
                 return
             if path == "/api/jobs":
                 if method == "GET":
@@ -5678,6 +5697,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 risks = self.release_portfolio_audit_store.read_risk_register(portfolio_id, default={})
                 self._send_json({"ok": True, "portfolio_id": portfolio_id, "risk_register": risks, "summary": {"risk_count": len(risks.get("risks", []) if isinstance(risks.get("risks"), list) else [])}})
                 return
+            if action == "governance-queues" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                queue = self.release_portfolio_governance_store.create_from_portfolio(portfolio_id, self._optional_json_body(), now=_utc_now())
+                status = HTTPStatus.OK if queue.get("existing") else HTTPStatus.CREATED
+                self._send_json({"ok": True, "portfolio_id": portfolio_id, "queue": queue, "summary": queue_summary(queue)}, status=status)
+                return
             if action == "export" and len(parts) == 2:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5728,6 +5755,116 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleasePortfolioAuditStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleasePortfolioAuditError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_release_portfolio_governance_queues(self, method: str, path: str) -> None:
+        prefix = "/api/release-portfolio-governance-queues"
+        tail = path[len(prefix):]
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                query = parse_qs(urlparse(self.path).query)
+                portfolio_id = str(query.get("portfolio_id", [""])[0] or "").strip() or None
+                include_archived = str(query.get("include_archived", [""])[0]).lower() in {"1", "true", "yes"}
+                queues = self.release_portfolio_governance_store.list_queues(portfolio_id=portfolio_id, include_archived=include_archived)
+                self._send_json({"ok": True, "queues": queues, "summary": {"count": len(queues)}})
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Queue route not found.")
+                return
+            queue_id = parts[0]
+            action = parts[1] if len(parts) > 1 else ""
+            if len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                queue = self.release_portfolio_governance_store.get_queue(queue_id)
+                execution = self.release_portfolio_governance_store.read_execution_report(queue_id, default={})
+                self._send_json({"ok": True, "queue": queue, "summary": queue_summary(queue, execution)})
+                return
+            if action == "plan" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.release_portfolio_governance_store.read_action_plan(queue_id, default={})
+                self._send_json({"ok": True, "queue_id": queue_id, "action_plan": plan, "summary": {"item_count": len(plan.get("items", []) if isinstance(plan.get("items"), list) else [])}})
+                return
+            if action == "execution" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                execution = self.release_portfolio_governance_store.read_execution_report(queue_id, default={})
+                self._send_json({"ok": True, "queue_id": queue_id, "execution_report": execution, "summary": execution.get("summary", {})})
+                return
+            if action == "manual-actions" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manual = self.release_portfolio_governance_store.read_manual_action_list(queue_id, default={})
+                self._send_json({"ok": True, "queue_id": queue_id, "manual_action_list": manual, "summary": {"count": len(manual.get("items", []) if isinstance(manual.get("items"), list) else [])}})
+                return
+            if action == "run-safe" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                queue = self.release_portfolio_governance_store.run_safe_actions(queue_id, self._optional_json_body(), now=_utc_now())
+                execution = self.release_portfolio_governance_store.read_execution_report(queue_id, default={})
+                self._send_json({"ok": True, "queue": queue, "execution_report": execution, "summary": queue_summary(queue, execution)})
+                return
+            if action == "export" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.release_portfolio_governance_store.export_queue(queue_id, now=_utc_now())
+                self._send_json({"ok": True, "queue_id": queue_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                return
+            if action == "export" and len(parts) == 3 and parts[2] == "zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.release_portfolio_governance_store.build_zip(queue_id, now=_utc_now())
+                manifest = self.release_portfolio_governance_store.read_export_manifest(queue_id)
+                self._send_json({"ok": True, "queue_id": queue_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+                return
+            if action == "verify" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_release_portfolio_governance_package(
+                    self.release_portfolio_governance_store.zip_path(queue_id),
+                    strict=bool(payload.get("strict", False)),
+                    require_manual_actions=bool(payload.get("require_manual_actions", False)),
+                    require_no_blocked=bool(payload.get("require_no_blocked", False)),
+                )
+                write_release_portfolio_governance_verification_report(report, self.release_portfolio_governance_store.verification_report_path(queue_id))
+                self._send_json({"ok": True, "queue_id": queue_id, "verification": report, "summary": release_portfolio_governance_verification_summary(report)})
+                return
+            if action == "download" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_portfolio_governance_store.get_queue(queue_id)
+                self._send_file(self.release_portfolio_governance_store.zip_path(queue_id), "application/zip", filename=f"musicforge-{queue_id}-portfolio-governance.zip")
+                return
+            if action == "archive" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                queue = self.release_portfolio_governance_store.archive(queue_id, now=_utc_now())
+                self._send_json({"ok": True, "queue": queue, "summary": queue_summary(queue)})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Queue route not found.")
+        except ReleasePortfolioGovernanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleasePortfolioGovernanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleasePortfolioGovernanceError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -14395,6 +14532,12 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             signoff_store=self.release_operations_signoff_store,
             audit_store=self.release_operations_audit_store,
             reviewer_pack_store=self.release_operations_reviewer_pack_store,
+        )
+        self.release_portfolio_governance_store = ReleasePortfolioGovernanceStore(
+            portfolio_store=self.release_portfolio_audit_store,
+            reviewer_pack_store=self.release_operations_reviewer_pack_store,
+            audit_store=self.release_operations_audit_store,
+            signoff_store=self.release_operations_signoff_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

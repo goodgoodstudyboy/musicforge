@@ -457,6 +457,14 @@ workspace for manifest/file hashes, report/trend/risk integrity, path safety,
 duplicate entries, manifest spoofing, redaction, and required reviewer/audit/
 archive evidence.
 
+Release Portfolio Governance Queue turns Portfolio Audit risks and
+recommendations into an auditable action queue. It can run only safe local
+refresh/export/zip/verify actions, such as Reviewer Pack, Operations Audit, and
+Operations Archive verification refreshes. Signoff, reset, approval, manual
+review, provider work, and external upload remain manual-required actions. A
+queue binds to the Portfolio Audit source hash; stale queues return 409 on
+`run-safe` and must be recreated from a refreshed Portfolio Audit.
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -482,6 +490,9 @@ python -m song_agent.cli verify-release-operations-reviewer-pack path\to\operati
 python -m song_agent.cli release-portfolio-audit --create --name "Q2 Portfolio Audit" --release-ids rel-000001,rel-000002 --require-reviewer-packs --require-audit --require-archive --json
 python -m song_agent.cli release-portfolio-audit --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --require-reviewer-packs --require-audit --require-archive --json
 python -m song_agent.cli verify-release-portfolio-audit-package path\to\portfolio-audit.zip --json --strict --require-reviewer-packs --require-audit --require-archive --report-out portfolio-audit-verification-report.json
+python -m song_agent.cli release-portfolio-governance-queue --portfolio-id pfa-000001 --create --json
+python -m song_agent.cli release-portfolio-governance-queue --queue-id pgq-000001 --run-safe --export --zip --verify --strict --require-manual-actions --json
+python -m song_agent.cli verify-release-portfolio-governance-package path\to\governance-queue.zip --json --strict --require-manual-actions --report-out governance-verification-report.json
 ```
 
 ```powershell

@@ -40,6 +40,7 @@ from song_agent.release_checks import (
     _v63_release_operations_audit_ledger_smoke,
     _v64_release_operations_reviewer_pack_smoke,
     _v65_release_portfolio_audit_smoke,
+    _v66_release_portfolio_governance_queue_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -260,6 +261,25 @@ def test_v65_release_portfolio_audit_smoke(tmp_path: Path) -> None:
     assert "spoof=failed/warning" in detail
     assert "redaction=failed" in detail
     assert "missing_reviewer=failed" in detail
+
+
+def test_v66_release_portfolio_governance_queue_smoke(tmp_path: Path) -> None:
+    ok, detail = _v66_release_portfolio_governance_queue_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "verify=passed" in detail
+    assert "external=passed" in detail
+    assert "manual=" in detail
+    assert "post_refresh=True" in detail
+    assert "duplicate_existing=True" in detail
+    assert "action_tamper=failed" in detail
+    assert "execution_tamper=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "dangerous=failed" in detail
+    assert "backslash=failed" in detail
+    assert "spoof=failed/warning" in detail
+    assert "redaction=failed" in detail
+    assert "stale=True" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:

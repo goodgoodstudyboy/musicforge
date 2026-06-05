@@ -467,3 +467,85 @@ def test_release_portfolio_audit_cli_create_export_verify(tmp_path: Path, monkey
 
     assert verified.returncode == 0, verified.stderr
     assert json.loads(verified.stdout)["status"] == "passed"
+
+
+def test_release_portfolio_governance_queue_cli_create_run_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance import governance_fixture
+
+    _release, _second, portfolio, _store = governance_fixture(Path(".musicforge"), monkeypatch)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+    portfolio_id = portfolio["portfolio_id"]
+
+    created = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-queue",
+            "--portfolio-id",
+            portfolio_id,
+            "--create",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert created.returncode == 0, created.stderr
+    queue_id = json.loads(created.stdout)["queue"]["queue_id"]
+
+    ran = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-queue",
+            "--queue-id",
+            queue_id,
+            "--run-safe",
+            "--export",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-manual-actions",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert ran.returncode == 0, ran.stderr
+    payload = json.loads(ran.stdout)
+    assert payload["summary"]["status"] == "manual_required"
+    assert payload["verification_summary"]["status"] == "passed"
+
+    verified = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-package",
+            str(Path(".musicforge") / "portfolio-governance-queues" / queue_id / "governance-queue.zip"),
+            "--strict",
+            "--require-manual-actions",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(verified.stdout)["status"] == "passed"

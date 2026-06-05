@@ -1,5 +1,20 @@
 # Changelog
 
+## v6.6.0 - 2026-06-05
+
+### Added
+- Release Portfolio Governance Queue for turning Portfolio Audit risks and recommendations into auditable safe/manual action plans.
+- Safe queue execution for local refresh/export/zip/verify actions covering Reviewer Packs, Operations Audit packages, Operations Archive verification, and Portfolio evidence refresh/export/verify.
+- Manual-required queue items for signoff, reset, approval, human review, provider work, external upload, process rule promotion, and portfolio policy changes.
+- Governance Queue export/ZIP with `queue.json`, `action-plan.json`, `execution-report.json`, `manual-action-list.json`, source summary, action source map, Markdown action guides, manifest integrity binding, and offline verifier.
+- API routes under `/api/release-portfolio-governance-queues` plus Portfolio Audit queue creation at `/api/release-portfolio-audits/<portfolio-id>/governance-queues`.
+- CLI commands `release-portfolio-governance-queue` and `verify-release-portfolio-governance-package`.
+- Studio Portfolio Governance Queue panel inside the Portfolio Audit workspace with create, run-safe, export, ZIP, verify, and download controls.
+- v6.6 release-check smoke covering duplicate source queue guard, stale run-safe guard, post-portfolio-refresh-required evidence, action-plan tamper, execution-report tamper, duplicate ZIP, dangerous/backslash entries, manifest spoof, redaction, and external clean-room verification.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance.py tests\test_server_release_portfolio_governance.py tests\test_cli_release_operations.py::test_release_portfolio_governance_queue_cli_create_run_export_verify tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v66_release_portfolio_governance_queue_smoke -q`
+
 ## v6.5.0 - 2026-06-05
 
 ### Added

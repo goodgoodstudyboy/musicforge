@@ -69,6 +69,7 @@ from song_agent.release_operations_archive_verifier import verify_release_operat
 from song_agent.release_operations_audit_verifier import verify_release_operations_audit_package
 from song_agent.release_operations_reviewer_pack_verifier import verify_release_operations_reviewer_pack
 from song_agent.release_portfolio_audit_verifier import verify_release_portfolio_audit_package
+from song_agent.release_portfolio_governance_verifier import verify_release_portfolio_governance_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -245,6 +246,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v6.3 release operations audit ledger smoke", *_v63_release_operations_audit_ledger_smoke(root))
     report.add("v6.4 release operations reviewer pack smoke", *_v64_release_operations_reviewer_pack_smoke(root))
     report.add("v6.5 release portfolio audit smoke", *_v65_release_portfolio_audit_smoke(root))
+    report.add("v6.6 release portfolio governance queue smoke", *_v66_release_portfolio_governance_queue_smoke(root))
     return report
 
 
@@ -9329,6 +9331,199 @@ def _v65_tamper_portfolio_risks(data: bytes) -> bytes:
 
 
 def _v65_spoof_portfolio_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v66_release_portfolio_governance_queue_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v66-portfolio-governance-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_audit_verifier import write_release_operations_audit_verification_report
+        from song_agent.release_operations_archive_verifier import write_release_operations_archive_verification_report
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_reviewer_pack_verifier import write_release_operations_reviewer_pack_verification_report
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_integrity_hash
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore, action_plan_integrity_ok, execution_report_integrity_ok, queue_integrity_ok
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+        reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(
+            release_store=release_store,
+            operations_store=operations_store,
+            runbook_store=runbook_store,
+            signoff_store=signoff_store,
+            audit_store=audit_store,
+            reviewer_pack_store=reviewer_store,
+        )
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=reviewer_store, audit_store=audit_store, signoff_store=signoff_store)
+        original_refresh = operations_store.refresh
+        reports: dict[str, dict[str, Any]] = {}
+
+        def make_release(index: int) -> Any:
+            release = release_store.create_release({"name": f"v6.6 Governance Release {index}", "release_type": "single_pack", "primary_artist": "MusicForge"})
+            report = original_refresh(release.release_id)
+            report["current_stage"] = "accepted"
+            report["next_stage"] = "archived"
+            report["summary"]["blocker_count"] = 0
+            report["summary"]["warning_count"] = 0
+            report["blockers"] = []
+            report["warnings"] = []
+            report["domains"] = {"submission_evidence": {"required": False, "status": "not_required", "summary": {}}}
+            report["verifier_summaries"] = {"release": {"status": "passed"}, "distribution": [], "submission": [], "submission_evidence": []}
+            report["package_summaries"] = {"release_zip": {"exists": True, "status": "exists", "sha256": f"{index}" * 64}, "distribution_packages": [], "submission_packages": [], "submission_evidence_packages": []}
+            report["source_hash"] = f"v66-governance-source-{index}"
+            report["source"] = {"fixture": "v6.6 accepted", "index": index}
+            report["integrity_hash"] = operations_report_integrity_hash(report)
+            write_json(operations_store.report_path(release.release_id), report)
+            reports[release.release_id] = report
+            return release
+
+        releases = [make_release(1), make_release(2)]
+
+        def build_report(release_id: str, persist: bool = False, now: str | None = None) -> dict[str, Any]:
+            return reports[release_id]
+
+        operations_store.build_report = build_report  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: reports[release_id]  # type: ignore[method-assign]
+
+        for release in releases:
+            runbook = runbook_store.create_from_operations_report(release.release_id)
+            runbook["status"] = "completed"
+            runbook["items"] = []
+            runbook["summary"] = {"total_count": 0, "safe_count": 0, "manual_count": 0, "completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0, "waived_count": 0, "pending_count": 0}
+            runbook["integrity_hash"] = runbook_integrity_hash(runbook)
+            write_json(runbook_store.runbook_path(release.release_id, runbook["runbook_id"]), runbook)
+            signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+            signoff_store.export_archive(release.release_id)
+            signoff_store.build_archive_zip(release.release_id)
+            archive_verification = verify_release_operations_archive_package(signoff_store.archive_zip_path(release.release_id), require_signed=True)
+            write_release_operations_archive_verification_report(archive_verification, signoff_store.operations_dir(release.release_id) / "operations-archive-verification-report.json")
+            audit_store.refresh(release.release_id)
+            audit_store.export_audit(release.release_id)
+            audit_store.build_zip(release.release_id)
+            audit_verification = verify_release_operations_audit_package(audit_store.zip_path(release.release_id), require_current=True, require_signed=True, require_archive=True)
+            write_release_operations_audit_verification_report(audit_verification, audit_store.verification_report_path(release.release_id))
+            reviewer_store.refresh(release.release_id)
+            reviewer_store.export_pack(release.release_id)
+            reviewer_store.build_zip(release.release_id)
+            reviewer_verification = verify_release_operations_reviewer_pack(reviewer_store.zip_path(release.release_id), strict=True, require_audit=True, require_signed=True, require_archive=True)
+            write_release_operations_reviewer_pack_verification_report(reviewer_verification, reviewer_store.verification_report_path(release.release_id))
+
+        change = signoff_store.create_change_request(releases[0].release_id, {"reason": "Release-check reset for governance queue manual action.", "scope": ["operations_signoff"]})
+        signoff_store.update_change_request_status(releases[0].release_id, change["change_request_id"], "approve", {"approved_by": "release-check"})
+        signoff_store.reset_signoff(releases[0].release_id, {"reason": "Release-check reset applies change request.", "change_request_id": change["change_request_id"]})
+        signoff_store.signoff(releases[0].release_id, {"signed_by": "release-check"})
+
+        second_verification_path = reviewer_store.verification_report_path(releases[1].release_id)
+        second_verification_bytes = second_verification_path.read_bytes()
+        second_verification_path.unlink()
+        portfolio = portfolio_store.create({"name": "v6.6 Portfolio Governance", "release_ids": [release.release_id for release in releases], "require_reviewer_packs": True, "require_audit": True, "require_archive": True})
+        portfolio_report = portfolio_store.refresh(portfolio["portfolio_id"])
+        queue = governance_store.create_from_portfolio(portfolio["portfolio_id"])
+        duplicate = governance_store.create_from_portfolio(portfolio["portfolio_id"])
+        stale_queue = governance_store.create_from_portfolio(portfolio["portfolio_id"], {"force_new": True})
+        plan = governance_store.read_action_plan(queue["queue_id"])
+        manual = governance_store.read_manual_action_list(queue["queue_id"])
+        ran = governance_store.run_safe_actions(queue["queue_id"])
+        execution = governance_store.read_execution_report(queue["queue_id"])
+        governance_store.export_queue(queue["queue_id"])
+        governance_store.build_zip(queue["queue_id"])
+        queue_zip = governance_store.zip_path(queue["queue_id"])
+        verified = verify_release_portfolio_governance_package(queue_zip, strict=True, require_manual_actions=True)
+        external_dir = base / "external-clean-governance"
+        external_dir.mkdir()
+        external_zip = external_dir / "governance-queue.zip"
+        shutil.copy2(queue_zip, external_zip)
+        external_report = verify_release_portfolio_governance_package(external_zip, strict=True, require_manual_actions=True)
+        action_tamper = verify_release_portfolio_governance_package(_v38_rewrite_zip(queue_zip, base / "action-tamper-v66-governance.zip", transforms={"action-plan.json": _v66_tamper_action_plan}))
+        execution_tamper = verify_release_portfolio_governance_package(_v38_rewrite_zip(queue_zip, base / "execution-tamper-v66-governance.zip", transforms={"execution-report.json": _v66_tamper_execution_report}))
+        duplicate_report = verify_release_portfolio_governance_package(_v43_duplicate_submission_zip(queue_zip, base / "duplicate-v66-governance.zip"))
+        dangerous_report = verify_release_portfolio_governance_package(_v38_rewrite_zip(queue_zip, base / "dangerous-v66-governance.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_report = verify_release_portfolio_governance_package(_v38_backslash_entry_zip(base / "backslash-v66-governance.zip"), strict=True)
+        spoof_report = verify_release_portfolio_governance_package(_v38_rewrite_zip(queue_zip, base / "spoof-v66-governance.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v66_spoof_governance_manifest}), strict=True)
+        redaction_report = verify_release_portfolio_governance_package(_v38_rewrite_zip(queue_zip, base / "redaction-v66-governance.zip", transforms={"GOVERNANCE_ACTIONS.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+
+        second_verification_path.write_bytes(second_verification_bytes)
+        stale_blocked = False
+        try:
+            governance_store.run_safe_actions(stale_queue["queue_id"])
+        except Exception as exc:
+            stale_blocked = "stale" in str(exc).lower()
+
+        serialized = json.dumps({"queue": ran, "plan": plan, "execution": execution, "manual": manual}, ensure_ascii=False)
+        ok = (
+            portfolio_report.get("status") == "failed"
+            and queue_integrity_ok(queue)
+            and action_plan_integrity_ok(plan)
+            and execution_report_integrity_ok(execution)
+            and duplicate.get("existing") is True
+            and duplicate.get("queue_id") == queue.get("queue_id")
+            and any(item.get("action_type") == "reviewer_pack.verify" and item.get("safety") == "safe" for item in plan.get("items", []) if isinstance(item, dict))
+            and any(item.get("action_type") == "change_request.review" and item.get("safety") == "manual_required" for item in plan.get("items", []) if isinstance(item, dict))
+            and ran.get("status") == "manual_required"
+            and execution.get("summary", {}).get("safe_completed", 0) >= 4
+            and execution.get("summary", {}).get("manual_required", 0) >= 1
+            and execution.get("post_conditions", {}).get("portfolio_refresh_required") is True
+            and verified.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and _v38_check_status(action_tamper, "portfolio_governance_action_plan_integrity") == "failed"
+            and _v38_check_status(execution_tamper, "portfolio_governance_execution_report_integrity") == "failed"
+            and _v38_check_status(duplicate_report, "portfolio_governance_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous_report, "portfolio_governance_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_report, "portfolio_governance_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof_report, "portfolio_governance_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof_report, "portfolio_governance_manifest_zip_entries_reference_only") == "warning"
+            and _v38_check_status(redaction_report, "portfolio_governance_redaction_scan") == "failed"
+            and stale_blocked
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"queue={queue.get('queue_id')}, status={ran.get('status')}, verify={verified.get('status')}, external={external_report.get('status')}, "
+            f"safe_completed={execution.get('summary', {}).get('safe_completed')}, manual={execution.get('summary', {}).get('manual_required')}, "
+            f"post_refresh={execution.get('post_conditions', {}).get('portfolio_refresh_required')}, duplicate_existing={duplicate.get('existing')}, "
+            f"action_tamper={_v38_check_status(action_tamper, 'portfolio_governance_action_plan_integrity')}, "
+            f"execution_tamper={_v38_check_status(execution_tamper, 'portfolio_governance_execution_report_integrity')}, "
+            f"duplicate={_v38_check_status(duplicate_report, 'portfolio_governance_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous_report, 'portfolio_governance_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash_report, 'portfolio_governance_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof_report, 'portfolio_governance_manifest_extra_entries')}/{_v38_check_status(spoof_report, 'portfolio_governance_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction_report, 'portfolio_governance_redaction_scan')}, stale={stale_blocked}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v66_tamper_action_plan(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    if items:
+        items[0]["status"] = "completed"
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v66_tamper_execution_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("summary", {})["failed"] = 99
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v66_spoof_governance_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")

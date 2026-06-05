@@ -3300,6 +3300,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { reportData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/report`); } catch (err) {}
       try { trendData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/trends`); } catch (err) {}
       try { riskData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/risks`); } catch (err) {}
+      let governanceData = { queues: [], summary: {} };
+      try { governanceData = await api(`/api/release-portfolio-governance-queues?portfolio_id=${encodeURIComponent(portfolioId)}`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const score = report.risk_score || {};
@@ -3340,6 +3342,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <td class="wrap-cell">${escapeHtml(item.message || item.title || "-")}</td>
         </tr>
       `).join("");
+      const governanceQueues = governanceData.queues || [];
+      const governanceRows = governanceQueues.slice(0, 8).map((queue) => {
+        const execution = queue.execution || {};
+        return `
+          <tr>
+            <td>${escapeHtml(queue.queue_id || "-")}</td>
+            <td><span class="status ${escapeHtml(queue.status || "")}">${escapeHtml(queue.status || "-")}</span></td>
+            <td>${escapeHtml(execution.total_items ?? "-")}</td>
+            <td>${escapeHtml(execution.safe_action_count ?? "-")}</td>
+            <td>${escapeHtml(execution.manual_required_count ?? "-")}</td>
+            <td>${execution.post_portfolio_refresh_required ? "yes" : "-"}</td>
+            <td>
+              <button class="secondary portfolio-governance-run-safe" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Run Safe</button>
+              <button class="secondary portfolio-governance-export" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Export</button>
+              <button class="secondary portfolio-governance-zip" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">ZIP</button>
+              <button class="secondary portfolio-governance-verify" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Verify</button>
+              <a class="button-link secondary" href="/api/release-portfolio-governance-queues/${encodeURIComponent(queue.queue_id)}/download">Download</a>
+            </td>
+          </tr>
+        `;
+      }).join("");
       $("portfolio-audit-detail").innerHTML = `
         <div class="panel-title" style="padding:0 0 12px;border-bottom:0;">
           <span>Release Portfolio Audit · ${escapeHtml(portfolio.name || portfolio.portfolio_id)}</span>
@@ -3384,8 +3407,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <thead><tr><th>Category</th><th>Status</th><th>Finding</th></tr></thead>
           <tbody>${trendRows || "<tr><td colspan='3'>No trend findings.</td></tr>"}</tbody>
         </table>
+        <div class="panel-title subhead"><span>Portfolio Governance Queue</span></div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-create" type="button">Create Governance Queue</button>
+          <span id="portfolio-governance-message" class="message"></span>
+        </div>
+        <table>
+          <thead><tr><th>Queue</th><th>Status</th><th>Items</th><th>Safe</th><th>Manual</th><th>Refresh Needed</th><th>Safe Actions</th></tr></thead>
+          <tbody>${governanceRows || "<tr><td colspan='7'>No Governance Queues yet.</td></tr>"}</tbody>
+        </table>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
+      wirePortfolioGovernanceActions(portfolio.portfolio_id);
     }
 
     function wirePortfolioAuditActions(portfolioId) {
@@ -3422,6 +3455,46 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("portfolio-audit-archive", async () => {
         await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/archive`, { method: "POST" });
         await loadPortfolioAudits();
+      });
+    }
+
+    function wirePortfolioGovernanceActions(portfolioId) {
+      bindAction("portfolio-governance-create", async () => {
+        const data = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-queues`, { method: "POST" });
+        $("portfolio-governance-message").textContent = (data.queue || {}).existing ? "existing queue" : "created";
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      document.querySelectorAll(".portfolio-governance-run-safe").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/run-safe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_portfolio_after_safe_actions: false }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-export").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/export`, { method: "POST" });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-zip").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/export/zip`, { method: "POST" });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-verify").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/verify`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ strict: true, require_manual_actions: true }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
       });
     }
 
