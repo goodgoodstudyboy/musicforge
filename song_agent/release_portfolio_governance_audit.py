@@ -425,6 +425,16 @@ class ReleasePortfolioGovernanceAuditStore:
                     blockers.append(_blocker("governance_archive_verification_missing", f"Signed Governance Queue {queue_id} is missing Governance Archive verification report."))
                 elif archive_verification.get("status") == "failed":
                     blockers.append(_blocker("governance_archive_verification_failed", f"Governance Archive {queue_id} verification failed."))
+                elif not archive_verification.get("zip_sha256"):
+                    blockers.append(_blocker("governance_archive_verification_zip_sha256_missing", f"Governance Archive {queue_id} verification report is missing archive ZIP sha256."))
+                elif not self.signoff_store.archive_zip_path(queue_id).exists():
+                    blockers.append(_blocker("governance_archive_zip_missing", f"Signed Governance Queue {queue_id} is missing current Governance Archive ZIP."))
+                elif str(archive_verification.get("zip_sha256") or "") != _sha256(self.signoff_store.archive_zip_path(queue_id)):
+                    blockers.append(_blocker("governance_archive_verification_zip_sha256", f"Governance Archive {queue_id} verification report does not match current archive ZIP."))
+                elif not archive_verification.get("manifest_hash"):
+                    blockers.append(_blocker("governance_archive_verification_manifest_hash_missing", f"Governance Archive {queue_id} verification report is missing archive manifest hash."))
+                elif archive_manifest and str(archive_verification.get("manifest_hash") or "") != str(archive_manifest.get("integrity_hash") or ""):
+                    blockers.append(_blocker("governance_archive_verification_manifest_hash", f"Governance Archive {queue_id} verification report does not match current archive manifest."))
                 if signoff.get("status") == "force_signed":
                     reason = str(signoff.get("override_reason") or "").strip()
                     if not reason:

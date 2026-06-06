@@ -1,5 +1,16 @@
 # Changelog
 
+## v6.8.1 - 2026-06-07
+
+### Fixed
+- Portfolio Governance Archive verification reports now record archive ZIP sha256, ZIP size, and archive manifest hash.
+- Portfolio Governance Audit now fails when a signed Governance Queue's Archive ZIP or manifest no longer matches the saved archive verification report.
+- Portfolio Governance Audit ZIP verifier now requires `manifest.package_type == "release_portfolio_governance_audit"` even when manifest integrity is recomputed.
+- v6.8 release-check smoke now covers stale archive verification evidence and wrong package type tampering.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_audit.py tests\test_release_portfolio_governance_signoff.py tests\test_release_check.py::test_v68_release_portfolio_governance_audit_ledger_smoke -q`
+
 ## v6.8.0 - 2026-06-06
 
 ### Added

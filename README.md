@@ -487,7 +487,10 @@ ZIP contains `portfolio-governance-audit-ledger.jsonl`,
 Markdown review notes. It can be verified outside the local workspace for
 ledger ordering, report integrity, reset Change Request causality, signed queue
 archive coverage, ZIP safety, manifest spoofing, duplicate entries, and
-redaction issues:
+redaction issues. Archive verification evidence is bound to the current
+Governance Archive ZIP sha256 and manifest hash, so rebuilding the archive ZIP
+requires re-running archive verification before the Portfolio Governance Audit
+can pass:
 
 ```powershell
 python -m song_agent.cli release-portfolio-governance-audit --portfolio-id <portfolio-id> --refresh --export --zip --verify --require-signed --require-archives --json

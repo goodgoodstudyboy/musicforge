@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tests.test_release_portfolio_governance_signoff import _manual_acknowledgements, _prepared_queue
 
-from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore, audit_ledger_integrity_ok, audit_report_integrity_ok
+from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore, audit_ledger_integrity_ok, audit_manifest_integrity_hash, audit_report_integrity_ok
 from song_agent.release_portfolio_governance_audit_verifier import verify_release_portfolio_governance_audit_package
 from song_agent.release_portfolio_governance_archive_verifier import verify_release_portfolio_governance_archive_package, write_release_portfolio_governance_archive_verification_report
 
@@ -58,6 +58,21 @@ def test_portfolio_governance_audit_requires_verified_archive_evidence(tmp_path:
     assert any(item["check_id"] == "governance_archive_verification_missing" for item in report["blockers"])
     assert verification["status"] == "failed"
     assert any(item["check_id"] == "portfolio_governance_audit_require_archives" for item in verification["blockers"])
+
+
+def test_portfolio_governance_audit_blocks_stale_archive_verification_report(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, queue_id, _governance_store, signoff_store, audit_store = _accepted_governance_fixture(tmp_path, monkeypatch)
+    old_report = signoff_store.archive_verification_report_path(queue_id).read_text(encoding="utf-8")
+    old_sha = json.loads(old_report)["zip_sha256"]
+
+    new_zip = signoff_store.build_archive_zip(queue_id)
+    signoff_store.archive_verification_report_path(queue_id).write_text(old_report, encoding="utf-8")
+
+    report = audit_store.refresh(portfolio_id)
+
+    assert old_sha != new_zip["sha256"]
+    assert report["status"] == "failed"
+    assert any(item["check_id"] == "governance_archive_verification_zip_sha256" for item in report["blockers"])
 
 
 def test_portfolio_governance_audit_reset_cr_causality(tmp_path: Path, monkeypatch) -> None:
@@ -125,10 +140,23 @@ def test_portfolio_governance_audit_verifier_catches_tamper_missing_reorder_and_
     reordered = verify_release_portfolio_governance_audit_package(reorder_zip)
     redaction = verify_release_portfolio_governance_audit_package(redaction_zip)
 
+    wrong_type_zip = tmp_path / "wrong-type-governance-audit.zip"
+    with zipfile.ZipFile(source_zip, "r") as src, zipfile.ZipFile(wrong_type_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "manifest.json":
+                payload = json.loads(data.decode("utf-8"))
+                payload["package_type"] = "wrong_package_type"
+                payload["integrity_hash"] = audit_manifest_integrity_hash(payload)
+                data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+            dst.writestr(info.filename, data)
+    wrong_type = verify_release_portfolio_governance_audit_package(wrong_type_zip)
+
     assert any(item["check_id"] == "portfolio_governance_audit_report_integrity" for item in tampered["blockers"])
     assert any(item["check_id"] == "portfolio_governance_audit_zip_required_entries" for item in missing["blockers"])
     assert any(item["check_id"] == "portfolio_governance_audit_ledger_chain" for item in reordered["blockers"])
     assert any(item["check_id"] == "portfolio_governance_audit_redaction_scan" for item in redaction["blockers"])
+    assert any(item["check_id"] == "portfolio_governance_audit_manifest_package_type" for item in wrong_type["blockers"])
 
 
 def test_portfolio_governance_audit_verifier_catches_zip_path_duplicate_and_spoof(tmp_path: Path, monkeypatch) -> None:

@@ -9875,6 +9875,14 @@ def _v68_release_portfolio_governance_audit_ledger_smoke(root: Path) -> tuple[bo
         archive_verify = verify_release_portfolio_governance_archive_package(governance_signoff_store.archive_zip_path(queue_id), strict=True, require_signed=True)
         write_release_portfolio_governance_archive_verification_report(archive_verify, governance_signoff_store.archive_verification_report_path(queue_id))
 
+        stale_archive_report_text = governance_signoff_store.archive_verification_report_path(queue_id).read_text(encoding="utf-8")
+        stale_archive_sha = archive_verify.get("zip_sha256")
+        rebuilt_archive_zip = governance_signoff_store.build_archive_zip(queue_id)
+        governance_signoff_store.archive_verification_report_path(queue_id).write_text(stale_archive_report_text, encoding="utf-8")
+        stale_archive_audit = governance_audit_store.refresh(portfolio["portfolio_id"])
+        archive_verify = verify_release_portfolio_governance_archive_package(governance_signoff_store.archive_zip_path(queue_id), strict=True, require_signed=True)
+        write_release_portfolio_governance_archive_verification_report(archive_verify, governance_signoff_store.archive_verification_report_path(queue_id))
+
         report = governance_audit_store.refresh(portfolio["portfolio_id"])
         manifest = governance_audit_store.export_audit(portfolio["portfolio_id"])
         zip_info = governance_audit_store.build_zip(portfolio["portfolio_id"])
@@ -9893,6 +9901,7 @@ def _v68_release_portfolio_governance_audit_ledger_smoke(root: Path) -> tuple[bo
         backslash = verify_release_portfolio_governance_audit_package(_v38_backslash_entry_zip(base / "backslash-v68-governance-audit.zip"), strict=True)
         spoof = verify_release_portfolio_governance_audit_package(_v38_rewrite_zip(audit_zip, base / "spoof-v68-governance-audit.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v68_spoof_governance_audit_manifest}), strict=True)
         redaction = verify_release_portfolio_governance_audit_package(_v38_rewrite_zip(audit_zip, base / "redaction-v68-governance-audit.zip", transforms={"GOVERNANCE_AUDIT.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        wrong_type = verify_release_portfolio_governance_audit_package(_v38_rewrite_zip(audit_zip, base / "wrong-type-v68-governance-audit.zip", transforms={"manifest.json": _v68_wrong_type_governance_audit_manifest}))
 
         stale_export = stale_zip = False
         stale_path = reviewer_store.verification_report_path(releases[0].release_id)
@@ -9915,6 +9924,9 @@ def _v68_release_portfolio_governance_audit_ledger_smoke(root: Path) -> tuple[bo
             and zip_info.get("sha256")
             and verification.get("status") == "passed"
             and external_report.get("status") == "passed"
+            and stale_archive_sha != rebuilt_archive_zip.get("sha256")
+            and stale_archive_audit.get("status") == "failed"
+            and any(item.get("check_id") == "governance_archive_verification_zip_sha256" for item in stale_archive_audit.get("blockers", []))
             and stale_export
             and stale_zip
             and _v38_check_status(tampered, "portfolio_governance_audit_report_integrity") == "failed"
@@ -9925,6 +9937,7 @@ def _v68_release_portfolio_governance_audit_ledger_smoke(root: Path) -> tuple[bo
             and _v38_check_status(spoof, "portfolio_governance_audit_manifest_extra_entries") == "failed"
             and _v38_check_status(spoof, "portfolio_governance_audit_manifest_zip_entries_reference_only") == "warning"
             and _v38_check_status(redaction, "portfolio_governance_audit_redaction_scan") == "failed"
+            and _v38_check_status(wrong_type, "portfolio_governance_audit_manifest_package_type") == "failed"
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -9932,11 +9945,11 @@ def _v68_release_portfolio_governance_audit_ledger_smoke(root: Path) -> tuple[bo
         )
         return ok, (
             f"report={report.get('status')}, ledger={report.get('ledger', {}).get('chain_status')}, verify={verification.get('status')}, external={external_report.get('status')}, "
-            f"stale_export={stale_export}, stale_zip={stale_zip}, tamper={_v38_check_status(tampered, 'portfolio_governance_audit_report_integrity')}, "
+            f"stale_archive={stale_archive_audit.get('status')}, stale_export={stale_export}, stale_zip={stale_zip}, tamper={_v38_check_status(tampered, 'portfolio_governance_audit_report_integrity')}, "
             f"reorder={_v38_check_status(reorder, 'portfolio_governance_audit_ledger_chain')}, duplicate={_v38_check_status(duplicate, 'portfolio_governance_audit_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'portfolio_governance_audit_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'portfolio_governance_audit_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof, 'portfolio_governance_audit_manifest_extra_entries')}/{_v38_check_status(spoof, 'portfolio_governance_audit_manifest_zip_entries_reference_only')}, "
-            f"redaction={_v38_check_status(redaction, 'portfolio_governance_audit_redaction_scan')}"
+            f"redaction={_v38_check_status(redaction, 'portfolio_governance_audit_redaction_scan')}, package_type={_v38_check_status(wrong_type, 'portfolio_governance_audit_manifest_package_type')}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -9959,6 +9972,15 @@ def _v68_reorder_governance_audit_ledger(data: bytes) -> bytes:
 def _v68_spoof_governance_audit_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v68_wrong_type_governance_audit_manifest(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_audit import audit_manifest_integrity_hash
+
+    payload = json.loads(data.decode("utf-8"))
+    payload["package_type"] = "wrong_package_type"
+    payload["integrity_hash"] = audit_manifest_integrity_hash(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 

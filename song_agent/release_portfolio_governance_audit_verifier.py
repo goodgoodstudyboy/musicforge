@@ -217,6 +217,8 @@ class _PortfolioGovernanceAuditVerifier:
         self._add_check("manifest", "portfolio_governance_audit_manifest_exists", "passed", "blocking", "manifest.json exists.")
         actual_manifest_hash = audit_manifest_integrity_hash(self.manifest)
         self._add_check("manifest", "portfolio_governance_audit_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Portfolio Governance Audit manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Portfolio Governance Audit manifest integrity hash does not match.")
+        package_type_ok = self.manifest.get("package_type") == "release_portfolio_governance_audit"
+        self._add_check("manifest", "portfolio_governance_audit_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is release_portfolio_governance_audit." if package_type_ok else "Manifest package_type is not release_portfolio_governance_audit.")
         rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
         valid: list[dict[str, Any]] = []
         errors: list[str] = []

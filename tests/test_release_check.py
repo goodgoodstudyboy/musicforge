@@ -312,6 +312,7 @@ def test_v68_release_portfolio_governance_audit_ledger_smoke(tmp_path: Path) -> 
     assert "ledger=passed" in detail
     assert "verify=passed" in detail
     assert "external=passed" in detail
+    assert "stale_archive=failed" in detail
     assert "stale_export=True" in detail
     assert "stale_zip=True" in detail
     assert "tamper=failed" in detail
@@ -321,6 +322,7 @@ def test_v68_release_portfolio_governance_audit_ledger_smoke(tmp_path: Path) -> 
     assert "backslash=failed" in detail
     assert "spoof=failed/warning" in detail
     assert "redaction=failed" in detail
+    assert "package_type=failed" in detail
 
 
 def test_v43_submission_workspace_smoke(tmp_path: Path) -> None:
