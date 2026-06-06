@@ -57,6 +57,7 @@ def test_portfolio_governance_create_run_export_zip_and_verify(tmp_path: Path, m
     manifest = store.export_queue(queue_id)
     zip_info = store.build_zip(queue_id)
     verification = verify_release_portfolio_governance_package(store.zip_path(queue_id), strict=True, require_manual_actions=True)
+    current_manifest = store.read_export_manifest(queue_id)
 
     assert ran["status"] == "manual_required"
     assert execution["summary"]["safe_completed"] >= 4
@@ -65,6 +66,9 @@ def test_portfolio_governance_create_run_export_zip_and_verify(tmp_path: Path, m
     assert execution_report_integrity_ok(execution)
     assert governance_manifest_integrity_ok(manifest)
     assert zip_info["sha256"]
+    assert verification["zip_sha256"] == zip_info["sha256"]
+    assert verification["zip_size_bytes"] == zip_info["size_bytes"]
+    assert verification["manifest_hash"] == current_manifest["integrity_hash"]
     assert verification["status"] == "passed"
 
 

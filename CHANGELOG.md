@@ -1,5 +1,16 @@
 # Changelog
 
+## v6.7.1 - 2026-06-06
+
+### Fixed
+- Portfolio Governance Queue verification reports now record the verified ZIP sha256, size, and manifest hash.
+- Portfolio Governance Signoff now rejects stale queue verification reports when the Governance Queue ZIP or export manifest has changed after verification.
+- Governance Archive verifier now checks that archived queue verification evidence matches the signed queue ZIP and export manifest evidence.
+- v6.7 release-check smoke now covers verify -> rebuild ZIP -> signoff blocked -> reverify -> signoff passed.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance.py tests\test_release_portfolio_governance_signoff.py tests\test_server_release_portfolio_governance_signoff.py tests\test_release_check.py::test_v67_release_portfolio_governance_signoff_smoke -q`
+
 ## v6.7.0 - 2026-06-06
 
 ### Added

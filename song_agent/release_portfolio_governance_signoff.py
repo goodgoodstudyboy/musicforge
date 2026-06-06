@@ -138,7 +138,7 @@ class ReleasePortfolioGovernanceSignoffStore:
 
         export_manifest = self._read_export_manifest(queue_id, blockers)
         zip_info = self._zip_evidence(queue_id, queue, blockers)
-        verification = self._read_queue_verification(queue_id, blockers, warnings)
+        verification = self._read_queue_verification(queue_id, zip_info, export_manifest, blockers, warnings)
 
         summary = execution.get("summary") if isinstance(execution.get("summary"), dict) else {}
         failed = int(summary.get("failed") or 0)
@@ -181,6 +181,7 @@ class ReleasePortfolioGovernanceSignoffStore:
                 "manual_action_list_integrity_hash": manual.get("integrity_hash"),
                 "queue_export_manifest_hash": export_manifest.get("integrity_hash"),
                 "queue_zip_sha256": zip_info.get("sha256"),
+                "queue_zip_size_bytes": zip_info.get("size_bytes"),
                 "queue_verification_report_hash": stable_hash(verification) if verification else None,
             },
             "summary": {
@@ -549,7 +550,7 @@ class ReleasePortfolioGovernanceSignoffStore:
             blockers.append(_blocker("queue_zip_sha256", "Governance Queue ZIP sha256 does not match queue evidence."))
         return {"filename": zip_path.name, "sha256": sha, "size_bytes": zip_path.stat().st_size}
 
-    def _read_queue_verification(self, queue_id: str, blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+    def _read_queue_verification(self, queue_id: str, zip_info: dict[str, Any], export_manifest: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
         path = self.governance_store.verification_report_path(queue_id)
         if not path.exists():
             blockers.append(_blocker("queue_verification_missing", "Governance Queue verification report is missing."))
@@ -562,6 +563,26 @@ class ReleasePortfolioGovernanceSignoffStore:
             warnings.append(_warning("queue_verification_warning", "Governance Queue verification report has warnings."))
         elif status != "passed":
             blockers.append(_blocker("queue_verification_status", f"Governance Queue verification status is {status or 'missing'}."))
+        expected_zip_sha = str(zip_info.get("sha256") or "")
+        report_zip_sha = str(report.get("zip_sha256") or (report.get("zip") if isinstance(report.get("zip"), dict) else {}).get("sha256") or "")
+        if not report_zip_sha:
+            blockers.append(_blocker("queue_verification_zip_sha256_missing", "Governance Queue verification report does not record the verified ZIP sha256. Re-run queue verification."))
+        elif expected_zip_sha and report_zip_sha != expected_zip_sha:
+            blockers.append(_blocker("queue_verification_zip_sha256", "Governance Queue verification report does not match the current Governance Queue ZIP. Re-run queue verification."))
+        expected_zip_size = zip_info.get("size_bytes")
+        report_zip_size = report.get("zip_size_bytes")
+        if report_zip_size is None and isinstance(report.get("zip"), dict):
+            report_zip_size = report["zip"].get("size_bytes")
+        if report_zip_size is None:
+            blockers.append(_blocker("queue_verification_zip_size_missing", "Governance Queue verification report does not record the verified ZIP size. Re-run queue verification."))
+        elif expected_zip_size is not None and int(report_zip_size or 0) != int(expected_zip_size or 0):
+            blockers.append(_blocker("queue_verification_zip_size", "Governance Queue verification report does not match the current Governance Queue ZIP size. Re-run queue verification."))
+        expected_manifest_hash = str(export_manifest.get("integrity_hash") or "")
+        report_manifest_hash = str(report.get("manifest_hash") or "")
+        if not report_manifest_hash:
+            blockers.append(_blocker("queue_verification_manifest_hash_missing", "Governance Queue verification report does not record the verified export manifest hash. Re-run queue verification."))
+        elif expected_manifest_hash and report_manifest_hash != expected_manifest_hash:
+            blockers.append(_blocker("queue_verification_manifest_hash", "Governance Queue verification report does not match the current Governance Queue export manifest. Re-run queue verification."))
         return report
 
     def _reserve_signoff_id(self, queue_id: str) -> str:

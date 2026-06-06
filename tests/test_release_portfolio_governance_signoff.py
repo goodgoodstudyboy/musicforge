@@ -78,6 +78,22 @@ def test_portfolio_governance_signoff_archive_export_verify_and_tamper(tmp_path:
     assert tampered["status"] == "failed"
     assert any(item["check_id"] == "portfolio_governance_archive_signoff_integrity" for item in tampered["blockers"])
 
+    stale_verification_zip = tmp_path / "stale-verification-governance-archive.zip"
+    with zipfile.ZipFile(store.archive_zip_path(queue_id), "r") as src, zipfile.ZipFile(stale_verification_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "queue-verification-report.json":
+                payload = json.loads(data.decode("utf-8"))
+                payload["zip_sha256"] = "0" * 64
+                if isinstance(payload.get("zip"), dict):
+                    payload["zip"]["sha256"] = "0" * 64
+                data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+            dst.writestr(info.filename, data)
+
+    stale_verification = verify_release_portfolio_governance_archive_package(stale_verification_zip, require_signed=True)
+    assert stale_verification["status"] == "failed"
+    assert any(item["check_id"] == "portfolio_governance_archive_queue_verification_zip_sha256" for item in stale_verification["blockers"])
+
 
 def test_portfolio_governance_signoff_blocks_missing_or_failed_verification(tmp_path: Path, monkeypatch) -> None:
     queue_id, governance_store, store = _prepared_queue(tmp_path, monkeypatch)
@@ -90,6 +106,28 @@ def test_portfolio_governance_signoff_blocks_missing_or_failed_verification(tmp_
     write_json(verification_path, {"status": "failed"})
     with pytest.raises(ReleasePortfolioGovernanceSignoffStateError, match="gate failed"):
         store.signoff(queue_id, {"signed_by": "tester", "force": True, "override_reason": "cannot bypass failed verifier", "manual_acknowledgements": _manual_acknowledgements(governance_store, queue_id)})
+
+
+def test_portfolio_governance_signoff_blocks_stale_queue_verification_report(tmp_path: Path, monkeypatch) -> None:
+    queue_id, governance_store, store = _prepared_queue(tmp_path, monkeypatch)
+    stale_report = governance_store.verification_report_path(queue_id).read_text(encoding="utf-8")
+    old_sha = governance_store.get_queue(queue_id)["latest_zip_sha256"]
+
+    governance_store.build_zip(queue_id)
+    new_sha = governance_store.get_queue(queue_id)["latest_zip_sha256"]
+    governance_store.verification_report_path(queue_id).write_text(stale_report, encoding="utf-8")
+
+    assert old_sha != new_sha
+    with pytest.raises(ReleasePortfolioGovernanceSignoffStateError, match="gate failed"):
+        store.signoff(queue_id, {"signed_by": "tester", "manual_acknowledgements": _manual_acknowledgements(governance_store, queue_id)})
+
+    verification = verify_release_portfolio_governance_package(governance_store.zip_path(queue_id), strict=True, require_manual_actions=True)
+    write_release_portfolio_governance_verification_report(verification, governance_store.verification_report_path(queue_id))
+    signed = store.signoff(queue_id, {"signed_by": "tester", "manual_acknowledgements": _manual_acknowledgements(governance_store, queue_id)})
+
+    assert signed["status"] == "signed"
+    assert signed["evidence"]["queue_zip_sha256"] == new_sha
+    assert verification["zip_sha256"] == new_sha
 
 
 def test_portfolio_governance_signed_queue_is_immutable_until_reset(tmp_path: Path, monkeypatch) -> None:

@@ -354,6 +354,16 @@ class _PortfolioGovernanceVerifier:
             "generated_at": self.generated_at,
             "status": "failed" if blockers else "warning" if warnings else "passed",
             "zip_path": self.zip_path.name,
+            "zip_sha256": self.zip_sha256,
+            "zip_size_bytes": self.zip_size_bytes,
+            "manifest_hash": self.manifest.get("integrity_hash") if isinstance(self.manifest, dict) else None,
+            "zip": {
+                "filename": self.zip_path.name,
+                "sha256": self.zip_sha256,
+                "size_bytes": self.zip_size_bytes,
+                "entry_count": len(self.entry_infos),
+                "uncompressed_size_bytes": self.total_uncompressed_size,
+            },
             "summary": {
                 "queue_id": self.manifest.get("queue_id") or self.queue.get("queue_id"),
                 "portfolio_id": self.manifest.get("portfolio_id") or self.queue.get("portfolio_id"),

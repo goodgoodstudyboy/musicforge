@@ -275,6 +275,15 @@ class _PortfolioGovernanceArchiveVerifier:
             self._add_sidecar_check("queue_verification", "queue_verification_report", actual)
             ok = self.queue_verification.get("status") in {"passed", "warning"}
             self._add_check("queue_verification", "portfolio_governance_archive_queue_verification_status", "passed" if ok else "failed", "blocking", "Governance Queue verification report is usable." if ok else "Governance Queue verification report failed or is missing.")
+            report_zip_sha = str(self.queue_verification.get("zip_sha256") or (self.queue_verification.get("zip") if isinstance(self.queue_verification.get("zip"), dict) else {}).get("sha256") or "")
+            evidence = self.signoff.get("evidence") if isinstance(self.signoff.get("evidence"), dict) else {}
+            self._add_hash_check("queue_verification", "portfolio_governance_archive_queue_verification_zip_sha256", report_zip_sha, evidence.get("queue_zip_sha256"), "Queue verification ZIP sha256 evidence")
+            report_zip_size = self.queue_verification.get("zip_size_bytes")
+            if report_zip_size is None and isinstance(self.queue_verification.get("zip"), dict):
+                report_zip_size = self.queue_verification["zip"].get("size_bytes")
+            self._add_hash_check("queue_verification", "portfolio_governance_archive_queue_verification_zip_size", report_zip_size, evidence.get("queue_zip_size_bytes"), "Queue verification ZIP size evidence")
+            report_manifest_hash = str(self.queue_verification.get("manifest_hash") or "")
+            self._add_hash_check("queue_verification", "portfolio_governance_archive_queue_verification_manifest_hash", report_manifest_hash, evidence.get("queue_export_manifest_hash"), "Queue verification manifest hash evidence")
         if self.signoff:
             actual = governance_signoff_hash(self.signoff)
             self._add_hash_check("signoff", "portfolio_governance_archive_signoff_integrity", self.signoff.get("integrity_hash"), actual, "Governance Signoff integrity hash")

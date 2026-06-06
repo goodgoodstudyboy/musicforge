@@ -470,6 +470,9 @@ Release Portfolio Governance Signoff closes a Governance Queue with queue,
 action-plan, execution, manual-action, queue-verifier, and source evidence
 bound into a signed record. Signed queues are immutable for `run-safe`, export,
 and ZIP rebuild; reset requires an approved one-time Governance Change Request.
+Queue verification evidence must match the current Governance Queue ZIP
+sha256, ZIP size, and export manifest hash, so rebuilding the queue ZIP after
+verification requires running verification again before signoff.
 Governance Archive ZIPs can be verified offline:
 
 ```powershell

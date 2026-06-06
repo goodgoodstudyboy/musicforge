@@ -9647,8 +9647,18 @@ def _v67_release_portfolio_governance_signoff_smoke(root: Path) -> tuple[bool, s
         governance_store.build_zip(queue_id)
         queue_verify = verify_release_portfolio_governance_package(governance_store.zip_path(queue_id), strict=True, require_manual_actions=True)
         write_release_portfolio_governance_verification_report(queue_verify, governance_store.verification_report_path(queue_id))
+        old_queue_zip_sha = queue_verify.get("zip_sha256")
+        governance_store.build_zip(queue_id)
+        rebuilt_queue_zip_sha = governance_store.get_queue(queue_id).get("latest_zip_sha256")
         manual = governance_store.read_manual_action_list(queue_id, default={})
         acknowledgements = [{"item_id": item.get("item_id"), "action_type": item.get("action_type"), "resolution": "accepted_for_followup", "owner": "release-check", "due_note": "next governance cycle"} for item in manual.get("items", []) if isinstance(item, dict)]
+        stale_verification_signoff_status = 200
+        try:
+            governance_signoff_store.signoff(queue_id, {"signed_by": "release-check", "manual_acknowledgements": acknowledgements})
+        except Exception:
+            stale_verification_signoff_status = 409
+        queue_verify = verify_release_portfolio_governance_package(governance_store.zip_path(queue_id), strict=True, require_manual_actions=True)
+        write_release_portfolio_governance_verification_report(queue_verify, governance_store.verification_report_path(queue_id))
         signed = governance_signoff_store.signoff(queue_id, {"signed_by": "release-check", "manual_acknowledgements": acknowledgements})
         manifest = governance_signoff_store.export_archive(queue_id)
         governance_signoff_store.build_archive_zip(queue_id)
@@ -9712,6 +9722,9 @@ def _v67_release_portfolio_governance_signoff_smoke(root: Path) -> tuple[bool, s
             and signed_export_status == 409
             and signed_zip_status == 409
             and stale_signoff_status == 409
+            and stale_verification_signoff_status == 409
+            and old_queue_zip_sha != rebuilt_queue_zip_sha
+            and queue_verify.get("zip_sha256") == rebuilt_queue_zip_sha
             and _v38_check_status(tampered, "portfolio_governance_archive_signoff_integrity") == "failed"
             and _v38_check_status(duplicate, "portfolio_governance_archive_zip_duplicate_entries") == "failed"
             and _v38_check_status(dangerous, "portfolio_governance_archive_zip_entry_path_safe") == "failed"
@@ -9730,6 +9743,7 @@ def _v67_release_portfolio_governance_signoff_smoke(root: Path) -> tuple[bool, s
         return ok, (
             f"signoff={archive_verify.get('status')}, archive={archive_verify.get('status')}, external={external_report.get('status')}, "
             f"stale={stale_signoff_status}, signed_mutation={signed_run_status}/{signed_export_status}/{signed_zip_status}, "
+            f"stale_verification={stale_verification_signoff_status}, "
             f"reset={reset_missing_status}/{reset_status}/{reset_reuse_status}, tamper={_v38_check_status(tampered, 'portfolio_governance_archive_signoff_integrity')}, "
             f"duplicate={_v38_check_status(duplicate, 'portfolio_governance_archive_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'portfolio_governance_archive_zip_entry_path_safe')}, "
