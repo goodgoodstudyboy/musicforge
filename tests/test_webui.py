@@ -179,10 +179,17 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "portfolio-governance-archive-export" in html
     assert "portfolio-governance-archive-zip" in html
     assert "portfolio-governance-archive-verify" in html
+    assert "Portfolio Governance Audit Ledger" in html
+    assert 'id="portfolio-governance-audit-refresh"' in html
+    assert 'id="portfolio-governance-audit-export"' in html
+    assert 'id="portfolio-governance-audit-zip"' in html
+    assert 'id="portfolio-governance-audit-verify"' in html
+    assert "/governance-audit.zip" in html
     assert "/api/release-portfolio-audits" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/verify" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit/verify" in html
     assert "/api/release-portfolio-governance-queues" in html
     assert "/governance-queues" in html
     assert "/run-safe" in html

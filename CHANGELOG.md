@@ -1,5 +1,17 @@
 # Changelog
 
+## v6.8.0 - 2026-06-06
+
+### Added
+- Release Portfolio Governance Audit Ledger for linking Portfolio Audit, Governance Queues, queue verification, signoff, archive verification, Change Requests, and reset causality into a hash-chained evidence package.
+- Governance Audit export/ZIP with ledger JSONL, report JSON, portfolio/queue/signoff/archive/change-request summaries, Markdown review notes, manifest integrity, and redaction summary.
+- Offline `verify-release-portfolio-governance-audit-package` CLI with signed/archive requirements, ledger chain validation, report/manifest integrity checks, reset Change Request causality checks, duplicate/path/backslash/spoof/redaction protections, and clean-room verification support.
+- API routes under `/api/release-portfolio-audits/<portfolio-id>/governance-audit` plus Studio controls in the Portfolio Audit workspace.
+- v6.8 release-check smoke covering passed audit export, external verification, stale export/ZIP blocking, report tamper, ledger reorder, duplicate ZIP, dangerous/backslash entries, manifest spoof, and redaction.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_audit.py tests\test_server_release_portfolio_governance_audit.py tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_audit_cli_json_report_out tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v66_release_portfolio_governance_queue_smoke tests\test_release_check.py::test_v67_release_portfolio_governance_signoff_smoke tests\test_release_check.py::test_v68_release_portfolio_governance_audit_ledger_smoke -q`
+
 ## v6.7.1 - 2026-06-06
 
 ### Fixed

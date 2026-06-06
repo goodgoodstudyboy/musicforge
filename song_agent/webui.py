@@ -3302,8 +3302,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { riskData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/risks`); } catch (err) {}
       let governanceData = { queues: [], summary: {} };
       try { governanceData = await api(`/api/release-portfolio-governance-queues?portfolio_id=${encodeURIComponent(portfolioId)}`); } catch (err) {}
+      let governanceAuditData = { report: {}, summary: {} };
+      try { governanceAuditData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
+      const governanceAuditSummary = governanceAuditData.summary || {};
       const score = report.risk_score || {};
       const stale = Boolean(reportData.stale || (reportData.summary || {}).stale || (data.summary || {}).stale);
       const trend = trendData.trend_report || {};
@@ -3430,6 +3433,23 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           ${metric("Archive", "verifiable")}
           ${metric("Change Control", "approved CR required")}
         </div>
+        <div class="panel-title subhead"><span>Portfolio Governance Audit Ledger</span></div>
+        <div class="summary-grid">
+          ${metric("Audit", governanceAuditSummary.status || "missing")}
+          ${metric("Entries", governanceAuditSummary.entry_count || 0)}
+          ${metric("Signed Queues", governanceAuditSummary.signed_queue_count || 0)}
+          ${metric("Archive Verified", governanceAuditSummary.archive_verified_count || 0)}
+          ${metric("Blockers", governanceAuditSummary.blocker_count || 0)}
+          ${metric("Warnings", governanceAuditSummary.warning_count || 0)}
+          ${metric("Stale", governanceAuditSummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-audit-refresh" type="button">Refresh Governance Audit</button>
+          <button class="secondary" id="portfolio-governance-audit-export" type="button">Export Governance Audit</button>
+          <button class="secondary" id="portfolio-governance-audit-zip" type="button">Build Governance Audit ZIP</button>
+          <button class="secondary" id="portfolio-governance-audit-verify" type="button">Verify Governance Audit ZIP</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-audit.zip">Download Governance Audit ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3469,6 +3489,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       bindAction("portfolio-audit-archive", async () => {
         await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/archive`, { method: "POST" });
         await loadPortfolioAudits();
+      });
+      bindAction("portfolio-governance-audit-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit/refresh`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-audit-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-audit-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-audit-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, require_signed: true, require_archives: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
       });
     }
 

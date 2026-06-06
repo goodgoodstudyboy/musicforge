@@ -241,6 +241,84 @@ def test_verify_release_operations_archive_cli_json_report_out_and_tamper(tmp_pa
     assert "approved" in (reuse.stderr + reuse.stdout).lower()
 
 
+def test_verify_release_portfolio_governance_audit_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_audit import _accepted_governance_fixture
+
+    portfolio_id, _queue_id, _governance_store, _signoff_store, audit_store = _accepted_governance_fixture(Path(".musicforge"), monkeypatch)
+    audit_store.refresh(portfolio_id)
+    audit_store.export_audit(portfolio_id)
+    audit_store.build_zip(portfolio_id)
+    report_out = tmp_path / "portfolio-governance-audit-verification.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    ok = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-audit-package",
+            str(audit_store.zip_path(portfolio_id)),
+            "--json",
+            "--require-signed",
+            "--require-archives",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert ok.returncode == 0, ok.stderr
+    payload = json.loads(ok.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+    assert payload["status"] == "passed"
+    assert saved["summary"]["portfolio_id"] == portfolio_id
+    assert saved["summary"]["ledger_hash"]
+
+
+def test_release_portfolio_governance_audit_cli_refresh_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_audit import _accepted_governance_fixture
+
+    portfolio_id, _queue_id, _governance_store, _signoff_store, _audit_store = _accepted_governance_fixture(Path(".musicforge"), monkeypatch)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-audit",
+            "--portfolio-id",
+            portfolio_id,
+            "--refresh",
+            "--export",
+            "--zip",
+            "--verify",
+            "--require-signed",
+            "--require-archives",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["summary"]["status"] == "passed"
+    assert payload["zip"]["sha256"]
+    assert payload["verification_summary"]["status"] == "passed"
+
+
 def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     release_store = ReleaseStore()

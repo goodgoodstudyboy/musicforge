@@ -479,6 +479,21 @@ Governance Archive ZIPs can be verified offline:
 python -m song_agent.cli verify-release-portfolio-governance-archive-package path\to\governance-archive.zip --strict --require-signed --json
 ```
 
+Release Portfolio Governance Audit Ledger links Portfolio Audit, Governance
+Queues, queue verification, signoff, archive verification, Change Requests, and
+reset causality into a deterministic hash-chained audit package. The exported
+ZIP contains `portfolio-governance-audit-ledger.jsonl`,
+`portfolio-governance-audit-report.json`, queue/signoff/archive summaries, and
+Markdown review notes. It can be verified outside the local workspace for
+ledger ordering, report integrity, reset Change Request causality, signed queue
+archive coverage, ZIP safety, manifest spoofing, duplicate entries, and
+redaction issues:
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-audit --portfolio-id <portfolio-id> --refresh --export --zip --verify --require-signed --require-archives --json
+python -m song_agent.cli verify-release-portfolio-governance-audit-package path\to\portfolio-governance-audit.zip --strict --require-signed --require-archives --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

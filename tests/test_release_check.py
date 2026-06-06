@@ -42,6 +42,7 @@ from song_agent.release_checks import (
     _v65_release_portfolio_audit_smoke,
     _v66_release_portfolio_governance_queue_smoke,
     _v67_release_portfolio_governance_signoff_smoke,
+    _v68_release_portfolio_governance_audit_ledger_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -296,6 +297,25 @@ def test_v67_release_portfolio_governance_signoff_smoke(tmp_path: Path) -> None:
     assert "signed_mutation=409/409/409" in detail
     assert "reset=409/200/409" in detail
     assert "tamper=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "dangerous=failed" in detail
+    assert "backslash=failed" in detail
+    assert "spoof=failed/warning" in detail
+    assert "redaction=failed" in detail
+
+
+def test_v68_release_portfolio_governance_audit_ledger_smoke(tmp_path: Path) -> None:
+    ok, detail = _v68_release_portfolio_governance_audit_ledger_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "report=passed" in detail
+    assert "ledger=passed" in detail
+    assert "verify=passed" in detail
+    assert "external=passed" in detail
+    assert "stale_export=True" in detail
+    assert "stale_zip=True" in detail
+    assert "tamper=failed" in detail
+    assert "reorder=failed" in detail
     assert "duplicate=failed" in detail
     assert "dangerous=failed" in detail
     assert "backslash=failed" in detail
