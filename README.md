@@ -466,6 +466,16 @@ queue binds to the Portfolio Audit source hash; stale queues return 409 on
 `run-safe`, export, and ZIP rebuild, and must be recreated from a refreshed
 Portfolio Audit.
 
+Release Portfolio Governance Signoff closes a Governance Queue with queue,
+action-plan, execution, manual-action, queue-verifier, and source evidence
+bound into a signed record. Signed queues are immutable for `run-safe`, export,
+and ZIP rebuild; reset requires an approved one-time Governance Change Request.
+Governance Archive ZIPs can be verified offline:
+
+```powershell
+python -m song_agent.cli verify-release-portfolio-governance-archive-package path\to\governance-archive.zip --strict --require-signed --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

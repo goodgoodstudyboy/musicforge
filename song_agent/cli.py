@@ -249,6 +249,20 @@ def build_verify_release_portfolio_governance_parser() -> argparse.ArgumentParse
     return verify_parser
 
 
+def build_verify_release_portfolio_governance_archive_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release Portfolio Governance Archive ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release Portfolio Governance Archive ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as failures.")
+    verify_parser.add_argument("--require-signed", action="store_true", help="Require signed Governance Signoff evidence.")
+    verify_parser.add_argument("--require-no-force", action="store_true", help="Fail when Governance Signoff was force signed.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=128, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_release_operations_runbook_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Create and run local MusicForge Release Operations Runbooks.")
     parser.add_argument("release_id", help="Release id.")
@@ -371,6 +385,31 @@ def build_release_portfolio_governance_queue_parser() -> argparse.ArgumentParser
     parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as verifier failures.")
     parser.add_argument("--require-manual-actions", action="store_true", help="Require manual-action-list coverage when verifying.")
     parser.add_argument("--require-no-blocked", action="store_true", help="Fail verification when blocked or failed items remain.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_release_portfolio_governance_signoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Sign, reset, and archive local MusicForge Release Portfolio Governance Queue evidence.")
+    parser.add_argument("--queue-id", required=True, help="Governance Queue id.")
+    parser.add_argument("--sign", action="store_true", help="Create Portfolio Governance Signoff.")
+    parser.add_argument("--reset", action="store_true", help="Reset Portfolio Governance Signoff.")
+    parser.add_argument("--signed-by", default="local-user", help="Signer name.")
+    parser.add_argument("--force", action="store_true", help="Force signoff through manual acknowledgement warnings.")
+    parser.add_argument("--override-reason", default="", help="Required with --force.")
+    parser.add_argument("--reason", default="", help="Change Request or reset reason.")
+    parser.add_argument("--change-request-id", default="", help="Approved Change Request id for reset.")
+    parser.add_argument("--create-change-request", action="store_true", help="Create a Governance Change Request.")
+    parser.add_argument("--approve-change-request", default="", help="Approve a Governance Change Request id.")
+    parser.add_argument("--reject-change-request", default="", help="Reject a Governance Change Request id.")
+    parser.add_argument("--approved-by", default="local-user", help="Approver name.")
+    parser.add_argument("--export-archive", action="store_true", help="Build Governance Archive export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build Governance Archive ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify Governance Archive ZIP.")
+    parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries as verifier failures.")
+    parser.add_argument("--require-signed", action="store_true", help="Require signed Governance Signoff when verifying.")
+    parser.add_argument("--require-no-force", action="store_true", help="Fail verification when signoff is force signed.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -1147,6 +1186,32 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_verification_report(report)
         raise SystemExit(release_portfolio_governance_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-portfolio-governance-archive-package":
+        from song_agent.release_portfolio_governance_archive_verifier import (
+            print_release_portfolio_governance_archive_verification_report,
+            release_portfolio_governance_archive_verification_exit_code,
+            verify_release_portfolio_governance_archive_package,
+            write_release_portfolio_governance_archive_verification_report,
+        )
+
+        parser = build_verify_release_portfolio_governance_archive_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_portfolio_governance_archive_package(
+            args.zip_path,
+            strict=args.strict,
+            require_signed=args.require_signed,
+            require_no_force=args.require_no_force,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_portfolio_governance_archive_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_archive_verification_report(report)
+        raise SystemExit(release_portfolio_governance_archive_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -1556,6 +1621,78 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_portfolio_governance_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-portfolio-governance-signoff":
+        from song_agent.distribution import DistributionStore
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_archive_verifier import release_portfolio_governance_archive_verification_summary, verify_release_portfolio_governance_archive_package, write_release_portfolio_governance_archive_verification_report
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
+
+        parser = build_release_portfolio_governance_signoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        release_store = ReleaseStore()
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        evidence_store = SubmissionEvidenceStore(submission_store)
+        operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=audit_store, reviewer_pack_store=reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=reviewer_store, audit_store=audit_store, signoff_store=operations_signoff_store)
+        store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        queue_id = args.queue_id
+        result: dict[str, Any] = {"ok": True, "queue_id": queue_id}
+        if args.create_change_request:
+            change = store.create_change_request(queue_id, {"reason": args.reason, "requested_by": args.signed_by})
+            result.update({"change_request": change, "change_request_summary": store.change_request_summary(queue_id)})
+        if args.approve_change_request:
+            change = store.update_change_request_status(queue_id, args.approve_change_request, "approve", {"approved_by": args.approved_by})
+            result.update({"change_request": change, "change_request_summary": store.change_request_summary(queue_id)})
+        if args.reject_change_request:
+            change = store.update_change_request_status(queue_id, args.reject_change_request, "reject", {"reason": args.reason or "Rejected by local reviewer"})
+            result.update({"change_request": change, "change_request_summary": store.change_request_summary(queue_id)})
+        if args.reset:
+            signoff = store.reset_signoff(queue_id, {"reason": args.reason, "change_request_id": args.change_request_id, "reset_by": args.signed_by})
+            result.update({"signoff": signoff, "summary": store.signoff_summary(queue_id, signoff=signoff)})
+        if args.sign:
+            manual = governance_store.read_manual_action_list(queue_id, default={})
+            acknowledgements = [
+                {"item_id": item.get("item_id"), "action_type": item.get("action_type"), "resolution": "accepted_for_followup", "owner": args.signed_by, "due_note": "tracked outside CLI signoff"}
+                for item in manual.get("items", [])
+                if isinstance(item, dict)
+            ]
+            signoff = store.signoff(queue_id, {"signed_by": args.signed_by, "force": args.force, "override_reason": args.override_reason, "manual_acknowledgements": acknowledgements})
+            result.update({"signoff": signoff, "summary": store.signoff_summary(queue_id, signoff=signoff)})
+        if args.export_archive:
+            manifest = store.export_archive(queue_id)
+            result.update({"manifest": manifest, "archive_summary": store.archive_summary(queue_id)})
+        if args.zip:
+            zip_info = store.build_archive_zip(queue_id)
+            result.update({"zip": zip_info, "archive_summary": store.archive_summary(queue_id)})
+        if args.verify:
+            verification = verify_release_portfolio_governance_archive_package(store.archive_zip_path(queue_id), strict=args.strict, require_signed=args.require_signed, require_no_force=args.require_no_force)
+            write_release_portfolio_governance_archive_verification_report(verification, store.archive_verification_report_path(queue_id))
+            result.update({"verification": verification, "verification_summary": release_portfolio_governance_archive_verification_summary(verification)})
+        if "summary" not in result:
+            signoff = store.read_signoff(queue_id, default={})
+            result.update({"signoff": signoff, "summary": store.signoff_summary(queue_id, signoff=signoff), "archive_summary": store.archive_summary(queue_id), "change_request_summary": store.change_request_summary(queue_id)})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_signoff_result(result)
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
@@ -2528,6 +2665,23 @@ def print_release_portfolio_governance_result(result: dict[str, Any]) -> None:
     print(f"failed: {summary.get('failed', 0)}")
     if result.get("queues") is not None:
         print(f"queues: {len(result.get('queues') or [])}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
+
+
+def print_release_portfolio_governance_signoff_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    archive = result.get("archive_summary") if isinstance(result.get("archive_summary"), dict) else {}
+    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+    print("MusicForge release-portfolio-governance-signoff")
+    print(f"queue: {result.get('queue_id') or summary.get('queue_id') or '-'}")
+    print(f"status: {summary.get('status') or '-'}")
+    print(f"stale: {summary.get('stale', False)}")
+    print(f"integrity: {summary.get('integrity_ok', False)}")
+    if archive:
+        print(f"archive: {archive.get('status') or '-'}")
     if result.get("zip"):
         print(f"zip: {(result.get('zip') or {}).get('filename')}")
     if verification:

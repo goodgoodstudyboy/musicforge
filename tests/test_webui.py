@@ -171,6 +171,14 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "portfolio-governance-export" in html
     assert "portfolio-governance-zip" in html
     assert "portfolio-governance-verify" in html
+    assert "Governance Closeout" in html
+    assert "portfolio-governance-signoff" in html
+    assert "portfolio-governance-force-signoff" in html
+    assert "portfolio-governance-cr" in html
+    assert "portfolio-governance-reset" in html
+    assert "portfolio-governance-archive-export" in html
+    assert "portfolio-governance-archive-zip" in html
+    assert "portfolio-governance-archive-verify" in html
     assert "/api/release-portfolio-audits" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
@@ -178,6 +186,12 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/api/release-portfolio-governance-queues" in html
     assert "/governance-queues" in html
     assert "/run-safe" in html
+    assert "/signoff/reset" in html
+    assert "/change-requests" in html
+    assert "/archive/export" in html
+    assert "/archive/zip" in html
+    assert "/archive/verify" in html
+    assert "/archive.zip" in html
     assert 'id="release-refresh-encoded-audio-health"' in html
     assert "/encoded-audio/health" in html
     assert "/encoded-audio/acceptance/refresh" in html

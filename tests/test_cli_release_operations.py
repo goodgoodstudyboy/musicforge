@@ -549,3 +549,100 @@ def test_release_portfolio_governance_queue_cli_create_run_export_verify(tmp_pat
 
     assert verified.returncode == 0, verified.stderr
     assert json.loads(verified.stdout)["status"] == "passed"
+
+
+def test_release_portfolio_governance_signoff_cli_sign_archive_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance import governance_fixture
+
+    _release, _second, portfolio, _store = governance_fixture(Path(".musicforge"), monkeypatch)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+    portfolio_id = portfolio["portfolio_id"]
+
+    created = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "release-portfolio-governance-queue", "--portfolio-id", portfolio_id, "--create", "--json"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert created.returncode == 0, created.stderr
+    queue_id = json.loads(created.stdout)["queue"]["queue_id"]
+
+    prepared = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-queue",
+            "--queue-id",
+            queue_id,
+            "--run-safe",
+            "--export",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-manual-actions",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert prepared.returncode == 0, prepared.stderr
+
+    signed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-signoff",
+            "--queue-id",
+            queue_id,
+            "--sign",
+            "--signed-by",
+            "cli-test",
+            "--export-archive",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-signed",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert signed.returncode == 0, signed.stderr
+    payload = json.loads(signed.stdout)
+    assert payload["summary"]["status"] == "signed"
+    assert payload["verification_summary"]["status"] == "passed"
+
+    verified = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-archive-package",
+            str(Path(".musicforge") / "portfolio-governance-queues" / queue_id / "governance-archive.zip"),
+            "--strict",
+            "--require-signed",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(verified.stdout)["status"] == "passed"

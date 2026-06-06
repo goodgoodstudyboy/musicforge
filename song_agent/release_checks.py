@@ -70,6 +70,7 @@ from song_agent.release_operations_audit_verifier import verify_release_operatio
 from song_agent.release_operations_reviewer_pack_verifier import verify_release_operations_reviewer_pack
 from song_agent.release_portfolio_audit_verifier import verify_release_portfolio_audit_package
 from song_agent.release_portfolio_governance_verifier import verify_release_portfolio_governance_package
+from song_agent.release_portfolio_governance_archive_verifier import verify_release_portfolio_governance_archive_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -247,6 +248,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v6.4 release operations reviewer pack smoke", *_v64_release_operations_reviewer_pack_smoke(root))
     report.add("v6.5 release portfolio audit smoke", *_v65_release_portfolio_audit_smoke(root))
     report.add("v6.6 release portfolio governance queue smoke", *_v66_release_portfolio_governance_queue_smoke(root))
+    report.add("v6.7 release portfolio governance signoff smoke", *_v67_release_portfolio_governance_signoff_smoke(root))
     return report
 
 
@@ -9540,6 +9542,215 @@ def _v66_tamper_execution_report(data: bytes) -> bytes:
 
 
 def _v66_spoof_governance_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v67_release_portfolio_governance_signoff_smoke(root: Path) -> tuple[bool, str]:
+    base = Path(tempfile.mkdtemp(prefix="mf-v67-portfolio-governance-signoff-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_audit_verifier import write_release_operations_audit_verification_report
+        from song_agent.release_operations_archive_verifier import write_release_operations_archive_verification_report
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_reviewer_pack_verifier import write_release_operations_reviewer_pack_verification_report
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_integrity_hash
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_archive_verifier import write_release_portfolio_governance_archive_verification_report
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.release_portfolio_governance_verifier import write_release_portfolio_governance_verification_report
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+        reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(
+            release_store=release_store,
+            operations_store=operations_store,
+            runbook_store=runbook_store,
+            signoff_store=signoff_store,
+            audit_store=audit_store,
+            reviewer_pack_store=reviewer_store,
+        )
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=reviewer_store, audit_store=audit_store, signoff_store=signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        original_refresh = operations_store.refresh
+        reports: dict[str, dict[str, Any]] = {}
+
+        def make_release(index: int) -> Any:
+            release = release_store.create_release({"name": f"v6.7 Governance Signoff Release {index}", "release_type": "single_pack", "primary_artist": "MusicForge"})
+            report = original_refresh(release.release_id)
+            report["current_stage"] = "accepted"
+            report["next_stage"] = "archived"
+            report["summary"]["blocker_count"] = 0
+            report["summary"]["warning_count"] = 0
+            report["blockers"] = []
+            report["warnings"] = []
+            report["domains"] = {"submission_evidence": {"required": False, "status": "not_required", "summary": {}}}
+            report["verifier_summaries"] = {"release": {"status": "passed"}, "distribution": [], "submission": [], "submission_evidence": []}
+            report["package_summaries"] = {"release_zip": {"exists": True, "status": "exists", "sha256": f"{index}" * 64}, "distribution_packages": [], "submission_packages": [], "submission_evidence_packages": []}
+            report["source_hash"] = f"v67-governance-source-{index}"
+            report["source"] = {"fixture": "v6.7 accepted", "index": index}
+            report["integrity_hash"] = operations_report_integrity_hash(report)
+            write_json(operations_store.report_path(release.release_id), report)
+            reports[release.release_id] = report
+            return release
+
+        releases = [make_release(1), make_release(2)]
+        operations_store.build_report = lambda release_id, persist=False, now=None: reports[release_id]  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: reports[release_id]  # type: ignore[method-assign]
+
+        for release in releases:
+            runbook = runbook_store.create_from_operations_report(release.release_id)
+            runbook["status"] = "completed"
+            runbook["items"] = []
+            runbook["summary"] = {"total_count": 0, "safe_count": 0, "manual_count": 0, "completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0, "waived_count": 0, "pending_count": 0}
+            runbook["integrity_hash"] = runbook_integrity_hash(runbook)
+            write_json(runbook_store.runbook_path(release.release_id, runbook["runbook_id"]), runbook)
+            signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+            signoff_store.export_archive(release.release_id)
+            signoff_store.build_archive_zip(release.release_id)
+            archive_verification = verify_release_operations_archive_package(signoff_store.archive_zip_path(release.release_id), require_signed=True)
+            write_release_operations_archive_verification_report(archive_verification, signoff_store.operations_dir(release.release_id) / "operations-archive-verification-report.json")
+            audit_store.refresh(release.release_id)
+            audit_store.export_audit(release.release_id)
+            audit_store.build_zip(release.release_id)
+            audit_verification = verify_release_operations_audit_package(audit_store.zip_path(release.release_id), require_current=True, require_signed=True, require_archive=True)
+            write_release_operations_audit_verification_report(audit_verification, audit_store.verification_report_path(release.release_id))
+            reviewer_store.refresh(release.release_id)
+            reviewer_store.export_pack(release.release_id)
+            reviewer_store.build_zip(release.release_id)
+            reviewer_verification = verify_release_operations_reviewer_pack(reviewer_store.zip_path(release.release_id), strict=True, require_audit=True, require_signed=True, require_archive=True)
+            write_release_operations_reviewer_pack_verification_report(reviewer_verification, reviewer_store.verification_report_path(release.release_id))
+
+        change = signoff_store.create_change_request(releases[0].release_id, {"reason": "Release-check reset for v6.7 governance manual action.", "scope": ["operations_signoff"]})
+        signoff_store.update_change_request_status(releases[0].release_id, change["change_request_id"], "approve", {"approved_by": "release-check"})
+        signoff_store.reset_signoff(releases[0].release_id, {"reason": "Release-check reset applies v6.7 change request.", "change_request_id": change["change_request_id"]})
+        signoff_store.signoff(releases[0].release_id, {"signed_by": "release-check"})
+
+        second_verification_path = reviewer_store.verification_report_path(releases[1].release_id)
+        second_verification_path.unlink()
+        portfolio = portfolio_store.create({"name": "v6.7 Portfolio Governance Signoff", "release_ids": [release.release_id for release in releases], "require_reviewer_packs": True, "require_audit": True, "require_archive": True})
+        portfolio_store.refresh(portfolio["portfolio_id"])
+        queue = governance_store.create_from_portfolio(portfolio["portfolio_id"])
+        stale_queue = governance_store.create_from_portfolio(portfolio["portfolio_id"], {"force_new": True})
+        queue_id = queue["queue_id"]
+        governance_store.run_safe_actions(queue_id)
+        governance_store.export_queue(queue_id)
+        governance_store.build_zip(queue_id)
+        queue_verify = verify_release_portfolio_governance_package(governance_store.zip_path(queue_id), strict=True, require_manual_actions=True)
+        write_release_portfolio_governance_verification_report(queue_verify, governance_store.verification_report_path(queue_id))
+        manual = governance_store.read_manual_action_list(queue_id, default={})
+        acknowledgements = [{"item_id": item.get("item_id"), "action_type": item.get("action_type"), "resolution": "accepted_for_followup", "owner": "release-check", "due_note": "next governance cycle"} for item in manual.get("items", []) if isinstance(item, dict)]
+        signed = governance_signoff_store.signoff(queue_id, {"signed_by": "release-check", "manual_acknowledgements": acknowledgements})
+        manifest = governance_signoff_store.export_archive(queue_id)
+        governance_signoff_store.build_archive_zip(queue_id)
+        archive_zip = governance_signoff_store.archive_zip_path(queue_id)
+        archive_verify = verify_release_portfolio_governance_archive_package(archive_zip, strict=True, require_signed=True)
+        write_release_portfolio_governance_archive_verification_report(archive_verify, governance_signoff_store.archive_verification_report_path(queue_id))
+        external_dir = base / "external-clean-governance-archive"
+        external_dir.mkdir()
+        external_zip = external_dir / "governance-archive.zip"
+        shutil.copy2(archive_zip, external_zip)
+        external_report = verify_release_portfolio_governance_archive_package(external_zip, strict=True, require_signed=True)
+
+        signed_run_status = signed_export_status = signed_zip_status = 200
+        try:
+            governance_store.run_safe_actions(queue_id)
+        except Exception:
+            signed_run_status = 409
+        try:
+            governance_store.export_queue(queue_id)
+        except Exception:
+            signed_export_status = 409
+        try:
+            governance_store.build_zip(queue_id)
+        except Exception:
+            signed_zip_status = 409
+
+        stale_signoff_status = 200
+        try:
+            governance_signoff_store.signoff(stale_queue["queue_id"], {"signed_by": "release-check", "force": True, "override_reason": "cannot force stale source"})
+        except Exception:
+            stale_signoff_status = 409
+
+        tampered = verify_release_portfolio_governance_archive_package(_v38_rewrite_zip(archive_zip, base / "tampered-v67-governance-archive.zip", transforms={"governance-signoff.json": _v67_tamper_governance_signoff}), require_signed=True)
+        duplicate = verify_release_portfolio_governance_archive_package(_v43_duplicate_submission_zip(archive_zip, base / "duplicate-v67-governance-archive.zip"))
+        dangerous = verify_release_portfolio_governance_archive_package(_v38_rewrite_zip(archive_zip, base / "dangerous-v67-governance-archive.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_release_portfolio_governance_archive_package(_v38_backslash_entry_zip(base / "backslash-v67-governance-archive.zip"), strict=True)
+        spoof = verify_release_portfolio_governance_archive_package(_v38_rewrite_zip(archive_zip, base / "spoof-v67-governance-archive.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v67_spoof_governance_archive_manifest}), strict=True)
+        redaction = verify_release_portfolio_governance_archive_package(_v38_rewrite_zip(archive_zip, base / "redaction-v67-governance-archive.zip", transforms={"GOVERNANCE_CLOSEOUT.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+
+        reset_missing_status = 200
+        try:
+            governance_signoff_store.reset_signoff(queue_id, {"reason": "Reset without approved change request"})
+        except Exception:
+            reset_missing_status = 409
+        cr = governance_signoff_store.create_change_request(queue_id, {"reason": "Release-check governance correction", "requested_by": "release-check"})
+        governance_signoff_store.update_change_request_status(queue_id, cr["change_request_id"], "approve", {"approved_by": "release-check"})
+        reset_status = 200
+        governance_signoff_store.reset_signoff(queue_id, {"reason": "Reset with approved governance change", "change_request_id": cr["change_request_id"]})
+        reset_reuse_status = 200
+        try:
+            governance_signoff_store.reset_signoff(queue_id, {"reason": "Reuse same approved governance change", "change_request_id": cr["change_request_id"]})
+        except Exception:
+            reset_reuse_status = 409
+
+        serialized = json.dumps({"signed": signed, "manifest": manifest, "archive": archive_verify}, ensure_ascii=False)
+        ok = (
+            signed.get("status") == "signed"
+            and archive_verify.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and signed_run_status == 409
+            and signed_export_status == 409
+            and signed_zip_status == 409
+            and stale_signoff_status == 409
+            and _v38_check_status(tampered, "portfolio_governance_archive_signoff_integrity") == "failed"
+            and _v38_check_status(duplicate, "portfolio_governance_archive_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "portfolio_governance_archive_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "portfolio_governance_archive_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof, "portfolio_governance_archive_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof, "portfolio_governance_archive_manifest_zip_entries_reference_only") == "warning"
+            and _v38_check_status(redaction, "portfolio_governance_archive_redaction_scan") == "failed"
+            and reset_missing_status == 409
+            and reset_status == 200
+            and reset_reuse_status == 409
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"signoff={archive_verify.get('status')}, archive={archive_verify.get('status')}, external={external_report.get('status')}, "
+            f"stale={stale_signoff_status}, signed_mutation={signed_run_status}/{signed_export_status}/{signed_zip_status}, "
+            f"reset={reset_missing_status}/{reset_status}/{reset_reuse_status}, tamper={_v38_check_status(tampered, 'portfolio_governance_archive_signoff_integrity')}, "
+            f"duplicate={_v38_check_status(duplicate, 'portfolio_governance_archive_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous, 'portfolio_governance_archive_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash, 'portfolio_governance_archive_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof, 'portfolio_governance_archive_manifest_extra_entries')}/{_v38_check_status(spoof, 'portfolio_governance_archive_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction, 'portfolio_governance_archive_redaction_scan')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v67_tamper_governance_signoff(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload["signed_by"] = "tampered"
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v67_spoof_governance_archive_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")

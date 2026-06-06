@@ -202,6 +202,7 @@ class ReleasePortfolioGovernanceStore:
         with self.lock:
             now = now or now_iso()
             queue = self.get_queue(queue_id)
+            self._ensure_mutable(queue_id)
             if queue.get("status") == "archived":
                 raise ReleasePortfolioGovernanceStateError("Archived Portfolio Governance Queue cannot run.")
             plan = self.read_action_plan(queue_id, default={})
@@ -297,6 +298,7 @@ class ReleasePortfolioGovernanceStore:
         with self.lock:
             now = now or now_iso()
             queue = self.get_queue(queue_id)
+            self._ensure_mutable(queue_id)
             if queue.get("status") == "archived":
                 raise ReleasePortfolioGovernanceStateError("Archived Portfolio Governance Queue cannot be exported.")
             plan = self.read_action_plan(queue_id, default={})
@@ -359,6 +361,7 @@ class ReleasePortfolioGovernanceStore:
         with self.lock:
             now = now or now_iso()
             queue = self.get_queue(queue_id)
+            self._ensure_mutable(queue_id)
             if queue.get("status") == "archived":
                 raise ReleasePortfolioGovernanceStateError("Archived Portfolio Governance Queue cannot be zipped.")
             plan = self.read_action_plan(queue_id, default={})
@@ -404,6 +407,7 @@ class ReleasePortfolioGovernanceStore:
     def archive(self, queue_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             queue = self.get_queue(queue_id)
+            self._ensure_mutable(queue_id)
             queue["status"] = "archived"
             queue["updated_at"] = now or now_iso()
             queue["integrity_hash"] = queue_integrity_hash(queue)
@@ -521,6 +525,17 @@ class ReleasePortfolioGovernanceStore:
             return True
         current = self._current_source(str(queue.get("portfolio_id") or ""))
         return bool(current.get("stale")) or stable_hash(current) != str(queue.get("source_hash") or "") or str(plan.get("integrity_hash") or "") != str(queue.get("action_plan_hash") or "")
+
+    def _ensure_mutable(self, queue_id: str) -> None:
+        path = self.queue_dir(queue_id) / "signoff.json"
+        if not path.exists():
+            return
+        try:
+            signoff = read_json(path)
+        except Exception:
+            raise ReleasePortfolioGovernanceStateError("Portfolio Governance Signoff exists but cannot be read. Reset signoff before mutating queue evidence.")
+        if isinstance(signoff, dict) and signoff.get("status") in {"signed", "force_signed"}:
+            raise ReleasePortfolioGovernanceStateError("Signed Portfolio Governance Queue is immutable. Reset signoff before mutating queue evidence.")
 
     def _ensure_queue_current_for_export(self, queue: dict[str, Any], plan: dict[str, Any], execution: dict[str, Any], *, now: str) -> None:
         if queue.get("status") == "stale":

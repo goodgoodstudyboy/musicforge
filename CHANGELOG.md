@@ -1,5 +1,16 @@
 # Changelog
 
+## v6.7.0 - 2026-06-06
+
+### Added
+- Release Portfolio Governance Signoff for closing Governance Queues with signed queue, action-plan, execution, manual-action, source, and queue-verifier evidence.
+- Portfolio Governance Change Requests for approved one-time signoff resets.
+- Governance Archive export/ZIP plus offline verifier for signed queue closeout evidence, including duplicate/path/backslash/spoof/redaction/tamper checks.
+- API, CLI, Studio, and release-check coverage for Governance Signoff, Change Requests, Archive ZIPs, and signed queue immutability.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance.py tests\test_release_portfolio_governance_signoff.py tests\test_server_release_portfolio_governance.py tests\test_server_release_portfolio_governance_signoff.py tests\test_cli_release_operations.py::test_release_portfolio_governance_queue_cli_create_run_export_verify tests\test_cli_release_operations.py::test_release_portfolio_governance_signoff_cli_sign_archive_verify tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v66_release_portfolio_governance_queue_smoke tests\test_release_check.py::test_v67_release_portfolio_governance_signoff_smoke -q`
+
 ## v6.6.1 - 2026-06-05
 
 ### Fixed

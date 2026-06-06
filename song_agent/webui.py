@@ -3359,6 +3359,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
               <button class="secondary portfolio-governance-zip" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">ZIP</button>
               <button class="secondary portfolio-governance-verify" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Verify</button>
               <a class="button-link secondary" href="/api/release-portfolio-governance-queues/${encodeURIComponent(queue.queue_id)}/download">Download</a>
+              <button class="secondary portfolio-governance-signoff" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Signoff</button>
+              <button class="secondary portfolio-governance-force-signoff" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Force Signoff</button>
+              <button class="secondary portfolio-governance-cr" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">New Change Request</button>
+              <button class="secondary portfolio-governance-reset" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Reset Signoff</button>
+              <button class="secondary portfolio-governance-archive-export" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Archive Export</button>
+              <button class="secondary portfolio-governance-archive-zip" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Archive ZIP</button>
+              <button class="secondary portfolio-governance-archive-verify" data-queue-id="${escapeHtml(queue.queue_id)}" type="button">Archive Verify</button>
+              <a class="button-link secondary" href="/api/release-portfolio-governance-queues/${encodeURIComponent(queue.queue_id)}/archive.zip">Archive Download</a>
             </td>
           </tr>
         `;
@@ -3416,6 +3424,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <thead><tr><th>Queue</th><th>Status</th><th>Items</th><th>Safe</th><th>Manual</th><th>Refresh Needed</th><th>Safe Actions</th></tr></thead>
           <tbody>${governanceRows || "<tr><td colspan='7'>No Governance Queues yet.</td></tr>"}</tbody>
         </table>
+        <div class="panel-title subhead"><span>Governance Closeout</span></div>
+        <div class="summary-grid">
+          ${metric("Signoff", "queue-level")}
+          ${metric("Archive", "verifiable")}
+          ${metric("Change Control", "approved CR required")}
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3492,6 +3506,83 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ strict: true, require_manual_actions: true }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      async function manualAcknowledgements(queueId) {
+        const data = await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(queueId)}/manual-actions`);
+        return ((data.manual_action_list || {}).items || []).map((item) => ({
+          item_id: item.item_id,
+          action_type: item.action_type,
+          resolution: "accepted_for_followup",
+          owner: "developer",
+          due_note: "next governance cycle",
+        }));
+      }
+      document.querySelectorAll(".portfolio-governance-signoff").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const queueId = button.dataset.queueId;
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(queueId)}/signoff`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ signed_by: "studio-user", manual_acknowledgements: await manualAcknowledgements(queueId) }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-force-signoff").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const queueId = button.dataset.queueId;
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(queueId)}/signoff`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ signed_by: "studio-user", force: true, override_reason: "accepted residual governance follow-up", manual_acknowledgements: await manualAcknowledgements(queueId) }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-cr").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/change-requests`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: "Governance signoff reset requested from Studio", requested_by: "studio-user" }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-reset").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const queueId = button.dataset.queueId;
+          const changes = await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(queueId)}/change-requests`);
+          const approved = ((changes.change_requests || []).find((item) => item.status === "approved") || {}).change_request_id || "";
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(queueId)}/signoff/reset`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: "Reset with approved governance change", change_request_id: approved }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-archive-export").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/archive/export`, { method: "POST" });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-archive-zip").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/archive/zip`, { method: "POST" });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-archive-verify").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api(`/api/release-portfolio-governance-queues/${encodeURIComponent(button.dataset.queueId)}/archive/verify`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ strict: true, require_signed: true }),
           });
           await renderPortfolioAuditDetail(portfolioId);
         });
