@@ -3306,10 +3306,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceAuditData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit`); } catch (err) {}
       let governanceReviewerData = { report: {}, summary: {} };
       try { governanceReviewerData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack`); } catch (err) {}
+      let governanceFinalBoardData = { report: {}, summary: {}, signoff_summary: {} };
+      try { governanceFinalBoardData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
       const governanceReviewerSummary = governanceReviewerData.summary || {};
+      const governanceFinalBoardSummary = governanceFinalBoardData.summary || {};
+      const governanceFinalBoardSignoff = governanceFinalBoardData.signoff_summary || {};
       const score = report.risk_score || {};
       const stale = Boolean(reportData.stale || (reportData.summary || {}).stale || (data.summary || {}).stale);
       const trend = trendData.trend_report || {};
@@ -3472,6 +3476,29 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-reviewer-verify" type="button">Verify Governance Reviewer ZIP</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-reviewer-pack.zip">Download Governance Reviewer ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Portfolio Governance Final Board</span></div>
+        <div class="summary-grid">
+          ${metric("Final Board", governanceFinalBoardSummary.status || "missing")}
+          ${metric("Signoff", governanceFinalBoardSignoff.status || "-")}
+          ${metric("Reviewer Response", governanceFinalBoardSummary.reviewer_response_status || "-")}
+          ${metric("Reviewer Pack", governanceFinalBoardSummary.reviewer_pack_verification_status || "-")}
+          ${metric("Audit", governanceFinalBoardSummary.audit_verification_status || "-")}
+          ${metric("Archive Verified", governanceFinalBoardSummary.archive_verified_count || 0)}
+          ${metric("Blockers", governanceFinalBoardSummary.blocker_count || 0)}
+          ${metric("Warnings", governanceFinalBoardSummary.warning_count || 0)}
+          ${metric("Stale", governanceFinalBoardSummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-final-board-refresh" type="button">Refresh Final Board</button>
+          <button class="secondary" id="portfolio-governance-final-board-import-accepted" type="button">Import Accepted Response</button>
+          <button class="secondary" id="portfolio-governance-final-board-signoff" type="button">Final Board Signoff</button>
+          <button class="secondary" id="portfolio-governance-final-board-cr" type="button">New Final Board Change Request</button>
+          <button class="secondary" id="portfolio-governance-final-board-reset" type="button">Reset Final Board Signoff</button>
+          <button class="secondary" id="portfolio-governance-final-board-export" type="button">Export Final Board Archive</button>
+          <button class="secondary" id="portfolio-governance-final-board-zip" type="button">Build Final Board ZIP</button>
+          <button class="secondary" id="portfolio-governance-final-board-verify" type="button">Verify Final Board ZIP</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-final-board.zip">Download Final Board ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3549,6 +3576,62 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ strict: true, require_audit: true, require_signed: true, require_archives: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ require_reviewer_response: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-import-accepted", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/reviewer-responses/import`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reviewer: { name: "Studio Reviewer" }, decision: "accepted", findings: [], notes: "Accepted in Studio." }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-signoff", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signed_by: "studio-user" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-cr", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/change-requests`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Final Board archive change requested." }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-reset", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/signoff/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Reset Final Board signoff after approved change.", change_request_id: "" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/archive/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/archive/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-final-board-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/archive/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, require_signed: true, require_reviewer_pack: true, require_audit: true, require_archives: true, require_reviewer_response: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

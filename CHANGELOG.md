@@ -1,5 +1,17 @@
 # Changelog
 
+## v7.0.0 - 2026-06-08
+
+### Added
+- Release Portfolio Governance Final Board for binding current Governance Reviewer Pack verification, Governance Audit verification, verified Governance Archive coverage, external reviewer responses, and final signoff evidence into a portable archive.
+- `release-portfolio-governance-final-board` and `verify-release-portfolio-governance-final-board` CLI commands with reviewer response, signed, reviewer pack, audit, archive, no-force, and reset-causality verification flags.
+- API routes under `/api/release-portfolio-audits/<portfolio-id>/governance-final-board` plus Studio controls in the Portfolio Audit workspace.
+- Final Board Archive ZIP verifier covering report/signoff/response/change-request integrity, duplicate ZIP entries, dangerous/backslash paths, manifest spoofing, wrong package type, redaction, and offline clean-room verification.
+- v7.0 release-check smoke covering missing and needs_changes reviewer responses, stale Reviewer Pack verification, stale Governance Audit verification, signed archive immutability, tamper, path, spoof, package type, and redaction regressions.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_final_board.py tests\test_server_release_portfolio_governance_final_board.py tests\test_cli_release_operations.py::test_release_portfolio_governance_final_board_cli_refresh_import_sign_export_verify tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_final_board_cli_json_report_out tests\test_release_check.py::test_v70_release_portfolio_governance_final_board_smoke -q`
+
 ## v6.9.1 - 2026-06-07
 
 ### Fixed

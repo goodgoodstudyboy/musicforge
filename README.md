@@ -515,6 +515,18 @@ python -m song_agent.cli release-portfolio-governance-reviewer-pack --portfolio-
 python -m song_agent.cli verify-release-portfolio-governance-reviewer-pack path\to\portfolio-governance-reviewer-pack.zip --strict --require-audit --require-signed --require-archives --json
 ```
 
+Release Portfolio Governance Final Board turns the v6.9 reviewer package into
+final portfolio governance signoff evidence. It requires current Reviewer Pack
+verification, current Governance Audit verification, verified Governance
+Archive coverage, and an accepted reviewer response before signing. The archive
+is immutable for a given signoff: rebuilding Final Board archive evidence
+requires an approved Final Board Change Request, reset, and new signoff.
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-final-board --portfolio-id <portfolio-id> --refresh --import-reviewer-response reviewer-response.json --require-reviewer-response --sign --signed-by local-user --export --zip --verify --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --json
+python -m song_agent.cli verify-release-portfolio-governance-final-board path\to\portfolio-governance-final-board-archive.zip --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -546,6 +558,8 @@ python -m song_agent.cli verify-release-portfolio-governance-package path\to\gov
 python -m song_agent.cli release-portfolio-governance-audit --portfolio-id pfa-000001 --refresh --export --zip --verify --require-signed --require-archives --json
 python -m song_agent.cli release-portfolio-governance-reviewer-pack --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --require-audit --require-signed --require-archives --json
 python -m song_agent.cli verify-release-portfolio-governance-reviewer-pack path\to\portfolio-governance-reviewer-pack.zip --json --strict --require-audit --require-signed --require-archives --report-out governance-reviewer-verification-report.json
+python -m song_agent.cli release-portfolio-governance-final-board --portfolio-id pfa-000001 --refresh --import-reviewer-response reviewer-response.json --require-reviewer-response --sign --signed-by local-user --export --zip --verify --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --json
+python -m song_agent.cli verify-release-portfolio-governance-final-board path\to\portfolio-governance-final-board-archive.zip --json --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --report-out final-board-verification-report.json
 ```
 
 ```powershell

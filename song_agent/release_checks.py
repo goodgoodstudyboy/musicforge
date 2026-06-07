@@ -73,6 +73,7 @@ from song_agent.release_portfolio_governance_verifier import verify_release_port
 from song_agent.release_portfolio_governance_archive_verifier import verify_release_portfolio_governance_archive_package
 from song_agent.release_portfolio_governance_audit_verifier import verify_release_portfolio_governance_audit_package
 from song_agent.release_portfolio_governance_reviewer_pack_verifier import verify_release_portfolio_governance_reviewer_pack
+from song_agent.release_portfolio_governance_final_board_verifier import verify_release_portfolio_governance_final_board_package
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -253,6 +254,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v6.7 release portfolio governance signoff smoke", *_v67_release_portfolio_governance_signoff_smoke(root))
     report.add("v6.8 release portfolio governance audit ledger smoke", *_v68_release_portfolio_governance_audit_ledger_smoke(root))
     report.add("v6.9 release portfolio governance reviewer pack smoke", *_v69_release_portfolio_governance_reviewer_pack_smoke(root))
+    report.add("v7.0 release portfolio governance final board smoke", *_v70_release_portfolio_governance_final_board_smoke(root))
     return report
 
 
@@ -10194,6 +10196,246 @@ def _v69_wrong_type_governance_reviewer_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload["package_type"] = "wrong_package_type"
     payload["integrity_hash"] = reviewer_pack_manifest_integrity_hash(payload)
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v70_release_portfolio_governance_final_board_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v70-portfolio-governance-final-board-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_audit_verifier import write_release_operations_audit_verification_report
+        from song_agent.release_operations_archive_verifier import write_release_operations_archive_verification_report
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_reviewer_pack_verifier import write_release_operations_reviewer_pack_verification_report
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore, runbook_integrity_hash
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_audit_verifier import write_release_portfolio_governance_audit_verification_report
+        from song_agent.release_portfolio_governance_archive_verifier import write_release_portfolio_governance_archive_verification_report
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_portfolio_governance_reviewer_pack_verifier import write_release_portfolio_governance_reviewer_pack_verification_report
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.release_portfolio_governance_verifier import write_release_portfolio_governance_verification_report
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(
+            release_store=release_store,
+            operations_store=operations_store,
+            runbook_store=runbook_store,
+            signoff_store=signoff_store,
+            audit_store=operations_audit_store,
+            reviewer_pack_store=operations_reviewer_store,
+        )
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+
+        release = release_store.create_release({"name": "v7.0 Governance Final Board Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        report = operations_store.refresh(release.release_id)
+        report["current_stage"] = "accepted"
+        report["next_stage"] = "archived"
+        report["summary"]["blocker_count"] = 0
+        report["summary"]["warning_count"] = 0
+        report["blockers"] = []
+        report["warnings"] = []
+        report["domains"] = {"submission_evidence": {"required": False, "status": "not_required", "summary": {}}}
+        report["verifier_summaries"] = {"release": {"status": "passed"}, "distribution": [], "submission": [], "submission_evidence": []}
+        report["package_summaries"] = {"release_zip": {"exists": True, "status": "exists", "sha256": "7" * 64}, "distribution_packages": [], "submission_packages": [], "submission_evidence_packages": []}
+        report["source_hash"] = "v70-governance-final-board-source"
+        report["source"] = {"fixture": "v7.0 accepted"}
+        report["integrity_hash"] = operations_report_integrity_hash(report)
+        write_json(operations_store.report_path(release.release_id), report)
+        operations_store.build_report = lambda release_id, persist=False, now=None: report  # type: ignore[method-assign]
+        operations_store.refresh = lambda release_id, now=None: report  # type: ignore[method-assign]
+
+        runbook = runbook_store.create_from_operations_report(release.release_id)
+        runbook["status"] = "completed"
+        runbook["items"] = []
+        runbook["summary"] = {"total_count": 0, "safe_count": 0, "manual_count": 0, "completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0, "waived_count": 0, "pending_count": 0}
+        runbook["integrity_hash"] = runbook_integrity_hash(runbook)
+        write_json(runbook_store.runbook_path(release.release_id, runbook["runbook_id"]), runbook)
+        signoff_store.signoff(release.release_id, {"signed_by": "release-check"})
+        signoff_store.export_archive(release.release_id)
+        signoff_store.build_archive_zip(release.release_id)
+        operations_archive = verify_release_operations_archive_package(signoff_store.archive_zip_path(release.release_id), require_signed=True)
+        write_release_operations_archive_verification_report(operations_archive, signoff_store.operations_dir(release.release_id) / "operations-archive-verification-report.json")
+        operations_audit_store.refresh(release.release_id)
+        operations_audit_store.export_audit(release.release_id)
+        operations_audit_store.build_zip(release.release_id)
+        operations_audit = verify_release_operations_audit_package(operations_audit_store.zip_path(release.release_id), require_current=True, require_signed=True, require_archive=True)
+        write_release_operations_audit_verification_report(operations_audit, operations_audit_store.verification_report_path(release.release_id))
+        operations_reviewer_store.refresh(release.release_id)
+        operations_reviewer_store.export_pack(release.release_id)
+        operations_reviewer_store.build_zip(release.release_id)
+        operations_reviewer = verify_release_operations_reviewer_pack(operations_reviewer_store.zip_path(release.release_id), strict=True, require_audit=True, require_signed=True, require_archive=True)
+        write_release_operations_reviewer_pack_verification_report(operations_reviewer, operations_reviewer_store.verification_report_path(release.release_id))
+
+        portfolio = portfolio_store.create({"name": "v7.0 Portfolio Governance Final Board", "release_ids": [release.release_id], "require_reviewer_packs": True, "require_audit": True, "require_archive": True})
+        portfolio_store.refresh(portfolio["portfolio_id"])
+        queue = governance_store.create_from_portfolio(portfolio["portfolio_id"])
+        queue_id = queue["queue_id"]
+        governance_store.run_safe_actions(queue_id)
+        governance_store.export_queue(queue_id)
+        governance_store.build_zip(queue_id)
+        queue_verify = verify_release_portfolio_governance_package(governance_store.zip_path(queue_id), strict=True, require_manual_actions=True)
+        write_release_portfolio_governance_verification_report(queue_verify, governance_store.verification_report_path(queue_id))
+        manual = governance_store.read_manual_action_list(queue_id, default={})
+        acknowledgements = [{"item_id": item.get("item_id"), "action_type": item.get("action_type"), "resolution": "accepted_for_followup", "owner": "release-check", "due_note": "next governance cycle"} for item in manual.get("items", []) if isinstance(item, dict)]
+        governance_signoff_store.signoff(queue_id, {"signed_by": "release-check", "manual_acknowledgements": acknowledgements})
+        governance_signoff_store.export_archive(queue_id)
+        governance_signoff_store.build_archive_zip(queue_id)
+        governance_archive = verify_release_portfolio_governance_archive_package(governance_signoff_store.archive_zip_path(queue_id), strict=True, require_signed=True)
+        write_release_portfolio_governance_archive_verification_report(governance_archive, governance_signoff_store.archive_verification_report_path(queue_id))
+
+        portfolio_store.refresh(portfolio["portfolio_id"])
+        governance_audit_store.refresh(portfolio["portfolio_id"])
+        governance_audit_store.export_audit(portfolio["portfolio_id"])
+        governance_audit_store.build_zip(portfolio["portfolio_id"])
+        governance_audit = verify_release_portfolio_governance_audit_package(governance_audit_store.zip_path(portfolio["portfolio_id"]), strict=True, require_signed=True, require_archives=True)
+        write_release_portfolio_governance_audit_verification_report(governance_audit, governance_audit_store.verification_report_path(portfolio["portfolio_id"]))
+        governance_reviewer_store.refresh(portfolio["portfolio_id"])
+        governance_reviewer_store.export_pack(portfolio["portfolio_id"])
+        governance_reviewer_store.build_zip(portfolio["portfolio_id"])
+        governance_reviewer = verify_release_portfolio_governance_reviewer_pack(governance_reviewer_store.zip_path(portfolio["portfolio_id"]), strict=True, require_audit=True, require_signed=True, require_archives=True)
+        write_release_portfolio_governance_reviewer_pack_verification_report(governance_reviewer, governance_reviewer_store.verification_report_path(portfolio["portfolio_id"]))
+
+        missing_response = final_board_store.refresh_report(portfolio["portfolio_id"], {"require_reviewer_response": True})
+        needs_changes = final_board_store.import_reviewer_response(portfolio["portfolio_id"], {"decision": "needs_changes", "reviewer": {"name": "Reviewer"}, "findings": [{"status": "open", "message": "Fix required."}]})
+        needs_changes_report = final_board_store.refresh_report(portfolio["portfolio_id"], {"require_reviewer_response": True})
+        try:
+            final_board_store.signoff(portfolio["portfolio_id"], {"signed_by": "release-check"})
+            needs_changes_signoff = "allowed"
+        except Exception:
+            needs_changes_signoff = "409"
+        final_board_store.import_reviewer_response(
+            portfolio["portfolio_id"],
+            {
+                "reviewer": {"name": "External Reviewer", "organization": "Partner"},
+                "decision": "accepted",
+                "findings": [{"finding_id": "finding-001", "severity": "low", "status": "closed", "category": "general", "message": "Reviewed.", "resolution_note": "Accepted."}],
+                "notes": "Portfolio governance final board accepted.",
+            },
+        )
+        final_report = final_board_store.refresh_report(portfolio["portfolio_id"], {"require_reviewer_response": True})
+        signoff = final_board_store.signoff(portfolio["portfolio_id"], {"signed_by": "release-check"})
+        manifest = final_board_store.export_archive(portfolio["portfolio_id"])
+        zip_info = final_board_store.build_archive_zip(portfolio["portfolio_id"])
+        final_zip = final_board_store.archive_zip_path(portfolio["portfolio_id"])
+        verification = verify_release_portfolio_governance_final_board_package(final_zip, strict=True, require_signed=True, require_reviewer_pack=True, require_audit=True, require_archives=True, require_reviewer_response=True)
+
+        external_dir = base / "external-clean-final-board"
+        external_dir.mkdir()
+        external_zip = external_dir / "final-board.zip"
+        shutil.copy2(final_zip, external_zip)
+        external_report = verify_release_portfolio_governance_final_board_package(external_zip, strict=True, require_signed=True, require_reviewer_pack=True, require_audit=True, require_archives=True, require_reviewer_response=True)
+
+        signed_export = signed_zip = False
+        try:
+            final_board_store.export_archive(portfolio["portfolio_id"])
+        except Exception:
+            signed_export = True
+        try:
+            final_board_store.build_archive_zip(portfolio["portfolio_id"])
+        except Exception:
+            signed_zip = True
+
+        tampered = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "tampered-v70-final-board.zip", transforms={"final-board-report.json": _v70_tamper_final_board_report}))
+        duplicate = verify_release_portfolio_governance_final_board_package(_v43_duplicate_submission_zip(final_zip, base / "duplicate-v70-final-board.zip"), strict=True)
+        dangerous = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "dangerous-v70-final-board.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_release_portfolio_governance_final_board_package(_v38_backslash_entry_zip(base / "backslash-v70-final-board.zip"), strict=True)
+        spoof = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "spoof-v70-final-board.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v70_spoof_final_board_manifest}), strict=True)
+        redaction = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "redaction-v70-final-board.zip", transforms={"final-board.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        wrong_type = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "wrong-type-v70-final-board.zip", transforms={"manifest.json": _v70_wrong_type_final_board_manifest}))
+
+        old_reviewer_verification = governance_reviewer_store.verification_report_path(portfolio["portfolio_id"]).read_text(encoding="utf-8")
+        governance_reviewer_store.build_zip(portfolio["portfolio_id"], now="2026-06-08T10:00:00+00:00")
+        governance_reviewer_store.verification_report_path(portfolio["portfolio_id"]).write_text(old_reviewer_verification, encoding="utf-8")
+        stale_reviewer = final_board_store.refresh_report(portfolio["portfolio_id"])
+        governance_reviewer = verify_release_portfolio_governance_reviewer_pack(governance_reviewer_store.zip_path(portfolio["portfolio_id"]), strict=True, require_audit=True, require_signed=True, require_archives=True)
+        write_release_portfolio_governance_reviewer_pack_verification_report(governance_reviewer, governance_reviewer_store.verification_report_path(portfolio["portfolio_id"]))
+        old_audit_verification = governance_audit_store.verification_report_path(portfolio["portfolio_id"]).read_text(encoding="utf-8")
+        governance_audit_store.build_zip(portfolio["portfolio_id"], now="2026-06-08T10:30:00+00:00")
+        governance_audit_store.verification_report_path(portfolio["portfolio_id"]).write_text(old_audit_verification, encoding="utf-8")
+        stale_audit = final_board_store.refresh_report(portfolio["portfolio_id"])
+
+        serialized = json.dumps({"report": final_report, "manifest": manifest, "verification": verification}, ensure_ascii=False)
+        ok = (
+            missing_response.get("status") == "failed"
+            and needs_changes.get("decision") == "needs_changes"
+            and needs_changes_report.get("status") == "failed"
+            and needs_changes_signoff == "409"
+            and final_report.get("status") == "passed"
+            and signoff.get("status") == "signed"
+            and manifest.get("package_type") == "release_portfolio_governance_final_board_archive"
+            and zip_info.get("sha256")
+            and verification.get("status") == "passed"
+            and external_report.get("status") == "passed"
+            and signed_export
+            and signed_zip
+            and stale_reviewer.get("status") == "failed"
+            and any(item.get("check_id") == "governance_reviewer_pack_verification_current" for item in stale_reviewer.get("blockers", []) if isinstance(item, dict))
+            and stale_audit.get("status") == "failed"
+            and any(item.get("check_id") == "governance_audit_verification_current" for item in stale_audit.get("blockers", []) if isinstance(item, dict))
+            and _v38_check_status(tampered, "final_board_report_integrity") == "failed"
+            and _v38_check_status(duplicate, "final_board_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "final_board_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "final_board_zip_entry_path_safe") == "failed"
+            and _v38_check_status(spoof, "final_board_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof, "final_board_manifest_zip_entries_reference_only") == "warning"
+            and _v38_check_status(redaction, "final_board_redaction_scan") == "failed"
+            and _v38_check_status(wrong_type, "final_board_manifest_package_type") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"report={final_report.get('status')}, signoff={signoff.get('status')}, verify={verification.get('status')}, external={external_report.get('status')}, "
+            f"missing_response={missing_response.get('status')}, needs_changes={needs_changes_report.get('status')}/{needs_changes_signoff}, signed_mutation={signed_export}/{signed_zip}, "
+            f"stale_reviewer={stale_reviewer.get('status')}, stale_audit={stale_audit.get('status')}, "
+            f"tamper={_v38_check_status(tampered, 'final_board_report_integrity')}, duplicate={_v38_check_status(duplicate, 'final_board_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous, 'final_board_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'final_board_zip_entry_path_safe')}, "
+            f"spoof={_v38_check_status(spoof, 'final_board_manifest_extra_entries')}/{_v38_check_status(spoof, 'final_board_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction, 'final_board_redaction_scan')}, package_type={_v38_check_status(wrong_type, 'final_board_manifest_package_type')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base)
+
+
+def _v70_tamper_final_board_report(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("summary", {})["queue_count"] = 99
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v70_spoof_final_board_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v70_wrong_type_final_board_manifest(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_final_board import final_board_archive_manifest_hash
+
+    payload = json.loads(data.decode("utf-8"))
+    payload["package_type"] = "wrong_package_type"
+    payload["integrity_hash"] = final_board_archive_manifest_hash(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 

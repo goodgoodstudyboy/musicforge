@@ -399,6 +399,102 @@ def test_verify_release_portfolio_governance_reviewer_pack_cli_json_report_out(t
     assert saved["summary"]["portfolio_id"] == portfolio_id
 
 
+def test_release_portfolio_governance_final_board_cli_refresh_import_sign_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_final_board import _accepted_final_board_fixture, _accepted_response
+
+    portfolio_id, _queue_id, _governance_store, _signoff_store, _audit_store, _reviewer_store, store = _accepted_final_board_fixture(Path(".musicforge"), monkeypatch)
+    response_path = tmp_path / "final-board-response.json"
+    response_path.write_text(json.dumps(_accepted_response()), encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-final-board",
+            "--portfolio-id",
+            portfolio_id,
+            "--refresh",
+            "--import-reviewer-response",
+            str(response_path),
+            "--require-reviewer-response",
+            "--sign",
+            "--signed-by",
+            "cli-test",
+            "--export",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-signed",
+            "--require-reviewer-pack",
+            "--require-audit",
+            "--require-archives",
+            "--require-reviewer-response",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["summary"]["status"] == "passed"
+    assert payload["signoff_summary"]["status"] == "signed"
+    assert payload["zip"]["sha256"]
+    assert payload["verification_summary"]["status"] == "passed"
+    assert store.archive_zip_path(portfolio_id).exists()
+
+
+def test_verify_release_portfolio_governance_final_board_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_final_board import _accepted_final_board_fixture, _accepted_response
+
+    portfolio_id, _queue_id, _governance_store, _signoff_store, _audit_store, _reviewer_store, store = _accepted_final_board_fixture(Path(".musicforge"), monkeypatch)
+    store.import_reviewer_response(portfolio_id, _accepted_response())
+    store.refresh_report(portfolio_id, {"require_reviewer_response": True})
+    store.signoff(portfolio_id, {"signed_by": "cli-test"})
+    store.export_archive(portfolio_id)
+    store.build_archive_zip(portfolio_id)
+    report_out = tmp_path / "portfolio-governance-final-board-verification.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    ok = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-final-board",
+            str(store.archive_zip_path(portfolio_id)),
+            "--json",
+            "--require-signed",
+            "--require-reviewer-pack",
+            "--require-audit",
+            "--require-archives",
+            "--require-reviewer-response",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert ok.returncode == 0, ok.stderr
+    payload = json.loads(ok.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+    assert payload["status"] == "passed"
+    assert saved["summary"]["portfolio_id"] == portfolio_id
+
+
 def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     release_store = ReleaseStore()

@@ -44,6 +44,7 @@ from song_agent.release_checks import (
     _v67_release_portfolio_governance_signoff_smoke,
     _v68_release_portfolio_governance_audit_ledger_smoke,
     _v69_release_portfolio_governance_reviewer_pack_smoke,
+    _v70_release_portfolio_governance_final_board_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -336,6 +337,28 @@ def test_v69_release_portfolio_governance_reviewer_pack_smoke(tmp_path: Path) ->
     assert "stale_audit_verification=failed" in detail
     assert "stale_export=True" in detail
     assert "stale_zip=True" in detail
+    assert "tamper=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "dangerous=failed" in detail
+    assert "backslash=failed" in detail
+    assert "spoof=failed/warning" in detail
+    assert "redaction=failed" in detail
+    assert "package_type=failed" in detail
+
+
+def test_v70_release_portfolio_governance_final_board_smoke(tmp_path: Path) -> None:
+    ok, detail = _v70_release_portfolio_governance_final_board_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "report=passed" in detail
+    assert "signoff=signed" in detail
+    assert "verify=passed" in detail
+    assert "external=passed" in detail
+    assert "missing_response=failed" in detail
+    assert "needs_changes=failed/409" in detail
+    assert "signed_mutation=True/True" in detail
+    assert "stale_reviewer=failed" in detail
+    assert "stale_audit=failed" in detail
     assert "tamper=failed" in detail
     assert "duplicate=failed" in detail
     assert "dangerous=failed" in detail

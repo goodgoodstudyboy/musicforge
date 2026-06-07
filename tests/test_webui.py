@@ -192,12 +192,24 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="portfolio-governance-reviewer-verify"' in html
     assert "/governance-reviewer-pack" in html
     assert "/governance-reviewer-pack.zip" in html
+    assert "Portfolio Governance Final Board" in html
+    assert 'id="portfolio-governance-final-board-refresh"' in html
+    assert 'id="portfolio-governance-final-board-import-accepted"' in html
+    assert 'id="portfolio-governance-final-board-signoff"' in html
+    assert 'id="portfolio-governance-final-board-cr"' in html
+    assert 'id="portfolio-governance-final-board-reset"' in html
+    assert 'id="portfolio-governance-final-board-export"' in html
+    assert 'id="portfolio-governance-final-board-zip"' in html
+    assert 'id="portfolio-governance-final-board-verify"' in html
+    assert "/governance-final-board" in html
+    assert "/governance-final-board.zip" in html
     assert "/api/release-portfolio-audits" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/verify" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit/verify" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack/verify" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board/archive/verify" in html
     assert "/api/release-portfolio-governance-queues" in html
     assert "/governance-queues" in html
     assert "/run-safe" in html

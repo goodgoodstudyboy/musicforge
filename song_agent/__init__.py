@@ -1,3 +1,3 @@
 """Song Agent package."""
 
-__version__ = "6.9.1"
+__version__ = "7.0.0"
