@@ -40,6 +40,9 @@ def test_portfolio_governance_audit_refresh_export_zip_verify(tmp_path: Path, mo
     assert manifest["audit_report"]["ledger_hash"] == report["ledger_hash"]
     assert zip_info["sha256"]
     assert verification["status"] == "passed"
+    assert verification["zip_sha256"] == zip_info["sha256"]
+    assert verification["zip_size_bytes"] == zip_info["size_bytes"]
+    assert verification["manifest_hash"] == manifest["integrity_hash"]
     assert report["coverage"]["signed_queue_count"] == 1
     assert report["coverage"]["archive_verified_count"] == 1
     assert report["queue_summaries"][0]["queue_id"] == queue_id

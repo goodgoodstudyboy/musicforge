@@ -1,5 +1,15 @@
 # Changelog
 
+## v6.9.1 - 2026-06-07
+
+### Fixed
+- Portfolio Governance Audit verification reports now record the verified Audit ZIP sha256, ZIP size, and Audit export manifest hash.
+- Portfolio Governance Reviewer Pack now rejects stale Governance Audit verification reports when the Audit ZIP or export manifest has changed after verification.
+- v6.9 release-check smoke now covers verify -> rebuild Governance Audit ZIP -> Reviewer Pack refresh failed until Audit verification is rerun.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_audit.py tests\test_release_portfolio_governance_reviewer_pack.py tests\test_release_check.py::test_v69_release_portfolio_governance_reviewer_pack_smoke -q`
+
 ## v6.9.0 - 2026-06-07
 
 ### Added

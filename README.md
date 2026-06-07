@@ -505,7 +505,10 @@ queues, run safe actions, signoff, reset, approve Change Requests, or feed back
 into the Governance Audit source hash. The offline verifier checks package
 type, sidecar integrity, manifest file hashes, required entries, duplicate and
 unsafe ZIP entries, manifest spoofing, redaction, audit verification, signed
-queue coverage, archive coverage, and reset causality:
+queue coverage, archive coverage, and reset causality. The required Governance
+Audit verification report must match the current Audit ZIP sha256, ZIP size,
+and Audit export manifest hash; rebuilding the Audit ZIP requires re-running
+Audit verification before a Reviewer Pack can pass:
 
 ```powershell
 python -m song_agent.cli release-portfolio-governance-reviewer-pack --portfolio-id <portfolio-id> --refresh --export --zip --verify --strict --require-audit --require-signed --require-archives --json

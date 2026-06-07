@@ -86,6 +86,22 @@ def test_portfolio_governance_reviewer_pack_requires_audit_verification(tmp_path
     assert any(item["check_id"] == "portfolio_governance_reviewer_pack_require_audit" for item in verification["blockers"])
 
 
+def test_portfolio_governance_reviewer_pack_blocks_stale_audit_verification_report(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, _queue_id, _governance_store, _signoff_store, audit_store, reviewer_store = _accepted_reviewer_fixture(tmp_path, monkeypatch)
+    old_report = audit_store.verification_report_path(portfolio_id).read_text(encoding="utf-8")
+    old_sha = json.loads(old_report)["zip_sha256"]
+
+    new_zip = audit_store.build_zip(portfolio_id, now="2026-06-07T12:34:56+00:00")
+    audit_store.verification_report_path(portfolio_id).write_text(old_report, encoding="utf-8")
+    report = reviewer_store.refresh(portfolio_id)
+
+    assert old_sha != new_zip["sha256"]
+    assert report["status"] == "failed"
+    assert report["source"]["governance_audit_verification_zip_sha256"] == old_sha
+    assert report["source"]["governance_audit_zip_sha256"] == new_zip["sha256"]
+    assert any(item["check_id"] == "governance_audit_verification_zip_sha256" for item in report["blockers"])
+
+
 def test_portfolio_governance_reviewer_pack_verifier_catches_tamper_package_type_path_spoof_and_redaction(tmp_path: Path, monkeypatch) -> None:
     portfolio_id, _queue_id, _governance_store, _signoff_store, _audit_store, reviewer_store = _accepted_reviewer_fixture(tmp_path, monkeypatch)
     reviewer_store.refresh(portfolio_id)

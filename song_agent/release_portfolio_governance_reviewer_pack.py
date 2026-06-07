@@ -196,6 +196,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
         ledger_entries = self.audit_store.read_ledger(portfolio_id)
         audit_export_manifest = _read_optional_json(self.audit_store.export_dir(portfolio_id) / "manifest.json")
         audit_verification = _read_optional_json(self.audit_store.verification_report_path(portfolio_id))
+        audit_binding = self._current_audit_package_binding(portfolio_id)
         return sanitize_metadata(
             {
                 "portfolio_id": portfolio_id,
@@ -210,6 +211,12 @@ class ReleasePortfolioGovernanceReviewerPackStore:
                 "governance_audit_ledger_hash": audit_ledger_hash(ledger_entries) if ledger_entries else None,
                 "governance_audit_report_ledger_hash": audit_report.get("ledger_hash") if audit_report else None,
                 "governance_audit_export_manifest_hash": audit_export_manifest.get("integrity_hash") if audit_export_manifest else None,
+                "governance_audit_zip_sha256": audit_binding.get("zip_sha256"),
+                "governance_audit_zip_size_bytes": audit_binding.get("zip_size_bytes"),
+                "governance_audit_verification_status": audit_verification.get("status") if audit_verification else None,
+                "governance_audit_verification_zip_sha256": audit_verification.get("zip_sha256") if audit_verification else None,
+                "governance_audit_verification_zip_size_bytes": audit_verification.get("zip_size_bytes") if audit_verification else None,
+                "governance_audit_verification_manifest_hash": audit_verification.get("manifest_hash") if audit_verification else None,
                 "governance_audit_verification_hash": stable_hash(audit_verification) if audit_verification else None,
                 "queue_summaries_hash": stable_hash(audit_report.get("queue_summaries", [])) if audit_report else None,
                 "change_request_summary_hash": stable_hash(audit_report.get("change_request_summary", {})) if audit_report else None,
@@ -344,6 +351,27 @@ class ReleasePortfolioGovernanceReviewerPackStore:
             blockers.append(_blocker("governance_audit_verification_missing", "Portfolio Governance Audit package verification report is missing."))
         elif audit_verification.get("status") != "passed":
             blockers.append(_blocker("governance_audit_verification_failed", "Portfolio Governance Audit package verification failed."))
+        else:
+            audit_binding = self._current_audit_package_binding(portfolio_id)
+            verification_zip_sha256 = str(audit_verification.get("zip_sha256") or "")
+            if not verification_zip_sha256:
+                blockers.append(_blocker("governance_audit_verification_zip_sha256_missing", "Portfolio Governance Audit verification report is missing audit ZIP sha256."))
+            elif not audit_binding.get("zip_exists"):
+                blockers.append(_blocker("governance_audit_zip_missing", "Current Portfolio Governance Audit ZIP is missing."))
+            elif verification_zip_sha256 != str(audit_binding.get("zip_sha256") or ""):
+                blockers.append(_blocker("governance_audit_verification_zip_sha256", "Portfolio Governance Audit verification report does not match the current audit ZIP. Re-run audit verification."))
+            verification_zip_size = _int_or_none(audit_verification.get("zip_size_bytes"))
+            if verification_zip_size is None:
+                blockers.append(_blocker("governance_audit_verification_zip_size_bytes_missing", "Portfolio Governance Audit verification report is missing audit ZIP size."))
+            elif audit_binding.get("zip_exists") and verification_zip_size != audit_binding.get("zip_size_bytes"):
+                blockers.append(_blocker("governance_audit_verification_zip_size_bytes", "Portfolio Governance Audit verification report ZIP size does not match the current audit ZIP. Re-run audit verification."))
+            verification_manifest_hash = str(audit_verification.get("manifest_hash") or "")
+            if not verification_manifest_hash:
+                blockers.append(_blocker("governance_audit_verification_manifest_hash_missing", "Portfolio Governance Audit verification report is missing audit export manifest hash."))
+            elif not audit_binding.get("manifest_hash"):
+                blockers.append(_blocker("governance_audit_export_manifest_missing", "Current Portfolio Governance Audit export manifest is missing."))
+            elif verification_manifest_hash != str(audit_binding.get("manifest_hash") or ""):
+                blockers.append(_blocker("governance_audit_verification_manifest_hash", "Portfolio Governance Audit verification report does not match the current audit export manifest. Re-run audit verification."))
         if _reset_causality_status(ledger_entries) == "failed":
             blockers.append(_blocker("governance_reset_causality_failed", "Governance reset entries are not bound to applied Change Requests."))
         for item in audit_report.get("blockers", []) if isinstance(audit_report.get("blockers"), list) else []:
@@ -357,6 +385,17 @@ class ReleasePortfolioGovernanceReviewerPackStore:
         if _redaction_summary({"audit_report": audit_report, "ledger": ledger_entries}).get("status") == "failed":
             blockers.append(_blocker("governance_reviewer_source_redaction", "Portfolio Governance reviewer source evidence contains sensitive values."))
         return blockers, warnings
+
+    def _current_audit_package_binding(self, portfolio_id: str) -> dict[str, Any]:
+        zip_path = self.audit_store.zip_path(portfolio_id)
+        zip_exists = zip_path.exists() and zip_path.is_file() and not zip_path.is_symlink()
+        audit_export_manifest = _read_optional_json(self.audit_store.export_dir(portfolio_id) / "manifest.json")
+        return {
+            "zip_exists": zip_exists,
+            "zip_sha256": _sha256(zip_path) if zip_exists else None,
+            "zip_size_bytes": zip_path.stat().st_size if zip_exists else None,
+            "manifest_hash": audit_export_manifest.get("integrity_hash") if audit_export_manifest else None,
+        }
 
 
 def build_evidence_index(*, portfolio_id: str, source_hash: str, audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]], audit_verification: dict[str, Any], audit_export_manifest: dict[str, Any], generated_at: str) -> dict[str, Any]:
@@ -741,6 +780,13 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _redaction_summary(value: Any) -> dict[str, Any]:

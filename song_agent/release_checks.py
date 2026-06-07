@@ -10094,6 +10094,14 @@ def _v69_release_portfolio_governance_reviewer_pack_smoke(root: Path) -> tuple[b
         governance_audit_verify = verify_release_portfolio_governance_audit_package(governance_audit_store.zip_path(portfolio["portfolio_id"]), strict=True, require_signed=True, require_archives=True)
         write_release_portfolio_governance_audit_verification_report(governance_audit_verify, governance_audit_store.verification_report_path(portfolio["portfolio_id"]))
 
+        old_audit_verification_report = governance_audit_store.verification_report_path(portfolio["portfolio_id"]).read_text(encoding="utf-8")
+        old_audit_verification_sha = str(json.loads(old_audit_verification_report).get("zip_sha256") or "")
+        stale_audit_zip = governance_audit_store.build_zip(portfolio["portfolio_id"], now="2026-06-07T12:34:56+00:00")
+        governance_audit_store.verification_report_path(portfolio["portfolio_id"]).write_text(old_audit_verification_report, encoding="utf-8")
+        stale_audit_reviewer = governance_reviewer_store.refresh(portfolio["portfolio_id"])
+        governance_audit_verify = verify_release_portfolio_governance_audit_package(governance_audit_store.zip_path(portfolio["portfolio_id"]), strict=True, require_signed=True, require_archives=True)
+        write_release_portfolio_governance_audit_verification_report(governance_audit_verify, governance_audit_store.verification_report_path(portfolio["portfolio_id"]))
+
         reviewer_report = governance_reviewer_store.refresh(portfolio["portfolio_id"])
         manifest = governance_reviewer_store.export_pack(portfolio["portfolio_id"])
         zip_info = governance_reviewer_store.build_zip(portfolio["portfolio_id"])
@@ -10134,6 +10142,10 @@ def _v69_release_portfolio_governance_reviewer_pack_smoke(root: Path) -> tuple[b
             and zip_info.get("sha256")
             and verification.get("status") == "passed"
             and external_report.get("status") == "passed"
+            and old_audit_verification_sha
+            and old_audit_verification_sha != stale_audit_zip.get("sha256")
+            and stale_audit_reviewer.get("status") == "failed"
+            and any(item.get("check_id") == "governance_audit_verification_zip_sha256" for item in stale_audit_reviewer.get("blockers", []) if isinstance(item, dict))
             and stale_export
             and stale_zip
             and _v38_check_status(tampered, "portfolio_governance_reviewer_pack_report_integrity") == "failed"
@@ -10151,7 +10163,7 @@ def _v69_release_portfolio_governance_reviewer_pack_smoke(root: Path) -> tuple[b
         )
         return ok, (
             f"report={reviewer_report.get('status')}, verify={verification.get('status')}, external={external_report.get('status')}, "
-            f"stale_export={stale_export}, stale_zip={stale_zip}, tamper={_v38_check_status(tampered, 'portfolio_governance_reviewer_pack_report_integrity')}, "
+            f"stale_audit_verification={stale_audit_reviewer.get('status')}, stale_export={stale_export}, stale_zip={stale_zip}, tamper={_v38_check_status(tampered, 'portfolio_governance_reviewer_pack_report_integrity')}, "
             f"duplicate={_v38_check_status(duplicate, 'portfolio_governance_reviewer_pack_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'portfolio_governance_reviewer_pack_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'portfolio_governance_reviewer_pack_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof, 'portfolio_governance_reviewer_pack_manifest_extra_entries')}/{_v38_check_status(spoof, 'portfolio_governance_reviewer_pack_manifest_zip_entries_reference_only')}, "

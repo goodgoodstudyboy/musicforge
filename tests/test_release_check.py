@@ -333,6 +333,7 @@ def test_v69_release_portfolio_governance_reviewer_pack_smoke(tmp_path: Path) ->
     assert "report=passed" in detail
     assert "verify=passed" in detail
     assert "external=passed" in detail
+    assert "stale_audit_verification=failed" in detail
     assert "stale_export=True" in detail
     assert "stale_zip=True" in detail
     assert "tamper=failed" in detail
