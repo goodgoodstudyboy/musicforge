@@ -1,5 +1,16 @@
 # Changelog
 
+## v6.9.0 - 2026-06-07
+
+### Added
+- Release Portfolio Governance Reviewer Pack for turning v6.8 Governance Audit Ledger evidence into a portable human review package with reviewer report, retrospective, evidence index, timeline, Markdown guide, export, ZIP, and offline verification.
+- `release-portfolio-governance-reviewer-pack` and `verify-release-portfolio-governance-reviewer-pack` CLI commands with audit, signed queue, archive, no-force, and reset-causality verification flags.
+- API routes under `/api/release-portfolio-audits/<portfolio-id>/governance-reviewer-pack` plus Studio controls in the Portfolio Audit workspace.
+- v6.9 release-check smoke covering external clean-room verification, stale audit guard, report tamper, duplicate ZIP, dangerous/backslash entries, manifest spoof, wrong package type, and redaction.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_reviewer_pack.py tests\test_server_release_portfolio_governance_reviewer_pack.py tests\test_cli_release_operations.py::test_release_portfolio_governance_reviewer_pack_cli_refresh_export_verify tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_reviewer_pack_cli_json_report_out tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v69_release_portfolio_governance_reviewer_pack_smoke -q`
+
 ## v6.8.1 - 2026-06-07
 
 ### Fixed

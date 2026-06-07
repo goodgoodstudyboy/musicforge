@@ -319,6 +319,86 @@ def test_release_portfolio_governance_audit_cli_refresh_export_verify(tmp_path: 
     assert payload["verification_summary"]["status"] == "passed"
 
 
+def test_release_portfolio_governance_reviewer_pack_cli_refresh_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_reviewer_pack import _accepted_reviewer_fixture
+
+    portfolio_id, _queue_id, _governance_store, _signoff_store, _audit_store, reviewer_store = _accepted_reviewer_fixture(Path(".musicforge"), monkeypatch)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-reviewer-pack",
+            "--portfolio-id",
+            portfolio_id,
+            "--refresh",
+            "--export",
+            "--zip",
+            "--verify",
+            "--require-audit",
+            "--require-signed",
+            "--require-archives",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["summary"]["status"] == "passed"
+    assert payload["zip"]["sha256"]
+    assert payload["verification_summary"]["status"] == "passed"
+    assert reviewer_store.zip_path(portfolio_id).exists()
+
+
+def test_verify_release_portfolio_governance_reviewer_pack_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_reviewer_pack import _accepted_reviewer_fixture
+
+    portfolio_id, _queue_id, _governance_store, _signoff_store, _audit_store, reviewer_store = _accepted_reviewer_fixture(Path(".musicforge"), monkeypatch)
+    reviewer_store.refresh(portfolio_id)
+    reviewer_store.export_pack(portfolio_id)
+    reviewer_store.build_zip(portfolio_id)
+    report_out = tmp_path / "portfolio-governance-reviewer-verification.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    ok = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-reviewer-pack",
+            str(reviewer_store.zip_path(portfolio_id)),
+            "--json",
+            "--require-audit",
+            "--require-signed",
+            "--require-archives",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert ok.returncode == 0, ok.stderr
+    payload = json.loads(ok.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+    assert payload["status"] == "passed"
+    assert saved["summary"]["portfolio_id"] == portfolio_id
+
+
 def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     release_store = ReleaseStore()

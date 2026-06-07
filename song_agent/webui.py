@@ -3304,9 +3304,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceData = await api(`/api/release-portfolio-governance-queues?portfolio_id=${encodeURIComponent(portfolioId)}`); } catch (err) {}
       let governanceAuditData = { report: {}, summary: {} };
       try { governanceAuditData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-audit`); } catch (err) {}
+      let governanceReviewerData = { report: {}, summary: {} };
+      try { governanceReviewerData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
+      const governanceReviewerSummary = governanceReviewerData.summary || {};
       const score = report.risk_score || {};
       const stale = Boolean(reportData.stale || (reportData.summary || {}).stale || (data.summary || {}).stale);
       const trend = trendData.trend_report || {};
@@ -3450,6 +3453,25 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-audit-verify" type="button">Verify Governance Audit ZIP</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-audit.zip">Download Governance Audit ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Portfolio Governance Reviewer Pack</span></div>
+        <div class="summary-grid">
+          ${metric("Reviewer Pack", governanceReviewerSummary.status || "missing")}
+          ${metric("Audit", governanceReviewerSummary.audit_status || "-")}
+          ${metric("Audit Verified", governanceReviewerSummary.audit_package_verification_status || "-")}
+          ${metric("Queues", governanceReviewerSummary.queue_count || 0)}
+          ${metric("Signed Queues", governanceReviewerSummary.signed_queue_count || 0)}
+          ${metric("Archive Verified", governanceReviewerSummary.archive_verified_count || 0)}
+          ${metric("Blockers", governanceReviewerSummary.blocker_count || 0)}
+          ${metric("Warnings", governanceReviewerSummary.warning_count || 0)}
+          ${metric("Stale", governanceReviewerSummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-reviewer-refresh" type="button">Refresh Governance Reviewer Pack</button>
+          <button class="secondary" id="portfolio-governance-reviewer-export" type="button">Export Governance Reviewer Pack</button>
+          <button class="secondary" id="portfolio-governance-reviewer-zip" type="button">Build Governance Reviewer ZIP</button>
+          <button class="secondary" id="portfolio-governance-reviewer-verify" type="button">Verify Governance Reviewer ZIP</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-reviewer-pack.zip">Download Governance Reviewer ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3507,6 +3529,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ strict: true, require_signed: true, require_archives: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-reviewer-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack/refresh`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-reviewer-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-reviewer-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-reviewer-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, require_audit: true, require_signed: true, require_archives: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

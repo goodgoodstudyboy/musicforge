@@ -198,6 +198,18 @@ from song_agent.release_portfolio_governance_audit_verifier import (
     verify_release_portfolio_governance_audit_package,
     write_release_portfolio_governance_audit_verification_report,
 )
+from song_agent.release_portfolio_governance_reviewer_pack import (
+    ReleasePortfolioGovernanceReviewerPackError,
+    ReleasePortfolioGovernanceReviewerPackNotFoundError,
+    ReleasePortfolioGovernanceReviewerPackStateError,
+    ReleasePortfolioGovernanceReviewerPackStore,
+    reviewer_pack_summary as portfolio_governance_reviewer_pack_summary,
+)
+from song_agent.release_portfolio_governance_reviewer_pack_verifier import (
+    release_portfolio_governance_reviewer_pack_verification_summary,
+    verify_release_portfolio_governance_reviewer_pack,
+    write_release_portfolio_governance_reviewer_pack_verification_report,
+)
 from song_agent.release_portfolio_governance_verifier import (
     release_portfolio_governance_verification_summary,
     verify_release_portfolio_governance_package,
@@ -2678,6 +2690,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_portfolio_governance_audit_store(self) -> ReleasePortfolioGovernanceAuditStore:
         return self.server.release_portfolio_governance_audit_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_reviewer_pack_store(self) -> ReleasePortfolioGovernanceReviewerPackStore:
+        return self.server.release_portfolio_governance_reviewer_pack_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5739,6 +5755,17 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     filename=f"musicforge-{portfolio_id}-portfolio-governance-audit.zip",
                 )
                 return
+            if action == "governance-reviewer-pack.zip" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_portfolio_audit_store.get_portfolio(portfolio_id)
+                self._send_file(
+                    self.release_portfolio_governance_reviewer_pack_store.zip_path(portfolio_id),
+                    "application/zip",
+                    filename=f"musicforge-{portfolio_id}-portfolio-governance-reviewer-pack.zip",
+                )
+                return
             if action == "governance-audit":
                 if len(parts) == 2:
                     if method != "GET":
@@ -5802,6 +5829,70 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report, "summary": release_portfolio_governance_audit_verification_summary(report)})
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Audit route not found.")
+                return
+            if action == "governance-reviewer-pack":
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.release_portfolio_governance_reviewer_pack_store.read_report(portfolio_id, default={})
+                    stale = self.release_portfolio_governance_reviewer_pack_store.report_is_stale(portfolio_id, report) if report else False
+                    summary = portfolio_governance_reviewer_pack_summary(report) if report else {"status": "missing"}
+                    summary["stale"] = stale
+                    self._send_json(
+                        {
+                            "ok": True,
+                            "portfolio_id": portfolio_id,
+                            "report": report,
+                            "retrospective": self.release_portfolio_governance_reviewer_pack_store.read_retrospective(portfolio_id, default={}),
+                            "evidence_index": self.release_portfolio_governance_reviewer_pack_store.read_evidence_index(portfolio_id, default={}),
+                            "timeline": self.release_portfolio_governance_reviewer_pack_store.read_timeline(portfolio_id, default={}),
+                            "summary": summary,
+                            "stale": stale,
+                        }
+                    )
+                    return
+                subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "refresh" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.release_portfolio_governance_reviewer_pack_store.refresh(portfolio_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "report": report, "summary": portfolio_governance_reviewer_pack_summary(report)})
+                    return
+                if subaction == "export" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.release_portfolio_governance_reviewer_pack_store.export_pack(portfolio_id, now=_utc_now())
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "zip" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    zip_info = self.release_portfolio_governance_reviewer_pack_store.build_zip(portfolio_id, now=_utc_now())
+                    manifest = self.release_portfolio_governance_reviewer_pack_store.read_export_manifest(portfolio_id)
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+                    return
+                if subaction == "verify" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    report = verify_release_portfolio_governance_reviewer_pack(
+                        self.release_portfolio_governance_reviewer_pack_store.zip_path(portfolio_id),
+                        strict=bool(payload.get("strict", False)),
+                        require_audit=bool(payload.get("require_audit", False)),
+                        require_signed=bool(payload.get("require_signed", False)),
+                        require_archives=bool(payload.get("require_archives", False)),
+                        require_no_force=bool(payload.get("require_no_force", False)),
+                        require_reset_cr_causality=bool(payload.get("require_reset_cr_causality", False)),
+                    )
+                    write_release_portfolio_governance_reviewer_pack_verification_report(report, self.release_portfolio_governance_reviewer_pack_store.verification_report_path(portfolio_id))
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report, "summary": release_portfolio_governance_reviewer_pack_verification_summary(report)})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Reviewer Pack route not found.")
                 return
             if action == "governance-queues" and len(parts) == 2:
                 if method != "POST":
@@ -5867,6 +5958,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleasePortfolioGovernanceAuditStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleasePortfolioGovernanceAuditError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleasePortfolioGovernanceReviewerPackNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleasePortfolioGovernanceReviewerPackStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleasePortfolioGovernanceReviewerPackError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -14756,6 +14853,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             portfolio_store=self.release_portfolio_audit_store,
             governance_store=self.release_portfolio_governance_store,
             signoff_store=self.release_portfolio_governance_signoff_store,
+        )
+        self.release_portfolio_governance_reviewer_pack_store = ReleasePortfolioGovernanceReviewerPackStore(
+            audit_store=self.release_portfolio_governance_audit_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
