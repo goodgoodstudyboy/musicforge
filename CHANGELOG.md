@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.1.1 - 2026-06-09
+
+### Fixed
+- Evidence Vault ZIP verifier now requires `vault-report.json`, `package-index.json`, `verification-index.json`, `chain-of-custody.json`, and `manifest.json` to bind the same `source_hash`.
+- Evidence Vault verification now fails when the report summary is re-signed against a different source snapshot while package, verification, or chain sidecars still describe the old source.
+- v7.1 release-check smoke now covers source hash mismatch tampering and uses stricter signed vault delete/rebuild assertions.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_evidence_vault.py tests\test_release_check.py::test_v71_release_portfolio_governance_evidence_vault_smoke -q`
+
 ## v7.1.0 - 2026-06-08
 
 ### Added

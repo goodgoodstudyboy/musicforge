@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import zipfile
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from song_agent.release_portfolio_governance_evidence_vault import (
     ReleasePortfolioGovernanceEvidenceVaultStateError,
     ReleasePortfolioGovernanceEvidenceVaultStore,
     evidence_vault_manifest_hash,
+    evidence_vault_report_integrity_hash,
     evidence_vault_report_integrity_ok,
 )
 from song_agent.release_portfolio_governance_evidence_vault_verifier import (
@@ -55,6 +57,26 @@ def _signed_final_board_vault_fixture(tmp_path: Path, monkeypatch):
         final_board_store=final_board_store,
     )
     return portfolio_id, queue_id, governance_store, signoff_store, audit_store, reviewer_store, final_board_store, vault_store
+
+
+def _rewrite_vault_with_json_changes(source_zip: Path, target_zip: Path, *, changes: dict[str, dict[str, object]]) -> Path:
+    encoded: dict[str, bytes] = {}
+    with zipfile.ZipFile(source_zip, "r") as archive:
+        manifest = dict(changes["manifest.json"]) if isinstance(changes.get("manifest.json"), dict) else json.loads(archive.read("manifest.json").decode("utf-8"))
+        for entry_name, payload in changes.items():
+            if entry_name != "manifest.json":
+                encoded[entry_name] = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        for file_row in manifest.get("files", []):
+            if isinstance(file_row, dict) and file_row.get("path") in encoded:
+                data = encoded[str(file_row["path"])]
+                file_row["size_bytes"] = len(data)
+                file_row["sha256"] = hashlib.sha256(data).hexdigest()
+        manifest["integrity_hash"] = evidence_vault_manifest_hash(manifest)
+        encoded["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+        with zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            for info in archive.infolist():
+                output.writestr(info.filename, encoded.get(info.filename, archive.read(info.filename)))
+    return target_zip
 
 
 def test_evidence_vault_refresh_export_zip_verify_deep(tmp_path: Path, monkeypatch) -> None:
@@ -144,6 +166,19 @@ def test_evidence_vault_verifier_catches_tamper_paths_spoof_and_redaction(tmp_pa
                 data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
             dst.writestr(info.filename, data)
 
+    source_mismatch_zip = tmp_path / "source-mismatch-vault.zip"
+    with zipfile.ZipFile(source_zip, "r") as src:
+        report_payload = json.loads(src.read("vault-report.json").decode("utf-8"))
+        manifest_payload = json.loads(src.read("manifest.json").decode("utf-8"))
+    report_payload["source_hash"] = "0" * 64
+    report_payload.setdefault("source", {})["signed_queue_count"] = 99
+    report_payload.setdefault("summary", {})["signed_queue_count"] = 99
+    report_payload["integrity_hash"] = evidence_vault_report_integrity_hash(report_payload)
+    manifest_payload["source_hash"] = report_payload["source_hash"]
+    manifest_payload.setdefault("vault_report", {})["source_hash"] = report_payload["source_hash"]
+    manifest_payload.setdefault("vault_report", {})["integrity_hash"] = report_payload["integrity_hash"]
+    _rewrite_vault_with_json_changes(source_zip, source_mismatch_zip, changes={"vault-report.json": report_payload, "manifest.json": manifest_payload})
+
     dangerous_zip = tmp_path / "dangerous-vault.zip"
     with zipfile.ZipFile(source_zip, "r") as src, zipfile.ZipFile(dangerous_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
         for info in src.infolist():
@@ -182,6 +217,9 @@ def test_evidence_vault_verifier_catches_tamper_paths_spoof_and_redaction(tmp_pa
 
     assert any(item["check_id"] == "evidence_vault_nested_package_sha256" for item in verify_release_portfolio_governance_evidence_vault_package(tampered_zip)["blockers"])
     assert any(item["check_id"] == "evidence_vault_manifest_package_type" for item in verify_release_portfolio_governance_evidence_vault_package(wrong_type_zip)["blockers"])
+    source_mismatch = verify_release_portfolio_governance_evidence_vault_package(source_mismatch_zip, strict=True, deep=True, require_final_board=True, require_reviewer_pack=True, require_audit=True, require_archives=True)
+    assert source_mismatch["status"] == "failed"
+    assert any(item["check_id"] == "evidence_vault_package_index_source_hash" for item in source_mismatch["blockers"])
     assert any(item["check_id"] == "evidence_vault_zip_entry_path_safe" for item in verify_release_portfolio_governance_evidence_vault_package(dangerous_zip, strict=True)["blockers"])
     assert any(item["check_id"] == "evidence_vault_zip_duplicate_entries" for item in verify_release_portfolio_governance_evidence_vault_package(duplicate_zip, strict=True)["blockers"])
     assert any(item["check_id"] == "evidence_vault_zip_entry_path_safe" for item in verify_release_portfolio_governance_evidence_vault_package(backslash_zip, strict=True)["blockers"])

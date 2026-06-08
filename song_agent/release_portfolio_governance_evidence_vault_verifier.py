@@ -258,23 +258,30 @@ class _EvidenceVaultVerifier:
         self.chain = self._read_json_entry(archive, "chain-of-custody.json", "chain", "evidence_vault_chain_parse")
 
     def _verify_documents(self) -> None:
+        manifest_source_hash = self.manifest.get("source_hash")
         if self.report_doc:
             self._add_hash_check("report", "evidence_vault_report_integrity", self.report_doc.get("integrity_hash"), evidence_vault_report_integrity_hash(self.report_doc), "Evidence Vault Report integrity")
             row = self.manifest.get("vault_report") if isinstance(self.manifest.get("vault_report"), dict) else {}
             self._add_hash_check("report", "evidence_vault_manifest_report_hash", row.get("integrity_hash"), self.report_doc.get("integrity_hash"), "Manifest report hash")
-            self._add_hash_check("report", "evidence_vault_report_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest source hash")
+            self._add_hash_check("report", "evidence_vault_report_source_hash", manifest_source_hash, self.report_doc.get("source_hash"), "Manifest report source hash")
         if self.package_index:
             self._add_hash_check("package_index", "evidence_vault_package_index_integrity", self.package_index.get("integrity_hash"), evidence_vault_package_index_hash(self.package_index), "Package index integrity")
             row = self.manifest.get("package_index") if isinstance(self.manifest.get("package_index"), dict) else {}
             self._add_hash_check("package_index", "evidence_vault_manifest_package_index_hash", row.get("integrity_hash"), self.package_index.get("integrity_hash"), "Manifest package index hash")
+            self._add_hash_check("package_index", "evidence_vault_package_index_source_hash", manifest_source_hash, self.package_index.get("source_hash"), "Package index source hash")
+            self._add_hash_check("package_index", "evidence_vault_manifest_package_index_source_hash", row.get("source_hash"), self.package_index.get("source_hash"), "Manifest package index source hash")
         if self.verification_index:
             self._add_hash_check("verification_index", "evidence_vault_verification_index_integrity", self.verification_index.get("integrity_hash"), evidence_vault_verification_index_hash(self.verification_index), "Verification index integrity")
             row = self.manifest.get("verification_index") if isinstance(self.manifest.get("verification_index"), dict) else {}
             self._add_hash_check("verification_index", "evidence_vault_manifest_verification_index_hash", row.get("integrity_hash"), self.verification_index.get("integrity_hash"), "Manifest verification index hash")
+            self._add_hash_check("verification_index", "evidence_vault_verification_index_source_hash", manifest_source_hash, self.verification_index.get("source_hash"), "Verification index source hash")
+            self._add_hash_check("verification_index", "evidence_vault_manifest_verification_index_source_hash", row.get("source_hash"), self.verification_index.get("source_hash"), "Manifest verification index source hash")
         if self.chain:
             self._add_hash_check("chain", "evidence_vault_chain_integrity", self.chain.get("integrity_hash"), evidence_vault_chain_hash(self.chain), "Chain of custody integrity")
             row = self.manifest.get("chain_of_custody") if isinstance(self.manifest.get("chain_of_custody"), dict) else {}
             self._add_hash_check("chain", "evidence_vault_manifest_chain_hash", row.get("integrity_hash"), self.chain.get("integrity_hash"), "Manifest chain hash")
+            self._add_hash_check("chain", "evidence_vault_chain_source_hash", manifest_source_hash, self.chain.get("source_hash"), "Chain of custody source hash")
+            self._add_hash_check("chain", "evidence_vault_manifest_chain_source_hash", row.get("source_hash"), self.chain.get("source_hash"), "Manifest chain source hash")
 
     def _verify_nested_packages(self, archive: zipfile.ZipFile) -> None:
         manifest_rows = self.manifest.get("nested_packages") if isinstance(self.manifest.get("nested_packages"), list) else []

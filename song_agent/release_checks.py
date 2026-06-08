@@ -10473,7 +10473,7 @@ def _v71_release_portfolio_governance_evidence_vault_smoke(root: Path) -> tuple[
         from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
         from song_agent.release_portfolio_governance_audit_verifier import write_release_portfolio_governance_audit_verification_report
         from song_agent.release_portfolio_governance_archive_verifier import write_release_portfolio_governance_archive_verification_report
-        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore, evidence_vault_report_integrity_hash
         from song_agent.release_portfolio_governance_evidence_vault_verifier import write_release_portfolio_governance_evidence_vault_verification_report
         from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
         from song_agent.release_portfolio_governance_final_board_verifier import write_release_portfolio_governance_final_board_verification_report
@@ -10595,26 +10595,36 @@ def _v71_release_portfolio_governance_evidence_vault_smoke(root: Path) -> tuple[
         stable_vault_zip = base / "stable-vault.zip"
         shutil.copy2(vault_store.zip_path(portfolio["portfolio_id"]), stable_vault_zip)
 
-        delete_export = delete_zip = False
+        initial_export_blocked = initial_zip_blocked = False
+        deleted_export_blocked = deleted_zip_blocked = False
         try:
             vault_store.export_vault(portfolio["portfolio_id"])
         except Exception:
-            delete_export = True
+            initial_export_blocked = True
         try:
             vault_store.build_zip(portfolio["portfolio_id"])
         except Exception:
-            delete_zip = True
+            initial_zip_blocked = True
         shutil.rmtree(vault_store.export_dir(portfolio["portfolio_id"]))
         vault_store.zip_path(portfolio["portfolio_id"]).unlink()
         try:
             vault_store.export_vault(portfolio["portfolio_id"])
         except Exception:
-            delete_export = delete_export and True
+            deleted_export_blocked = True
         try:
             vault_store.build_zip(portfolio["portfolio_id"])
         except Exception:
-            delete_zip = delete_zip and True
+            deleted_zip_blocked = True
 
+        source_mismatch = verify_release_portfolio_governance_evidence_vault_package(
+            _v71_source_mismatch_evidence_vault_zip(stable_vault_zip, base / "source-mismatch-v71-vault.zip", report_hash_fn=evidence_vault_report_integrity_hash),
+            strict=True,
+            deep=True,
+            require_final_board=True,
+            require_reviewer_pack=True,
+            require_audit=True,
+            require_archives=True,
+        )
         nested_tamper = verify_release_portfolio_governance_evidence_vault_package(_v38_rewrite_zip(stable_vault_zip, base / "tampered-v71-vault.zip", transforms={"nested/final-board/portfolio-governance-final-board-archive.zip": lambda data: data + b"tampered"}))
         duplicate = verify_release_portfolio_governance_evidence_vault_package(_v43_duplicate_submission_zip(stable_vault_zip, base / "duplicate-v71-vault.zip"), strict=True)
         dangerous = verify_release_portfolio_governance_evidence_vault_package(_v38_rewrite_zip(stable_vault_zip, base / "dangerous-v71-vault.zip", additions={"../evil.txt": b"x"}), strict=True)
@@ -10642,8 +10652,11 @@ def _v71_release_portfolio_governance_evidence_vault_smoke(root: Path) -> tuple[
             and verification.get("status") == "passed"
             and verification.get("summary", {}).get("deep_verification_status") == "passed"
             and external.get("status") == "passed"
-            and delete_export
-            and delete_zip
+            and initial_export_blocked
+            and initial_zip_blocked
+            and deleted_export_blocked
+            and deleted_zip_blocked
+            and _v38_check_status(source_mismatch, "evidence_vault_package_index_source_hash") == "failed"
             and _v38_check_status(nested_tamper, "evidence_vault_nested_package_sha256") == "failed"
             and _v38_check_status(duplicate, "evidence_vault_zip_duplicate_entries") == "failed"
             and _v38_check_status(dangerous, "evidence_vault_zip_entry_path_safe") == "failed"
@@ -10659,7 +10672,8 @@ def _v71_release_portfolio_governance_evidence_vault_smoke(root: Path) -> tuple[
         )
         return ok, (
             f"report={vault_report.get('status')}, verify={verification.get('status')}/{verification.get('summary', {}).get('deep_verification_status')}, external={external.get('status')}, "
-            f"stale_reviewer={stale_reviewer.get('status')}, stale_audit={stale_audit.get('status')}, delete_rebuild={delete_export}/{delete_zip}, "
+            f"stale_reviewer={stale_reviewer.get('status')}, stale_audit={stale_audit.get('status')}, delete_rebuild={initial_export_blocked}/{initial_zip_blocked}/{deleted_export_blocked}/{deleted_zip_blocked}, "
+            f"source_mismatch={_v38_check_status(source_mismatch, 'evidence_vault_package_index_source_hash')}, "
             f"nested_tamper={_v38_check_status(nested_tamper, 'evidence_vault_nested_package_sha256')}, duplicate={_v38_check_status(duplicate, 'evidence_vault_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'evidence_vault_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'evidence_vault_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof, 'evidence_vault_manifest_extra_entries')}/{_v38_check_status(spoof, 'evidence_vault_manifest_zip_entries_reference_only')}, "
@@ -10685,6 +10699,37 @@ def _v71_wrong_type_evidence_vault_manifest(data: bytes) -> bytes:
     payload["package_type"] = "wrong_package_type"
     payload["integrity_hash"] = evidence_vault_manifest_hash(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v71_source_mismatch_evidence_vault_zip(source: Path, target: Path, *, report_hash_fn: Any) -> Path:
+    from song_agent.release_portfolio_governance_evidence_vault import evidence_vault_manifest_hash
+
+    with zipfile.ZipFile(source, "r") as archive:
+        report = json.loads(archive.read("vault-report.json").decode("utf-8"))
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        report["source_hash"] = "0" * 64
+        report.setdefault("source", {})["signed_queue_count"] = 99
+        report.setdefault("summary", {})["signed_queue_count"] = 99
+        report["integrity_hash"] = report_hash_fn(report)
+        report_bytes = json.dumps(report, ensure_ascii=False, indent=2).encode("utf-8")
+        manifest["source_hash"] = report["source_hash"]
+        manifest.setdefault("vault_report", {})["source_hash"] = report["source_hash"]
+        manifest.setdefault("vault_report", {})["integrity_hash"] = report["integrity_hash"]
+        for file_row in manifest.get("files", []):
+            if isinstance(file_row, dict) and file_row.get("path") == "vault-report.json":
+                file_row["size_bytes"] = len(report_bytes)
+                file_row["sha256"] = hashlib.sha256(report_bytes).hexdigest()
+        manifest["integrity_hash"] = evidence_vault_manifest_hash(manifest)
+        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+        with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            for info in archive.infolist():
+                if info.filename == "vault-report.json":
+                    output.writestr(info.filename, report_bytes)
+                elif info.filename == "manifest.json":
+                    output.writestr(info.filename, manifest_bytes)
+                else:
+                    output.writestr(info.filename, archive.read(info.filename))
+    return target
 
 
 class _V55FixtureEncoderRunner:
