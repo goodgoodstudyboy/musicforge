@@ -86,6 +86,9 @@ def release_portfolio_governance_reviewer_pack_verification_summary(report: dict
     return sanitize_metadata(
         {
             "status": report.get("status"),
+            "zip_sha256": report.get("zip_sha256"),
+            "zip_size_bytes": report.get("zip_size_bytes"),
+            "manifest_hash": report.get("manifest_hash"),
             "portfolio_id": summary.get("portfolio_id"),
             "reviewer_status": summary.get("reviewer_status"),
             "audit_status": summary.get("audit_status"),
@@ -385,6 +388,7 @@ class _PortfolioGovernanceReviewerPackVerifier:
             "zip_path": self.zip_path.name,
             "zip_sha256": self.zip_sha256,
             "zip_size_bytes": self.zip_size_bytes,
+            "manifest_hash": self.manifest.get("integrity_hash") if isinstance(self.manifest, dict) else None,
             "summary": {
                 "portfolio_id": self.manifest.get("portfolio_id") or self.reviewer_report.get("portfolio_id"),
                 "reviewer_status": self.reviewer_report.get("status"),

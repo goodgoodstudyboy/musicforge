@@ -3308,12 +3308,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceReviewerData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-reviewer-pack`); } catch (err) {}
       let governanceFinalBoardData = { report: {}, summary: {}, signoff_summary: {} };
       try { governanceFinalBoardData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board`); } catch (err) {}
+      let governanceEvidenceVaultData = { report: {}, summary: {} };
+      try { governanceEvidenceVaultData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
       const governanceReviewerSummary = governanceReviewerData.summary || {};
       const governanceFinalBoardSummary = governanceFinalBoardData.summary || {};
       const governanceFinalBoardSignoff = governanceFinalBoardData.signoff_summary || {};
+      const governanceEvidenceVaultSummary = governanceEvidenceVaultData.summary || {};
       const score = report.risk_score || {};
       const stale = Boolean(reportData.stale || (reportData.summary || {}).stale || (data.summary || {}).stale);
       const trend = trendData.trend_report || {};
@@ -3499,6 +3502,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-final-board-verify" type="button">Verify Final Board ZIP</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-final-board.zip">Download Final Board ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Governance Evidence Vault</span></div>
+        <div class="summary-grid">
+          ${metric("Evidence Vault", governanceEvidenceVaultSummary.status || "missing")}
+          ${metric("Nested Required", governanceEvidenceVaultSummary.required_package_count || 0)}
+          ${metric("Nested Current", governanceEvidenceVaultSummary.current_required_package_count || 0)}
+          ${metric("Archives", governanceEvidenceVaultSummary.archive_package_count || 0)}
+          ${metric("Queues", governanceEvidenceVaultSummary.queue_package_count || 0)}
+          ${metric("Verification", governanceEvidenceVaultSummary.verification_status || "-")}
+          ${metric("Deep Verify", governanceEvidenceVaultSummary.deep_verification_status || "-")}
+          ${metric("Blockers", governanceEvidenceVaultSummary.blocker_count || 0)}
+          ${metric("Warnings", governanceEvidenceVaultSummary.warning_count || 0)}
+          ${metric("Stale", governanceEvidenceVaultSummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-vault-refresh" type="button">Refresh Evidence Vault</button>
+          <button class="secondary" id="portfolio-governance-vault-export" type="button">Export Evidence Vault</button>
+          <button class="secondary" id="portfolio-governance-vault-zip" type="button">Build Evidence Vault ZIP</button>
+          <button class="secondary" id="portfolio-governance-vault-verify" type="button">Verify Evidence Vault ZIP</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-evidence-vault.zip">Download Evidence Vault ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3632,6 +3655,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ strict: true, require_signed: true, require_reviewer_pack: true, require_audit: true, require_archives: true, require_reviewer_response: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-vault-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault/refresh`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-vault-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-vault-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-vault-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, deep: true, require_final_board: true, require_reviewer_pack: true, require_audit: true, require_archives: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

@@ -1,5 +1,17 @@
 # Changelog
 
+## v7.1.0 - 2026-06-08
+
+### Added
+- Release Portfolio Governance Evidence Vault for bundling Final Board Archive, Governance Reviewer Pack, Governance Audit, Governance Archives, and optional Governance Queue packages into a portable long-term evidence package.
+- `release-portfolio-governance-evidence-vault` and `verify-release-portfolio-governance-evidence-vault` CLI commands with strict, deep nested verification, Final Board, reviewer pack, audit, archive, and queue package requirement flags.
+- API routes under `/api/release-portfolio-audits/<portfolio-id>/governance-evidence-vault` plus Studio controls in the Portfolio Audit workspace.
+- Evidence Vault ZIP verifier covering nested package hash binding, nested verification report binding, duplicate ZIP entries, dangerous/backslash paths, manifest spoofing, wrong package type, redaction, ZIP size limits, and deep clean-room verification.
+- v7.1 release-check smoke covering external deep verification, stale nested verification, signed vault immutability after deletion, nested package tamper, duplicate/path/backslash/spoof/package-type/redaction regressions.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_evidence_vault.py tests\test_server_release_portfolio_governance_evidence_vault.py tests\test_cli_release_operations.py::test_release_portfolio_governance_evidence_vault_cli_export_verify tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_evidence_vault_cli_json_report_out tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v71_release_portfolio_governance_evidence_vault_smoke -q`
+
 ## v7.0.1 - 2026-06-08
 
 ### Fixed

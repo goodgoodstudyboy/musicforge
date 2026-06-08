@@ -223,6 +223,17 @@ from song_agent.release_portfolio_governance_final_board_verifier import (
     verify_release_portfolio_governance_final_board_package,
     write_release_portfolio_governance_final_board_verification_report,
 )
+from song_agent.release_portfolio_governance_evidence_vault import (
+    ReleasePortfolioGovernanceEvidenceVaultError,
+    ReleasePortfolioGovernanceEvidenceVaultNotFoundError,
+    ReleasePortfolioGovernanceEvidenceVaultStateError,
+    ReleasePortfolioGovernanceEvidenceVaultStore,
+    evidence_vault_summary as portfolio_governance_evidence_vault_summary,
+)
+from song_agent.release_portfolio_governance_evidence_vault_verifier import (
+    verify_release_portfolio_governance_evidence_vault_package,
+    write_release_portfolio_governance_evidence_vault_verification_report,
+)
 from song_agent.release_portfolio_governance_verifier import (
     release_portfolio_governance_verification_summary,
     verify_release_portfolio_governance_package,
@@ -2711,6 +2722,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_portfolio_governance_final_board_store(self) -> ReleasePortfolioGovernanceFinalBoardStore:
         return self.server.release_portfolio_governance_final_board_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_evidence_vault_store(self) -> ReleasePortfolioGovernanceEvidenceVaultStore:
+        return self.server.release_portfolio_governance_evidence_vault_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5794,6 +5809,17 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     filename=f"musicforge-{portfolio_id}-portfolio-governance-final-board-archive.zip",
                 )
                 return
+            if action == "governance-evidence-vault.zip" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self.release_portfolio_audit_store.get_portfolio(portfolio_id)
+                self._send_file(
+                    self.release_portfolio_governance_evidence_vault_store.zip_path(portfolio_id),
+                    "application/zip",
+                    filename=f"musicforge-{portfolio_id}-portfolio-governance-evidence-vault.zip",
+                )
+                return
             if action == "governance-audit":
                 if len(parts) == 2:
                     if method != "GET":
@@ -6043,6 +6069,72 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Final Board route not found.")
                 return
+            if action == "governance-evidence-vault":
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.release_portfolio_governance_evidence_vault_store.read_report(portfolio_id, default={})
+                    stale = self.release_portfolio_governance_evidence_vault_store.report_is_stale(portfolio_id, report) if report else False
+                    summary = portfolio_governance_evidence_vault_summary(report) if report else {"status": "missing"}
+                    summary["stale"] = stale
+                    self._send_json(
+                        {
+                            "ok": True,
+                            "portfolio_id": portfolio_id,
+                            "report": report,
+                            "package_index": self.release_portfolio_governance_evidence_vault_store.read_package_index(portfolio_id, default={}),
+                            "verification_index": self.release_portfolio_governance_evidence_vault_store.read_verification_index(portfolio_id, default={}),
+                            "chain_of_custody": self.release_portfolio_governance_evidence_vault_store.read_chain_of_custody(portfolio_id, default={}),
+                            "verification": read_json(self.release_portfolio_governance_evidence_vault_store.verification_report_path(portfolio_id)) if self.release_portfolio_governance_evidence_vault_store.verification_report_path(portfolio_id).exists() else {},
+                            "summary": summary,
+                            "stale": stale,
+                        }
+                    )
+                    return
+                subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "refresh" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.release_portfolio_governance_evidence_vault_store.refresh_report(portfolio_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "report": report, "summary": portfolio_governance_evidence_vault_summary(report)})
+                    return
+                if subaction == "export" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.release_portfolio_governance_evidence_vault_store.export_vault(portfolio_id, now=_utc_now())
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "zip" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    zip_info = self.release_portfolio_governance_evidence_vault_store.build_zip(portfolio_id, now=_utc_now())
+                    manifest = self.release_portfolio_governance_evidence_vault_store.read_export_manifest(portfolio_id)
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+                    return
+                if subaction == "verify" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    report = verify_release_portfolio_governance_evidence_vault_package(
+                        self.release_portfolio_governance_evidence_vault_store.zip_path(portfolio_id),
+                        strict=bool(payload.get("strict", False)),
+                        deep=bool(payload.get("deep", False)),
+                        require_final_board=bool(payload.get("require_final_board", False)),
+                        require_reviewer_pack=bool(payload.get("require_reviewer_pack", False)),
+                        require_audit=bool(payload.get("require_audit", False)),
+                        require_archives=bool(payload.get("require_archives", False)),
+                        require_queue_packages=bool(payload.get("require_queue_packages", False)),
+                    )
+                    write_release_portfolio_governance_evidence_vault_verification_report(report, self.release_portfolio_governance_evidence_vault_store.verification_report_path(portfolio_id))
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report, "summary": portfolio_governance_evidence_vault_summary(self.release_portfolio_governance_evidence_vault_store.read_report(portfolio_id, default={}))})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Evidence Vault route not found.")
+                return
             if action == "governance-queues" and len(parts) == 2:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -6119,6 +6211,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleasePortfolioGovernanceFinalBoardStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleasePortfolioGovernanceFinalBoardError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleasePortfolioGovernanceEvidenceVaultNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleasePortfolioGovernanceEvidenceVaultStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleasePortfolioGovernanceEvidenceVaultError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -15016,6 +15114,14 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             portfolio_store=self.release_portfolio_audit_store,
             audit_store=self.release_portfolio_governance_audit_store,
             reviewer_pack_store=self.release_portfolio_governance_reviewer_pack_store,
+        )
+        self.release_portfolio_governance_evidence_vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(
+            portfolio_store=self.release_portfolio_audit_store,
+            governance_store=self.release_portfolio_governance_store,
+            signoff_store=self.release_portfolio_governance_signoff_store,
+            audit_store=self.release_portfolio_governance_audit_store,
+            reviewer_pack_store=self.release_portfolio_governance_reviewer_pack_store,
+            final_board_store=self.release_portfolio_governance_final_board_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

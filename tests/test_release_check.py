@@ -45,6 +45,7 @@ from song_agent.release_checks import (
     _v68_release_portfolio_governance_audit_ledger_smoke,
     _v69_release_portfolio_governance_reviewer_pack_smoke,
     _v70_release_portfolio_governance_final_board_smoke,
+    _v71_release_portfolio_governance_evidence_vault_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -590,6 +591,20 @@ def test_v56_encoded_audio_acceptance_smoke(tmp_path: Path) -> None:
     assert "stale_export=409" in detail
     assert "sign=200" in detail
     assert "tampered_review=failed" in detail
+
+
+def test_v71_release_portfolio_governance_evidence_vault_smoke(tmp_path: Path) -> None:
+    ok, detail = _v71_release_portfolio_governance_evidence_vault_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "verify=passed/passed" in detail
+    assert "external=passed" in detail
+    assert "stale_reviewer=failed" in detail
+    assert "stale_audit=failed" in detail
+    assert "delete_rebuild=True/True" in detail
+    assert "nested_tamper=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "redaction=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

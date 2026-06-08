@@ -529,6 +529,21 @@ python -m song_agent.cli release-portfolio-governance-final-board --portfolio-id
 python -m song_agent.cli verify-release-portfolio-governance-final-board path\to\portfolio-governance-final-board-archive.zip --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --json
 ```
 
+Release Portfolio Governance Evidence Vault packages the current Final Board
+Archive, Governance Reviewer Pack, Governance Audit, signed Governance Archives,
+and optional Governance Queue packages into a long-term portable evidence vault.
+The vault does not mutate Final Board, Audit, Reviewer Pack, Queue, or Archive
+source evidence. It verifies nested ZIP sha256, ZIP size, manifest hashes, and
+the saved verification reports before export, and `--deep` re-runs nested
+offline verifiers from a clean temporary directory. Like the Final Board
+Archive, vault export and ZIP rebuild are immutable for the current Final Board
+signoff hash; deleting vault files does not permit a silent rebuild.
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-evidence-vault --portfolio-id <portfolio-id> --refresh --export --zip --verify --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --json
+python -m song_agent.cli verify-release-portfolio-governance-evidence-vault path\to\portfolio-governance-evidence-vault.zip --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -562,6 +577,8 @@ python -m song_agent.cli release-portfolio-governance-reviewer-pack --portfolio-
 python -m song_agent.cli verify-release-portfolio-governance-reviewer-pack path\to\portfolio-governance-reviewer-pack.zip --json --strict --require-audit --require-signed --require-archives --report-out governance-reviewer-verification-report.json
 python -m song_agent.cli release-portfolio-governance-final-board --portfolio-id pfa-000001 --refresh --import-reviewer-response reviewer-response.json --require-reviewer-response --sign --signed-by local-user --export --zip --verify --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --json
 python -m song_agent.cli verify-release-portfolio-governance-final-board path\to\portfolio-governance-final-board-archive.zip --json --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --report-out final-board-verification-report.json
+python -m song_agent.cli release-portfolio-governance-evidence-vault --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --json
+python -m song_agent.cli verify-release-portfolio-governance-evidence-vault path\to\portfolio-governance-evidence-vault.zip --json --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --report-out evidence-vault-verification-report.json
 ```
 
 ```powershell

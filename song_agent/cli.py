@@ -486,6 +486,25 @@ def build_release_portfolio_governance_final_board_parser() -> argparse.Argument
     return parser
 
 
+def build_release_portfolio_governance_evidence_vault_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build and verify local MusicForge Release Portfolio Governance Evidence Vault packages.")
+    parser.add_argument("--portfolio-id", required=True, help="Release Portfolio Audit id.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh the Evidence Vault Report.")
+    parser.add_argument("--export", action="store_true", help="Build the Evidence Vault export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Evidence Vault ZIP package.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Evidence Vault ZIP package.")
+    parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    parser.add_argument("--deep", action="store_true", help="Run nested package verifiers.")
+    parser.add_argument("--require-final-board", action="store_true", help="Require passed Final Board Archive evidence.")
+    parser.add_argument("--require-reviewer-pack", action="store_true", help="Require passed Governance Reviewer Pack evidence.")
+    parser.add_argument("--require-audit", action="store_true", help="Require passed Governance Audit evidence.")
+    parser.add_argument("--require-archives", action="store_true", help="Require signed queue Governance Archive evidence.")
+    parser.add_argument("--require-queue-packages", action="store_true", help="Require Governance Queue ZIP evidence.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
 def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")
     verify_parser.add_argument("zip_path", type=Path, help="Path to the Human Review Pack ZIP to verify.")
@@ -547,6 +566,24 @@ def build_verify_release_portfolio_governance_final_board_parser() -> argparse.A
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=128, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=5000, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_release_portfolio_governance_evidence_vault_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release Portfolio Governance Evidence Vault ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release Portfolio Governance Evidence Vault ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--deep", action="store_true", help="Run nested package verifiers.")
+    verify_parser.add_argument("--require-final-board", action="store_true", help="Require passed Final Board Archive evidence.")
+    verify_parser.add_argument("--require-reviewer-pack", action="store_true", help="Require passed Governance Reviewer Pack evidence.")
+    verify_parser.add_argument("--require-audit", action="store_true", help="Require passed Governance Audit evidence.")
+    verify_parser.add_argument("--require-archives", action="store_true", help="Require signed queue Governance Archive evidence.")
+    verify_parser.add_argument("--require-queue-packages", action="store_true", help="Require Governance Queue ZIP evidence.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=1024, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=4096, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=20000, help="Maximum number of ZIP entries.")
     return verify_parser
 
 
@@ -1423,6 +1460,36 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_final_board_verification_report(report)
         raise SystemExit(release_portfolio_governance_final_board_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-portfolio-governance-evidence-vault":
+        from song_agent.release_portfolio_governance_evidence_vault_verifier import (
+            print_release_portfolio_governance_evidence_vault_verification_report,
+            release_portfolio_governance_evidence_vault_verification_exit_code,
+            verify_release_portfolio_governance_evidence_vault_package,
+            write_release_portfolio_governance_evidence_vault_verification_report,
+        )
+
+        parser = build_verify_release_portfolio_governance_evidence_vault_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_portfolio_governance_evidence_vault_package(
+            args.zip_path,
+            strict=args.strict,
+            deep=args.deep,
+            require_final_board=args.require_final_board,
+            require_reviewer_pack=args.require_reviewer_pack,
+            require_audit=args.require_audit,
+            require_archives=args.require_archives,
+            require_queue_packages=args.require_queue_packages,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_portfolio_governance_evidence_vault_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_evidence_vault_verification_report(report)
+        raise SystemExit(release_portfolio_governance_evidence_vault_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -2148,6 +2215,95 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_portfolio_governance_final_board_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-portfolio-governance-evidence-vault":
+        from song_agent.distribution import DistributionStore
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore, evidence_vault_summary as portfolio_governance_evidence_vault_summary, evidence_vault_verification_summary as release_portfolio_governance_evidence_vault_verification_summary
+        from song_agent.release_portfolio_governance_evidence_vault_verifier import verify_release_portfolio_governance_evidence_vault_package, write_release_portfolio_governance_evidence_vault_verification_report
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
+
+        parser = build_release_portfolio_governance_evidence_vault_parser()
+        args = parser.parse_args(raw_args[1:])
+        release_store = ReleaseStore()
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        evidence_store = SubmissionEvidenceStore(submission_store)
+        operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=operations_audit_store, reviewer_pack_store=operations_reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=operations_signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+        store = ReleasePortfolioGovernanceEvidenceVaultStore(
+            portfolio_store=portfolio_store,
+            governance_store=governance_store,
+            signoff_store=governance_signoff_store,
+            audit_store=governance_audit_store,
+            reviewer_pack_store=governance_reviewer_store,
+            final_board_store=final_board_store,
+        )
+        portfolio_id = args.portfolio_id
+        result: dict[str, Any] = {"ok": True, "portfolio_id": portfolio_id}
+        refresh_payload = {
+            "require_final_board": True,
+            "require_reviewer_pack": True,
+            "require_audit": True,
+            "require_archives": True,
+            "require_queue_packages": args.require_queue_packages,
+        }
+        if args.refresh:
+            report = store.refresh_report(portfolio_id, refresh_payload)
+            result.update({"report": report, "summary": portfolio_governance_evidence_vault_summary(report), "stale": store.report_is_stale(portfolio_id, report)})
+        else:
+            report = store.read_report(portfolio_id, default={})
+            summary = portfolio_governance_evidence_vault_summary(report) if report else {"status": "missing"}
+            if report:
+                summary["stale"] = store.report_is_stale(portfolio_id, report)
+            result.update({"report": report, "summary": summary, "stale": summary.get("stale", False)})
+        result.update({"package_index": store.read_package_index(portfolio_id, default={}), "verification_index": store.read_verification_index(portfolio_id, default={}), "chain_of_custody": store.read_chain_of_custody(portfolio_id, default={})})
+        if args.export:
+            manifest = store.export_vault(portfolio_id)
+            result.update({"manifest": manifest})
+        if args.zip:
+            zip_info = store.build_zip(portfolio_id)
+            result.update({"zip": zip_info})
+        if args.verify:
+            verification = verify_release_portfolio_governance_evidence_vault_package(
+                store.zip_path(portfolio_id),
+                strict=args.strict,
+                deep=args.deep,
+                require_final_board=args.require_final_board,
+                require_reviewer_pack=args.require_reviewer_pack,
+                require_audit=args.require_audit,
+                require_archives=args.require_archives,
+                require_queue_packages=args.require_queue_packages,
+            )
+            write_release_portfolio_governance_evidence_vault_verification_report(verification, store.verification_report_path(portfolio_id))
+            result.update({"verification": verification, "verification_summary": release_portfolio_governance_evidence_vault_verification_summary(verification)})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_evidence_vault_result(result)
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
@@ -3192,6 +3348,24 @@ def print_release_portfolio_governance_final_board_result(result: dict[str, Any]
     print(f"audit: {summary.get('audit_verification_status') or '-'}")
     print(f"reviewer_pack: {summary.get('reviewer_pack_verification_status') or '-'}")
     print(f"signoff: {signoff.get('status') or '-'}")
+    print(f"blockers: {summary.get('blocker_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
+
+
+def print_release_portfolio_governance_evidence_vault_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+    print("MusicForge release-portfolio-governance-evidence-vault")
+    print(f"portfolio: {result.get('portfolio_id') or '-'}")
+    print(f"status: {summary.get('status') or '-'}")
+    print(f"stale: {summary.get('stale', False)}")
+    print(f"final_board: {summary.get('final_board_signoff_status') or '-'}")
+    print(f"nested_required: {summary.get('required_package_count', 0)}")
+    print(f"nested_current: {summary.get('current_required_package_count', 0)}")
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     if result.get("zip"):
