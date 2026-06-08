@@ -357,6 +357,7 @@ def test_v70_release_portfolio_governance_final_board_smoke(tmp_path: Path) -> N
     assert "missing_response=failed" in detail
     assert "needs_changes=failed/409" in detail
     assert "signed_mutation=True/True" in detail
+    assert "delete_rebuild=True/True" in detail
     assert "stale_reviewer=failed" in detail
     assert "stale_audit=failed" in detail
     assert "tamper=failed" in detail

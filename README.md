@@ -520,7 +520,9 @@ final portfolio governance signoff evidence. It requires current Reviewer Pack
 verification, current Governance Audit verification, verified Governance
 Archive coverage, and an accepted reviewer response before signing. The archive
 is immutable for a given signoff: rebuilding Final Board archive evidence
-requires an approved Final Board Change Request, reset, and new signoff.
+requires an approved Final Board Change Request, reset, and new signoff. This
+immutability is backed by persisted history, not just by the presence of export
+files, so deleting the archive directory or ZIP does not permit a silent rebuild.
 
 ```powershell
 python -m song_agent.cli release-portfolio-governance-final-board --portfolio-id <portfolio-id> --refresh --import-reviewer-response reviewer-response.json --require-reviewer-response --sign --signed-by local-user --export --zip --verify --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --json

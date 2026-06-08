@@ -10340,6 +10340,8 @@ def _v70_release_portfolio_governance_final_board_smoke(root: Path) -> tuple[boo
         external_dir.mkdir()
         external_zip = external_dir / "final-board.zip"
         shutil.copy2(final_zip, external_zip)
+        stable_final_zip = base / "stable-final-board.zip"
+        shutil.copy2(final_zip, stable_final_zip)
         external_report = verify_release_portfolio_governance_final_board_package(external_zip, strict=True, require_signed=True, require_reviewer_pack=True, require_audit=True, require_archives=True, require_reviewer_response=True)
 
         signed_export = signed_zip = False
@@ -10351,14 +10353,25 @@ def _v70_release_portfolio_governance_final_board_smoke(root: Path) -> tuple[boo
             final_board_store.build_archive_zip(portfolio["portfolio_id"])
         except Exception:
             signed_zip = True
+        delete_rebuild_export = delete_rebuild_zip = False
+        shutil.rmtree(final_board_store.export_dir(portfolio["portfolio_id"]))
+        final_board_store.archive_zip_path(portfolio["portfolio_id"]).unlink()
+        try:
+            final_board_store.export_archive(portfolio["portfolio_id"])
+        except Exception:
+            delete_rebuild_export = True
+        try:
+            final_board_store.build_archive_zip(portfolio["portfolio_id"])
+        except Exception:
+            delete_rebuild_zip = True
 
-        tampered = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "tampered-v70-final-board.zip", transforms={"final-board-report.json": _v70_tamper_final_board_report}))
-        duplicate = verify_release_portfolio_governance_final_board_package(_v43_duplicate_submission_zip(final_zip, base / "duplicate-v70-final-board.zip"), strict=True)
-        dangerous = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "dangerous-v70-final-board.zip", additions={"../evil.txt": b"x"}), strict=True)
+        tampered = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(stable_final_zip, base / "tampered-v70-final-board.zip", transforms={"final-board-report.json": _v70_tamper_final_board_report}))
+        duplicate = verify_release_portfolio_governance_final_board_package(_v43_duplicate_submission_zip(stable_final_zip, base / "duplicate-v70-final-board.zip"), strict=True)
+        dangerous = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(stable_final_zip, base / "dangerous-v70-final-board.zip", additions={"../evil.txt": b"x"}), strict=True)
         backslash = verify_release_portfolio_governance_final_board_package(_v38_backslash_entry_zip(base / "backslash-v70-final-board.zip"), strict=True)
-        spoof = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "spoof-v70-final-board.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v70_spoof_final_board_manifest}), strict=True)
-        redaction = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "redaction-v70-final-board.zip", transforms={"final-board.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
-        wrong_type = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(final_zip, base / "wrong-type-v70-final-board.zip", transforms={"manifest.json": _v70_wrong_type_final_board_manifest}))
+        spoof = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(stable_final_zip, base / "spoof-v70-final-board.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v70_spoof_final_board_manifest}), strict=True)
+        redaction = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(stable_final_zip, base / "redaction-v70-final-board.zip", transforms={"final-board.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        wrong_type = verify_release_portfolio_governance_final_board_package(_v38_rewrite_zip(stable_final_zip, base / "wrong-type-v70-final-board.zip", transforms={"manifest.json": _v70_wrong_type_final_board_manifest}))
 
         old_reviewer_verification = governance_reviewer_store.verification_report_path(portfolio["portfolio_id"]).read_text(encoding="utf-8")
         governance_reviewer_store.build_zip(portfolio["portfolio_id"], now="2026-06-08T10:00:00+00:00")
@@ -10385,6 +10398,8 @@ def _v70_release_portfolio_governance_final_board_smoke(root: Path) -> tuple[boo
             and external_report.get("status") == "passed"
             and signed_export
             and signed_zip
+            and delete_rebuild_export
+            and delete_rebuild_zip
             and stale_reviewer.get("status") == "failed"
             and any(item.get("check_id") == "governance_reviewer_pack_verification_current" for item in stale_reviewer.get("blockers", []) if isinstance(item, dict))
             and stale_audit.get("status") == "failed"
@@ -10404,7 +10419,7 @@ def _v70_release_portfolio_governance_final_board_smoke(root: Path) -> tuple[boo
         )
         return ok, (
             f"report={final_report.get('status')}, signoff={signoff.get('status')}, verify={verification.get('status')}, external={external_report.get('status')}, "
-            f"missing_response={missing_response.get('status')}, needs_changes={needs_changes_report.get('status')}/{needs_changes_signoff}, signed_mutation={signed_export}/{signed_zip}, "
+            f"missing_response={missing_response.get('status')}, needs_changes={needs_changes_report.get('status')}/{needs_changes_signoff}, signed_mutation={signed_export}/{signed_zip}, delete_rebuild={delete_rebuild_export}/{delete_rebuild_zip}, "
             f"stale_reviewer={stale_reviewer.get('status')}, stale_audit={stale_audit.get('status')}, "
             f"tamper={_v38_check_status(tampered, 'final_board_report_integrity')}, duplicate={_v38_check_status(duplicate, 'final_board_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'final_board_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'final_board_zip_entry_path_safe')}, "

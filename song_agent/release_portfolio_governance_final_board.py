@@ -328,7 +328,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             }
             signoff["integrity_hash"] = final_board_signoff_hash(signoff)
             _write_json(self.signoff_path(portfolio_id), signoff)
-            self._append_history(portfolio_id, "signed", {"status": status, "signoff_id": signoff["signoff_id"]}, now=now)
+            self._append_history(portfolio_id, "signed", {"status": status, "signoff_id": signoff["signoff_id"], "signoff_integrity_hash": signoff["integrity_hash"]}, now=now)
             return signoff
 
     def reset_signoff(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
@@ -457,6 +457,8 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             export_dir = self.export_dir(portfolio_id).resolve()
             root = self.root_dir(portfolio_id).resolve()
             _ensure_within(root, export_dir)
+            if self._history_has_current_signoff_archive_event(portfolio_id, signoff, "archive_exported"):
+                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive already exists for this signoff. Reset signoff before rebuilding archive evidence.")
             existing_manifest = _read_json_default(export_dir / "manifest.json", default={})
             if existing_manifest.get("final_board_signoff", {}).get("integrity_hash") == signoff.get("integrity_hash"):
                 raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive already exists for this signoff. Reset signoff before rebuilding archive evidence.")
@@ -509,7 +511,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             }
             manifest["integrity_hash"] = final_board_archive_manifest_hash(manifest)
             _write_json(export_dir / "manifest.json", manifest)
-            self._append_history(portfolio_id, "archive_exported", {"status": report.get("status"), "file_count": len(files)}, now=now)
+            self._append_history(portfolio_id, "archive_exported", {"status": report.get("status"), "file_count": len(files), "signoff_id": signoff.get("signoff_id"), "signoff_integrity_hash": signoff.get("integrity_hash")}, now=now)
             return sanitize_metadata(manifest, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
     def build_archive_zip(self, portfolio_id: str, *, now: str | None = None) -> dict[str, Any]:
@@ -518,6 +520,9 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             signoff = self.signoff_summary(portfolio_id)
             if signoff.get("status") not in SIGNED_STATUSES:
                 raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive ZIP requires signed Final Board Signoff.")
+            current_signoff = self.read_signoff(portfolio_id, default={})
+            if self._history_has_current_signoff_archive_event(portfolio_id, current_signoff, "archive_zip_built"):
+                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive ZIP already exists for this signoff. Reset signoff before rebuilding archive evidence.")
             export_dir = self.export_dir(portfolio_id).resolve()
             root = self.root_dir(portfolio_id).resolve()
             zip_path = self.archive_zip_path(portfolio_id).resolve()
@@ -527,8 +532,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                 self.export_archive(portfolio_id, now=now)
             if zip_path.exists():
                 manifest = _read_zip_json(zip_path, "manifest.json")
-                current = self.read_signoff(portfolio_id, default={})
-                if manifest.get("final_board_signoff", {}).get("integrity_hash") == current.get("integrity_hash"):
+                if manifest.get("final_board_signoff", {}).get("integrity_hash") == current_signoff.get("integrity_hash"):
                     raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive ZIP already exists for this signoff. Reset signoff before rebuilding archive evidence.")
             manifest = read_json(export_dir / "manifest.json")
             entries = _zip_entries(export_dir)
@@ -547,7 +551,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                     tmp_path.unlink()
                 raise
             info = {"created_at": now, "filename": zip_path.name, "size_bytes": zip_path.stat().st_size, "sha256": _sha256(zip_path), "entry_count": len(entries), "entries": [entry for _path, entry in entries]}
-            self._append_history(portfolio_id, "archive_zip_built", {"sha256": info["sha256"], "entry_count": len(entries)}, now=now)
+            self._append_history(portfolio_id, "archive_zip_built", {"sha256": info["sha256"], "entry_count": len(entries), "signoff_id": current_signoff.get("signoff_id"), "signoff_integrity_hash": current_signoff.get("integrity_hash")}, now=now)
             return sanitize_metadata(info, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
     def signoff_summary(self, portfolio_id: str, *, signoff: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -689,6 +693,50 @@ class ReleasePortfolioGovernanceFinalBoardStore:
         event = sanitize_metadata({"event_id": f"fgbe-{count + 1:06d}", "at": now or now_iso(), "type": event_type, "summary": summary}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+
+    def _history_has_current_signoff_archive_event(self, portfolio_id: str, signoff: dict[str, Any], event_type: str) -> bool:
+        signoff_id = str(signoff.get("signoff_id") or "")
+        signoff_hash = str(signoff.get("integrity_hash") or "")
+        if not signoff_id and not signoff_hash:
+            return False
+        active_signoff_id: str | None = None
+        active_signoff_hash: str | None = None
+        path = self.history_path(portfolio_id)
+        if not path.exists():
+            return False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            event_name = str(event.get("type") or "")
+            if event_name == "signed":
+                active_signoff_id = str(summary.get("signoff_id") or "") or None
+                active_signoff_hash = str(summary.get("signoff_integrity_hash") or "") or None
+                continue
+            if event_name == "reset":
+                active_signoff_id = None
+                active_signoff_hash = None
+                continue
+            if event_name != event_type:
+                continue
+            event_signoff_hash = str(summary.get("signoff_integrity_hash") or "")
+            event_signoff_id = str(summary.get("signoff_id") or "")
+            if signoff_hash and event_signoff_hash and event_signoff_hash == signoff_hash:
+                return True
+            if signoff_id and event_signoff_id and event_signoff_id == signoff_id:
+                return True
+            # v7.0.0 archive history entries did not record signoff hashes.
+            # Bind those legacy entries to the latest signed event until reset.
+            if not event_signoff_hash and not event_signoff_id:
+                if signoff_id and active_signoff_id == signoff_id:
+                    return True
+                if signoff_hash and active_signoff_hash == signoff_hash:
+                    return True
+        return False
 
     def _append_change_event(self, portfolio_id: str, event_type: str, item: dict[str, Any], *, now: str | None = None) -> None:
         path = self.change_request_events_path(portfolio_id)

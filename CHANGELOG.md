@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.0.1 - 2026-06-08
+
+### Fixed
+- Final Board Archive and ZIP immutability now uses persisted history tied to the current signoff integrity hash, so deleting export files or the ZIP cannot bypass the signed archive rebuild guard.
+- Final Board history now records signoff integrity hashes for signed/exported/zipped events while preserving compatibility with v7.0.0 history entries.
+- v7.0 release-check smoke now covers signoff -> export/zip -> delete export/zip -> rebuild blocked.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_final_board.py tests\test_release_check.py::test_v70_release_portfolio_governance_final_board_smoke -q`
+
 ## v7.0.0 - 2026-06-08
 
 ### Added

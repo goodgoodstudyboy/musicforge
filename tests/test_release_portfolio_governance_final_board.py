@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -69,6 +70,12 @@ def test_final_board_refresh_response_signoff_archive_verify(tmp_path: Path, mon
     assert manifest["integrity_hash"] == final_board_archive_manifest_hash(manifest)
     assert zip_info["sha256"]
     assert verification["status"] == "passed"
+    with pytest.raises(ReleasePortfolioGovernanceFinalBoardStateError, match="already exists"):
+        store.export_archive(portfolio_id)
+    with pytest.raises(ReleasePortfolioGovernanceFinalBoardStateError, match="already exists"):
+        store.build_archive_zip(portfolio_id)
+    shutil.rmtree(store.export_dir(portfolio_id))
+    store.archive_zip_path(portfolio_id).unlink()
     with pytest.raises(ReleasePortfolioGovernanceFinalBoardStateError, match="already exists"):
         store.export_archive(portfolio_id)
     with pytest.raises(ReleasePortfolioGovernanceFinalBoardStateError, match="already exists"):
