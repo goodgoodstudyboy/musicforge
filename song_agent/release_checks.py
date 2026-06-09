@@ -11545,6 +11545,8 @@ def _v74_release_portfolio_governance_attestation_portal_smoke(root: Path) -> tu
         spoof = verify_release_portfolio_governance_attestation_portal(_v38_rewrite_zip(stable_zip, base / "spoof-v74.zip", additions={"extra.txt": b"extra"}, transforms={"portal-manifest.json": _v74_spoof_portal_manifest}), strict=True)
         redaction = verify_release_portfolio_governance_attestation_portal(_v38_rewrite_zip(stable_zip, base / "redaction-v74.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
         package_type = verify_release_portfolio_governance_attestation_portal(_v38_rewrite_zip(stable_zip, base / "wrong-type-v74.zip", transforms={"portal-manifest.json": _v74_wrong_type_portal_manifest}), strict=True)
+        full_resign = verify_release_portfolio_governance_attestation_portal(_v74_rewrite_portal_zip(stable_zip, base / "full-resign-v74.zip", _v74_tamper_portal_full_resign_without_verification_summaries), strict=True, require_current=True, require_registry=True, require_attestation=True)
+        verification_summary = verify_release_portfolio_governance_attestation_portal(_v74_rewrite_portal_zip(stable_zip, base / "verification-summary-v74.zip", _v74_tamper_portal_registry_verification_summary_resigned), strict=True, require_current=True, require_registry=True, require_attestation=True)
 
         serialized = json.dumps({"report": portal_report, "manifest": portal_manifest, "verification": portal_verify}, ensure_ascii=False)
         ok = (
@@ -11569,6 +11571,9 @@ def _v74_release_portfolio_governance_attestation_portal_smoke(root: Path) -> tu
             and _v38_check_status(spoof, "portal_manifest_extra_entries") == "failed"
             and _v38_check_status(redaction, "portal_redaction_scan") == "failed"
             and _v38_check_status(package_type, "portal_manifest_package_type") == "failed"
+            and _v38_check_status(full_resign, "portal_data_registry_verification_zip_sha256") == "failed"
+            and _v38_check_status(full_resign, "portal_data_attestation_verification_zip_sha256") == "failed"
+            and _v38_check_status(verification_summary, "portal_data_registry_verification_zip_sha256") == "failed"
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -11581,7 +11586,9 @@ def _v74_release_portfolio_governance_attestation_portal_smoke(root: Path) -> tu
             f"duplicate={_v38_check_status(duplicate_zip, 'portal_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'portal_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash, 'portal_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge, 'portal_zip_no_nested_packages')}, "
             f"nested={_v38_check_status(nested, 'portal_zip_no_nested_packages')}, spoof={_v38_check_status(spoof, 'portal_manifest_extra_entries')}, "
-            f"redaction={_v38_check_status(redaction, 'portal_redaction_scan')}, package_type={_v38_check_status(package_type, 'portal_manifest_package_type')}"
+            f"redaction={_v38_check_status(redaction, 'portal_redaction_scan')}, package_type={_v38_check_status(package_type, 'portal_manifest_package_type')}, "
+            f"full_resign={_v38_check_status(full_resign, 'portal_data_registry_verification_zip_sha256')}/{_v38_check_status(full_resign, 'portal_data_attestation_verification_zip_sha256')}, "
+            f"verification_summary={_v38_check_status(verification_summary, 'portal_data_registry_verification_zip_sha256')}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -11639,6 +11646,84 @@ def _v74_tamper_portal_current_summary_resigned(docs: dict[str, bytes]) -> None:
     current["attestation_zip_sha256"] = "1" * 64
     docs["data/current-attestation-summary.json"] = _v74_json_doc(current)
     _v74_sync_manifest_file(manifest, "data/current-attestation-summary.json", docs["data/current-attestation-summary.json"])
+    manifest["integrity_hash"] = portal_manifest_hash(manifest)
+    docs["portal-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v74_tamper_portal_full_resign_without_verification_summaries(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_portal import portal_manifest_hash, portal_report_hash
+
+    report = _v74_read_json_doc(docs, "portal-report.json")
+    manifest = _v74_read_json_doc(docs, "portal-manifest.json")
+    portal_summary = _v74_read_json_doc(docs, "data/portal-summary.json")
+    registry_summary = _v74_read_json_doc(docs, "data/registry-summary.json")
+    current_summary = _v74_read_json_doc(docs, "data/current-attestation-summary.json")
+    commands = _v74_read_json_doc(docs, "data/verification-commands.json")
+    old_source_hash = str(report.get("source_hash") or "")
+    source = report.setdefault("source", {})
+    source.update(
+        {
+            "registry_zip_sha256": "2" * 64,
+            "registry_manifest_hash": "3" * 64,
+            "registry_verification_hash": "4" * 64,
+            "current_attestation_zip_sha256": "5" * 64,
+            "current_attestation_manifest_hash": "6" * 64,
+            "current_attestation_verification_hash": "7" * 64,
+            "attestation_zip_sha256": "5" * 64,
+            "attestation_manifest_hash": "6" * 64,
+            "attestation_verification_hash": "8" * 64,
+            "evidence_vault_zip_sha256": "9" * 64,
+            "evidence_vault_manifest_hash": "a" * 64,
+            "evidence_vault_verification_hash": "b" * 64,
+            "final_board_signoff_hash": "c" * 64,
+        }
+    )
+    report["source_hash"] = stable_hash(source)
+    report["integrity_hash"] = portal_report_hash(report)
+    for payload in (portal_summary, registry_summary, current_summary, commands):
+        payload["source_hash"] = report["source_hash"]
+    registry_summary.update({"registry_zip_sha256": source["registry_zip_sha256"], "registry_manifest_hash": source["registry_manifest_hash"], "registry_verification_hash": source["registry_verification_hash"]})
+    current_summary.update(
+        {
+            "attestation_zip_sha256": source["current_attestation_zip_sha256"],
+            "attestation_manifest_hash": source["current_attestation_manifest_hash"],
+            "attestation_verification_hash": source["current_attestation_verification_hash"],
+            "evidence_vault_zip_sha256": source["evidence_vault_zip_sha256"],
+            "evidence_vault_manifest_hash": source["evidence_vault_manifest_hash"],
+            "evidence_vault_verification_hash": source["evidence_vault_verification_hash"],
+            "final_board_signoff_hash": source["final_board_signoff_hash"],
+        }
+    )
+    docs["portal-report.json"] = _v74_json_doc(report)
+    docs["data/portal-summary.json"] = _v74_json_doc(portal_summary)
+    docs["data/registry-summary.json"] = _v74_json_doc(registry_summary)
+    docs["data/current-attestation-summary.json"] = _v74_json_doc(current_summary)
+    docs["data/verification-commands.json"] = _v74_json_doc(commands)
+    for page in ("index.html", "current.html", "registry.html", "revocations.html", "verify.html"):
+        docs[page] = docs[page].decode("utf-8").replace(f'data-source-hash="{old_source_hash}"', f'data-source-hash="{report["source_hash"]}"').encode("utf-8")
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("portal_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("portal_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("registry", {}).update({"zip_sha256": source["registry_zip_sha256"], "manifest_hash": source["registry_manifest_hash"], "verification_hash": source["registry_verification_hash"]})
+    manifest.setdefault("current_attestation", {}).update({"zip_sha256": source["current_attestation_zip_sha256"], "manifest_hash": source["current_attestation_manifest_hash"], "verification_hash": source["current_attestation_verification_hash"]})
+    for item in manifest.get("pages", []):
+        if isinstance(item, dict) and item.get("path") in docs:
+            item["source_hash"] = report["source_hash"]
+            item["content_hash"] = hashlib.sha256(docs[item["path"]]).hexdigest()
+    for path in ("portal-report.json", "data/portal-summary.json", "data/registry-summary.json", "data/current-attestation-summary.json", "data/verification-commands.json", "index.html", "current.html", "registry.html", "revocations.html", "verify.html"):
+        _v74_sync_manifest_file(manifest, path, docs[path])
+    manifest["integrity_hash"] = portal_manifest_hash(manifest)
+    docs["portal-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v74_tamper_portal_registry_verification_summary_resigned(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_portal import portal_manifest_hash
+
+    registry_verification = _v74_read_json_doc(docs, "data/registry-verification-summary.json")
+    manifest = _v74_read_json_doc(docs, "portal-manifest.json")
+    registry_verification["zip_sha256"] = "d" * 64
+    docs["data/registry-verification-summary.json"] = _v74_json_doc(registry_verification)
+    _v74_sync_manifest_file(manifest, "data/registry-verification-summary.json", docs["data/registry-verification-summary.json"])
     manifest["integrity_hash"] = portal_manifest_hash(manifest)
     docs["portal-manifest.json"] = _v74_json_doc(manifest)
 

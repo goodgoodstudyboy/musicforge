@@ -89,6 +89,32 @@ def test_attestation_portal_verifier_catches_resigned_report_and_data_tamper(tmp
     assert any(item["check_id"] == "portal_data_current_attestation_attestation_zip_sha256" for item in data_verification["blockers"])
 
 
+def test_attestation_portal_verifier_rejects_full_resign_without_matching_verification_summaries(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, *_rest, portal_store = _portal_fixture(tmp_path, monkeypatch)
+    portal_store.refresh_report(portfolio_id)
+    portal_store.export_portal(portfolio_id)
+    portal_store.build_zip(portfolio_id)
+
+    tampered = _rewrite_portal_zip(portal_store.zip_path(portfolio_id), tmp_path / "full-resign.zip", _tamper_full_resign_without_verification_summaries)
+    verification = verify_release_portfolio_governance_attestation_portal(tampered, strict=True, require_current=True, require_registry=True, require_attestation=True)
+
+    assert any(item["check_id"] == "portal_data_registry_verification_zip_sha256" for item in verification["blockers"])
+    assert any(item["check_id"] == "portal_data_attestation_verification_zip_sha256" for item in verification["blockers"])
+
+
+def test_attestation_portal_verifier_binds_verification_summaries(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, *_rest, portal_store = _portal_fixture(tmp_path, monkeypatch)
+    portal_store.refresh_report(portfolio_id)
+    portal_store.export_portal(portfolio_id)
+    portal_store.build_zip(portfolio_id)
+
+    tampered = _rewrite_portal_zip(portal_store.zip_path(portfolio_id), tmp_path / "verification-summary.zip", _tamper_registry_verification_summary_and_resign)
+    verification = verify_release_portfolio_governance_attestation_portal(tampered, strict=True, require_current=True, require_registry=True, require_attestation=True)
+
+    assert any(item["check_id"] == "portal_data_registry_verification_zip_sha256" for item in verification["blockers"])
+    assert any(item["check_id"] == "portal_data_registry_summary_verification_registry_zip_sha256" for item in verification["blockers"])
+
+
 def test_attestation_portal_verifier_catches_html_and_zip_safety(tmp_path: Path, monkeypatch) -> None:
     portfolio_id, *_rest, portal_store = _portal_fixture(tmp_path, monkeypatch)
     portal_store.refresh_report(portfolio_id)
@@ -154,6 +180,110 @@ def _tamper_current_summary_and_resign_manifest(docs: dict[str, bytes]) -> None:
     current["attestation_zip_sha256"] = "1" * 64
     docs["data/current-attestation-summary.json"] = _doc_bytes(current)
     _sync_manifest_file(manifest, "data/current-attestation-summary.json", docs["data/current-attestation-summary.json"])
+    manifest["integrity_hash"] = portal_manifest_hash(manifest)
+    docs["portal-manifest.json"] = _doc_bytes(manifest)
+
+
+def _tamper_full_resign_without_verification_summaries(docs: dict[str, bytes]) -> None:
+    report = _read_doc(docs, "portal-report.json")
+    manifest = _read_doc(docs, "portal-manifest.json")
+    portal_summary = _read_doc(docs, "data/portal-summary.json")
+    registry_summary = _read_doc(docs, "data/registry-summary.json")
+    current_summary = _read_doc(docs, "data/current-attestation-summary.json")
+    commands = _read_doc(docs, "data/verification-commands.json")
+    old_source_hash = str(report.get("source_hash") or "")
+    source = report.setdefault("source", {})
+    source.update(
+        {
+            "registry_zip_sha256": "2" * 64,
+            "registry_manifest_hash": "3" * 64,
+            "registry_verification_hash": "4" * 64,
+            "current_attestation_zip_sha256": "5" * 64,
+            "current_attestation_manifest_hash": "6" * 64,
+            "current_attestation_verification_hash": "7" * 64,
+            "attestation_zip_sha256": "5" * 64,
+            "attestation_manifest_hash": "6" * 64,
+            "attestation_verification_hash": "8" * 64,
+            "evidence_vault_zip_sha256": "9" * 64,
+            "evidence_vault_manifest_hash": "a" * 64,
+            "evidence_vault_verification_hash": "b" * 64,
+            "final_board_signoff_hash": "c" * 64,
+        }
+    )
+    report["source_hash"] = stable_hash(source)
+    report["integrity_hash"] = portal_report_hash(report)
+    for payload in (portal_summary, registry_summary, current_summary, commands):
+        payload["source_hash"] = report["source_hash"]
+    registry_summary.update(
+        {
+            "registry_zip_sha256": source["registry_zip_sha256"],
+            "registry_manifest_hash": source["registry_manifest_hash"],
+            "registry_verification_hash": source["registry_verification_hash"],
+        }
+    )
+    current_summary.update(
+        {
+            "attestation_zip_sha256": source["current_attestation_zip_sha256"],
+            "attestation_manifest_hash": source["current_attestation_manifest_hash"],
+            "attestation_verification_hash": source["current_attestation_verification_hash"],
+            "evidence_vault_zip_sha256": source["evidence_vault_zip_sha256"],
+            "evidence_vault_manifest_hash": source["evidence_vault_manifest_hash"],
+            "evidence_vault_verification_hash": source["evidence_vault_verification_hash"],
+            "final_board_signoff_hash": source["final_board_signoff_hash"],
+        }
+    )
+    docs["portal-report.json"] = _doc_bytes(report)
+    docs["data/portal-summary.json"] = _doc_bytes(portal_summary)
+    docs["data/registry-summary.json"] = _doc_bytes(registry_summary)
+    docs["data/current-attestation-summary.json"] = _doc_bytes(current_summary)
+    docs["data/verification-commands.json"] = _doc_bytes(commands)
+    for page in ("index.html", "current.html", "registry.html", "revocations.html", "verify.html"):
+        text = docs[page].decode("utf-8").replace(f'data-source-hash="{old_source_hash}"', f'data-source-hash="{report["source_hash"]}"')
+        docs[page] = text.encode("utf-8")
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("portal_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("portal_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("registry", {}).update(
+        {
+            "zip_sha256": source["registry_zip_sha256"],
+            "manifest_hash": source["registry_manifest_hash"],
+            "verification_hash": source["registry_verification_hash"],
+        }
+    )
+    manifest.setdefault("current_attestation", {}).update(
+        {
+            "zip_sha256": source["current_attestation_zip_sha256"],
+            "manifest_hash": source["current_attestation_manifest_hash"],
+            "verification_hash": source["current_attestation_verification_hash"],
+        }
+    )
+    for item in manifest.get("pages", []):
+        if isinstance(item, dict) and item.get("path") in docs:
+            item["source_hash"] = report["source_hash"]
+            item["content_hash"] = hashlib.sha256(docs[item["path"]]).hexdigest()
+    for path in (
+        "portal-report.json",
+        "data/portal-summary.json",
+        "data/registry-summary.json",
+        "data/current-attestation-summary.json",
+        "data/verification-commands.json",
+        "index.html",
+        "current.html",
+        "registry.html",
+        "revocations.html",
+        "verify.html",
+    ):
+        _sync_manifest_file(manifest, path, docs[path])
+    manifest["integrity_hash"] = portal_manifest_hash(manifest)
+    docs["portal-manifest.json"] = _doc_bytes(manifest)
+
+
+def _tamper_registry_verification_summary_and_resign(docs: dict[str, bytes]) -> None:
+    registry_verification = _read_doc(docs, "data/registry-verification-summary.json")
+    manifest = _read_doc(docs, "portal-manifest.json")
+    registry_verification["zip_sha256"] = "d" * 64
+    docs["data/registry-verification-summary.json"] = _doc_bytes(registry_verification)
+    _sync_manifest_file(manifest, "data/registry-verification-summary.json", docs["data/registry-verification-summary.json"])
     manifest["integrity_hash"] = portal_manifest_hash(manifest)
     docs["portal-manifest.json"] = _doc_bytes(manifest)
 

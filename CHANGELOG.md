@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.4.1 - 2026-06-10
+
+### Fixed
+- Attestation Portal export now includes Registry and Public Attestation verification summary sidecars.
+- Attestation Portal verifier now binds `portal-report.json`, data summaries, and manifest evidence back to the verification summary sidecars so fully re-signed Portal packages cannot point at forged Registry or Attestation fingerprints.
+- v7.4 release-check smoke now covers full Portal re-signing and verification summary tamper regressions.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_portal.py tests\test_release_check.py::test_v74_release_portfolio_governance_attestation_portal_smoke -q`
+
 ## v7.4.0 - 2026-06-09
 
 ### Added

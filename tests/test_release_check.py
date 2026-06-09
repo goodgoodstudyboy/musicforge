@@ -665,6 +665,8 @@ def test_v74_release_portfolio_governance_attestation_portal_smoke(tmp_path: Pat
     assert "spoof=failed" in detail
     assert "redaction=failed" in detail
     assert "package_type=failed" in detail
+    assert "full_resign=failed/failed" in detail
+    assert "verification_summary=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

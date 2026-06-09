@@ -574,7 +574,9 @@ Public Attestation Registry into a static offline HTML/JSON portal. The portal
 contains human-readable pages plus machine-readable summaries, but it does not
 embed Public Attestation, Registry, Evidence Vault, or Final Board ZIP packages.
 The verifier rejects scripts, remote links, local paths, nested packages, data
-summary tamper, and manifest spoofing.
+summary tamper, manifest spoofing, and fully re-signed packages whose Portal
+summary no longer matches the Registry or Public Attestation verification
+summary sidecars.
 
 ```powershell
 python -m song_agent.cli release-portfolio-governance-attestation-portal --portfolio-id <portfolio-id> --refresh --export --zip --verify --strict --require-current --require-registry --require-attestation --json

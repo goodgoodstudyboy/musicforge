@@ -28,7 +28,22 @@ DEFAULT_MAX_ZIP_SIZE_MB = 64
 DEFAULT_MAX_UNCOMPRESSED_SIZE_MB = 128
 DEFAULT_MAX_ENTRY_COUNT = 200
 MAX_TEXT_SCAN_BYTES = 2 * 1024 * 1024
-REQUIRED_ENTRIES = {"portal-manifest.json", "portal-report.json", "index.html", "current.html", "registry.html", "revocations.html", "verify.html", "data/portal-summary.json", "data/registry-summary.json", "data/current-attestation-summary.json", "data/verification-commands.json", "README.txt"}
+REQUIRED_ENTRIES = {
+    "portal-manifest.json",
+    "portal-report.json",
+    "index.html",
+    "current.html",
+    "registry.html",
+    "revocations.html",
+    "verify.html",
+    "data/portal-summary.json",
+    "data/registry-summary.json",
+    "data/current-attestation-summary.json",
+    "data/registry-verification-summary.json",
+    "data/attestation-verification-summary.json",
+    "data/verification-commands.json",
+    "README.txt",
+}
 LEGAL_SIDECAR_ENTRIES = {"portal-manifest.json"}
 HEX_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
 INLINE_EVENT_RE = re.compile(r"\son[a-z]+\s*=", re.IGNORECASE)
@@ -230,7 +245,14 @@ class _PortalVerifier:
 
     def _read_documents(self, archive: zipfile.ZipFile) -> None:
         self.report_doc = self._read_json_entry(archive, "portal-report.json", "report", "portal_report_parse")
-        for name in ("portal-summary.json", "registry-summary.json", "current-attestation-summary.json", "verification-commands.json"):
+        for name in (
+            "portal-summary.json",
+            "registry-summary.json",
+            "current-attestation-summary.json",
+            "registry-verification-summary.json",
+            "attestation-verification-summary.json",
+            "verification-commands.json",
+        ):
             self.data_docs[name] = self._read_json_entry(archive, f"data/{name}", "data", f"portal_data_{name.replace('-', '_').replace('.', '_')}_parse")
 
     def _verify_documents(self) -> None:
@@ -276,9 +298,45 @@ class _PortalVerifier:
         source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
         registry_summary = self.data_docs.get("registry-summary.json", {})
         current_summary = self.data_docs.get("current-attestation-summary.json", {})
+        registry_verification = self.data_docs.get("registry-verification-summary.json", {})
+        attestation_verification = self.data_docs.get("attestation-verification-summary.json", {})
         commands = self.data_docs.get("verification-commands.json", {})
         for name, doc in self.data_docs.items():
             self._add_exact_check("data", f"portal_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), self.report_doc.get("source_hash"), f"{name} source_hash")
+        for key, source_key in (
+            ("status", "registry_verification_status"),
+            ("zip_sha256", "registry_zip_sha256"),
+            ("zip_size_bytes", "registry_zip_size_bytes"),
+            ("manifest_hash", "registry_manifest_hash"),
+            ("verification_hash", "registry_verification_hash"),
+            ("current_entry_id", "registry_current_entry_id"),
+            ("current_entry_hash", "registry_current_entry_hash"),
+            ("current_entry_status", "registry_current_entry_status"),
+            ("current_certificate_id", "current_certificate_id"),
+            ("published_count", "published_count"),
+            ("revoked_count", "revoked_count"),
+            ("superseded_count", "superseded_count"),
+        ):
+            self._add_exact_check("data", f"portal_data_registry_verification_{key}", registry_verification.get(key), source.get(source_key), f"Registry verification summary {key}")
+        for key, source_key in (
+            ("status", "attestation_verification_status"),
+            ("zip_sha256", "current_attestation_zip_sha256"),
+            ("zip_size_bytes", "current_attestation_zip_size_bytes"),
+            ("manifest_hash", "current_attestation_manifest_hash"),
+            ("verification_hash", "current_attestation_verification_hash"),
+            ("live_zip_sha256", "attestation_zip_sha256"),
+            ("live_manifest_hash", "attestation_manifest_hash"),
+            ("live_verification_hash", "attestation_verification_hash"),
+            ("live_verification_status", "attestation_verification_status"),
+            ("certificate_id", "current_certificate_id"),
+            ("entry_id", "registry_current_entry_id"),
+            ("evidence_vault_zip_sha256", "evidence_vault_zip_sha256"),
+            ("evidence_vault_manifest_hash", "evidence_vault_manifest_hash"),
+            ("evidence_vault_verification_hash", "evidence_vault_verification_hash"),
+            ("evidence_vault_deep_verification_status", "evidence_vault_deep_verification_status"),
+            ("final_board_signoff_hash", "final_board_signoff_hash"),
+        ):
+            self._add_exact_check("data", f"portal_data_attestation_verification_{key}", attestation_verification.get(key), source.get(source_key), f"Attestation verification summary {key}")
         for key, source_key in (
             ("current_entry_id", "registry_current_entry_id"),
             ("current_certificate_id", "current_certificate_id"),
@@ -292,6 +350,19 @@ class _PortalVerifier:
             ("current_entry_hash", "registry_current_entry_hash"),
         ):
             self._add_exact_check("data", f"portal_data_registry_summary_{key}", registry_summary.get(key), source.get(source_key), f"Registry summary {key}")
+        for key, verification_key in (
+            ("current_entry_id", "current_entry_id"),
+            ("current_certificate_id", "current_certificate_id"),
+            ("published_count", "published_count"),
+            ("revoked_count", "revoked_count"),
+            ("superseded_count", "superseded_count"),
+            ("registry_verification_status", "status"),
+            ("registry_zip_sha256", "zip_sha256"),
+            ("registry_manifest_hash", "manifest_hash"),
+            ("registry_verification_hash", "verification_hash"),
+            ("current_entry_hash", "current_entry_hash"),
+        ):
+            self._add_exact_check("data", f"portal_data_registry_summary_verification_{key}", registry_summary.get(key), registry_verification.get(verification_key), f"Registry summary {key} verification binding")
         for key, source_key in (
             ("certificate_id", "current_certificate_id"),
             ("entry_id", "registry_current_entry_id"),
@@ -306,6 +377,20 @@ class _PortalVerifier:
             ("final_board_signoff_hash", "final_board_signoff_hash"),
         ):
             self._add_exact_check("data", f"portal_data_current_attestation_{key}", current_summary.get(key), source.get(source_key), f"Current attestation summary {key}")
+        for key, verification_key in (
+            ("certificate_id", "certificate_id"),
+            ("entry_id", "entry_id"),
+            ("attestation_zip_sha256", "zip_sha256"),
+            ("attestation_manifest_hash", "manifest_hash"),
+            ("attestation_verification_hash", "verification_hash"),
+            ("attestation_verification_status", "status"),
+            ("evidence_vault_zip_sha256", "evidence_vault_zip_sha256"),
+            ("evidence_vault_manifest_hash", "evidence_vault_manifest_hash"),
+            ("evidence_vault_verification_hash", "evidence_vault_verification_hash"),
+            ("evidence_vault_deep_verification_status", "evidence_vault_deep_verification_status"),
+            ("final_board_signoff_hash", "final_board_signoff_hash"),
+        ):
+            self._add_exact_check("data", f"portal_data_current_attestation_verification_{key}", current_summary.get(key), attestation_verification.get(verification_key), f"Current attestation summary {key} verification binding")
         commands_text = json.dumps(commands, ensure_ascii=False, sort_keys=True)
         unsafe_commands = _contains_local_path(commands_text) or "http://" in commands_text.lower() or "https://" in commands_text.lower()
         self._add_check("data", "portal_data_verification_commands_safe", "failed" if unsafe_commands else "passed", "blocking", "verification-commands contains unsafe paths or remote URLs." if unsafe_commands else "verification-commands contains no local paths or remote URLs.")
