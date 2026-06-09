@@ -225,6 +225,13 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="portfolio-governance-attestation-registry-verify"' in html
     assert "/governance-attestation-registry" in html
     assert "/governance-attestation-registry.zip" in html
+    assert "Governance Attestation Portal Snapshot" in html
+    assert 'id="portfolio-governance-attestation-portal-refresh"' in html
+    assert 'id="portfolio-governance-attestation-portal-export"' in html
+    assert 'id="portfolio-governance-attestation-portal-zip"' in html
+    assert 'id="portfolio-governance-attestation-portal-verify"' in html
+    assert "/governance-attestation-portal" in html
+    assert "/governance-attestation-portal.zip" in html
     assert "/api/release-portfolio-audits" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
@@ -235,6 +242,7 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault/verify" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation/verify" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/verify" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal/verify" in html
     assert "/api/release-portfolio-governance-queues" in html
     assert "/governance-queues" in html
     assert "/run-safe" in html

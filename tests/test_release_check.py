@@ -48,6 +48,7 @@ from song_agent.release_checks import (
     _v71_release_portfolio_governance_evidence_vault_smoke,
     _v72_release_portfolio_governance_attestation_smoke,
     _v73_release_portfolio_governance_attestation_registry_smoke,
+    _v74_release_portfolio_governance_attestation_portal_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -643,6 +644,27 @@ def test_v73_release_portfolio_governance_attestation_registry_smoke(tmp_path: P
     assert "no_current=failed" in detail
     assert "report_source=failed" in detail
     assert "package_index=failed" in detail
+
+
+def test_v74_release_portfolio_governance_attestation_portal_smoke(tmp_path: Path) -> None:
+    ok, detail = _v74_release_portfolio_governance_attestation_portal_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "refresh=passed" in detail
+    assert "external=passed" in detail
+    assert "immutable=True/True/True/True" in detail
+    assert "report_source=failed" in detail
+    assert "data_summary=failed" in detail
+    assert "html_script=failed" in detail
+    assert "html_remote=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "dangerous=failed" in detail
+    assert "backslash=failed" in detail
+    assert "case_musicforge=failed" in detail
+    assert "nested=failed" in detail
+    assert "spoof=failed" in detail
+    assert "redaction=failed" in detail
+    assert "package_type=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

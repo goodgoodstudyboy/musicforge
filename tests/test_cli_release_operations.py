@@ -772,6 +772,88 @@ def test_verify_release_portfolio_governance_attestation_registry_cli_json_repor
     assert saved["summary"]["portfolio_id"] == portfolio_id
 
 
+def test_release_portfolio_governance_attestation_portal_cli_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_portal import _portal_fixture
+
+    portfolio_id, *_rest, store = _portal_fixture(Path(".musicforge"), monkeypatch)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    managed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-attestation-portal",
+            "--portfolio-id",
+            portfolio_id,
+            "--refresh",
+            "--export",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-current",
+            "--require-registry",
+            "--require-attestation",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert managed.returncode == 0, managed.stderr
+    payload = json.loads(managed.stdout)
+    assert payload["summary"]["status"] == "passed"
+    assert payload["zip"]["sha256"]
+    assert payload["verification_summary"]["status"] == "passed"
+    assert store.zip_path(portfolio_id).exists()
+
+
+def test_verify_release_portfolio_governance_attestation_portal_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_portal import _portal_fixture
+
+    portfolio_id, *_rest, store = _portal_fixture(Path(".musicforge"), monkeypatch)
+    store.refresh_report(portfolio_id)
+    store.export_portal(portfolio_id)
+    store.build_zip(portfolio_id)
+    report_out = tmp_path / "portfolio-governance-attestation-portal-verification.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    ok = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-attestation-portal",
+            str(store.zip_path(portfolio_id)),
+            "--json",
+            "--strict",
+            "--require-current",
+            "--require-registry",
+            "--require-attestation",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert ok.returncode == 0, ok.stderr
+    payload = json.loads(ok.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+    assert payload["status"] == "passed"
+    assert saved["summary"]["portfolio_id"] == portfolio_id
+
+
 def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     release_store = ReleaseStore()

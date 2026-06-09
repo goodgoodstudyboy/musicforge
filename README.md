@@ -569,6 +569,18 @@ python -m song_agent.cli release-portfolio-governance-attestation-registry --por
 python -m song_agent.cli verify-release-portfolio-governance-attestation-registry path\to\governance-attestation-registry.zip --strict --require-current --require-published --json
 ```
 
+Release Portfolio Governance Attestation Portal Snapshot turns a verified
+Public Attestation Registry into a static offline HTML/JSON portal. The portal
+contains human-readable pages plus machine-readable summaries, but it does not
+embed Public Attestation, Registry, Evidence Vault, or Final Board ZIP packages.
+The verifier rejects scripts, remote links, local paths, nested packages, data
+summary tamper, and manifest spoofing.
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-attestation-portal --portfolio-id <portfolio-id> --refresh --export --zip --verify --strict --require-current --require-registry --require-attestation --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-portal path\to\governance-attestation-portal.zip --strict --require-current --require-registry --require-attestation --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -608,6 +620,8 @@ python -m song_agent.cli release-portfolio-governance-attestation --portfolio-id
 python -m song_agent.cli verify-release-portfolio-governance-attestation path\to\portfolio-governance-public-attestation.zip --json --strict --require-vault --require-final-board --report-out public-attestation-verification-report.json
 python -m song_agent.cli release-portfolio-governance-attestation-registry --portfolio-id pfa-000001 --register-current --publish pgar-000001 --refresh --export --zip --verify --strict --require-current --require-published --json
 python -m song_agent.cli verify-release-portfolio-governance-attestation-registry path\to\governance-attestation-registry.zip --json --strict --require-current --require-published --report-out attestation-registry-verification-report.json
+python -m song_agent.cli release-portfolio-governance-attestation-portal --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --require-current --require-registry --require-attestation --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-portal path\to\governance-attestation-portal.zip --json --strict --require-current --require-registry --require-attestation --report-out attestation-portal-verification-report.json
 ```
 
 ```powershell

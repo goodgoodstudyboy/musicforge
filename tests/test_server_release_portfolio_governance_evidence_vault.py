@@ -64,6 +64,13 @@ def test_server_release_portfolio_governance_evidence_vault_routes(tmp_path, mon
         registry_verify_status, registry_verified = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/verify", {"profile": "public_summary", "strict": True, "require_current": True, "require_published": True, "require_no_revoked_current": True})
         registry_rebuild_status, registry_rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/zip", {"profile": "public_summary"})
         registry_download_status, registry_zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry.zip")
+        portal_refresh_status, portal_refreshed = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal/refresh", {"profile": "public_summary"})
+        portal_detail_status, portal_detail = request_json(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal")
+        portal_export_status, portal_exported = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal/export", {"profile": "public_summary"})
+        portal_zip_status, portal_zipped = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal/zip", {"profile": "public_summary"})
+        portal_verify_status, portal_verified = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal/verify", {"profile": "public_summary", "strict": True, "require_current": True, "require_registry": True, "require_attestation": True})
+        portal_rebuild_status, portal_rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal/zip", {"profile": "public_summary"})
+        portal_download_status, portal_zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal.zip")
         rebuild_status, rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault/zip")
         download_status, zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault.zip")
     finally:
@@ -111,6 +118,20 @@ def test_server_release_portfolio_governance_evidence_vault_routes(tmp_path, mon
     assert "already exists" in registry_rebuild.get("error", "")
     assert registry_download_status == 200
     assert registry_zip_bytes.startswith(b"PK")
+    assert portal_refresh_status == 200
+    assert portal_refreshed["summary"]["status"] == "passed"
+    assert portal_detail_status == 200
+    assert portal_detail["summary"]["status"] == "passed"
+    assert portal_export_status == 201
+    assert portal_exported["manifest"]["package_type"] == "release_portfolio_governance_attestation_portal"
+    assert portal_zip_status == 200
+    assert portal_zipped["zip"]["sha256"]
+    assert portal_verify_status == 200
+    assert portal_verified["verification"]["status"] == "passed"
+    assert portal_rebuild_status == 409
+    assert "already exists" in portal_rebuild.get("error", "")
+    assert portal_download_status == 200
+    assert portal_zip_bytes.startswith(b"PK")
     assert rebuild_status == 409
     assert "already exists" in rebuild.get("error", "")
     assert download_status == 200
