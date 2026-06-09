@@ -557,6 +557,18 @@ python -m song_agent.cli release-portfolio-governance-attestation --portfolio-id
 python -m song_agent.cli verify-release-portfolio-governance-attestation path\to\portfolio-governance-public-attestation.zip --strict --require-vault --require-final-board --json
 ```
 
+Release Portfolio Governance Attestation Registry records the lifecycle of
+public certificates. It registers the current verified Public Attestation,
+publishes one current entry, supersedes older entries only with explicit
+confirmation, supports revocation without deletion, and exports a registry ZIP
+that can be verified offline. Registry export and ZIP rebuild are immutable for
+the same registry state, so deleting files does not permit silent regeneration.
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-attestation-registry --portfolio-id <portfolio-id> --register-current --publish pgar-000001 --refresh --export --zip --verify --strict --require-current --require-published --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-registry path\to\governance-attestation-registry.zip --strict --require-current --require-published --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -594,6 +606,8 @@ python -m song_agent.cli release-portfolio-governance-evidence-vault --portfolio
 python -m song_agent.cli verify-release-portfolio-governance-evidence-vault path\to\portfolio-governance-evidence-vault.zip --json --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --report-out evidence-vault-verification-report.json
 python -m song_agent.cli release-portfolio-governance-attestation --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --require-vault --require-final-board --json
 python -m song_agent.cli verify-release-portfolio-governance-attestation path\to\portfolio-governance-public-attestation.zip --json --strict --require-vault --require-final-board --report-out public-attestation-verification-report.json
+python -m song_agent.cli release-portfolio-governance-attestation-registry --portfolio-id pfa-000001 --register-current --publish pgar-000001 --refresh --export --zip --verify --strict --require-current --require-published --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-registry path\to\governance-attestation-registry.zip --json --strict --require-current --require-published --report-out attestation-registry-verification-report.json
 ```
 
 ```powershell

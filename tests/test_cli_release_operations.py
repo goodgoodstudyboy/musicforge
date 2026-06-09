@@ -664,6 +664,114 @@ def test_verify_release_portfolio_governance_attestation_cli_json_report_out(tmp
     assert saved["summary"]["portfolio_id"] == portfolio_id
 
 
+def test_release_portfolio_governance_attestation_registry_cli_lifecycle_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_registry import _registry_fixture
+
+    portfolio_id, *_rest, store = _registry_fixture(Path(".musicforge"), monkeypatch)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    registered = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-attestation-registry",
+            "--portfolio-id",
+            portfolio_id,
+            "--register-current",
+            "--refresh",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert registered.returncode == 0, registered.stderr
+    registered_payload = json.loads(registered.stdout)
+    entry_id = registered_payload["entry"]["entry_id"]
+
+    managed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-attestation-registry",
+            "--portfolio-id",
+            portfolio_id,
+            "--publish",
+            entry_id,
+            "--refresh",
+            "--export",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-current",
+            "--require-published",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert managed.returncode == 0, managed.stderr
+    payload = json.loads(managed.stdout)
+    assert payload["summary"]["current_entry_id"] == entry_id
+    assert payload["zip"]["sha256"]
+    assert payload["verification_summary"]["status"] == "passed"
+    assert store.zip_path(portfolio_id).exists()
+
+
+def test_verify_release_portfolio_governance_attestation_registry_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_registry import _registry_fixture
+
+    portfolio_id, *_rest, store = _registry_fixture(Path(".musicforge"), monkeypatch)
+    entry = store.register_current_attestation(portfolio_id)["entry"]
+    store.publish_entry(portfolio_id, entry["entry_id"], {"published_by": "test"})
+    store.refresh_report(portfolio_id)
+    store.export_registry(portfolio_id)
+    store.build_zip(portfolio_id)
+    report_out = tmp_path / "portfolio-governance-attestation-registry-verification.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    ok = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-attestation-registry",
+            str(store.zip_path(portfolio_id)),
+            "--json",
+            "--strict",
+            "--require-current",
+            "--require-published",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert ok.returncode == 0, ok.stderr
+    payload = json.loads(ok.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+    assert payload["status"] == "passed"
+    assert saved["summary"]["portfolio_id"] == portfolio_id
+
+
 def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     release_store = ReleaseStore()

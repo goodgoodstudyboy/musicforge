@@ -76,6 +76,7 @@ from song_agent.release_portfolio_governance_reviewer_pack_verifier import verif
 from song_agent.release_portfolio_governance_final_board_verifier import verify_release_portfolio_governance_final_board_package
 from song_agent.release_portfolio_governance_evidence_vault_verifier import verify_release_portfolio_governance_evidence_vault_package
 from song_agent.release_portfolio_governance_attestation_verifier import verify_release_portfolio_governance_attestation
+from song_agent.release_portfolio_governance_attestation_registry_verifier import verify_release_portfolio_governance_attestation_registry
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
@@ -259,6 +260,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
     report.add("v7.0 release portfolio governance final board smoke", *_v70_release_portfolio_governance_final_board_smoke(root))
     report.add("v7.1 release portfolio governance evidence vault smoke", *_v71_release_portfolio_governance_evidence_vault_smoke(root))
     report.add("v7.2 release portfolio governance public attestation smoke", *_v72_release_portfolio_governance_attestation_smoke(root))
+    report.add("v7.3 release portfolio governance attestation registry smoke", *_v73_release_portfolio_governance_attestation_registry_smoke(root))
     return report
 
 
@@ -11113,6 +11115,266 @@ def _v72_case_variant_musicforge_attestation_zip(source: Path, target: Path) -> 
                     output.writestr(info.filename, archive.read(info.filename))
             output.writestr(".MusicForge/internal.json", internal_bytes)
     return target
+
+
+def _v73_release_portfolio_governance_attestation_registry_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v73-attestation-registry-")).resolve()
+    try:
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore
+        from song_agent.release_portfolio_governance_attestation_registry import ReleasePortfolioGovernanceAttestationRegistryStore
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.releases import ReleaseStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=operations_audit_store, reviewer_pack_store=operations_reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=operations_signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+        vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store, final_board_store=final_board_store)
+        attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
+        registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
+
+        release = release_store.create_release({"name": "v7.3 Registry Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        portfolio = portfolio_store.create({"name": "v7.3 Registry Portfolio", "release_ids": [release.release_id]})
+        portfolio_id = portfolio["portfolio_id"]
+        _v73_write_minimal_attestation_zip(attestation_store.zip_path(portfolio_id), portfolio_id=portfolio_id, suffix="a")
+        attestation_verify = verify_release_portfolio_governance_attestation(attestation_store.zip_path(portfolio_id), strict=True, require_vault=True, require_final_board=True)
+        first = registry_store.register_current_attestation(portfolio_id)["entry"]
+        duplicate = registry_store.register_current_attestation(portfolio_id)
+        registry_store.publish_entry(portfolio_id, first["entry_id"], {"published_by": "release-check"})
+
+        _v73_write_minimal_attestation_zip(attestation_store.zip_path(portfolio_id), portfolio_id=portfolio_id, suffix="b")
+        second = registry_store.register_current_attestation(portfolio_id)["entry"]
+        publish_without_supersede_blocked = False
+        try:
+            registry_store.publish_entry(portfolio_id, second["entry_id"], {"published_by": "release-check"})
+        except Exception:
+            publish_without_supersede_blocked = True
+        registry_store.publish_entry(portfolio_id, second["entry_id"], {"published_by": "release-check", "supersede_current": True})
+        registry_store.revoke_entry(portfolio_id, first["entry_id"], {"revoked_by": "release-check", "reason": "Superseded by current public proof."})
+        registry_report = registry_store.refresh_report(portfolio_id)
+        registry_manifest = registry_store.export_registry(portfolio_id)
+        registry_zip = registry_store.build_zip(portfolio_id)
+        stable_zip = base / "stable-registry.zip"
+        shutil.copy2(registry_store.zip_path(portfolio_id), stable_zip)
+        registry_verify = verify_release_portfolio_governance_attestation_registry(stable_zip, strict=True, require_current=True, require_published=True, require_no_revoked_current=True)
+
+        initial_export_blocked = initial_zip_blocked = deleted_export_blocked = deleted_zip_blocked = False
+        try:
+            registry_store.export_registry(portfolio_id)
+        except Exception:
+            initial_export_blocked = True
+        try:
+            registry_store.build_zip(portfolio_id)
+        except Exception:
+            initial_zip_blocked = True
+        shutil.rmtree(registry_store.export_dir(portfolio_id))
+        registry_store.zip_path(portfolio_id).unlink()
+        try:
+            registry_store.export_registry(portfolio_id)
+        except Exception:
+            deleted_export_blocked = True
+        try:
+            registry_store.build_zip(portfolio_id)
+        except Exception:
+            deleted_zip_blocked = True
+
+        registry_tamper = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "registry-tamper-v73.zip", transforms={"registry.json": _v73_tamper_registry_current}), strict=True)
+        wrong_type = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "wrong-type-v73.zip", transforms={"manifest.json": _v73_wrong_type_registry_manifest}), strict=True)
+        duplicate_zip = verify_release_portfolio_governance_attestation_registry(_v43_duplicate_submission_zip(stable_zip, base / "duplicate-v73.zip"), strict=True)
+        dangerous = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "dangerous-v73.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_release_portfolio_governance_attestation_registry(_v38_backslash_entry_zip(base / "backslash-v73.zip"), strict=True)
+        case_musicforge = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "case-musicforge-v73.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "nested-v73.zip", additions={"nested/fake.zip": b"PK\x05\x06" + (b"\0" * 18)}), strict=True)
+        spoof = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "spoof-v73.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v73_spoof_registry_manifest}), strict=True)
+        redaction = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "redaction-v73.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        no_current = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "no-current-v73.zip", transforms={"registry.json": _v73_clear_registry_current}), strict=True, require_current=True)
+
+        serialized = json.dumps({"report": registry_report, "manifest": registry_manifest, "verification": registry_verify}, ensure_ascii=False)
+        ok = (
+            attestation_verify.get("status") == "passed"
+            and first.get("status") == "draft"
+            and duplicate.get("existing") is True
+            and publish_without_supersede_blocked
+            and registry_report.get("status") == "passed"
+            and registry_manifest.get("package_type") == "release_portfolio_governance_attestation_registry"
+            and registry_zip.get("sha256")
+            and registry_verify.get("status") == "passed"
+            and initial_export_blocked
+            and initial_zip_blocked
+            and deleted_export_blocked
+            and deleted_zip_blocked
+            and _v38_check_status(registry_tamper, "registry_current_entry_exists") == "failed"
+            and _v38_check_status(wrong_type, "registry_manifest_package_type") == "failed"
+            and _v38_check_status(duplicate_zip, "registry_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "registry_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "registry_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "registry_zip_no_nested_packages") == "failed"
+            and _v38_check_status(nested, "registry_zip_no_nested_packages") == "failed"
+            and _v38_check_status(spoof, "registry_manifest_extra_entries") == "failed"
+            and _v38_check_status(spoof, "registry_manifest_zip_entries_reference_only") == "warning"
+            and _v38_check_status(redaction, "registry_redaction_scan") == "failed"
+            and _v38_check_status(no_current, "registry_require_current") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"attestation={attestation_verify.get('status')}, registry={registry_report.get('status')}, verify={registry_verify.get('status')}, "
+            f"publish_blocked={publish_without_supersede_blocked}, delete_rebuild={initial_export_blocked}/{initial_zip_blocked}/{deleted_export_blocked}/{deleted_zip_blocked}, "
+            f"tamper={_v38_check_status(registry_tamper, 'registry_current_entry_exists')}, package_type={_v38_check_status(wrong_type, 'registry_manifest_package_type')}, "
+            f"duplicate={_v38_check_status(duplicate_zip, 'registry_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'registry_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash, 'registry_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge, 'registry_zip_no_nested_packages')}, "
+            f"nested={_v38_check_status(nested, 'registry_zip_no_nested_packages')}, spoof={_v38_check_status(spoof, 'registry_manifest_extra_entries')}/{_v38_check_status(spoof, 'registry_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction, 'registry_redaction_scan')}, no_current={_v38_check_status(no_current, 'registry_require_current')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v73_write_minimal_attestation_zip(zip_path: Path, *, portfolio_id: str, suffix: str) -> None:
+    from song_agent.release_portfolio_governance_attestation import build_certificate, attestation_certificate_hash, attestation_manifest_hash, attestation_report_integrity_hash
+
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+    source = {
+        "portfolio_id": portfolio_id,
+        "attestation_profile": "public_summary",
+        "final_board_signoff_status": "signed",
+        "final_board_signoff_hash": stable_hash({"final": suffix}),
+        "final_board_report_hash": stable_hash({"final_report": suffix}),
+        "evidence_vault_zip_sha256": hashlib.sha256(f"vault-{suffix}".encode("utf-8")).hexdigest(),
+        "evidence_vault_zip_size_bytes": 1000 + len(suffix),
+        "evidence_vault_manifest_hash": hashlib.sha256(f"vault-manifest-{suffix}".encode("utf-8")).hexdigest(),
+        "evidence_vault_verification_hash": hashlib.sha256(f"vault-verification-{suffix}".encode("utf-8")).hexdigest(),
+        "evidence_vault_verification_status": "passed",
+        "evidence_vault_deep_verification_status": "passed",
+        "signed_queue_count": 1,
+        "force_signed_queue_count": 0,
+        "reviewer_response_status": "accepted",
+    }
+    report = {
+        "schema_version": 1,
+        "package_type": "release_portfolio_governance_attestation_report",
+        "report_id": f"pga-000001-{suffix}",
+        "portfolio_id": portfolio_id,
+        "generated_at": "2026-06-09T00:00:00+00:00",
+        "status": "passed",
+        "readiness": "attestation_ready",
+        "source_hash": stable_hash(source),
+        "source": source,
+        "summary": {
+            "portfolio_id": portfolio_id,
+            "status": "passed",
+            "final_board_status": "signed",
+            "vault_verification_status": "passed",
+            "deep_verification_status": "passed",
+            "vault_zip_sha256": source["evidence_vault_zip_sha256"],
+            "signed_queue_count": 1,
+            "force_signed_queue_count": 0,
+            "reviewer_response_status": "accepted",
+            "attestation_profile": "public_summary",
+            "certificate_status": "ready",
+            "blocker_count": 0,
+            "warning_count": 0,
+        },
+        "blockers": [],
+        "warnings": [],
+        "checks": [],
+    }
+    report["integrity_hash"] = attestation_report_integrity_hash(report)
+    certificate = build_certificate(report=report, generated_at="2026-06-09T00:00:00+00:00", profile="public_summary")
+    certificate["certificate_id"] = f"pgc-000001-{suffix}"
+    certificate["payload_hash"] = attestation_certificate_hash(certificate)
+    files: dict[str, bytes] = {
+        "attestation-report.json": json.dumps(report, ensure_ascii=False, indent=2).encode("utf-8"),
+        "certificate.json": json.dumps(certificate, ensure_ascii=False, indent=2).encode("utf-8"),
+        "certificate.md": f"# MusicForge Portfolio Governance Public Attestation\n\nCertificate ID: `{certificate.get('certificate_id')}`\n".encode("utf-8"),
+        "README.txt": b"MusicForge Release Portfolio Governance Public Attestation\n",
+    }
+    manifest = {
+        "schema_version": 1,
+        "package_type": "release_portfolio_governance_public_attestation",
+        "tool": {"name": "MusicForge Release Portfolio Governance Public Attestation", "version": __version__},
+        "portfolio_id": portfolio_id,
+        "created_at": "2026-06-09T00:00:00+00:00",
+        "source_hash": report["source_hash"],
+        "attestation_profile": "public_summary",
+        "attestation_report": {"integrity_hash": report["integrity_hash"], "source_hash": report["source_hash"]},
+        "certificate": {"certificate_id": certificate["certificate_id"], "payload_hash": certificate["payload_hash"]},
+        "final_board": {"signoff_hash": source["final_board_signoff_hash"], "signoff_status": "signed"},
+        "evidence_vault": {
+            "zip_sha256": source["evidence_vault_zip_sha256"],
+            "zip_size_bytes": source["evidence_vault_zip_size_bytes"],
+            "manifest_hash": source["evidence_vault_manifest_hash"],
+            "verification_hash": source["evidence_vault_verification_hash"],
+            "verification_status": "passed",
+            "deep_verification_status": "passed",
+        },
+        "files": [{"path": name, "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()} for name, data in sorted(files.items())],
+        "zip": {},
+        "redaction_summary": {"status": "passed", "matches": []},
+    }
+    manifest["integrity_hash"] = attestation_manifest_hash(manifest)
+    files["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, data in sorted(files.items()):
+            archive.writestr(name, data)
+
+
+def _v73_tamper_registry_current(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_attestation_registry import registry_hash
+
+    payload = json.loads(data.decode("utf-8"))
+    payload["current_entry_id"] = "missing-entry"
+    payload["integrity_hash"] = registry_hash(payload)
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v73_clear_registry_current(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_attestation_registry import registry_hash
+
+    payload = json.loads(data.decode("utf-8"))
+    payload["current_entry_id"] = None
+    payload["integrity_hash"] = registry_hash(payload)
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v73_wrong_type_registry_manifest(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_attestation_registry import registry_manifest_hash
+
+    payload = json.loads(data.decode("utf-8"))
+    payload["package_type"] = "wrong_package_type"
+    payload["integrity_hash"] = registry_manifest_hash(payload)
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v73_spoof_registry_manifest(data: bytes) -> bytes:
+    payload = json.loads(data.decode("utf-8"))
+    payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 class _V55FixtureEncoderRunner:

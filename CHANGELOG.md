@@ -1,5 +1,17 @@
 # Changelog
 
+## v7.3.0 - 2026-06-09
+
+### Added
+- Release Portfolio Governance Attestation Registry for registering, publishing, superseding, and revoking Public Attestation certificate entries without deleting lifecycle history.
+- `release-portfolio-governance-attestation-registry` and `verify-release-portfolio-governance-attestation-registry` CLI commands with current/published registry requirement flags.
+- API routes under `/api/release-portfolio-audits/<portfolio-id>/governance-attestation-registry` plus Studio controls in the Portfolio Audit workspace.
+- Offline Attestation Registry ZIP verifier covering registry/report/manifest/chain integrity, current entry requirements, duplicate certificate ambiguity, nested ZIP and `.musicforge/` exclusion, unsafe/backslash paths, manifest spoofing, package type, and redaction checks.
+- v7.3 release-check smoke covering register/publish/supersede/revoke lifecycle, immutable delete/rebuild guards, tamper, duplicate/path/backslash/case `.MusicForge/`, nested package, manifest spoof, package type, missing current, and redaction regressions.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_registry.py tests\test_server_release_portfolio_governance_evidence_vault.py::test_server_release_portfolio_governance_evidence_vault_routes tests\test_cli_release_operations.py::test_release_portfolio_governance_attestation_registry_cli_lifecycle_verify tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_attestation_registry_cli_json_report_out tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v73_release_portfolio_governance_attestation_registry_smoke -q`
+
 ## v7.2.1 - 2026-06-09
 
 ### Fixed

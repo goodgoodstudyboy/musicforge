@@ -522,6 +522,30 @@ def build_release_portfolio_governance_attestation_parser() -> argparse.Argument
     return parser
 
 
+def build_release_portfolio_governance_attestation_registry_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage local MusicForge Release Portfolio Governance Public Attestation registries.")
+    parser.add_argument("--portfolio-id", required=True, help="Release Portfolio Audit id.")
+    parser.add_argument("--profile", default="public_summary", help="Attestation profile.")
+    parser.add_argument("--register-current", action="store_true", help="Register the current verified Public Attestation ZIP.")
+    parser.add_argument("--publish", metavar="ENTRY_ID", default=None, help="Publish a registry entry.")
+    parser.add_argument("--supersede-current", action="store_true", help="Allow publish to supersede the current entry.")
+    parser.add_argument("--revoke", metavar="ENTRY_ID", default=None, help="Revoke a published or superseded registry entry.")
+    parser.add_argument("--reason", default="", help="Revocation reason.")
+    parser.add_argument("--public-url", default="", help="Optional public URL for the published entry.")
+    parser.add_argument("--distribution-note", default="", help="Optional public distribution note.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh the registry report.")
+    parser.add_argument("--export", action="store_true", help="Build the registry export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the registry ZIP package.")
+    parser.add_argument("--verify", action="store_true", help="Verify the registry ZIP package.")
+    parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    parser.add_argument("--require-current", action="store_true", help="Require a current published registry entry.")
+    parser.add_argument("--require-published", action="store_true", help="Require at least one published registry entry.")
+    parser.add_argument("--require-no-revoked-current", action="store_true", help="Fail when the current registry entry is revoked.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
 def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")
     verify_parser.add_argument("zip_path", type=Path, help="Path to the Human Review Pack ZIP to verify.")
@@ -612,6 +636,21 @@ def build_verify_release_portfolio_governance_attestation_parser() -> argparse.A
     verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
     verify_parser.add_argument("--require-vault", action="store_true", help="Require passed deep Evidence Vault verification.")
     verify_parser.add_argument("--require-final-board", action="store_true", help="Require Final Board signoff evidence.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_release_portfolio_governance_attestation_registry_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release Portfolio Governance Public Attestation Registry ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Release Portfolio Governance Public Attestation Registry ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require a current published registry entry.")
+    verify_parser.add_argument("--require-published", action="store_true", help="Require at least one published registry entry.")
+    verify_parser.add_argument("--require-no-revoked-current", action="store_true", help="Fail when the current registry entry is revoked.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
@@ -1547,6 +1586,33 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_attestation_verification_report(report)
         raise SystemExit(release_portfolio_governance_attestation_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-portfolio-governance-attestation-registry":
+        from song_agent.release_portfolio_governance_attestation_registry_verifier import (
+            print_release_portfolio_governance_attestation_registry_verification_report,
+            release_portfolio_governance_attestation_registry_verification_exit_code,
+            verify_release_portfolio_governance_attestation_registry,
+            write_release_portfolio_governance_attestation_registry_verification_report,
+        )
+
+        parser = build_verify_release_portfolio_governance_attestation_registry_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_portfolio_governance_attestation_registry(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_published=args.require_published,
+            require_no_revoked_current=args.require_no_revoked_current,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_portfolio_governance_attestation_registry_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_attestation_registry_verification_report(report)
+        raise SystemExit(release_portfolio_governance_attestation_registry_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -2439,6 +2505,93 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_portfolio_governance_attestation_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-portfolio-governance-attestation-registry":
+        from song_agent.distribution import DistributionStore
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore
+        from song_agent.release_portfolio_governance_attestation_registry import ReleasePortfolioGovernanceAttestationRegistryStore, registry_summary as portfolio_governance_attestation_registry_summary, registry_verification_summary as release_portfolio_governance_attestation_registry_verification_summary
+        from song_agent.release_portfolio_governance_attestation_registry_verifier import verify_release_portfolio_governance_attestation_registry, write_release_portfolio_governance_attestation_registry_verification_report
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
+
+        parser = build_release_portfolio_governance_attestation_registry_parser()
+        args = parser.parse_args(raw_args[1:])
+        release_store = ReleaseStore()
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        evidence_store = SubmissionEvidenceStore(submission_store)
+        operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=operations_audit_store, reviewer_pack_store=operations_reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=operations_signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+        vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(
+            portfolio_store=portfolio_store,
+            governance_store=governance_store,
+            signoff_store=governance_signoff_store,
+            audit_store=governance_audit_store,
+            reviewer_pack_store=governance_reviewer_store,
+            final_board_store=final_board_store,
+        )
+        attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
+        store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
+        portfolio_id = args.portfolio_id
+        payload = {"profile": args.profile}
+        result: dict[str, Any] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+        if args.register_current:
+            registered = store.register_current_attestation(portfolio_id, {**payload, "public_url": args.public_url, "distribution_note": args.distribution_note})
+            result.update({"entry": registered.get("entry"), "registry": registered.get("registry"), "existing": bool(registered.get("existing"))})
+        if args.publish:
+            published = store.publish_entry(portfolio_id, args.publish, {**payload, "supersede_current": args.supersede_current, "public_url": args.public_url, "distribution_note": args.distribution_note, "published_by": "cli"})
+            result.update({"entry": published.get("entry"), "registry": published.get("registry")})
+        if args.revoke:
+            revoked = store.revoke_entry(portfolio_id, args.revoke, {**payload, "reason": args.reason, "revoked_by": "cli"})
+            result.update({"entry": revoked.get("entry"), "registry": revoked.get("registry")})
+        if args.refresh:
+            report = store.refresh_report(portfolio_id, payload)
+            result.update({"report": report})
+        else:
+            report = store.read_report(portfolio_id, profile=args.profile, default={})
+            if report:
+                result["report"] = report
+        registry = result.get("registry") if isinstance(result.get("registry"), dict) else store.read_registry(portfolio_id, profile=args.profile, default={})
+        result["registry"] = registry
+        result["summary"] = portfolio_governance_attestation_registry_summary(registry) if registry else {"status": "missing", "profile": args.profile}
+        if args.export:
+            manifest = store.export_registry(portfolio_id, payload)
+            result.update({"manifest": manifest})
+        if args.zip:
+            zip_info = store.build_zip(portfolio_id, payload)
+            result.update({"zip": zip_info})
+        if args.verify:
+            verification = verify_release_portfolio_governance_attestation_registry(store.zip_path(portfolio_id, args.profile), strict=args.strict, require_current=args.require_current, require_published=args.require_published, require_no_revoked_current=args.require_no_revoked_current)
+            write_release_portfolio_governance_attestation_registry_verification_report(verification, store.verification_report_path(portfolio_id, args.profile))
+            result.update({"verification": verification, "verification_summary": release_portfolio_governance_attestation_registry_verification_summary(verification)})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_attestation_registry_result(result)
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
@@ -3522,6 +3675,26 @@ def print_release_portfolio_governance_attestation_result(result: dict[str, Any]
     print(f"vault: {summary.get('vault_verification_status') or '-'} / deep {summary.get('deep_verification_status') or '-'}")
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
+
+
+def print_release_portfolio_governance_attestation_registry_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    entry = result.get("entry") if isinstance(result.get("entry"), dict) else {}
+    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+    print("MusicForge release-portfolio-governance-attestation-registry")
+    print(f"portfolio: {result.get('portfolio_id') or '-'}")
+    print(f"profile: {result.get('profile') or summary.get('profile') or '-'}")
+    print(f"status: {summary.get('status') or '-'}")
+    print(f"current entry: {summary.get('current_entry_id') or '-'}")
+    print(f"entries: {summary.get('entry_count', 0)}")
+    print(f"published: {summary.get('published_count', 0)}")
+    print(f"revoked: {summary.get('revoked_count', 0)}")
+    if entry:
+        print(f"entry: {entry.get('entry_id') or '-'} / {entry.get('status') or '-'}")
     if result.get("zip"):
         print(f"zip: {(result.get('zip') or {}).get('filename')}")
     if verification:

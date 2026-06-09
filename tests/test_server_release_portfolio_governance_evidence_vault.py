@@ -54,6 +54,16 @@ def test_server_release_portfolio_governance_evidence_vault_routes(tmp_path, mon
         att_verify_status, att_verified = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation/verify", {"profile": "public_summary", "strict": True, "require_vault": True, "require_final_board": True})
         att_rebuild_status, att_rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation/zip", {"profile": "public_summary"})
         att_download_status, att_zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation.zip")
+        registry_register_status, registry_registered = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/register-current", {"profile": "public_summary"})
+        registry_entry_id = registry_registered["entry"]["entry_id"]
+        registry_publish_status, registry_published = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/entries/{registry_entry_id}/publish", {"profile": "public_summary"})
+        registry_detail_status, registry_detail = request_json(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry")
+        registry_refresh_status, registry_refreshed = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/refresh", {"profile": "public_summary"})
+        registry_export_status, registry_exported = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/export", {"profile": "public_summary"})
+        registry_zip_status, registry_zipped = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/zip", {"profile": "public_summary"})
+        registry_verify_status, registry_verified = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/verify", {"profile": "public_summary", "strict": True, "require_current": True, "require_published": True, "require_no_revoked_current": True})
+        registry_rebuild_status, registry_rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry/zip", {"profile": "public_summary"})
+        registry_download_status, registry_zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-registry.zip")
         rebuild_status, rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault/zip")
         download_status, zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault.zip")
     finally:
@@ -83,6 +93,24 @@ def test_server_release_portfolio_governance_evidence_vault_routes(tmp_path, mon
     assert "already exists" in att_rebuild.get("error", "")
     assert att_download_status == 200
     assert att_zip_bytes.startswith(b"PK")
+    assert registry_register_status == 201
+    assert registry_registered["entry"]["status"] == "draft"
+    assert registry_publish_status == 200
+    assert registry_published["summary"]["current_entry_id"] == registry_entry_id
+    assert registry_detail_status == 200
+    assert registry_detail["summary"]["current_entry_id"] == registry_entry_id
+    assert registry_refresh_status == 200
+    assert registry_refreshed["report"]["status"] == "passed"
+    assert registry_export_status == 201
+    assert registry_exported["manifest"]["package_type"] == "release_portfolio_governance_attestation_registry"
+    assert registry_zip_status == 200
+    assert registry_zipped["zip"]["sha256"]
+    assert registry_verify_status == 200
+    assert registry_verified["verification"]["status"] == "passed"
+    assert registry_rebuild_status == 409
+    assert "already exists" in registry_rebuild.get("error", "")
+    assert registry_download_status == 200
+    assert registry_zip_bytes.startswith(b"PK")
     assert rebuild_status == 409
     assert "already exists" in rebuild.get("error", "")
     assert download_status == 200

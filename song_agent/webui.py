@@ -3312,6 +3312,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceEvidenceVaultData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault`); } catch (err) {}
       let governanceAttestationData = { report: {}, summary: {}, certificate: {} };
       try { governanceAttestationData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation`); } catch (err) {}
+      let governanceAttestationRegistryData = { registry: {}, report: {}, summary: {} };
+      try { governanceAttestationRegistryData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
@@ -3321,6 +3323,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const governanceEvidenceVaultSummary = governanceEvidenceVaultData.summary || {};
       const governanceAttestationSummary = governanceAttestationData.summary || {};
       const governanceAttestationCertificate = governanceAttestationData.certificate || {};
+      const governanceAttestationRegistrySummary = governanceAttestationRegistryData.summary || {};
+      const governanceAttestationRegistry = governanceAttestationRegistryData.registry || {};
+      const governanceAttestationRegistryRows = (governanceAttestationRegistry.entries || []).slice(-6).reverse().map((entry) => `
+        <tr>
+          <td>${escapeHtml(entry.entry_id || "-")}</td>
+          <td><span class="status ${escapeHtml(entry.status || "")}">${escapeHtml(entry.status || "-")}</span></td>
+          <td>${escapeHtml(entry.certificate_id || "-")}</td>
+          <td>${escapeHtml(((entry.source || {}).attestation_zip_sha256 || "").slice(0, 12) || "-")}</td>
+          <td>
+            <button class="secondary portfolio-governance-attestation-registry-publish" data-entry-id="${escapeHtml(entry.entry_id || "")}" type="button">Publish</button>
+            <button class="secondary portfolio-governance-attestation-registry-revoke" data-entry-id="${escapeHtml(entry.entry_id || "")}" type="button">Revoke</button>
+          </td>
+        </tr>
+      `).join("");
       const score = report.risk_score || {};
       const stale = Boolean(reportData.stale || (reportData.summary || {}).stale || (data.summary || {}).stale);
       const trend = trendData.trend_report || {};
@@ -3545,6 +3561,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-attestation-verify" type="button">Verify Public Attestation ZIP</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation.zip">Download Public Attestation ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Governance Attestation Registry</span></div>
+        <div class="summary-grid">
+          ${metric("Registry", governanceAttestationRegistrySummary.status || "missing")}
+          ${metric("Current Entry", governanceAttestationRegistrySummary.current_entry_id || "-")}
+          ${metric("Entries", governanceAttestationRegistrySummary.entry_count || 0)}
+          ${metric("Published", governanceAttestationRegistrySummary.published_count || 0)}
+          ${metric("Revoked", governanceAttestationRegistrySummary.revoked_count || 0)}
+          ${metric("Superseded", governanceAttestationRegistrySummary.superseded_count || 0)}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-attestation-registry-register-current" type="button">Register Current Attestation</button>
+          <button class="secondary" id="portfolio-governance-attestation-registry-refresh" type="button">Refresh Registry Report</button>
+          <button class="secondary" id="portfolio-governance-attestation-registry-export" type="button">Export Registry</button>
+          <button class="secondary" id="portfolio-governance-attestation-registry-zip" type="button">Build Registry ZIP</button>
+          <button class="secondary" id="portfolio-governance-attestation-registry-verify" type="button">Verify Registry ZIP</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-registry.zip">Download Registry ZIP</a>
+        </div>
+        <table class="compact-table">
+          <thead><tr><th>Entry</th><th>Status</th><th>Certificate</th><th>ZIP SHA</th><th>Actions</th></tr></thead>
+          <tbody>${governanceAttestationRegistryRows || '<tr><td colspan="5">No registry entries.</td></tr>'}</tbody>
+        </table>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3732,6 +3769,72 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           body: JSON.stringify({ profile: "public_summary", strict: true, require_vault: true, require_final_board: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-registry-register-current", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/register-current`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-registry-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-registry-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-registry-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-registry-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true, require_published: true, require_no_revoked_current: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      document.querySelectorAll(".portfolio-governance-attestation-registry-publish").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const entryId = button.dataset.entryId;
+          if (!entryId) return;
+          await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/entries/${encodeURIComponent(entryId)}/publish`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ profile: "public_summary", supersede_current: true }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
+      });
+      document.querySelectorAll(".portfolio-governance-attestation-registry-revoke").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const entryId = button.dataset.entryId;
+          if (!entryId) return;
+          const reason = prompt("Revocation reason");
+          if (!reason) return;
+          await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/entries/${encodeURIComponent(entryId)}/revoke`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ profile: "public_summary", reason }),
+          });
+          await renderPortfolioAuditDetail(portfolioId);
+        });
       });
     }
 
