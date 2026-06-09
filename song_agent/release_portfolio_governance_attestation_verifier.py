@@ -170,7 +170,7 @@ class _AttestationVerifier:
         self._add_check("zip", "attestation_zip_duplicate_entries", "failed" if duplicates else "passed", "blocking", "Duplicate ZIP entries: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate ZIP entries.")
         missing = sorted(REQUIRED_ENTRIES - set(self.entry_names))
         self._add_check("zip", "attestation_zip_required_entries", "failed" if missing else "passed", "blocking", "Missing required entries: " + ", ".join(missing) if missing else "All required Public Attestation entries exist.")
-        forbidden = [name for name in self.entry_names if name.lower().endswith(".zip") or name.startswith("nested/") or ".musicforge/" in name or name.startswith(".musicforge/")]
+        forbidden = [name for name in self.entry_names if _is_forbidden_public_entry(name)]
         self._add_check("zip", "attestation_zip_no_nested_packages", "failed" if forbidden else "passed", "blocking", "Forbidden nested package entries: " + ", ".join(forbidden[:5]) if forbidden else "No nested ZIP or .musicforge entries are present.")
 
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
@@ -253,6 +253,12 @@ class _AttestationVerifier:
         self._add_hash_check("certificate", "attestation_evidence_vault_verification_hash", evidence_manifest.get("verification_hash"), evidence_cert.get("verification_hash"), "Evidence Vault verification hash")
         self._add_value_check("certificate", "attestation_evidence_vault_verification_status", evidence_cert.get("verification_status"), evidence_manifest.get("verification_status"), "Evidence Vault verification status")
         self._add_value_check("certificate", "attestation_evidence_vault_deep_verification_status", evidence_cert.get("deep_verification_status"), evidence_manifest.get("deep_verification_status"), "Evidence Vault deep verification status")
+        self._add_hash_check("certificate", "attestation_source_evidence_vault_zip_sha256", evidence_manifest.get("zip_sha256"), source.get("evidence_vault_zip_sha256"), "Evidence Vault ZIP sha256 source binding")
+        self._add_value_check("certificate", "attestation_source_evidence_vault_zip_size_bytes", evidence_manifest.get("zip_size_bytes"), source.get("evidence_vault_zip_size_bytes"), "Evidence Vault ZIP size source binding")
+        self._add_hash_check("certificate", "attestation_source_evidence_vault_manifest_hash", evidence_manifest.get("manifest_hash"), source.get("evidence_vault_manifest_hash"), "Evidence Vault manifest hash source binding")
+        self._add_hash_check("certificate", "attestation_source_evidence_vault_verification_hash", evidence_manifest.get("verification_hash"), source.get("evidence_vault_verification_hash"), "Evidence Vault verification hash source binding")
+        self._add_value_check("certificate", "attestation_source_evidence_vault_verification_status", evidence_manifest.get("verification_status"), source.get("evidence_vault_verification_status"), "Evidence Vault verification status source binding")
+        self._add_value_check("certificate", "attestation_source_evidence_vault_deep_verification_status", evidence_manifest.get("deep_verification_status"), source.get("evidence_vault_deep_verification_status"), "Evidence Vault deep verification status source binding")
         self._add_hash_check("certificate", "attestation_final_board_signoff_hash", source.get("final_board_signoff_hash"), final_cert.get("signoff_hash"), "Final Board signoff hash")
         self._add_hash_check("certificate", "attestation_final_board_report_hash", source.get("final_board_report_hash"), final_cert.get("report_hash"), "Final Board report hash")
         self._add_hash_check("certificate", "attestation_certificate_portfolio_id", self.report_doc.get("portfolio_id"), self.certificate.get("portfolio_id"), "Certificate portfolio id")
@@ -350,6 +356,12 @@ def _is_safe_zip_entry(name: str) -> bool:
     if ":" in path.parts[0]:
         return False
     return True
+
+
+def _is_forbidden_public_entry(name: str) -> bool:
+    text = str(name or "")
+    lowered = text.lower()
+    return lowered.endswith(".zip") or lowered.startswith("nested/") or ".musicforge/" in lowered or lowered.startswith(".musicforge/")
 
 
 def _raw_zip_entry_names(path: Path) -> list[str]:

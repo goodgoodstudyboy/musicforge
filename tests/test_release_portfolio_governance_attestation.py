@@ -130,3 +130,77 @@ def test_attestation_verifier_catches_tamper_nested_spoof_and_redaction(tmp_path
     assert any(item["check_id"] == "attestation_manifest_extra_entries" for item in spoofed["blockers"])
     assert any(item["check_id"] == "attestation_manifest_zip_entries_reference_only" for item in spoofed["warnings"])
     assert any(item["check_id"] == "attestation_redaction_scan" for item in verify_release_portfolio_governance_attestation(redaction_zip)["blockers"])
+
+
+def test_attestation_verifier_rejects_vault_fingerprint_desync_from_report_source(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, *_rest, store = _attestation_fixture(tmp_path, monkeypatch)
+    store.refresh_report(portfolio_id)
+    store.export_attestation(portfolio_id)
+    store.build_zip(portfolio_id)
+    source_zip = store.zip_path(portfolio_id)
+    tampered_zip = tmp_path / "vault-fingerprint-desync.zip"
+    fake_vault = {
+        "zip_sha256": "a" * 64,
+        "zip_size_bytes": 123456,
+        "manifest_hash": "b" * 64,
+        "verification_hash": "c" * 64,
+        "verification_status": "passed",
+        "deep_verification_status": "passed",
+    }
+
+    with zipfile.ZipFile(source_zip, "r") as src, zipfile.ZipFile(tampered_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        rewritten: dict[str, bytes] = {}
+        for info in src.infolist():
+            rewritten[info.filename] = src.read(info.filename)
+        certificate = json.loads(rewritten["certificate.json"].decode("utf-8"))
+        certificate["evidence_vault"] = fake_vault
+        certificate["payload_hash"] = attestation_certificate_hash(certificate)
+        certificate_bytes = json.dumps(certificate, ensure_ascii=False, indent=2).encode("utf-8")
+        manifest = json.loads(rewritten["manifest.json"].decode("utf-8"))
+        manifest["evidence_vault"] = fake_vault
+        manifest.setdefault("certificate", {})["payload_hash"] = certificate["payload_hash"]
+        for row in manifest.get("files", []):
+            if isinstance(row, dict) and row.get("path") == "certificate.json":
+                row["size_bytes"] = len(certificate_bytes)
+                import hashlib
+
+                row["sha256"] = hashlib.sha256(certificate_bytes).hexdigest()
+        manifest["integrity_hash"] = attestation_manifest_hash(manifest)
+        rewritten["certificate.json"] = certificate_bytes
+        rewritten["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+        for info in src.infolist():
+            dst.writestr(info.filename, rewritten[info.filename])
+
+    result = verify_release_portfolio_governance_attestation(tampered_zip, strict=True, require_vault=True, require_final_board=True)
+
+    assert any(item["check_id"] == "attestation_source_evidence_vault_zip_sha256" for item in result["blockers"])
+    assert any(item["check_id"] == "attestation_source_evidence_vault_zip_size_bytes" for item in result["blockers"])
+    assert any(item["check_id"] == "attestation_source_evidence_vault_manifest_hash" for item in result["blockers"])
+    assert any(item["check_id"] == "attestation_source_evidence_vault_verification_hash" for item in result["blockers"])
+
+
+def test_attestation_verifier_rejects_case_variant_musicforge_entry_declared_in_manifest(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, *_rest, store = _attestation_fixture(tmp_path, monkeypatch)
+    store.refresh_report(portfolio_id)
+    store.export_attestation(portfolio_id)
+    store.build_zip(portfolio_id)
+    source_zip = store.zip_path(portfolio_id)
+    tampered_zip = tmp_path / "case-variant-musicforge.zip"
+    internal_bytes = b"internal"
+
+    with zipfile.ZipFile(source_zip, "r") as src, zipfile.ZipFile(tampered_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "manifest.json":
+                payload = json.loads(data.decode("utf-8"))
+                import hashlib
+
+                payload.setdefault("files", []).append({"path": ".MusicForge/internal.json", "size_bytes": len(internal_bytes), "sha256": hashlib.sha256(internal_bytes).hexdigest()})
+                payload["integrity_hash"] = attestation_manifest_hash(payload)
+                data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+            dst.writestr(info.filename, data)
+        dst.writestr(".MusicForge/internal.json", internal_bytes)
+
+    result = verify_release_portfolio_governance_attestation(tampered_zip, strict=True)
+
+    assert any(item["check_id"] == "attestation_zip_no_nested_packages" for item in result["blockers"])

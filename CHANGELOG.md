@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.2.1 - 2026-06-09
+
+### Fixed
+- Public Attestation verifier now binds `manifest.evidence_vault` and `certificate.evidence_vault` back to `attestation-report.source.evidence_vault_*` fingerprints.
+- Public Attestation verifier now rejects case variants of `.musicforge/`, `nested/`, and nested `.zip` entries in public certificate packages.
+- v7.2 release-check smoke now covers forged Evidence Vault fingerprints and `.MusicForge/` internal directory variants.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation.py tests\test_release_check.py::test_v72_release_portfolio_governance_attestation_smoke -q`
+
 ## v7.2.0 - 2026-06-09
 
 ### Added

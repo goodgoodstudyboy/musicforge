@@ -10939,6 +10939,18 @@ def _v72_release_portfolio_governance_attestation_smoke(root: Path) -> tuple[boo
         spoof = verify_release_portfolio_governance_attestation(_v38_rewrite_zip(stable_attestation_zip, base / "spoof-v72-attestation.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v72_spoof_attestation_manifest}), strict=True)
         redaction = verify_release_portfolio_governance_attestation(_v38_rewrite_zip(stable_attestation_zip, base / "redaction-v72-attestation.zip", transforms={"certificate.md": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
         wrong_type = verify_release_portfolio_governance_attestation(_v38_rewrite_zip(stable_attestation_zip, base / "wrong-type-v72-attestation.zip", transforms={"manifest.json": _v72_wrong_type_attestation_manifest}))
+        vault_fingerprint_desync = verify_release_portfolio_governance_attestation(
+            _v72_vault_fingerprint_desync_attestation_zip(stable_attestation_zip, base / "vault-fingerprint-desync-v72-attestation.zip"),
+            strict=True,
+            require_vault=True,
+            require_final_board=True,
+        )
+        case_musicforge = verify_release_portfolio_governance_attestation(
+            _v72_case_variant_musicforge_attestation_zip(stable_attestation_zip, base / "case-musicforge-v72-attestation.zip"),
+            strict=True,
+            require_vault=True,
+            require_final_board=True,
+        )
 
         serialized = json.dumps({"report": attestation_report, "manifest": attestation_manifest, "verification": attestation_verification}, ensure_ascii=False)
         ok = (
@@ -10965,6 +10977,8 @@ def _v72_release_portfolio_governance_attestation_smoke(root: Path) -> tuple[boo
             and _v38_check_status(spoof, "attestation_manifest_zip_entries_reference_only") == "warning"
             and _v38_check_status(redaction, "attestation_redaction_scan") == "failed"
             and _v38_check_status(wrong_type, "attestation_manifest_package_type") == "failed"
+            and _v38_check_status(vault_fingerprint_desync, "attestation_source_evidence_vault_zip_sha256") == "failed"
+            and _v38_check_status(case_musicforge, "attestation_zip_no_nested_packages") == "failed"
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -10977,7 +10991,8 @@ def _v72_release_portfolio_governance_attestation_smoke(root: Path) -> tuple[boo
             f"nested={_v38_check_status(nested, 'attestation_zip_no_nested_packages')}, duplicate={_v38_check_status(duplicate, 'attestation_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'attestation_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'attestation_zip_entry_path_safe')}, "
             f"spoof={_v38_check_status(spoof, 'attestation_manifest_extra_entries')}/{_v38_check_status(spoof, 'attestation_manifest_zip_entries_reference_only')}, "
-            f"redaction={_v38_check_status(redaction, 'attestation_redaction_scan')}, package_type={_v38_check_status(wrong_type, 'attestation_manifest_package_type')}"
+            f"redaction={_v38_check_status(redaction, 'attestation_redaction_scan')}, package_type={_v38_check_status(wrong_type, 'attestation_manifest_package_type')}, "
+            f"vault_fingerprint={_v38_check_status(vault_fingerprint_desync, 'attestation_source_evidence_vault_zip_sha256')}, case_musicforge={_v38_check_status(case_musicforge, 'attestation_zip_no_nested_packages')}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -11037,6 +11052,67 @@ def _v72_wrong_type_attestation_manifest(data: bytes) -> bytes:
     payload["package_type"] = "wrong_package_type"
     payload["integrity_hash"] = attestation_manifest_hash(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v72_vault_fingerprint_desync_attestation_zip(source: Path, target: Path) -> Path:
+    from song_agent.release_portfolio_governance_attestation import attestation_certificate_hash, attestation_manifest_hash
+
+    fake_vault = {
+        "zip_sha256": "a" * 64,
+        "zip_size_bytes": 123456,
+        "manifest_hash": "b" * 64,
+        "verification_hash": "c" * 64,
+        "verification_status": "passed",
+        "deep_verification_status": "passed",
+    }
+    with zipfile.ZipFile(source, "r") as archive:
+        certificate = json.loads(archive.read("certificate.json").decode("utf-8"))
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        certificate["evidence_vault"] = fake_vault
+        certificate["payload_hash"] = attestation_certificate_hash(certificate)
+        certificate_bytes = json.dumps(certificate, ensure_ascii=False, indent=2).encode("utf-8")
+        manifest["evidence_vault"] = fake_vault
+        manifest.setdefault("certificate", {})["payload_hash"] = certificate["payload_hash"]
+        for file_row in manifest.get("files", []):
+            if isinstance(file_row, dict) and file_row.get("path") == "certificate.json":
+                file_row["size_bytes"] = len(certificate_bytes)
+                file_row["sha256"] = hashlib.sha256(certificate_bytes).hexdigest()
+        manifest["integrity_hash"] = attestation_manifest_hash(manifest)
+        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+        with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            for info in archive.infolist():
+                if info.filename == "certificate.json":
+                    output.writestr(info.filename, certificate_bytes)
+                elif info.filename == "manifest.json":
+                    output.writestr(info.filename, manifest_bytes)
+                else:
+                    output.writestr(info.filename, archive.read(info.filename))
+    return target
+
+
+def _v72_case_variant_musicforge_attestation_zip(source: Path, target: Path) -> Path:
+    from song_agent.release_portfolio_governance_attestation import attestation_manifest_hash
+
+    internal_bytes = b"internal"
+    with zipfile.ZipFile(source, "r") as archive:
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        manifest.setdefault("files", []).append(
+            {
+                "path": ".MusicForge/internal.json",
+                "size_bytes": len(internal_bytes),
+                "sha256": hashlib.sha256(internal_bytes).hexdigest(),
+            }
+        )
+        manifest["integrity_hash"] = attestation_manifest_hash(manifest)
+        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+        with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            for info in archive.infolist():
+                if info.filename == "manifest.json":
+                    output.writestr(info.filename, manifest_bytes)
+                else:
+                    output.writestr(info.filename, archive.read(info.filename))
+            output.writestr(".MusicForge/internal.json", internal_bytes)
+    return target
 
 
 class _V55FixtureEncoderRunner:
