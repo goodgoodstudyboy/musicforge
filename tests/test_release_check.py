@@ -641,6 +641,8 @@ def test_v73_release_portfolio_governance_attestation_registry_smoke(tmp_path: P
     assert "spoof=failed/warning" in detail
     assert "redaction=failed" in detail
     assert "no_current=failed" in detail
+    assert "report_source=failed" in detail
+    assert "package_index=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

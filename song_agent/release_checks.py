@@ -11208,6 +11208,8 @@ def _v73_release_portfolio_governance_attestation_registry_smoke(root: Path) -> 
         spoof = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "spoof-v73.zip", additions={"extra.txt": b"extra"}, transforms={"manifest.json": _v73_spoof_registry_manifest}), strict=True)
         redaction = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "redaction-v73.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
         no_current = verify_release_portfolio_governance_attestation_registry(_v38_rewrite_zip(stable_zip, base / "no-current-v73.zip", transforms={"registry.json": _v73_clear_registry_current}), strict=True, require_current=True)
+        report_source = verify_release_portfolio_governance_attestation_registry(_v73_rewrite_registry_package(stable_zip, base / "report-source-v73.zip", _v73_tamper_registry_report_source_resigned), strict=True, require_current=True, require_published=True)
+        package_index = verify_release_portfolio_governance_attestation_registry(_v73_rewrite_registry_package(stable_zip, base / "package-index-v73.zip", _v73_tamper_registry_package_index_resigned), strict=True, require_current=True, require_published=True)
 
         serialized = json.dumps({"report": registry_report, "manifest": registry_manifest, "verification": registry_verify}, ensure_ascii=False)
         ok = (
@@ -11234,6 +11236,8 @@ def _v73_release_portfolio_governance_attestation_registry_smoke(root: Path) -> 
             and _v38_check_status(spoof, "registry_manifest_zip_entries_reference_only") == "warning"
             and _v38_check_status(redaction, "registry_redaction_scan") == "failed"
             and _v38_check_status(no_current, "registry_require_current") == "failed"
+            and _v38_check_status(report_source, "registry_report_source_current_attestation_zip_sha256") == "failed"
+            and _v38_check_status(package_index, "registry_package_index_items_match_registry") == "failed"
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -11246,7 +11250,9 @@ def _v73_release_portfolio_governance_attestation_registry_smoke(root: Path) -> 
             f"duplicate={_v38_check_status(duplicate_zip, 'registry_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'registry_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash, 'registry_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge, 'registry_zip_no_nested_packages')}, "
             f"nested={_v38_check_status(nested, 'registry_zip_no_nested_packages')}, spoof={_v38_check_status(spoof, 'registry_manifest_extra_entries')}/{_v38_check_status(spoof, 'registry_manifest_zip_entries_reference_only')}, "
-            f"redaction={_v38_check_status(redaction, 'registry_redaction_scan')}, no_current={_v38_check_status(no_current, 'registry_require_current')}"
+            f"redaction={_v38_check_status(redaction, 'registry_redaction_scan')}, no_current={_v38_check_status(no_current, 'registry_require_current')}, "
+            f"report_source={_v38_check_status(report_source, 'registry_report_source_current_attestation_zip_sha256')}, "
+            f"package_index={_v38_check_status(package_index, 'registry_package_index_items_match_registry')}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -11375,6 +11381,75 @@ def _v73_spoof_registry_manifest(data: bytes) -> bytes:
     payload = json.loads(data.decode("utf-8"))
     payload.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v73_rewrite_registry_package(source_zip: Path, target_zip: Path, mutate) -> Path:
+    with zipfile.ZipFile(source_zip, "r") as src:
+        docs = {info.filename: src.read(info.filename) for info in src.infolist()}
+        mutate(docs)
+        with zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+            for info in src.infolist():
+                dst.writestr(info.filename, docs[info.filename])
+    return target_zip
+
+
+def _v73_tamper_registry_report_source_resigned(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_registry import registry_manifest_hash, registry_report_hash
+
+    report = _v73_read_json_doc(docs, "registry-report.json")
+    package_index = _v73_read_json_doc(docs, "package-index.json")
+    chain = _v73_read_json_doc(docs, "chain-of-custody.json")
+    manifest = _v73_read_json_doc(docs, "manifest.json")
+
+    report.setdefault("source", {})["current_attestation_zip_sha256"] = "0" * 64
+    report["source_hash"] = stable_hash(report["source"])
+    report["integrity_hash"] = registry_report_hash(report)
+    package_index["source_hash"] = report["source_hash"]
+    package_index["integrity_hash"] = stable_hash({key: value for key, value in package_index.items() if key != "integrity_hash"})
+    chain["source_hash"] = report["source_hash"]
+    chain["integrity_hash"] = stable_hash({key: value for key, value in chain.items() if key != "integrity_hash"})
+
+    docs["registry-report.json"] = _v73_json_doc(report)
+    docs["package-index.json"] = _v73_json_doc(package_index)
+    docs["chain-of-custody.json"] = _v73_json_doc(chain)
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("registry_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("registry_report", {})["integrity_hash"] = report["integrity_hash"]
+    _v73_sync_manifest_file(manifest, "registry-report.json", docs["registry-report.json"])
+    _v73_sync_manifest_file(manifest, "package-index.json", docs["package-index.json"])
+    _v73_sync_manifest_file(manifest, "chain-of-custody.json", docs["chain-of-custody.json"])
+    manifest["integrity_hash"] = registry_manifest_hash(manifest)
+    docs["manifest.json"] = _v73_json_doc(manifest)
+
+
+def _v73_tamper_registry_package_index_resigned(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_registry import registry_manifest_hash
+
+    package_index = _v73_read_json_doc(docs, "package-index.json")
+    manifest = _v73_read_json_doc(docs, "manifest.json")
+    package_index.setdefault("items", [])[0]["attestation_zip_sha256"] = "1" * 64
+    package_index["integrity_hash"] = stable_hash({key: value for key, value in package_index.items() if key != "integrity_hash"})
+    docs["package-index.json"] = _v73_json_doc(package_index)
+    _v73_sync_manifest_file(manifest, "package-index.json", docs["package-index.json"])
+    manifest["integrity_hash"] = registry_manifest_hash(manifest)
+    docs["manifest.json"] = _v73_json_doc(manifest)
+
+
+def _v73_read_json_doc(docs: dict[str, bytes], name: str) -> dict[str, Any]:
+    return json.loads(docs[name].decode("utf-8"))
+
+
+def _v73_json_doc(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _v73_sync_manifest_file(manifest: dict[str, Any], path: str, data: bytes) -> None:
+    for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
+        if isinstance(item, dict) and item.get("path") == path:
+            item["size_bytes"] = len(data)
+            item["sha256"] = hashlib.sha256(data).hexdigest()
+            return
+    raise ValueError(f"manifest file row missing: {path}")
 
 
 class _V55FixtureEncoderRunner:

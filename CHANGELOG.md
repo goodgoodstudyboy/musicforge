@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.3.1 - 2026-06-09
+
+### Fixed
+- Public Attestation Registry verifier now derives `registry-report.source` evidence from `registry.json` current entry data instead of trusting re-signed sidecar summaries.
+- Public Attestation Registry verifier now checks `package-index.json` items against `registry.entries` and binds chain summary fields back to the registry/current event snapshot.
+- v7.3 release-check smoke now covers fully re-signed `registry-report` and `package-index` tamper packages.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_registry.py tests\test_server_release_portfolio_governance_evidence_vault.py::test_server_release_portfolio_governance_evidence_vault_routes tests\test_cli_release_operations.py::test_release_portfolio_governance_attestation_registry_cli_lifecycle_verify tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_attestation_registry_cli_json_report_out tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v73_release_portfolio_governance_attestation_registry_smoke -q`
+
 ## v7.3.0 - 2026-06-09
 
 ### Added

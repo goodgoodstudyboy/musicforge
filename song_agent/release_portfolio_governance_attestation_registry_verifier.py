@@ -275,6 +275,17 @@ class _RegistryVerifier:
             self._add_hash_check("report", "registry_manifest_report_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest report source hash")
             source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
             self._add_hash_check("report", "registry_report_source_registry_hash", source.get("registry_hash"), self.registry.get("integrity_hash"), "Report registry source hash")
+            expected_source = _report_source_from_registry(self.registry)
+            for key in (
+                "current_entry_id",
+                "current_entry_hash",
+                "current_attestation_zip_sha256",
+                "current_attestation_manifest_hash",
+                "current_attestation_verification_hash",
+                "evidence_vault_zip_sha256",
+                "final_board_signoff_hash",
+            ):
+                self._add_exact_check("report", f"registry_report_source_{key}", source.get(key), expected_source.get(key), f"Report source {key}")
             expected = registry_summary(self.registry)
             summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
             for key in ("entry_count", "published_count", "revoked_count", "superseded_count", "current_entry_id"):
@@ -284,11 +295,24 @@ class _RegistryVerifier:
         if self.package_index:
             self._add_hash_check("package_index", "registry_package_index_integrity", self.package_index.get("integrity_hash"), stable_hash({key: value for key, value in self.package_index.items() if key != "integrity_hash"}), "Package index integrity")
             self._add_hash_check("package_index", "registry_package_index_source_hash", self.package_index.get("source_hash"), self.report_doc.get("source_hash"), "Package index source hash")
+            self._add_exact_check("package_index", "registry_package_index_portfolio_id", self.package_index.get("portfolio_id"), self.registry.get("portfolio_id"), "Package index portfolio_id")
+            expected_items = _package_index_items_from_registry(self.registry)
+            actual_items = self.package_index.get("items") if isinstance(self.package_index.get("items"), list) else []
+            self._add_hash_check("package_index", "registry_package_index_items_match_registry", stable_hash(expected_items), stable_hash(actual_items), "Package index items derived from registry")
+            summary = self.package_index.get("summary") if isinstance(self.package_index.get("summary"), dict) else {}
+            self._add_exact_check("package_index", "registry_package_index_summary_entry_count", summary.get("entry_count"), len(expected_items), "Package index entry_count")
         else:
             self._add_check("package_index", "registry_package_index_document_exists", "failed", "blocking", "package-index.json must contain a JSON object.")
         if self.chain:
             self._add_hash_check("chain", "registry_chain_integrity", self.chain.get("integrity_hash"), stable_hash({key: value for key, value in self.chain.items() if key != "integrity_hash"}), "Chain of custody integrity")
             self._add_hash_check("chain", "registry_chain_source_hash", self.chain.get("source_hash"), self.report_doc.get("source_hash"), "Chain of custody source hash")
+            self._add_exact_check("chain", "registry_chain_portfolio_id", self.chain.get("portfolio_id"), self.registry.get("portfolio_id"), "Chain portfolio_id")
+            chain_summary = self.chain.get("summary") if isinstance(self.chain.get("summary"), dict) else {}
+            events = self.chain.get("events") if isinstance(self.chain.get("events"), list) else []
+            latest_event_type = events[-1].get("type") if events and isinstance(events[-1], dict) else None
+            self._add_exact_check("chain", "registry_chain_summary_current_entry_id", chain_summary.get("current_entry_id"), self.registry.get("current_entry_id"), "Chain current_entry_id")
+            self._add_exact_check("chain", "registry_chain_summary_event_count", chain_summary.get("event_count"), len(events), "Chain event_count")
+            self._add_exact_check("chain", "registry_chain_summary_latest_event_type", chain_summary.get("latest_event_type"), latest_event_type, "Chain latest_event_type")
         else:
             self._add_check("chain", "registry_chain_document_exists", "failed", "blocking", "chain-of-custody.json must contain a JSON object.")
 
@@ -365,8 +389,40 @@ class _RegistryVerifier:
         ok = expected is not None and str(expected) == str(actual)
         self._add_check(scope, check_id, "passed" if ok else "failed", "blocking", f"{label} matches." if ok else f"{label} does not match.")
 
+    def _add_exact_check(self, scope: str, check_id: str, expected: Any, actual: Any, label: str) -> None:
+        ok = expected == actual
+        self._add_check(scope, check_id, "passed" if ok else "failed", "blocking", f"{label} matches." if ok else f"{label} does not match.")
+
     def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str) -> None:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
+
+
+def _report_source_from_registry(registry: dict[str, Any]) -> dict[str, Any]:
+    current = _find_entry(registry, str(registry.get("current_entry_id") or "")) if registry.get("current_entry_id") else {}
+    source = current.get("source") if current and isinstance(current.get("source"), dict) else {}
+    return {
+        "registry_hash": registry.get("integrity_hash"),
+        "current_entry_id": registry.get("current_entry_id"),
+        "current_entry_hash": current.get("integrity_hash") if current else None,
+        "current_attestation_zip_sha256": source.get("attestation_zip_sha256") if current else None,
+        "current_attestation_manifest_hash": source.get("attestation_manifest_hash") if current else None,
+        "current_attestation_verification_hash": source.get("attestation_verification_hash") if current else None,
+        "evidence_vault_zip_sha256": source.get("evidence_vault_zip_sha256") if current else None,
+        "final_board_signoff_hash": source.get("final_board_signoff_hash") if current else None,
+    }
+
+
+def _package_index_items_from_registry(registry: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
+    items: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        item = {"entry_id": entry.get("entry_id"), "certificate_id": entry.get("certificate_id"), "status": entry.get("status")}
+        source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+        item.update(source)
+        items.append(item)
+    return sanitize_metadata(items, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
 
 def _find_entry(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
