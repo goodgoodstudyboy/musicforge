@@ -1,5 +1,17 @@
 # Changelog
 
+## v7.2.0 - 2026-06-09
+
+### Added
+- Release Portfolio Governance Public Attestation for generating lightweight certificate packages from current, deep-verified Evidence Vault evidence.
+- `release-portfolio-governance-attestation` and `verify-release-portfolio-governance-attestation` CLI commands with strict Vault and Final Board requirement flags.
+- API routes under `/api/release-portfolio-audits/<portfolio-id>/governance-attestation` plus Studio controls in the Portfolio Audit workspace.
+- Public Attestation verifier covering certificate/report/manifest hash binding, Vault verification fingerprints, nested ZIP exclusion, duplicate/path/backslash safety, manifest spoofing, package type, and redaction checks.
+- v7.2 release-check smoke covering external verification, stale Vault verification, immutable delete/rebuild guards, certificate/report tamper, nested package, duplicate/path/backslash/spoof/package-type/redaction regressions.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation.py tests\test_server_release_portfolio_governance_evidence_vault.py tests\test_cli_release_operations.py::test_release_portfolio_governance_attestation_cli_export_verify tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_attestation_cli_json_report_out tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls tests\test_release_check.py::test_v72_release_portfolio_governance_attestation_smoke -q`
+
 ## v7.1.1 - 2026-06-09
 
 ### Fixed

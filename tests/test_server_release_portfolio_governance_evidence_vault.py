@@ -47,6 +47,13 @@ def test_server_release_portfolio_governance_evidence_vault_routes(tmp_path, mon
         export_status, exported = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault/export")
         zip_status, zipped = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault/zip")
         verify_status, verified = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault/verify", {"strict": True, "deep": True, "require_final_board": True, "require_reviewer_pack": True, "require_audit": True, "require_archives": True})
+        att_refresh_status, att_refreshed = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation/refresh", {"profile": "public_summary"})
+        att_detail_status, att_detail = request_json(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation")
+        att_export_status, att_exported = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation/export", {"profile": "public_summary"})
+        att_zip_status, att_zipped = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation/zip", {"profile": "public_summary"})
+        att_verify_status, att_verified = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation/verify", {"profile": "public_summary", "strict": True, "require_vault": True, "require_final_board": True})
+        att_rebuild_status, att_rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation/zip", {"profile": "public_summary"})
+        att_download_status, att_zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation.zip")
         rebuild_status, rebuild = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault/zip")
         download_status, zip_bytes = request_bytes(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-evidence-vault.zip")
     finally:
@@ -62,6 +69,20 @@ def test_server_release_portfolio_governance_evidence_vault_routes(tmp_path, mon
     assert zipped["zip"]["sha256"]
     assert verify_status == 200
     assert verified["verification"]["status"] == "passed"
+    assert att_refresh_status == 200
+    assert att_refreshed["summary"]["status"] == "passed"
+    assert att_detail_status == 200
+    assert att_detail["certificate"]["certificate_id"] == "pgc-000001"
+    assert att_export_status == 201
+    assert att_exported["manifest"]["package_type"] == "release_portfolio_governance_public_attestation"
+    assert att_zip_status == 200
+    assert att_zipped["zip"]["sha256"]
+    assert att_verify_status == 200
+    assert att_verified["verification"]["status"] == "passed"
+    assert att_rebuild_status == 409
+    assert "already exists" in att_rebuild.get("error", "")
+    assert att_download_status == 200
+    assert att_zip_bytes.startswith(b"PK")
     assert rebuild_status == 409
     assert "already exists" in rebuild.get("error", "")
     assert download_status == 200

@@ -3310,6 +3310,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceFinalBoardData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-final-board`); } catch (err) {}
       let governanceEvidenceVaultData = { report: {}, summary: {} };
       try { governanceEvidenceVaultData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-evidence-vault`); } catch (err) {}
+      let governanceAttestationData = { report: {}, summary: {}, certificate: {} };
+      try { governanceAttestationData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
@@ -3317,6 +3319,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const governanceFinalBoardSummary = governanceFinalBoardData.summary || {};
       const governanceFinalBoardSignoff = governanceFinalBoardData.signoff_summary || {};
       const governanceEvidenceVaultSummary = governanceEvidenceVaultData.summary || {};
+      const governanceAttestationSummary = governanceAttestationData.summary || {};
+      const governanceAttestationCertificate = governanceAttestationData.certificate || {};
       const score = report.risk_score || {};
       const stale = Boolean(reportData.stale || (reportData.summary || {}).stale || (data.summary || {}).stale);
       const trend = trendData.trend_report || {};
@@ -3522,6 +3526,25 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-vault-verify" type="button">Verify Evidence Vault ZIP</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-evidence-vault.zip">Download Evidence Vault ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Governance Public Attestation</span></div>
+        <div class="summary-grid">
+          ${metric("Public Attestation", governanceAttestationSummary.status || "missing")}
+          ${metric("Profile", governanceAttestationSummary.profile || "public_summary")}
+          ${metric("Certificate", governanceAttestationSummary.certificate_id || governanceAttestationCertificate.certificate_id || "-")}
+          ${metric("Vault Verify", governanceAttestationSummary.vault_verification_status || governanceAttestationSummary.verification_status || "-")}
+          ${metric("Deep Verify", governanceAttestationSummary.deep_verification_status || "-")}
+          ${metric("Signed Queues", governanceAttestationSummary.signed_queue_count || 0)}
+          ${metric("Blockers", governanceAttestationSummary.blocker_count || 0)}
+          ${metric("Warnings", governanceAttestationSummary.warning_count || 0)}
+          ${metric("Stale", governanceAttestationSummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-attestation-refresh" type="button">Refresh Public Attestation</button>
+          <button class="secondary" id="portfolio-governance-attestation-export" type="button">Export Public Attestation</button>
+          <button class="secondary" id="portfolio-governance-attestation-zip" type="button">Build Public Attestation ZIP</button>
+          <button class="secondary" id="portfolio-governance-attestation-verify" type="button">Verify Public Attestation ZIP</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation.zip">Download Public Attestation ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3675,6 +3698,38 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ strict: true, deep: true, require_final_board: true, require_reviewer_pack: true, require_audit: true, require_archives: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation/zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_vault: true, require_final_board: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

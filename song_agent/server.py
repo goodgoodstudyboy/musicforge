@@ -234,6 +234,17 @@ from song_agent.release_portfolio_governance_evidence_vault_verifier import (
     verify_release_portfolio_governance_evidence_vault_package,
     write_release_portfolio_governance_evidence_vault_verification_report,
 )
+from song_agent.release_portfolio_governance_attestation import (
+    ReleasePortfolioGovernanceAttestationError,
+    ReleasePortfolioGovernanceAttestationNotFoundError,
+    ReleasePortfolioGovernanceAttestationStateError,
+    ReleasePortfolioGovernanceAttestationStore,
+    attestation_summary as portfolio_governance_attestation_summary,
+)
+from song_agent.release_portfolio_governance_attestation_verifier import (
+    verify_release_portfolio_governance_attestation,
+    write_release_portfolio_governance_attestation_verification_report,
+)
 from song_agent.release_portfolio_governance_verifier import (
     release_portfolio_governance_verification_summary,
     verify_release_portfolio_governance_package,
@@ -2726,6 +2737,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_portfolio_governance_evidence_vault_store(self) -> ReleasePortfolioGovernanceEvidenceVaultStore:
         return self.server.release_portfolio_governance_evidence_vault_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_store(self) -> ReleasePortfolioGovernanceAttestationStore:
+        return self.server.release_portfolio_governance_attestation_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5820,6 +5835,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     filename=f"musicforge-{portfolio_id}-portfolio-governance-evidence-vault.zip",
                 )
                 return
+            if action == "governance-attestation.zip" and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                query = parse_qs(urlparse(self.path).query)
+                profile = str(query.get("profile", ["public_summary"])[0] or "public_summary")
+                self.release_portfolio_audit_store.get_portfolio(portfolio_id)
+                self._send_file(
+                    self.release_portfolio_governance_attestation_store.zip_path(portfolio_id, profile),
+                    "application/zip",
+                    filename=f"musicforge-{portfolio_id}-portfolio-governance-public-attestation.zip",
+                )
+                return
             if action == "governance-audit":
                 if len(parts) == 2:
                     if method != "GET":
@@ -6135,6 +6163,74 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Evidence Vault route not found.")
                 return
+            if action == "governance-attestation":
+                query = parse_qs(urlparse(self.path).query)
+                query_profile = str(query.get("profile", ["public_summary"])[0] or "public_summary")
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.release_portfolio_governance_attestation_store.read_report(portfolio_id, profile=query_profile, default={})
+                    stale = self.release_portfolio_governance_attestation_store.report_is_stale(portfolio_id, report, profile=query_profile) if report else False
+                    summary = portfolio_governance_attestation_summary(report) if report else {"status": "missing", "profile": query_profile}
+                    summary["stale"] = stale
+                    certificate = self.release_portfolio_governance_attestation_store.read_certificate(portfolio_id, profile=query_profile, default={})
+                    verification_path = self.release_portfolio_governance_attestation_store.verification_report_path(portfolio_id, query_profile)
+                    self._send_json(
+                        {
+                            "ok": True,
+                            "portfolio_id": portfolio_id,
+                            "profile": query_profile,
+                            "report": report,
+                            "certificate": certificate,
+                            "verification": read_json(verification_path) if verification_path.exists() else {},
+                            "summary": summary,
+                            "stale": stale,
+                        }
+                    )
+                    return
+                subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "refresh" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    report = self.release_portfolio_governance_attestation_store.refresh_report(portfolio_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "report": report, "summary": portfolio_governance_attestation_summary(report)})
+                    return
+                if subaction == "export" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.release_portfolio_governance_attestation_store.export_attestation(portfolio_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "manifest": manifest, "summary": manifest.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "zip" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    zip_info = self.release_portfolio_governance_attestation_store.build_zip(portfolio_id, payload, now=_utc_now())
+                    manifest = self.release_portfolio_governance_attestation_store.read_export_manifest(portfolio_id, profile=str(payload.get("profile") or "public_summary"))
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "zip": zip_info, "summary": manifest.get("summary", {})})
+                    return
+                if subaction == "verify" and len(parts) == 3:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    profile = str(payload.get("profile") or "public_summary")
+                    report = verify_release_portfolio_governance_attestation(
+                        self.release_portfolio_governance_attestation_store.zip_path(portfolio_id, profile),
+                        strict=bool(payload.get("strict", False)),
+                        require_vault=bool(payload.get("require_vault", False)),
+                        require_final_board=bool(payload.get("require_final_board", False)),
+                    )
+                    write_release_portfolio_governance_attestation_verification_report(report, self.release_portfolio_governance_attestation_store.verification_report_path(portfolio_id, profile))
+                    self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report, "summary": portfolio_governance_attestation_summary(self.release_portfolio_governance_attestation_store.read_report(portfolio_id, profile=profile, default={}))})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Public Attestation route not found.")
+                return
             if action == "governance-queues" and len(parts) == 2:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -6217,6 +6313,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleasePortfolioGovernanceEvidenceVaultStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleasePortfolioGovernanceEvidenceVaultError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleasePortfolioGovernanceAttestationNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleasePortfolioGovernanceAttestationStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleasePortfolioGovernanceAttestationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -15122,6 +15224,11 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             audit_store=self.release_portfolio_governance_audit_store,
             reviewer_pack_store=self.release_portfolio_governance_reviewer_pack_store,
             final_board_store=self.release_portfolio_governance_final_board_store,
+        )
+        self.release_portfolio_governance_attestation_store = ReleasePortfolioGovernanceAttestationStore(
+            portfolio_store=self.release_portfolio_audit_store,
+            final_board_store=self.release_portfolio_governance_final_board_store,
+            evidence_vault_store=self.release_portfolio_governance_evidence_vault_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

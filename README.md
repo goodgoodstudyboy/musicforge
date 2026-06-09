@@ -544,6 +544,19 @@ python -m song_agent.cli release-portfolio-governance-evidence-vault --portfolio
 python -m song_agent.cli verify-release-portfolio-governance-evidence-vault path\to\portfolio-governance-evidence-vault.zip --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --json
 ```
 
+Release Portfolio Governance Public Attestation creates a lightweight public
+certificate package from a current, deep-verified Evidence Vault. It contains
+`certificate.json`, `certificate.md`, optional static HTML, hash fingerprints,
+and verification status, but it does not include nested Evidence Vault, Final
+Board, Audit, Queue, or Archive ZIP packages. Export and ZIP rebuild are
+immutable for the same Evidence Vault ZIP hash, Final Board signoff hash, and
+attestation profile, so deleting files does not permit a silent rebuild.
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-attestation --portfolio-id <portfolio-id> --refresh --export --zip --verify --strict --require-vault --require-final-board --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation path\to\portfolio-governance-public-attestation.zip --strict --require-vault --require-final-board --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
@@ -579,6 +592,8 @@ python -m song_agent.cli release-portfolio-governance-final-board --portfolio-id
 python -m song_agent.cli verify-release-portfolio-governance-final-board path\to\portfolio-governance-final-board-archive.zip --json --strict --require-signed --require-reviewer-pack --require-audit --require-archives --require-reviewer-response --report-out final-board-verification-report.json
 python -m song_agent.cli release-portfolio-governance-evidence-vault --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --json
 python -m song_agent.cli verify-release-portfolio-governance-evidence-vault path\to\portfolio-governance-evidence-vault.zip --json --strict --deep --require-final-board --require-reviewer-pack --require-audit --require-archives --report-out evidence-vault-verification-report.json
+python -m song_agent.cli release-portfolio-governance-attestation --portfolio-id pfa-000001 --refresh --export --zip --verify --strict --require-vault --require-final-board --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation path\to\portfolio-governance-public-attestation.zip --json --strict --require-vault --require-final-board --report-out public-attestation-verification-report.json
 ```
 
 ```powershell
