@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from song_agent.release_check_matrix import (
+    ReleaseCheckMatrixError,
+    all_check_definitions,
+    select_check_definitions,
+    validate_check_definitions,
+)
+from song_agent.release_check_runner import run_release_check_matrix
+
+
+def test_release_check_definitions_are_valid() -> None:
+    validate_check_definitions()
+    definitions = all_check_definitions()
+
+    assert len({definition.check_id for definition in definitions}) == len(definitions)
+    assert "v74.attestation_portal_smoke" in {definition.check_id for definition in definitions}
+    assert "v75.release_check_matrix_smoke" in {definition.check_id for definition in definitions}
+
+
+def test_release_check_profile_and_filters() -> None:
+    latest = select_check_definitions(profile="latest")
+    v7 = select_check_definitions(profile="v7")
+    portal = select_check_definitions(profile="latest", groups=["portal"])
+    since = select_check_definitions(profile="v7", since="7.2")
+    only = select_check_definitions(profile="full", only=["v75.release_check_matrix_smoke"])
+
+    assert "v74.attestation_portal_smoke" in {definition.check_id for definition in latest}
+    assert "v75.release_check_matrix_smoke" in {definition.check_id for definition in latest}
+    assert "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
+    assert {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke"}
+    assert all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
+    assert [definition.check_id for definition in only] == ["v75.release_check_matrix_smoke"]
+
+
+def test_release_check_unknown_filters_fail() -> None:
+    try:
+        select_check_definitions(profile="latest", groups=["missing-group"])
+    except ReleaseCheckMatrixError as exc:
+        assert "Unknown release-check group" in str(exc)
+    else:
+        raise AssertionError("unknown group should fail")
+
+    try:
+        select_check_definitions(only=["missing.check"])
+    except ReleaseCheckMatrixError as exc:
+        assert "Unknown release-check id" in str(exc)
+    else:
+        raise AssertionError("unknown check id should fail")
+
+
+def test_release_check_runner_json_and_timing(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('[project]\nversion = "7.5.0"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## v7.5.0\n", encoding="utf-8")
+
+    report = run_release_check_matrix(repo_root=tmp_path, profile="latest", only=["v75.release_check_matrix_smoke"])
+    payload = report.to_json_report()
+    timing = report.to_timing_report()
+
+    assert report.ok is True, payload
+    assert payload["summary"]["total"] == 1
+    assert payload["results"][0]["check_id"] == "v75.release_check_matrix_smoke"
+    assert timing["results"][0]["duration_ms"] >= 0

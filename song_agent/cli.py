@@ -63,6 +63,22 @@ def build_doctor_parser() -> argparse.ArgumentParser:
     return doctor_parser
 
 
+def build_release_check_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
+    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
+    parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
+    parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")
+    parser.add_argument("--list", action="store_true", help="List selected checks without running them.")
+    parser.add_argument("--json", action="store_true", help="Print a machine-readable JSON report.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write the JSON report to this path.")
+    parser.add_argument("--timing-out", type=Path, default=None, help="Write a lightweight timing report to this path.")
+    parser.add_argument("--fail-fast", action="store_true", help="Stop after the first failed check.")
+    parser.add_argument("--timeout-seconds", type=int, default=None, help="Override per-command timeout. Minimum is 10 seconds.")
+    parser.add_argument("--skip-tests", action="store_true", help="Skip the full pytest check when selected.")
+    return parser
+
+
 def build_verify_release_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Release ZIP.")
     verify_parser.add_argument("zip_path", type=Path, help="Path to the Release ZIP to verify.")
@@ -1143,10 +1159,48 @@ def _main() -> None:
         run_doctor(provider_test=args.provider_test)
         return
     elif raw_args and raw_args[0] == "release-check":
-        from song_agent.release_checks import print_release_check_report, run_release_checks
+        from song_agent.release_check_matrix import release_check_definitions_as_dicts, select_check_definitions
+        from song_agent.release_check_runner import print_release_check_report, run_release_check_matrix, write_json_report, write_timing_report
 
-        report = run_release_checks()
-        print_release_check_report(report)
+        parser = build_release_check_parser()
+        args = parser.parse_args(raw_args[1:])
+        selected = select_check_definitions(
+            profile=args.profile,
+            groups=args.group,
+            since=args.since,
+            only=args.only,
+            run_tests=not args.skip_tests,
+        )
+        if args.list:
+            rows = release_check_definitions_as_dicts(selected)
+            if args.json:
+                print(json.dumps({"checks": rows}, ensure_ascii=False, indent=2))
+            else:
+                for item in rows:
+                    print(f"{item['check_id']}\t{item['group']}\t{item.get('version') or '-'}\t{item['name']}")
+            return
+
+        def _progress(definition: Any) -> None:
+            print(f"[release-check] running {definition.check_id} ...", file=sys.stderr, flush=True)
+
+        report = run_release_check_matrix(
+            profile=args.profile,
+            groups=args.group,
+            since=args.since,
+            only=args.only,
+            run_tests=not args.skip_tests,
+            fail_fast=args.fail_fast,
+            timeout_seconds=args.timeout_seconds,
+            progress=None if args.json else _progress,
+        )
+        if args.report_out is not None:
+            write_json_report(report, args.report_out)
+        if args.timing_out is not None:
+            write_timing_report(report, args.timing_out)
+        if args.json:
+            print(json.dumps(report.to_json_report(), ensure_ascii=False, indent=2))
+        else:
+            print_release_check_report(report)
         if not report.ok:
             raise SystemExit(1)
         return

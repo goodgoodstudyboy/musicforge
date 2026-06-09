@@ -583,6 +583,19 @@ python -m song_agent.cli release-portfolio-governance-attestation-portal --portf
 python -m song_agent.cli verify-release-portfolio-governance-attestation-portal path\to\governance-attestation-portal.zip --strict --require-current --require-registry --require-attestation --json
 ```
 
+Release Verification Matrix makes `release-check` selectable and auditable.
+The default command still runs the full verification set, while profiles can be
+used for focused hotfix or reviewer checks. Reports are written without tokens
+or local key paths:
+
+```powershell
+python -m song_agent.cli release-check
+python -m song_agent.cli release-check --profile latest --json --report-out runs\release-check-latest.json
+python -m song_agent.cli release-check --profile v7 --timing-out runs\release-check-v7-timing.json
+python -m song_agent.cli release-check --group portal --list
+python -m song_agent.cli release-check --only v75.release_check_matrix_smoke --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

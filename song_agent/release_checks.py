@@ -82,6 +82,12 @@ from song_agent.music_acceptance import AcceptanceStore
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
+from song_agent.release_check_runner import (
+    CheckResult,
+    ReleaseCheckReport,
+    print_release_check_report,
+    run_release_check_matrix,
+)
 
 
 SECRET_PATTERNS = [
@@ -114,46 +120,22 @@ ALLOWED_SECRET_FIXTURE_PATTERNS = [
 ]
 
 
-@dataclass
-class CheckResult:
-    name: str
-    ok: bool
-    detail: str = ""
-
-
-@dataclass
-class ReleaseCheckReport:
-    results: list[CheckResult] = field(default_factory=list)
-
-    @property
-    def ok(self) -> bool:
-        return all(result.ok for result in self.results)
-
-    def add(self, name: str, ok: bool, detail: str = "") -> None:
-        self.results.append(CheckResult(name=name, ok=ok, detail=detail))
-
-
 def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None) -> ReleaseCheckReport:
-    root = repo_root or Path.cwd()
-    report = ReleaseCheckReport()
-    if run_tests:
-        tests = _run(["python", "-m", "pytest", "-q"], root)
-        report.add("pytest", tests.returncode == 0, _last_lines(tests.stdout + tests.stderr))
-    diff = _run(["git", "diff", "--check"], root)
-    report.add("git diff --check", diff.returncode == 0, _last_lines(diff.stdout + diff.stderr))
+    return run_release_check_matrix(profile="full", run_tests=run_tests, repo_root=repo_root)
+
+
+def _git_status_check(root: Path) -> tuple[bool, str]:
     status = _run(["git", "status", "--short", "--branch"], root)
     status_text = status.stdout.strip()
-    report.add(
-        "git status",
-        status.returncode == 0 and _status_is_clean(status_text),
-        status_text,
-    )
+    return status.returncode == 0 and _status_is_clean(status_text), status_text
+
+
+def _remote_url_token_check(root: Path) -> tuple[bool, str]:
     remotes = _run(["git", "remote", "-v"], root)
-    report.add(
-        "remote url token check",
-        remotes.returncode == 0 and not _remote_has_token(remotes.stdout),
-        _redact_remote(remotes.stdout.strip()),
-    )
+    return remotes.returncode == 0 and not _remote_has_token(remotes.stdout), _redact_remote(remotes.stdout.strip())
+
+
+def _musicforge_configs_untracked_check(root: Path) -> tuple[bool, str]:
     tracked = _run(
         [
             "git",
@@ -166,11 +148,10 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
         ],
         root,
     )
-    report.add(
-        ".musicforge configs untracked",
-        tracked.returncode == 0 and not tracked.stdout.strip(),
-        tracked.stdout.strip(),
-    )
+    return tracked.returncode == 0 and not tracked.stdout.strip(), tracked.stdout.strip()
+
+
+def _musicforge_configs_ignored_check(root: Path) -> tuple[bool, str]:
     ignored = _run(
         [
             "git",
@@ -184,95 +165,7 @@ def run_release_checks(*, run_tests: bool = True, repo_root: Path | None = None)
         ],
         root,
     )
-    report.add(
-        ".musicforge configs ignored",
-        ignored.returncode == 0,
-        ignored.stdout.strip(),
-    )
-    report.add("version consistency", *_version_consistency(root))
-    report.add("secret scan", *_secret_scan(root))
-    report.add("final export smoke", *_final_export_smoke(root))
-    report.add("edit smoke", *_edit_smoke(root))
-    report.add("v1.2 workflow smoke", *_v12_workflow_smoke(root))
-    report.add("v1.2.1 hardening smoke", *_v121_hardening_smoke(root))
-    report.add("v1.3 provider edit smoke", *_v13_provider_edit_smoke(root))
-    report.add("v1.4 candidate edit smoke", *_v14_candidate_edit_smoke(root))
-    report.add("v1.5 candidate audition and usage smoke", *_v15_candidate_audition_usage_smoke(root))
-    report.add("v1.6 creative assets smoke", *_v16_creative_assets_smoke(root))
-    report.add("v1.7 reference library smoke", *_v17_reference_library_smoke(root))
-    report.add("v1.8 reference analysis smoke", *_v18_reference_analysis_smoke(root))
-    report.add("v1.9 library context smoke", *_v19_library_context_smoke(root))
-    report.add("v2.0 visual editor smoke", *_v20_visual_editor_smoke(root))
-    report.add("v2.1 structure editor smoke", *_v21_structure_editor_smoke(root))
-    report.add("v2.2 interactive editor smoke", *_v22_interactive_editor_smoke(root))
-    report.add("v2.3 editor clip insert smoke", *_v23_editor_clip_insert_smoke(root))
-    report.add("v2.4 editor template smoke", *_v24_editor_template_smoke(root))
-    report.add("v2.5 editor audition smoke", *_v25_editor_audition_smoke(root))
-    report.add("v2.6 audition review smoke", *_v26_audition_review_smoke(root))
-    report.add("v2.7 review edit smoke", *_v27_review_edit_smoke(root))
-    report.add("v2.8 review task smoke", *_v28_review_task_smoke(root))
-    report.add("v2.9 provider review candidates smoke", *_v29_provider_review_candidates_smoke(root))
-    report.add("v3.0 review sprint smoke", *_v30_review_sprint_smoke(root))
-    report.add("v3.1 review sprint recommendations smoke", *_v31_review_sprint_recommendations_smoke(root))
-    report.add("v3.2 review sprint action queue smoke", *_v32_review_sprint_action_queue_smoke(root))
-    report.add("v3.3 review sprint dashboard metrics smoke", *_v33_review_sprint_dashboard_metrics_smoke(root))
-    report.add("v3.4 provider review judge smoke", *_v34_provider_review_judge_smoke(root))
-    report.add("v3.5 review sprint closeout smoke", *_v35_review_sprint_closeout_smoke(root))
-    report.add("v3.6 delivery qa handoff smoke", *_v36_delivery_qa_handoff_smoke(root))
-    report.add("v3.7 release workspace smoke", *_v37_release_workspace_smoke(root))
-    report.add("v3.8 release zip verifier smoke", *_v38_release_zip_verifier_smoke(root))
-    report.add("v3.9 release metadata smoke", *_v39_release_metadata_smoke(root))
-    report.add("v4.0 distribution prep smoke", *_v40_distribution_prep_smoke(root))
-    report.add("v4.1 distribution template packs smoke", *_v41_distribution_template_packs_smoke(root))
-    report.add("v4.2 distribution layout contract smoke", *_v42_distribution_layout_contract_smoke(root))
-    report.add("v4.3 submission workspace smoke", *_v43_submission_workspace_smoke(root))
-    report.add("v4.4 music acceptance lab smoke", *_v44_music_acceptance_lab_smoke(root))
-    report.add("v4.5 acceptance profiles songbook smoke", *_v45_acceptance_profiles_songbook_smoke(root))
-    report.add("v4.6 human review pack smoke", *_v46_human_review_pack_smoke(root))
-    report.add("v4.7 acceptance analytics smoke", *_v47_acceptance_analytics_smoke(root))
-    report.add("v4.8 acceptance fix sprint smoke", *_v48_acceptance_fix_sprint_smoke(root))
-    report.add("v4.9 acceptance knowledge base smoke", *_v49_acceptance_knowledge_base_smoke(root))
-    report.add("v4.10 knowledge-assisted fix planning smoke", *_v410_knowledge_assisted_fix_planning_smoke(root))
-    report.add("v4.11 fix plan outcome review smoke", *_v411_fix_plan_outcome_review_smoke(root))
-    report.add("v4.12 planning rule simulation smoke", *_v412_planning_rule_simulation_smoke(root))
-    report.add("v4.13 planning rule governance smoke", *_v413_planning_rule_governance_smoke(root))
-    report.add("v4.14 planning rule impact smoke", *_v414_planning_rule_impact_smoke(root))
-    report.add("v5.0 real audio baseline smoke", *_v50_real_audio_baseline_smoke(root))
-    report.add("v5.1 per-track audio review smoke", *_v51_per_track_audio_review_smoke(root))
-    report.add("v5.2 arrangement mix controls smoke", *_v52_arrangement_mix_controls_smoke(root))
-    report.add("v5.3 audio revision workbench smoke", *_v53_audio_revision_workbench_smoke(root))
-    report.add("v5.4 mastering qa smoke", *_v54_mastering_qa_smoke(root))
-    report.add("v5.5 distribution audio formats smoke", *_v55_distribution_audio_formats_smoke(root))
-    report.add("v5.6 encoded audio acceptance smoke", *_v56_encoded_audio_acceptance_smoke(root))
-    report.add("v5.7 release format decision smoke", *_v57_release_format_decision_smoke(root))
-    report.add("v5.8 rights clearance smoke", *_v58_rights_clearance_smoke(root))
-    report.add("v5.9 submission evidence archive smoke", *_v59_submission_evidence_archive_smoke(root))
-    report.add("v6.0 release operations dashboard smoke", *_v60_release_operations_dashboard_smoke(root))
-    report.add("v6.1 release operations runbook smoke", *_v61_release_operations_runbook_smoke(root))
-    report.add("v6.2 release operations signoff archive smoke", *_v62_release_operations_signoff_archive_smoke(root))
-    report.add("v6.3 release operations audit ledger smoke", *_v63_release_operations_audit_ledger_smoke(root))
-    report.add("v6.4 release operations reviewer pack smoke", *_v64_release_operations_reviewer_pack_smoke(root))
-    report.add("v6.5 release portfolio audit smoke", *_v65_release_portfolio_audit_smoke(root))
-    report.add("v6.6 release portfolio governance queue smoke", *_v66_release_portfolio_governance_queue_smoke(root))
-    report.add("v6.7 release portfolio governance signoff smoke", *_v67_release_portfolio_governance_signoff_smoke(root))
-    report.add("v6.8 release portfolio governance audit ledger smoke", *_v68_release_portfolio_governance_audit_ledger_smoke(root))
-    report.add("v6.9 release portfolio governance reviewer pack smoke", *_v69_release_portfolio_governance_reviewer_pack_smoke(root))
-    report.add("v7.0 release portfolio governance final board smoke", *_v70_release_portfolio_governance_final_board_smoke(root))
-    report.add("v7.1 release portfolio governance evidence vault smoke", *_v71_release_portfolio_governance_evidence_vault_smoke(root))
-    report.add("v7.2 release portfolio governance public attestation smoke", *_v72_release_portfolio_governance_attestation_smoke(root))
-    report.add("v7.3 release portfolio governance attestation registry smoke", *_v73_release_portfolio_governance_attestation_registry_smoke(root))
-    report.add("v7.4 release portfolio governance attestation portal smoke", *_v74_release_portfolio_governance_attestation_portal_smoke(root))
-    return report
-
-
-def print_release_check_report(report: ReleaseCheckReport) -> None:
-    print("MusicForge release-check")
-    for result in report.results:
-        status = "ok" if result.ok else "failed"
-        print(f"{result.name}: {status}")
-        if result.detail:
-            for line in result.detail.splitlines():
-                print(f"  {line}")
+    return ignored.returncode == 0, ignored.stdout.strip()
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -11594,6 +11487,108 @@ def _v74_release_portfolio_governance_attestation_portal_smoke(root: Path) -> tu
         return False, str(exc)
     finally:
         if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
+    base: Path | None = None
+    try:
+        from song_agent.release_check_matrix import ReleaseCheckDefinition, all_check_definitions, select_check_definitions, validate_check_definitions
+        from song_agent.release_check_runner import run_release_check_matrix
+
+        validate_check_definitions()
+        definitions = all_check_definitions()
+        ids = {definition.check_id for definition in definitions}
+        latest = select_check_definitions(profile="latest")
+        v7 = select_check_definitions(profile="v7")
+        portal = select_check_definitions(profile="latest", groups=["portal"])
+        since = select_check_definitions(profile="v7", since="7.2")
+        only = select_check_definitions(profile="full", only=["v74.attestation_portal_smoke"])
+        base = Path(tempfile.mkdtemp(prefix="release-check-v75-"))
+        fake_script = base / "v75_timeout_fake.py"
+        fake_script.write_text("import time\nprint('starting fake timeout')\ntime.sleep(2)\n", encoding="utf-8")
+        fake_definitions = [
+            ReleaseCheckDefinition(
+                check_id="fake.pass",
+                name="fake pass",
+                group="meta",
+                version="7.5",
+                kind="smoke",
+                risk="normal",
+                timeout_seconds=10,
+                callable_name="_version_consistency",
+                profiles=("latest",),
+            ),
+            ReleaseCheckDefinition(
+                check_id="fake.timeout",
+                name="fake timeout",
+                group="meta",
+                version="7.5",
+                kind="pytest",
+                risk="normal",
+                timeout_seconds=1,
+                command=("python", str(fake_script)),
+                profiles=("latest",),
+            ),
+            ReleaseCheckDefinition(
+                check_id="fake.warning",
+                name="fake warning",
+                group="meta",
+                version="7.5",
+                kind="pytest",
+                risk="normal",
+                timeout_seconds=10,
+                command=("python", "-c", "import sys; print('Duplicate name: README.txt', file=sys.stderr)"),
+                expected_warnings=("Duplicate name:",),
+                profiles=("latest",),
+            ),
+            ReleaseCheckDefinition(
+                check_id="fake.redaction",
+                name="fake redaction",
+                group="security",
+                version="7.5",
+                kind="pytest",
+                risk="normal",
+                timeout_seconds=10,
+                command=("python", "-c", "print('Authorization: Bearer secret-token api_key=\"secret-value\" C:\\\\Users\\\\demo\\\\Documents\\\\projects\\\\githubkey.txt')"),
+                profiles=("latest",),
+            ),
+        ]
+        fake_report = run_release_check_matrix(repo_root=root, profile="latest", definitions=fake_definitions)
+        report_json = fake_report.to_json_report()
+        serialized = json.dumps(report_json, ensure_ascii=False)
+        timeout_status = next(item.status for item in fake_report.results if item.check_id == "fake.timeout")
+        warning_result = next(item for item in fake_report.results if item.check_id == "fake.warning")
+        redaction_result = next(item for item in fake_report.results if item.check_id == "fake.redaction")
+        redaction_text = json.dumps(redaction_result.__dict__, ensure_ascii=False)
+        ok = (
+            "v74.attestation_portal_smoke" in ids
+            and "v75.release_check_matrix_smoke" in ids
+            and "v74.attestation_portal_smoke" in {definition.check_id for definition in latest}
+            and "v75.release_check_matrix_smoke" in {definition.check_id for definition in latest}
+            and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
+            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke"}
+            and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
+            and [definition.check_id for definition in only] == ["v74.attestation_portal_smoke"]
+            and timeout_status == "timed_out"
+            and warning_result.ok
+            and bool(warning_result.expected_warning_matches)
+            and "secret-token" not in redaction_text
+            and "secret-value" not in redaction_text
+            and "githubkey.txt" not in redaction_text
+            and "[redacted local token path]" in redaction_text
+            and "C:\\\\Users\\\\demo" not in redaction_text
+            and report_json["summary"]["total"] == len(fake_definitions)
+            and report_json["duration_ms"] >= 0
+        )
+        return ok, (
+            f"defs={len(definitions)}, latest={len(latest)}, v7={len(v7)}, portal={len(portal)}, since={len(since)}, "
+            f"timeout={timeout_status}, warning={warning_result.status}/{len(warning_result.expected_warning_matches)}, json={report_json['summary']['total']}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base is not None:
             shutil.rmtree(base, ignore_errors=True)
 
 

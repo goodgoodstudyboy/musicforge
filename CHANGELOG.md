@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.5.0 - 2026-06-10
+
+### Added
+- Release Check Verification Matrix with stable check ids, profile/group/since/only selection, per-check timing, JSON reports, timing reports, and visible progress output.
+- `release-check` CLI options for `--profile`, `--group`, `--since`, `--only`, `--list`, `--json`, `--report-out`, `--timing-out`, `--fail-fast`, `--timeout-seconds`, and `--skip-tests`.
+- v7.5 release-check matrix smoke covering selection, timeout reporting, expected warning recording, JSON serialization, and report redaction.
+
+### Verified
+- `python -m pytest tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py tests\test_release_check.py::test_v74_release_portfolio_governance_attestation_portal_smoke tests\test_release_check.py::test_v75_release_check_matrix_smoke -q`
+
 ## v7.4.1 - 2026-06-10
 
 ### Fixed
