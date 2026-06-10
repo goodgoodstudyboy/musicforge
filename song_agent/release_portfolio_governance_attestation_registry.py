@@ -237,7 +237,8 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
             registry = self._require_registry(portfolio_id, profile)
             report = self.read_report(portfolio_id, profile=profile, default={}) or self.refresh_report(portfolio_id, {"profile": profile}, now=now)
             self._ensure_exportable(registry, report)
-            state = _state_triple(registry)
+            external_review = _accepted_evidence_summary_for_portfolio_dir(self.attestation_store.portfolio_store.portfolio_dir(portfolio_id), profile=profile)
+            state = {**_state_triple(registry), "external_review_hash": stable_hash(external_review)}
             if self._history_has_state_event(portfolio_id, profile, state, "registry_exported"):
                 raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry export already exists for this registry state.")
             export_dir = self.export_dir(portfolio_id, profile).resolve()
@@ -249,12 +250,14 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
+            (export_dir / "data").mkdir(parents=True, exist_ok=True)
             package_index = build_package_index(registry, report, generated_at=now)
             chain = build_chain_of_custody(self.history_path(portfolio_id, profile), registry, report, generated_at=now)
             _write_json(export_dir / "registry.json", registry)
             _write_json(export_dir / "registry-report.json", report)
             _write_json(export_dir / "package-index.json", package_index)
             _write_json(export_dir / "chain-of-custody.json", chain)
+            _write_json(export_dir / "data" / "accepted-evidence-summary.json", {"source_hash": report.get("source_hash"), "external_review": external_review})
             _write_readme(export_dir, registry, report)
             files = [_file_record(export_dir, path) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
             manifest = {
@@ -271,6 +274,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                     "current_entry_hash": state.get("current_entry_hash"),
                 },
                 "registry_report": {"integrity_hash": report.get("integrity_hash"), "source_hash": report.get("source_hash")},
+                "external_review": external_review,
                 "files": files,
                 "zip": {},
             }
@@ -286,7 +290,8 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
             registry = self._require_registry(portfolio_id, profile)
             report = self.read_report(portfolio_id, profile=profile, default={})
             self._ensure_exportable(registry, report)
-            state = _state_triple(registry)
+            external_review = _accepted_evidence_summary_for_portfolio_dir(self.attestation_store.portfolio_store.portfolio_dir(portfolio_id), profile=profile)
+            state = {**_state_triple(registry), "external_review_hash": stable_hash(external_review)}
             if self._history_has_state_event(portfolio_id, profile, state, "registry_zip_built"):
                 raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry ZIP already exists for this registry state.")
             export_dir = self.export_dir(portfolio_id, profile).resolve()
@@ -303,6 +308,8 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                 if _manifest_state(manifest_in_zip) == state:
                     raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry ZIP already exists for this registry state.")
             manifest = read_json(export_dir / "manifest.json")
+            if stable_hash(manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}) != stable_hash(external_review):
+                raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry export is stale. Re-export before ZIP.")
             entries = _zip_entries(export_dir)
             manifest["zip"] = {"created_at": now, "filename": zip_path.name, "entry_count": len(entries), "entries": [entry for _path, entry in entries], "total_uncompressed_size_bytes": sum(path.stat().st_size for path, _entry in entries)}
             manifest["integrity_hash"] = registry_manifest_hash(manifest)
@@ -560,7 +567,8 @@ def _state_triple(registry: dict[str, Any]) -> dict[str, str]:
 
 def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
     row = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
-    return {"registry_hash": str(row.get("integrity_hash") or ""), "current_entry_id": str(row.get("current_entry_id") or ""), "current_entry_hash": str(row.get("current_entry_hash") or "")}
+    external = manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}
+    return {"registry_hash": str(row.get("integrity_hash") or ""), "current_entry_id": str(row.get("current_entry_id") or ""), "current_entry_hash": str(row.get("current_entry_hash") or ""), "external_review_hash": stable_hash(external)}
 
 
 def _find_entry(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
@@ -651,6 +659,15 @@ def _write_readme(export_dir: Path, registry: dict[str, Any], report: dict[str, 
         ),
         encoding="utf-8",
     )
+
+
+def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
+    try:
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence import accepted_evidence_public_summary_from_portfolio_dir
+
+        return accepted_evidence_public_summary_from_portfolio_dir(portfolio_dir, profile=profile)
+    except Exception:
+        return {"status": "missing", "external_review_status": "missing"}
 
 
 def _safe_text(value: Any, limit: int = 160) -> str:

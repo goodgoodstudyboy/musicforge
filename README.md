@@ -612,6 +612,20 @@ python -m song_agent.cli release-check --group portal --list
 python -m song_agent.cli release-check --only v75.release_check_matrix_smoke --json
 ```
 
+Release Portfolio Governance Attestation Accepted Evidence turns a verified
+accepted Portal Review Response into a public-safe evidence record. It does not
+publish, revoke, supersede, or rewrite Registry history; it only records that
+the current Portal/Registry/Public Attestation chain has accepted external
+review evidence. Registry and Portal verifiers can require this evidence with
+`--require-accepted-evidence`:
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-attestation-accepted-evidence --portfolio-id <portfolio-id> --refresh --export --zip --verify --strict --require-current --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-accepted-evidence path\to\governance-attestation-accepted-evidence.zip --strict --require-current --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-registry path\to\governance-attestation-registry.zip --strict --require-current --require-published --require-accepted-evidence --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-portal path\to\governance-attestation-portal.zip --strict --require-current --require-registry --require-attestation --require-accepted-evidence --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

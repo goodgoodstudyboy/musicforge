@@ -557,6 +557,7 @@ def build_release_portfolio_governance_attestation_registry_parser() -> argparse
     parser.add_argument("--require-current", action="store_true", help="Require a current published registry entry.")
     parser.add_argument("--require-published", action="store_true", help="Require at least one published registry entry.")
     parser.add_argument("--require-no-revoked-current", action="store_true", help="Fail when the current registry entry is revoked.")
+    parser.add_argument("--require-accepted-evidence", action="store_true", help="Require current accepted external review evidence.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -574,6 +575,7 @@ def build_release_portfolio_governance_attestation_portal_parser() -> argparse.A
     parser.add_argument("--require-current", action="store_true", help="Require a current published portal entry.")
     parser.add_argument("--require-registry", action="store_true", help="Require passed Attestation Registry evidence.")
     parser.add_argument("--require-attestation", action="store_true", help="Require passed Public Attestation evidence.")
+    parser.add_argument("--require-accepted-evidence", action="store_true", help="Require current accepted external review evidence.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -596,6 +598,24 @@ def build_release_portfolio_governance_attestation_portal_review_parser() -> arg
     parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
     parser.add_argument("--require-current", action="store_true", help="Require current source evidence when verifying.")
     parser.add_argument("--require-pack", action="store_true", help="Require response to bind to a Review Pack source.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_release_portfolio_governance_attestation_accepted_evidence_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage local MusicForge Public Attestation Accepted Evidence packages.")
+    parser.add_argument("--portfolio-id", required=True, help="Release Portfolio Audit id.")
+    parser.add_argument("--profile", default="public_summary", help="Attestation profile.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh Accepted Evidence from an accepted Portal Review Response.")
+    parser.add_argument("--response-id", default="", help="Accepted Portal Review Response id.")
+    parser.add_argument("--export", action="store_true", help="Build the Accepted Evidence export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Accepted Evidence ZIP package.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Accepted Evidence ZIP package.")
+    parser.add_argument("--archive", action="store_true", help="Archive current Accepted Evidence.")
+    parser.add_argument("--reason", default="", help="Archive reason.")
+    parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    parser.add_argument("--require-current", action="store_true", help="Require current accepted evidence when verifying.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -706,6 +726,7 @@ def build_verify_release_portfolio_governance_attestation_registry_parser() -> a
     verify_parser.add_argument("--require-current", action="store_true", help="Require a current published registry entry.")
     verify_parser.add_argument("--require-published", action="store_true", help="Require at least one published registry entry.")
     verify_parser.add_argument("--require-no-revoked-current", action="store_true", help="Fail when the current registry entry is revoked.")
+    verify_parser.add_argument("--require-accepted-evidence", action="store_true", help="Require current accepted external review evidence.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
@@ -721,6 +742,7 @@ def build_verify_release_portfolio_governance_attestation_portal_parser() -> arg
     verify_parser.add_argument("--require-current", action="store_true", help="Require a current published portal entry.")
     verify_parser.add_argument("--require-registry", action="store_true", help="Require passed Attestation Registry evidence.")
     verify_parser.add_argument("--require-attestation", action="store_true", help="Require passed Public Attestation evidence.")
+    verify_parser.add_argument("--require-accepted-evidence", action="store_true", help="Require current accepted external review evidence.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
@@ -748,6 +770,19 @@ def build_verify_release_portfolio_governance_attestation_portal_response_parser
     verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
     verify_parser.add_argument("--require-current", action="store_true", help="Require current response source evidence.")
     verify_parser.add_argument("--require-pack", action="store_true", help="Require response to bind to a Review Pack source.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_release_portfolio_governance_attestation_accepted_evidence_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Public Attestation Accepted Evidence ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Accepted Evidence ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require current accepted external review evidence.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
@@ -1737,6 +1772,7 @@ def _main() -> None:
             require_current=args.require_current,
             require_published=args.require_published,
             require_no_revoked_current=args.require_no_revoked_current,
+            require_accepted_evidence=args.require_accepted_evidence,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -1764,6 +1800,7 @@ def _main() -> None:
             require_current=args.require_current,
             require_registry=args.require_registry,
             require_attestation=args.require_attestation,
+            require_accepted_evidence=args.require_accepted_evidence,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -1826,6 +1863,31 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_attestation_portal_response_verification_report(report)
         raise SystemExit(release_portfolio_governance_attestation_portal_review_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-portfolio-governance-attestation-accepted-evidence":
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence_verifier import (
+            print_release_portfolio_governance_attestation_accepted_evidence_verification_report,
+            release_portfolio_governance_attestation_accepted_evidence_verification_exit_code,
+            verify_release_portfolio_governance_attestation_accepted_evidence,
+            write_release_portfolio_governance_attestation_accepted_evidence_verification_report,
+        )
+
+        parser = build_verify_release_portfolio_governance_attestation_accepted_evidence_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_portfolio_governance_attestation_accepted_evidence(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_portfolio_governance_attestation_accepted_evidence_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_attestation_accepted_evidence_verification_report(report)
+        raise SystemExit(release_portfolio_governance_attestation_accepted_evidence_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -2796,7 +2858,7 @@ def _main() -> None:
             zip_info = store.build_zip(portfolio_id, payload)
             result.update({"zip": zip_info})
         if args.verify:
-            verification = verify_release_portfolio_governance_attestation_registry(store.zip_path(portfolio_id, args.profile), strict=args.strict, require_current=args.require_current, require_published=args.require_published, require_no_revoked_current=args.require_no_revoked_current)
+            verification = verify_release_portfolio_governance_attestation_registry(store.zip_path(portfolio_id, args.profile), strict=args.strict, require_current=args.require_current, require_published=args.require_published, require_no_revoked_current=args.require_no_revoked_current, require_accepted_evidence=args.require_accepted_evidence)
             write_release_portfolio_governance_attestation_registry_verification_report(verification, store.verification_report_path(portfolio_id, args.profile))
             result.update({"verification": verification, "verification_summary": release_portfolio_governance_attestation_registry_verification_summary(verification)})
         if args.report_out is not None:
@@ -2875,7 +2937,7 @@ def _main() -> None:
             zip_info = store.build_zip(portfolio_id, payload)
             result.update({"zip": zip_info})
         if args.verify:
-            verification = verify_release_portfolio_governance_attestation_portal(store.zip_path(portfolio_id, args.profile), strict=args.strict, require_current=args.require_current, require_registry=args.require_registry, require_attestation=args.require_attestation)
+            verification = verify_release_portfolio_governance_attestation_portal(store.zip_path(portfolio_id, args.profile), strict=args.strict, require_current=args.require_current, require_registry=args.require_registry, require_attestation=args.require_attestation, require_accepted_evidence=args.require_accepted_evidence)
             write_release_portfolio_governance_attestation_portal_verification_report(verification, store.verification_report_path(portfolio_id, args.profile))
             result.update({"verification": verification, "verification_summary": release_portfolio_governance_attestation_portal_verification_summary(verification)})
         if args.report_out is not None:
@@ -2949,6 +3011,48 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_portfolio_governance_attestation_portal_review_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-portfolio-governance-attestation-accepted-evidence":
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore, accepted_evidence_summary
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence_verifier import write_release_portfolio_governance_attestation_accepted_evidence_verification_report
+        from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+
+        parser = build_release_portfolio_governance_attestation_accepted_evidence_parser()
+        args = parser.parse_args(raw_args[1:])
+        portal_store = _build_release_portfolio_governance_attestation_portal_store()
+        review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+        store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
+        portfolio_id = args.portfolio_id
+        result: dict[str, Any] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+        if args.refresh:
+            payload = {"profile": args.profile}
+            if args.response_id:
+                payload["response_id"] = args.response_id
+            evidence = store.refresh_evidence(portfolio_id, payload)
+            result.update({"accepted_evidence": evidence, "summary": accepted_evidence_summary(evidence), "stale": False})
+        else:
+            evidence = store.read_evidence(portfolio_id, profile=args.profile, default={})
+            summary = accepted_evidence_summary(evidence) if evidence else {"status": "missing", "external_review_status": "missing", "profile": args.profile}
+            if evidence:
+                summary["stale"] = store.evidence_is_stale(portfolio_id, evidence, profile=args.profile)
+            result.update({"accepted_evidence": evidence, "summary": summary, "stale": summary.get("stale", False)})
+        if args.export:
+            result["manifest"] = store.export_evidence(portfolio_id, {"profile": args.profile})
+        if args.zip:
+            result["zip"] = store.build_zip(portfolio_id, {"profile": args.profile})
+        if args.verify:
+            verification = store.verify_evidence(portfolio_id, {"profile": args.profile, "strict": args.strict, "require_current": args.require_current})
+            write_release_portfolio_governance_attestation_accepted_evidence_verification_report(verification, store.verification_report_path(portfolio_id, args.profile))
+            result["verification"] = verification
+        if args.archive:
+            result["accepted_evidence"] = store.archive_evidence(portfolio_id, {"profile": args.profile, "reason": args.reason})
+            result["summary"] = accepted_evidence_summary(result["accepted_evidence"])
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_attestation_accepted_evidence_result(result)
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
@@ -4101,6 +4205,19 @@ def print_release_portfolio_governance_attestation_portal_review_result(result: 
         print(f"verify response: {response_verification.get('status')}")
     if change:
         print(f"change request: {change.get('change_request_id') or '-'} / {change.get('status') or '-'}")
+
+
+def print_release_portfolio_governance_attestation_accepted_evidence_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    evidence = result.get("accepted_evidence") if isinstance(result.get("accepted_evidence"), dict) else {}
+    print("MusicForge release portfolio governance attestation accepted evidence")
+    print(f"portfolio: {result.get('portfolio_id')}")
+    print(f"status: {summary.get('status') or evidence.get('status') or 'missing'}")
+    print(f"external review: {summary.get('external_review_status') or 'missing'}")
+    print(f"accepted evidence: {summary.get('accepted_evidence_id') or evidence.get('accepted_evidence_id') or '-'}")
+    print(f"response: {summary.get('response_id') or '-'}")
+    if result.get("verification"):
+        print(f"verification: {result.get('verification', {}).get('status')}")
 
 
 def _build_release_portfolio_governance_attestation_portal_store():

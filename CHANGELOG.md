@@ -1,5 +1,16 @@
 # Changelog
 
+## v7.7.0 - 2026-06-11
+
+### Added
+- Public Attestation Accepted Evidence workflow for turning a verified accepted Portal Review Response into a public-safe evidence record and portable ZIP.
+- Registry and Portal summaries can now include accepted external review evidence, and their offline verifiers support `--require-accepted-evidence`.
+- API, CLI, Studio controls, and release-check matrix coverage for Accepted Evidence refresh/export/ZIP/verify/archive flows.
+- Accepted Evidence verifier covers source binding, public summary binding, duplicate/path/backslash/nested `.musicforge` guards, manifest spoofing, package type, and redaction scans.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_accepted_evidence.py tests\test_server_release_portfolio_governance_attestation_accepted_evidence.py tests\test_cli_release_operations.py::test_release_portfolio_governance_attestation_accepted_evidence_cli_export_verify tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v77_attestation_accepted_evidence_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v7.6.1 - 2026-06-10
 
 ### Fixed

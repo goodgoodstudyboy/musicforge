@@ -51,6 +51,7 @@ from song_agent.release_checks import (
     _v74_release_portfolio_governance_attestation_portal_smoke,
     _v75_release_check_matrix_smoke,
     _v76_attestation_portal_review_response_smoke,
+    _v77_attestation_accepted_evidence_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -693,6 +694,20 @@ def test_v76_attestation_portal_review_response_smoke(tmp_path: Path) -> None:
     assert "response_tamper=failed" in detail
     assert "response_source=failed" in detail
     assert "response_redaction=failed" in detail
+
+
+def test_v77_attestation_accepted_evidence_smoke(tmp_path: Path) -> None:
+    ok, detail = _v77_attestation_accepted_evidence_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "accepted=current/passed" in detail
+    assert "registry=passed" in detail
+    assert "portal=passed" in detail
+    assert "rejected=True" in detail
+    assert "stale=True" in detail
+    assert "report_source=failed" in detail
+    assert "summary=failed" in detail
+    assert "redaction=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

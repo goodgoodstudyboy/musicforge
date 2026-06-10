@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -898,6 +899,88 @@ def test_release_portfolio_governance_attestation_portal_review_cli_export_verif
     assert payload["zip"]["sha256"]
     assert payload["verification"]["status"] == "passed"
     assert saved["verification"]["status"] == "passed"
+
+
+def test_release_portfolio_governance_attestation_accepted_evidence_cli_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_portal import _portal_fixture
+    from tests.test_release_portfolio_governance_attestation_portal_review import _response_payload
+    from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
+    from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+
+    portfolio_id, *_rest, portal_store = _portal_fixture(Path(".musicforge"), monkeypatch)
+    portal_store.refresh_report(portfolio_id)
+    portal_store.export_portal(portfolio_id)
+    portal_store.build_zip(portfolio_id)
+    review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+    review_store.refresh_pack(portfolio_id)
+    response_zip = review_store.build_response_zip(portfolio_id, _response_payload())
+    review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(response_zip.read_bytes()).decode("ascii")})
+    accepted_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
+    report_out = tmp_path / "accepted-evidence-command.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    managed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-attestation-accepted-evidence",
+            "--portfolio-id",
+            portfolio_id,
+            "--refresh",
+            "--export",
+            "--zip",
+            "--verify",
+            "--strict",
+            "--require-current",
+            "--json",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    payload = json.loads(managed.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+
+    assert managed.returncode == 0, managed.stderr
+    assert payload["summary"]["external_review_status"] == "accepted"
+    assert payload["zip"]["sha256"]
+    assert payload["verification"]["status"] == "passed"
+    assert saved["verification"]["status"] == "passed"
+
+    offline_report = tmp_path / "accepted-evidence-offline.json"
+    offline = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-attestation-accepted-evidence",
+            str(accepted_store.zip_path(portfolio_id)),
+            "--json",
+            "--strict",
+            "--require-current",
+            "--report-out",
+            str(offline_report),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    offline_payload = json.loads(offline.stdout)
+    offline_saved = json.loads(offline_report.read_text(encoding="utf-8"))
+
+    assert offline.returncode == 0, offline.stderr
+    assert offline_payload["status"] == "passed"
+    assert offline_saved["summary"]["accepted_evidence_id"]
 
 
 def test_verify_release_portfolio_governance_attestation_portal_response_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:

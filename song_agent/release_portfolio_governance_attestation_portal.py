@@ -174,7 +174,8 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
             report = self.read_report(portfolio_id, profile=profile, default={}) or self.refresh_report(portfolio_id, {"profile": profile}, now=now)
             source = self.build_source(portfolio_id, profile=profile)
             self._ensure_exportable(report, source)
-            state = _state_triple(report)
+            external_review = _accepted_evidence_summary_for_portfolio_dir(self.attestation_store.portfolio_store.portfolio_dir(portfolio_id), profile=profile)
+            state = {**_state_triple(report), "external_review_hash": stable_hash(external_review)}
             if self._history_has_state_event(portfolio_id, profile, state, "portal_exported"):
                 raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal export already exists for this source state.")
             export_dir = self.export_dir(portfolio_id, profile).resolve()
@@ -190,9 +191,10 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
 
             _write_json(export_dir / "portal-report.json", report)
             data_docs = _data_documents(report)
+            data_docs["accepted-evidence-summary.json"] = {"source_hash": report.get("source_hash"), "external_review": external_review}
             for name, payload_doc in data_docs.items():
                 _write_json(export_dir / "data" / name, payload_doc)
-            for name, content in _html_pages(report, data_docs).items():
+            for name, content in _html_pages(report, data_docs, external_review=external_review).items():
                 (export_dir / name).write_text(content, encoding="utf-8")
             _write_readme(export_dir, report)
 
@@ -209,6 +211,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
                 "portal_report": {"integrity_hash": report.get("integrity_hash"), "source_hash": report.get("source_hash")},
                 "registry": _registry_manifest_row(source),
                 "current_attestation": _attestation_manifest_row(source),
+                "external_review": external_review,
                 "pages": pages,
                 "files": sorted(files, key=lambda item: item["path"]),
                 "zip": {},
@@ -226,7 +229,8 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
             report = self.read_report(portfolio_id, profile=profile, default={})
             source = self.build_source(portfolio_id, profile=profile)
             self._ensure_exportable(report, source)
-            state = _state_triple(report)
+            external_review = _accepted_evidence_summary_for_portfolio_dir(self.attestation_store.portfolio_store.portfolio_dir(portfolio_id), profile=profile)
+            state = {**_state_triple(report), "external_review_hash": stable_hash(external_review)}
             if self._history_has_state_event(portfolio_id, profile, state, "portal_zip_built"):
                 raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal ZIP already exists for this source state.")
             export_dir = self.export_dir(portfolio_id, profile).resolve()
@@ -243,6 +247,8 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
                 if _manifest_state(manifest_in_zip) == state:
                     raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal ZIP already exists for this source state.")
             manifest = read_json(export_dir / "portal-manifest.json")
+            if stable_hash(manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}) != stable_hash(external_review):
+                raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal export is stale. Re-export before ZIP.")
             entries = _zip_entries(export_dir)
             manifest["zip"] = {"created_at": now, "filename": zip_path.name, "entry_count": len(entries), "entries": [entry for _path, entry in entries], "total_uncompressed_size_bytes": sum(path.stat().st_size for path, _entry in entries)}
             manifest["integrity_hash"] = portal_manifest_hash(manifest)
@@ -460,9 +466,10 @@ def _data_documents(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]]) -> dict[str, str]:
+def _html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]], *, external_review: dict[str, Any] | None = None) -> dict[str, str]:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    external = external_review if isinstance(external_review, dict) else {}
     base = _html_shell
     hashes = {
         "Registry ZIP": source.get("registry_zip_sha256"),
@@ -477,6 +484,7 @@ def _html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]]) ->
         _kv("Current entry", source.get("registry_current_entry_id")),
         _kv("Registry status", source.get("registry_verification_status")),
         _kv("Attestation status", source.get("attestation_verification_status")),
+        _kv("External Review", _external_review_label(external)),
         _kv("Published / revoked / superseded", f"{source.get('published_count', 0)} / {source.get('revoked_count', 0)} / {source.get('superseded_count', 0)}"),
         _hash_table(hashes),
         _links(),
@@ -488,6 +496,7 @@ def _html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]]) ->
         _kv("Attestation profile", source.get("attestation_profile")),
         _kv("Attestation verification", source.get("attestation_verification_status")),
         _kv("Evidence Vault deep verification", source.get("evidence_vault_deep_verification_status")),
+        _kv("External Review", _external_review_label(external)),
         _kv("Final Board signoff hash", source.get("final_board_signoff_hash")),
         "<p>This page is a summary. Run verifier for evidence validation.</p>",
         _links(),
@@ -557,6 +566,17 @@ def _hash_table(rows: dict[str, Any]) -> str:
     return f"<table>{body}</table>"
 
 
+def _external_review_label(external: dict[str, Any]) -> str:
+    status = str(external.get("external_review_status") or external.get("status") or "missing")
+    if status == "accepted":
+        reviewer = str(external.get("reviewer_label") or "external reviewer")
+        reviewed_at = str(external.get("reviewed_at") or "")
+        return f"Accepted by {reviewer}" + (f" at {reviewed_at}" if reviewed_at else "")
+    if status == "stale":
+        return "Stale evidence"
+    return status
+
+
 def _registry_manifest_row(source: dict[str, Any]) -> dict[str, Any]:
     return {
         "zip_sha256": source.get("registry_zip_sha256"),
@@ -587,7 +607,8 @@ def _state_triple(report: dict[str, Any]) -> dict[str, str]:
 
 def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
     registry = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
-    return {"source_hash": str(manifest.get("source_hash") or ""), "current_entry_hash": str(registry.get("current_entry_hash") or ""), "registry_zip_sha256": str(registry.get("zip_sha256") or "")}
+    external = manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}
+    return {"source_hash": str(manifest.get("source_hash") or ""), "current_entry_hash": str(registry.get("current_entry_hash") or ""), "registry_zip_sha256": str(registry.get("zip_sha256") or ""), "external_review_hash": stable_hash(external)}
 
 
 def _page_record(root: Path, path: str, source_hash: Any) -> dict[str, Any]:
@@ -670,6 +691,15 @@ def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
+    try:
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence import accepted_evidence_public_summary_from_portfolio_dir
+
+        return accepted_evidence_public_summary_from_portfolio_dir(portfolio_dir, profile=profile)
+    except Exception:
+        return {"status": "missing", "external_review_status": "missing"}
 
 
 def _find_entry(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:

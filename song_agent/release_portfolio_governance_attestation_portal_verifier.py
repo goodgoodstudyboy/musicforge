@@ -57,6 +57,7 @@ def verify_release_portfolio_governance_attestation_portal(
     require_current: bool = False,
     require_registry: bool = False,
     require_attestation: bool = False,
+    require_accepted_evidence: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -68,6 +69,7 @@ def verify_release_portfolio_governance_attestation_portal(
         require_current=require_current,
         require_registry=require_registry,
         require_attestation=require_attestation,
+        require_accepted_evidence=require_accepted_evidence,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -110,6 +112,7 @@ class _PortalVerifier:
         require_current: bool,
         require_registry: bool,
         require_attestation: bool,
+        require_accepted_evidence: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -120,6 +123,7 @@ class _PortalVerifier:
         self.require_current = require_current
         self.require_registry = require_registry
         self.require_attestation = require_attestation
+        self.require_accepted_evidence = require_accepted_evidence
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -189,7 +193,10 @@ class _PortalVerifier:
         self._add_check("zip", "portal_zip_entry_path_safe", "failed" if unsafe else "passed", "blocking", "Unsafe ZIP entries: " + ", ".join(unsafe[:5]) if unsafe else "All ZIP entry paths are safe.")
         duplicates = sorted(name for name, count in _counts(self.entry_names).items() if count > 1)
         self._add_check("zip", "portal_zip_duplicate_entries", "failed" if duplicates else "passed", "blocking", "Duplicate ZIP entries: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate ZIP entries.")
-        missing = sorted(REQUIRED_ENTRIES - set(self.entry_names))
+        required = set(REQUIRED_ENTRIES)
+        if "data/accepted-evidence-summary.json" in self.entry_names:
+            required.add("data/accepted-evidence-summary.json")
+        missing = sorted(required - set(self.entry_names))
         self._add_check("zip", "portal_zip_required_entries", "failed" if missing else "passed", "blocking", "Missing required entries: " + ", ".join(missing) if missing else "All required portal entries exist.")
         forbidden = [name for name in self.entry_names if _is_forbidden_public_entry(name)]
         self._add_check("zip", "portal_zip_no_nested_packages", "failed" if forbidden else "passed", "blocking", "Forbidden nested package entries: " + ", ".join(forbidden[:5]) if forbidden else "No nested ZIP or .musicforge entries are present.")
@@ -254,6 +261,10 @@ class _PortalVerifier:
             "verification-commands.json",
         ):
             self.data_docs[name] = self._read_json_entry(archive, f"data/{name}", "data", f"portal_data_{name.replace('-', '_').replace('.', '_')}_parse")
+        if "data/accepted-evidence-summary.json" in self.entry_map:
+            self.data_docs["accepted-evidence-summary.json"] = self._read_json_entry(archive, "data/accepted-evidence-summary.json", "data", "portal_data_accepted_evidence_summary_json_parse")
+        else:
+            self.data_docs["accepted-evidence-summary.json"] = {}
 
     def _verify_documents(self) -> None:
         if self.report_doc:
@@ -301,6 +312,7 @@ class _PortalVerifier:
         registry_verification = self.data_docs.get("registry-verification-summary.json", {})
         attestation_verification = self.data_docs.get("attestation-verification-summary.json", {})
         commands = self.data_docs.get("verification-commands.json", {})
+        accepted = self.data_docs.get("accepted-evidence-summary.json", {})
         for name, doc in self.data_docs.items():
             self._add_exact_check("data", f"portal_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), self.report_doc.get("source_hash"), f"{name} source_hash")
         for key, source_key in (
@@ -391,6 +403,12 @@ class _PortalVerifier:
             ("final_board_signoff_hash", "final_board_signoff_hash"),
         ):
             self._add_exact_check("data", f"portal_data_current_attestation_verification_{key}", current_summary.get(key), attestation_verification.get(verification_key), f"Current attestation summary {key} verification binding")
+        external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+        accepted_external = accepted.get("external_review") if isinstance(accepted.get("external_review"), dict) else {}
+        if accepted:
+            self._add_exact_check("data", "portal_data_accepted_evidence_source_hash", accepted.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence summary source_hash")
+            for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash"):
+                self._add_exact_check("data", f"portal_data_accepted_evidence_{key}", accepted_external.get(key), external.get(key), f"Accepted Evidence summary {key}")
         commands_text = json.dumps(commands, ensure_ascii=False, sort_keys=True)
         unsafe_commands = _contains_local_path(commands_text) or "http://" in commands_text.lower() or "https://" in commands_text.lower()
         self._add_check("data", "portal_data_verification_commands_safe", "failed" if unsafe_commands else "passed", "blocking", "verification-commands contains unsafe paths or remote URLs." if unsafe_commands else "verification-commands contains no local paths or remote URLs.")
@@ -433,6 +451,17 @@ class _PortalVerifier:
             self._add_check("requirements", "portal_require_registry", "passed" if source.get("registry_verification_status") == "passed" and source.get("registry_zip_sha256") else "failed", "blocking", "Registry verification evidence is present." if source.get("registry_verification_status") == "passed" and source.get("registry_zip_sha256") else "Passed Registry verification evidence is required.")
         if self.require_attestation:
             self._add_check("requirements", "portal_require_attestation", "passed" if source.get("attestation_verification_status") == "passed" and source.get("current_attestation_zip_sha256") else "failed", "blocking", "Public Attestation verification evidence is present." if source.get("attestation_verification_status") == "passed" and source.get("current_attestation_zip_sha256") else "Passed Public Attestation verification evidence is required.")
+        if self.require_accepted_evidence:
+            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+            ok = (
+                external.get("external_review_status") == "accepted"
+                and external.get("status") == "current"
+                and external.get("verification_status") == "passed"
+                and external.get("accepted_evidence_verification_status") == "passed"
+                and bool(external.get("accepted_evidence_zip_sha256"))
+                and bool(external.get("accepted_evidence_manifest_hash"))
+            )
+            self._add_check("requirements", "portal_require_accepted_evidence", "passed" if ok else "failed", "blocking", "Current accepted external review evidence is present." if ok else "Current accepted external review evidence is required.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:

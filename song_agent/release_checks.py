@@ -11571,8 +11571,9 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             and "v74.attestation_portal_smoke" in {definition.check_id for definition in latest}
             and "v75.release_check_matrix_smoke" in {definition.check_id for definition in latest}
             and "v76.attestation_portal_review_response_smoke" in {definition.check_id for definition in latest}
+            and "v77.attestation_accepted_evidence_smoke" in {definition.check_id for definition in latest}
             and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
-            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke"}
+            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke"}
             and empty_group == []
             and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
             and empty_since == []
@@ -11745,6 +11746,147 @@ def _v76_attestation_portal_review_response_smoke(root: Path) -> tuple[bool, str
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v77_attestation_accepted_evidence_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v77-attestation-accepted-evidence-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore, accepted_evidence_manifest_hash
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence_verifier import verify_release_portfolio_governance_attestation_accepted_evidence
+        from song_agent.release_portfolio_governance_attestation_portal import ReleasePortfolioGovernanceAttestationPortalStore
+        from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+        from song_agent.release_portfolio_governance_attestation_portal_verifier import verify_release_portfolio_governance_attestation_portal
+        from song_agent.release_portfolio_governance_attestation_registry import ReleasePortfolioGovernanceAttestationRegistryStore
+        from song_agent.release_portfolio_governance_attestation_registry_verifier import verify_release_portfolio_governance_attestation_registry
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=operations_audit_store, reviewer_pack_store=operations_reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=operations_signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+        vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store, final_board_store=final_board_store)
+        attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
+        registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
+        portal_store = ReleasePortfolioGovernanceAttestationPortalStore(registry_store=registry_store, attestation_store=attestation_store)
+        review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+        accepted_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
+
+        release = release_store.create_release({"name": "v7.7 Accepted Evidence Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        portfolio = portfolio_store.create({"name": "v7.7 Accepted Evidence Portfolio", "release_ids": [release.release_id]})
+        portfolio_id = portfolio["portfolio_id"]
+        _v73_write_minimal_attestation_zip(attestation_store.zip_path(portfolio_id), portfolio_id=portfolio_id, suffix="accepted-evidence")
+        entry = registry_store.register_current_attestation(portfolio_id)["entry"]
+        registry_store.publish_entry(portfolio_id, entry["entry_id"], {"published_by": "release-check"})
+        registry_store.refresh_report(portfolio_id)
+        registry_store.export_registry(portfolio_id)
+        registry_store.build_zip(portfolio_id)
+        portal_store.refresh_report(portfolio_id)
+        portal_store.export_portal(portfolio_id)
+        portal_store.build_zip(portfolio_id)
+        review_store.refresh_pack(portfolio_id)
+        review_store.export_pack(portfolio_id)
+        review_store.build_pack_zip(portfolio_id)
+
+        accepted_zip = review_store.build_response_zip(portfolio_id, _v76_response_payload("accepted"))
+        imported = review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(accepted_zip.read_bytes()).decode("ascii")})
+        evidence = accepted_store.refresh_evidence(portfolio_id, {"response_id": imported["response"]["response_id"]})
+        manifest = accepted_store.export_evidence(portfolio_id)
+        accepted_store.build_zip(portfolio_id)
+        accepted_verification = accepted_store.verify_evidence(portfolio_id, {"strict": True, "require_current": True})
+
+        registry_store.refresh_report(portfolio_id)
+        registry_store.export_registry(portfolio_id)
+        registry_store.build_zip(portfolio_id)
+        registry_verification = verify_release_portfolio_governance_attestation_registry(registry_store.zip_path(portfolio_id), strict=True, require_current=True, require_published=True, require_accepted_evidence=True)
+        portal_store.refresh_report(portfolio_id)
+        portal_store.export_portal(portfolio_id)
+        portal_store.build_zip(portfolio_id)
+        portal_verification = verify_release_portfolio_governance_attestation_portal(portal_store.zip_path(portfolio_id), strict=True, require_current=True, require_registry=True, require_attestation=True, require_accepted_evidence=True)
+
+        rejected_blocked = False
+        try:
+            rejected_zip = review_store.build_response_zip(portfolio_id, _v76_response_payload("rejected"))
+            rejected_import = review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(rejected_zip.read_bytes()).decode("ascii")})
+            accepted_store.refresh_evidence(portfolio_id, {"response_id": rejected_import["response"]["response_id"]})
+        except Exception:
+            rejected_blocked = True
+        stale_blocked = False
+        try:
+            review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(json.dumps({**_v76_response_payload("accepted"), "review_pack_id": "wrong", "review_pack_source_hash": "0" * 64}).encode("utf-8")).decode("ascii")})
+        except Exception:
+            stale_blocked = True
+
+        source_zip = accepted_store.zip_path(portfolio_id)
+        report_tamper = verify_release_portfolio_governance_attestation_accepted_evidence(_v76_rewrite_zip(source_zip, base / "accepted-report-source-v77.zip", _v77_tamper_accepted_report_source), strict=True, require_current=True)
+        summary_tamper = verify_release_portfolio_governance_attestation_accepted_evidence(_v76_rewrite_zip(source_zip, base / "accepted-summary-v77.zip", _v77_tamper_accepted_summary), strict=True, require_current=True)
+        duplicate = verify_release_portfolio_governance_attestation_accepted_evidence(_v43_duplicate_submission_zip(source_zip, base / "duplicate-v77-accepted.zip"), strict=True)
+        dangerous = verify_release_portfolio_governance_attestation_accepted_evidence(_v38_rewrite_zip(source_zip, base / "dangerous-v77-accepted.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_release_portfolio_governance_attestation_accepted_evidence(_v38_backslash_entry_zip(base / "backslash-v77-accepted.zip"), strict=True)
+        case_musicforge = verify_release_portfolio_governance_attestation_accepted_evidence(_v38_rewrite_zip(source_zip, base / "case-musicforge-v77-accepted.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_release_portfolio_governance_attestation_accepted_evidence(_v38_rewrite_zip(source_zip, base / "nested-v77-accepted.zip", additions={"nested/fake.zip": b"PK\x05\x06" + (b"\0" * 18)}), strict=True)
+        spoof = verify_release_portfolio_governance_attestation_accepted_evidence(_v38_rewrite_zip(source_zip, base / "spoof-v77-accepted.zip", additions={"extra.txt": b"extra"}, transforms={"accepted-evidence-manifest.json": _v77_spoof_accepted_manifest}), strict=True)
+        redaction = verify_release_portfolio_governance_attestation_accepted_evidence(_v38_rewrite_zip(source_zip, base / "redaction-v77-accepted.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        missing_accepted_registry = verify_release_portfolio_governance_attestation_registry(registry_store.zip_path(portfolio_id), strict=True, require_current=True, require_published=True, require_accepted_evidence=True)
+        serialized = json.dumps({"evidence": evidence, "manifest": manifest, "accepted": accepted_verification, "registry": registry_verification, "portal": portal_verification}, ensure_ascii=False)
+        ok = (
+            evidence.get("status") == "current"
+            and manifest.get("package_type") == "release_portfolio_governance_attestation_accepted_evidence"
+            and accepted_verification.get("status") == "passed"
+            and registry_verification.get("status") == "passed"
+            and portal_verification.get("status") == "passed"
+            and rejected_blocked
+            and stale_blocked
+            and _v38_check_status(report_tamper, "accepted_evidence_report_source_hash") == "failed"
+            and _v38_check_status(summary_tamper, "accepted_evidence_summary_public_status") == "failed"
+            and _v38_check_status(duplicate, "accepted_evidence_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "accepted_evidence_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "accepted_evidence_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "accepted_evidence_zip_no_nested_or_internal_entries") == "failed"
+            and _v38_check_status(nested, "accepted_evidence_zip_no_nested_or_internal_entries") == "failed"
+            and _v38_check_status(spoof, "accepted_evidence_manifest_extra_entries") == "failed"
+            and _v38_check_status(redaction, "accepted_evidence_redaction_scan") == "failed"
+            and _v38_check_status(missing_accepted_registry, "registry_require_accepted_evidence") == "passed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"accepted={evidence.get('status')}/{accepted_verification.get('status')}, registry={registry_verification.get('status')}, portal={portal_verification.get('status')}, "
+            f"rejected={rejected_blocked}, stale={stale_blocked}, "
+            f"report_source={_v38_check_status(report_tamper, 'accepted_evidence_report_source_hash')}, summary={_v38_check_status(summary_tamper, 'accepted_evidence_summary_public_status')}, "
+            f"duplicate={_v38_check_status(duplicate, 'accepted_evidence_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'accepted_evidence_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash, 'accepted_evidence_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge, 'accepted_evidence_zip_no_nested_or_internal_entries')}, "
+            f"nested={_v38_check_status(nested, 'accepted_evidence_zip_no_nested_or_internal_entries')}, spoof={_v38_check_status(spoof, 'accepted_evidence_manifest_extra_entries')}, "
+            f"redaction={_v38_check_status(redaction, 'accepted_evidence_redaction_scan')}, registry_require={_v38_check_status(missing_accepted_registry, 'registry_require_accepted_evidence')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v74_rewrite_portal_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
     with zipfile.ZipFile(source_zip, "r") as src:
         docs = {info.filename: src.read(info.filename) for info in src.infolist()}
@@ -11765,6 +11907,41 @@ def _v76_response_payload(decision: str) -> dict[str, Any]:
         "findings": [] if decision == "accepted" else [{"severity": "high", "status": "open", "message": "External reviewer requested changes."}],
         "attachment_summaries": [],
     }
+
+
+def _v77_tamper_accepted_report_source(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_accepted_evidence import accepted_evidence_hash, accepted_evidence_manifest_hash
+
+    report = _v74_read_json_doc(docs, "accepted-evidence-report.json")
+    manifest = _v74_read_json_doc(docs, "accepted-evidence-manifest.json")
+    report.setdefault("source", {})["response_verification_hash"] = "0" * 64
+    report["integrity_hash"] = accepted_evidence_hash(report)
+    docs["accepted-evidence-report.json"] = _v74_json_doc(report)
+    _v74_sync_manifest_file(manifest, "accepted-evidence-report.json", docs["accepted-evidence-report.json"])
+    manifest.setdefault("accepted_evidence", {})["integrity_hash"] = report["integrity_hash"]
+    manifest["integrity_hash"] = accepted_evidence_manifest_hash(manifest)
+    docs["accepted-evidence-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v77_tamper_accepted_summary(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_accepted_evidence import accepted_evidence_manifest_hash
+
+    summary = _v74_read_json_doc(docs, "accepted-evidence-summary.json")
+    manifest = _v74_read_json_doc(docs, "accepted-evidence-manifest.json")
+    summary.setdefault("public_summary", {})["external_review_status"] = "missing"
+    docs["accepted-evidence-summary.json"] = _v74_json_doc(summary)
+    _v74_sync_manifest_file(manifest, "accepted-evidence-summary.json", docs["accepted-evidence-summary.json"])
+    manifest["integrity_hash"] = accepted_evidence_manifest_hash(manifest)
+    docs["accepted-evidence-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v77_spoof_accepted_manifest(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_attestation_accepted_evidence import accepted_evidence_manifest_hash
+
+    manifest = json.loads(data.decode("utf-8"))
+    manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
+    manifest["integrity_hash"] = accepted_evidence_manifest_hash(manifest)
+    return _v74_json_doc(manifest)
 
 
 def _v76_rewrite_zip(source_zip: Path, target_zip: Path, mutate) -> Path:

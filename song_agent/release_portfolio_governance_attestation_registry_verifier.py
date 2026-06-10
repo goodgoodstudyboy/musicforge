@@ -44,6 +44,7 @@ def verify_release_portfolio_governance_attestation_registry(
     require_current: bool = False,
     require_published: bool = False,
     require_no_revoked_current: bool = False,
+    require_accepted_evidence: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -55,6 +56,7 @@ def verify_release_portfolio_governance_attestation_registry(
         require_current=require_current,
         require_published=require_published,
         require_no_revoked_current=require_no_revoked_current,
+        require_accepted_evidence=require_accepted_evidence,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -97,6 +99,7 @@ class _RegistryVerifier:
         require_current: bool,
         require_published: bool,
         require_no_revoked_current: bool,
+        require_accepted_evidence: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -107,6 +110,7 @@ class _RegistryVerifier:
         self.require_current = require_current
         self.require_published = require_published
         self.require_no_revoked_current = require_no_revoked_current
+        self.require_accepted_evidence = require_accepted_evidence
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -119,6 +123,7 @@ class _RegistryVerifier:
         self.report_doc: dict[str, Any] = {}
         self.package_index: dict[str, Any] = {}
         self.chain: dict[str, Any] = {}
+        self.accepted_evidence: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -177,7 +182,10 @@ class _RegistryVerifier:
         self._add_check("zip", "registry_zip_entry_path_safe", "failed" if unsafe else "passed", "blocking", "Unsafe ZIP entries: " + ", ".join(unsafe[:5]) if unsafe else "All ZIP entry paths are safe.")
         duplicates = sorted(name for name, count in _counts(self.entry_names).items() if count > 1)
         self._add_check("zip", "registry_zip_duplicate_entries", "failed" if duplicates else "passed", "blocking", "Duplicate ZIP entries: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate ZIP entries.")
-        missing = sorted(REQUIRED_ENTRIES - set(self.entry_names))
+        required = set(REQUIRED_ENTRIES)
+        if "data/accepted-evidence-summary.json" in self.entry_names:
+            required.add("data/accepted-evidence-summary.json")
+        missing = sorted(required - set(self.entry_names))
         self._add_check("zip", "registry_zip_required_entries", "failed" if missing else "passed", "blocking", "Missing required entries: " + ", ".join(missing) if missing else "All required registry entries exist.")
         forbidden = [name for name in self.entry_names if _is_forbidden_public_entry(name)]
         self._add_check("zip", "registry_zip_no_nested_packages", "failed" if forbidden else "passed", "blocking", "Forbidden nested package entries: " + ", ".join(forbidden[:5]) if forbidden else "No nested ZIP or .musicforge entries are present.")
@@ -235,6 +243,10 @@ class _RegistryVerifier:
         self.report_doc = self._read_json_entry(archive, "registry-report.json", "report", "registry_report_parse")
         self.package_index = self._read_json_entry(archive, "package-index.json", "package_index", "registry_package_index_parse")
         self.chain = self._read_json_entry(archive, "chain-of-custody.json", "chain", "registry_chain_parse")
+        if "data/accepted-evidence-summary.json" in self.entry_map:
+            self.accepted_evidence = self._read_json_entry(archive, "data/accepted-evidence-summary.json", "data", "registry_data_accepted_evidence_summary_parse")
+        else:
+            self.accepted_evidence = {}
 
     def _verify_documents(self) -> None:
         if self.registry:
@@ -315,6 +327,12 @@ class _RegistryVerifier:
             self._add_exact_check("chain", "registry_chain_summary_latest_event_type", chain_summary.get("latest_event_type"), latest_event_type, "Chain latest_event_type")
         else:
             self._add_check("chain", "registry_chain_document_exists", "failed", "blocking", "chain-of-custody.json must contain a JSON object.")
+        if self.accepted_evidence:
+            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+            evidence_external = self.accepted_evidence.get("external_review") if isinstance(self.accepted_evidence.get("external_review"), dict) else {}
+            self._add_exact_check("accepted_evidence", "registry_accepted_evidence_source_hash", self.accepted_evidence.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence summary source_hash")
+            for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash"):
+                self._add_exact_check("accepted_evidence", f"registry_accepted_evidence_{key}", evidence_external.get(key), external.get(key), f"Accepted Evidence summary {key}")
 
     def _verify_requirements(self) -> None:
         current_id = str(self.registry.get("current_entry_id") or "")
@@ -325,6 +343,18 @@ class _RegistryVerifier:
             self._add_check("requirements", "registry_require_published", "passed" if current and current.get("status") == "published" else "failed", "blocking", "Current Registry entry is published." if current and current.get("status") == "published" else "Published current Registry entry is required.")
         if self.require_no_revoked_current:
             self._add_check("requirements", "registry_require_no_revoked_current", "passed" if not current or current.get("status") != "revoked" else "failed", "blocking", "Current Registry entry is not revoked." if not current or current.get("status") != "revoked" else "Current Registry entry is revoked.")
+        if self.require_accepted_evidence:
+            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+            ok = (
+                bool(self.accepted_evidence)
+                and external.get("external_review_status") == "accepted"
+                and external.get("status") == "current"
+                and external.get("verification_status") == "passed"
+                and external.get("accepted_evidence_verification_status") == "passed"
+                and bool(external.get("accepted_evidence_zip_sha256"))
+                and bool(external.get("accepted_evidence_manifest_hash"))
+            )
+            self._add_check("requirements", "registry_require_accepted_evidence", "passed" if ok else "failed", "blocking", "Current accepted external review evidence is present." if ok else "Current accepted external review evidence is required.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:

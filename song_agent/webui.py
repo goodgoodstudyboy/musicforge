@@ -3318,6 +3318,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceAttestationPortalData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal`); } catch (err) {}
       let governanceAttestationPortalReviewData = { review_pack: {}, summary: {}, responses: [] };
       try { governanceAttestationPortalReviewData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal-review`); } catch (err) {}
+      let governanceAttestationAcceptedEvidenceData = { accepted_evidence: {}, summary: {}, verification: {} };
+      try { governanceAttestationAcceptedEvidenceData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
@@ -3332,6 +3334,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const governanceAttestationPortalSummary = governanceAttestationPortalData.summary || {};
       const governanceAttestationPortalReviewSummary = governanceAttestationPortalReviewData.summary || {};
       const governanceAttestationPortalReviewResponses = governanceAttestationPortalReviewData.responses || [];
+      const governanceAttestationAcceptedEvidenceSummary = governanceAttestationAcceptedEvidenceData.summary || {};
       const governanceAttestationRegistryRows = (governanceAttestationRegistry.entries || []).slice(-6).reverse().map((entry) => `
         <tr>
           <td>${escapeHtml(entry.entry_id || "-")}</td>
@@ -3624,6 +3627,23 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-attestation-portal-review-create-change-request" type="button">Create Change Request</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-portal-review-pack.zip">Download Review Pack ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Accepted Evidence</span></div>
+        <div class="summary-grid">
+          ${metric("Evidence", governanceAttestationAcceptedEvidenceSummary.status || "missing")}
+          ${metric("External Review", governanceAttestationAcceptedEvidenceSummary.external_review_status || "-")}
+          ${metric("Accepted Evidence", governanceAttestationAcceptedEvidenceSummary.accepted_evidence_id || "-")}
+          ${metric("Response", governanceAttestationAcceptedEvidenceSummary.response_id || "-")}
+          ${metric("Verification", governanceAttestationAcceptedEvidenceSummary.accepted_evidence_verification_status || governanceAttestationAcceptedEvidenceSummary.verification_status || "-")}
+          ${metric("Stale", governanceAttestationAcceptedEvidenceSummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-attestation-accepted-evidence-refresh" type="button">Refresh Accepted Evidence</button>
+          <button class="secondary" id="portfolio-governance-attestation-accepted-evidence-export" type="button">Export Accepted Evidence</button>
+          <button class="secondary" id="portfolio-governance-attestation-accepted-evidence-zip" type="button">Build Accepted Evidence ZIP</button>
+          <button class="secondary" id="portfolio-governance-attestation-accepted-evidence-verify" type="button">Verify Accepted Evidence ZIP</button>
+          <button class="secondary" id="portfolio-governance-attestation-accepted-evidence-archive" type="button">Archive Accepted Evidence</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-accepted-evidence.zip">Download Accepted Evidence ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
@@ -3848,7 +3868,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-registry/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true, require_published: true, require_no_revoked_current: true }),
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true, require_published: true, require_no_revoked_current: true, require_accepted_evidence: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });
@@ -3906,7 +3926,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true, require_registry: true, require_attestation: true }),
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true, require_registry: true, require_attestation: true, require_accepted_evidence: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });
@@ -3961,6 +3981,48 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ created_by: "studio" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-accepted-evidence-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-accepted-evidence-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-accepted-evidence-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence/zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-accepted-evidence-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-accepted-evidence-archive", async () => {
+        const reason = prompt("Accepted Evidence archive reason");
+        if (!reason) return;
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence/archive`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", reason }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });
