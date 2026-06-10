@@ -79,7 +79,8 @@ def select_check_definitions(
 
 
 def release_check_definitions_as_dicts(definitions: Iterable[ReleaseCheckDefinition] | None = None) -> list[dict[str, object]]:
-    return [definition_to_dict(definition) for definition in definitions or CHECK_DEFINITIONS]
+    source = CHECK_DEFINITIONS if definitions is None else definitions
+    return [definition_to_dict(definition) for definition in source]
 
 
 def definition_to_dict(definition: ReleaseCheckDefinition) -> dict[str, object]:
@@ -285,4 +286,3 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
 )
 
 KNOWN_PROFILES = {"full", "quick", "latest", "v7", "publish"}
-

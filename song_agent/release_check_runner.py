@@ -50,7 +50,7 @@ class ReleaseCheckReport:
 
     @property
     def ok(self) -> bool:
-        return all(result.ok for result in self.results)
+        return bool(self.results) and all(result.ok for result in self.results)
 
     def add(self, name: str, ok: bool, detail: str = "") -> None:
         status = "passed" if ok else "failed"
@@ -58,7 +58,11 @@ class ReleaseCheckReport:
 
     def to_json_report(self) -> dict[str, Any]:
         failures = [result for result in self.results if not result.ok]
-        warnings = [result for result in self.results if result.status == "warning"]
+        warning_results = [result for result in self.results if result.status == "warning"]
+        checks_with_warnings = [result for result in self.results if result.warnings or result.expected_warning_matches or result.status == "warning"]
+        expected_warning_count = sum(len(result.expected_warning_matches) for result in self.results)
+        raw_warning_count = sum(len(result.warnings) for result in self.results)
+        unexpected_warning_count = max(0, raw_warning_count - expected_warning_count)
         timed_out = [result for result in self.results if result.status == "timed_out"]
         network = [result for result in self.results if result.status == "network_error"]
         slowest = sorted(self.results, key=lambda result: result.duration_ms, reverse=True)[:10]
@@ -78,7 +82,10 @@ class ReleaseCheckReport:
                     "total": len(self.results),
                     "passed": sum(1 for result in self.results if result.status == "passed"),
                     "failed": len(failures),
-                    "warning": len(warnings),
+                    "warning": len(warning_results),
+                    "checks_with_warnings": len(checks_with_warnings),
+                    "expected_warnings": expected_warning_count,
+                    "unexpected_warnings": unexpected_warning_count,
                     "timed_out": len(timed_out),
                     "network_error": len(network),
                     "skipped": sum(1 for result in self.results if result.status == "skipped"),
@@ -153,6 +160,11 @@ def run_release_check_matrix(
         environment=_environment(root),
         selected_checks=[definition_to_dict(definition) for definition in selected],
     )
+    if not selected:
+        report.results.append(_empty_selection_result(profile=profile, groups=groups, since=since, only=only))
+        report.finished_at = _now()
+        report.duration_ms = int((time.perf_counter() - start) * 1000)
+        return report
     for definition in selected:
         if progress is not None:
             progress(definition)
@@ -163,6 +175,30 @@ def run_release_check_matrix(
     report.finished_at = _now()
     report.duration_ms = int((time.perf_counter() - start) * 1000)
     return report
+
+
+def _empty_selection_result(*, profile: str, groups: list[str] | None, since: str | None, only: list[str] | None) -> CheckResult:
+    filters = []
+    if groups:
+        filters.append(f"groups={','.join(groups)}")
+    if since:
+        filters.append(f"since={since}")
+    if only:
+        filters.append(f"only={','.join(only)}")
+    suffix = f" ({'; '.join(filters)})" if filters else ""
+    now = _now()
+    return CheckResult(
+        name="release-check selection",
+        ok=False,
+        detail=f"No release-checks selected for profile={profile}{suffix}. Adjust --profile, --group, --since, or --only.",
+        check_id="release_check.selection",
+        group="meta",
+        kind="selection",
+        risk="critical",
+        status="failed",
+        started_at=now,
+        finished_at=now,
+    )
 
 
 def write_json_report(report: ReleaseCheckReport, path: Path | str) -> Path:

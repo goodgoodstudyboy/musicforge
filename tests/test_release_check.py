@@ -674,8 +674,10 @@ def test_v75_release_check_matrix_smoke(tmp_path: Path) -> None:
     ok, detail = _v75_release_check_matrix_smoke(tmp_path)
 
     assert ok is True, detail
+    assert "empty=failed" in detail
     assert "timeout=timed_out" in detail
     assert "warning=passed/1" in detail
+    assert "warning_summary=1/1" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

@@ -586,7 +586,8 @@ python -m song_agent.cli verify-release-portfolio-governance-attestation-portal 
 Release Verification Matrix makes `release-check` selectable and auditable.
 The default command still runs the full verification set, while profiles can be
 used for focused hotfix or reviewer checks. Reports are written without tokens
-or local key paths:
+or local key paths. Execution fails if the selected matrix is empty; `--list`
+may be used to inspect an empty selection without failing:
 
 ```powershell
 python -m song_agent.cli release-check

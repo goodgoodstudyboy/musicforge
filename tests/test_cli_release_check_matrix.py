@@ -53,3 +53,29 @@ def test_release_check_cli_group_timing(tmp_path: Path) -> None:
     payload = json.loads(completed.stdout)
     assert {item["check_id"] for item in payload["checks"]} == {"v74.attestation_portal_smoke"}
 
+
+def test_release_check_cli_empty_selection_fails() -> None:
+    completed = _run_cli(["release-check", "--profile", "latest", "--group", "audio", "--json"])
+
+    assert completed.returncode == 1
+    payload = json.loads(completed.stdout)
+    assert payload["ok"] is False
+    assert payload["summary"]["total"] == 1
+    assert payload["results"][0]["check_id"] == "release_check.selection"
+
+
+def test_release_check_cli_empty_since_fails() -> None:
+    completed = _run_cli(["release-check", "--profile", "latest", "--since", "9.0", "--json"])
+
+    assert completed.returncode == 1
+    payload = json.loads(completed.stdout)
+    assert payload["ok"] is False
+    assert payload["results"][0]["check_id"] == "release_check.selection"
+
+
+def test_release_check_cli_list_allows_empty_selection() -> None:
+    completed = _run_cli(["release-check", "--profile", "latest", "--group", "audio", "--list", "--json"])
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert payload["checks"] == []

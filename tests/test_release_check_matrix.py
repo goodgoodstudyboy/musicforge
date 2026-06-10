@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from song_agent.release_check_matrix import (
+    ReleaseCheckDefinition,
     ReleaseCheckMatrixError,
     all_check_definitions,
     select_check_definitions,
@@ -63,3 +64,39 @@ def test_release_check_runner_json_and_timing(tmp_path: Path) -> None:
     assert payload["summary"]["total"] == 1
     assert payload["results"][0]["check_id"] == "v75.release_check_matrix_smoke"
     assert timing["results"][0]["duration_ms"] >= 0
+
+
+def test_release_check_runner_empty_selection_fails() -> None:
+    report = run_release_check_matrix(profile="latest", groups=["audio"])
+    payload = report.to_json_report()
+
+    assert report.ok is False
+    assert payload["summary"]["total"] == 1
+    assert payload["results"][0]["check_id"] == "release_check.selection"
+    assert "No release-checks selected" in payload["results"][0]["detail"]
+
+
+def test_release_check_warning_summary_counts_expected_and_unexpected(tmp_path: Path) -> None:
+    definitions = [
+        ReleaseCheckDefinition(
+            check_id="fake.warning",
+            name="fake warning",
+            group="meta",
+            version="7.5",
+            kind="pytest",
+            risk="normal",
+            timeout_seconds=10,
+            command=("python", "-c", "import sys; print('warning: expected', file=sys.stderr); print('warning: surprise', file=sys.stderr)"),
+            expected_warnings=("warning: expected",),
+            profiles=("latest",),
+        )
+    ]
+
+    report = run_release_check_matrix(repo_root=tmp_path, profile="latest", definitions=definitions)
+    summary = report.to_json_report()["summary"]
+
+    assert report.ok is True
+    assert summary["warning"] == 0
+    assert summary["checks_with_warnings"] == 1
+    assert summary["expected_warnings"] == 1
+    assert summary["unexpected_warnings"] == 1

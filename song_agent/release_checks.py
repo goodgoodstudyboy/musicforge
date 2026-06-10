@@ -11502,7 +11502,9 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
         latest = select_check_definitions(profile="latest")
         v7 = select_check_definitions(profile="v7")
         portal = select_check_definitions(profile="latest", groups=["portal"])
+        empty_group = select_check_definitions(profile="latest", groups=["audio"])
         since = select_check_definitions(profile="v7", since="7.2")
+        empty_since = select_check_definitions(profile="latest", since="9.0")
         only = select_check_definitions(profile="full", only=["v74.attestation_portal_smoke"])
         base = Path(tempfile.mkdtemp(prefix="release-check-v75-"))
         fake_script = base / "v75_timeout_fake.py"
@@ -11555,7 +11557,9 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             ),
         ]
         fake_report = run_release_check_matrix(repo_root=root, profile="latest", definitions=fake_definitions)
+        empty_report = run_release_check_matrix(repo_root=root, profile="latest", groups=["audio"])
         report_json = fake_report.to_json_report()
+        empty_json = empty_report.to_json_report()
         serialized = json.dumps(report_json, ensure_ascii=False)
         timeout_status = next(item.status for item in fake_report.results if item.check_id == "fake.timeout")
         warning_result = next(item for item in fake_report.results if item.check_id == "fake.warning")
@@ -11568,11 +11572,17 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             and "v75.release_check_matrix_smoke" in {definition.check_id for definition in latest}
             and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
             and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke"}
+            and empty_group == []
             and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
+            and empty_since == []
             and [definition.check_id for definition in only] == ["v74.attestation_portal_smoke"]
+            and not empty_report.ok
+            and empty_json["results"][0]["check_id"] == "release_check.selection"
             and timeout_status == "timed_out"
             and warning_result.ok
             and bool(warning_result.expected_warning_matches)
+            and report_json["summary"]["checks_with_warnings"] == 1
+            and report_json["summary"]["expected_warnings"] == 1
             and "secret-token" not in redaction_text
             and "secret-value" not in redaction_text
             and "githubkey.txt" not in redaction_text
@@ -11583,7 +11593,10 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"defs={len(definitions)}, latest={len(latest)}, v7={len(v7)}, portal={len(portal)}, since={len(since)}, "
-            f"timeout={timeout_status}, warning={warning_result.status}/{len(warning_result.expected_warning_matches)}, json={report_json['summary']['total']}"
+            f"empty={empty_json['results'][0]['status']}, timeout={timeout_status}, "
+            f"warning={warning_result.status}/{len(warning_result.expected_warning_matches)}, "
+            f"warning_summary={report_json['summary']['checks_with_warnings']}/{report_json['summary']['expected_warnings']}, "
+            f"json={report_json['summary']['total']}"
         )
     except Exception as exc:
         return False, str(exc)

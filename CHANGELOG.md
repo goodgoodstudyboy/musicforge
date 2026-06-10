@@ -1,5 +1,17 @@
 # Changelog
 
+## v7.5.1 - 2026-06-10
+
+### Fixed
+- `release-check` execution now fails when profile/group/since/only filters select zero checks, preventing false-green reports with `total=0`.
+- `release-check --list` now preserves an empty selection as `{"checks": []}` instead of falling back to the full matrix.
+- JSON summaries now include `checks_with_warnings`, `expected_warnings`, and `unexpected_warnings` so expected-warning checks are visible without marking the check failed.
+
+### Verified
+- `python -m pytest tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile latest --group audio --json`
+- `python -m song_agent.cli release-check --profile latest --since 9.0 --json`
+
 ## v7.5.0 - 2026-06-10
 
 ### Added
