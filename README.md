@@ -83,6 +83,21 @@ payload hashes. Signed acceptance suites are read-only until signoff is reset,
 and report reads re-check source/content hashes so tampered reviews or reports
 show up as failed.
 
+v7.6.0 adds a Public Attestation Portal Review Response loop. After building a
+v7.4 Attestation Portal ZIP, create a review pack and import an external
+response locally:
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-attestation-portal-review --portfolio-id <portfolio-id> --refresh-pack --export-pack --zip-pack --verify-pack --strict --require-current
+python -m song_agent.cli verify-release-portfolio-governance-attestation-portal-review-pack .musicforge\portfolio-audits\<portfolio-id>\governance-attestation-portal-review\governance-attestation-portal-review-pack.zip --strict --require-current
+python -m song_agent.cli verify-release-portfolio-governance-attestation-portal-response <response.zip> --strict --require-current --require-pack
+```
+
+Review responses are imported from uploaded/base64 content only. `source_path`
+is rejected so the API cannot read arbitrary server-side files. `needs_changes`
+and `rejected` responses can create local Change Request drafts; they do not
+auto-approve, reset, sign off, or mutate governance evidence.
+
 ```powershell
 python -m song_agent.cli acceptance-check --profile midi_smoke --auto-review --render-audio never
 python -m song_agent.cli acceptance-check --profile developer_manual --render-audio auto --report-out runs\acceptance-v450.json

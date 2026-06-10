@@ -854,6 +854,97 @@ def test_verify_release_portfolio_governance_attestation_portal_cli_json_report_
     assert saved["summary"]["portfolio_id"] == portfolio_id
 
 
+def test_release_portfolio_governance_attestation_portal_review_cli_export_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_portal import _portal_fixture
+
+    portfolio_id, *_rest, store = _portal_fixture(Path(".musicforge"), monkeypatch)
+    store.refresh_report(portfolio_id)
+    store.export_portal(portfolio_id)
+    store.build_zip(portfolio_id)
+    report_out = tmp_path / "portal-review-pack-command.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    managed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-attestation-portal-review",
+            "--portfolio-id",
+            portfolio_id,
+            "--refresh-pack",
+            "--export-pack",
+            "--zip-pack",
+            "--verify-pack",
+            "--strict",
+            "--require-current",
+            "--json",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    payload = json.loads(managed.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+
+    assert managed.returncode == 0, managed.stderr
+    assert payload["summary"]["status"] == "ready"
+    assert payload["zip"]["sha256"]
+    assert payload["verification"]["status"] == "passed"
+    assert saved["verification"]["status"] == "passed"
+
+
+def test_verify_release_portfolio_governance_attestation_portal_response_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_portal import _portal_fixture
+    from tests.test_release_portfolio_governance_attestation_portal_review import _response_payload
+    from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+
+    portfolio_id, *_rest, portal_store = _portal_fixture(Path(".musicforge"), monkeypatch)
+    portal_store.refresh_report(portfolio_id)
+    portal_store.export_portal(portfolio_id)
+    portal_store.build_zip(portfolio_id)
+    review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+    review_store.refresh_pack(portfolio_id)
+    response_zip = review_store.build_response_zip(portfolio_id, _response_payload())
+    report_out = tmp_path / "portal-response-verification.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    ok = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-attestation-portal-response",
+            str(response_zip),
+            "--json",
+            "--strict",
+            "--require-current",
+            "--require-pack",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    payload = json.loads(ok.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+
+    assert ok.returncode == 0, ok.stderr
+    assert payload["status"] == "passed"
+    assert saved["summary"]["response_id"]
+
+
 def test_verify_release_operations_audit_cli_json_report_out_and_tamper(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     release_store = ReleaseStore()

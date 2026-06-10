@@ -11570,8 +11570,9 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             and "v75.release_check_matrix_smoke" in ids
             and "v74.attestation_portal_smoke" in {definition.check_id for definition in latest}
             and "v75.release_check_matrix_smoke" in {definition.check_id for definition in latest}
+            and "v76.attestation_portal_review_response_smoke" in {definition.check_id for definition in latest}
             and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
-            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke"}
+            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke"}
             and empty_group == []
             and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
             and empty_since == []
@@ -11605,6 +11606,139 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v76_attestation_portal_review_response_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v76-attestation-portal-review-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore
+        from song_agent.release_portfolio_governance_attestation_portal import ReleasePortfolioGovernanceAttestationPortalStore
+        from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore, response_integrity_hash, response_payload_hash, review_manifest_hash
+        from song_agent.release_portfolio_governance_attestation_portal_review_verifier import verify_release_portfolio_governance_attestation_portal_response, verify_release_portfolio_governance_attestation_portal_review_pack
+        from song_agent.release_portfolio_governance_attestation_portal_verifier import verify_release_portfolio_governance_attestation_portal
+        from song_agent.release_portfolio_governance_attestation_registry import ReleasePortfolioGovernanceAttestationRegistryStore
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=operations_audit_store, reviewer_pack_store=operations_reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=operations_signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+        vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store, final_board_store=final_board_store)
+        attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
+        registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
+        portal_store = ReleasePortfolioGovernanceAttestationPortalStore(registry_store=registry_store, attestation_store=attestation_store)
+        review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+
+        release = release_store.create_release({"name": "v7.6 Portal Review Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        portfolio = portfolio_store.create({"name": "v7.6 Portal Review Portfolio", "release_ids": [release.release_id]})
+        portfolio_id = portfolio["portfolio_id"]
+        _v73_write_minimal_attestation_zip(attestation_store.zip_path(portfolio_id), portfolio_id=portfolio_id, suffix="portal-review")
+        entry = registry_store.register_current_attestation(portfolio_id)["entry"]
+        registry_store.publish_entry(portfolio_id, entry["entry_id"], {"published_by": "release-check"})
+        registry_store.refresh_report(portfolio_id)
+        registry_store.export_registry(portfolio_id)
+        registry_store.build_zip(portfolio_id)
+        portal_store.refresh_report(portfolio_id)
+        portal_store.export_portal(portfolio_id)
+        portal_store.build_zip(portfolio_id)
+        portal_verify = verify_release_portfolio_governance_attestation_portal(portal_store.zip_path(portfolio_id), strict=True, require_current=True, require_registry=True, require_attestation=True)
+
+        pack = review_store.refresh_pack(portfolio_id)
+        manifest = review_store.export_pack(portfolio_id)
+        review_store.build_pack_zip(portfolio_id)
+        stable_pack_zip = base / "stable-v76-review-pack.zip"
+        shutil.copy2(review_store.pack_zip_path(portfolio_id), stable_pack_zip)
+        pack_verify = verify_release_portfolio_governance_attestation_portal_review_pack(stable_pack_zip, strict=True, require_current=True)
+
+        accepted_zip = review_store.build_response_zip(portfolio_id, _v76_response_payload("accepted"))
+        accepted_verify = verify_release_portfolio_governance_attestation_portal_response(accepted_zip, strict=True, require_current=True, require_pack=True)
+        imported = review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(accepted_zip.read_bytes()).decode("ascii")})
+        needs_changes_zip = review_store.build_response_zip(portfolio_id, _v76_response_payload("needs_changes"))
+        needs_import = review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(needs_changes_zip.read_bytes()).decode("ascii")})
+        change = review_store.create_change_request(portfolio_id, needs_import["response"]["response_id"], {"created_by": "release-check"})
+        source_path_blocked = False
+        try:
+            review_store.import_response(portfolio_id, {"source_path": str(base / "response.json")})
+        except Exception:
+            source_path_blocked = True
+
+        pack_tamper = verify_release_portfolio_governance_attestation_portal_review_pack(_v76_rewrite_zip(stable_pack_zip, base / "pack-source-v76.zip", _v76_tamper_pack_portal_verification), strict=True, require_current=True)
+        duplicate_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v43_duplicate_submission_zip(stable_pack_zip, base / "duplicate-v76-review-pack.zip"), strict=True)
+        dangerous_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v38_rewrite_zip(stable_pack_zip, base / "dangerous-v76-review-pack.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v38_backslash_entry_zip(base / "backslash-v76-review-pack.zip"), strict=True)
+        case_musicforge_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v38_rewrite_zip(stable_pack_zip, base / "case-musicforge-v76-review-pack.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v38_rewrite_zip(stable_pack_zip, base / "nested-v76-review-pack.zip", additions={"nested/fake.zip": b"PK\x05\x06" + (b"\0" * 18)}), strict=True)
+        spoof_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v38_rewrite_zip(stable_pack_zip, base / "spoof-v76-review-pack.zip", additions={"extra.txt": b"extra"}, transforms={"review-pack-manifest.json": _v76_spoof_review_manifest}), strict=True)
+        redaction_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v38_rewrite_zip(stable_pack_zip, base / "redaction-v76-review-pack.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}))
+        wrong_type_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v38_rewrite_zip(stable_pack_zip, base / "wrong-type-v76-review-pack.zip", transforms={"review-pack-manifest.json": _v76_wrong_type_pack_manifest}), strict=True)
+        response_tamper = verify_release_portfolio_governance_attestation_portal_response(_v76_rewrite_zip(accepted_zip, base / "response-tamper-v76.zip", lambda docs: _v76_tamper_response_without_payload_hash(docs, response_integrity_hash=response_integrity_hash)), strict=True, require_current=True, require_pack=True)
+        response_source = verify_release_portfolio_governance_attestation_portal_response(_v76_rewrite_zip(accepted_zip, base / "response-source-v76.zip", lambda docs: _v76_tamper_response_source_binding(docs, response_payload_hash=response_payload_hash, response_integrity_hash=response_integrity_hash, review_manifest_hash=review_manifest_hash)), strict=True, require_current=True, require_pack=True)
+        response_redaction = verify_release_portfolio_governance_attestation_portal_response(_v76_rewrite_zip(accepted_zip, base / "response-redaction-v76.zip", lambda docs: _v76_append_response_notes(docs, ' api_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt', response_payload_hash=response_payload_hash, response_integrity_hash=response_integrity_hash, review_manifest_hash=review_manifest_hash)), strict=True)
+
+        serialized = json.dumps({"pack": pack, "manifest": manifest, "pack_verify": pack_verify, "accepted_verify": accepted_verify, "imported": imported}, ensure_ascii=False)
+        ok = (
+            portal_verify.get("status") == "passed"
+            and pack.get("status") == "ready"
+            and manifest.get("package_type") == "release_portfolio_governance_attestation_portal_review_pack"
+            and pack_verify.get("status") == "passed"
+            and accepted_verify.get("status") == "passed"
+            and imported.get("verification", {}).get("status") == "passed"
+            and change.get("change_request", {}).get("status") == "draft"
+            and source_path_blocked
+            and _v38_check_status(pack_tamper, "portal_review_pack_data_portal_verification_zip_sha256") == "failed"
+            and _v38_check_status(duplicate_pack, "portal_review_pack_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous_pack, "portal_review_pack_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash_pack, "portal_review_pack_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge_pack, "portal_review_pack_zip_no_nested_or_internal_entries") == "failed"
+            and _v38_check_status(nested_pack, "portal_review_pack_zip_no_nested_or_internal_entries") == "failed"
+            and _v38_check_status(spoof_pack, "portal_review_pack_manifest_extra_entries") == "failed"
+            and _v38_check_status(redaction_pack, "portal_review_pack_redaction_scan") == "failed"
+            and _v38_check_status(wrong_type_pack, "portal_review_pack_manifest_package_type") == "failed"
+            and _v38_check_status(response_tamper, "portal_review_response_payload_hash") == "failed"
+            and _v38_check_status(response_source, "portal_review_response_data_pack_source_hash") == "failed"
+            and _v38_check_status(response_redaction, "portal_review_response_redaction_scan") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"pack={pack.get('status')}/{pack_verify.get('status')}, accepted={accepted_verify.get('status')}, "
+            f"change_request={change.get('change_request', {}).get('status')}, source_path={source_path_blocked}, "
+            f"pack_tamper={_v38_check_status(pack_tamper, 'portal_review_pack_data_portal_verification_zip_sha256')}, "
+            f"duplicate={_v38_check_status(duplicate_pack, 'portal_review_pack_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous_pack, 'portal_review_pack_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash_pack, 'portal_review_pack_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge_pack, 'portal_review_pack_zip_no_nested_or_internal_entries')}, "
+            f"nested={_v38_check_status(nested_pack, 'portal_review_pack_zip_no_nested_or_internal_entries')}, spoof={_v38_check_status(spoof_pack, 'portal_review_pack_manifest_extra_entries')}, "
+            f"redaction={_v38_check_status(redaction_pack, 'portal_review_pack_redaction_scan')}, wrong_type={_v38_check_status(wrong_type_pack, 'portal_review_pack_manifest_package_type')}, "
+            f"response_tamper={_v38_check_status(response_tamper, 'portal_review_response_payload_hash')}, response_source={_v38_check_status(response_source, 'portal_review_response_data_pack_source_hash')}, "
+            f"response_redaction={_v38_check_status(response_redaction, 'portal_review_response_redaction_scan')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v74_rewrite_portal_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
     with zipfile.ZipFile(source_zip, "r") as src:
         docs = {info.filename: src.read(info.filename) for info in src.infolist()}
@@ -11613,6 +11747,102 @@ def _v74_rewrite_portal_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
             for name, data in docs.items():
                 dst.writestr(name, data)
     return target_zip
+
+
+def _v76_response_payload(decision: str) -> dict[str, Any]:
+    return {
+        "reviewer": {"name": "Release Check Reviewer", "organization": "MusicForge"},
+        "decision": decision,
+        "reviewed_at": "2026-06-10T00:00:00+00:00",
+        "rating": 5 if decision == "accepted" else 2,
+        "notes": "Portal review response smoke.",
+        "findings": [] if decision == "accepted" else [{"severity": "high", "status": "open", "message": "External reviewer requested changes."}],
+        "attachment_summaries": [],
+    }
+
+
+def _v76_rewrite_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
+    with zipfile.ZipFile(source_zip, "r") as src:
+        docs = {info.filename: src.read(info.filename) for info in src.infolist()}
+        mutate(docs)
+        with zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+            for name, data in docs.items():
+                dst.writestr(name, data)
+    return target_zip
+
+
+def _v76_tamper_pack_portal_verification(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_portal_review import review_manifest_hash
+
+    payload = _v74_read_json_doc(docs, "data/portal-verification-summary.json")
+    manifest = _v74_read_json_doc(docs, "review-pack-manifest.json")
+    payload["zip_sha256"] = "0" * 64
+    docs["data/portal-verification-summary.json"] = _v74_json_doc(payload)
+    _v74_sync_manifest_file(manifest, "data/portal-verification-summary.json", docs["data/portal-verification-summary.json"])
+    manifest["integrity_hash"] = review_manifest_hash(manifest)
+    docs["review-pack-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v76_spoof_review_manifest(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_attestation_portal_review import review_manifest_hash
+
+    manifest = json.loads(data.decode("utf-8"))
+    manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
+    manifest["integrity_hash"] = review_manifest_hash(manifest)
+    return _v74_json_doc(manifest)
+
+
+def _v76_wrong_type_pack_manifest(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_attestation_portal_review import review_manifest_hash
+
+    manifest = json.loads(data.decode("utf-8"))
+    manifest["package_type"] = "wrong_package_type"
+    manifest["integrity_hash"] = review_manifest_hash(manifest)
+    return _v74_json_doc(manifest)
+
+
+def _v76_tamper_response_without_payload_hash(docs: dict[str, bytes], *, response_integrity_hash) -> None:
+    from song_agent.release_portfolio_governance_attestation_portal_review import review_manifest_hash
+
+    response = _v74_read_json_doc(docs, "review-response.json")
+    manifest = _v74_read_json_doc(docs, "response-manifest.json")
+    response["decision"] = "rejected"
+    response["integrity_hash"] = response_integrity_hash(response)
+    docs["review-response.json"] = _v74_json_doc(response)
+    _v74_sync_manifest_file(manifest, "review-response.json", docs["review-response.json"])
+    manifest["integrity_hash"] = review_manifest_hash(manifest)
+    docs["response-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v76_tamper_response_source_binding(docs: dict[str, bytes], *, response_payload_hash, response_integrity_hash, review_manifest_hash) -> None:
+    response = _v74_read_json_doc(docs, "review-response.json")
+    manifest = _v74_read_json_doc(docs, "response-manifest.json")
+    source_doc = _v74_read_json_doc(docs, "data/review-pack-source.json")
+    response["review_pack_source_hash"] = "1" * 64
+    response["payload_hash"] = response_payload_hash(response)
+    response["integrity_hash"] = response_integrity_hash(response)
+    docs["review-response.json"] = _v74_json_doc(response)
+    docs["data/review-pack-source.json"] = _v74_json_doc(source_doc)
+    _v74_sync_manifest_file(manifest, "review-response.json", docs["review-response.json"])
+    _v74_sync_manifest_file(manifest, "data/review-pack-source.json", docs["data/review-pack-source.json"])
+    manifest["review_pack_source_hash"] = response["review_pack_source_hash"]
+    manifest["source_hash"] = response["review_pack_source_hash"]
+    manifest["payload_hash"] = response["payload_hash"]
+    manifest["integrity_hash"] = review_manifest_hash(manifest)
+    docs["response-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v76_append_response_notes(docs: dict[str, bytes], suffix: str, *, response_payload_hash, response_integrity_hash, review_manifest_hash) -> None:
+    response = _v74_read_json_doc(docs, "review-response.json")
+    manifest = _v74_read_json_doc(docs, "response-manifest.json")
+    response["notes"] = str(response.get("notes") or "") + suffix
+    response["payload_hash"] = response_payload_hash(response)
+    response["integrity_hash"] = response_integrity_hash(response)
+    docs["review-response.json"] = _v74_json_doc(response)
+    _v74_sync_manifest_file(manifest, "review-response.json", docs["review-response.json"])
+    manifest["payload_hash"] = response["payload_hash"]
+    manifest["integrity_hash"] = review_manifest_hash(manifest)
+    docs["response-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v74_tamper_portal_report_source_resigned(docs: dict[str, bytes]) -> None:

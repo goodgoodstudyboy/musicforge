@@ -50,6 +50,7 @@ from song_agent.release_checks import (
     _v73_release_portfolio_governance_attestation_registry_smoke,
     _v74_release_portfolio_governance_attestation_portal_smoke,
     _v75_release_check_matrix_smoke,
+    _v76_attestation_portal_review_response_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -678,6 +679,19 @@ def test_v75_release_check_matrix_smoke(tmp_path: Path) -> None:
     assert "timeout=timed_out" in detail
     assert "warning=passed/1" in detail
     assert "warning_summary=1/1" in detail
+
+
+def test_v76_attestation_portal_review_response_smoke(tmp_path: Path) -> None:
+    ok, detail = _v76_attestation_portal_review_response_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "pack=ready/passed" in detail
+    assert "accepted=passed" in detail
+    assert "change_request=draft" in detail
+    assert "source_path=True" in detail
+    assert "response_tamper=failed" in detail
+    assert "response_source=failed" in detail
+    assert "response_redaction=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

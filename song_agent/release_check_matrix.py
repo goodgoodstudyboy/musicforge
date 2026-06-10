@@ -283,6 +283,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v73.release_portfolio_governance_attestation_registry_smoke", "v7.3 release portfolio governance attestation registry smoke", "_v73_release_portfolio_governance_attestation_registry_smoke", group="attestation", version="7.3", risk="high", timeout_seconds=600, tags=("v7", "governance", "registry"), profiles=V7_PROFILES),
     _callable("v74.attestation_portal_smoke", "v7.4 release portfolio governance attestation portal smoke", "_v74_release_portfolio_governance_attestation_portal_smoke", group="portal", version="7.4", risk="critical", timeout_seconds=600, tags=("v7", "governance", "attestation"), profiles=("full", "v7", "quick", "latest"), expected_warnings=("Duplicate name:",)),
     _callable("v75.release_check_matrix_smoke", "v7.5 release check verification matrix smoke", "_v75_release_check_matrix_smoke", group="meta", version="7.5", risk="critical", timeout_seconds=300, tags=("v7", "release_check"), profiles=("full", "v7", "quick", "latest")),
+    _callable("v76.attestation_portal_review_response_smoke", "v7.6 release portfolio governance attestation portal review response smoke", "_v76_attestation_portal_review_response_smoke", group="portal", version="7.6", risk="critical", timeout_seconds=600, tags=("v7", "governance", "attestation", "review"), profiles=("full", "v7", "quick", "latest"), expected_warnings=("Duplicate name:",)),
 )
 
 KNOWN_PROFILES = {"full", "quick", "latest", "v7", "publish"}

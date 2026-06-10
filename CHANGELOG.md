@@ -1,5 +1,16 @@
 # Changelog
 
+## v7.6.0 - 2026-06-10
+
+### Added
+- Public Attestation Portal Review Response workflow with exportable review packs, external response ZIP verification, response import, and needs_changes/rejected Change Request draft creation.
+- Offline verifiers for Portal Review Pack and Portal Review Response packages, including manifest hash checks, source binding, duplicate/path/backslash/nested `.musicforge` package guards, package type checks, and redaction scans.
+- Studio controls and API routes for refreshing/exporting/verifying Review Packs, importing responses, and creating Change Request drafts.
+- `v76.attestation_portal_review_response_smoke` in the release-check matrix for latest/v7 profiles.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_portal_review.py tests\test_server_release_portfolio_governance_attestation_portal_review.py tests\test_cli_release_operations.py::test_release_portfolio_governance_attestation_portal_review_cli_export_verify tests\test_cli_release_operations.py::test_verify_release_portfolio_governance_attestation_portal_response_cli_json_report_out tests\test_release_check.py::test_v76_attestation_portal_review_response_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+
 ## v7.5.1 - 2026-06-10
 
 ### Fixed

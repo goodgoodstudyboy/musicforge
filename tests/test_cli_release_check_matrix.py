@@ -18,6 +18,7 @@ def test_release_check_cli_list_json() -> None:
     ids = {item["check_id"] for item in payload["checks"]}
     assert "v74.attestation_portal_smoke" in ids
     assert "v75.release_check_matrix_smoke" in ids
+    assert "v76.attestation_portal_review_response_smoke" in ids
 
 
 def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
@@ -51,7 +52,7 @@ def test_release_check_cli_group_timing(tmp_path: Path) -> None:
 
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
-    assert {item["check_id"] for item in payload["checks"]} == {"v74.attestation_portal_smoke"}
+    assert {item["check_id"] for item in payload["checks"]} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke"}
 
 
 def test_release_check_cli_empty_selection_fails() -> None:
