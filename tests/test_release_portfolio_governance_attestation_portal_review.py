@@ -94,6 +94,29 @@ def test_attestation_portal_review_import_rejects_source_path(tmp_path: Path, mo
         store.import_response(portfolio_id, {"source_path": str(tmp_path / "response.json")})
 
 
+def test_attestation_portal_review_import_requires_external_source_binding(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, _portal_store, store = _review_fixture(tmp_path, monkeypatch)
+    pack = store.refresh_pack(portfolio_id)
+    bare = _response_payload()
+    missing_pack_id = {**bare, "review_pack_source_hash": pack["source_hash"]}
+    missing_source_hash = {**bare, "review_pack_id": pack["review_pack_id"]}
+    wrong_source_hash = {**_response_payload("needs_changes"), "review_pack_id": pack["review_pack_id"], "review_pack_source_hash": "0" * 64}
+    wrong_source_hash["payload_hash"] = response_payload_hash(wrong_source_hash)
+    wrong_source_hash["integrity_hash"] = response_integrity_hash(wrong_source_hash)
+
+    with pytest.raises(ReleasePortfolioGovernanceAttestationPortalReviewStateError, match="review_pack_id"):
+        store.import_response(portfolio_id, {"content_base64": base64.b64encode(json.dumps(missing_pack_id).encode("utf-8")).decode("ascii")})
+    with pytest.raises(ReleasePortfolioGovernanceAttestationPortalReviewStateError, match="review_pack_source_hash"):
+        store.import_response(portfolio_id, {"content_base64": base64.b64encode(json.dumps(missing_source_hash).encode("utf-8")).decode("ascii")})
+
+    imported = store.import_response(portfolio_id, {"content_base64": base64.b64encode(json.dumps(wrong_source_hash).encode("utf-8")).decode("ascii")})
+
+    assert imported["response"]["status"] == "stale"
+    assert imported["verification"]["status"] == "failed"
+    with pytest.raises(ReleasePortfolioGovernanceAttestationPortalReviewStateError, match="stale"):
+        store.create_change_request(portfolio_id, imported["response"]["response_id"])
+
+
 def test_attestation_portal_review_verifiers_catch_tamper_and_paths(tmp_path: Path, monkeypatch) -> None:
     portfolio_id, _portal_store, store = _review_fixture(tmp_path, monkeypatch)
     store.refresh_pack(portfolio_id)

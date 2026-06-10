@@ -689,6 +689,7 @@ def test_v76_attestation_portal_review_response_smoke(tmp_path: Path) -> None:
     assert "accepted=passed" in detail
     assert "change_request=draft" in detail
     assert "source_path=True" in detail
+    assert "bare_json=True" in detail
     assert "response_tamper=failed" in detail
     assert "response_source=failed" in detail
     assert "response_redaction=failed" in detail

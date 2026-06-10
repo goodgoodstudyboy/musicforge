@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.6.1 - 2026-06-10
+
+### Fixed
+- Portal Review Response import now requires external payloads to explicitly include `review_pack_id` and `review_pack_source_hash`; the importer no longer fills source-binding evidence for bare JSON responses.
+- Stale Portal Review Responses continue to verify as failed and cannot create Change Request drafts.
+- v7.6 release-check smoke now covers bare JSON response import rejection.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_portal_review.py tests\test_server_release_portfolio_governance_attestation_portal_review.py tests\test_release_check.py::test_v76_attestation_portal_review_response_smoke -q`
+
 ## v7.6.0 - 2026-06-10
 
 ### Added

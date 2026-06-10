@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from pathlib import Path
 
 from tests.test_release_portfolio_governance_attestation_portal_review import _response_payload
@@ -52,6 +53,16 @@ def test_server_attestation_portal_review_pack_response_api(tmp_path: Path, monk
         detail_status, detail = request_json(server, "GET", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/responses/{response_id}")
         cr_status, cr = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/responses/{response_id}/create-change-request", {"created_by": "server-test"})
         source_path_status, source_path = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/responses/import", {"source_path": str(tmp_path / "response.json")})
+        bare_payload = {
+            "reviewer": {"name": "Bare Reviewer"},
+            "decision": "accepted",
+            "reviewed_at": "2026-06-10T00:00:00+00:00",
+            "rating": 5,
+            "notes": "missing source binding",
+            "findings": [],
+            "attachment_summaries": [],
+        }
+        bare_status, bare = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/responses/import", {"content_base64": base64.b64encode(json.dumps(bare_payload).encode("utf-8")).decode("ascii")})
     finally:
         stop_test_server(server)
 
@@ -73,3 +84,5 @@ def test_server_attestation_portal_review_pack_response_api(tmp_path: Path, monk
     assert cr["change_request"]["status"] == "draft"
     assert source_path_status == 409
     assert "source_path" in source_path["error"]
+    assert bare_status == 409
+    assert "review_pack_id" in bare["error"]

@@ -290,11 +290,10 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
             if not pack:
                 raise ReleasePortfolioGovernanceAttestationPortalReviewNotFoundError("Portal Review Pack does not exist.")
             response = self._decode_response_payload(payload)
+            self._ensure_external_response_source_binding(response, pack)
             response.setdefault("schema_version", PORTAL_REVIEW_SCHEMA_VERSION)
             response.setdefault("package_type", PORTAL_REVIEW_RESPONSE_PACKAGE_TYPE)
             response.setdefault("response_id", self._next_response_id(portfolio_id, profile))
-            response.setdefault("review_pack_id", pack.get("review_pack_id"))
-            response.setdefault("review_pack_source_hash", pack.get("source_hash"))
             response.setdefault("portfolio_id", portfolio_id)
             response.setdefault("attestation_profile", profile)
             response.setdefault("imported_at", now)
@@ -306,6 +305,16 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
             report = self.verify_response(portfolio_id, response["response_id"], profile=profile, now=now)
             result = {"response": response, "verification": report, "summary": response_summary(response)}
             return sanitize_metadata(result, blocked_keys=PORTAL_REVIEW_BLOCKED_KEYS)
+
+    def _ensure_external_response_source_binding(self, response: dict[str, Any], pack: dict[str, Any]) -> None:
+        review_pack_id = str(response.get("review_pack_id") or "").strip()
+        review_pack_source_hash = str(response.get("review_pack_source_hash") or "").strip()
+        if not review_pack_id:
+            raise ReleasePortfolioGovernanceAttestationPortalReviewStateError("Portal Review Response must include review_pack_id from the exported Review Pack.")
+        if not review_pack_source_hash:
+            raise ReleasePortfolioGovernanceAttestationPortalReviewStateError("Portal Review Response must include review_pack_source_hash from the exported Review Pack.")
+        if review_pack_id != str(pack.get("review_pack_id") or ""):
+            raise ReleasePortfolioGovernanceAttestationPortalReviewStateError("Portal Review Response review_pack_id does not match the current Review Pack.")
 
     def build_response_zip(self, portfolio_id: str, response: dict[str, Any], *, profile: str = "public_summary", now: str | None = None) -> Path:
         now = now or now_iso()

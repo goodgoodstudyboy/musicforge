@@ -11680,6 +11680,11 @@ def _v76_attestation_portal_review_response_smoke(root: Path) -> tuple[bool, str
             review_store.import_response(portfolio_id, {"source_path": str(base / "response.json")})
         except Exception:
             source_path_blocked = True
+        bare_json_blocked = False
+        try:
+            review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(json.dumps(_v76_response_payload("accepted")).encode("utf-8")).decode("ascii")})
+        except Exception:
+            bare_json_blocked = True
 
         pack_tamper = verify_release_portfolio_governance_attestation_portal_review_pack(_v76_rewrite_zip(stable_pack_zip, base / "pack-source-v76.zip", _v76_tamper_pack_portal_verification), strict=True, require_current=True)
         duplicate_pack = verify_release_portfolio_governance_attestation_portal_review_pack(_v43_duplicate_submission_zip(stable_pack_zip, base / "duplicate-v76-review-pack.zip"), strict=True)
@@ -11704,6 +11709,7 @@ def _v76_attestation_portal_review_response_smoke(root: Path) -> tuple[bool, str
             and imported.get("verification", {}).get("status") == "passed"
             and change.get("change_request", {}).get("status") == "draft"
             and source_path_blocked
+            and bare_json_blocked
             and _v38_check_status(pack_tamper, "portal_review_pack_data_portal_verification_zip_sha256") == "failed"
             and _v38_check_status(duplicate_pack, "portal_review_pack_zip_duplicate_entries") == "failed"
             and _v38_check_status(dangerous_pack, "portal_review_pack_zip_entry_path_safe") == "failed"
@@ -11723,7 +11729,7 @@ def _v76_attestation_portal_review_response_smoke(root: Path) -> tuple[bool, str
         )
         return ok, (
             f"pack={pack.get('status')}/{pack_verify.get('status')}, accepted={accepted_verify.get('status')}, "
-            f"change_request={change.get('change_request', {}).get('status')}, source_path={source_path_blocked}, "
+            f"change_request={change.get('change_request', {}).get('status')}, source_path={source_path_blocked}, bare_json={bare_json_blocked}, "
             f"pack_tamper={_v38_check_status(pack_tamper, 'portal_review_pack_data_portal_verification_zip_sha256')}, "
             f"duplicate={_v38_check_status(duplicate_pack, 'portal_review_pack_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous_pack, 'portal_review_pack_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash_pack, 'portal_review_pack_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge_pack, 'portal_review_pack_zip_no_nested_or_internal_entries')}, "
