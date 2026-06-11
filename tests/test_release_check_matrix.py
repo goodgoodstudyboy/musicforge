@@ -22,6 +22,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v76.attestation_portal_review_response_smoke" in {definition.check_id for definition in definitions}
     assert "v77.attestation_accepted_evidence_smoke" in {definition.check_id for definition in definitions}
     assert "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in definitions}
+    assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in definitions}
 
 
 def test_release_check_profile_and_filters() -> None:
@@ -36,8 +37,15 @@ def test_release_check_profile_and_filters() -> None:
     assert "v76.attestation_portal_review_response_smoke" in {definition.check_id for definition in latest}
     assert "v77.attestation_accepted_evidence_smoke" in {definition.check_id for definition in latest}
     assert "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in latest}
+    assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in latest}
     assert "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
-    assert {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke", "v78.attestation_transparency_feed_smoke"}
+    assert {definition.check_id for definition in portal} == {
+        "v74.attestation_portal_smoke",
+        "v76.attestation_portal_review_response_smoke",
+        "v77.attestation_accepted_evidence_smoke",
+        "v78.attestation_transparency_feed_smoke",
+        "v79.attestation_transparency_acknowledgement_smoke",
+    }
     assert all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
     assert [definition.check_id for definition in only] == ["v75.release_check_matrix_smoke"]
 

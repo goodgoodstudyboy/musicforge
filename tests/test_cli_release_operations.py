@@ -1088,6 +1088,100 @@ def test_release_portfolio_governance_attestation_transparency_cli_export_verify
     assert offline_saved["summary"]["event_count"] >= 4
 
 
+def test_release_portfolio_governance_attestation_transparency_acknowledgement_cli_verify(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from tests.test_release_portfolio_governance_attestation_transparency_acknowledgement import _accepted_response
+    from tests.test_release_portfolio_governance_attestation_transparency_acknowledgement import _ack_fixture
+
+    portfolio_id, _transparency_store, store = _ack_fixture(Path(".musicforge"), monkeypatch)
+    pack = store.refresh_pack(portfolio_id)
+    store.export_pack(portfolio_id)
+    store.build_pack_zip(portfolio_id)
+    imported = store.import_response(portfolio_id, {"content": _accepted_response(pack)})
+    store.refresh_evidence(portfolio_id, {"response_id": imported["response"]["response_id"]})
+    store.export_evidence(portfolio_id)
+    store.build_evidence_zip(portfolio_id)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    pack_report = tmp_path / "ack-pack-verify.json"
+    pack_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-attestation-transparency-acknowledgement",
+            str(store.pack_zip_path(portfolio_id)),
+            "--json",
+            "--strict",
+            "--require-pack",
+            "--require-transparency",
+            "--report-out",
+            str(pack_report),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    evidence_report = tmp_path / "ack-evidence-verify.json"
+    evidence_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-release-portfolio-governance-attestation-transparency-acknowledgement",
+            str(store.evidence_zip_path(portfolio_id)),
+            "--json",
+            "--strict",
+            "--require-response",
+            "--require-accepted",
+            "--report-out",
+            str(evidence_report),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    managed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "release-portfolio-governance-attestation-transparency-acknowledgement",
+            "--portfolio-id",
+            portfolio_id,
+            "--verify-pack",
+            "--verify-evidence",
+            "--strict",
+            "--require-transparency",
+            "--require-accepted",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert pack_result.returncode == 0, pack_result.stderr
+    assert evidence_result.returncode == 0, evidence_result.stderr
+    assert json.loads(pack_result.stdout)["status"] == "passed"
+    assert json.loads(evidence_result.stdout)["status"] == "passed"
+    assert json.loads(pack_report.read_text(encoding="utf-8"))["status"] == "passed"
+    assert json.loads(evidence_report.read_text(encoding="utf-8"))["status"] == "passed"
+    assert managed.returncode == 0, managed.stderr
+    managed_payload = json.loads(managed.stdout)
+    assert managed_payload["pack_verification"]["status"] == "passed"
+    assert managed_payload["evidence_verification"]["status"] == "passed"
+
+
 def test_verify_release_portfolio_governance_attestation_portal_response_cli_json_report_out(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     from tests.test_release_portfolio_governance_attestation_portal import _portal_fixture

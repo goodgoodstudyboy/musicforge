@@ -637,6 +637,22 @@ python -m song_agent.cli release-portfolio-governance-attestation-transparency -
 python -m song_agent.cli verify-release-portfolio-governance-attestation-transparency path\to\governance-attestation-transparency.zip --strict --require-current --require-accepted-evidence --require-contiguous-chain --json
 ```
 
+Release Portfolio Governance Attestation Transparency Acknowledgement lets an
+external reviewer confirm the current Transparency ZIP and change notices. The
+response payload must explicitly bind to the acknowledgement pack id/source hash
+and current Transparency ZIP/manifest/feed source; the importer will not fill
+those fields for a bare JSON response. Accepted responses can be converted into
+public-safe acknowledgement evidence. `needs_changes` and `rejected` responses
+only create local Change Request drafts and never mutate Registry, Portal,
+Transparency, or Accepted Evidence state automatically:
+
+```powershell
+python -m song_agent.cli release-portfolio-governance-attestation-transparency-acknowledgement --portfolio-id <portfolio-id> --refresh-pack --export-pack --zip-pack --verify-pack --strict --require-transparency --json
+python -m song_agent.cli release-portfolio-governance-attestation-transparency-acknowledgement --portfolio-id <portfolio-id> --import-response --content-base64 <base64-json-or-zip> --refresh-evidence --export-evidence --zip-evidence --verify-evidence --strict --require-accepted --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-transparency-acknowledgement path\to\transparency-acknowledgement-pack.zip --strict --require-pack --require-transparency --json
+python -m song_agent.cli verify-release-portfolio-governance-attestation-transparency-acknowledgement path\to\transparency-acknowledgement-evidence.zip --strict --require-response --require-accepted --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

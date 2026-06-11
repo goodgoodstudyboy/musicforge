@@ -11574,8 +11574,9 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             and "v76.attestation_portal_review_response_smoke" in {definition.check_id for definition in latest}
             and "v77.attestation_accepted_evidence_smoke" in {definition.check_id for definition in latest}
             and "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in latest}
+            and "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in latest}
             and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
-            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke", "v78.attestation_transparency_feed_smoke"}
+            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke", "v78.attestation_transparency_feed_smoke", "v79.attestation_transparency_acknowledgement_smoke"}
             and empty_group == []
             and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
             and empty_since == []
@@ -12039,6 +12040,192 @@ def _v78_attestation_transparency_feed_smoke(root: Path) -> tuple[bool, str]:
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v79_attestation_transparency_acknowledgement_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v79-transparency-ack-")).resolve()
+    try:
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
+        from song_agent.release_portfolio_governance_attestation_portal import ReleasePortfolioGovernanceAttestationPortalStore
+        from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+        from song_agent.release_portfolio_governance_attestation_registry import ReleasePortfolioGovernanceAttestationRegistryStore
+        from song_agent.release_portfolio_governance_attestation_transparency import ReleasePortfolioGovernanceAttestationTransparencyStore
+        from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import (
+            ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore,
+            ack_evidence_hash,
+            ack_manifest_hash,
+            response_payload_hash,
+            response_template,
+        )
+        from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement_verifier import verify_release_portfolio_governance_attestation_transparency_acknowledgement_package
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=operations_audit_store, reviewer_pack_store=operations_reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=operations_signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+        vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store, final_board_store=final_board_store)
+        attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
+        registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
+        portal_store = ReleasePortfolioGovernanceAttestationPortalStore(registry_store=registry_store, attestation_store=attestation_store)
+        review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+        accepted_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
+        transparency_store = ReleasePortfolioGovernanceAttestationTransparencyStore(attestation_store=attestation_store, registry_store=registry_store, portal_store=portal_store, accepted_evidence_store=accepted_store)
+        ack_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=transparency_store)
+
+        release = release_store.create_release({"name": "v7.9 Transparency Ack Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        portfolio = portfolio_store.create({"name": "v7.9 Transparency Ack Portfolio", "release_ids": [release.release_id]})
+        portfolio_id = portfolio["portfolio_id"]
+        _v73_write_minimal_attestation_zip(attestation_store.zip_path(portfolio_id), portfolio_id=portfolio_id, suffix="transparency-ack")
+        entry = registry_store.register_current_attestation(portfolio_id)["entry"]
+        registry_store.publish_entry(portfolio_id, entry["entry_id"], {"published_by": "release-check"})
+        registry_store.refresh_report(portfolio_id)
+        registry_store.export_registry(portfolio_id)
+        registry_store.build_zip(portfolio_id)
+        portal_store.refresh_report(portfolio_id)
+        portal_store.export_portal(portfolio_id)
+        portal_store.build_zip(portfolio_id)
+        review_store.refresh_pack(portfolio_id)
+        review_store.export_pack(portfolio_id)
+        review_store.build_pack_zip(portfolio_id)
+        accepted_zip = review_store.build_response_zip(portfolio_id, _v76_response_payload("accepted"))
+        imported = review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(accepted_zip.read_bytes()).decode("ascii")})
+        accepted_store.refresh_evidence(portfolio_id, {"response_id": imported["response"]["response_id"]})
+        accepted_store.export_evidence(portfolio_id)
+        accepted_store.build_zip(portfolio_id)
+        accepted_store.verify_evidence(portfolio_id, {"strict": True, "require_current": True})
+        registry_store.refresh_report(portfolio_id)
+        registry_store.export_registry(portfolio_id)
+        registry_store.build_zip(portfolio_id)
+        portal_store.refresh_report(portfolio_id)
+        portal_store.export_portal(portfolio_id)
+        portal_store.build_zip(portfolio_id)
+        transparency_store.refresh_feed(portfolio_id, {"require_accepted_evidence": True})
+        transparency_store.export_transparency(portfolio_id)
+        transparency_store.build_zip(portfolio_id)
+        transparency_store.verify_transparency(portfolio_id, {"strict": True, "require_current": True, "require_accepted_evidence": True, "require_contiguous_chain": True})
+
+        pack = ack_store.refresh_pack(portfolio_id)
+        ack_store.export_pack(portfolio_id)
+        ack_store.build_pack_zip(portfolio_id)
+        pack_report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(ack_store.pack_zip_path(portfolio_id), strict=True, require_pack=True, require_transparency=True)
+        payload = response_template(pack)
+        payload.update({"response_id": "v79-external-ack", "reviewer": {"name": "Release Check Reviewer", "organization": "MusicForge"}, "comments": "Acknowledgement smoke.", "submitted_at": "2026-06-11T00:00:00+00:00"})
+        payload["response_hash"] = response_payload_hash(payload)
+        accepted_response = ack_store.import_response(portfolio_id, {"content_base64": base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")})
+        evidence = ack_store.refresh_evidence(portfolio_id, {"response_id": accepted_response["response"]["response_id"]})
+        ack_store.export_evidence(portfolio_id)
+        ack_store.build_evidence_zip(portfolio_id)
+        evidence_report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(ack_store.evidence_zip_path(portfolio_id), strict=True, require_response=True, require_accepted=True)
+
+        missing_binding = False
+        missing_payload = dict(payload)
+        missing_payload.pop("review_pack_source_hash", None)
+        try:
+            ack_store.import_response(portfolio_id, {"content": missing_payload})
+        except Exception:
+            missing_binding = True
+        wrong_source = False
+        wrong_payload = dict(payload)
+        wrong_payload["transparency_zip_sha256"] = "0" * 64
+        wrong_payload["response_hash"] = response_payload_hash(wrong_payload)
+        try:
+            ack_store.import_response(portfolio_id, {"content": wrong_payload})
+        except Exception:
+            wrong_source = True
+        needs_payload = dict(payload)
+        needs_payload["response_id"] = "v79-needs-changes"
+        needs_payload["review_status"] = "needs_changes"
+        needs_payload["concerns"] = [{"notice_id": payload["reviewed_notice_ids"][0], "severity": "warning", "message": "Clarify notice."}]
+        needs_payload["response_hash"] = response_payload_hash(needs_payload)
+        needs_import = ack_store.import_response(portfolio_id, {"content": needs_payload})
+        change_request = ack_store.create_change_request(portfolio_id, needs_import["response"]["response_id"])
+
+        forged_evidence = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(
+            _v76_rewrite_zip(ack_store.evidence_zip_path(portfolio_id), base / "ack-evidence-full-resign.zip", _v79_full_resign_ack_evidence),
+            strict=True,
+            require_response=True,
+            require_accepted=True,
+        )
+        duplicate = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(_v43_duplicate_submission_zip(ack_store.pack_zip_path(portfolio_id), base / "ack-duplicate.zip"), strict=True)
+        dangerous = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(_v38_rewrite_zip(ack_store.pack_zip_path(portfolio_id), base / "ack-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(_v38_backslash_entry_zip(base / "ack-backslash.zip"), strict=True)
+        case_musicforge = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(_v38_rewrite_zip(ack_store.pack_zip_path(portfolio_id), base / "ack-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(_v38_rewrite_zip(ack_store.pack_zip_path(portfolio_id), base / "ack-nested.zip", additions={"nested/fake.zip": b"PK\x05\x06" + (b"\0" * 18)}), strict=True)
+        spoof = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(_v38_rewrite_zip(ack_store.pack_zip_path(portfolio_id), base / "ack-spoof.zip", additions={"extra.txt": b"extra"}, transforms={"acknowledgement-pack-manifest.json": _v79_spoof_ack_pack_manifest}), strict=True)
+        redaction = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(_v38_rewrite_zip(ack_store.pack_zip_path(portfolio_id), base / "ack-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        transparency_store.zip_path(portfolio_id).write_bytes(transparency_store.zip_path(portfolio_id).read_bytes() + b"changed")
+        stale_export = False
+        stale_zip = False
+        try:
+            ack_store.export_pack(portfolio_id)
+        except Exception:
+            stale_export = True
+        try:
+            ack_store.build_pack_zip(portfolio_id)
+        except Exception:
+            stale_zip = True
+
+        serialized = json.dumps({"pack": pack, "evidence": evidence, "pack_report": pack_report, "evidence_report": evidence_report}, ensure_ascii=False)
+        ok = (
+            pack.get("status") == "ready"
+            and pack_report.get("status") == "passed"
+            and evidence.get("status") == "current"
+            and evidence_report.get("status") == "passed"
+            and missing_binding
+            and wrong_source
+            and change_request.get("status") == "draft"
+            and _v38_check_status(forged_evidence, "ack_evidence_semantics_match") == "failed"
+            and _v38_check_status(duplicate, "ack_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "ack_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "ack_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "ack_zip_no_nested_packages") == "failed"
+            and _v38_check_status(nested, "ack_zip_no_nested_packages") == "failed"
+            and _v38_check_status(spoof, "ack_pack_manifest_zip_entries_reference_only") == "failed"
+            and _v38_check_status(redaction, "ack_redaction_scan") == "failed"
+            and stale_export
+            and stale_zip
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"pack={pack.get('status')}/{pack_report.get('status')}, evidence={evidence.get('status')}/{evidence_report.get('status')}, "
+            f"missing_binding={missing_binding}, wrong_source={wrong_source}, change_request={change_request.get('status')}, "
+            f"full_resign={_v38_check_status(forged_evidence, 'ack_evidence_semantics_match')}, duplicate={_v38_check_status(duplicate, 'ack_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous, 'ack_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ack_zip_entry_path_safe')}, "
+            f"case_musicforge={_v38_check_status(case_musicforge, 'ack_zip_no_nested_packages')}, nested={_v38_check_status(nested, 'ack_zip_no_nested_packages')}, "
+            f"spoof={_v38_check_status(spoof, 'ack_pack_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ack_redaction_scan')}, "
+            f"stale_export={stale_export}, stale_zip={stale_zip}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v74_rewrite_portal_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
     with zipfile.ZipFile(source_zip, "r") as src:
         docs = {info.filename: src.read(info.filename) for info in src.infolist()}
@@ -12148,6 +12335,37 @@ def _v78_spoof_transparency_manifest(data: bytes) -> bytes:
     manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
     manifest["integrity_hash"] = transparency_manifest_hash(manifest)
     return _v74_json_doc(manifest)
+
+
+def _v79_spoof_ack_pack_manifest(data: bytes) -> bytes:
+    from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ack_manifest_hash
+
+    manifest = json.loads(data.decode("utf-8"))
+    manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
+    manifest["integrity_hash"] = ack_manifest_hash(manifest)
+    return _v74_json_doc(manifest)
+
+
+def _v79_full_resign_ack_evidence(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ack_evidence_hash, ack_manifest_hash
+
+    evidence = _v74_read_json_doc(docs, "acknowledgement-evidence.json")
+    summary = _v74_read_json_doc(docs, "acknowledgement-evidence-summary.json")
+    public = _v74_read_json_doc(docs, "data/public-summary.json")
+    manifest = _v74_read_json_doc(docs, "acknowledgement-evidence-manifest.json")
+    evidence.setdefault("public_summary", {})["reviewer_name"] = "Forged Reviewer"
+    evidence["integrity_hash"] = ack_evidence_hash(evidence)
+    summary["public_summary"] = evidence.get("public_summary")
+    public["public_summary"] = evidence.get("public_summary")
+    docs["acknowledgement-evidence.json"] = _v74_json_doc(evidence)
+    docs["acknowledgement-evidence-summary.json"] = _v74_json_doc(summary)
+    docs["data/public-summary.json"] = _v74_json_doc(public)
+    _v74_sync_manifest_file(manifest, "acknowledgement-evidence.json", docs["acknowledgement-evidence.json"])
+    _v74_sync_manifest_file(manifest, "acknowledgement-evidence-summary.json", docs["acknowledgement-evidence-summary.json"])
+    _v74_sync_manifest_file(manifest, "data/public-summary.json", docs["data/public-summary.json"])
+    manifest.setdefault("acknowledgement", {})["integrity_hash"] = evidence["integrity_hash"]
+    manifest["integrity_hash"] = ack_manifest_hash(manifest)
+    docs["acknowledgement-evidence-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v77_tamper_accepted_report_source(docs: dict[str, bytes]) -> None:

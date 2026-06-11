@@ -640,6 +640,32 @@ def build_release_portfolio_governance_attestation_transparency_parser() -> argp
     return parser
 
 
+def build_release_portfolio_governance_attestation_transparency_acknowledgement_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage local MusicForge Public Attestation Transparency Acknowledgement packages.")
+    parser.add_argument("--portfolio-id", required=True, help="Release Portfolio Audit id.")
+    parser.add_argument("--profile", default="public_summary", help="Attestation profile.")
+    parser.add_argument("--refresh-pack", action="store_true", help="Refresh the Transparency Acknowledgement Pack.")
+    parser.add_argument("--export-pack", action="store_true", help="Build the Acknowledgement Pack export directory.")
+    parser.add_argument("--zip-pack", action="store_true", help="Build the Acknowledgement Pack ZIP package.")
+    parser.add_argument("--verify-pack", action="store_true", help="Verify the Acknowledgement Pack ZIP package.")
+    parser.add_argument("--import-response", action="store_true", help="Import an uploaded acknowledgement response.")
+    parser.add_argument("--content-base64", default="", help="Base64-encoded acknowledgement response JSON or ZIP.")
+    parser.add_argument("--response-id", default="", help="Acknowledgement response id.")
+    parser.add_argument("--refresh-evidence", action="store_true", help="Refresh accepted acknowledgement evidence.")
+    parser.add_argument("--export-evidence", action="store_true", help="Build the Acknowledgement Evidence export directory.")
+    parser.add_argument("--zip-evidence", action="store_true", help="Build the Acknowledgement Evidence ZIP package.")
+    parser.add_argument("--verify-evidence", action="store_true", help="Verify the Acknowledgement Evidence ZIP package.")
+    parser.add_argument("--create-change-request", action="store_true", help="Create a Change Request draft from a needs_changes/rejected response.")
+    parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    parser.add_argument("--require-pack", action="store_true", help="Require an Acknowledgement Pack package when verifying.")
+    parser.add_argument("--require-response", action="store_true", help="Require Acknowledgement Evidence when verifying.")
+    parser.add_argument("--require-accepted", action="store_true", help="Require accepted acknowledgement evidence when verifying.")
+    parser.add_argument("--require-transparency", action="store_true", help="Require passed Transparency verification and semantics.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
 def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")
     verify_parser.add_argument("zip_path", type=Path, help="Path to the Human Review Pack ZIP to verify.")
@@ -818,6 +844,22 @@ def build_verify_release_portfolio_governance_attestation_transparency_parser() 
     verify_parser.add_argument("--require-accepted-evidence", action="store_true", help="Require current accepted external review evidence.")
     verify_parser.add_argument("--require-no-revoked-current", action="store_true", help="Fail when the current registry entry is revoked.")
     verify_parser.add_argument("--require-contiguous-chain", action="store_true", help="Require a valid contiguous transparency event chain.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=300, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Public Attestation Transparency Acknowledgement ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Transparency Acknowledgement Pack/Evidence ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--require-pack", action="store_true", help="Require an Acknowledgement Pack package.")
+    verify_parser.add_argument("--require-response", action="store_true", help="Require Acknowledgement Evidence.")
+    verify_parser.add_argument("--require-accepted", action="store_true", help="Require accepted acknowledgement evidence.")
+    verify_parser.add_argument("--require-transparency", action="store_true", help="Require passed Transparency verification and semantics.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=300, help="Maximum number of ZIP entries.")
@@ -1951,6 +1993,34 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_attestation_transparency_verification_report(report)
         raise SystemExit(release_portfolio_governance_attestation_transparency_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-portfolio-governance-attestation-transparency-acknowledgement":
+        from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement_verifier import (
+            print_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report,
+            release_portfolio_governance_attestation_transparency_acknowledgement_verification_exit_code,
+            verify_release_portfolio_governance_attestation_transparency_acknowledgement_package,
+            write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report,
+        )
+
+        parser = build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(
+            args.zip_path,
+            strict=args.strict,
+            require_pack=args.require_pack,
+            require_response=args.require_response,
+            require_accepted=args.require_accepted,
+            require_transparency=args.require_transparency,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report)
+        raise SystemExit(release_portfolio_governance_attestation_transparency_acknowledgement_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3172,6 +3242,85 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_attestation_transparency_result(result)
         raise SystemExit(0)
+    elif raw_args and raw_args[0] == "release-portfolio-governance-attestation-transparency-acknowledgement":
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
+        from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+        from song_agent.release_portfolio_governance_attestation_transparency import ReleasePortfolioGovernanceAttestationTransparencyStore
+        from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore, acknowledgement_summary
+        from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement_verifier import (
+            verify_release_portfolio_governance_attestation_transparency_acknowledgement_package,
+            write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report,
+        )
+
+        parser = build_release_portfolio_governance_attestation_transparency_acknowledgement_parser()
+        args = parser.parse_args(raw_args[1:])
+        portal_store = _build_release_portfolio_governance_attestation_portal_store()
+        review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+        accepted_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
+        transparency_store = ReleasePortfolioGovernanceAttestationTransparencyStore(
+            attestation_store=portal_store.attestation_store,
+            registry_store=portal_store.registry_store,
+            portal_store=portal_store,
+            accepted_evidence_store=accepted_store,
+        )
+        store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=transparency_store)
+        portfolio_id = args.portfolio_id
+        result: dict[str, Any] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+        if args.refresh_pack:
+            pack = store.refresh_pack(portfolio_id, {"profile": args.profile})
+            result.update({"pack": pack, "summary": {"status": pack.get("status"), "pack_id": pack.get("pack_id"), "source_hash": pack.get("source_hash")}})
+        else:
+            pack = store.read_pack(portfolio_id, profile=args.profile, default={})
+            result.update({"pack": pack, "summary": {"status": pack.get("status", "missing") if pack else "missing", "pack_id": pack.get("pack_id") if pack else None}})
+        if args.export_pack:
+            result["pack_manifest"] = store.export_pack(portfolio_id, {"profile": args.profile})
+        if args.zip_pack:
+            result["pack_zip"] = store.build_pack_zip(portfolio_id, {"profile": args.profile})
+        if args.verify_pack:
+            report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(
+                store.pack_zip_path(portfolio_id, args.profile),
+                strict=args.strict,
+                require_pack=True,
+                require_transparency=args.require_transparency,
+            )
+            write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report, store.pack_verification_report_path(portfolio_id, args.profile))
+            result["pack_verification"] = report
+        if args.import_response:
+            payload: dict[str, Any] = {"profile": args.profile}
+            if args.content_base64:
+                payload["content_base64"] = args.content_base64
+            imported = store.import_response(portfolio_id, payload)
+            result.update(imported)
+        if args.refresh_evidence:
+            payload = {"profile": args.profile}
+            if args.response_id:
+                payload["response_id"] = args.response_id
+            evidence = store.refresh_evidence(portfolio_id, payload)
+            result.update({"acknowledgement_evidence": evidence, "evidence_summary": acknowledgement_summary(evidence)})
+        if args.export_evidence:
+            result["evidence_manifest"] = store.export_evidence(portfolio_id, {"profile": args.profile})
+        if args.zip_evidence:
+            result["evidence_zip"] = store.build_evidence_zip(portfolio_id, {"profile": args.profile})
+        if args.verify_evidence:
+            report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(
+                store.evidence_zip_path(portfolio_id, args.profile),
+                strict=args.strict,
+                require_response=True,
+                require_accepted=args.require_accepted,
+            )
+            write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report, store.evidence_verification_report_path(portfolio_id, args.profile))
+            result["evidence_verification"] = report
+        if args.create_change_request:
+            if not args.response_id:
+                raise SystemExit("--response-id is required with --create-change-request")
+            result["change_request"] = store.create_change_request(portfolio_id, args.response_id, {"profile": args.profile})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_release_portfolio_governance_attestation_transparency_acknowledgement_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
             human_review_verification_exit_code,
@@ -4349,6 +4498,26 @@ def print_release_portfolio_governance_attestation_transparency_result(result: d
     print(f"notices: {summary.get('notice_count', 0)}")
     if result.get("verification"):
         print(f"verification: {result.get('verification', {}).get('status')}")
+
+
+def print_release_portfolio_governance_attestation_transparency_acknowledgement_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    evidence_summary = result.get("evidence_summary") if isinstance(result.get("evidence_summary"), dict) else {}
+    response = result.get("response") if isinstance(result.get("response"), dict) else {}
+    print("MusicForge release portfolio governance attestation transparency acknowledgement")
+    print(f"portfolio: {result.get('portfolio_id')}")
+    print(f"pack: {summary.get('status') or 'missing'} / {summary.get('pack_id') or '-'}")
+    if response:
+        print(f"response: {response.get('response_id') or '-'} / {response.get('status') or '-'}")
+    if evidence_summary:
+        print(f"evidence: {evidence_summary.get('status') or 'missing'} / {evidence_summary.get('acknowledgement_id') or '-'}")
+    if result.get("pack_verification"):
+        print(f"pack verification: {result.get('pack_verification', {}).get('status')}")
+    if result.get("evidence_verification"):
+        print(f"evidence verification: {result.get('evidence_verification', {}).get('status')}")
+    if result.get("change_request"):
+        change = result["change_request"]
+        print(f"change request: {change.get('change_request_id') or '-'} / {change.get('status') or '-'}")
 
 
 def _build_release_portfolio_governance_attestation_portal_store():

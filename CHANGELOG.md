@@ -1,5 +1,17 @@
 # Changelog
 
+## v7.9.0 - 2026-06-11
+
+### Added
+- Transparency Acknowledgement Pack workflow for external confirmation of the current Transparency ZIP, manifest, and feed source.
+- Acknowledgement response import now requires explicit source binding to the current pack and Transparency evidence; the importer does not fill binding fields for bare JSON responses.
+- Accepted acknowledgement responses can produce public-safe Acknowledgement Evidence ZIPs, while needs_changes/rejected responses create local Change Request drafts only.
+- API, CLI, Studio controls, offline verifier, and release-check matrix coverage for pack/evidence refresh, export, ZIP, verify, response import, and Change Request creation.
+- v7.9 release-check smoke covers missing source binding, wrong source binding, evidence full-resign tamper, stale export/ZIP guards, duplicate/path/backslash/.MusicForge/nested package guards, manifest spoofing, and redaction.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_transparency_acknowledgement.py tests\test_server_release_portfolio_governance_attestation_transparency_acknowledgement.py tests\test_cli_release_operations.py::test_release_portfolio_governance_attestation_transparency_acknowledgement_cli_verify tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v79_attestation_transparency_acknowledgement_smoke -q`
+
 ## v7.8.1 - 2026-06-11
 
 ### Fixed

@@ -256,6 +256,20 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="portfolio-governance-attestation-transparency-verify"' in html
     assert "/governance-attestation-transparency" in html
     assert "/governance-attestation-transparency.zip" in html
+    assert "Transparency Acknowledgement" in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-refresh-pack"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-export-pack"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-zip-pack"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-verify-pack"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-import-response"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-refresh-evidence"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-export-evidence"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-zip-evidence"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-verify-evidence"' in html
+    assert 'id="portfolio-governance-attestation-transparency-ack-create-change-request"' in html
+    assert "/governance-attestation-transparency-acknowledgement" in html
+    assert "/governance-attestation-transparency-acknowledgement-pack.zip" in html
+    assert "/governance-attestation-transparency-acknowledgement-evidence.zip" in html
     assert "/api/release-portfolio-audits" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
@@ -271,6 +285,8 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal-review/responses/import" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence/verify" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency/verify" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/pack/verify" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/evidence/verify" in html
     assert "/api/release-portfolio-governance-queues" in html
     assert "/governance-queues" in html
     assert "/run-safe" in html

@@ -3322,6 +3322,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceAttestationAcceptedEvidenceData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence`); } catch (err) {}
       let governanceAttestationTransparencyData = { feed: {}, summary: {}, verification: {} };
       try { governanceAttestationTransparencyData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency`); } catch (err) {}
+      let governanceAttestationTransparencyAcknowledgementData = { pack: {}, summary: {}, evidence_summary: {}, responses: [] };
+      try { governanceAttestationTransparencyAcknowledgementData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
@@ -3338,6 +3340,9 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const governanceAttestationPortalReviewResponses = governanceAttestationPortalReviewData.responses || [];
       const governanceAttestationAcceptedEvidenceSummary = governanceAttestationAcceptedEvidenceData.summary || {};
       const governanceAttestationTransparencySummary = governanceAttestationTransparencyData.summary || {};
+      const governanceAttestationTransparencyAcknowledgementSummary = governanceAttestationTransparencyAcknowledgementData.summary || {};
+      const governanceAttestationTransparencyAcknowledgementEvidenceSummary = governanceAttestationTransparencyAcknowledgementData.evidence_summary || {};
+      const governanceAttestationTransparencyAcknowledgementResponses = governanceAttestationTransparencyAcknowledgementData.responses || [];
       const governanceAttestationRegistryRows = (governanceAttestationRegistry.entries || []).slice(-6).reverse().map((entry) => `
         <tr>
           <td>${escapeHtml(entry.entry_id || "-")}</td>
@@ -3663,6 +3668,30 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-attestation-transparency-zip" type="button">Build Transparency ZIP</button>
           <button class="secondary" id="portfolio-governance-attestation-transparency-verify" type="button">Verify Transparency ZIP</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-transparency.zip">Download Transparency ZIP</a>
+        </div>
+        <div class="panel-title subhead"><span>Transparency Acknowledgement</span></div>
+        <div class="summary-grid">
+          ${metric("Pack", governanceAttestationTransparencyAcknowledgementSummary.status || "missing")}
+          ${metric("Pack ID", governanceAttestationTransparencyAcknowledgementSummary.pack_id || "-")}
+          ${metric("Responses", governanceAttestationTransparencyAcknowledgementResponses.length || 0)}
+          ${metric("Evidence", governanceAttestationTransparencyAcknowledgementEvidenceSummary.status || "missing")}
+          ${metric("External Review", governanceAttestationTransparencyAcknowledgementEvidenceSummary.external_review_status || "-")}
+          ${metric("Acknowledgement", governanceAttestationTransparencyAcknowledgementEvidenceSummary.acknowledgement_id || "-")}
+          ${metric("Stale", governanceAttestationTransparencyAcknowledgementSummary.stale || governanceAttestationTransparencyAcknowledgementEvidenceSummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-refresh-pack" type="button">Refresh Ack Pack</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-export-pack" type="button">Export Ack Pack</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-zip-pack" type="button">Build Ack Pack ZIP</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-verify-pack" type="button">Verify Ack Pack</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-import-response" type="button">Import Ack Response</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-refresh-evidence" type="button">Refresh Ack Evidence</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-export-evidence" type="button">Export Ack Evidence</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-zip-evidence" type="button">Build Ack Evidence ZIP</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-verify-evidence" type="button">Verify Ack Evidence</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-ack-create-change-request" type="button">Create Ack Change Request</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-transparency-acknowledgement-pack.zip">Download Ack Pack ZIP</a>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-transparency-acknowledgement-evidence.zip">Download Ack Evidence ZIP</a>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4075,6 +4104,92 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true, require_accepted_evidence: true, require_contiguous_chain: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-refresh-pack", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/pack/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-export-pack", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/pack/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-zip-pack", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/pack/zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-verify-pack", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/pack/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_transparency: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-import-response", async () => {
+        const contentBase64 = prompt("Transparency Acknowledgement Response content_base64");
+        if (!contentBase64) return;
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/responses/import`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", content_base64: contentBase64 }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-refresh-evidence", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/evidence/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-export-evidence", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/evidence/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-zip-evidence", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/evidence/zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-verify-evidence", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/evidence/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_accepted: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-ack-create-change-request", async () => {
+        const data = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement`);
+        const responses = data.responses || [];
+        const response = responses[responses.length - 1] || {};
+        if (!response.response_id) return;
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/responses/${encodeURIComponent(response.response_id)}/create-change-request`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

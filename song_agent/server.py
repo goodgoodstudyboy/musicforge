@@ -303,6 +303,17 @@ from song_agent.release_portfolio_governance_attestation_transparency_verifier i
     verify_release_portfolio_governance_attestation_transparency,
     write_release_portfolio_governance_attestation_transparency_verification_report,
 )
+from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import (
+    ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementError,
+    ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementNotFoundError,
+    ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStateError,
+    ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore,
+    acknowledgement_summary as portfolio_governance_attestation_transparency_acknowledgement_summary,
+)
+from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement_verifier import (
+    verify_release_portfolio_governance_attestation_transparency_acknowledgement_package,
+    write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report,
+)
 from song_agent.release_portfolio_governance_verifier import (
     release_portfolio_governance_verification_summary,
     verify_release_portfolio_governance_package,
@@ -2819,6 +2830,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_portfolio_governance_attestation_transparency_store(self) -> ReleasePortfolioGovernanceAttestationTransparencyStore:
         return self.server.release_portfolio_governance_attestation_transparency_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_transparency_acknowledgement_store(self) -> ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
+        return self.server.release_portfolio_governance_attestation_transparency_acknowledgement_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -5991,6 +6006,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     filename=f"musicforge-{portfolio_id}-portfolio-governance-attestation-transparency.zip",
                 )
                 return
+            if action in {"governance-attestation-transparency-acknowledgement-pack.zip", "governance-attestation-transparency-acknowledgement-evidence.zip"} and len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                query = parse_qs(urlparse(self.path).query)
+                profile = str(query.get("profile", ["public_summary"])[0] or "public_summary")
+                self.release_portfolio_audit_store.portfolio_store.get_portfolio(portfolio_id)
+                if action.endswith("pack.zip"):
+                    path = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.pack_zip_path(portfolio_id, profile)
+                    filename = f"musicforge-{portfolio_id}-portfolio-governance-attestation-transparency-acknowledgement-pack.zip"
+                else:
+                    path = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.evidence_zip_path(portfolio_id, profile)
+                    filename = f"musicforge-{portfolio_id}-portfolio-governance-attestation-transparency-acknowledgement-evidence.zip"
+                self._send_file(path, "application/zip", filename=filename)
+                return
             if action == "governance-audit":
                 if len(parts) == 2:
                     if method != "GET":
@@ -6794,6 +6824,164 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Attestation Transparency route not found.")
                 return
+            if action == "governance-attestation-transparency-acknowledgement":
+                query = parse_qs(urlparse(self.path).query)
+                query_profile = str(query.get("profile", ["public_summary"])[0] or "public_summary")
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    pack = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.read_pack(portfolio_id, profile=query_profile, default={})
+                    evidence = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.read_evidence(portfolio_id, profile=query_profile, default={})
+                    summary = {"status": pack.get("status", "missing") if pack else "missing", "profile": query_profile, "pack_id": pack.get("pack_id") if pack else None}
+                    if pack:
+                        summary["stale"] = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.pack_is_stale(portfolio_id, pack, profile=query_profile)
+                    evidence_summary = portfolio_governance_attestation_transparency_acknowledgement_summary(evidence) if evidence else {"status": "missing", "external_review_status": "missing"}
+                    if evidence:
+                        evidence_summary["stale"] = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.evidence_is_stale(portfolio_id, evidence, profile=query_profile)
+                    self._send_json(
+                        {
+                            "ok": True,
+                            "portfolio_id": portfolio_id,
+                            "profile": query_profile,
+                            "pack": pack,
+                            "responses": self.release_portfolio_governance_attestation_transparency_acknowledgement_store.list_responses(portfolio_id, profile=query_profile),
+                            "acknowledgement_evidence": evidence,
+                            "change_requests": self.release_portfolio_governance_attestation_transparency_acknowledgement_store.list_change_requests(portfolio_id, profile=query_profile),
+                            "summary": summary,
+                            "evidence_summary": evidence_summary,
+                        }
+                    )
+                    return
+                subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "pack" and len(parts) >= 4:
+                    pack_action = parts[3]
+                    if pack_action == "refresh" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        payload.setdefault("profile", query_profile)
+                        pack = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.refresh_pack(portfolio_id, payload, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "pack": pack, "summary": {"status": pack.get("status"), "pack_id": pack.get("pack_id")}}, status=HTTPStatus.CREATED)
+                        return
+                    if pack_action == "export" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        payload.setdefault("profile", query_profile)
+                        manifest = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.export_pack(portfolio_id, payload, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                        return
+                    if pack_action == "zip" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        payload.setdefault("profile", query_profile)
+                        zip_info = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.build_pack_zip(portfolio_id, payload, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "zip": zip_info})
+                        return
+                    if pack_action == "verify" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        profile = str(payload.get("profile") or query_profile)
+                        report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(
+                            self.release_portfolio_governance_attestation_transparency_acknowledgement_store.pack_zip_path(portfolio_id, profile),
+                            strict=bool(payload.get("strict", False)),
+                            require_pack=True,
+                            require_transparency=bool(payload.get("require_transparency", False)),
+                        )
+                        write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report, self.release_portfolio_governance_attestation_transparency_acknowledgement_store.pack_verification_report_path(portfolio_id, profile))
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report})
+                        return
+                if subaction == "responses" and len(parts) >= 3:
+                    if len(parts) == 3:
+                        if method != "GET":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "responses": self.release_portfolio_governance_attestation_transparency_acknowledgement_store.list_responses(portfolio_id, profile=query_profile)})
+                        return
+                    if parts[3] == "import" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._read_json_body()
+                        payload.setdefault("profile", query_profile)
+                        imported = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.import_response(portfolio_id, payload, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, **imported}, status=HTTPStatus.CREATED)
+                        return
+                    response_id = parts[3]
+                    if len(parts) == 4:
+                        if method != "GET":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        response = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.read_response(portfolio_id, response_id, profile=query_profile)
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "response": response})
+                        return
+                    if len(parts) == 5 and parts[4] == "verify":
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        report = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.verify_response(portfolio_id, response_id, profile=query_profile, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report})
+                        return
+                    if len(parts) == 5 and parts[4] == "create-change-request":
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        change_request = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.create_change_request(portfolio_id, response_id, self._optional_json_body(), now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "change_request": change_request}, status=HTTPStatus.CREATED)
+                        return
+                if subaction == "evidence" and len(parts) >= 4:
+                    evidence_action = parts[3]
+                    if evidence_action == "refresh" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        payload.setdefault("profile", query_profile)
+                        evidence = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.refresh_evidence(portfolio_id, payload, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "acknowledgement_evidence": evidence, "summary": portfolio_governance_attestation_transparency_acknowledgement_summary(evidence)}, status=HTTPStatus.CREATED)
+                        return
+                    if evidence_action == "export" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        payload.setdefault("profile", query_profile)
+                        manifest = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.export_evidence(portfolio_id, payload, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                        return
+                    if evidence_action == "zip" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        payload.setdefault("profile", query_profile)
+                        zip_info = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.build_evidence_zip(portfolio_id, payload, now=_utc_now())
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "zip": zip_info})
+                        return
+                    if evidence_action == "verify" and len(parts) == 4:
+                        if method != "POST":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        payload = self._optional_json_body()
+                        profile = str(payload.get("profile") or query_profile)
+                        report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(
+                            self.release_portfolio_governance_attestation_transparency_acknowledgement_store.evidence_zip_path(portfolio_id, profile),
+                            strict=bool(payload.get("strict", False)),
+                            require_response=True,
+                            require_accepted=bool(payload.get("require_accepted", False)),
+                        )
+                        write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report, self.release_portfolio_governance_attestation_transparency_acknowledgement_store.evidence_verification_report_path(portfolio_id, profile))
+                        self._send_json({"ok": True, "portfolio_id": portfolio_id, "verification": report})
+                        return
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Portfolio Governance Attestation Transparency Acknowledgement route not found.")
+                return
             if action == "governance-queues" and len(parts) == 2:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -6912,6 +7100,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleasePortfolioGovernanceAttestationTransparencyStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleasePortfolioGovernanceAttestationTransparencyError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -15841,6 +16035,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             registry_store=self.release_portfolio_governance_attestation_registry_store,
             portal_store=self.release_portfolio_governance_attestation_portal_store,
             accepted_evidence_store=self.release_portfolio_governance_attestation_accepted_evidence_store,
+        )
+        self.release_portfolio_governance_attestation_transparency_acknowledgement_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(
+            transparency_store=self.release_portfolio_governance_attestation_transparency_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
