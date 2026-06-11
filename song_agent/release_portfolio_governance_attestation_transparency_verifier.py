@@ -16,6 +16,8 @@ from song_agent.release_portfolio_governance_attestation_transparency import (
     TRANSPARENCY_PACKAGE_TYPE,
     TRANSPARENCY_FEED_PACKAGE_TYPE,
     TRANSPARENCY_REPORT_PACKAGE_TYPE,
+    _build_events,
+    _build_notices,
     transparency_event_hash,
     transparency_feed_hash,
     transparency_manifest_hash,
@@ -270,6 +272,8 @@ class _TransparencyVerifier:
         self._add_check("feed", "transparency_feed_package_type", "passed" if self.feed_doc.get("package_type") == TRANSPARENCY_FEED_PACKAGE_TYPE else "failed", "blocking", "Feed package_type is valid." if self.feed_doc.get("package_type") == TRANSPARENCY_FEED_PACKAGE_TYPE else "Feed package_type is invalid.")
         self._verify_event_chain()
         self._verify_notices()
+        self._verify_event_semantics(source, current_state)
+        self._verify_notice_semantics(source, current_state)
 
         self._add_hash_check("report", "transparency_report_integrity", self.report_doc.get("integrity_hash"), _transparency_report_hash(self.report_doc), "Attestation Transparency Report integrity")
         report_source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
@@ -327,6 +331,55 @@ class _TransparencyVerifier:
         missing = [f"notices/{notice_id}.json" for notice_id in by_id if f"notices/{notice_id}.json" not in self.entry_names]
         problems.extend(missing)
         self._add_check("feed", "transparency_notices_integrity", "failed" if problems else "passed", "blocking", "Notice problems: " + "; ".join(problems[:5]) if problems else "Transparency notices are bound to feed events.")
+
+    def _verify_event_semantics(self, source: dict[str, Any], current_state: dict[str, Any]) -> None:
+        actual_events = self.feed_doc.get("events") if isinstance(self.feed_doc.get("events"), list) else []
+        expected_events = _build_events(
+            str(self.feed_doc.get("portfolio_id") or ""),
+            str(self.feed_doc.get("attestation_profile") or "public_summary"),
+            current_state,
+            source,
+            now=str(self.feed_doc.get("generated_at") or self.generated_at),
+        )
+        expected_semantics = [_event_semantics(event) for event in expected_events if isinstance(event, dict)]
+        actual_semantics = [_event_semantics(event) for event in actual_events if isinstance(event, dict)]
+        problems = _semantic_mismatches("event", expected_semantics, actual_semantics)
+        self._add_check(
+            "feed",
+            "transparency_event_semantics_match",
+            "failed" if problems else "passed",
+            "blocking",
+            "Transparency event semantics mismatch: " + "; ".join(problems[:5]) if problems else "Transparency events match the package public state.",
+        )
+
+    def _verify_notice_semantics(self, source: dict[str, Any], current_state: dict[str, Any]) -> None:
+        actual_notices = self.feed_doc.get("notices") if isinstance(self.feed_doc.get("notices"), list) else []
+        expected_events = _build_events(
+            str(self.feed_doc.get("portfolio_id") or ""),
+            str(self.feed_doc.get("attestation_profile") or "public_summary"),
+            current_state,
+            source,
+            now=str(self.feed_doc.get("generated_at") or self.generated_at),
+        )
+        expected_notices = _build_notices(
+            str(self.feed_doc.get("portfolio_id") or ""),
+            str(self.feed_doc.get("attestation_profile") or "public_summary"),
+            current_state,
+            source,
+            expected_events,
+            {},
+            now=str(self.feed_doc.get("generated_at") or self.generated_at),
+        )
+        expected_semantics = [_notice_semantics(notice) for notice in expected_notices if isinstance(notice, dict)]
+        actual_semantics = [_notice_semantics(notice) for notice in actual_notices if isinstance(notice, dict)]
+        problems = _semantic_mismatches("notice", expected_semantics, actual_semantics)
+        self._add_check(
+            "feed",
+            "transparency_notice_semantics_match",
+            "failed" if problems else "passed",
+            "blocking",
+            "Transparency notice semantics mismatch: " + "; ".join(problems[:5]) if problems else "Transparency notices match the package public state and events.",
+        )
 
     def _verify_data_bindings(self, source: dict[str, Any], current_state: dict[str, Any]) -> None:
         current = self.data_docs.get("current-public-state.json", {})
@@ -461,6 +514,68 @@ class _TransparencyVerifier:
 
 def _transparency_report_hash(report: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in {"integrity_hash", "generated_at", "updated_at"}})
+
+
+def _event_semantics(event: dict[str, Any]) -> dict[str, Any]:
+    source = event.get("source") if isinstance(event.get("source"), dict) else {}
+    summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+    return {
+        "event_id": event.get("event_id"),
+        "event_type": event.get("event_type"),
+        "severity": event.get("severity"),
+        "portfolio_id": event.get("portfolio_id"),
+        "attestation_profile": event.get("attestation_profile"),
+        "source": {
+            "public_state_hash": source.get("public_state_hash"),
+            "registry_current_entry_id": source.get("registry_current_entry_id"),
+            "current_certificate_id": source.get("current_certificate_id"),
+            "portal_manifest_hash": source.get("portal_manifest_hash"),
+            "accepted_evidence_id": source.get("accepted_evidence_id"),
+        },
+        "public_references": summary.get("public_references") if isinstance(summary.get("public_references"), dict) else {},
+    }
+
+
+def _notice_semantics(notice: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "notice_id": notice.get("notice_id"),
+        "notice_type": notice.get("notice_type"),
+        "severity": notice.get("severity"),
+        "portfolio_id": notice.get("portfolio_id"),
+        "attestation_profile": notice.get("attestation_profile"),
+        "source_event_ids": list(notice.get("source_event_ids") or []) if isinstance(notice.get("source_event_ids"), list) else [],
+        "public_references": notice.get("public_references") if isinstance(notice.get("public_references"), dict) else {},
+    }
+
+
+def _semantic_mismatches(kind: str, expected: list[dict[str, Any]], actual: list[dict[str, Any]]) -> list[str]:
+    problems: list[str] = []
+    if len(actual) != len(expected):
+        problems.append(f"{kind} count {len(actual)} != expected {len(expected)}")
+    for index, expected_item in enumerate(expected):
+        if index >= len(actual):
+            problems.append(f"{kind}[{index}] missing")
+            continue
+        actual_item = actual[index]
+        for key, expected_value in expected_item.items():
+            actual_value = actual_item.get(key)
+            if key == "public_references" and kind == "notice":
+                if not _reference_subset_matches(expected_value, actual_value, notice_type=str(expected_item.get("notice_type") or "")):
+                    problems.append(f"{kind}[{index}].{key} mismatch")
+                continue
+            if actual_value != expected_value:
+                problems.append(f"{kind}[{index}].{key} mismatch")
+    return problems
+
+
+def _reference_subset_matches(expected: Any, actual: Any, *, notice_type: str) -> bool:
+    expected_refs = expected if isinstance(expected, dict) else {}
+    actual_refs = actual if isinstance(actual, dict) else {}
+    for key, value in expected_refs.items():
+        if actual_refs.get(key) != value:
+            return False
+    extra_keys = set(actual_refs) - set(expected_refs)
+    return not extra_keys or (notice_type == "public_state_refreshed" and extra_keys <= {"previous_state_hash"})
 
 
 def _is_safe_zip_entry(name: str) -> bool:

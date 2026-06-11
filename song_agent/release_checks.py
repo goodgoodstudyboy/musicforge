@@ -11976,6 +11976,8 @@ def _v78_attestation_transparency_feed_smoke(root: Path) -> tuple[bool, str]:
         verification = transparency_store.verify_transparency(portfolio_id, {"strict": True, "require_current": True, "require_accepted_evidence": True, "require_contiguous_chain": True})
         source_zip = transparency_store.zip_path(portfolio_id)
         event_tamper = verify_release_portfolio_governance_attestation_transparency(_v76_rewrite_zip(source_zip, base / "event-tamper-v78.zip", _v78_tamper_transparency_event), strict=True, require_contiguous_chain=True)
+        event_full_resign = verify_release_portfolio_governance_attestation_transparency(_v76_rewrite_zip(source_zip, base / "event-full-resign-v78.zip", _v78_full_resign_transparency_event_semantics), strict=True, require_current=True, require_accepted_evidence=True, require_contiguous_chain=True)
+        notice_full_resign = verify_release_portfolio_governance_attestation_transparency(_v76_rewrite_zip(source_zip, base / "notice-full-resign-v78.zip", _v78_full_resign_transparency_notice_semantics), strict=True, require_current=True, require_accepted_evidence=True, require_contiguous_chain=True)
         data_tamper = verify_release_portfolio_governance_attestation_transparency(_v76_rewrite_zip(source_zip, base / "data-tamper-v78.zip", _v78_tamper_transparency_package), strict=True)
         duplicate = verify_release_portfolio_governance_attestation_transparency(_v43_duplicate_submission_zip(source_zip, base / "duplicate-v78.zip"), strict=True)
         dangerous = verify_release_portfolio_governance_attestation_transparency(_v38_rewrite_zip(source_zip, base / "dangerous-v78.zip", additions={"../evil.txt": b"x"}), strict=True)
@@ -12004,6 +12006,8 @@ def _v78_attestation_transparency_feed_smoke(root: Path) -> tuple[bool, str]:
             and registry_verification.get("status") == "passed"
             and portal_verification.get("status") == "passed"
             and _v38_check_status(event_tamper, "transparency_event_chain_contiguous") == "failed"
+            and _v38_check_status(event_full_resign, "transparency_event_semantics_match") == "failed"
+            and _v38_check_status(notice_full_resign, "transparency_notice_semantics_match") == "failed"
             and _v38_check_status(data_tamper, "transparency_data_package_registry_zip_sha256") == "failed"
             and _v38_check_status(duplicate, "transparency_zip_duplicate_entries") == "failed"
             and _v38_check_status(dangerous, "transparency_zip_entry_path_safe") == "failed"
@@ -12021,7 +12025,8 @@ def _v78_attestation_transparency_feed_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"feed={feed.get('status')}/{verification.get('status')}, registry={registry_verification.get('status')}, portal={portal_verification.get('status')}, "
-            f"event={_v38_check_status(event_tamper, 'transparency_event_chain_contiguous')}, data={_v38_check_status(data_tamper, 'transparency_data_package_registry_zip_sha256')}, "
+            f"event={_v38_check_status(event_tamper, 'transparency_event_chain_contiguous')}, event_full_resign={_v38_check_status(event_full_resign, 'transparency_event_semantics_match')}, "
+            f"notice_full_resign={_v38_check_status(notice_full_resign, 'transparency_notice_semantics_match')}, data={_v38_check_status(data_tamper, 'transparency_data_package_registry_zip_sha256')}, "
             f"duplicate={_v38_check_status(duplicate, 'transparency_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'transparency_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash, 'transparency_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge, 'transparency_zip_no_nested_or_internal_entries')}, "
             f"nested={_v38_check_status(nested, 'transparency_zip_no_nested_or_internal_entries')}, spoof={_v38_check_status(spoof, 'transparency_manifest_extra_entries')}, "
@@ -12066,6 +12071,60 @@ def _v78_tamper_transparency_event(docs: dict[str, bytes]) -> None:
     docs["transparency-feed.json"] = _v74_json_doc(feed)
     _v74_sync_manifest_file(manifest, "transparency-feed.json", docs["transparency-feed.json"])
     manifest.setdefault("feed", {})["integrity_hash"] = feed["integrity_hash"]
+    manifest["integrity_hash"] = transparency_manifest_hash(manifest)
+    docs["transparency-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v78_full_resign_transparency_event_semantics(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_transparency import transparency_event_hash
+
+    feed = _v74_read_json_doc(docs, "transparency-feed.json")
+    first = feed["events"][0]
+    first["event_type"] = "registry_current_revoked"
+    first["severity"] = "warning"
+    first["summary"]["public_references"] = {"current_entry_id": first.get("source", {}).get("registry_current_entry_id")}
+    previous = ""
+    for event in feed.get("events", []):
+        event["previous_event_hash"] = previous
+        event["event_hash"] = transparency_event_hash(event)
+        previous = event["event_hash"]
+    _v78_resign_transparency_feed_report_manifest(docs, feed)
+
+
+def _v78_full_resign_transparency_notice_semantics(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_transparency import transparency_notice_hash
+
+    feed = _v74_read_json_doc(docs, "transparency-feed.json")
+    notice = feed["notices"][0]
+    notice["notice_type"] = "registry_current_revoked"
+    notice["severity"] = "warning"
+    notice["public_references"] = {"current_entry_id": feed["events"][0].get("source", {}).get("registry_current_entry_id")}
+    notice["integrity_hash"] = transparency_notice_hash(notice)
+    docs[f"notices/{notice['notice_id']}.json"] = _v74_json_doc(notice)
+    _v78_resign_transparency_feed_report_manifest(docs, feed)
+
+
+def _v78_resign_transparency_feed_report_manifest(docs: dict[str, bytes], feed: dict[str, Any]) -> None:
+    from song_agent.release_portfolio_governance_attestation_transparency import transparency_feed_hash, transparency_manifest_hash, transparency_report_hash
+
+    report = _v74_read_json_doc(docs, "transparency-report.json")
+    manifest = _v74_read_json_doc(docs, "transparency-manifest.json")
+    feed["integrity_hash"] = transparency_feed_hash(feed)
+    report.setdefault("source", {})["feed_hash"] = feed["integrity_hash"]
+    report["source_hash"] = stable_hash(report["source"])
+    report["summary"] = feed.get("summary", {})
+    report["integrity_hash"] = transparency_report_hash(report)
+    docs["transparency-feed.json"] = _v74_json_doc(feed)
+    docs["transparency-report.json"] = _v74_json_doc(report)
+    _v74_sync_manifest_file(manifest, "transparency-feed.json", docs["transparency-feed.json"])
+    _v74_sync_manifest_file(manifest, "transparency-report.json", docs["transparency-report.json"])
+    manifest.setdefault("feed", {})["integrity_hash"] = feed["integrity_hash"]
+    manifest.setdefault("report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("report", {})["source_hash"] = report["source_hash"]
+    for notice in feed.get("notices", []):
+        notice_path = f"notices/{notice.get('notice_id')}.json"
+        if notice_path in docs:
+            _v74_sync_manifest_file(manifest, notice_path, docs[notice_path])
     manifest["integrity_hash"] = transparency_manifest_hash(manifest)
     docs["transparency-manifest.json"] = _v74_json_doc(manifest)
 

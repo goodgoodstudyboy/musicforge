@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.8.1 - 2026-06-11
+
+### Fixed
+- Transparency verifier now derives expected event semantics from the package public state/source and rejects fully re-signed forged events.
+- Transparency verifier now derives expected notice semantics from package state/events and rejects fully re-signed forged notices.
+- v7.8 release-check smoke covers event and notice full-resign attacks.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_transparency.py tests\test_release_check.py::test_v78_attestation_transparency_feed_smoke -q`
+
 ## v7.8.0 - 2026-06-11
 
 ### Added

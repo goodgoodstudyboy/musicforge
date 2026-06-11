@@ -16,6 +16,8 @@ from song_agent.release_portfolio_governance_attestation_transparency import (
     transparency_event_hash,
     transparency_feed_hash,
     transparency_manifest_hash,
+    transparency_notice_hash,
+    transparency_report_hash,
 )
 from song_agent.release_portfolio_governance_attestation_transparency_verifier import verify_release_portfolio_governance_attestation_transparency
 
@@ -89,6 +91,30 @@ def test_attestation_transparency_verifier_catches_tamper_and_paths(tmp_path: Pa
     assert any(item["check_id"] == "transparency_zip_no_nested_or_internal_entries" for item in verify_release_portfolio_governance_attestation_transparency(nested, strict=True)["blockers"])
     assert any(item["check_id"] == "transparency_manifest_zip_entries_reference_only" for item in verify_release_portfolio_governance_attestation_transparency(spoof, strict=True)["blockers"])
     assert any(item["check_id"] == "transparency_redaction_scan" for item in verify_release_portfolio_governance_attestation_transparency(redaction, strict=True)["blockers"])
+
+
+def test_attestation_transparency_verifier_rejects_full_resigned_event_semantics(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, _portal_store, _accepted_store, store = _transparency_fixture(tmp_path, monkeypatch)
+    store.refresh_feed(portfolio_id, {"require_accepted_evidence": True})
+    store.export_transparency(portfolio_id)
+    store.build_zip(portfolio_id)
+
+    event_full_resign = _rewrite_zip(store.zip_path(portfolio_id), tmp_path / "event-full-resign.zip", _full_resign_event_semantics)
+    report = verify_release_portfolio_governance_attestation_transparency(event_full_resign, strict=True, require_current=True, require_accepted_evidence=True, require_contiguous_chain=True)
+
+    assert any(item["check_id"] == "transparency_event_semantics_match" for item in report["blockers"])
+
+
+def test_attestation_transparency_verifier_rejects_full_resigned_notice_semantics(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, _portal_store, _accepted_store, store = _transparency_fixture(tmp_path, monkeypatch)
+    store.refresh_feed(portfolio_id, {"require_accepted_evidence": True})
+    store.export_transparency(portfolio_id)
+    store.build_zip(portfolio_id)
+
+    notice_full_resign = _rewrite_zip(store.zip_path(portfolio_id), tmp_path / "notice-full-resign.zip", _full_resign_notice_semantics)
+    report = verify_release_portfolio_governance_attestation_transparency(notice_full_resign, strict=True, require_current=True, require_accepted_evidence=True, require_contiguous_chain=True)
+
+    assert any(item["check_id"] == "transparency_notice_semantics_match" for item in report["blockers"])
 
 
 def test_attestation_transparency_stale_feed_blocks_export_and_zip(tmp_path: Path, monkeypatch) -> None:
@@ -168,6 +194,64 @@ def _tamper_package_fingerprint_and_resign(docs: dict[str, bytes]) -> None:
     _sync_manifest_file(manifest, "data/package-fingerprints.json", docs["data/package-fingerprints.json"])
     manifest["integrity_hash"] = transparency_manifest_hash(manifest)
     docs["transparency-manifest.json"] = _doc_bytes(manifest)
+
+
+def _full_resign_event_semantics(docs: dict[str, bytes]) -> None:
+    feed = _read_doc(docs, "transparency-feed.json")
+    first = feed["events"][0]
+    first["event_type"] = "registry_current_revoked"
+    first["severity"] = "warning"
+    first["summary"]["public_references"] = {"current_entry_id": first["source"].get("registry_current_entry_id")}
+    _resign_event_chain(feed)
+    _resign_feed_report_manifest(docs, feed)
+
+
+def _full_resign_notice_semantics(docs: dict[str, bytes]) -> None:
+    feed = _read_doc(docs, "transparency-feed.json")
+    notice = feed["notices"][0]
+    notice["notice_type"] = "registry_current_revoked"
+    notice["severity"] = "warning"
+    notice["public_references"] = {"current_entry_id": feed["events"][0]["source"].get("registry_current_entry_id")}
+    notice["integrity_hash"] = transparency_notice_hash(notice)
+    docs[f"notices/{notice['notice_id']}.json"] = _doc_bytes(notice)
+    _resign_feed_report_manifest(docs, feed)
+
+
+def _resign_event_chain(feed: dict) -> None:
+    previous = ""
+    for event in feed.get("events", []):
+        event["previous_event_hash"] = previous
+        event["event_hash"] = transparency_event_hash(event)
+        previous = event["event_hash"]
+
+
+def _resign_feed_report_manifest(docs: dict[str, bytes], feed: dict) -> None:
+    report = _read_doc(docs, "transparency-report.json")
+    manifest = _read_doc(docs, "transparency-manifest.json")
+    feed["integrity_hash"] = transparency_feed_hash(feed)
+    report["source"]["feed_hash"] = feed["integrity_hash"]
+    report["source_hash"] = _stable_hash(report["source"])
+    report["summary"] = feed.get("summary", {})
+    report["integrity_hash"] = transparency_report_hash(report)
+    docs["transparency-feed.json"] = _doc_bytes(feed)
+    docs["transparency-report.json"] = _doc_bytes(report)
+    _sync_manifest_file(manifest, "transparency-feed.json", docs["transparency-feed.json"])
+    _sync_manifest_file(manifest, "transparency-report.json", docs["transparency-report.json"])
+    manifest["feed"]["integrity_hash"] = feed["integrity_hash"]
+    manifest["report"]["integrity_hash"] = report["integrity_hash"]
+    manifest["report"]["source_hash"] = report["source_hash"]
+    for notice in feed.get("notices", []):
+        notice_path = f"notices/{notice.get('notice_id')}.json"
+        if notice_path in docs:
+            _sync_manifest_file(manifest, notice_path, docs[notice_path])
+    manifest["integrity_hash"] = transparency_manifest_hash(manifest)
+    docs["transparency-manifest.json"] = _doc_bytes(manifest)
+
+
+def _stable_hash(value: dict) -> str:
+    from song_agent.releases import stable_hash
+
+    return stable_hash(value)
 
 
 def _spoof_manifest_zip_entries(docs: dict[str, bytes]) -> None:

@@ -717,6 +717,8 @@ def test_v78_attestation_transparency_feed_smoke(tmp_path: Path) -> None:
     assert ok is True, detail
     assert "feed=current/passed" in detail
     assert "event=failed" in detail
+    assert "event_full_resign=failed" in detail
+    assert "notice_full_resign=failed" in detail
     assert "data=failed" in detail
     assert "backslash=failed" in detail
     assert "redaction=failed" in detail
