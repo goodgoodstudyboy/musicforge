@@ -124,6 +124,7 @@ class _RegistryVerifier:
         self.package_index: dict[str, Any] = {}
         self.chain: dict[str, Any] = {}
         self.accepted_evidence: dict[str, Any] = {}
+        self.accepted_evidence_verification: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -183,8 +184,9 @@ class _RegistryVerifier:
         duplicates = sorted(name for name, count in _counts(self.entry_names).items() if count > 1)
         self._add_check("zip", "registry_zip_duplicate_entries", "failed" if duplicates else "passed", "blocking", "Duplicate ZIP entries: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate ZIP entries.")
         required = set(REQUIRED_ENTRIES)
-        if "data/accepted-evidence-summary.json" in self.entry_names:
+        if "data/accepted-evidence-summary.json" in self.entry_names or "data/accepted-evidence-verification-summary.json" in self.entry_names:
             required.add("data/accepted-evidence-summary.json")
+            required.add("data/accepted-evidence-verification-summary.json")
         missing = sorted(required - set(self.entry_names))
         self._add_check("zip", "registry_zip_required_entries", "failed" if missing else "passed", "blocking", "Missing required entries: " + ", ".join(missing) if missing else "All required registry entries exist.")
         forbidden = [name for name in self.entry_names if _is_forbidden_public_entry(name)]
@@ -247,6 +249,10 @@ class _RegistryVerifier:
             self.accepted_evidence = self._read_json_entry(archive, "data/accepted-evidence-summary.json", "data", "registry_data_accepted_evidence_summary_parse")
         else:
             self.accepted_evidence = {}
+        if "data/accepted-evidence-verification-summary.json" in self.entry_map:
+            self.accepted_evidence_verification = self._read_json_entry(archive, "data/accepted-evidence-verification-summary.json", "data", "registry_data_accepted_evidence_verification_summary_parse")
+        else:
+            self.accepted_evidence_verification = {}
 
     def _verify_documents(self) -> None:
         if self.registry:
@@ -331,8 +337,47 @@ class _RegistryVerifier:
             external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
             evidence_external = self.accepted_evidence.get("external_review") if isinstance(self.accepted_evidence.get("external_review"), dict) else {}
             self._add_exact_check("accepted_evidence", "registry_accepted_evidence_source_hash", self.accepted_evidence.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence summary source_hash")
-            for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash"):
+            for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash", "accepted_evidence_verification_report_hash"):
                 self._add_exact_check("accepted_evidence", f"registry_accepted_evidence_{key}", evidence_external.get(key), external.get(key), f"Accepted Evidence summary {key}")
+        if self.accepted_evidence_verification:
+            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+            manifest_verification = self.manifest.get("external_review_verification") if isinstance(self.manifest.get("external_review_verification"), dict) else {}
+            evidence_external = self.accepted_evidence.get("external_review") if isinstance(self.accepted_evidence.get("external_review"), dict) else {}
+            verification = self.accepted_evidence_verification.get("accepted_evidence_verification") if isinstance(self.accepted_evidence_verification.get("accepted_evidence_verification"), dict) else {}
+            self._add_exact_check("accepted_evidence", "registry_accepted_evidence_verification_source_hash", self.accepted_evidence_verification.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence verification summary source_hash")
+            for key in (
+                "accepted_evidence_id",
+                "accepted_evidence_source_hash",
+                "accepted_evidence_status",
+                "external_review_status",
+                "response_id",
+                "current_entry_id",
+                "current_certificate_id",
+                "accepted_evidence_verification_status",
+                "accepted_evidence_zip_sha256",
+                "accepted_evidence_zip_size_bytes",
+                "accepted_evidence_manifest_hash",
+                "accepted_evidence_verification_report_hash",
+            ):
+                self._add_exact_check("accepted_evidence", f"registry_accepted_evidence_verification_{key}", verification.get(key), manifest_verification.get(key), f"Accepted Evidence verification {key}")
+            summary_bindings = {
+                "accepted_evidence_id": "accepted_evidence_id",
+                "accepted_evidence_source_hash": "source_hash",
+                "accepted_evidence_status": "status",
+                "external_review_status": "external_review_status",
+                "response_id": "response_id",
+                "current_entry_id": "current_entry_id",
+                "current_certificate_id": "current_certificate_id",
+                "accepted_evidence_verification_status": "accepted_evidence_verification_status",
+                "accepted_evidence_zip_sha256": "accepted_evidence_zip_sha256",
+                "accepted_evidence_zip_size_bytes": "accepted_evidence_zip_size_bytes",
+                "accepted_evidence_manifest_hash": "accepted_evidence_manifest_hash",
+                "accepted_evidence_verification_report_hash": "accepted_evidence_verification_report_hash",
+            }
+            for verification_key, summary_key in summary_bindings.items():
+                self._add_exact_check("accepted_evidence", f"registry_accepted_evidence_summary_verification_{verification_key}", evidence_external.get(summary_key), verification.get(verification_key), f"Accepted Evidence summary binding {verification_key}")
+            for verification_key, summary_key in summary_bindings.items():
+                self._add_exact_check("accepted_evidence", f"registry_accepted_evidence_manifest_verification_{verification_key}", external.get(summary_key), verification.get(verification_key), f"Accepted Evidence manifest binding {verification_key}")
 
     def _verify_requirements(self) -> None:
         current_id = str(self.registry.get("current_entry_id") or "")
@@ -345,14 +390,21 @@ class _RegistryVerifier:
             self._add_check("requirements", "registry_require_no_revoked_current", "passed" if not current or current.get("status") != "revoked" else "failed", "blocking", "Current Registry entry is not revoked." if not current or current.get("status") != "revoked" else "Current Registry entry is revoked.")
         if self.require_accepted_evidence:
             external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+            verification = self.accepted_evidence_verification.get("accepted_evidence_verification") if isinstance(self.accepted_evidence_verification.get("accepted_evidence_verification"), dict) else {}
             ok = (
                 bool(self.accepted_evidence)
+                and bool(self.accepted_evidence_verification)
                 and external.get("external_review_status") == "accepted"
                 and external.get("status") == "current"
                 and external.get("verification_status") == "passed"
                 and external.get("accepted_evidence_verification_status") == "passed"
+                and verification.get("accepted_evidence_verification_status") == "passed"
                 and bool(external.get("accepted_evidence_zip_sha256"))
                 and bool(external.get("accepted_evidence_manifest_hash"))
+                and bool(external.get("accepted_evidence_verification_report_hash"))
+                and external.get("accepted_evidence_zip_sha256") == verification.get("accepted_evidence_zip_sha256")
+                and external.get("accepted_evidence_manifest_hash") == verification.get("accepted_evidence_manifest_hash")
+                and external.get("accepted_evidence_verification_report_hash") == verification.get("accepted_evidence_verification_report_hash")
             )
             self._add_check("requirements", "registry_require_accepted_evidence", "passed" if ok else "failed", "blocking", "Current accepted external review evidence is present." if ok else "Current accepted external review evidence is required.")
 

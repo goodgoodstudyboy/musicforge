@@ -194,8 +194,9 @@ class _PortalVerifier:
         duplicates = sorted(name for name, count in _counts(self.entry_names).items() if count > 1)
         self._add_check("zip", "portal_zip_duplicate_entries", "failed" if duplicates else "passed", "blocking", "Duplicate ZIP entries: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate ZIP entries.")
         required = set(REQUIRED_ENTRIES)
-        if "data/accepted-evidence-summary.json" in self.entry_names:
+        if "data/accepted-evidence-summary.json" in self.entry_names or "data/accepted-evidence-verification-summary.json" in self.entry_names:
             required.add("data/accepted-evidence-summary.json")
+            required.add("data/accepted-evidence-verification-summary.json")
         missing = sorted(required - set(self.entry_names))
         self._add_check("zip", "portal_zip_required_entries", "failed" if missing else "passed", "blocking", "Missing required entries: " + ", ".join(missing) if missing else "All required portal entries exist.")
         forbidden = [name for name in self.entry_names if _is_forbidden_public_entry(name)]
@@ -265,6 +266,10 @@ class _PortalVerifier:
             self.data_docs["accepted-evidence-summary.json"] = self._read_json_entry(archive, "data/accepted-evidence-summary.json", "data", "portal_data_accepted_evidence_summary_json_parse")
         else:
             self.data_docs["accepted-evidence-summary.json"] = {}
+        if "data/accepted-evidence-verification-summary.json" in self.entry_map:
+            self.data_docs["accepted-evidence-verification-summary.json"] = self._read_json_entry(archive, "data/accepted-evidence-verification-summary.json", "data", "portal_data_accepted_evidence_verification_summary_json_parse")
+        else:
+            self.data_docs["accepted-evidence-verification-summary.json"] = {}
 
     def _verify_documents(self) -> None:
         if self.report_doc:
@@ -313,7 +318,10 @@ class _PortalVerifier:
         attestation_verification = self.data_docs.get("attestation-verification-summary.json", {})
         commands = self.data_docs.get("verification-commands.json", {})
         accepted = self.data_docs.get("accepted-evidence-summary.json", {})
+        accepted_verification = self.data_docs.get("accepted-evidence-verification-summary.json", {})
         for name, doc in self.data_docs.items():
+            if not doc and name in {"accepted-evidence-summary.json", "accepted-evidence-verification-summary.json"}:
+                continue
             self._add_exact_check("data", f"portal_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), self.report_doc.get("source_hash"), f"{name} source_hash")
         for key, source_key in (
             ("status", "registry_verification_status"),
@@ -407,8 +415,45 @@ class _PortalVerifier:
         accepted_external = accepted.get("external_review") if isinstance(accepted.get("external_review"), dict) else {}
         if accepted:
             self._add_exact_check("data", "portal_data_accepted_evidence_source_hash", accepted.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence summary source_hash")
-            for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash"):
+            for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash", "accepted_evidence_verification_report_hash"):
                 self._add_exact_check("data", f"portal_data_accepted_evidence_{key}", accepted_external.get(key), external.get(key), f"Accepted Evidence summary {key}")
+        if accepted_verification:
+            manifest_verification = self.manifest.get("external_review_verification") if isinstance(self.manifest.get("external_review_verification"), dict) else {}
+            verification = accepted_verification.get("accepted_evidence_verification") if isinstance(accepted_verification.get("accepted_evidence_verification"), dict) else {}
+            self._add_exact_check("data", "portal_data_accepted_evidence_verification_source_hash", accepted_verification.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence verification summary source_hash")
+            for key in (
+                "accepted_evidence_id",
+                "accepted_evidence_source_hash",
+                "accepted_evidence_status",
+                "external_review_status",
+                "response_id",
+                "current_entry_id",
+                "current_certificate_id",
+                "accepted_evidence_verification_status",
+                "accepted_evidence_zip_sha256",
+                "accepted_evidence_zip_size_bytes",
+                "accepted_evidence_manifest_hash",
+                "accepted_evidence_verification_report_hash",
+            ):
+                self._add_exact_check("data", f"portal_data_accepted_evidence_verification_{key}", verification.get(key), manifest_verification.get(key), f"Accepted Evidence verification {key}")
+            summary_bindings = {
+                "accepted_evidence_id": "accepted_evidence_id",
+                "accepted_evidence_source_hash": "source_hash",
+                "accepted_evidence_status": "status",
+                "external_review_status": "external_review_status",
+                "response_id": "response_id",
+                "current_entry_id": "current_entry_id",
+                "current_certificate_id": "current_certificate_id",
+                "accepted_evidence_verification_status": "accepted_evidence_verification_status",
+                "accepted_evidence_zip_sha256": "accepted_evidence_zip_sha256",
+                "accepted_evidence_zip_size_bytes": "accepted_evidence_zip_size_bytes",
+                "accepted_evidence_manifest_hash": "accepted_evidence_manifest_hash",
+                "accepted_evidence_verification_report_hash": "accepted_evidence_verification_report_hash",
+            }
+            for verification_key, summary_key in summary_bindings.items():
+                self._add_exact_check("data", f"portal_data_accepted_evidence_summary_verification_{verification_key}", accepted_external.get(summary_key), verification.get(verification_key), f"Accepted Evidence summary binding {verification_key}")
+            for verification_key, summary_key in summary_bindings.items():
+                self._add_exact_check("data", f"portal_data_accepted_evidence_manifest_verification_{verification_key}", external.get(summary_key), verification.get(verification_key), f"Accepted Evidence manifest binding {verification_key}")
         commands_text = json.dumps(commands, ensure_ascii=False, sort_keys=True)
         unsafe_commands = _contains_local_path(commands_text) or "http://" in commands_text.lower() or "https://" in commands_text.lower()
         self._add_check("data", "portal_data_verification_commands_safe", "failed" if unsafe_commands else "passed", "blocking", "verification-commands contains unsafe paths or remote URLs." if unsafe_commands else "verification-commands contains no local paths or remote URLs.")
@@ -453,13 +498,22 @@ class _PortalVerifier:
             self._add_check("requirements", "portal_require_attestation", "passed" if source.get("attestation_verification_status") == "passed" and source.get("current_attestation_zip_sha256") else "failed", "blocking", "Public Attestation verification evidence is present." if source.get("attestation_verification_status") == "passed" and source.get("current_attestation_zip_sha256") else "Passed Public Attestation verification evidence is required.")
         if self.require_accepted_evidence:
             external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+            accepted_verification = self.data_docs.get("accepted-evidence-verification-summary.json", {})
+            verification = accepted_verification.get("accepted_evidence_verification") if isinstance(accepted_verification.get("accepted_evidence_verification"), dict) else {}
             ok = (
-                external.get("external_review_status") == "accepted"
+                bool(self.data_docs.get("accepted-evidence-summary.json"))
+                and bool(accepted_verification)
+                and external.get("external_review_status") == "accepted"
                 and external.get("status") == "current"
                 and external.get("verification_status") == "passed"
                 and external.get("accepted_evidence_verification_status") == "passed"
+                and verification.get("accepted_evidence_verification_status") == "passed"
                 and bool(external.get("accepted_evidence_zip_sha256"))
                 and bool(external.get("accepted_evidence_manifest_hash"))
+                and bool(external.get("accepted_evidence_verification_report_hash"))
+                and external.get("accepted_evidence_zip_sha256") == verification.get("accepted_evidence_zip_sha256")
+                and external.get("accepted_evidence_manifest_hash") == verification.get("accepted_evidence_manifest_hash")
+                and external.get("accepted_evidence_verification_report_hash") == verification.get("accepted_evidence_verification_report_hash")
             )
             self._add_check("requirements", "portal_require_accepted_evidence", "passed" if ok else "failed", "blocking", "Current accepted external review evidence is present." if ok else "Current accepted external review evidence is required.")
 

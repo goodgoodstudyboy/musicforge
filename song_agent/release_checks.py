@@ -11822,6 +11822,8 @@ def _v77_attestation_accepted_evidence_smoke(root: Path) -> tuple[bool, str]:
         portal_store.export_portal(portfolio_id)
         portal_store.build_zip(portfolio_id)
         portal_verification = verify_release_portfolio_governance_attestation_portal(portal_store.zip_path(portfolio_id), strict=True, require_current=True, require_registry=True, require_attestation=True, require_accepted_evidence=True)
+        forged_registry = verify_release_portfolio_governance_attestation_registry(_v76_rewrite_zip(registry_store.zip_path(portfolio_id), base / "forged-registry-summary-v77.zip", _v77_remove_registry_accepted_verification_sidecar), strict=True, require_current=True, require_published=True, require_accepted_evidence=True)
+        forged_portal = verify_release_portfolio_governance_attestation_portal(_v76_rewrite_zip(portal_store.zip_path(portfolio_id), base / "forged-portal-summary-v77.zip", _v77_remove_portal_accepted_verification_sidecar), strict=True, require_current=True, require_registry=True, require_attestation=True, require_accepted_evidence=True)
 
         rejected_blocked = False
         try:
@@ -11854,6 +11856,8 @@ def _v77_attestation_accepted_evidence_smoke(root: Path) -> tuple[bool, str]:
             and accepted_verification.get("status") == "passed"
             and registry_verification.get("status") == "passed"
             and portal_verification.get("status") == "passed"
+            and _v38_check_status(forged_registry, "registry_require_accepted_evidence") == "failed"
+            and _v38_check_status(forged_portal, "portal_require_accepted_evidence") == "failed"
             and rejected_blocked
             and stale_blocked
             and _v38_check_status(report_tamper, "accepted_evidence_report_source_hash") == "failed"
@@ -11873,6 +11877,7 @@ def _v77_attestation_accepted_evidence_smoke(root: Path) -> tuple[bool, str]:
         )
         return ok, (
             f"accepted={evidence.get('status')}/{accepted_verification.get('status')}, registry={registry_verification.get('status')}, portal={portal_verification.get('status')}, "
+            f"forged_registry={_v38_check_status(forged_registry, 'registry_require_accepted_evidence')}, forged_portal={_v38_check_status(forged_portal, 'portal_require_accepted_evidence')}, "
             f"rejected={rejected_blocked}, stale={stale_blocked}, "
             f"report_source={_v38_check_status(report_tamper, 'accepted_evidence_report_source_hash')}, summary={_v38_check_status(summary_tamper, 'accepted_evidence_summary_public_status')}, "
             f"duplicate={_v38_check_status(duplicate, 'accepted_evidence_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'accepted_evidence_zip_entry_path_safe')}, "
@@ -11942,6 +11947,28 @@ def _v77_spoof_accepted_manifest(data: bytes) -> bytes:
     manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
     manifest["integrity_hash"] = accepted_evidence_manifest_hash(manifest)
     return _v74_json_doc(manifest)
+
+
+def _v77_remove_registry_accepted_verification_sidecar(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_registry import registry_manifest_hash
+
+    manifest = _v74_read_json_doc(docs, "manifest.json")
+    docs.pop("data/accepted-evidence-verification-summary.json", None)
+    manifest.pop("external_review_verification", None)
+    manifest["files"] = [item for item in manifest.get("files", []) if not (isinstance(item, dict) and item.get("path") == "data/accepted-evidence-verification-summary.json")]
+    manifest["integrity_hash"] = registry_manifest_hash(manifest)
+    docs["manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v77_remove_portal_accepted_verification_sidecar(docs: dict[str, bytes]) -> None:
+    from song_agent.release_portfolio_governance_attestation_portal import portal_manifest_hash
+
+    manifest = _v74_read_json_doc(docs, "portal-manifest.json")
+    docs.pop("data/accepted-evidence-verification-summary.json", None)
+    manifest.pop("external_review_verification", None)
+    manifest["files"] = [item for item in manifest.get("files", []) if not (isinstance(item, dict) and item.get("path") == "data/accepted-evidence-verification-summary.json")]
+    manifest["integrity_hash"] = portal_manifest_hash(manifest)
+    docs["portal-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v76_rewrite_zip(source_zip: Path, target_zip: Path, mutate) -> Path:

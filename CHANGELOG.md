@@ -1,5 +1,16 @@
 # Changelog
 
+## v7.7.1 - 2026-06-11
+
+### Fixed
+- Registry and Portal exports now include `data/accepted-evidence-verification-summary.json` and bind it through their manifests.
+- Registry/Portal `--require-accepted-evidence` now requires the public summary, manifest external review fields, and verification sidecar to agree, so forged accepted-evidence summaries no longer pass.
+- v7.7 release-check smoke now covers forged Registry and Portal accepted-evidence summaries.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_accepted_evidence.py tests\test_release_check.py::test_v77_attestation_accepted_evidence_smoke -q`
+- `python -m pytest tests\test_release_portfolio_governance_attestation_registry.py tests\test_release_portfolio_governance_attestation_portal.py -q`
+
 ## v7.7.0 - 2026-06-11
 
 ### Added
