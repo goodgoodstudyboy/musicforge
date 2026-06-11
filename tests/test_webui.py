@@ -249,6 +249,13 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="portfolio-governance-attestation-accepted-evidence-archive"' in html
     assert "/governance-attestation-accepted-evidence" in html
     assert "/governance-attestation-accepted-evidence.zip" in html
+    assert "Transparency Feed" in html
+    assert 'id="portfolio-governance-attestation-transparency-refresh"' in html
+    assert 'id="portfolio-governance-attestation-transparency-export"' in html
+    assert 'id="portfolio-governance-attestation-transparency-zip"' in html
+    assert 'id="portfolio-governance-attestation-transparency-verify"' in html
+    assert "/governance-attestation-transparency" in html
+    assert "/governance-attestation-transparency.zip" in html
     assert "/api/release-portfolio-audits" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/refresh" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/export/zip" in html
@@ -263,6 +270,7 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal-review/pack/verify" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal-review/responses/import" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence/verify" in html
+    assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency/verify" in html
     assert "/api/release-portfolio-governance-queues" in html
     assert "/governance-queues" in html
     assert "/run-safe" in html

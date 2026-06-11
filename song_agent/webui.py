@@ -3320,6 +3320,8 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       try { governanceAttestationPortalReviewData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-portal-review`); } catch (err) {}
       let governanceAttestationAcceptedEvidenceData = { accepted_evidence: {}, summary: {}, verification: {} };
       try { governanceAttestationAcceptedEvidenceData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-accepted-evidence`); } catch (err) {}
+      let governanceAttestationTransparencyData = { feed: {}, summary: {}, verification: {} };
+      try { governanceAttestationTransparencyData = await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency`); } catch (err) {}
       const report = reportData.report || {};
       const summary = report.summary || reportData.summary || {};
       const governanceAuditSummary = governanceAuditData.summary || {};
@@ -3335,6 +3337,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const governanceAttestationPortalReviewSummary = governanceAttestationPortalReviewData.summary || {};
       const governanceAttestationPortalReviewResponses = governanceAttestationPortalReviewData.responses || [];
       const governanceAttestationAcceptedEvidenceSummary = governanceAttestationAcceptedEvidenceData.summary || {};
+      const governanceAttestationTransparencySummary = governanceAttestationTransparencyData.summary || {};
       const governanceAttestationRegistryRows = (governanceAttestationRegistry.entries || []).slice(-6).reverse().map((entry) => `
         <tr>
           <td>${escapeHtml(entry.entry_id || "-")}</td>
@@ -3643,6 +3646,23 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="portfolio-governance-attestation-accepted-evidence-verify" type="button">Verify Accepted Evidence ZIP</button>
           <button class="secondary" id="portfolio-governance-attestation-accepted-evidence-archive" type="button">Archive Accepted Evidence</button>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-accepted-evidence.zip">Download Accepted Evidence ZIP</a>
+        </div>
+        <div class="panel-title subhead"><span>Transparency Feed</span></div>
+        <div class="summary-grid">
+          ${metric("Feed", governanceAttestationTransparencySummary.status || "missing")}
+          ${metric("Current Entry", governanceAttestationTransparencySummary.current_entry_id || "-")}
+          ${metric("External Review", governanceAttestationTransparencySummary.external_review_status || "-")}
+          ${metric("Events", governanceAttestationTransparencySummary.event_count ?? 0)}
+          ${metric("Notices", governanceAttestationTransparencySummary.notice_count ?? 0)}
+          ${metric("Verification", governanceAttestationTransparencySummary.verification_status || "-")}
+          ${metric("Stale", governanceAttestationTransparencySummary.stale ? "yes" : "-")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="portfolio-governance-attestation-transparency-refresh" type="button">Refresh Transparency</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-export" type="button">Export Transparency</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-zip" type="button">Build Transparency ZIP</button>
+          <button class="secondary" id="portfolio-governance-attestation-transparency-verify" type="button">Verify Transparency ZIP</button>
+          <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-transparency.zip">Download Transparency ZIP</a>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4023,6 +4043,38 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ profile: "public_summary", reason }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-refresh", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", require_accepted_evidence: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-export", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-zip", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency/zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("portfolio-governance-attestation-transparency-verify", async () => {
+        await api(`/api/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: "public_summary", strict: true, require_current: true, require_accepted_evidence: true, require_contiguous_chain: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

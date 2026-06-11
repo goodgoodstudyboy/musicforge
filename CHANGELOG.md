@@ -1,5 +1,16 @@
 # Changelog
 
+## v7.8.0 - 2026-06-11
+
+### Added
+- Public Attestation Transparency Feed for binding current Registry, Portal, Public Attestation, and Accepted Evidence fingerprints into a public-safe event chain.
+- Transparency export/ZIP package with feed, report, notices, package fingerprints, binding summaries, and offline verifier.
+- API, CLI, Studio controls, and release-check matrix coverage for Transparency refresh/export/ZIP/verify flows.
+- Transparency verifier covers event hash-chain tamper, data sidecar binding, duplicate/path/backslash/nested `.musicforge` guards, manifest spoofing, stale export/ZIP, package type, and redaction scans.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_transparency.py tests\test_server_release_portfolio_governance_attestation_transparency.py tests\test_cli_release_operations.py::test_release_portfolio_governance_attestation_transparency_cli_export_verify tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v78_attestation_transparency_feed_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v7.7.1 - 2026-06-11
 
 ### Fixed
