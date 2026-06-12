@@ -36,6 +36,7 @@ REQUIRED_ENTRIES = {
     "data/portfolio-index.json",
     "data/package-index.json",
     "data/verification-index.json",
+    "data/public-package-verification-index.json",
     "data/risk-register.json",
     "data/transparency-index.json",
     "data/acknowledgement-index.json",
@@ -265,6 +266,7 @@ class _PublicTrustCenterVerifier:
             "portfolio-index.json",
             "package-index.json",
             "verification-index.json",
+            "public-package-verification-index.json",
             "risk-register.json",
             "transparency-index.json",
             "acknowledgement-index.json",
@@ -312,12 +314,16 @@ class _PublicTrustCenterVerifier:
             ("acknowledgement-index.json", "acknowledgements"),
         ):
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_trust_center_binding", self.data_docs.get(name, {}).get(key), data_doc.get(key), f"{name} binds trust-center-data.{key}")
+        sidecar_doc = self.data_docs.get("public-package-verification-index.json", {})
+        self._add_exact_check("data", "ptc_data_public_package_verification_index_json_trust_center_binding", sidecar_doc.get("packages"), data_doc.get("package_verification_summaries"), "public-package-verification-index.json binds trust-center-data.package_verification_summaries")
+        self._verify_package_verification_sidecar()
 
     def _verify_manifest_bindings(self) -> None:
         data = self.manifest.get("data") if isinstance(self.manifest.get("data"), dict) else {}
         self._add_exact_check("manifest", "ptc_manifest_data_trust_center_hash", data.get("trust_center_data_hash"), stable_hash(self.data_docs.get("trust-center-data.json", {})), "Manifest trust-center-data hash")
         self._add_exact_check("manifest", "ptc_manifest_data_package_index_hash", data.get("package_index_hash"), stable_hash(self.data_docs.get("package-index.json", {})), "Manifest package-index hash")
         self._add_exact_check("manifest", "ptc_manifest_data_verification_index_hash", data.get("verification_index_hash"), stable_hash(self.data_docs.get("verification-index.json", {})), "Manifest verification-index hash")
+        self._add_exact_check("manifest", "ptc_manifest_data_public_package_verification_index_hash", data.get("public_package_verification_index_hash"), stable_hash(self.data_docs.get("public-package-verification-index.json", {})), "Manifest public-package-verification-index hash")
         self._add_exact_check("manifest", "ptc_manifest_data_risk_register_hash", data.get("risk_register_hash"), stable_hash(self.data_docs.get("risk-register.json", {})), "Manifest risk-register hash")
         summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
         for key in ("release_count", "portfolio_count", "public_package_count", "verification_count"):
@@ -354,6 +360,22 @@ class _PublicTrustCenterVerifier:
             if _contains_local_path(text) or ".musicforge/" in lower:
                 bad.append("local_path")
             self._add_check("html", f"ptc_html_{page}_safe", "failed" if bad else "passed", "blocking", f"{page} contains forbidden HTML content: " + ", ".join(bad) if bad else f"{page} contains no forbidden HTML content.")
+
+    def _verify_package_verification_sidecar(self) -> None:
+        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        package_doc = self.data_docs.get("package-index.json", {})
+        verification_doc = self.data_docs.get("verification-index.json", {})
+        sidecar_doc = self.data_docs.get("public-package-verification-index.json", {})
+        packages = package_doc.get("packages") if isinstance(package_doc.get("packages"), list) else []
+        verifications = verification_doc.get("verifications") if isinstance(verification_doc.get("verifications"), list) else []
+        sidecar_packages = sidecar_doc.get("packages") if isinstance(sidecar_doc.get("packages"), list) else []
+        sidecar_verifications = sidecar_doc.get("verifications") if isinstance(sidecar_doc.get("verifications"), list) else []
+        expected_packages = _package_verification_sidecars(source)
+        expected_verifications = _verification_sidecars(source)
+        self._add_exact_check("data", "ptc_package_fingerprint_verification_summary_binding", sidecar_packages, expected_packages, "Public package fingerprints bind verification sidecar")
+        self._add_exact_check("data", "ptc_verification_index_sidecar_binding", sidecar_verifications, expected_verifications, "Verification index binds verification sidecar")
+        self._add_exact_check("data", "ptc_full_resign_package_fingerprint", packages, _packages_from_sidecars(sidecar_packages), "Package index fingerprints match independent verification sidecar")
+        self._add_exact_check("data", "ptc_full_resign_verification_fingerprint", verifications, _verifications_from_sidecars(sidecar_verifications), "Verification index fingerprints match independent verification sidecar")
 
     def _verify_requirements(self) -> None:
         packages = self.report_doc.get("package_index") if isinstance(self.report_doc.get("package_index"), list) else []
@@ -498,6 +520,104 @@ def _package_index(source: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _verification_index(source: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted([dict(item) for item in source.get("verification_fingerprints", []) if isinstance(item, dict)], key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+    packages = _package_index(source)
+    verifications = {
+        _fingerprint_key(item): dict(item)
+        for item in source.get("verification_fingerprints", [])
+        if isinstance(item, dict)
+    }
+    rows: list[dict[str, Any]] = []
+    for package in packages:
+        verification = verifications.get(_fingerprint_key(package), {})
+        rows.append(
+            {
+                "portfolio_id": package.get("portfolio_id"),
+                "profile": package.get("profile"),
+                "package_type": package.get("package_type"),
+                "zip_sha256": package.get("zip_sha256"),
+                "zip_size_bytes": package.get("zip_size_bytes"),
+                "manifest_hash": package.get("manifest_hash"),
+                "verification_hash": package.get("verification_hash"),
+                "verification_status": package.get("verification_status"),
+                "verification_report_hash": verification.get("verification_hash") or package.get("verification_hash"),
+                "verification_report_status": verification.get("verification_status") or package.get("verification_status"),
+                "blocker_count": verification.get("blocker_count", 0),
+            }
+        )
+    return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+    packages = {
+        _fingerprint_key(item): dict(item)
+        for item in source.get("public_package_fingerprints", [])
+        if isinstance(item, dict)
+    }
+    rows: list[dict[str, Any]] = []
+    for verification in _verification_index(source):
+        package = packages.get(_fingerprint_key(verification), {})
+        rows.append(
+            {
+                "portfolio_id": verification.get("portfolio_id"),
+                "profile": verification.get("profile"),
+                "package_type": verification.get("package_type"),
+                "verification_hash": verification.get("verification_hash"),
+                "verification_status": verification.get("verification_status"),
+                "blocker_count": verification.get("blocker_count", 0),
+                "zip_sha256": package.get("zip_sha256") or verification.get("zip_sha256"),
+                "zip_size_bytes": package.get("zip_size_bytes") or verification.get("zip_size_bytes"),
+                "manifest_hash": package.get("manifest_hash") or verification.get("manifest_hash"),
+            }
+        )
+    return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _packages_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in sidecars:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "portfolio_id": item.get("portfolio_id"),
+                "profile": item.get("profile"),
+                "package_type": item.get("package_type"),
+                "zip_sha256": item.get("zip_sha256"),
+                "zip_size_bytes": item.get("zip_size_bytes"),
+                "manifest_hash": item.get("manifest_hash"),
+                "verification_hash": item.get("verification_hash"),
+                "verification_status": item.get("verification_status"),
+            }
+        )
+    return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _verifications_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in sidecars:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "portfolio_id": item.get("portfolio_id"),
+                "profile": item.get("profile"),
+                "package_type": item.get("package_type"),
+                "zip_sha256": item.get("zip_sha256"),
+                "zip_size_bytes": item.get("zip_size_bytes"),
+                "manifest_hash": item.get("manifest_hash"),
+                "verification_hash": item.get("verification_hash"),
+                "verification_status": item.get("verification_status"),
+                "blocker_count": item.get("blocker_count", 0),
+            }
+        )
+    return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _fingerprint_key(item: dict[str, Any]) -> tuple[str, str, str]:
+    return (str(item.get("portfolio_id") or ""), str(item.get("package_type") or ""), str(item.get("profile") or ""))
 
 
 def _is_safe_zip_entry(name: str) -> bool:

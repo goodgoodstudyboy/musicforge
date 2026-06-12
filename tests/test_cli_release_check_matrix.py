@@ -66,6 +66,14 @@ def test_release_check_cli_group_timing(tmp_path: Path) -> None:
     }
 
 
+def test_release_check_cli_v8_profile_lists_public_trust_center() -> None:
+    completed = _run_cli(["release-check", "--profile", "v8", "--list", "--json"])
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert [item["check_id"] for item in payload["checks"]] == ["v80.public_trust_center_smoke"]
+
+
 def test_release_check_cli_empty_selection_fails() -> None:
     completed = _run_cli(["release-check", "--profile", "latest", "--group", "audio", "--json"])
 

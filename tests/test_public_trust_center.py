@@ -87,6 +87,7 @@ def test_public_trust_center_roundtrip_and_verifier(tmp_path: Path, monkeypatch)
         index = archive.read("index.html").decode("utf-8")
     assert "trust-center-manifest.json" in names
     assert "data/package-index.json" in names
+    assert "data/public-package-verification-index.json" in names
     assert "nested/fake.zip" not in names
     assert "<script" not in index.lower()
 
@@ -130,6 +131,7 @@ def test_public_trust_center_verifier_catches_full_resign_and_paths(tmp_path: Pa
     report_tamper = _rewrite_zip(source_zip, tmp_path / "report-tamper.zip", _tamper_report_summary_and_resign)
     data_tamper = _rewrite_zip(source_zip, tmp_path / "data-tamper.zip", _tamper_data_package_index_and_resign)
     html_tamper = _rewrite_zip(source_zip, tmp_path / "html-tamper.zip", lambda docs: _tamper_html_and_resign(docs, "index.html"))
+    fingerprint_tamper = _rewrite_zip(source_zip, tmp_path / "fingerprint-tamper.zip", _tamper_package_fingerprint_full_resign)
     duplicate = _duplicate_zip(source_zip, tmp_path / "duplicate.zip")
     dangerous = _rewrite_zip(source_zip, tmp_path / "dangerous.zip", lambda docs: docs.update({"../evil.txt": b"x"}))
     backslash = _backslash_zip(tmp_path / "backslash.zip")
@@ -141,6 +143,7 @@ def test_public_trust_center_verifier_catches_full_resign_and_paths(tmp_path: Pa
     assert any(item["check_id"] == "ptc_report_summary_release_count" for item in verify_public_trust_center_package(report_tamper, strict=True)["blockers"])
     assert any(item["check_id"] == "ptc_data_package_index_json_semantics" for item in verify_public_trust_center_package(data_tamper, strict=True)["blockers"])
     assert any(item["check_id"] == "ptc_html_index.html_semantics" for item in verify_public_trust_center_package(html_tamper, strict=True)["blockers"])
+    assert any(item["check_id"] == "ptc_full_resign_package_fingerprint" for item in verify_public_trust_center_package(fingerprint_tamper, strict=True)["blockers"])
     assert any(item["check_id"] == "ptc_zip_duplicate_entries" for item in verify_public_trust_center_package(duplicate, strict=True)["blockers"])
     assert any(item["check_id"] == "ptc_zip_entry_path_safe" for item in verify_public_trust_center_package(dangerous, strict=True)["blockers"])
     assert any(item["check_id"] == "ptc_zip_entry_path_safe" for item in verify_public_trust_center_package(backslash, strict=True)["blockers"])
@@ -208,6 +211,49 @@ def _tamper_html_and_resign(docs: dict[str, bytes], page: str) -> None:
         if isinstance(row, dict) and row.get("path") == page:
             row["content_hash"] = hashlib.sha256(docs[page]).hexdigest()
     _sync_manifest_file(manifest, page, docs[page])
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    docs["trust-center-manifest.json"] = _doc_bytes(manifest)
+
+
+def _tamper_package_fingerprint_full_resign(docs: dict[str, bytes]) -> None:
+    report = _read_doc(docs, "trust-center-report.json")
+    manifest = _read_doc(docs, "trust-center-manifest.json")
+    trust_data = _read_doc(docs, "data/trust-center-data.json")
+    package_index = _read_doc(docs, "data/package-index.json")
+    verification_index = _read_doc(docs, "data/verification-index.json")
+    old_source_hash = report["source_hash"]
+    if report.get("source", {}).get("public_package_fingerprints"):
+        report["source"]["public_package_fingerprints"][0]["zip_sha256"] = "f" * 64
+        report["package_index"][0]["zip_sha256"] = "f" * 64
+        package_index["packages"][0]["zip_sha256"] = "f" * 64
+        trust_data["packages"][0]["zip_sha256"] = "f" * 64
+    if report.get("source", {}).get("verification_fingerprints"):
+        report["source"]["verification_fingerprints"][0]["zip_sha256"] = "f" * 64
+        verification_index["verifications"][0]["zip_sha256"] = "f" * 64
+        trust_data["verifications"][0]["zip_sha256"] = "f" * 64
+    report["source_hash"] = stable_hash(report["source"])
+    for payload in (trust_data, package_index, verification_index):
+        payload["source_hash"] = report["source_hash"]
+    report["integrity_hash"] = public_trust_center_report_hash(report)
+    docs["trust-center-report.json"] = _doc_bytes(report)
+    docs["data/trust-center-data.json"] = _doc_bytes(trust_data)
+    docs["data/package-index.json"] = _doc_bytes(package_index)
+    docs["data/verification-index.json"] = _doc_bytes(verification_index)
+    for page in ("index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+        text = docs[page].decode("utf-8").replace(old_source_hash, report["source_hash"]).replace("data-report-integrity=\"" + manifest["trust_center_report"]["integrity_hash"] + "\"", "data-report-integrity=\"" + report["integrity_hash"] + "\"")
+        docs[page] = text.encode("utf-8")
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("data", {})["trust_center_data_hash"] = stable_hash(trust_data)
+    manifest.setdefault("data", {})["package_index_hash"] = stable_hash(package_index)
+    manifest.setdefault("data", {})["verification_index_hash"] = stable_hash(verification_index)
+    for row in manifest.get("pages", []) if isinstance(manifest.get("pages"), list) else []:
+        if isinstance(row, dict) and row.get("path") in docs:
+            row["source_hash"] = report["source_hash"]
+            row["content_hash"] = hashlib.sha256(docs[row["path"]]).hexdigest()
+    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/package-index.json", "data/verification-index.json", "index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+        _sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
     docs["trust-center-manifest.json"] = _doc_bytes(manifest)
 

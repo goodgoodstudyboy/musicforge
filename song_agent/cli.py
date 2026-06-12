@@ -65,7 +65,7 @@ def build_doctor_parser() -> argparse.ArgumentParser:
 
 def build_release_check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
-    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "publish"], help="Release-check profile to run.")
     parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
     parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
     parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")

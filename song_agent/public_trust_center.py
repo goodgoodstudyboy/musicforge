@@ -264,6 +264,7 @@ class PublicTrustCenterStore:
                     "trust_center_data_hash": stable_hash(data_docs["trust-center-data.json"]),
                     "package_index_hash": stable_hash(data_docs["package-index.json"]),
                     "verification_index_hash": stable_hash(data_docs["verification-index.json"]),
+                    "public_package_verification_index_hash": stable_hash(data_docs["public-package-verification-index.json"]),
                     "risk_register_hash": stable_hash(data_docs["risk-register.json"]),
                 },
                 "files": sorted(files, key=lambda item: item["path"]),
@@ -558,6 +559,11 @@ def public_trust_center_data_documents(report: dict[str, Any]) -> dict[str, dict
     risk_register = {"source_hash": source_hash, "risks": report.get("risk_register", [])}
     transparency_index = {"source_hash": source_hash, "transparency": source.get("transparency", [])}
     acknowledgement_index = {"source_hash": source_hash, "acknowledgements": source.get("acknowledgements", [])}
+    verification_sidecar = {
+        "source_hash": source_hash,
+        "packages": _package_verification_sidecars(source),
+        "verifications": _verification_sidecars(source),
+    }
     data = {
         "source_hash": source_hash,
         "summary": report.get("summary", {}),
@@ -565,6 +571,7 @@ def public_trust_center_data_documents(report: dict[str, Any]) -> dict[str, dict
         "portfolios": portfolio_index["portfolios"],
         "packages": package_index["packages"],
         "verifications": verification_index["verifications"],
+        "package_verification_summaries": verification_sidecar["packages"],
         "risks": risk_register["risks"],
         "transparency": transparency_index["transparency"],
         "acknowledgements": acknowledgement_index["acknowledgements"],
@@ -575,6 +582,7 @@ def public_trust_center_data_documents(report: dict[str, Any]) -> dict[str, dict
         "portfolio-index.json": portfolio_index,
         "package-index.json": package_index,
         "verification-index.json": verification_index,
+        "public-package-verification-index.json": verification_sidecar,
         "risk-register.json": risk_register,
         "transparency-index.json": transparency_index,
         "acknowledgement-index.json": acknowledgement_index,
@@ -721,6 +729,63 @@ def _package_index(source: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _verification_index(source: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted([dict(item) for item in source.get("verification_fingerprints", []) if isinstance(item, dict)], key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+    packages = _package_index(source)
+    verifications = {
+        _fingerprint_key(item): dict(item)
+        for item in source.get("verification_fingerprints", [])
+        if isinstance(item, dict)
+    }
+    rows: list[dict[str, Any]] = []
+    for package in packages:
+        verification = verifications.get(_fingerprint_key(package), {})
+        rows.append(
+            {
+                "portfolio_id": package.get("portfolio_id"),
+                "profile": package.get("profile"),
+                "package_type": package.get("package_type"),
+                "zip_sha256": package.get("zip_sha256"),
+                "zip_size_bytes": package.get("zip_size_bytes"),
+                "manifest_hash": package.get("manifest_hash"),
+                "verification_hash": package.get("verification_hash"),
+                "verification_status": package.get("verification_status"),
+                "verification_report_hash": verification.get("verification_hash") or package.get("verification_hash"),
+                "verification_report_status": verification.get("verification_status") or package.get("verification_status"),
+                "blocker_count": verification.get("blocker_count", 0),
+            }
+        )
+    return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+    packages = {
+        _fingerprint_key(item): dict(item)
+        for item in source.get("public_package_fingerprints", [])
+        if isinstance(item, dict)
+    }
+    rows: list[dict[str, Any]] = []
+    for verification in _verification_index(source):
+        package = packages.get(_fingerprint_key(verification), {})
+        rows.append(
+            {
+                "portfolio_id": verification.get("portfolio_id"),
+                "profile": verification.get("profile"),
+                "package_type": verification.get("package_type"),
+                "verification_hash": verification.get("verification_hash"),
+                "verification_status": verification.get("verification_status"),
+                "blocker_count": verification.get("blocker_count", 0),
+                "zip_sha256": package.get("zip_sha256") or verification.get("zip_sha256"),
+                "zip_size_bytes": package.get("zip_size_bytes") or verification.get("zip_size_bytes"),
+                "manifest_hash": package.get("manifest_hash") or verification.get("manifest_hash"),
+            }
+        )
+    return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _fingerprint_key(item: dict[str, Any]) -> tuple[str, str, str]:
+    return (str(item.get("portfolio_id") or ""), str(item.get("package_type") or ""), str(item.get("profile") or ""))
 
 
 def _risk_register(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:

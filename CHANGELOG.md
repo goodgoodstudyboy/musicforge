@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.0.1 - 2026-06-12
+
+### Fixed
+- Public Trust Center exports now include `data/public-package-verification-index.json`, an independent sidecar binding public package fingerprints to their verification summaries.
+- The Public Trust Center offline verifier now cross-checks package-index and verification-index entries against the sidecar, so fully re-signed forged package fingerprints fail verification.
+- `release-check` now includes a `v8` profile and the v8 smoke covers full-resign package fingerprint forgery.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center.py tests\test_release_check.py::test_v80_public_trust_center_smoke -q`
+
 ## v8.0.0 - 2026-06-12
 
 ### Added

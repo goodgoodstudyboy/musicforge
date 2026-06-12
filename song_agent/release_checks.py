@@ -12338,6 +12338,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
         report_tamper = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-report-tamper.zip", _v80_tamper_trust_center_report), strict=True)
         data_tamper = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-data-tamper.zip", _v80_tamper_trust_center_data), strict=True)
         html_tamper = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-html-tamper.zip", _v80_tamper_trust_center_html), strict=True)
+        full_resign = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-fingerprint-full-resign.zip", _v80_tamper_trust_center_package_fingerprint_full_resign), strict=True, require_registry_current=True, require_portal_current=True, require_transparency_current=True, require_acknowledgement_current=True)
         duplicate = verify_public_trust_center_package(_v43_duplicate_submission_zip(source_zip, base / "ptc-duplicate.zip"), strict=True)
         dangerous = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
         backslash = verify_public_trust_center_package(_v38_backslash_entry_zip(base / "ptc-backslash.zip"), strict=True)
@@ -12367,6 +12368,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(report_tamper, "ptc_report_summary_release_count") == "failed"
             and _v38_check_status(data_tamper, "ptc_data_package_index_json_semantics") == "failed"
             and _v38_check_status(html_tamper, "ptc_html_index.html_semantics") == "failed"
+            and _v38_check_status(full_resign, "ptc_full_resign_package_fingerprint") == "failed"
             and _v38_check_status(duplicate, "ptc_zip_duplicate_entries") == "failed"
             and _v38_check_status(dangerous, "ptc_zip_entry_path_safe") == "failed"
             and _v38_check_status(backslash, "ptc_zip_entry_path_safe") == "failed"
@@ -12384,7 +12386,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
         return ok, (
             f"trust={report.get('status')}/{verification.get('status')}, zip={bool(zip_info.get('sha256'))}, archive={bool(archive.get('zip_sha256'))}, "
             f"report={_v38_check_status(report_tamper, 'ptc_report_summary_release_count')}, data={_v38_check_status(data_tamper, 'ptc_data_package_index_json_semantics')}, "
-            f"html={_v38_check_status(html_tamper, 'ptc_html_index.html_semantics')}, duplicate={_v38_check_status(duplicate, 'ptc_zip_duplicate_entries')}, "
+            f"html={_v38_check_status(html_tamper, 'ptc_html_index.html_semantics')}, full_resign={_v38_check_status(full_resign, 'ptc_full_resign_package_fingerprint')}, duplicate={_v38_check_status(duplicate, 'ptc_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'ptc_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptc_zip_entry_path_safe')}, "
             f"case_musicforge={_v38_check_status(case_musicforge, 'ptc_zip_no_nested_internal_entries')}, nested={_v38_check_status(nested, 'ptc_zip_no_nested_internal_entries')}, "
             f"spoof={_v38_check_status(spoof, 'ptc_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptc_redaction_scan')}, "
@@ -12434,6 +12436,51 @@ def _v80_tamper_trust_center_html(docs: dict[str, bytes]) -> None:
         if isinstance(item, dict) and item.get("path") == "index.html":
             item["content_hash"] = hashlib.sha256(docs["index.html"]).hexdigest()
     _v74_sync_manifest_file(manifest, "index.html", docs["index.html"])
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v80_tamper_trust_center_package_fingerprint_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center import public_trust_center_manifest_hash, public_trust_center_report_hash
+
+    report = _v74_read_json_doc(docs, "trust-center-report.json")
+    manifest = _v74_read_json_doc(docs, "trust-center-manifest.json")
+    trust_data = _v74_read_json_doc(docs, "data/trust-center-data.json")
+    package_index = _v74_read_json_doc(docs, "data/package-index.json")
+    verification_index = _v74_read_json_doc(docs, "data/verification-index.json")
+    old_source_hash = str(report.get("source_hash") or "")
+    old_report_hash = str(report.get("integrity_hash") or "")
+    if report.get("source", {}).get("public_package_fingerprints"):
+        report["source"]["public_package_fingerprints"][0]["zip_sha256"] = "f" * 64
+        report["package_index"][0]["zip_sha256"] = "f" * 64
+        package_index["packages"][0]["zip_sha256"] = "f" * 64
+        trust_data["packages"][0]["zip_sha256"] = "f" * 64
+    if report.get("source", {}).get("verification_fingerprints"):
+        report["source"]["verification_fingerprints"][0]["zip_sha256"] = "f" * 64
+        verification_index["verifications"][0]["zip_sha256"] = "f" * 64
+        trust_data["verifications"][0]["zip_sha256"] = "f" * 64
+    report["source_hash"] = stable_hash(report["source"])
+    for payload in (trust_data, package_index, verification_index):
+        payload["source_hash"] = report["source_hash"]
+    report["integrity_hash"] = public_trust_center_report_hash(report)
+    docs["trust-center-report.json"] = _v74_json_doc(report)
+    docs["data/trust-center-data.json"] = _v74_json_doc(trust_data)
+    docs["data/package-index.json"] = _v74_json_doc(package_index)
+    docs["data/verification-index.json"] = _v74_json_doc(verification_index)
+    for page in ("index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+        docs[page] = docs[page].decode("utf-8").replace(old_source_hash, report["source_hash"]).replace(old_report_hash, report["integrity_hash"]).encode("utf-8")
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("data", {})["trust_center_data_hash"] = stable_hash(trust_data)
+    manifest.setdefault("data", {})["package_index_hash"] = stable_hash(package_index)
+    manifest.setdefault("data", {})["verification_index_hash"] = stable_hash(verification_index)
+    for item in manifest.get("pages", []) if isinstance(manifest.get("pages"), list) else []:
+        if isinstance(item, dict) and item.get("path") in docs:
+            item["source_hash"] = report["source_hash"]
+            item["content_hash"] = hashlib.sha256(docs[item["path"]]).hexdigest()
+    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/package-index.json", "data/verification-index.json", "index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+        _v74_sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
     docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
 

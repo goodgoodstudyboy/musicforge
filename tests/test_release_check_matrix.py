@@ -29,6 +29,7 @@ def test_release_check_definitions_are_valid() -> None:
 def test_release_check_profile_and_filters() -> None:
     latest = select_check_definitions(profile="latest")
     v7 = select_check_definitions(profile="v7")
+    v8 = select_check_definitions(profile="v8")
     portal = select_check_definitions(profile="latest", groups=["portal"])
     since = select_check_definitions(profile="v7", since="7.2")
     only = select_check_definitions(profile="full", only=["v75.release_check_matrix_smoke"])
@@ -41,6 +42,7 @@ def test_release_check_profile_and_filters() -> None:
     assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in latest}
     assert "v80.public_trust_center_smoke" in {definition.check_id for definition in latest}
     assert "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
+    assert {definition.check_id for definition in v8} == {"v80.public_trust_center_smoke"}
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
         "v76.attestation_portal_review_response_smoke",
