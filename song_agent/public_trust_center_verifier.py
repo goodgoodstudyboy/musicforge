@@ -272,6 +272,15 @@ class _PublicTrustCenterVerifier:
             "acknowledgement-index.json",
         ):
             self.data_docs[name] = self._read_json_entry(archive, f"data/{name}", "data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_parse")
+        sidecar_index = self.data_docs.get("public-package-verification-index.json", {})
+        for row in sidecar_index.get("sidecars", []) if isinstance(sidecar_index.get("sidecars"), list) else []:
+            if not isinstance(row, dict):
+                continue
+            path = str(row.get("path") or "")
+            if not path:
+                continue
+            entry = f"data/{path}"
+            self.data_docs[path] = self._read_json_entry(archive, entry, "data", f"ptc_data_{path.replace('/', '_').replace('-', '_').replace('.', '_')}_parse")
 
     def _verify_documents(self) -> None:
         if self.report_doc:
@@ -299,8 +308,11 @@ class _PublicTrustCenterVerifier:
         self._add_exact_check("report", "ptc_report_verification_index_semantics", self.report_doc.get("verification_index"), _verification_index(source), "Verification index")
 
     def _verify_data_documents(self) -> None:
-        expected_docs, _expected_pages = expected_public_trust_center_documents(self.report_doc)
+        sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
+        expected_docs, _expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs)
         for name, doc in self.data_docs.items():
+            if name.startswith("package-verification-summaries/"):
+                continue
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), self.report_doc.get("source_hash"), f"{name} source_hash")
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_semantics", doc, expected_docs.get(name), f"{name} semantic payload")
         data_doc = self.data_docs.get("trust-center-data.json", {})
@@ -330,7 +342,8 @@ class _PublicTrustCenterVerifier:
             self._add_exact_check("manifest", f"ptc_manifest_{key}", self.manifest.get(key), summary.get(key), f"Manifest {key}")
 
     def _verify_html(self, archive: zipfile.ZipFile) -> None:
-        _expected_docs, expected_pages = expected_public_trust_center_documents(self.report_doc)
+        sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
+        _expected_docs, expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs)
         pages = self.manifest.get("pages") if isinstance(self.manifest.get("pages"), list) else []
         page_rows = {str(item.get("path") or ""): item for item in pages if isinstance(item, dict)}
         source_hash = str(self.report_doc.get("source_hash") or "")
@@ -362,7 +375,6 @@ class _PublicTrustCenterVerifier:
             self._add_check("html", f"ptc_html_{page}_safe", "failed" if bad else "passed", "blocking", f"{page} contains forbidden HTML content: " + ", ".join(bad) if bad else f"{page} contains no forbidden HTML content.")
 
     def _verify_package_verification_sidecar(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
         package_doc = self.data_docs.get("package-index.json", {})
         verification_doc = self.data_docs.get("verification-index.json", {})
         sidecar_doc = self.data_docs.get("public-package-verification-index.json", {})
@@ -370,12 +382,21 @@ class _PublicTrustCenterVerifier:
         verifications = verification_doc.get("verifications") if isinstance(verification_doc.get("verifications"), list) else []
         sidecar_packages = sidecar_doc.get("packages") if isinstance(sidecar_doc.get("packages"), list) else []
         sidecar_verifications = sidecar_doc.get("verifications") if isinstance(sidecar_doc.get("verifications"), list) else []
-        expected_packages = _package_verification_sidecars(source)
-        expected_verifications = _verification_sidecars(source)
-        self._add_exact_check("data", "ptc_package_fingerprint_verification_summary_binding", sidecar_packages, expected_packages, "Public package fingerprints bind verification sidecar")
-        self._add_exact_check("data", "ptc_verification_index_sidecar_binding", sidecar_verifications, expected_verifications, "Verification index binds verification sidecar")
+        independent_sidecars = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
+        expected_index = _package_verification_index_from_independent_sidecars(self.report_doc.get("source_hash"), independent_sidecars)
+        self._add_exact_check("data", "ptc_package_fingerprint_verification_summary_binding", sidecar_packages, expected_index.get("packages"), "Public package fingerprints bind independent verification sidecars")
+        self._add_exact_check("data", "ptc_verification_index_sidecar_binding", sidecar_verifications, expected_index.get("verifications"), "Verification index binds independent verification sidecars")
         self._add_exact_check("data", "ptc_full_resign_package_fingerprint", packages, _packages_from_sidecars(sidecar_packages), "Package index fingerprints match independent verification sidecar")
         self._add_exact_check("data", "ptc_full_resign_verification_fingerprint", verifications, _verifications_from_sidecars(sidecar_verifications), "Verification index fingerprints match independent verification sidecar")
+        self._verify_independent_sidecar_hashes(sidecar_doc, independent_sidecars)
+
+    def _verify_independent_sidecar_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
+        rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
+        declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
+        actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
+        self._add_exact_check("data", "ptc_independent_verification_sidecar_set", sorted(declared), sorted(actual), "Declared independent verification sidecar set")
+        for path, row in sorted(declared.items()):
+            self._add_exact_check("data", "ptc_independent_verification_sidecar_hash", row.get("hash"), actual.get(path), f"Independent verification sidecar hash {path}")
 
     def _verify_requirements(self) -> None:
         packages = self.report_doc.get("package_index") if isinstance(self.report_doc.get("package_index"), list) else []
@@ -550,6 +571,44 @@ def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
+def _package_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    packages: list[dict[str, Any]] = []
+    verifications: list[dict[str, Any]] = []
+    rows = []
+    for path, doc in sorted(sidecars.items()):
+        if not isinstance(doc, dict):
+            continue
+        package = dict(doc.get("package") if isinstance(doc.get("package"), dict) else {})
+        package["sidecar_path"] = path
+        package["sidecar_hash"] = stable_hash(doc)
+        packages.append(package)
+        verification = doc.get("verification") if isinstance(doc.get("verification"), dict) else {}
+        verifications.append(
+            {
+                "portfolio_id": package.get("portfolio_id"),
+                "profile": package.get("profile"),
+                "package_type": package.get("package_type"),
+                "verification_hash": verification.get("verification_report_hash"),
+                "verification_status": verification.get("verification_report_status"),
+                "verification_report_hash": verification.get("verification_report_hash"),
+                "verification_report_status": verification.get("verification_report_status"),
+                "blocker_count": verification.get("blocker_count", 0),
+                "zip_sha256": verification.get("zip_sha256"),
+                "zip_size_bytes": verification.get("zip_size_bytes"),
+                "manifest_hash": verification.get("manifest_hash"),
+                "sidecar_path": path,
+                "sidecar_hash": stable_hash(doc),
+            }
+        )
+        rows.append({"path": path, "hash": stable_hash(doc)})
+    return {
+        "source_hash": source_hash,
+        "packages": sorted(packages, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type")), str(item.get("profile")))),
+        "verifications": sorted(verifications, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type")), str(item.get("profile")))),
+        "sidecars": rows,
+    }
+
+
 def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
     packages = {
         _fingerprint_key(item): dict(item)
@@ -590,6 +649,8 @@ def _packages_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
                 "manifest_hash": item.get("manifest_hash"),
                 "verification_hash": item.get("verification_hash"),
                 "verification_status": item.get("verification_status"),
+                "verification_report_hash": item.get("verification_report_hash"),
+                "verification_report_status": item.get("verification_report_status"),
             }
         )
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
@@ -610,6 +671,8 @@ def _verifications_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
                 "manifest_hash": item.get("manifest_hash"),
                 "verification_hash": item.get("verification_hash"),
                 "verification_status": item.get("verification_status"),
+                "verification_report_hash": item.get("verification_report_hash"),
+                "verification_report_status": item.get("verification_report_status"),
                 "blocker_count": item.get("blocker_count", 0),
             }
         )

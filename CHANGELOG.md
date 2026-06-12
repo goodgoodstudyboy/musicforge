@@ -1,9 +1,19 @@
 # Changelog
 
+## v8.0.2 - 2026-06-13
+
+### Fixed
+- Public Trust Center exports now include per-package verification summary sidecars derived from the underlying Registry, Portal, Transparency, and Acknowledgement verification reports.
+- The Public Trust Center verifier now rejects fully re-signed forged package fingerprints even when `trust-center-report.json`, `public-package-verification-index.json`, data files, HTML, and manifest are all rewritten together.
+- v8 release-check smoke now covers the stronger sidecar-inclusive full-resign forgery path.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center.py tests\test_release_check.py::test_v80_public_trust_center_smoke -q`
+
 ## v8.0.1 - 2026-06-12
 
 ### Fixed
-- Public Trust Center exports now include `data/public-package-verification-index.json`, an independent sidecar binding public package fingerprints to their verification summaries.
+- Public Trust Center exports now include `data/public-package-verification-index.json`, a package verification index binding public package fingerprints to their verification summaries.
 - The Public Trust Center offline verifier now cross-checks package-index and verification-index entries against the sidecar, so fully re-signed forged package fingerprints fail verification.
 - `release-check` now includes a `v8` profile and the v8 smoke covers full-resign package fingerprint forgery.
 

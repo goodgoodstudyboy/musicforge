@@ -237,7 +237,9 @@ class PublicTrustCenterStore:
             (export_dir / "data").mkdir(parents=True, exist_ok=True)
 
             _write_json(export_dir / "trust-center-report.json", report)
-            data_docs = public_trust_center_data_documents(report)
+            verification_sidecars = self._verification_sidecar_documents(source)
+            data_docs = public_trust_center_data_documents(report, verification_sidecars)
+            data_docs.update(verification_sidecars)
             for name, doc in data_docs.items():
                 _write_json(export_dir / "data" / name, doc)
             pages = public_trust_center_html_pages(report, data_docs)
@@ -399,10 +401,10 @@ class PublicTrustCenterStore:
             portfolio = self.portfolio_store.get_portfolio(portfolio_id)
         except Exception:
             portfolio = {"portfolio_id": portfolio_id, "status": "missing"}
-        registry = self._package_summary("registry", portfolio_id, profile, self.registry_store.zip_path(portfolio_id, profile), "trust-center-registry", lambda path: verify_release_portfolio_governance_attestation_registry(path, strict=True, require_current=True, require_published=True, require_no_revoked_current=True), self.registry_store.export_dir(portfolio_id, profile) / "manifest.json")
-        portal = self._package_summary("portal", portfolio_id, profile, self.portal_store.zip_path(portfolio_id, profile), "trust-center-portal", lambda path: verify_release_portfolio_governance_attestation_portal(path, strict=True, require_current=True, require_registry=True, require_attestation=True, require_accepted_evidence=False), self.portal_store.export_dir(portfolio_id, profile) / "portal-manifest.json")
-        transparency = self._package_summary("transparency", portfolio_id, profile, self.transparency_store.zip_path(portfolio_id, profile), "trust-center-transparency", lambda path: verify_release_portfolio_governance_attestation_transparency(path, strict=True, require_current=True, require_accepted_evidence=True, require_contiguous_chain=True), self.transparency_store.export_dir(portfolio_id, profile) / "transparency-manifest.json")
-        ack = self._package_summary("transparency_acknowledgement", portfolio_id, profile, self.acknowledgement_store.evidence_zip_path(portfolio_id, profile), "trust-center-acknowledgement", lambda path: verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(path, strict=True, require_response=True, require_accepted=True), self.acknowledgement_store.evidence_export_dir(portfolio_id, profile) / "acknowledgement-evidence-manifest.json")
+        registry = self._package_summary("registry", portfolio_id, profile, self.registry_store.zip_path(portfolio_id, profile), self.registry_store.export_dir(portfolio_id, profile) / "manifest.json", self.registry_store.verification_report_path(portfolio_id, profile))
+        portal = self._package_summary("portal", portfolio_id, profile, self.portal_store.zip_path(portfolio_id, profile), self.portal_store.export_dir(portfolio_id, profile) / "portal-manifest.json", self.portal_store.verification_report_path(portfolio_id, profile))
+        transparency = self._package_summary("transparency", portfolio_id, profile, self.transparency_store.zip_path(portfolio_id, profile), self.transparency_store.export_dir(portfolio_id, profile) / "transparency-manifest.json", self.transparency_store.verification_report_path(portfolio_id, profile))
+        ack = self._package_summary("transparency_acknowledgement", portfolio_id, profile, self.acknowledgement_store.evidence_zip_path(portfolio_id, profile), self.acknowledgement_store.evidence_export_dir(portfolio_id, profile) / "acknowledgement-evidence-manifest.json", self.acknowledgement_store.evidence_verification_report_path(portfolio_id, profile))
         public_packages = [registry["package"], portal["package"], transparency["package"], ack["package"]]
         verification_summaries = [registry["verification"], portal["verification"], transparency["verification"], ack["verification"]]
         accepted_verification = accepted_evidence_verification_summary_from_portfolio_dir(self._portfolio_dir(portfolio_id), profile=profile)
@@ -424,31 +426,55 @@ class PublicTrustCenterStore:
             blocked_keys=PTC_BLOCKED_KEYS,
         )
 
-    def _package_summary(self, package_type: str, portfolio_id: str, profile: str, zip_path: Path, check_prefix: str, verifier, manifest_path: Path) -> dict[str, Any]:
+    def _package_summary(self, package_type: str, portfolio_id: str, profile: str, zip_path: Path, manifest_path: Path, verification_report_path: Path) -> dict[str, Any]:
         manifest = _read_json_default(manifest_path, default={})
         summary: dict[str, Any] = {}
-        verification: dict[str, Any] = {}
-        if zip_path.exists():
-            try:
-                verification = verifier(zip_path)
-            except Exception as exc:
-                verification = {"status": "failed", "error": str(exc), "checks": [{"check_id": f"{check_prefix}-exception", "status": "failed", "message": str(exc)}]}
-        else:
-            verification = {"status": "missing", "checks": []}
+        verification = _read_json_default(verification_report_path, default={})
+        current_zip_sha256 = _sha256(zip_path)
+        current_zip_size = zip_path.stat().st_size if zip_path.exists() and zip_path.is_file() else None
+        current_manifest_hash = manifest.get("integrity_hash") if isinstance(manifest, dict) else None
         verification_hash = _verification_hash(verification)
+        verification_status = _verification_current_status(verification, current_zip_sha256, current_zip_size, current_manifest_hash)
         package = {
             "portfolio_id": portfolio_id,
             "profile": profile,
             "package_type": package_type,
-            "zip_sha256": _sha256(zip_path),
-            "zip_size_bytes": zip_path.stat().st_size if zip_path.exists() and zip_path.is_file() else None,
-            "manifest_hash": manifest.get("integrity_hash") or verification.get("manifest_hash"),
+            "zip_sha256": current_zip_sha256,
+            "zip_size_bytes": current_zip_size,
+            "manifest_hash": current_manifest_hash or verification.get("manifest_hash"),
             "verification_hash": verification_hash,
-            "verification_status": verification.get("status") or "missing",
+            "verification_status": verification_status,
+            "verification_report_hash": verification_hash,
+            "verification_report_status": verification.get("status") or "missing",
         }
         if isinstance(verification.get("summary"), dict):
             summary = dict(verification["summary"])
         return {"package": package, "verification": {**package, "blocker_count": len(verification.get("blockers", []) if isinstance(verification.get("blockers"), list) else [])}, "summary": summary}
+
+    def _verification_sidecar_documents(self, source: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        docs: dict[str, dict[str, Any]] = {}
+        for item in source.get("public_package_fingerprints", []) if isinstance(source.get("public_package_fingerprints"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            portfolio_id = str(item.get("portfolio_id") or "")
+            profile = str(item.get("profile") or "public_summary")
+            package_type = str(item.get("package_type") or "")
+            report_path = self._stored_verification_report_path(package_type, portfolio_id, profile)
+            verification_report = _read_json_default(report_path, default={}) if report_path else {}
+            path = _verification_sidecar_path(portfolio_id, profile, package_type)
+            docs[path] = _verification_sidecar_document(item, verification_report)
+        return docs
+
+    def _stored_verification_report_path(self, package_type: str, portfolio_id: str, profile: str) -> Path | None:
+        if package_type == "registry":
+            return self.registry_store.verification_report_path(portfolio_id, profile)
+        if package_type == "portal":
+            return self.portal_store.verification_report_path(portfolio_id, profile)
+        if package_type == "transparency":
+            return self.transparency_store.verification_report_path(portfolio_id, profile)
+        if package_type == "transparency_acknowledgement":
+            return self.acknowledgement_store.evidence_verification_report_path(portfolio_id, profile)
+        return None
 
     def _portfolio_dir(self, portfolio_id: str) -> Path:
         if hasattr(self.portfolio_store, "portfolio_dir"):
@@ -549,7 +575,7 @@ def public_trust_center_summary_from_source(source: dict[str, Any], blockers: li
     }
 
 
-def public_trust_center_data_documents(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def public_trust_center_data_documents(report: dict[str, Any], verification_sidecars: dict[str, dict[str, Any]] | None = None) -> dict[str, dict[str, Any]]:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     source_hash = report.get("source_hash")
     release_index = {"source_hash": source_hash, "releases": report.get("release_readiness", [])}
@@ -559,11 +585,7 @@ def public_trust_center_data_documents(report: dict[str, Any]) -> dict[str, dict
     risk_register = {"source_hash": source_hash, "risks": report.get("risk_register", [])}
     transparency_index = {"source_hash": source_hash, "transparency": source.get("transparency", [])}
     acknowledgement_index = {"source_hash": source_hash, "acknowledgements": source.get("acknowledgements", [])}
-    verification_sidecar = {
-        "source_hash": source_hash,
-        "packages": _package_verification_sidecars(source),
-        "verifications": _verification_sidecars(source),
-    }
+    verification_sidecar = _package_verification_index_from_sidecars(source_hash, verification_sidecars) if verification_sidecars is not None else {"source_hash": source_hash, "packages": _package_verification_sidecars(source), "verifications": _verification_sidecars(source), "sidecars": []}
     data = {
         "source_hash": source_hash,
         "summary": report.get("summary", {}),
@@ -637,8 +659,8 @@ def public_trust_center_html_pages(report: dict[str, Any], data_docs: dict[str, 
     return {name: _html_shell(name, title=name, body="".join(parts), source_hash=source_hash, report_hash=report_hash, data_hash=data_hash) for name, parts in body.items()}
 
 
-def expected_public_trust_center_documents(report: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    data_docs = public_trust_center_data_documents(report)
+def expected_public_trust_center_documents(report: dict[str, Any], verification_sidecars: dict[str, dict[str, Any]] | None = None) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    data_docs = public_trust_center_data_documents(report, verification_sidecars)
     return data_docs, public_trust_center_html_pages(report, data_docs)
 
 
@@ -759,6 +781,85 @@ def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
+def _package_verification_index_from_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]] | None) -> dict[str, Any]:
+    rows = []
+    for path, doc in sorted((sidecars or {}).items()):
+        if not isinstance(doc, dict):
+            continue
+        row = dict(doc.get("package") if isinstance(doc.get("package"), dict) else {})
+        row["sidecar_path"] = path
+        row["sidecar_hash"] = stable_hash(doc)
+        rows.append(row)
+    return {
+        "source_hash": source_hash,
+        "packages": sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type")), str(item.get("profile")))),
+        "verifications": _verification_sidecars_from_docs(sidecars or {}),
+        "sidecars": [{"path": path, "hash": stable_hash(doc)} for path, doc in sorted((sidecars or {}).items()) if isinstance(doc, dict)],
+    }
+
+
+def _verification_sidecars_from_docs(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for doc in sidecars.values():
+        if not isinstance(doc, dict):
+            continue
+        package = doc.get("package") if isinstance(doc.get("package"), dict) else {}
+        verification = doc.get("verification") if isinstance(doc.get("verification"), dict) else {}
+        rows.append(
+            {
+                "portfolio_id": package.get("portfolio_id"),
+                "profile": package.get("profile"),
+                "package_type": package.get("package_type"),
+                "verification_hash": verification.get("verification_report_hash"),
+                "verification_status": verification.get("verification_report_status"),
+                "verification_report_hash": verification.get("verification_report_hash"),
+                "verification_report_status": verification.get("verification_report_status"),
+                "blocker_count": verification.get("blocker_count", 0),
+                "zip_sha256": verification.get("zip_sha256"),
+                "zip_size_bytes": verification.get("zip_size_bytes"),
+                "manifest_hash": verification.get("manifest_hash"),
+                "sidecar_path": doc.get("sidecar_path"),
+                "sidecar_hash": stable_hash(doc),
+            }
+        )
+    return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type")), str(item.get("profile"))))
+
+
+def _verification_sidecar_document(package: dict[str, Any], verification_report: dict[str, Any]) -> dict[str, Any]:
+    verification_hash = _verification_hash(verification_report)
+    doc = {
+        "schema_version": PTC_SCHEMA_VERSION,
+        "package_type": "musicforge_public_trust_center_package_verification_summary",
+        "sidecar_path": _verification_sidecar_path(str(package.get("portfolio_id") or ""), str(package.get("profile") or "public_summary"), str(package.get("package_type") or "")),
+        "portfolio_id": package.get("portfolio_id"),
+        "profile": package.get("profile"),
+        "public_package_type": package.get("package_type"),
+        "package": {
+            "portfolio_id": package.get("portfolio_id"),
+            "profile": package.get("profile"),
+            "package_type": package.get("package_type"),
+            "zip_sha256": package.get("zip_sha256"),
+            "zip_size_bytes": package.get("zip_size_bytes"),
+            "manifest_hash": package.get("manifest_hash"),
+            "verification_hash": verification_hash,
+            "verification_status": _verification_current_status(verification_report, package.get("zip_sha256"), package.get("zip_size_bytes"), package.get("manifest_hash")),
+            "verification_report_hash": verification_hash,
+            "verification_report_status": verification_report.get("status") or "missing",
+        },
+        "verification": {
+            "verification_report_hash": verification_hash,
+            "verification_report_status": verification_report.get("status") or "missing",
+            "zip_sha256": verification_report.get("zip_sha256"),
+            "zip_size_bytes": verification_report.get("zip_size_bytes"),
+            "manifest_hash": verification_report.get("manifest_hash"),
+            "blocker_count": len(verification_report.get("blockers", []) if isinstance(verification_report.get("blockers"), list) else []),
+            "warning_count": len(verification_report.get("warnings", []) if isinstance(verification_report.get("warnings"), list) else []),
+        },
+    }
+    doc["summary_hash"] = stable_hash({"package": doc["package"], "verification": doc["verification"]})
+    return _sanitize_public_metadata(doc)
+
+
 def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
     packages = {
         _fingerprint_key(item): dict(item)
@@ -786,6 +887,11 @@ def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _fingerprint_key(item: dict[str, Any]) -> tuple[str, str, str]:
     return (str(item.get("portfolio_id") or ""), str(item.get("package_type") or ""), str(item.get("profile") or ""))
+
+
+def _verification_sidecar_path(portfolio_id: str, profile: str, package_type: str) -> str:
+    parts = [_safe_id(portfolio_id), _safe_id(profile or "public_summary"), _safe_id(package_type or "unknown")]
+    return "package-verification-summaries/" + "__".join(parts) + ".json"
 
 
 def _risk_register(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -955,6 +1061,21 @@ def _verification_hash(report: dict[str, Any]) -> str | None:
     if report.get("schema_version") and "checks" in report:
         return ack_verification_hash(report)
     return stable_hash({key: value for key, value in report.items() if key != "generated_at"})
+
+
+def _verification_current_status(report: dict[str, Any], zip_sha256: Any, zip_size_bytes: Any, manifest_hash: Any) -> str:
+    if not report:
+        return "missing"
+    status = str(report.get("status") or "missing")
+    if status != "passed":
+        return status
+    if str(report.get("zip_sha256") or "") != str(zip_sha256 or ""):
+        return "failed"
+    if str(report.get("zip_size_bytes") or "") != str(zip_size_bytes or ""):
+        return "failed"
+    if str(report.get("manifest_hash") or "") != str(manifest_hash or ""):
+        return "failed"
+    return "passed"
 
 
 def _ensure_within(root: Path, target: Path) -> None:

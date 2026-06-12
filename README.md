@@ -661,8 +661,9 @@ export, ZIP, verify, and archive never sign off, reset, approve, upload, or
 mutate underlying Release/Distribution/Submission/Portfolio evidence. The ZIP
 does not embed internal evidence packages; it references fingerprints and
 verification summaries, and the verifier can run in a clean directory without
-`.musicforge`. Public package fingerprints are checked against an independent
-verification sidecar so a fully re-signed forged summary is rejected:
+`.musicforge`. Public package fingerprints are checked against per-package
+verification summary sidecars exported from the underlying verification reports,
+so a fully re-signed forged summary is rejected:
 
 ```powershell
 python -m song_agent.cli public-trust-center --center-id ptc-default --refresh --export --zip --verify --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --json
