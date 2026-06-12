@@ -655,6 +655,19 @@ python -m song_agent.cli verify-release-portfolio-governance-attestation-transpa
 python -m song_agent.cli verify-release-portfolio-governance-attestation-transparency-acknowledgement path\to\transparency-acknowledgement-evidence.zip --strict --require-response --require-accepted --json
 ```
 
+Public Trust Center aggregates the public-safe evidence chain across Releases
+and Portfolio Governance into a static portal ZIP. It is read-only: refresh,
+export, ZIP, verify, and archive never sign off, reset, approve, upload, or
+mutate underlying Release/Distribution/Submission/Portfolio evidence. The ZIP
+does not embed internal evidence packages; it references fingerprints and
+verification summaries, and the verifier can run in a clean directory without
+`.musicforge`:
+
+```powershell
+python -m song_agent.cli public-trust-center --center-id ptc-default --refresh --export --zip --verify --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --json
+python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

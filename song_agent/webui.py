@@ -3693,9 +3693,19 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-transparency-acknowledgement-pack.zip">Download Ack Pack ZIP</a>
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-transparency-acknowledgement-evidence.zip">Download Ack Evidence ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Public Trust Center</span></div>
+        <div class="actions">
+          <button class="secondary" id="public-trust-center-refresh" type="button">Refresh Trust Center</button>
+          <button class="secondary" id="public-trust-center-export" type="button">Export Trust Center</button>
+          <button class="secondary" id="public-trust-center-zip" type="button">Build Trust Center ZIP</button>
+          <button class="secondary" id="public-trust-center-verify" type="button">Verify Trust Center ZIP</button>
+          <button class="secondary" id="public-trust-center-archive" type="button">Archive Trust Center</button>
+          <a class="button-link secondary" href="/api/public-trust-centers/ptc-default.zip">Download Trust Center ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
+      wirePublicTrustCenterActions(portfolio.portfolio_id);
     }
 
     function wirePortfolioAuditActions(portfolioId) {
@@ -4191,6 +4201,51 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ profile: "public_summary" }),
         });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+    }
+
+    function wirePublicTrustCenterActions(portfolioId) {
+      const payload = () => ({
+        center_id: "ptc-default",
+        portfolio_ids: [portfolioId],
+        include_all_releases: true,
+        include_all_portfolios: false,
+        attestation_profile: "public_summary",
+        require_registry_current: true,
+        require_portal_current: true,
+        require_transparency_current: true,
+      });
+      bindAction("public-trust-center-refresh", async () => {
+        await api(`/api/public-trust-centers/ptc-default/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload()),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-export", async () => {
+        await api(`/api/public-trust-centers/ptc-default/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload()),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-zip", async () => {
+        await api(`/api/public-trust-centers/ptc-default/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-verify", async () => {
+        await api(`/api/public-trust-centers/ptc-default/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, require_registry_current: true, require_portal_current: true, require_transparency_current: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-archive", async () => {
+        await api(`/api/public-trust-centers/ptc-default/archive`, { method: "POST" });
         await renderPortfolioAuditDetail(portfolioId);
       });
     }

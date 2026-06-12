@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.0.0 - 2026-06-12
+
+### Added
+- Public Trust Center reports for aggregating public-safe Release, Portfolio Governance, Registry, Portal, Transparency, and Acknowledgement evidence into one read-only trust portal.
+- Static Public Trust Center exports and ZIP packages with report, data indexes, HTML pages, package/verification indexes, risk register, manifest, and offline verifier.
+- API, CLI, Studio controls, and release-check matrix coverage for Trust Center refresh, export, ZIP, verify, archive, and download flows.
+- v8 release-check smoke covers report/data/html full-resign tamper, manifest spoofing, duplicate entries, dangerous paths, backslash entries, `.MusicForge` variants, nested ZIPs, redaction, and stale export/ZIP guards.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center.py tests\test_server_public_trust_center.py tests\test_cli_public_trust_center.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v80_public_trust_center_smoke -q`
+- `python -m pytest tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py tests\test_release_check.py::test_v75_release_check_matrix_smoke tests\test_release_check.py::test_v80_public_trust_center_smoke -q`
+
 ## v7.9.1 - 2026-06-12
 
 ### Fixed

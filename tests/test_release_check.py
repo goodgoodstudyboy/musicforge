@@ -54,6 +54,7 @@ from song_agent.release_checks import (
     _v77_attestation_accepted_evidence_smoke,
     _v78_attestation_transparency_feed_smoke,
     _v79_attestation_transparency_acknowledgement_smoke,
+    _v80_public_trust_center_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -737,6 +738,20 @@ def test_v79_attestation_transparency_acknowledgement_smoke(tmp_path: Path) -> N
     assert "wrong_source=True" in detail
     assert "change_request=draft" in detail
     assert "full_resign=failed" in detail
+    assert "backslash=failed" in detail
+    assert "redaction=failed" in detail
+    assert "stale_export=True" in detail
+    assert "stale_zip=True" in detail
+
+
+def test_v80_public_trust_center_smoke(tmp_path: Path) -> None:
+    ok, detail = _v80_public_trust_center_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "trust=passed/passed" in detail
+    assert "report=failed" in detail
+    assert "data=failed" in detail
+    assert "html=failed" in detail
     assert "backslash=failed" in detail
     assert "redaction=failed" in detail
     assert "stale_export=True" in detail

@@ -22,6 +22,7 @@ def test_release_check_cli_list_json() -> None:
     assert "v77.attestation_accepted_evidence_smoke" in ids
     assert "v78.attestation_transparency_feed_smoke" in ids
     assert "v79.attestation_transparency_acknowledgement_smoke" in ids
+    assert "v80.public_trust_center_smoke" in ids
 
 
 def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
@@ -61,6 +62,7 @@ def test_release_check_cli_group_timing(tmp_path: Path) -> None:
         "v77.attestation_accepted_evidence_smoke",
         "v78.attestation_transparency_feed_smoke",
         "v79.attestation_transparency_acknowledgement_smoke",
+        "v80.public_trust_center_smoke",
     }
 
 

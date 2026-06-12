@@ -314,6 +314,17 @@ from song_agent.release_portfolio_governance_attestation_transparency_acknowledg
     verify_release_portfolio_governance_attestation_transparency_acknowledgement_package,
     write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report,
 )
+from song_agent.public_trust_center import (
+    PublicTrustCenterError,
+    PublicTrustCenterNotFoundError,
+    PublicTrustCenterStateError,
+    PublicTrustCenterStore,
+    public_trust_center_summary,
+)
+from song_agent.public_trust_center_verifier import (
+    verify_public_trust_center_package,
+    write_public_trust_center_verification_report,
+)
 from song_agent.release_portfolio_governance_verifier import (
     release_portfolio_governance_verification_summary,
     verify_release_portfolio_governance_package,
@@ -2836,6 +2847,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.release_portfolio_governance_attestation_transparency_acknowledgement_store  # type: ignore[attr-defined]
 
     @property
+    def public_trust_center_store(self) -> PublicTrustCenterStore:
+        return self.server.public_trust_center_store  # type: ignore[attr-defined]
+
+    @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
         return self.server.audio_review_store  # type: ignore[attr-defined]
 
@@ -3016,6 +3031,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/release-portfolio-governance-queues" or path.startswith("/api/release-portfolio-governance-queues/"):
                 self._handle_release_portfolio_governance_queues(method, path)
+                return
+            if path == "/api/public-trust-centers" or path.startswith("/api/public-trust-centers/"):
+                self._handle_public_trust_centers(method, path)
                 return
             if path == "/api/jobs":
                 if method == "GET":
@@ -7106,6 +7124,96 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_public_trust_centers(self, method: str, path: str) -> None:
+        prefix = "/api/public-trust-centers"
+        tail = path[len(prefix):]
+        try:
+            if tail in {"", "/"}:
+                if method == "GET":
+                    centers = self.public_trust_center_store.list_centers()
+                    self._send_json({"ok": True, "centers": centers, "summary": {"count": len(centers)}})
+                    return
+                if method == "POST":
+                    config = self.public_trust_center_store.create_or_update_center(self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "center": config, "summary": public_trust_center_summary(self.public_trust_center_store.read_report(str(config.get("center_id") or "ptc-default"), default={}))}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.strip("/").split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center route not found.")
+                return
+            center_id = parts[0]
+            if center_id.endswith(".zip") and len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                actual_id = center_id[:-4]
+                self.public_trust_center_store.get_center(actual_id)
+                self._send_file(self.public_trust_center_store.zip_path(actual_id), "application/zip", filename=f"musicforge-{actual_id}-public-trust-center.zip")
+                return
+            action = parts[1] if len(parts) > 1 else ""
+            if len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                detail = self.public_trust_center_store.get_center(center_id)
+                self._send_json({"ok": True, **detail})
+                return
+            if action == "refresh" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.public_trust_center_store.refresh_report(center_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "report": report, "summary": public_trust_center_summary(report)}, status=HTTPStatus.CREATED)
+                return
+            if action == "export" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.public_trust_center_store.export_center(center_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "manifest": manifest, "summary": {"source_hash": manifest.get("source_hash"), "package_type": manifest.get("package_type")}}, status=HTTPStatus.CREATED)
+                return
+            if action == "zip" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.public_trust_center_store.build_zip(center_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "zip": zip_info})
+                return
+            if action == "verify" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = verify_public_trust_center_package(
+                    self.public_trust_center_store.zip_path(center_id),
+                    strict=bool(payload.get("strict", True)),
+                    require_registry_current=bool(payload.get("require_registry_current", False)),
+                    require_portal_current=bool(payload.get("require_portal_current", False)),
+                    require_transparency_current=bool(payload.get("require_transparency_current", False)),
+                    require_acknowledgement_current=bool(payload.get("require_acknowledgement_current", False)),
+                )
+                write_public_trust_center_verification_report(report, self.public_trust_center_store.verification_report_path(center_id))
+                self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                return
+            if action == "archive" and len(parts) == 2:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                archive = self.public_trust_center_store.archive_snapshot(center_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "archive": archive, "summary": {"status": "archived", "zip_sha256": archive.get("zip_sha256")}})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center route not found.")
+        except PublicTrustCenterNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -16038,6 +16146,14 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         )
         self.release_portfolio_governance_attestation_transparency_acknowledgement_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(
             transparency_store=self.release_portfolio_governance_attestation_transparency_store,
+        )
+        self.public_trust_center_store = PublicTrustCenterStore(
+            release_store=self.release_store,
+            portfolio_store=self.release_portfolio_audit_store,
+            registry_store=self.release_portfolio_governance_attestation_registry_store,
+            portal_store=self.release_portfolio_governance_attestation_portal_store,
+            transparency_store=self.release_portfolio_governance_attestation_transparency_store,
+            acknowledgement_store=self.release_portfolio_governance_attestation_transparency_acknowledgement_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

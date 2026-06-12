@@ -11575,8 +11575,9 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             and "v77.attestation_accepted_evidence_smoke" in {definition.check_id for definition in latest}
             and "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in latest}
             and "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in latest}
+            and "v80.public_trust_center_smoke" in {definition.check_id for definition in latest}
             and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
-            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke", "v78.attestation_transparency_feed_smoke", "v79.attestation_transparency_acknowledgement_smoke"}
+            and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke", "v78.attestation_transparency_feed_smoke", "v79.attestation_transparency_acknowledgement_smoke", "v80.public_trust_center_smoke"}
             and empty_group == []
             and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
             and empty_since == []
@@ -12224,6 +12225,226 @@ def _v79_attestation_transparency_acknowledgement_smoke(root: Path) -> tuple[boo
     finally:
         if base.exists():
             shutil.rmtree(base, ignore_errors=True)
+
+
+def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v80-public-trust-center-")).resolve()
+    try:
+        from song_agent.public_trust_center import PublicTrustCenterStore, public_trust_center_manifest_hash, public_trust_center_report_hash
+        from song_agent.public_trust_center_verifier import verify_public_trust_center_package
+        from song_agent.release_operations import ReleaseOperationsStore
+        from song_agent.release_operations_audit import ReleaseOperationsAuditStore
+        from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
+        from song_agent.release_operations_runbook import ReleaseOperationsRunbookStore
+        from song_agent.release_operations_signoff import ReleaseOperationsSignoffStore
+        from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore
+        from song_agent.release_portfolio_governance import ReleasePortfolioGovernanceStore
+        from song_agent.release_portfolio_governance_audit import ReleasePortfolioGovernanceAuditStore
+        from song_agent.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore
+        from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
+        from song_agent.release_portfolio_governance_attestation_portal import ReleasePortfolioGovernanceAttestationPortalStore
+        from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+        from song_agent.release_portfolio_governance_attestation_portal_verifier import verify_release_portfolio_governance_attestation_portal, write_release_portfolio_governance_attestation_portal_verification_report
+        from song_agent.release_portfolio_governance_attestation_registry import ReleasePortfolioGovernanceAttestationRegistryStore
+        from song_agent.release_portfolio_governance_attestation_registry_verifier import verify_release_portfolio_governance_attestation_registry, write_release_portfolio_governance_attestation_registry_verification_report
+        from song_agent.release_portfolio_governance_attestation_transparency import ReleasePortfolioGovernanceAttestationTransparencyStore
+        from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore, response_payload_hash, response_template
+        from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement_verifier import verify_release_portfolio_governance_attestation_transparency_acknowledgement_package, write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report
+        from song_agent.release_portfolio_governance_evidence_vault import ReleasePortfolioGovernanceEvidenceVaultStore
+        from song_agent.release_portfolio_governance_final_board import ReleasePortfolioGovernanceFinalBoardStore
+        from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
+        from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        operations_store = ReleaseOperationsStore(release_store=release_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
+        operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
+        operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
+        portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, audit_store=operations_audit_store, reviewer_pack_store=operations_reviewer_store)
+        governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=operations_reviewer_store, audit_store=operations_audit_store, signoff_store=operations_signoff_store)
+        governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
+        governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store)
+        governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
+        final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
+        vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=governance_signoff_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store, final_board_store=final_board_store)
+        attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
+        registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
+        portal_store = ReleasePortfolioGovernanceAttestationPortalStore(registry_store=registry_store, attestation_store=attestation_store)
+        review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+        accepted_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
+        transparency_store = ReleasePortfolioGovernanceAttestationTransparencyStore(attestation_store=attestation_store, registry_store=registry_store, portal_store=portal_store, accepted_evidence_store=accepted_store)
+        ack_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=transparency_store)
+        trust_store = PublicTrustCenterStore(release_store=release_store, portfolio_store=portfolio_store, registry_store=registry_store, portal_store=portal_store, transparency_store=transparency_store, acknowledgement_store=ack_store)
+
+        release = release_store.create_release({"name": "v8.0 Public Trust Center Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        portfolio = portfolio_store.create({"name": "v8.0 Public Trust Center Portfolio", "release_ids": [release.release_id]})
+        portfolio_id = portfolio["portfolio_id"]
+        _v73_write_minimal_attestation_zip(attestation_store.zip_path(portfolio_id), portfolio_id=portfolio_id, suffix="public-trust-center")
+        entry = registry_store.register_current_attestation(portfolio_id)["entry"]
+        registry_store.publish_entry(portfolio_id, entry["entry_id"], {"published_by": "release-check"})
+        registry_store.refresh_report(portfolio_id)
+        registry_store.export_registry(portfolio_id)
+        registry_store.build_zip(portfolio_id)
+        registry_report = verify_release_portfolio_governance_attestation_registry(registry_store.zip_path(portfolio_id), strict=True, require_current=True, require_published=True)
+        write_release_portfolio_governance_attestation_registry_verification_report(registry_report, registry_store.verification_report_path(portfolio_id))
+        portal_store.refresh_report(portfolio_id)
+        portal_store.export_portal(portfolio_id)
+        portal_store.build_zip(portfolio_id)
+        portal_report = verify_release_portfolio_governance_attestation_portal(portal_store.zip_path(portfolio_id), strict=True, require_current=True, require_registry=True, require_attestation=True)
+        write_release_portfolio_governance_attestation_portal_verification_report(portal_report, portal_store.verification_report_path(portfolio_id))
+        review_store.refresh_pack(portfolio_id)
+        review_store.export_pack(portfolio_id)
+        review_store.build_pack_zip(portfolio_id)
+        accepted_zip = review_store.build_response_zip(portfolio_id, _v76_response_payload("accepted"))
+        imported = review_store.import_response(portfolio_id, {"content_base64": base64.b64encode(accepted_zip.read_bytes()).decode("ascii")})
+        accepted_store.refresh_evidence(portfolio_id, {"response_id": imported["response"]["response_id"]})
+        accepted_store.export_evidence(portfolio_id)
+        accepted_store.build_zip(portfolio_id)
+        accepted_store.verify_evidence(portfolio_id, {"strict": True, "require_current": True})
+        registry_store.refresh_report(portfolio_id)
+        registry_store.export_registry(portfolio_id)
+        registry_store.build_zip(portfolio_id)
+        registry_report = verify_release_portfolio_governance_attestation_registry(registry_store.zip_path(portfolio_id), strict=True, require_current=True, require_published=True, require_accepted_evidence=True)
+        write_release_portfolio_governance_attestation_registry_verification_report(registry_report, registry_store.verification_report_path(portfolio_id))
+        portal_store.refresh_report(portfolio_id)
+        portal_store.export_portal(portfolio_id)
+        portal_store.build_zip(portfolio_id)
+        portal_report = verify_release_portfolio_governance_attestation_portal(portal_store.zip_path(portfolio_id), strict=True, require_current=True, require_registry=True, require_attestation=True, require_accepted_evidence=True)
+        write_release_portfolio_governance_attestation_portal_verification_report(portal_report, portal_store.verification_report_path(portfolio_id))
+        transparency_store.refresh_feed(portfolio_id, {"require_accepted_evidence": True})
+        transparency_store.export_transparency(portfolio_id)
+        transparency_store.build_zip(portfolio_id)
+        transparency_store.verify_transparency(portfolio_id, {"strict": True, "require_current": True, "require_accepted_evidence": True, "require_contiguous_chain": True})
+        pack = ack_store.refresh_pack(portfolio_id)
+        payload = response_template(pack)
+        payload.update({"response_id": "v80-external-ack", "reviewer": {"name": "Release Check Reviewer", "organization": "MusicForge"}, "comments": "Public Trust Center smoke acknowledgement.", "submitted_at": "2026-06-12T00:00:00+00:00"})
+        payload["response_hash"] = response_payload_hash(payload)
+        ack_import = ack_store.import_response(portfolio_id, {"content_base64": base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")})
+        ack_store.refresh_evidence(portfolio_id, {"response_id": ack_import["response"]["response_id"]})
+        ack_store.export_evidence(portfolio_id)
+        ack_store.build_evidence_zip(portfolio_id)
+        ack_report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(ack_store.evidence_zip_path(portfolio_id), strict=True, require_response=True, require_accepted=True)
+        write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(ack_report, ack_store.evidence_verification_report_path(portfolio_id))
+
+        report = trust_store.refresh_report("ptc-default", {"portfolio_ids": [portfolio_id], "include_all_releases": False, "include_all_portfolios": False})
+        manifest = trust_store.export_center("ptc-default")
+        zip_info = trust_store.build_zip("ptc-default")
+        verification = verify_public_trust_center_package(trust_store.zip_path("ptc-default"), strict=True, require_registry_current=True, require_portal_current=True, require_transparency_current=True, require_acknowledgement_current=True)
+        archive = trust_store.archive_snapshot("ptc-default")
+        source_zip = trust_store.zip_path("ptc-default")
+        report_tamper = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-report-tamper.zip", _v80_tamper_trust_center_report), strict=True)
+        data_tamper = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-data-tamper.zip", _v80_tamper_trust_center_data), strict=True)
+        html_tamper = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-html-tamper.zip", _v80_tamper_trust_center_html), strict=True)
+        duplicate = verify_public_trust_center_package(_v43_duplicate_submission_zip(source_zip, base / "ptc-duplicate.zip"), strict=True)
+        dangerous = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_public_trust_center_package(_v38_backslash_entry_zip(base / "ptc-backslash.zip"), strict=True)
+        case_musicforge = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-nested.zip", additions={"nested/fake.zip": b"PK\x05\x06" + (b"\0" * 18)}), strict=True)
+        spoof = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-spoof.zip", additions={"extra.txt": b"extra"}, transforms={"trust-center-manifest.json": _v80_spoof_trust_center_manifest}), strict=True)
+        redaction = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        ack_store.evidence_zip_path(portfolio_id).write_bytes(ack_store.evidence_zip_path(portfolio_id).read_bytes() + b"changed")
+        stale_export = False
+        stale_zip = False
+        try:
+            trust_store.export_center("ptc-default")
+        except Exception:
+            stale_export = True
+        try:
+            trust_store.build_zip("ptc-default")
+        except Exception:
+            stale_zip = True
+
+        serialized = json.dumps({"report": report, "manifest": manifest, "verification": verification, "archive": archive}, ensure_ascii=False)
+        ok = (
+            report.get("status") == "passed"
+            and manifest.get("package_type") == "musicforge_public_trust_center"
+            and zip_info.get("sha256")
+            and verification.get("status") == "passed"
+            and archive.get("zip_sha256")
+            and _v38_check_status(report_tamper, "ptc_report_summary_release_count") == "failed"
+            and _v38_check_status(data_tamper, "ptc_data_package_index_json_semantics") == "failed"
+            and _v38_check_status(html_tamper, "ptc_html_index.html_semantics") == "failed"
+            and _v38_check_status(duplicate, "ptc_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "ptc_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "ptc_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "ptc_zip_no_nested_internal_entries") == "failed"
+            and _v38_check_status(nested, "ptc_zip_no_nested_internal_entries") == "failed"
+            and _v38_check_status(spoof, "ptc_manifest_zip_entries_reference_only") == "failed"
+            and _v38_check_status(redaction, "ptc_redaction_scan") == "failed"
+            and stale_export
+            and stale_zip
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"trust={report.get('status')}/{verification.get('status')}, zip={bool(zip_info.get('sha256'))}, archive={bool(archive.get('zip_sha256'))}, "
+            f"report={_v38_check_status(report_tamper, 'ptc_report_summary_release_count')}, data={_v38_check_status(data_tamper, 'ptc_data_package_index_json_semantics')}, "
+            f"html={_v38_check_status(html_tamper, 'ptc_html_index.html_semantics')}, duplicate={_v38_check_status(duplicate, 'ptc_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous, 'ptc_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptc_zip_entry_path_safe')}, "
+            f"case_musicforge={_v38_check_status(case_musicforge, 'ptc_zip_no_nested_internal_entries')}, nested={_v38_check_status(nested, 'ptc_zip_no_nested_internal_entries')}, "
+            f"spoof={_v38_check_status(spoof, 'ptc_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptc_redaction_scan')}, "
+            f"stale_export={stale_export}, stale_zip={stale_zip}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v80_tamper_trust_center_report(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center import public_trust_center_manifest_hash, public_trust_center_report_hash
+
+    report = _v74_read_json_doc(docs, "trust-center-report.json")
+    manifest = _v74_read_json_doc(docs, "trust-center-manifest.json")
+    report.setdefault("summary", {})["release_count"] = 999
+    report["integrity_hash"] = public_trust_center_report_hash(report)
+    docs["trust-center-report.json"] = _v74_json_doc(report)
+    manifest.setdefault("trust_center_report", {})["integrity_hash"] = report["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "trust-center-report.json", docs["trust-center-report.json"])
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v80_tamper_trust_center_data(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center import public_trust_center_manifest_hash
+
+    package = _v74_read_json_doc(docs, "data/package-index.json")
+    manifest = _v74_read_json_doc(docs, "trust-center-manifest.json")
+    if package.get("packages"):
+        package["packages"][0]["zip_sha256"] = "0" * 64
+    docs["data/package-index.json"] = _v74_json_doc(package)
+    manifest.setdefault("data", {})["package_index_hash"] = stable_hash(package)
+    _v74_sync_manifest_file(manifest, "data/package-index.json", docs["data/package-index.json"])
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v80_tamper_trust_center_html(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center import public_trust_center_manifest_hash
+
+    manifest = _v74_read_json_doc(docs, "trust-center-manifest.json")
+    docs["index.html"] = docs["index.html"].replace(b"MusicForge Public Trust Center", b"Forged Public Trust Center")
+    for item in manifest.get("pages", []) if isinstance(manifest.get("pages"), list) else []:
+        if isinstance(item, dict) and item.get("path") == "index.html":
+            item["content_hash"] = hashlib.sha256(docs["index.html"]).hexdigest()
+    _v74_sync_manifest_file(manifest, "index.html", docs["index.html"])
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v80_spoof_trust_center_manifest(data: bytes) -> bytes:
+    from song_agent.public_trust_center import public_trust_center_manifest_hash
+
+    manifest = json.loads(data.decode("utf-8"))
+    manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    return _v74_json_doc(manifest)
 
 
 def _v74_rewrite_portal_zip(source_zip: Path, target_zip: Path, mutate) -> Path:

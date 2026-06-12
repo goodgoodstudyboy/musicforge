@@ -866,6 +866,46 @@ def build_verify_release_portfolio_governance_attestation_transparency_acknowled
     return verify_parser
 
 
+def build_verify_public_trust_center_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Public Trust Center ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Public Trust Center ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--require-release-readiness", action="store_true", help="Require selected releases to be ready.")
+    verify_parser.add_argument("--require-public-attestation", action="store_true", help="Require registry, portal, and transparency evidence.")
+    verify_parser.add_argument("--require-registry-current", action="store_true", help="Require current Registry evidence.")
+    verify_parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
+    verify_parser.add_argument("--require-transparency-current", action="store_true", help="Require current Transparency evidence.")
+    verify_parser.add_argument("--require-acknowledgement-current", action="store_true", help="Require current accepted acknowledgement evidence.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=250, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_public_trust_center_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build local MusicForge Public Trust Center reports and packages.")
+    parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
+    parser.add_argument("--name", default=None, help="Display name.")
+    parser.add_argument("--release-id", action="append", dest="release_ids", default=[], help="Release id to include. Can be repeated.")
+    parser.add_argument("--portfolio-id", action="append", dest="portfolio_ids", default=[], help="Portfolio id to include. Can be repeated.")
+    parser.add_argument("--profile", default="public_summary", help="Attestation profile.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh the Public Trust Center report.")
+    parser.add_argument("--export", action="store_true", help="Build the static Trust Center export directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Public Trust Center ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Public Trust Center ZIP.")
+    parser.add_argument("--archive", action="store_true", help="Append an archive event for the current ZIP.")
+    parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--require-registry-current", action="store_true", help="Require current Registry evidence.")
+    parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
+    parser.add_argument("--require-transparency-current", action="store_true", help="Require current Transparency evidence.")
+    parser.add_argument("--require-acknowledgement-current", action="store_true", help="Require current accepted acknowledgement evidence.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
 def build_acceptance_check_parser() -> argparse.ArgumentParser:
     acceptance_parser = argparse.ArgumentParser(description="Run a local Music Acceptance Lab suite.")
     acceptance_parser.add_argument("--out", type=Path, default=Path(".musicforge") / "acceptance", help="Acceptance workspace directory.")
@@ -2021,6 +2061,36 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report)
         raise SystemExit(release_portfolio_governance_attestation_transparency_acknowledgement_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-package":
+        from song_agent.public_trust_center_verifier import (
+            print_public_trust_center_verification_report,
+            public_trust_center_verification_exit_code,
+            verify_public_trust_center_package,
+            write_public_trust_center_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_package(
+            args.zip_path,
+            strict=args.strict,
+            require_release_readiness=args.require_release_readiness,
+            require_public_attestation=args.require_public_attestation,
+            require_registry_current=args.require_registry_current,
+            require_portal_current=args.require_portal_current,
+            require_transparency_current=args.require_transparency_current,
+            require_acknowledgement_current=args.require_acknowledgement_current,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_verification_report(report)
+        raise SystemExit(public_trust_center_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3321,6 +3391,63 @@ def _main() -> None:
         else:
             print_release_portfolio_governance_attestation_transparency_acknowledgement_result(result)
         raise SystemExit(0)
+    elif raw_args and raw_args[0] == "public-trust-center":
+        from song_agent.public_trust_center import public_trust_center_summary
+
+        parser = build_public_trust_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = _build_public_trust_center_store()
+        payload: dict[str, Any] = {
+            "center_id": args.center_id,
+            "attestation_profile": args.profile,
+            "release_ids": args.release_ids,
+            "portfolio_ids": args.portfolio_ids,
+            "include_all_releases": not bool(args.release_ids),
+            "include_all_portfolios": not bool(args.portfolio_ids),
+            "require_registry_current": True,
+            "require_portal_current": True,
+            "require_transparency_current": True,
+            "require_acknowledgement_current": args.require_acknowledgement_current,
+        }
+        if args.name:
+            payload["name"] = args.name
+        result: dict[str, Any] = {"ok": True, "center_id": args.center_id}
+        if args.refresh:
+            report = store.refresh_report(args.center_id, payload)
+            result.update({"report": report, "summary": public_trust_center_summary(report), "stale": False})
+        else:
+            config = store.read_config(args.center_id, default={}) or store.create_or_update_center(payload)
+            report = store.read_report(args.center_id, default={})
+            summary = public_trust_center_summary(report) if report else {"status": "missing", "center_id": args.center_id}
+            if report:
+                summary["stale"] = store.report_is_stale(args.center_id, report)
+            result.update({"config": config, "report": report, "summary": summary, "stale": summary.get("stale", False)})
+        if args.export:
+            result["manifest"] = store.export_center(args.center_id)
+        if args.zip:
+            result["zip"] = store.build_zip(args.center_id)
+        if args.verify:
+            verification = store.verify_zip(
+                args.center_id,
+                {
+                    "strict": args.strict,
+                    "require_registry_current": args.require_registry_current,
+                    "require_portal_current": args.require_portal_current,
+                    "require_transparency_current": args.require_transparency_current,
+                    "require_acknowledgement_current": args.require_acknowledgement_current,
+                },
+            )
+            result["verification"] = verification
+            result["verification_summary"] = verification.get("summary", {})
+        if args.archive:
+            result["archive"] = store.archive_snapshot(args.center_id)
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_result(result)
+        raise SystemExit(0)
     elif raw_args and raw_args[0] == "verify-human-review-pack":
         from song_agent.human_review_verifier import (
             human_review_verification_exit_code,
@@ -4520,6 +4647,24 @@ def print_release_portfolio_governance_attestation_transparency_acknowledgement_
         print(f"change request: {change.get('change_request_id') or '-'} / {change.get('status') or '-'}")
 
 
+def print_public_trust_center_result(result: dict[str, Any]) -> None:
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    verification = result.get("verification") if isinstance(result.get("verification"), dict) else {}
+    print("MusicForge public-trust-center")
+    print(f"center: {result.get('center_id') or '-'}")
+    print(f"status: {summary.get('status') or '-'}")
+    print(f"readiness: {summary.get('readiness') or '-'}")
+    print(f"stale: {summary.get('stale', result.get('stale', False))}")
+    print(f"releases: {summary.get('release_count', 0)}")
+    print(f"portfolios: {summary.get('portfolio_count', 0)}")
+    print(f"blockers: {summary.get('blocker_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
+    if result.get("zip"):
+        print(f"zip: {(result.get('zip') or {}).get('sha256') or (result.get('zip') or {}).get('filename')}")
+    if verification:
+        print(f"verify: {verification.get('status')}")
+
+
 def _build_release_portfolio_governance_attestation_portal_store():
     from song_agent.distribution import DistributionStore
     from song_agent.release_operations import ReleaseOperationsStore
@@ -4567,6 +4712,34 @@ def _build_release_portfolio_governance_attestation_portal_store():
     attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
     registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
     return ReleasePortfolioGovernanceAttestationPortalStore(registry_store=registry_store, attestation_store=attestation_store)
+
+
+def _build_public_trust_center_store():
+    from song_agent.public_trust_center import PublicTrustCenterStore
+    from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
+    from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
+    from song_agent.release_portfolio_governance_attestation_transparency import ReleasePortfolioGovernanceAttestationTransparencyStore
+    from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore
+    from song_agent.releases import ReleaseStore
+
+    portal_store = _build_release_portfolio_governance_attestation_portal_store()
+    review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
+    accepted_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
+    transparency_store = ReleasePortfolioGovernanceAttestationTransparencyStore(
+        attestation_store=portal_store.attestation_store,
+        registry_store=portal_store.registry_store,
+        portal_store=portal_store,
+        accepted_evidence_store=accepted_store,
+    )
+    acknowledgement_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=transparency_store)
+    return PublicTrustCenterStore(
+        release_store=ReleaseStore(),
+        portfolio_store=portal_store.attestation_store.portfolio_store,
+        registry_store=portal_store.registry_store,
+        portal_store=portal_store,
+        transparency_store=transparency_store,
+        acknowledgement_store=acknowledgement_store,
+    )
 
 
 def _acceptance_analytics_fail_on(readiness: str, fail_on: str | None) -> bool:
