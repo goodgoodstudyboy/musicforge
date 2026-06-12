@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.9.1 - 2026-06-12
+
+### Fixed
+- Acknowledgement Evidence ZIPs now include response verification and original response binding sidecars.
+- The offline acknowledgement verifier now rejects fully re-signed forged evidence summaries by comparing public summary fields against the original accepted response binding.
+- v7.9 release-check smoke now covers the stronger full-resign evidence forgery path.
+
+### Verified
+- `python -m pytest tests\test_release_portfolio_governance_attestation_transparency_acknowledgement.py tests\test_release_check.py::test_v79_attestation_transparency_acknowledgement_smoke -q`
+
 ## v7.9.0 - 2026-06-11
 
 ### Added

@@ -155,7 +155,8 @@ def test_transparency_acknowledgement_verifier_rejects_full_resigned_evidence_pu
     forged = _rewrite_zip(store.evidence_zip_path(portfolio_id), tmp_path / "forged-evidence.zip", _full_resign_evidence_public_summary)
     report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(forged, strict=True, require_response=True, require_accepted=True)
 
-    assert any(item["check_id"] == "ack_evidence_semantics_match" for item in report["blockers"])
+    assert report["status"] == "failed"
+    assert any(item["check_id"] == "ack_evidence_original_response_public_summary" for item in report["blockers"])
 
 
 def _accepted_response(pack: dict) -> dict:
@@ -206,19 +207,32 @@ def _spoof_pack_manifest_zip_entries(docs: dict[str, bytes]) -> None:
 def _full_resign_evidence_public_summary(docs: dict[str, bytes]) -> None:
     evidence = _read_doc(docs, "acknowledgement-evidence.json")
     summary = _read_doc(docs, "acknowledgement-evidence-summary.json")
+    response_binding = _read_doc(docs, "data/response-binding-summary.json")
     public = _read_doc(docs, "data/public-summary.json")
     manifest = _read_doc(docs, "acknowledgement-evidence-manifest.json")
     evidence["public_summary"]["reviewer_name"] = "Forged Reviewer"
+    evidence["public_summary"]["reviewer_organization"] = "Forged Org"
+    forged_summary_hash = _stable_hash_for_test(evidence["public_summary"])
+    evidence.setdefault("source", {})["response_public_summary_hash"] = forged_summary_hash
+    evidence["source_hash"] = _stable_hash_for_test(evidence["source"])
     evidence["integrity_hash"] = ack_evidence_hash(evidence)
     summary["public_summary"] = evidence["public_summary"]
+    summary.setdefault("summary", {})["reviewer_name"] = evidence["public_summary"]["reviewer_name"]
+    response_binding["source_hash"] = evidence["source_hash"]
+    response_binding["response_public_summary_hash"] = forged_summary_hash
     docs["acknowledgement-evidence.json"] = _doc_bytes(evidence)
     docs["acknowledgement-evidence-summary.json"] = _doc_bytes(summary)
+    docs["data/response-binding-summary.json"] = _doc_bytes(response_binding)
     public["public_summary"] = evidence["public_summary"]
+    public["source_hash"] = evidence["source_hash"]
     docs["data/public-summary.json"] = _doc_bytes(public)
     _sync_manifest_file(manifest, "acknowledgement-evidence.json", docs["acknowledgement-evidence.json"])
     _sync_manifest_file(manifest, "acknowledgement-evidence-summary.json", docs["acknowledgement-evidence-summary.json"])
+    _sync_manifest_file(manifest, "data/response-binding-summary.json", docs["data/response-binding-summary.json"])
     _sync_manifest_file(manifest, "data/public-summary.json", docs["data/public-summary.json"])
+    manifest["source_hash"] = evidence["source_hash"]
     manifest["acknowledgement"]["integrity_hash"] = evidence["integrity_hash"]
+    manifest["acknowledgement"]["source_hash"] = evidence["source_hash"]
     manifest["integrity_hash"] = ack_manifest_hash(manifest)
     docs["acknowledgement-evidence-manifest.json"] = _doc_bytes(manifest)
 
@@ -238,3 +252,9 @@ def _sync_manifest_file(manifest: dict, path: str, data: bytes) -> None:
             item["sha256"] = hashlib.sha256(data).hexdigest()
             return
     raise AssertionError(f"manifest file row missing: {path}")
+
+
+def _stable_hash_for_test(payload: dict) -> str:
+    from song_agent.releases import stable_hash
+
+    return stable_hash(payload)

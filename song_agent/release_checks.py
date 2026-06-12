@@ -12195,7 +12195,7 @@ def _v79_attestation_transparency_acknowledgement_smoke(root: Path) -> tuple[boo
             and missing_binding
             and wrong_source
             and change_request.get("status") == "draft"
-            and _v38_check_status(forged_evidence, "ack_evidence_semantics_match") == "failed"
+            and _v38_check_status(forged_evidence, "ack_evidence_original_response_public_summary") == "failed"
             and _v38_check_status(duplicate, "ack_zip_duplicate_entries") == "failed"
             and _v38_check_status(dangerous, "ack_zip_entry_path_safe") == "failed"
             and _v38_check_status(backslash, "ack_zip_entry_path_safe") == "failed"
@@ -12213,7 +12213,7 @@ def _v79_attestation_transparency_acknowledgement_smoke(root: Path) -> tuple[boo
         return ok, (
             f"pack={pack.get('status')}/{pack_report.get('status')}, evidence={evidence.get('status')}/{evidence_report.get('status')}, "
             f"missing_binding={missing_binding}, wrong_source={wrong_source}, change_request={change_request.get('status')}, "
-            f"full_resign={_v38_check_status(forged_evidence, 'ack_evidence_semantics_match')}, duplicate={_v38_check_status(duplicate, 'ack_zip_duplicate_entries')}, "
+            f"full_resign={_v38_check_status(forged_evidence, 'ack_evidence_original_response_public_summary')}, duplicate={_v38_check_status(duplicate, 'ack_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'ack_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ack_zip_entry_path_safe')}, "
             f"case_musicforge={_v38_check_status(case_musicforge, 'ack_zip_no_nested_packages')}, nested={_v38_check_status(nested, 'ack_zip_no_nested_packages')}, "
             f"spoof={_v38_check_status(spoof, 'ack_pack_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ack_redaction_scan')}, "
@@ -12351,19 +12351,32 @@ def _v79_full_resign_ack_evidence(docs: dict[str, bytes]) -> None:
 
     evidence = _v74_read_json_doc(docs, "acknowledgement-evidence.json")
     summary = _v74_read_json_doc(docs, "acknowledgement-evidence-summary.json")
+    response_binding = _v74_read_json_doc(docs, "data/response-binding-summary.json")
     public = _v74_read_json_doc(docs, "data/public-summary.json")
     manifest = _v74_read_json_doc(docs, "acknowledgement-evidence-manifest.json")
     evidence.setdefault("public_summary", {})["reviewer_name"] = "Forged Reviewer"
+    evidence.setdefault("public_summary", {})["reviewer_organization"] = "Forged Org"
+    forged_summary_hash = stable_hash(evidence.get("public_summary") or {})
+    evidence.setdefault("source", {})["response_public_summary_hash"] = forged_summary_hash
+    evidence["source_hash"] = stable_hash(evidence.get("source") or {})
     evidence["integrity_hash"] = ack_evidence_hash(evidence)
     summary["public_summary"] = evidence.get("public_summary")
+    summary.setdefault("summary", {})["reviewer_name"] = evidence.get("public_summary", {}).get("reviewer_name")
+    response_binding["source_hash"] = evidence["source_hash"]
+    response_binding["response_public_summary_hash"] = forged_summary_hash
     public["public_summary"] = evidence.get("public_summary")
+    public["source_hash"] = evidence["source_hash"]
     docs["acknowledgement-evidence.json"] = _v74_json_doc(evidence)
     docs["acknowledgement-evidence-summary.json"] = _v74_json_doc(summary)
+    docs["data/response-binding-summary.json"] = _v74_json_doc(response_binding)
     docs["data/public-summary.json"] = _v74_json_doc(public)
     _v74_sync_manifest_file(manifest, "acknowledgement-evidence.json", docs["acknowledgement-evidence.json"])
     _v74_sync_manifest_file(manifest, "acknowledgement-evidence-summary.json", docs["acknowledgement-evidence-summary.json"])
+    _v74_sync_manifest_file(manifest, "data/response-binding-summary.json", docs["data/response-binding-summary.json"])
     _v74_sync_manifest_file(manifest, "data/public-summary.json", docs["data/public-summary.json"])
+    manifest["source_hash"] = evidence["source_hash"]
     manifest.setdefault("acknowledgement", {})["integrity_hash"] = evidence["integrity_hash"]
+    manifest.setdefault("acknowledgement", {})["source_hash"] = evidence["source_hash"]
     manifest["integrity_hash"] = ack_manifest_hash(manifest)
     docs["acknowledgement-evidence-manifest.json"] = _v74_json_doc(manifest)
 

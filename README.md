@@ -642,7 +642,9 @@ external reviewer confirm the current Transparency ZIP and change notices. The
 response payload must explicitly bind to the acknowledgement pack id/source hash
 and current Transparency ZIP/manifest/feed source; the importer will not fill
 those fields for a bare JSON response. Accepted responses can be converted into
-public-safe acknowledgement evidence. `needs_changes` and `rejected` responses
+public-safe acknowledgement evidence. Evidence ZIPs include response verification
+and original response binding sidecars, so the offline verifier rejects fully
+re-signed forged reviewer summaries. `needs_changes` and `rejected` responses
 only create local Change Request drafts and never mutate Registry, Portal,
 Transparency, or Accepted Evidence state automatically:
 

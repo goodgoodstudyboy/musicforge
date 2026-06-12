@@ -48,6 +48,8 @@ EVIDENCE_REQUIRED_ENTRIES = {
     "acknowledgement-evidence.json",
     "acknowledgement-evidence-summary.json",
     "data/response-binding-summary.json",
+    "data/response-verification-summary.json",
+    "data/original-response-binding-summary.json",
     "data/public-summary.json",
     "README.txt",
 }
@@ -275,7 +277,7 @@ class _AckVerifier:
                 self.data_docs[name] = self._read_json_entry(archive, f"forms/{name}", "template", f"{self.check_prefix}_forms_{name.replace('-', '_').replace('.', '_')}_parse")
         elif self.package_type == ACK_EVIDENCE_PACKAGE_TYPE:
             self.summary_doc = self._read_json_entry(archive, "acknowledgement-evidence-summary.json", "summary", "ack_evidence_summary_parse")
-            for name in ("response-binding-summary.json", "public-summary.json"):
+            for name in ("response-binding-summary.json", "response-verification-summary.json", "original-response-binding-summary.json", "public-summary.json"):
                 self.data_docs[name] = self._read_json_entry(archive, f"data/{name}", "data", f"{self.check_prefix}_data_{name.replace('-', '_').replace('.', '_')}_parse")
 
     def _verify_documents(self) -> None:
@@ -332,12 +334,29 @@ class _AckVerifier:
         row = self.manifest.get("acknowledgement") if isinstance(self.manifest.get("acknowledgement"), dict) else {}
         self._add_exact_check("manifest", "ack_evidence_manifest_integrity", row.get("integrity_hash"), self.main_doc.get("integrity_hash"), "Manifest evidence integrity")
         response_binding = self.data_docs.get("response-binding-summary.json", {})
+        response_verification = self.data_docs.get("response-verification-summary.json", {})
+        original_response = self.data_docs.get("original-response-binding-summary.json", {})
         public_summary_doc = self.data_docs.get("public-summary.json", {})
         for key, value in source.items():
             self._add_exact_check("data", f"ack_evidence_data_response_{key}", response_binding.get(key), value, f"Response binding {key}")
         public = self.main_doc.get("public_summary") if isinstance(self.main_doc.get("public_summary"), dict) else {}
         self._add_exact_check("data", "ack_evidence_data_public_summary", public_summary_doc.get("public_summary"), public, "Public summary data")
         self._add_exact_check("evidence", "ack_evidence_semantics_match", source.get("response_public_summary_hash"), stable_hash(public), "Evidence public summary response binding")
+        self._add_exact_check("data", "ack_evidence_response_verification_status", response_verification.get("status"), source.get("response_verification_status"), "Response verification status sidecar")
+        self._add_exact_check("data", "ack_evidence_response_verification_hash", response_verification.get("verification_hash"), source.get("response_verification_hash"), "Response verification hash sidecar")
+        self._add_exact_check("data", "ack_evidence_response_verification_response_id", response_verification.get("response_id"), source.get("response_id"), "Response verification response id")
+        self._add_exact_check("data", "ack_evidence_response_verification_payload_hash", response_verification.get("response_payload_hash"), source.get("response_payload_hash"), "Response verification payload hash")
+        self._add_exact_check("data", "ack_evidence_response_verification_integrity_hash", response_verification.get("response_integrity_hash"), source.get("response_integrity_hash"), "Response verification integrity hash")
+        self._add_exact_check("data", "ack_evidence_original_response_id", original_response.get("response_id"), source.get("response_id"), "Original response id")
+        self._add_exact_check("data", "ack_evidence_original_response_payload_hash", original_response.get("response_payload_hash"), source.get("response_payload_hash"), "Original response payload hash")
+        self._add_exact_check("data", "ack_evidence_original_response_integrity_hash", original_response.get("response_integrity_hash"), source.get("response_integrity_hash"), "Original response integrity hash")
+        self._add_exact_check("data", "ack_evidence_original_response_public_summary", original_response.get("public_summary"), public, "Original response public summary")
+        self._add_exact_check("data", "ack_evidence_original_response_public_summary_hash", original_response.get("response_public_summary_hash"), stable_hash(public), "Original response public summary hash")
+        self._add_exact_check("data", "ack_evidence_original_response_pack_id", original_response.get("review_pack_id"), source.get("response_review_pack_id"), "Original response pack id")
+        self._add_exact_check("data", "ack_evidence_original_response_pack_source_hash", original_response.get("review_pack_source_hash"), source.get("response_review_pack_source_hash"), "Original response pack source hash")
+        self._add_exact_check("data", "ack_evidence_original_response_transparency_zip", original_response.get("transparency_zip_sha256"), source.get("transparency_zip_sha256"), "Original response transparency ZIP hash")
+        self._add_exact_check("data", "ack_evidence_original_response_transparency_manifest", original_response.get("transparency_manifest_hash"), source.get("transparency_manifest_hash"), "Original response transparency manifest hash")
+        self._add_exact_check("data", "ack_evidence_original_response_transparency_feed", original_response.get("transparency_feed_source_hash"), source.get("transparency_feed_source_hash"), "Original response transparency feed source hash")
         self._add_exact_check("evidence", "ack_evidence_status_binding", source.get("response_status"), self.main_doc.get("external_review_status"), "Evidence response status binding")
         self._add_exact_check("evidence", "ack_evidence_verification_binding", source.get("response_verification_status"), "passed", "Evidence response verification binding")
         self._add_exact_check("summary", "ack_evidence_summary_status", self.summary_doc.get("summary", {}).get("status") if isinstance(self.summary_doc.get("summary"), dict) else None, acknowledgement_summary(self.main_doc).get("status"), "Evidence summary status")

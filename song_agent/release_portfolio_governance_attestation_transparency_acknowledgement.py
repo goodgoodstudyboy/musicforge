@@ -752,9 +752,36 @@ def _pack_data_documents(pack: dict[str, Any], feed: dict[str, Any]) -> dict[str
 
 def _evidence_data_documents(evidence: dict[str, Any]) -> dict[str, Any]:
     source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
+    public = evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}
     return {
         "response-binding-summary.json": {"source_hash": evidence.get("source_hash"), **source},
-        "public-summary.json": {"source_hash": evidence.get("source_hash"), "public_summary": evidence.get("public_summary")},
+        "response-verification-summary.json": {
+            "source_hash": evidence.get("source_hash"),
+            "response_id": source.get("response_id"),
+            "status": source.get("response_verification_status"),
+            "verification_hash": source.get("response_verification_hash"),
+            "response_payload_hash": source.get("response_payload_hash"),
+            "response_integrity_hash": source.get("response_integrity_hash"),
+            "review_pack_id": source.get("review_pack_id"),
+            "review_pack_source_hash": source.get("review_pack_source_hash"),
+            "transparency_zip_sha256": source.get("transparency_zip_sha256"),
+            "transparency_manifest_hash": source.get("transparency_manifest_hash"),
+            "transparency_feed_source_hash": source.get("transparency_feed_source_hash"),
+        },
+        "original-response-binding-summary.json": {
+            "source_hash": evidence.get("source_hash"),
+            "response_id": source.get("response_id"),
+            "response_payload_hash": source.get("response_payload_hash"),
+            "response_integrity_hash": source.get("response_integrity_hash"),
+            "review_pack_id": source.get("response_review_pack_id"),
+            "review_pack_source_hash": source.get("response_review_pack_source_hash"),
+            "transparency_zip_sha256": source.get("transparency_zip_sha256"),
+            "transparency_manifest_hash": source.get("transparency_manifest_hash"),
+            "transparency_feed_source_hash": source.get("transparency_feed_source_hash"),
+            "public_summary": public,
+            "response_public_summary_hash": source.get("response_public_summary_hash"),
+        },
+        "public-summary.json": {"source_hash": evidence.get("source_hash"), "public_summary": public},
     }
 
 
