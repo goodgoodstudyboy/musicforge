@@ -56,6 +56,7 @@ from song_agent.release_checks import (
     _v79_attestation_transparency_acknowledgement_smoke,
     _v80_public_trust_center_smoke,
     _v81_public_trust_center_delivery_smoke,
+    _v82_public_trust_center_anchor_registry_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -764,6 +765,18 @@ def test_v81_public_trust_center_delivery_smoke(tmp_path: Path) -> None:
 
     assert ok is True, detail
     assert "delivery_full_resign=failed" in detail
+
+
+def test_v82_public_trust_center_anchor_registry_smoke(tmp_path: Path) -> None:
+    ok, detail = _v82_public_trust_center_anchor_registry_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "anchor=passed/passed" in detail
+    assert "ptc_anchor=passed" in detail
+    assert "signature=failed" in detail
+    assert "current_anchor=failed" in detail
+    assert "backslash=failed" in detail
+    assert "redaction=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

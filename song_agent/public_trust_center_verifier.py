@@ -89,6 +89,10 @@ def verify_public_trust_center_package(
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
     delivery_anchor_path: Path | str | None = None,
+    anchor_registry_path: Path | str | None = None,
+    require_anchor_registry_current: bool = False,
+    require_anchor_published: bool = False,
+    require_anchor_not_revoked: bool = False,
 ) -> dict[str, Any]:
     verifier = _PublicTrustCenterVerifier(
         Path(zip_path),
@@ -111,6 +115,10 @@ def verify_public_trust_center_package(
         max_entry_count=max_entry_count,
         now=now,
         delivery_anchor_path=Path(delivery_anchor_path) if delivery_anchor_path is not None else None,
+        anchor_registry_path=Path(anchor_registry_path) if anchor_registry_path is not None else None,
+        require_anchor_registry_current=require_anchor_registry_current,
+        require_anchor_published=require_anchor_published,
+        require_anchor_not_revoked=require_anchor_not_revoked,
     )
     return verifier.run()
 
@@ -164,6 +172,10 @@ class _PublicTrustCenterVerifier:
         max_entry_count: int,
         now: str | None,
         delivery_anchor_path: Path | None,
+        anchor_registry_path: Path | None,
+        require_anchor_registry_current: bool,
+        require_anchor_published: bool,
+        require_anchor_not_revoked: bool,
     ) -> None:
         self.zip_path = zip_path
         self.strict = strict
@@ -185,7 +197,12 @@ class _PublicTrustCenterVerifier:
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
         self.delivery_anchor_path = delivery_anchor_path
+        self.anchor_registry_path = anchor_registry_path
+        self.require_anchor_registry_current = require_anchor_registry_current
+        self.require_anchor_published = require_anchor_published
+        self.require_anchor_not_revoked = require_anchor_not_revoked
         self.delivery_anchor_doc: dict[str, Any] = {}
+        self.anchor_registry_verification: dict[str, Any] = {}
         self.checks: list[dict[str, Any]] = []
         self.files: list[dict[str, Any]] = []
         self.redaction_findings: list[dict[str, Any]] = []
@@ -214,6 +231,7 @@ class _PublicTrustCenterVerifier:
                 self._verify_html(archive)
                 self._verify_requirements()
                 self._verify_delivery_anchor()
+                self._verify_anchor_registry()
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -624,6 +642,48 @@ class _PublicTrustCenterVerifier:
         actual = self.delivery_anchor_doc.get("fingerprint_sidecars") if isinstance(self.delivery_anchor_doc.get("fingerprint_sidecars"), list) else []
         self._add_exact_check("requirements", "ptc_delivery_anchor_fingerprint_sidecars", actual, expected, "Delivery anchor binds fingerprint sidecars")
 
+    def _verify_anchor_registry(self) -> None:
+        required = self.require_anchor_registry_current or self.require_anchor_published or self.require_anchor_not_revoked or self.anchor_registry_path is not None
+        if not required:
+            return
+        registry_path = self.anchor_registry_path
+        if registry_path is None:
+            self._add_check("requirements", "ptc_anchor_registry_present", "failed", "blocking", "Anchor Registry ZIP is required.")
+            return
+        if not registry_path.exists() or not registry_path.is_file() or registry_path.is_symlink():
+            self._add_check("requirements", "ptc_anchor_registry_present", "failed", "blocking", "Anchor Registry ZIP does not exist or is not a regular file.")
+            return
+        try:
+            from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package
+        except Exception as exc:
+            self._add_check("requirements", "ptc_anchor_registry_import", "failed", "blocking", f"Anchor Registry verifier cannot be imported: {exc}")
+            return
+        registry_report = verify_public_trust_center_anchor_registry_package(
+            registry_path,
+            strict=self.strict,
+            require_current=self.require_anchor_registry_current,
+            require_anchor_published=self.require_anchor_published,
+            require_anchor_not_revoked=self.require_anchor_not_revoked,
+            max_zip_size_mb=self.max_zip_size_mb,
+            max_uncompressed_size_mb=self.max_uncompressed_size_mb,
+            max_entry_count=self.max_entry_count,
+            now=self.generated_at,
+        )
+        self.anchor_registry_verification = registry_report
+        self._add_exact_check("requirements", "ptc_anchor_registry_verification_status", registry_report.get("status"), "passed", "Anchor Registry verification status")
+        registry = _read_zip_json(registry_path, "registry.json")
+        current = _find_registry_current_entry(registry)
+        registry_anchor = current.get("anchor") if current and isinstance(current.get("anchor"), dict) else {}
+        self._add_exact_check("requirements", "ptc_anchor_registry_current_anchor", registry_anchor, self.delivery_anchor_doc, "Anchor Registry current anchor matches delivery anchor")
+        self._add_exact_check("requirements", "ptc_anchor_registry_zip_sha256", registry_anchor.get("zip_sha256"), self.zip_sha256, "Anchor Registry current anchor ZIP sha256")
+        self._add_exact_check("requirements", "ptc_anchor_registry_manifest_hash", registry_anchor.get("manifest_hash"), self.manifest.get("integrity_hash"), "Anchor Registry current anchor manifest hash")
+        self._add_exact_check("requirements", "ptc_anchor_registry_source_hash", registry_anchor.get("source_hash"), self.report_doc.get("source_hash"), "Anchor Registry current anchor source hash")
+        if self.require_anchor_published or self.require_anchor_registry_current:
+            self._add_exact_check("requirements", "ptc_anchor_registry_current_status", current.get("status") if current else None, "published", "Anchor Registry current entry status")
+        if self.require_anchor_not_revoked:
+            ok = bool(current) and current.get("status") != "revoked"
+            self._add_check("requirements", "ptc_anchor_registry_not_revoked", "passed" if ok else "failed", "blocking", "Anchor Registry current entry is not revoked." if ok else "Anchor Registry current entry is revoked or missing.")
+
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:
             if not name.endswith((".json", ".txt", ".md", ".html")):
@@ -959,6 +1019,23 @@ def _delivery_anchor_rows_from_fingerprint_sidecars(sidecars: dict[str, dict[str
             }
         )
     return sorted(rows, key=lambda item: str(item.get("path") or ""))
+
+
+def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            value = json.loads(archive.read(entry).decode("utf-8"))
+            return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def _find_registry_current_entry(registry: dict[str, Any]) -> dict[str, Any]:
+    current_id = str(registry.get("current_entry_id") or "")
+    for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
+        if isinstance(entry, dict) and entry.get("entry_id") == current_id:
+            return entry
+    return {}
 
 
 def _delivery_payloads_from_data_docs(data_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

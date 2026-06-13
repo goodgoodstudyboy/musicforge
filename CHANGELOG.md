@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.2.0 - 2026-06-13
+
+### Added
+- Public Trust Center Anchor Registry for registering, publishing, revoking, exporting, zipping, and offline-verifying current delivery anchors.
+- `verify-public-trust-center-anchor-registry-package` CLI plus Public Trust Center CLI/API/Studio controls for anchor registry workflows.
+- Public Trust Center verifier support for `--anchor-registry`, `--require-anchor-registry-current`, `--require-anchor-published`, and `--require-anchor-not-revoked`.
+- release-check v8.2 smoke covering anchor publication, PTC binding, signature tamper, current-anchor tamper, revoke checks, ZIP safety, manifest spoofing, and redaction.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_anchor_registry.py tests\test_cli_public_trust_center.py tests\test_server_public_trust_center.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v82_public_trust_center_anchor_registry_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --skip-tests --json`
+
 ## v8.1.3 - 2026-06-13
 
 ### Fixed

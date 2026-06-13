@@ -672,6 +672,17 @@ python -m song_agent.cli public-trust-center --center-id ptc-default --refresh -
 python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --require-delivery-readiness --require-distribution-ready --require-submission-accepted --require-submission-evidence --require-operations-signed --require-operations-audit --require-operations-reviewer-pack --json
 ```
 
+Public Trust Center Anchor Registry registers the current delivery anchor as a
+publishable, revocable trust-anchor entry. The registry ZIP is verified outside
+the Trust Center ZIP and can be supplied back to the Trust Center verifier when
+anchor registry requirements are enabled:
+
+```powershell
+python -m song_agent.cli public-trust-center --center-id ptc-default --anchor-register --anchor-publish --anchor-export --anchor-zip --anchor-verify --strict --require-anchor-registry-current --require-anchor-published --require-anchor-not-revoked --json
+python -m song_agent.cli verify-public-trust-center-anchor-registry-package path\to\public-trust-center-anchor-registry.zip --strict --require-current --require-anchor-published --require-anchor-not-revoked --json
+python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-delivery-readiness --delivery-anchor path\to\public-trust-center.delivery-anchor.json --anchor-registry path\to\public-trust-center-anchor-registry.zip --require-anchor-registry-current --require-anchor-published --require-anchor-not-revoked --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

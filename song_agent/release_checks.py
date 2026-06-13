@@ -12442,6 +12442,173 @@ def _v81_public_trust_center_delivery_smoke(root: Path) -> tuple[bool, str]:
     return ok, "v8.1 delivery sidecar checks via v8.0 full trust smoke; " + detail
 
 
+def _v82_public_trust_center_anchor_registry_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v82-public-trust-center-anchor-")).resolve()
+    try:
+        from song_agent.public_trust_center import PublicTrustCenterStore
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore, anchor_registry_manifest_hash, anchor_registry_report_hash, anchor_registry_hash
+        from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package
+        from song_agent.public_trust_center_verifier import verify_public_trust_center_package
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+        release = release_store.create_release({"name": "v8.2 Anchor Registry Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_store.write_signoff(release.release_id, {"status": "signed", "signed_by": "release-check", "signed_at": "2026-06-13T00:00:00+00:00"})
+        release_store.update_signoff_summary(release.release_id, {"status": "signed"})
+        class _DummyStore:
+            def list_portfolios(self, include_archived: bool = False) -> list[dict[str, Any]]:
+                return []
+
+        dummy_store = _DummyStore()
+        trust_store = PublicTrustCenterStore(
+            release_store=release_store,
+            portfolio_store=dummy_store,
+            registry_store=dummy_store,
+            portal_store=dummy_store,
+            transparency_store=dummy_store,
+            acknowledgement_store=dummy_store,
+        )
+        trust_store.refresh_report(
+            "ptc-default",
+            {
+                "release_ids": [release.release_id],
+                "include_all_releases": False,
+                "include_all_portfolios": False,
+                "require_registry_current": False,
+                "require_portal_current": False,
+                "require_transparency_current": False,
+                "require_acknowledgement_current": False,
+                "include_distribution": False,
+                "include_submission": False,
+                "include_submission_evidence": False,
+                "include_operations": False,
+            },
+        )
+        trust_store.export_center("ptc-default")
+        trust_store.build_zip("ptc-default")
+
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+        entry = anchor_store.register_current_anchor("ptc-default", {"reason": "release-check register anchor"})["entry"]
+        anchor_store.publish_entry("ptc-default", str(entry["entry_id"]), {"reason": "release-check publish anchor"})
+        report = anchor_store.refresh_report("ptc-default")
+        manifest = anchor_store.export_registry("ptc-default")
+        zip_info = anchor_store.build_zip("ptc-default")
+        verification = verify_public_trust_center_anchor_registry_package(anchor_store.zip_path("ptc-default"), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        ptc_verification = verify_public_trust_center_package(
+            trust_store.zip_path("ptc-default"),
+            strict=True,
+            require_delivery_readiness=True,
+            delivery_anchor_path=trust_store.delivery_anchor_path("ptc-default"),
+            anchor_registry_path=anchor_store.zip_path("ptc-default"),
+            require_anchor_registry_current=True,
+            require_anchor_published=True,
+            require_anchor_not_revoked=True,
+        )
+        source_zip = anchor_store.zip_path("ptc-default")
+        signature_tamper = verify_public_trust_center_anchor_registry_package(_v76_rewrite_zip(source_zip, base / "anchor-signature.zip", _v82_tamper_anchor_signature), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        anchor_tamper = verify_public_trust_center_anchor_registry_package(_v76_rewrite_zip(source_zip, base / "anchor-current.zip", _v82_tamper_anchor_current), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        duplicate = verify_public_trust_center_anchor_registry_package(_v43_duplicate_submission_zip(source_zip, base / "anchor-duplicate.zip"), strict=True)
+        dangerous = verify_public_trust_center_anchor_registry_package(_v38_rewrite_zip(source_zip, base / "anchor-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_public_trust_center_anchor_registry_package(_v38_backslash_entry_zip(base / "anchor-backslash.zip"), strict=True)
+        case_musicforge = verify_public_trust_center_anchor_registry_package(_v38_rewrite_zip(source_zip, base / "anchor-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        spoof = verify_public_trust_center_anchor_registry_package(_v38_rewrite_zip(source_zip, base / "anchor-spoof.zip", additions={"extra.txt": b"extra"}, transforms={"anchor-registry-manifest.json": _v82_spoof_anchor_manifest}), strict=True)
+        redaction = verify_public_trust_center_anchor_registry_package(_v38_rewrite_zip(source_zip, base / "anchor-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+
+        anchor_store.revoke_entry("ptc-default", str(entry["entry_id"]), {"reason": "release-check revoke anchor"})
+        anchor_store.refresh_report("ptc-default")
+        anchor_store.export_registry("ptc-default")
+        anchor_store.build_zip("ptc-default")
+        revoked_ptc = verify_public_trust_center_package(
+            trust_store.zip_path("ptc-default"),
+            strict=True,
+            require_delivery_readiness=True,
+            delivery_anchor_path=trust_store.delivery_anchor_path("ptc-default"),
+            anchor_registry_path=anchor_store.zip_path("ptc-default"),
+            require_anchor_registry_current=True,
+            require_anchor_not_revoked=True,
+        )
+
+        serialized = json.dumps({"report": report, "manifest": manifest, "verification": verification}, ensure_ascii=False)
+        ok = (
+            report.get("status") == "passed"
+            and manifest.get("package_type") == "musicforge_public_trust_center_anchor_registry"
+            and bool(zip_info.get("sha256"))
+            and verification.get("status") == "passed"
+            and _v38_check_status(ptc_verification, "ptc_anchor_registry_current_anchor") == "passed"
+            and _v38_check_status(signature_tamper, "ptcar-entry-000001_signature") == "failed"
+            and _v38_check_status(anchor_tamper, "ptcar_current_anchor_matches_entry") == "failed"
+            and _v38_check_status(duplicate, "ptcar_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "ptcar_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "ptcar_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "ptcar_zip_no_nested_internal_entries") == "failed"
+            and _v38_check_status(spoof, "ptcar_manifest_zip_entries_reference_only") == "failed"
+            and _v38_check_status(redaction, "ptcar_redaction_scan") == "failed"
+            and (
+                _v38_check_status(revoked_ptc, "ptc_anchor_registry_current_anchor") == "failed"
+                or _v38_check_status(revoked_ptc, "ptcar_require_current") == "failed"
+            )
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"anchor={report.get('status')}/{verification.get('status')}, zip={bool(zip_info.get('sha256'))}, "
+            f"ptc_anchor={_v38_check_status(ptc_verification, 'ptc_anchor_registry_current_anchor')}, "
+            f"signature={_v38_check_status(signature_tamper, 'ptcar-entry-000001_signature')}, current_anchor={_v38_check_status(anchor_tamper, 'ptcar_current_anchor_matches_entry')}, "
+            f"duplicate={_v38_check_status(duplicate, 'ptcar_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'ptcar_zip_entry_path_safe')}, "
+            f"backslash={_v38_check_status(backslash, 'ptcar_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge, 'ptcar_zip_no_nested_internal_entries')}, "
+            f"spoof={_v38_check_status(spoof, 'ptcar_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptcar_redaction_scan')}, "
+            f"revoked={_v38_check_status(revoked_ptc, 'ptc_anchor_registry_current_anchor')}/{_v38_check_status(revoked_ptc, 'ptcar_require_current')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v82_tamper_anchor_signature(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_anchor_registry import anchor_entry_hash, anchor_registry_hash, anchor_registry_manifest_hash
+
+    registry = _v74_read_json_doc(docs, "registry.json")
+    manifest = _v74_read_json_doc(docs, "anchor-registry-manifest.json")
+    entry = registry["entries"][0]
+    entry.setdefault("signature", {})["key_id"] = "tampered-key"
+    entry["integrity_hash"] = anchor_entry_hash(entry)
+    registry["integrity_hash"] = anchor_registry_hash(registry)
+    docs["registry.json"] = _v74_json_doc(registry)
+    docs[f"entries/{entry['entry_id']}.json"] = _v74_json_doc(entry)
+    _v74_sync_manifest_file(manifest, "registry.json", docs["registry.json"])
+    _v74_sync_manifest_file(manifest, f"entries/{entry['entry_id']}.json", docs[f"entries/{entry['entry_id']}.json"])
+    manifest.setdefault("registry", {})["integrity_hash"] = registry["integrity_hash"]
+    manifest["integrity_hash"] = anchor_registry_manifest_hash(manifest)
+    docs["anchor-registry-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v82_tamper_anchor_current(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_anchor_registry import anchor_registry_manifest_hash
+
+    current = _v74_read_json_doc(docs, "current-anchor.json")
+    manifest = _v74_read_json_doc(docs, "anchor-registry-manifest.json")
+    current["zip_sha256"] = "f" * 64
+    current["anchor_hash"] = stable_hash({key: value for key, value in current.items() if key != "anchor_hash"})
+    docs["current-anchor.json"] = _v74_json_doc(current)
+    _v74_sync_manifest_file(manifest, "current-anchor.json", docs["current-anchor.json"])
+    manifest["integrity_hash"] = anchor_registry_manifest_hash(manifest)
+    docs["anchor-registry-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v82_spoof_anchor_manifest(data: bytes) -> bytes:
+    from song_agent.public_trust_center_anchor_registry import anchor_registry_manifest_hash
+
+    manifest = json.loads(data.decode("utf-8"))
+    manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
+    manifest["integrity_hash"] = anchor_registry_manifest_hash(manifest)
+    return _v74_json_doc(manifest)
+
+
 def _v80_tamper_trust_center_report(docs: dict[str, bytes]) -> None:
     from song_agent.public_trust_center import public_trust_center_manifest_hash, public_trust_center_report_hash
 

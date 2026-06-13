@@ -293,7 +293,12 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="public-trust-center-zip"' in html
     assert 'id="public-trust-center-verify"' in html
     assert 'id="public-trust-center-archive"' in html
+    assert 'id="public-trust-center-anchor-register"' in html
+    assert 'id="public-trust-center-anchor-export"' in html
+    assert 'id="public-trust-center-anchor-zip"' in html
+    assert 'id="public-trust-center-anchor-verify"' in html
     assert "/api/public-trust-centers/ptc-default.zip" in html
+    assert "/api/public-trust-centers/ptc-default/anchor-registry/download" in html
     assert "/api/public-trust-centers/ptc-default/refresh" in html
     assert "/api/public-trust-centers/ptc-default/verify" in html
     assert "/api/release-portfolio-governance-queues" in html

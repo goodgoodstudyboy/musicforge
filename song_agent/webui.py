@@ -3705,6 +3705,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="public-trust-center-verify" type="button">Verify Trust Center ZIP</button>
           <button class="secondary" id="public-trust-center-archive" type="button">Archive Trust Center</button>
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default.zip">Download Trust Center ZIP</a>
+          <button class="secondary" id="public-trust-center-anchor-register" type="button">Register Anchor</button>
+          <button class="secondary" id="public-trust-center-anchor-export" type="button">Export Anchor Registry</button>
+          <button class="secondary" id="public-trust-center-anchor-zip" type="button">Build Anchor Registry ZIP</button>
+          <button class="secondary" id="public-trust-center-anchor-verify" type="button">Verify Anchor Registry</button>
+          <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/anchor-registry/download">Download Anchor Registry ZIP</a>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4249,12 +4254,44 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/public-trust-centers/ptc-default/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ strict: true, require_registry_current: true, require_portal_current: true, require_transparency_current: true, require_delivery_readiness: false, require_distribution_ready: false, require_submission_accepted: false, require_submission_evidence: false, require_operations_signed: false, require_operations_audit: false, require_operations_reviewer_pack: false }),
+          body: JSON.stringify({ strict: true, require_registry_current: true, require_portal_current: true, require_transparency_current: true, require_delivery_readiness: false, require_distribution_ready: false, require_submission_accepted: false, require_submission_evidence: false, require_operations_signed: false, require_operations_audit: false, require_operations_reviewer_pack: false, require_anchor_registry_current: true, require_anchor_published: true, require_anchor_not_revoked: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });
       bindAction("public-trust-center-archive", async () => {
         await api(`/api/public-trust-centers/ptc-default/archive`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-register", async () => {
+        const registered = await api(`/api/public-trust-centers/ptc-default/anchor-registry/register-current`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Studio anchor registration" }),
+        });
+        const entryId = (registered.entry || {}).entry_id;
+        if (entryId) {
+          await api(`/api/public-trust-centers/ptc-default/anchor-registry/publish/${encodeURIComponent(entryId)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: "Studio anchor publication" }),
+          });
+        }
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-export", async () => {
+        await api(`/api/public-trust-centers/ptc-default/anchor-registry/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-zip", async () => {
+        await api(`/api/public-trust-centers/ptc-default/anchor-registry/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-verify", async () => {
+        await api(`/api/public-trust-centers/ptc-default/anchor-registry/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, require_current: true, require_anchor_published: true, require_anchor_not_revoked: true }),
+        });
         await renderPortfolioAuditDetail(portfolioId);
       });
     }

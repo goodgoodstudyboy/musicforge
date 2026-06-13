@@ -9,6 +9,7 @@ from tests.test_server_release_portfolio_governance_attestation_transparency_ack
 from tests.test_server_release_portfolio_governance_attestation_transparency import _response_payload
 
 from song_agent.public_trust_center import PublicTrustCenterStore
+from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
 from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
 from song_agent.release_portfolio_governance_attestation_transparency import ReleasePortfolioGovernanceAttestationTransparencyStore
 from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore, response_payload_hash, response_template
@@ -47,6 +48,7 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
             operations_audit_store=server.release_operations_audit_store,
             operations_reviewer_pack_store=server.release_operations_reviewer_pack_store,
         )
+        server.public_trust_center_anchor_registry_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=server.public_trust_center_store)
         request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/pack/refresh", {"profile": "public_summary"})
         response_zip = review_store.build_response_zip(portfolio_id, _response_payload("accepted"))
         _portal_import_status, portal_imported = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/responses/import", {"content_base64": base64.b64encode(response_zip.read_bytes()).decode("ascii")})
@@ -89,6 +91,16 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
         export_status, export = request_json(server, "POST", "/api/public-trust-centers/ptc-default/export")
         zip_status, zipped = request_json(server, "POST", "/api/public-trust-centers/ptc-default/zip")
         verify_status, verify = request_json(server, "POST", "/api/public-trust-centers/ptc-default/verify", {"strict": True, "require_registry_current": True, "require_portal_current": True, "require_transparency_current": True, "require_acknowledgement_current": True})
+        anchor_register_status, anchor_registered = request_json(server, "POST", "/api/public-trust-centers/ptc-default/anchor-registry/register-current", {"reason": "register current trust center anchor"})
+        anchor_entry_id = anchor_registered["entry"]["entry_id"]
+        anchor_publish_status, anchor_published = request_json(server, "POST", f"/api/public-trust-centers/ptc-default/anchor-registry/publish/{anchor_entry_id}", {"reason": "publish current trust center anchor"})
+        anchor_refresh_status, anchor_refresh = request_json(server, "POST", "/api/public-trust-centers/ptc-default/anchor-registry/refresh", {})
+        anchor_export_status, anchor_export = request_json(server, "POST", "/api/public-trust-centers/ptc-default/anchor-registry/export", {})
+        anchor_zip_status, anchor_zip = request_json(server, "POST", "/api/public-trust-centers/ptc-default/anchor-registry/zip", {})
+        anchor_verify_status, anchor_verify = request_json(server, "POST", "/api/public-trust-centers/ptc-default/anchor-registry/verify", {"strict": True, "require_current": True, "require_anchor_published": True, "require_anchor_not_revoked": True})
+        anchor_detail_status, anchor_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/anchor-registry")
+        anchor_download_status, anchor_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/anchor-registry/download")
+        verify_anchor_status, verify_anchor = request_json(server, "POST", "/api/public-trust-centers/ptc-default/verify", {"strict": True, "require_delivery_readiness": True, "require_anchor_registry_current": True, "require_anchor_published": True, "require_anchor_not_revoked": True})
         detail_status, detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default")
         archive_status, archive = request_json(server, "POST", "/api/public-trust-centers/ptc-default/archive")
         download_status, body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default.zip")
@@ -110,6 +122,24 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
     assert verify_status == 200
     assert verify["verification"]["status"] == "passed"
     assert any(item["check_id"] == "ptc_delivery_verification_sidecar_binding" for item in verify["verification"]["checks"])
+    assert anchor_register_status == 201
+    assert anchor_publish_status == 200
+    assert anchor_published["summary"]["current_entry_status"] == "published"
+    assert anchor_refresh_status == 201
+    assert anchor_refresh["report"]["status"] == "passed"
+    assert anchor_export_status == 201
+    assert anchor_export["manifest"]["package_type"] == "musicforge_public_trust_center_anchor_registry"
+    assert anchor_zip_status == 200
+    assert anchor_zip["zip"]["sha256"]
+    assert anchor_verify_status == 200
+    assert anchor_verify["verification"]["status"] == "passed"
+    assert anchor_detail_status == 200
+    assert anchor_detail["summary"]["current_entry_status"] == "published"
+    assert anchor_download_status == 200
+    assert anchor_body.startswith(b"PK")
+    assert verify_anchor_status == 200
+    assert any(item["check_id"] == "ptc_anchor_registry_current_anchor" for item in verify_anchor["verification"]["checks"])
+    assert all(not item["check_id"].startswith("ptc_anchor_registry") for item in verify_anchor["verification"]["blockers"])
     assert detail_status == 200
     assert detail["summary"]["status"] == "passed"
     assert archive_status == 200

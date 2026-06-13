@@ -321,6 +321,17 @@ from song_agent.public_trust_center import (
     PublicTrustCenterStore,
     public_trust_center_summary,
 )
+from song_agent.public_trust_center_anchor_registry import (
+    PublicTrustCenterAnchorRegistryError,
+    PublicTrustCenterAnchorRegistryNotFoundError,
+    PublicTrustCenterAnchorRegistryStateError,
+    PublicTrustCenterAnchorRegistryStore,
+    anchor_registry_summary as public_trust_center_anchor_registry_summary,
+)
+from song_agent.public_trust_center_anchor_registry_verifier import (
+    verify_public_trust_center_anchor_registry_package,
+    write_public_trust_center_anchor_registry_verification_report,
+)
 from song_agent.public_trust_center_verifier import (
     verify_public_trust_center_package,
     write_public_trust_center_verification_report,
@@ -2849,6 +2860,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def public_trust_center_store(self) -> PublicTrustCenterStore:
         return self.server.public_trust_center_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_anchor_registry_store(self) -> PublicTrustCenterAnchorRegistryStore:
+        return self.server.public_trust_center_anchor_registry_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -7206,9 +7221,75 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     require_operations_audit=bool(payload.get("require_operations_audit", False)),
                     require_operations_reviewer_pack=bool(payload.get("require_operations_reviewer_pack", False)),
                     delivery_anchor_path=self.public_trust_center_store.delivery_anchor_path(center_id),
+                    anchor_registry_path=self.public_trust_center_anchor_registry_store.zip_path(center_id) if bool(payload.get("require_anchor_registry_current", False)) or bool(payload.get("require_anchor_published", False)) or bool(payload.get("require_anchor_not_revoked", False)) or bool(payload.get("use_anchor_registry", False)) else None,
+                    require_anchor_registry_current=bool(payload.get("require_anchor_registry_current", False)),
+                    require_anchor_published=bool(payload.get("require_anchor_published", False)),
+                    require_anchor_not_revoked=bool(payload.get("require_anchor_not_revoked", False)),
                 )
                 write_public_trust_center_verification_report(report, self.public_trust_center_store.verification_report_path(center_id))
                 self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                return
+            if action == "anchor-registry":
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    registry = self.public_trust_center_anchor_registry_store.read_registry(center_id, default={})
+                    report = self.public_trust_center_anchor_registry_store.read_report(center_id, default={})
+                    self._send_json({"ok": True, "center_id": center_id, "registry": registry, "report": report, "summary": self.public_trust_center_anchor_registry_store.summary(center_id)})
+                    return
+                subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "download" and len(parts) == 3:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.public_trust_center_anchor_registry_store.zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-anchor-registry.zip")
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                if subaction == "register-current" and len(parts) == 3:
+                    result = self.public_trust_center_anchor_registry_store.register_current_anchor(center_id, payload, now=_utc_now())
+                    status = HTTPStatus.OK if result.get("existing") else HTTPStatus.CREATED
+                    self._send_json({"ok": True, "center_id": center_id, **result, "summary": public_trust_center_anchor_registry_summary(result.get("registry") if isinstance(result.get("registry"), dict) else {})}, status=status)
+                    return
+                if subaction == "publish" and len(parts) == 4:
+                    result = self.public_trust_center_anchor_registry_store.publish_entry(center_id, parts[3], payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, **result, "summary": public_trust_center_anchor_registry_summary(result.get("registry") if isinstance(result.get("registry"), dict) else {})})
+                    return
+                if subaction == "revoke" and len(parts) == 4:
+                    result = self.public_trust_center_anchor_registry_store.revoke_entry(center_id, parts[3], payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, **result, "summary": public_trust_center_anchor_registry_summary(result.get("registry") if isinstance(result.get("registry"), dict) else {})})
+                    return
+                if subaction == "supersede" and len(parts) == 4:
+                    result = self.public_trust_center_anchor_registry_store.supersede_entry(center_id, parts[3], payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, **result, "summary": public_trust_center_anchor_registry_summary(result.get("registry") if isinstance(result.get("registry"), dict) else {})})
+                    return
+                if subaction == "refresh" and len(parts) == 3:
+                    report = self.public_trust_center_anchor_registry_store.refresh_report(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "report": report, "summary": public_trust_center_anchor_registry_summary(self.public_trust_center_anchor_registry_store.read_registry(center_id, default={}))}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "export" and len(parts) == 3:
+                    manifest = self.public_trust_center_anchor_registry_store.export_registry(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "manifest": manifest, "summary": {"source_hash": manifest.get("source_hash"), "package_type": manifest.get("package_type")}}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "zip" and len(parts) == 3:
+                    zip_info = self.public_trust_center_anchor_registry_store.build_zip(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "zip": zip_info})
+                    return
+                if subaction == "verify" and len(parts) == 3:
+                    report = verify_public_trust_center_anchor_registry_package(
+                        self.public_trust_center_anchor_registry_store.zip_path(center_id),
+                        strict=bool(payload.get("strict", True)),
+                        require_current=bool(payload.get("require_current", False)),
+                        require_anchor_published=bool(payload.get("require_anchor_published", False)),
+                        require_anchor_not_revoked=bool(payload.get("require_anchor_not_revoked", False)),
+                    )
+                    write_public_trust_center_anchor_registry_verification_report(report, self.public_trust_center_anchor_registry_store.verification_report_path(center_id))
+                    self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Anchor Registry route not found.")
                 return
             if action == "archive" and len(parts) == 2:
                 if method != "POST":
@@ -7223,6 +7304,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except PublicTrustCenterStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except PublicTrustCenterError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except PublicTrustCenterAnchorRegistryNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterAnchorRegistryStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterAnchorRegistryError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -16171,6 +16258,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             operations_signoff_store=self.release_operations_signoff_store,
             operations_audit_store=self.release_operations_audit_store,
             operations_reviewer_pack_store=self.release_operations_reviewer_pack_store,
+        )
+        self.public_trust_center_anchor_registry_store = PublicTrustCenterAnchorRegistryStore(
+            trust_center_store=self.public_trust_center_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

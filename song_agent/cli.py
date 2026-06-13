@@ -886,9 +886,28 @@ def build_verify_public_trust_center_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-operations-audit", action="store_true", help="Require verified Release Operations Audit evidence.")
     verify_parser.add_argument("--require-operations-reviewer-pack", action="store_true", help="Require verified Release Operations Reviewer Pack evidence.")
     verify_parser.add_argument("--delivery-anchor", type=Path, default=None, help="Path to an external Public Trust Center delivery anchor JSON file.")
+    verify_parser.add_argument("--anchor-registry", type=Path, default=None, help="Path to a Public Trust Center Anchor Registry ZIP.")
+    verify_parser.add_argument("--require-anchor-registry-current", action="store_true", help="Require the Anchor Registry current entry to match this package.")
+    verify_parser.add_argument("--require-anchor-published", action="store_true", help="Require the Anchor Registry current entry to be published.")
+    verify_parser.add_argument("--require-anchor-not-revoked", action="store_true", help="Require the Anchor Registry current entry not to be revoked.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=250, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_public_trust_center_anchor_registry_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Anchor Registry ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Anchor Registry ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require a current anchor entry.")
+    verify_parser.add_argument("--require-anchor-published", action="store_true", help="Require the current anchor entry to be published.")
+    verify_parser.add_argument("--require-anchor-not-revoked", action="store_true", help="Require the current anchor entry not to be revoked.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
     return verify_parser
 
 
@@ -904,6 +923,13 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--zip", action="store_true", help="Build the Public Trust Center ZIP.")
     parser.add_argument("--verify", action="store_true", help="Verify the Public Trust Center ZIP.")
     parser.add_argument("--archive", action="store_true", help="Append an archive event for the current ZIP.")
+    parser.add_argument("--anchor-register", action="store_true", help="Register the current delivery anchor in the Anchor Registry.")
+    parser.add_argument("--anchor-publish", action="store_true", help="Publish the current Anchor Registry entry.")
+    parser.add_argument("--anchor-revoke", default=None, help="Revoke an Anchor Registry entry id.")
+    parser.add_argument("--anchor-export", action="store_true", help="Export the Anchor Registry package directory.")
+    parser.add_argument("--anchor-zip", action="store_true", help="Build the Anchor Registry ZIP.")
+    parser.add_argument("--anchor-verify", action="store_true", help="Verify the Anchor Registry ZIP.")
+    parser.add_argument("--anchor-reason", default="Public Trust Center anchor registry operation", help="Reason for Anchor Registry state changes.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-registry-current", action="store_true", help="Require current Registry evidence.")
     parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
@@ -933,6 +959,9 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-submission-evidence", action="store_true", help="Verifier requires submission evidence.")
     parser.add_argument("--require-operations-audit", action="store_true", help="Verifier requires operations audit evidence.")
     parser.add_argument("--require-operations-reviewer-pack", action="store_true", help="Verifier requires operations reviewer pack evidence.")
+    parser.add_argument("--require-anchor-registry-current", action="store_true", help="Verifier requires current Anchor Registry evidence.")
+    parser.add_argument("--require-anchor-published", action="store_true", help="Verifier requires a published Anchor Registry current entry.")
+    parser.add_argument("--require-anchor-not-revoked", action="store_true", help="Verifier requires the Anchor Registry current entry not to be revoked.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2120,6 +2149,10 @@ def _main() -> None:
             require_operations_audit=args.require_operations_audit,
             require_operations_reviewer_pack=args.require_operations_reviewer_pack,
             delivery_anchor_path=args.delivery_anchor,
+            anchor_registry_path=args.anchor_registry,
+            require_anchor_registry_current=args.require_anchor_registry_current,
+            require_anchor_published=args.require_anchor_published,
+            require_anchor_not_revoked=args.require_anchor_not_revoked,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -2131,6 +2164,33 @@ def _main() -> None:
         else:
             print_public_trust_center_verification_report(report)
         raise SystemExit(public_trust_center_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-anchor-registry-package":
+        from song_agent.public_trust_center_anchor_registry_verifier import (
+            print_public_trust_center_anchor_registry_verification_report,
+            public_trust_center_anchor_registry_verification_exit_code,
+            verify_public_trust_center_anchor_registry_package,
+            write_public_trust_center_anchor_registry_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_anchor_registry_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_anchor_registry_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_anchor_published=args.require_anchor_published,
+            require_anchor_not_revoked=args.require_anchor_not_revoked,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_anchor_registry_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_anchor_registry_verification_report(report)
+        raise SystemExit(public_trust_center_anchor_registry_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3433,10 +3493,16 @@ def _main() -> None:
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "public-trust-center":
         from song_agent.public_trust_center import public_trust_center_summary
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore, anchor_registry_summary
+        from song_agent.public_trust_center_anchor_registry_verifier import (
+            verify_public_trust_center_anchor_registry_package,
+            write_public_trust_center_anchor_registry_verification_report,
+        )
 
         parser = build_public_trust_center_parser()
         args = parser.parse_args(raw_args[1:])
         store = _build_public_trust_center_store()
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=store)
         payload: dict[str, Any] = {
             "center_id": args.center_id,
             "attestation_profile": args.profile,
@@ -3479,28 +3545,63 @@ def _main() -> None:
         if args.zip:
             result["zip"] = store.build_zip(args.center_id)
         if args.verify:
-            verification = store.verify_zip(
-                args.center_id,
-                {
-                    "strict": args.strict,
-                    "require_registry_current": args.require_registry_current,
-                    "require_portal_current": args.require_portal_current,
-                    "require_transparency_current": args.require_transparency_current,
-                    "require_acknowledgement_current": args.require_acknowledgement_current,
-                    "require_release_readiness": args.require_release_readiness,
-                    "require_delivery_readiness": args.require_delivery_readiness,
-                    "require_distribution_ready": args.require_distribution_ready,
-                    "require_submission_accepted": args.require_submission_accepted,
-                    "require_submission_evidence": args.require_submission_evidence,
-                    "require_operations_signed": args.require_operations_signed,
-                    "require_operations_audit": args.require_operations_audit,
-                    "require_operations_reviewer_pack": args.require_operations_reviewer_pack,
-                },
-            )
+            verify_payload = {
+                "strict": args.strict,
+                "require_registry_current": args.require_registry_current,
+                "require_portal_current": args.require_portal_current,
+                "require_transparency_current": args.require_transparency_current,
+                "require_acknowledgement_current": args.require_acknowledgement_current,
+                "require_release_readiness": args.require_release_readiness,
+                "require_delivery_readiness": args.require_delivery_readiness,
+                "require_distribution_ready": args.require_distribution_ready,
+                "require_submission_accepted": args.require_submission_accepted,
+                "require_submission_evidence": args.require_submission_evidence,
+                "require_operations_signed": args.require_operations_signed,
+                "require_operations_audit": args.require_operations_audit,
+                "require_operations_reviewer_pack": args.require_operations_reviewer_pack,
+                "require_anchor_registry_current": args.require_anchor_registry_current,
+                "require_anchor_published": args.require_anchor_published,
+                "require_anchor_not_revoked": args.require_anchor_not_revoked,
+            }
+            if args.require_anchor_registry_current or args.require_anchor_published or args.require_anchor_not_revoked:
+                verify_payload["anchor_registry_path"] = anchor_store.zip_path(args.center_id)
+            verification = store.verify_zip(args.center_id, verify_payload)
             result["verification"] = verification
             result["verification_summary"] = verification.get("summary", {})
         if args.archive:
             result["archive"] = store.archive_snapshot(args.center_id)
+        if args.anchor_register:
+            registered = anchor_store.register_current_anchor(args.center_id, {"reason": args.anchor_reason})
+            result["anchor_registry"] = registered
+            result["anchor_summary"] = anchor_registry_summary(registered.get("registry") if isinstance(registered.get("registry"), dict) else {})
+        if args.anchor_publish:
+            registry = anchor_store.read_registry(args.center_id, default={})
+            entry_id = str(registry.get("current_entry_id") or "")
+            if not entry_id:
+                registered = anchor_store.register_current_anchor(args.center_id, {"reason": args.anchor_reason})
+                entry_id = str((registered.get("entry") if isinstance(registered.get("entry"), dict) else {}).get("entry_id") or "")
+            published = anchor_store.publish_entry(args.center_id, entry_id, {"reason": args.anchor_reason, "supersede_current": True})
+            result["anchor_publish"] = published
+            result["anchor_summary"] = anchor_registry_summary(published.get("registry") if isinstance(published.get("registry"), dict) else {})
+        if args.anchor_revoke:
+            revoked = anchor_store.revoke_entry(args.center_id, args.anchor_revoke, {"reason": args.anchor_reason})
+            result["anchor_revoke"] = revoked
+            result["anchor_summary"] = anchor_registry_summary(revoked.get("registry") if isinstance(revoked.get("registry"), dict) else {})
+        if args.anchor_export:
+            result["anchor_manifest"] = anchor_store.export_registry(args.center_id)
+        if args.anchor_zip:
+            result["anchor_zip"] = anchor_store.build_zip(args.center_id)
+        if args.anchor_verify:
+            anchor_verification = verify_public_trust_center_anchor_registry_package(
+                anchor_store.zip_path(args.center_id),
+                strict=args.strict,
+                require_current=args.require_anchor_registry_current,
+                require_anchor_published=args.require_anchor_published,
+                require_anchor_not_revoked=args.require_anchor_not_revoked,
+            )
+            write_public_trust_center_anchor_registry_verification_report(anchor_verification, anchor_store.verification_report_path(args.center_id))
+            result["anchor_verification"] = anchor_verification
+            result["anchor_verification_summary"] = anchor_verification.get("summary", {})
         if args.report_out is not None:
             write_json(args.report_out, result)
         if args.json:
