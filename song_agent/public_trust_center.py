@@ -818,8 +818,12 @@ class PublicTrustCenterStore:
                 entity_id = str(item.get("target_id") or item.get("submission_id") or item.get("release_id") or "summary")
                 if not release_id:
                     continue
-                path = _delivery_sidecar_path(domain, release_id, entity_id)
-                docs[path] = _delivery_sidecar_document(domain, self._independent_delivery_sidecar_item(domain, item))
+                summary_path = _delivery_sidecar_path(domain, release_id, entity_id)
+                fingerprint_path = _delivery_fingerprint_sidecar_path(domain, release_id, entity_id)
+                independent_item = self._independent_delivery_sidecar_item(domain, item)
+                fingerprint_doc = _delivery_fingerprint_sidecar_document(domain, independent_item, fingerprint_path)
+                docs[summary_path] = _delivery_sidecar_document(domain, independent_item, fingerprint_path=fingerprint_path, fingerprint_hash=stable_hash(fingerprint_doc))
+                docs[fingerprint_path] = fingerprint_doc
         return docs
 
     def _independent_delivery_sidecar_item(self, domain: str, item: dict[str, Any]) -> dict[str, Any]:
@@ -1416,21 +1420,34 @@ def _delivery_verification_index_from_source(source_hash: Any, source: dict[str,
 def _delivery_verification_index_from_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]] | None) -> dict[str, Any]:
     summaries: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
+    fingerprint_rows: list[dict[str, Any]] = []
     for path, doc in sorted((sidecars or {}).items()):
         if not isinstance(doc, dict):
+            continue
+        if path.startswith("delivery-fingerprint-summaries/"):
+            fingerprint_rows.append({"path": path, "hash": stable_hash(doc)})
+            continue
+        if not path.startswith("delivery-verification-summaries/"):
             continue
         summary = dict(doc.get("summary") if isinstance(doc.get("summary"), dict) else {})
         summary["sidecar_path"] = path
         summary["sidecar_hash"] = stable_hash(doc)
+        if doc.get("fingerprint_sidecar_path"):
+            summary["fingerprint_sidecar_path"] = doc.get("fingerprint_sidecar_path")
+            summary["fingerprint_sidecar_hash"] = doc.get("fingerprint_sidecar_hash")
         summaries.append(summary)
         rows.append({"path": path, "hash": stable_hash(doc)})
-    return {"source_hash": source_hash, "summaries": sorted(summaries, key=_delivery_summary_key), "sidecars": rows}
+    return {"source_hash": source_hash, "summaries": sorted(summaries, key=_delivery_summary_key), "sidecars": rows, "fingerprint_sidecars": fingerprint_rows}
 
 
-def _delivery_sidecar_document(domain: str, item: dict[str, Any]) -> dict[str, Any]:
+def _delivery_sidecar_document(domain: str, item: dict[str, Any], *, fingerprint_path: str | None = None, fingerprint_hash: str | None = None) -> dict[str, Any]:
     summary = _delivery_summary_from_item(domain, item)
     payload = _delivery_public_payload(domain, item)
     evidence = _delivery_sidecar_evidence(domain, item, payload)
+    if fingerprint_path:
+        summary["fingerprint_sidecar_path"] = fingerprint_path
+    if fingerprint_hash:
+        summary["fingerprint_sidecar_hash"] = fingerprint_hash
     doc = {
         "schema_version": PTC_SCHEMA_VERSION,
         "package_type": "musicforge_public_trust_center_delivery_verification_summary",
@@ -1438,6 +1455,8 @@ def _delivery_sidecar_document(domain: str, item: dict[str, Any]) -> dict[str, A
         "release_id": item.get("release_id"),
         "domain": domain,
         "entity_id": summary.get("entity_id"),
+        "fingerprint_sidecar_path": fingerprint_path,
+        "fingerprint_sidecar_hash": fingerprint_hash,
         "summary": summary,
         "payload": payload,
         "evidence": evidence,
@@ -1445,6 +1464,60 @@ def _delivery_sidecar_document(domain: str, item: dict[str, Any]) -> dict[str, A
     }
     doc["summary_hash"] = stable_hash({"summary": summary, "payload": payload, "evidence": evidence})
     return _sanitize_public_metadata(doc)
+
+
+def _delivery_fingerprint_sidecar_document(domain: str, item: dict[str, Any], sidecar_path: str) -> dict[str, Any]:
+    payload = _delivery_public_payload(domain, item)
+    fingerprints = _delivery_bottom_fingerprints(domain, item)
+    doc = {
+        "schema_version": PTC_SCHEMA_VERSION,
+        "package_type": "musicforge_public_trust_center_delivery_fingerprint_summary",
+        "sidecar_path": sidecar_path,
+        "release_id": item.get("release_id"),
+        "domain": domain,
+        "entity_id": str(item.get("target_id") or item.get("submission_id") or item.get("release_id") or ""),
+        "payload": payload,
+        "payload_hash": stable_hash(payload),
+        "fingerprints": fingerprints,
+    }
+    doc["fingerprint_hash"] = stable_hash({"payload_hash": doc["payload_hash"], "fingerprints": fingerprints})
+    return _sanitize_public_metadata(doc)
+
+
+def _delivery_bottom_fingerprints(domain: str, item: dict[str, Any]) -> dict[str, Any]:
+    keys = {
+        "release_id",
+        "target_id",
+        "submission_id",
+        "package_id",
+        "signoff_status",
+        "signoff_hash",
+        "release_signoff_status",
+        "release_zip_status",
+        "zip_sha256",
+        "zip_size_bytes",
+        "export_manifest_hash",
+        "package_zip_status",
+        "package_zip_sha256",
+        "package_zip_size_bytes",
+        "manifest_hash",
+        "verification_status",
+        "verification_hash",
+        "verification_report_status",
+        "report_status",
+        "report_hash",
+        "operations_report_status",
+        "operations_report_hash",
+        "operations_source_hash",
+        "operations_signoff_status",
+        "operations_signoff_hash",
+        "operations_archive_status",
+        "operations_audit_status",
+        "operations_reviewer_pack_status",
+        "runbook_status",
+        "fingerprint_hash",
+    }
+    return {"domain": domain, **{key: item.get(key) for key in sorted(keys) if key in item}}
 
 
 def _delivery_sidecar_evidence(domain: str, item: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
@@ -1634,6 +1707,11 @@ def _verification_sidecar_path(portfolio_id: str, profile: str, package_type: st
 def _delivery_sidecar_path(domain: str, release_id: str, entity_id: str) -> str:
     parts = [_safe_id(release_id), _safe_id(domain or "delivery"), _safe_id(entity_id or "summary")]
     return "delivery-verification-summaries/" + "__".join(parts) + ".json"
+
+
+def _delivery_fingerprint_sidecar_path(domain: str, release_id: str, entity_id: str) -> str:
+    parts = [_safe_id(release_id), _safe_id(domain or "delivery"), _safe_id(entity_id or "summary")]
+    return "delivery-fingerprint-summaries/" + "__".join(parts) + ".json"
 
 
 def _risk_register(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:

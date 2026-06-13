@@ -166,7 +166,7 @@ def test_public_trust_center_verifier_rejects_delivery_full_resign(tmp_path: Pat
     report = verify_public_trust_center_package(forged, strict=True)
 
     assert report["status"] == "failed"
-    assert any(item["check_id"] in {"ptc_delivery_full_resign_guard", "ptc_delivery_sidecar_evidence_binding"} for item in report["blockers"])
+    assert any(item["check_id"] in {"ptc_delivery_full_resign_guard", "ptc_delivery_sidecar_fingerprint_payload_binding"} for item in report["blockers"])
 
 
 def test_public_trust_center_delivery_requires_real_configured_evidence(tmp_path: Path, monkeypatch) -> None:
@@ -353,7 +353,7 @@ def _tamper_delivery_full_resign(docs: dict[str, bytes]) -> None:
     if delivery_verification.get("summaries"):
         delivery_verification["summaries"][0]["readiness"] = "ready"
         delivery_verification["summaries"][0]["risk_count"] = 0
-    sidecar_rows = _tamper_delivery_sidecars_without_evidence(docs)
+    sidecar_rows = _tamper_delivery_sidecars_without_fingerprint(docs)
     if sidecar_rows:
         rows_by_path = {row["sidecar_path"]: row for row in sidecar_rows}
         for row in delivery_verification.get("summaries", []) if isinstance(delivery_verification.get("summaries"), list) else []:
@@ -398,12 +398,13 @@ def _tamper_delivery_full_resign(docs: dict[str, bytes]) -> None:
     docs["trust-center-manifest.json"] = _doc_bytes(manifest)
 
 
-def _tamper_delivery_sidecars_without_evidence(docs: dict[str, bytes]) -> list[dict]:
+def _tamper_delivery_sidecars_without_fingerprint(docs: dict[str, bytes]) -> list[dict]:
     rows: list[dict] = []
     for path in sorted(name for name in docs if name.startswith("data/delivery-verification-summaries/")):
         sidecar = _read_doc(docs, path)
         payload = sidecar.get("payload") if isinstance(sidecar.get("payload"), dict) else {}
         summary = sidecar.get("summary") if isinstance(sidecar.get("summary"), dict) else {}
+        evidence = sidecar.get("evidence") if isinstance(sidecar.get("evidence"), dict) else {}
         payload["readiness"] = "ready"
         payload["risk_count"] = 0
         payload["release_signoff_status"] = "force_signed"
@@ -411,7 +412,10 @@ def _tamper_delivery_sidecars_without_evidence(docs: dict[str, bytes]) -> list[d
         summary["risk_count"] = 0
         summary["release_signoff_status"] = "force_signed"
         summary["summary_hash"] = stable_hash(payload)
+        evidence["payload"] = dict(payload)
+        evidence["payload_hash"] = stable_hash(payload)
         sidecar["payload"] = payload
+        sidecar["evidence"] = evidence
         sidecar["summary"] = summary
         sidecar["summary_hash"] = stable_hash({"summary": summary, "payload": payload, "evidence": sidecar.get("evidence") if isinstance(sidecar.get("evidence"), dict) else {}})
         docs[path] = _doc_bytes(sidecar)

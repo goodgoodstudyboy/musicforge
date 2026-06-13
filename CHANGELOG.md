@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.1.2 - 2026-06-13
+
+### Fixed
+- Public Trust Center delivery evidence now includes independent delivery fingerprint sidecars, so delivery summaries cannot be fully re-signed by rewriting `trust-center-report.json`, data files, HTML, manifest, and delivery summary sidecars together.
+- The offline verifier now checks delivery summary sidecars against delivery fingerprint sidecars and uses those fingerprints as the source for delivery full-resign guards.
+- v8.1 release-check smoke now covers the stronger payload-plus-evidence re-sign attack.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center.py tests\test_release_check.py::test_v80_public_trust_center_smoke tests\test_release_check.py::test_v81_public_trust_center_delivery_smoke -q`
+
 ## v8.1.1 - 2026-06-13
 
 ### Fixed

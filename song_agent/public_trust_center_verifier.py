@@ -340,6 +340,14 @@ class _PublicTrustCenterVerifier:
                 continue
             entry = f"data/{path}"
             self.data_docs[path] = self._read_json_entry(archive, entry, "data", f"ptc_data_{path.replace('/', '_').replace('-', '_').replace('.', '_')}_parse")
+        for row in delivery_sidecar_index.get("fingerprint_sidecars", []) if isinstance(delivery_sidecar_index.get("fingerprint_sidecars"), list) else []:
+            if not isinstance(row, dict):
+                continue
+            path = str(row.get("path") or "")
+            if not path:
+                continue
+            entry = f"data/{path}"
+            self.data_docs[path] = self._read_json_entry(archive, entry, "data", f"ptc_data_{path.replace('/', '_').replace('-', '_').replace('.', '_')}_parse")
 
     def _verify_documents(self) -> None:
         if self.report_doc:
@@ -370,10 +378,10 @@ class _PublicTrustCenterVerifier:
 
     def _verify_data_documents(self) -> None:
         sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
-        delivery_sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/")}
+        delivery_sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/") or name.startswith("delivery-fingerprint-summaries/")}
         expected_docs, _expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs, delivery_sidecar_docs)
         for name, doc in self.data_docs.items():
-            if name.startswith("package-verification-summaries/") or name.startswith("delivery-verification-summaries/"):
+            if name.startswith("package-verification-summaries/") or name.startswith("delivery-verification-summaries/") or name.startswith("delivery-fingerprint-summaries/"):
                 continue
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), self.report_doc.get("source_hash"), f"{name} source_hash")
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_semantics", doc, expected_docs.get(name), f"{name} semantic payload")
@@ -431,7 +439,7 @@ class _PublicTrustCenterVerifier:
 
     def _verify_html(self, archive: zipfile.ZipFile) -> None:
         sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
-        delivery_sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/")}
+        delivery_sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/") or name.startswith("delivery-fingerprint-summaries/")}
         _expected_docs, expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs, delivery_sidecar_docs)
         pages = self.manifest.get("pages") if isinstance(self.manifest.get("pages"), list) else []
         page_rows = {str(item.get("path") or ""): item for item in pages if isinstance(item, dict)}
@@ -482,13 +490,16 @@ class _PublicTrustCenterVerifier:
     def _verify_delivery_verification_sidecar(self) -> None:
         delivery_doc = self.data_docs.get("delivery-verification-index.json", {})
         independent_sidecars = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/")}
-        self._verify_delivery_sidecar_evidence_bindings(independent_sidecars)
-        expected_index = _delivery_verification_index_from_independent_sidecars(self.report_doc.get("source_hash"), independent_sidecars)
+        fingerprint_sidecars = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-fingerprint-summaries/")}
+        self._verify_delivery_sidecar_evidence_bindings(independent_sidecars, fingerprint_sidecars)
+        expected_index = _delivery_verification_index_from_independent_sidecars(self.report_doc.get("source_hash"), independent_sidecars, fingerprint_sidecars)
         self._add_exact_check("data", "ptc_delivery_verification_sidecar_binding", delivery_doc.get("summaries"), expected_index.get("summaries"), "Delivery verification index binds independent sidecars")
-        expected_payloads = _delivery_payloads_from_sidecars(independent_sidecars)
+        self._add_exact_check("data", "ptc_delivery_fingerprint_sidecar_binding", delivery_doc.get("fingerprint_sidecars"), expected_index.get("fingerprint_sidecars"), "Delivery verification index binds independent fingerprint sidecars")
+        expected_payloads = _delivery_payloads_from_fingerprint_sidecars(fingerprint_sidecars)
         actual_payloads = _delivery_payloads_from_data_docs(self.data_docs)
         self._add_exact_check("data", "ptc_delivery_full_resign_guard", actual_payloads, expected_payloads, "Delivery data payloads match independent sidecars")
         self._verify_independent_delivery_sidecar_hashes(delivery_doc, independent_sidecars)
+        self._verify_independent_delivery_fingerprint_hashes(delivery_doc, fingerprint_sidecars)
 
     def _verify_independent_sidecar_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
         rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
@@ -506,17 +517,33 @@ class _PublicTrustCenterVerifier:
         for path, row in sorted(declared.items()):
             self._add_exact_check("data", "ptc_independent_delivery_sidecar_hash", row.get("hash"), actual.get(path), f"Independent delivery sidecar hash {path}")
 
-    def _verify_delivery_sidecar_evidence_bindings(self, sidecars: dict[str, dict[str, Any]]) -> None:
+    def _verify_independent_delivery_fingerprint_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
+        rows = sidecar_doc.get("fingerprint_sidecars") if isinstance(sidecar_doc.get("fingerprint_sidecars"), list) else []
+        declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
+        actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
+        self._add_exact_check("data", "ptc_independent_delivery_fingerprint_sidecar_set", sorted(declared), sorted(actual), "Declared independent delivery fingerprint sidecar set")
+        for path, row in sorted(declared.items()):
+            self._add_exact_check("data", "ptc_independent_delivery_fingerprint_sidecar_hash", row.get("hash"), actual.get(path), f"Independent delivery fingerprint sidecar hash {path}")
+
+    def _verify_delivery_sidecar_evidence_bindings(self, sidecars: dict[str, dict[str, Any]], fingerprint_sidecars: dict[str, dict[str, Any]]) -> None:
         for path, doc in sorted(sidecars.items()):
             if not isinstance(doc, dict):
                 continue
             evidence = doc.get("evidence") if isinstance(doc.get("evidence"), dict) else {}
             payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
             summary = doc.get("summary") if isinstance(doc.get("summary"), dict) else {}
+            fingerprint_path = str(doc.get("fingerprint_sidecar_path") or summary.get("fingerprint_sidecar_path") or "")
+            fingerprint_doc = fingerprint_sidecars.get(fingerprint_path, {}) if fingerprint_path else {}
+            fingerprint_payload = fingerprint_doc.get("payload") if isinstance(fingerprint_doc.get("payload"), dict) else {}
             evidence_payload = evidence.get("payload") if isinstance(evidence.get("payload"), dict) else {}
             self._add_exact_check("data", "ptc_delivery_sidecar_evidence_binding", payload, evidence_payload, f"Delivery sidecar payload binds independent evidence {path}")
             self._add_exact_check("data", "ptc_delivery_sidecar_evidence_payload_hash", evidence.get("payload_hash"), stable_hash(evidence_payload), f"Delivery sidecar evidence payload hash {path}")
             self._add_exact_check("data", "ptc_delivery_sidecar_summary_hash", doc.get("summary_hash"), stable_hash({"summary": summary, "payload": payload, "evidence": evidence}), f"Delivery sidecar summary hash {path}")
+            self._add_exact_check("data", "ptc_delivery_sidecar_fingerprint_reference", doc.get("fingerprint_sidecar_hash"), stable_hash(fingerprint_doc) if fingerprint_doc else None, f"Delivery sidecar fingerprint reference {path}")
+            self._add_exact_check("data", "ptc_delivery_sidecar_fingerprint_payload_binding", payload, fingerprint_payload, f"Delivery sidecar payload binds fingerprint sidecar {path}")
+            self._add_exact_check("data", "ptc_delivery_fingerprint_payload_hash", fingerprint_doc.get("payload_hash") if isinstance(fingerprint_doc, dict) else None, stable_hash(fingerprint_payload), f"Delivery fingerprint payload hash {path}")
+            fingerprints = fingerprint_doc.get("fingerprints") if isinstance(fingerprint_doc.get("fingerprints"), dict) else {}
+            self._add_exact_check("data", "ptc_delivery_fingerprint_hash", fingerprint_doc.get("fingerprint_hash") if isinstance(fingerprint_doc, dict) else None, stable_hash({"payload_hash": fingerprint_doc.get("payload_hash") if isinstance(fingerprint_doc, dict) else None, "fingerprints": fingerprints}), f"Delivery fingerprint hash {path}")
 
     def _verify_requirements(self) -> None:
         packages = self.report_doc.get("package_index") if isinstance(self.report_doc.get("package_index"), list) else []
@@ -764,18 +791,25 @@ def _package_verification_index_from_independent_sidecars(source_hash: Any, side
     }
 
 
-def _delivery_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _delivery_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]], fingerprint_sidecars: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     summaries: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
+    fingerprint_rows: list[dict[str, Any]] = []
     for path, doc in sorted(sidecars.items()):
         if not isinstance(doc, dict):
             continue
         summary = dict(doc.get("summary") if isinstance(doc.get("summary"), dict) else {})
         summary["sidecar_path"] = path
         summary["sidecar_hash"] = stable_hash(doc)
+        if doc.get("fingerprint_sidecar_path"):
+            summary["fingerprint_sidecar_path"] = doc.get("fingerprint_sidecar_path")
+            summary["fingerprint_sidecar_hash"] = doc.get("fingerprint_sidecar_hash")
         summaries.append(summary)
         rows.append({"path": path, "hash": stable_hash(doc)})
-    return {"source_hash": source_hash, "summaries": sorted(summaries, key=_delivery_summary_key), "sidecars": rows}
+    for path, doc in sorted((fingerprint_sidecars or {}).items()):
+        if isinstance(doc, dict):
+            fingerprint_rows.append({"path": path, "hash": stable_hash(doc)})
+    return {"source_hash": source_hash, "summaries": sorted(summaries, key=_delivery_summary_key), "sidecars": rows, "fingerprint_sidecars": fingerprint_rows}
 
 
 def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
@@ -854,10 +888,20 @@ def _delivery_payloads_from_sidecars(sidecars: dict[str, dict[str, Any]]) -> lis
         del path
         if not isinstance(doc, dict):
             continue
-        evidence = doc.get("evidence") if isinstance(doc.get("evidence"), dict) else {}
-        payload = evidence.get("payload") if isinstance(evidence.get("payload"), dict) else doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+        payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
         row = dict(payload)
         rows.append(row)
+    return sorted(rows, key=_delivery_payload_key)
+
+
+def _delivery_payloads_from_fingerprint_sidecars(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path, doc in sorted(sidecars.items()):
+        del path
+        if not isinstance(doc, dict):
+            continue
+        payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+        rows.append(dict(payload))
     return sorted(rows, key=_delivery_payload_key)
 
 

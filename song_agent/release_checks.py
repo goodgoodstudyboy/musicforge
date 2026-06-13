@@ -12401,7 +12401,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(nested, "ptc_zip_no_nested_internal_entries") == "failed"
             and _v38_check_status(spoof, "ptc_manifest_zip_entries_reference_only") == "failed"
             and _v38_check_status(redaction, "ptc_redaction_scan") == "failed"
-            and _v38_check_status(delivery_full_resign, "ptc_delivery_sidecar_evidence_binding") == "failed"
+            and _v38_check_status(delivery_full_resign, "ptc_delivery_sidecar_fingerprint_payload_binding") == "failed"
             and _v38_check_status(require_missing, "ptc_require_distribution_ready") == "failed"
             and _v38_check_status(require_missing, "ptc_require_submission_accepted") == "failed"
             and _v38_check_status(require_missing, "ptc_require_operations_signed") == "failed"
@@ -12420,7 +12420,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
             f"trust={report.get('status')}/{verification.get('status')}, zip={bool(zip_info.get('sha256'))}, archive={bool(archive.get('zip_sha256'))}, "
             f"report={_v38_check_status(report_tamper, 'ptc_report_summary_release_count')}, data={_v38_check_status(data_tamper, 'ptc_data_package_index_json_semantics')}, "
             f"html={_v38_check_status(html_tamper, 'ptc_html_index.html_semantics')}, full_resign={_v38_check_status(full_resign, 'ptc_package_fingerprint_verification_summary_binding')}, duplicate={_v38_check_status(duplicate, 'ptc_zip_duplicate_entries')}, "
-            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'ptc_delivery_sidecar_evidence_binding')}, "
+            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'ptc_delivery_sidecar_fingerprint_payload_binding')}, "
             f"require_not_configured={_v38_check_status(require_missing, 'ptc_require_distribution_ready')}/{_v38_check_status(require_missing, 'ptc_require_submission_accepted')}/{_v38_check_status(require_missing, 'ptc_require_operations_signed')}, "
             f"release_zip_readiness={report.get('delivery_readiness', [{}])[0].get('readiness')}/{report.get('delivery_readiness', [{}])[0].get('release_zip_status')}, "
             f"dangerous={_v38_check_status(dangerous, 'ptc_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptc_zip_entry_path_safe')}, "
@@ -12559,7 +12559,7 @@ def _v81_tamper_trust_center_delivery_full_resign(docs: dict[str, bytes]) -> Non
     if delivery_verification.get("summaries"):
         delivery_verification["summaries"][0]["readiness"] = "forged_ready"
         delivery_verification["summaries"][0]["release_signoff_status"] = "force_signed"
-    sidecar_rows = _v81_tamper_delivery_sidecars_without_evidence(docs)
+    sidecar_rows = _v81_tamper_delivery_sidecars_without_fingerprint(docs)
     if sidecar_rows:
         rows_by_path = {row["sidecar_path"]: row for row in sidecar_rows}
         for row in delivery_verification.get("summaries", []) if isinstance(delivery_verification.get("summaries"), list) else []:
@@ -12602,18 +12602,22 @@ def _v81_tamper_trust_center_delivery_full_resign(docs: dict[str, bytes]) -> Non
     docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
 
 
-def _v81_tamper_delivery_sidecars_without_evidence(docs: dict[str, bytes]) -> list[dict[str, Any]]:
+def _v81_tamper_delivery_sidecars_without_fingerprint(docs: dict[str, bytes]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for path in sorted(name for name in docs if name.startswith("data/delivery-verification-summaries/")):
         sidecar = _v74_read_json_doc(docs, path)
         payload = sidecar.get("payload") if isinstance(sidecar.get("payload"), dict) else {}
         summary = sidecar.get("summary") if isinstance(sidecar.get("summary"), dict) else {}
+        evidence = sidecar.get("evidence") if isinstance(sidecar.get("evidence"), dict) else {}
         payload["readiness"] = "forged_ready"
         payload["release_signoff_status"] = "force_signed"
         summary["readiness"] = "forged_ready"
         summary["release_signoff_status"] = "force_signed"
         summary["summary_hash"] = stable_hash(payload)
+        evidence["payload"] = dict(payload)
+        evidence["payload_hash"] = stable_hash(payload)
         sidecar["payload"] = payload
+        sidecar["evidence"] = evidence
         sidecar["summary"] = summary
         sidecar["summary_hash"] = stable_hash({"summary": summary, "payload": payload, "evidence": sidecar.get("evidence") if isinstance(sidecar.get("evidence"), dict) else {}})
         docs[path] = _v74_json_doc(sidecar)
