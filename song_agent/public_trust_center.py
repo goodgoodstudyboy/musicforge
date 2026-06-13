@@ -819,8 +819,54 @@ class PublicTrustCenterStore:
                 if not release_id:
                     continue
                 path = _delivery_sidecar_path(domain, release_id, entity_id)
-                docs[path] = _delivery_sidecar_document(domain, item)
+                docs[path] = _delivery_sidecar_document(domain, self._independent_delivery_sidecar_item(domain, item))
         return docs
+
+    def _independent_delivery_sidecar_item(self, domain: str, item: dict[str, Any]) -> dict[str, Any]:
+        release_id = str(item.get("release_id") or "")
+        if not release_id:
+            return item
+        try:
+            if domain == "release":
+                releases = self._release_summaries({"release_ids": [release_id], "include_all_releases": False})
+                distribution = self._distribution_summaries([release_id])
+                submissions = self._submission_summaries([release_id])
+                submission_evidence = self._submission_evidence_summaries(submissions)
+                operations = self._operations_summaries([release_id])
+                rows = _delivery_readiness_matrix_from_parts(releases, [], distribution, submissions, submission_evidence, operations)
+                if rows:
+                    row = dict(rows[0])
+                    if "portfolio_public_proof_status" in item:
+                        row["portfolio_public_proof_status"] = item.get("portfolio_public_proof_status")
+                        row.pop("fingerprint_hash", None)
+                        row["fingerprint_hash"] = stable_hash(row)
+                    return row
+                return dict(item)
+            if domain == "distribution":
+                return self._matching_delivery_row(self._distribution_summaries([release_id]), item, "target_id")
+            if domain == "submission":
+                return self._matching_delivery_row(self._submission_summaries([release_id]), item, "submission_id")
+            if domain == "submission_evidence":
+                submissions = self._submission_summaries([release_id])
+                return self._matching_delivery_row(self._submission_evidence_summaries(submissions), item, "submission_id")
+            if domain == "operations":
+                return self._matching_delivery_row(self._operations_summaries([release_id]), item, "release_id")
+        except Exception as exc:
+            fallback = dict(item)
+            fallback["status"] = "failed"
+            fallback["verification_status"] = "failed"
+            fallback["error"] = str(exc)
+            return fallback
+        return item
+
+    @staticmethod
+    def _matching_delivery_row(rows: list[dict[str, Any]], item: dict[str, Any], key: str) -> dict[str, Any]:
+        wanted = str(item.get(key) or "")
+        if wanted:
+            for row in rows:
+                if str(row.get(key) or "") == wanted:
+                    return row
+        return rows[0] if rows else dict(item)
 
     def _stored_verification_report_path(self, package_type: str, portfolio_id: str, profile: str) -> Path | None:
         if package_type == "registry":
@@ -1167,27 +1213,27 @@ def _findings_from_source(source: dict[str, Any]) -> tuple[list[dict[str, Any]],
         if failed:
             blockers.append(_finding("release_signoff_required", "critical", "One or more releases are missing Release Signoff."))
     if delivery_required["distribution_signed"]:
-        failed = [item for item in readiness if isinstance(item, dict) and item.get("distribution_status") not in {"ready", "not_configured"}]
+        failed = [item for item in readiness if isinstance(item, dict) and item.get("distribution_status") not in {"ready"}]
         if failed:
             blockers.append(_finding("distribution_signed_required", "critical", "Distribution readiness is required but not complete."))
     if delivery_required["submission_accepted"]:
-        failed = [item for item in readiness if isinstance(item, dict) and item.get("submission_status") not in {"accepted", "not_configured"}]
+        failed = [item for item in readiness if isinstance(item, dict) and item.get("submission_status") not in {"accepted"}]
         if failed:
             blockers.append(_finding("submission_accepted_required", "critical", "Submission accepted status is required but missing."))
     if delivery_required["submission_evidence_signed"]:
-        failed = [item for item in readiness if isinstance(item, dict) and item.get("submission_evidence_status") not in {"signed", "not_configured"}]
+        failed = [item for item in readiness if isinstance(item, dict) and item.get("submission_evidence_status") not in {"signed"}]
         if failed:
             blockers.append(_finding("submission_evidence_signed_required", "critical", "Submission Evidence signoff is required but missing."))
     if delivery_required["operations_signed"]:
-        failed = [item for item in readiness if isinstance(item, dict) and item.get("operations_status") not in {"signed", "force_signed", "not_configured"}]
+        failed = [item for item in readiness if isinstance(item, dict) and item.get("operations_status") not in {"signed", "force_signed"}]
         if failed:
             blockers.append(_finding("operations_signed_required", "critical", "Release Operations signoff is required but missing."))
     if delivery_required["operations_audit_verified"]:
-        failed = [item for item in readiness if isinstance(item, dict) and item.get("operations_audit_status") not in {"passed", "warning", "not_configured"}]
+        failed = [item for item in readiness if isinstance(item, dict) and item.get("operations_audit_status") not in {"passed", "warning"}]
         if failed:
             blockers.append(_finding("operations_audit_required", "critical", "Release Operations Audit verification is required but missing."))
     if delivery_required["operations_reviewer_pack_verified"]:
-        failed = [item for item in readiness if isinstance(item, dict) and item.get("operations_reviewer_pack_status") not in {"passed", "warning", "not_configured"}]
+        failed = [item for item in readiness if isinstance(item, dict) and item.get("operations_reviewer_pack_status") not in {"passed", "warning"}]
         if failed:
             blockers.append(_finding("operations_reviewer_pack_required", "critical", "Release Operations Reviewer Pack verification is required but missing."))
     delivery_blocker_ids = {
@@ -1384,6 +1430,7 @@ def _delivery_verification_index_from_sidecars(source_hash: Any, sidecars: dict[
 def _delivery_sidecar_document(domain: str, item: dict[str, Any]) -> dict[str, Any]:
     summary = _delivery_summary_from_item(domain, item)
     payload = _delivery_public_payload(domain, item)
+    evidence = _delivery_sidecar_evidence(domain, item, payload)
     doc = {
         "schema_version": PTC_SCHEMA_VERSION,
         "package_type": "musicforge_public_trust_center_delivery_verification_summary",
@@ -1393,10 +1440,58 @@ def _delivery_sidecar_document(domain: str, item: dict[str, Any]) -> dict[str, A
         "entity_id": summary.get("entity_id"),
         "summary": summary,
         "payload": payload,
+        "evidence": evidence,
         "source_hash": stable_hash(item),
     }
-    doc["summary_hash"] = stable_hash({"summary": summary, "payload": payload})
+    doc["summary_hash"] = stable_hash({"summary": summary, "payload": payload, "evidence": evidence})
     return _sanitize_public_metadata(doc)
+
+
+def _delivery_sidecar_evidence(domain: str, item: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    evidence_keys = {
+        "release_id",
+        "target_id",
+        "submission_id",
+        "package_id",
+        "status",
+        "signoff_status",
+        "signoff_hash",
+        "release_signoff_status",
+        "release_zip_status",
+        "package_zip_status",
+        "package_zip_sha256",
+        "package_zip_size_bytes",
+        "manifest_hash",
+        "verification_status",
+        "verification_hash",
+        "verification_report_status",
+        "operations_report_status",
+        "operations_report_hash",
+        "operations_source_hash",
+        "operations_signoff_status",
+        "operations_signoff_hash",
+        "operations_archive_status",
+        "operations_audit_status",
+        "operations_reviewer_pack_status",
+        "readiness",
+        "risk_count",
+        "distribution_status",
+        "submission_status",
+        "submission_evidence_status",
+        "operations_status",
+        "portfolio_public_proof_status",
+        "fingerprint_hash",
+    }
+    evidence = {
+        "domain": domain,
+        "payload": payload,
+        "payload_hash": stable_hash(payload),
+        "store_snapshot_hash": stable_hash({key: item.get(key) for key in sorted(evidence_keys) if key in item}),
+    }
+    for key in sorted(evidence_keys):
+        if key in item:
+            evidence[key] = item.get(key)
+    return evidence
 
 
 def _delivery_summary_from_item(domain: str, item: dict[str, Any]) -> dict[str, Any]:
@@ -1612,6 +1707,7 @@ def _delivery_risks_for_row(row: dict[str, Any]) -> list[dict[str, Any]]:
     release_id = row.get("release_id")
     checks = [
         ("release", row.get("release_signoff_status") in {"signed", "force_signed"}, "Release Signoff is missing."),
+        ("release_zip", row.get("release_zip_status") == "exists", "Release ZIP is missing."),
         ("distribution", row.get("distribution_status") in {"ready", "not_configured"}, "Distribution package is not fully signed and verified."),
         ("submission", row.get("submission_status") in {"accepted", "not_configured", "missing"}, "Submission is not accepted."),
         ("submission_evidence", row.get("submission_evidence_status") in {"signed", "not_configured", "missing"}, "Submission Evidence Archive is not signed."),

@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.1.1 - 2026-06-13
+
+### Fixed
+- Public Trust Center delivery verification sidecars now bind data pages to independently re-read delivery evidence instead of trusting `trust-center-report.json` source fields.
+- Explicit delivery verifier requirements no longer treat `not_configured` Distribution, Submission, or Release Operations domains as passing evidence.
+- Delivery readiness now treats a missing Release ZIP as a critical readiness gap even when Release Signoff is present.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center.py tests\test_release_check.py::test_v80_public_trust_center_smoke tests\test_release_check.py::test_v81_public_trust_center_delivery_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --skip-tests --json`
+- `python -m song_agent.cli doctor`
+
 ## v8.1.0 - 2026-06-13
 
 ### Added

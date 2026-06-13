@@ -166,7 +166,48 @@ def test_public_trust_center_verifier_rejects_delivery_full_resign(tmp_path: Pat
     report = verify_public_trust_center_package(forged, strict=True)
 
     assert report["status"] == "failed"
-    assert any(item["check_id"] in {"ptc_delivery_full_resign_guard", "ptc_delivery_verification_sidecar_binding"} for item in report["blockers"])
+    assert any(item["check_id"] in {"ptc_delivery_full_resign_guard", "ptc_delivery_sidecar_evidence_binding"} for item in report["blockers"])
+
+
+def test_public_trust_center_delivery_requires_real_configured_evidence(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, _ack_store, store = _trust_center_fixture(tmp_path, monkeypatch)
+    release = store.release_store.create_release({"name": "Delivery Requirement Fixture", "release_type": "demo_pack"})
+    store.release_store.write_signoff(release.release_id, {"status": "signed", "signed_by": "tester", "signed_at": "2026-06-13T00:00:00+00:00"})
+    store.release_store.update_signoff_summary(release.release_id, {"status": "signed"})
+
+    report = store.refresh_report("ptc-default", {"portfolio_ids": [portfolio_id], "release_ids": [release.release_id], "include_all_releases": False, "include_all_portfolios": False})
+    row = report["delivery_readiness"][0]
+
+    assert row["release_zip_status"] == "missing"
+    assert row["readiness"] != "ready"
+    assert any(risk["domain"] == "release_zip" for risk in report["delivery_risk_register"])
+
+    required_report = store.refresh_report(
+        "ptc-required",
+        {
+            "portfolio_ids": [portfolio_id],
+            "release_ids": [release.release_id],
+            "include_all_releases": False,
+            "include_all_portfolios": False,
+            "require_distribution_signed": True,
+            "require_submission_accepted": True,
+            "require_operations_signed": True,
+        },
+    )
+    blocker_ids = {item["check_id"] for item in required_report["blockers"]}
+    assert {"distribution_signed_required", "submission_accepted_required", "operations_signed_required"}.issubset(blocker_ids)
+
+    store.export_center("ptc-default")
+    store.build_zip("ptc-default")
+    verification = verify_public_trust_center_package(
+        store.zip_path("ptc-default"),
+        strict=True,
+        require_distribution_ready=True,
+        require_submission_accepted=True,
+        require_operations_signed=True,
+    )
+    failed = {item["check_id"] for item in verification["blockers"]}
+    assert {"ptc_require_distribution_ready", "ptc_require_submission_accepted", "ptc_require_operations_signed"}.issubset(failed)
 
 
 def _rewrite_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
@@ -312,6 +353,18 @@ def _tamper_delivery_full_resign(docs: dict[str, bytes]) -> None:
     if delivery_verification.get("summaries"):
         delivery_verification["summaries"][0]["readiness"] = "ready"
         delivery_verification["summaries"][0]["risk_count"] = 0
+    sidecar_rows = _tamper_delivery_sidecars_without_evidence(docs)
+    if sidecar_rows:
+        rows_by_path = {row["sidecar_path"]: row for row in sidecar_rows}
+        for row in delivery_verification.get("summaries", []) if isinstance(delivery_verification.get("summaries"), list) else []:
+            replacement = rows_by_path.get(row.get("sidecar_path"))
+            if replacement:
+                row.clear()
+                row.update(replacement)
+        for row in delivery_verification.get("sidecars", []) if isinstance(delivery_verification.get("sidecars"), list) else []:
+            replacement = rows_by_path.get(row.get("path"))
+            if replacement:
+                row["hash"] = replacement["sidecar_hash"]
     report["source_hash"] = stable_hash(report["source"])
     for payload in (trust_data, delivery_index, readiness_matrix, delivery_verification):
         payload["source_hash"] = report["source_hash"]
@@ -338,8 +391,33 @@ def _tamper_delivery_full_resign(docs: dict[str, bytes]) -> None:
             row["content_hash"] = hashlib.sha256(docs[row["path"]]).hexdigest()
     for path in ("trust-center-report.json", "data/trust-center-data.json", "data/delivery-index.json", "data/readiness-matrix.json", "data/delivery-verification-index.json", "index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
         _sync_manifest_file(manifest, path, docs[path])
+    for path in docs:
+        if path.startswith("data/delivery-verification-summaries/"):
+            _sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
     docs["trust-center-manifest.json"] = _doc_bytes(manifest)
+
+
+def _tamper_delivery_sidecars_without_evidence(docs: dict[str, bytes]) -> list[dict]:
+    rows: list[dict] = []
+    for path in sorted(name for name in docs if name.startswith("data/delivery-verification-summaries/")):
+        sidecar = _read_doc(docs, path)
+        payload = sidecar.get("payload") if isinstance(sidecar.get("payload"), dict) else {}
+        summary = sidecar.get("summary") if isinstance(sidecar.get("summary"), dict) else {}
+        payload["readiness"] = "ready"
+        payload["risk_count"] = 0
+        payload["release_signoff_status"] = "force_signed"
+        summary["readiness"] = "ready"
+        summary["risk_count"] = 0
+        summary["release_signoff_status"] = "force_signed"
+        summary["summary_hash"] = stable_hash(payload)
+        sidecar["payload"] = payload
+        sidecar["summary"] = summary
+        sidecar["summary_hash"] = stable_hash({"summary": summary, "payload": payload, "evidence": sidecar.get("evidence") if isinstance(sidecar.get("evidence"), dict) else {}})
+        docs[path] = _doc_bytes(sidecar)
+        public_path = path.removeprefix("data/")
+        rows.append({**summary, "sidecar_path": public_path, "sidecar_hash": stable_hash(sidecar)})
+    return rows
 
 
 def _spoof_manifest_zip_entries(docs: dict[str, bytes]) -> None:

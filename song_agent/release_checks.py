@@ -12356,6 +12356,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
         manifest = trust_store.export_center("ptc-default")
         zip_info = trust_store.build_zip("ptc-default")
         verification = verify_public_trust_center_package(trust_store.zip_path("ptc-default"), strict=True, require_registry_current=True, require_portal_current=True, require_transparency_current=True, require_acknowledgement_current=True)
+        require_missing = verify_public_trust_center_package(trust_store.zip_path("ptc-default"), strict=True, require_distribution_ready=True, require_submission_accepted=True, require_operations_signed=True)
         archive = trust_store.archive_snapshot("ptc-default")
         source_zip = trust_store.zip_path("ptc-default")
         report_tamper = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-report-tamper.zip", _v80_tamper_trust_center_report), strict=True)
@@ -12400,7 +12401,12 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(nested, "ptc_zip_no_nested_internal_entries") == "failed"
             and _v38_check_status(spoof, "ptc_manifest_zip_entries_reference_only") == "failed"
             and _v38_check_status(redaction, "ptc_redaction_scan") == "failed"
-            and _v38_check_status(delivery_full_resign, "ptc_delivery_verification_sidecar_binding") == "failed"
+            and _v38_check_status(delivery_full_resign, "ptc_delivery_sidecar_evidence_binding") == "failed"
+            and _v38_check_status(require_missing, "ptc_require_distribution_ready") == "failed"
+            and _v38_check_status(require_missing, "ptc_require_submission_accepted") == "failed"
+            and _v38_check_status(require_missing, "ptc_require_operations_signed") == "failed"
+            and report.get("delivery_readiness", [{}])[0].get("release_zip_status") == "missing"
+            and report.get("delivery_readiness", [{}])[0].get("readiness") != "ready"
             and manifest.get("data", {}).get("delivery_index_hash")
             and "data/delivery-verification-index.json" in {item.get("path") for item in manifest.get("files", []) if isinstance(item, dict)}
             and stale_export
@@ -12414,7 +12420,9 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
             f"trust={report.get('status')}/{verification.get('status')}, zip={bool(zip_info.get('sha256'))}, archive={bool(archive.get('zip_sha256'))}, "
             f"report={_v38_check_status(report_tamper, 'ptc_report_summary_release_count')}, data={_v38_check_status(data_tamper, 'ptc_data_package_index_json_semantics')}, "
             f"html={_v38_check_status(html_tamper, 'ptc_html_index.html_semantics')}, full_resign={_v38_check_status(full_resign, 'ptc_package_fingerprint_verification_summary_binding')}, duplicate={_v38_check_status(duplicate, 'ptc_zip_duplicate_entries')}, "
-            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'ptc_delivery_verification_sidecar_binding')}, "
+            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'ptc_delivery_sidecar_evidence_binding')}, "
+            f"require_not_configured={_v38_check_status(require_missing, 'ptc_require_distribution_ready')}/{_v38_check_status(require_missing, 'ptc_require_submission_accepted')}/{_v38_check_status(require_missing, 'ptc_require_operations_signed')}, "
+            f"release_zip_readiness={report.get('delivery_readiness', [{}])[0].get('readiness')}/{report.get('delivery_readiness', [{}])[0].get('release_zip_status')}, "
             f"dangerous={_v38_check_status(dangerous, 'ptc_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptc_zip_entry_path_safe')}, "
             f"case_musicforge={_v38_check_status(case_musicforge, 'ptc_zip_no_nested_internal_entries')}, nested={_v38_check_status(nested, 'ptc_zip_no_nested_internal_entries')}, "
             f"spoof={_v38_check_status(spoof, 'ptc_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptc_redaction_scan')}, "
@@ -12551,6 +12559,18 @@ def _v81_tamper_trust_center_delivery_full_resign(docs: dict[str, bytes]) -> Non
     if delivery_verification.get("summaries"):
         delivery_verification["summaries"][0]["readiness"] = "forged_ready"
         delivery_verification["summaries"][0]["release_signoff_status"] = "force_signed"
+    sidecar_rows = _v81_tamper_delivery_sidecars_without_evidence(docs)
+    if sidecar_rows:
+        rows_by_path = {row["sidecar_path"]: row for row in sidecar_rows}
+        for row in delivery_verification.get("summaries", []) if isinstance(delivery_verification.get("summaries"), list) else []:
+            replacement = rows_by_path.get(row.get("sidecar_path"))
+            if replacement:
+                row.clear()
+                row.update(replacement)
+        for row in delivery_verification.get("sidecars", []) if isinstance(delivery_verification.get("sidecars"), list) else []:
+            replacement = rows_by_path.get(row.get("path"))
+            if replacement:
+                row["hash"] = replacement["sidecar_hash"]
     report["source_hash"] = stable_hash(report["source"])
     for payload in (trust_data, delivery_index, readiness_matrix, delivery_verification):
         payload["source_hash"] = report["source_hash"]
@@ -12575,8 +12595,31 @@ def _v81_tamper_trust_center_delivery_full_resign(docs: dict[str, bytes]) -> Non
             item["content_hash"] = hashlib.sha256(docs[item["path"]]).hexdigest()
     for path in ("trust-center-report.json", "data/trust-center-data.json", "data/delivery-index.json", "data/readiness-matrix.json", "data/delivery-verification-index.json", "index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
         _v74_sync_manifest_file(manifest, path, docs[path])
+    for path in docs:
+        if path.startswith("data/delivery-verification-summaries/"):
+            _v74_sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
     docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v81_tamper_delivery_sidecars_without_evidence(docs: dict[str, bytes]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(name for name in docs if name.startswith("data/delivery-verification-summaries/")):
+        sidecar = _v74_read_json_doc(docs, path)
+        payload = sidecar.get("payload") if isinstance(sidecar.get("payload"), dict) else {}
+        summary = sidecar.get("summary") if isinstance(sidecar.get("summary"), dict) else {}
+        payload["readiness"] = "forged_ready"
+        payload["release_signoff_status"] = "force_signed"
+        summary["readiness"] = "forged_ready"
+        summary["release_signoff_status"] = "force_signed"
+        summary["summary_hash"] = stable_hash(payload)
+        sidecar["payload"] = payload
+        sidecar["summary"] = summary
+        sidecar["summary_hash"] = stable_hash({"summary": summary, "payload": payload, "evidence": sidecar.get("evidence") if isinstance(sidecar.get("evidence"), dict) else {}})
+        docs[path] = _v74_json_doc(sidecar)
+        public_path = path.removeprefix("data/")
+        rows.append({**summary, "sidecar_path": public_path, "sidecar_hash": stable_hash(sidecar)})
+    return rows
 
 
 def _v80_spoof_trust_center_manifest(data: bytes) -> bytes:

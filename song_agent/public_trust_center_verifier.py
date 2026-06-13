@@ -482,6 +482,7 @@ class _PublicTrustCenterVerifier:
     def _verify_delivery_verification_sidecar(self) -> None:
         delivery_doc = self.data_docs.get("delivery-verification-index.json", {})
         independent_sidecars = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/")}
+        self._verify_delivery_sidecar_evidence_bindings(independent_sidecars)
         expected_index = _delivery_verification_index_from_independent_sidecars(self.report_doc.get("source_hash"), independent_sidecars)
         self._add_exact_check("data", "ptc_delivery_verification_sidecar_binding", delivery_doc.get("summaries"), expected_index.get("summaries"), "Delivery verification index binds independent sidecars")
         expected_payloads = _delivery_payloads_from_sidecars(independent_sidecars)
@@ -504,6 +505,18 @@ class _PublicTrustCenterVerifier:
         self._add_exact_check("data", "ptc_independent_delivery_sidecar_set", sorted(declared), sorted(actual), "Declared independent delivery sidecar set")
         for path, row in sorted(declared.items()):
             self._add_exact_check("data", "ptc_independent_delivery_sidecar_hash", row.get("hash"), actual.get(path), f"Independent delivery sidecar hash {path}")
+
+    def _verify_delivery_sidecar_evidence_bindings(self, sidecars: dict[str, dict[str, Any]]) -> None:
+        for path, doc in sorted(sidecars.items()):
+            if not isinstance(doc, dict):
+                continue
+            evidence = doc.get("evidence") if isinstance(doc.get("evidence"), dict) else {}
+            payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+            summary = doc.get("summary") if isinstance(doc.get("summary"), dict) else {}
+            evidence_payload = evidence.get("payload") if isinstance(evidence.get("payload"), dict) else {}
+            self._add_exact_check("data", "ptc_delivery_sidecar_evidence_binding", payload, evidence_payload, f"Delivery sidecar payload binds independent evidence {path}")
+            self._add_exact_check("data", "ptc_delivery_sidecar_evidence_payload_hash", evidence.get("payload_hash"), stable_hash(evidence_payload), f"Delivery sidecar evidence payload hash {path}")
+            self._add_exact_check("data", "ptc_delivery_sidecar_summary_hash", doc.get("summary_hash"), stable_hash({"summary": summary, "payload": payload, "evidence": evidence}), f"Delivery sidecar summary hash {path}")
 
     def _verify_requirements(self) -> None:
         packages = self.report_doc.get("package_index") if isinstance(self.report_doc.get("package_index"), list) else []
@@ -531,12 +544,12 @@ class _PublicTrustCenterVerifier:
             ok = bool(delivery_rows) and all(item.get("readiness") == "ready" for item in delivery_rows if isinstance(item, dict))
             self._add_check("requirements", "ptc_require_delivery_readiness", "passed" if ok else "failed", "blocking", "Delivery readiness is complete." if ok else "Delivery readiness is required.")
         requirement_checks = (
-            ("distribution_ready", self.require_distribution_ready, "distribution_status", {"ready", "not_configured"}, "Distribution evidence is ready."),
-            ("submission_accepted", self.require_submission_accepted, "submission_status", {"accepted", "not_configured"}, "Submission evidence is accepted."),
-            ("submission_evidence", self.require_submission_evidence, "submission_evidence_status", {"signed", "not_configured"}, "Submission Evidence is signed."),
-            ("operations_signed", self.require_operations_signed, "operations_status", {"signed", "force_signed", "not_configured"}, "Release Operations is signed."),
-            ("operations_audit", self.require_operations_audit, "operations_audit_status", {"passed", "warning", "not_configured"}, "Release Operations Audit is verified."),
-            ("operations_reviewer_pack", self.require_operations_reviewer_pack, "operations_reviewer_pack_status", {"passed", "warning", "not_configured"}, "Release Operations Reviewer Pack is verified."),
+            ("distribution_ready", self.require_distribution_ready, "distribution_status", {"ready"}, "Distribution evidence is ready."),
+            ("submission_accepted", self.require_submission_accepted, "submission_status", {"accepted"}, "Submission evidence is accepted."),
+            ("submission_evidence", self.require_submission_evidence, "submission_evidence_status", {"signed"}, "Submission Evidence is signed."),
+            ("operations_signed", self.require_operations_signed, "operations_status", {"signed", "force_signed"}, "Release Operations is signed."),
+            ("operations_audit", self.require_operations_audit, "operations_audit_status", {"passed", "warning"}, "Release Operations Audit is verified."),
+            ("operations_reviewer_pack", self.require_operations_reviewer_pack, "operations_reviewer_pack_status", {"passed", "warning"}, "Release Operations Reviewer Pack is verified."),
         )
         for name, enabled, key, allowed, passed_message in requirement_checks:
             if not enabled:
@@ -841,7 +854,8 @@ def _delivery_payloads_from_sidecars(sidecars: dict[str, dict[str, Any]]) -> lis
         del path
         if not isinstance(doc, dict):
             continue
-        payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+        evidence = doc.get("evidence") if isinstance(doc.get("evidence"), dict) else {}
+        payload = evidence.get("payload") if isinstance(evidence.get("payload"), dict) else doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
         row = dict(payload)
         rows.append(row)
     return sorted(rows, key=_delivery_payload_key)
