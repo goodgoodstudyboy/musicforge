@@ -366,6 +366,7 @@ class PublicTrustCenterStore:
             _write_zip(zip_path, export_dir)
             zip_info["sha256"] = _sha256(zip_path)
             zip_info["size_bytes"] = zip_path.stat().st_size
+            self._write_delivery_anchor(center_id, manifest, zip_info)
             self._append_history(center_id, "trust_center_zip_built", {"source_hash": report.get("source_hash"), "zip_sha256": zip_info["sha256"], "manifest_hash": manifest["integrity_hash"], **state}, now=now)
             return _sanitize_public_metadata(zip_info)
 
@@ -417,6 +418,41 @@ class PublicTrustCenterStore:
             archive["integrity_hash"] = stable_hash(archive)
             self._append_history(center_id, "trust_center_archived", archive, now=now)
             return _sanitize_public_metadata(archive)
+
+    def delivery_anchor_path(self, center_id: str = "ptc-default") -> Path:
+        return self.zip_path(center_id).with_name(self.zip_path(center_id).stem + ".delivery-anchor.json")
+
+    def _write_delivery_anchor(self, center_id: str, manifest: dict[str, Any], zip_info: dict[str, Any]) -> dict[str, Any]:
+        export_dir = self.export_dir(center_id)
+        rows: list[dict[str, Any]] = []
+        for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            path = str(item.get("path") or "")
+            if not path.startswith("data/delivery-fingerprint-summaries/"):
+                continue
+            doc = _read_json_default(export_dir / path, default={})
+            rows.append(
+                {
+                    "path": path.removeprefix("data/"),
+                    "fingerprint_hash": doc.get("fingerprint_hash"),
+                    "payload_hash": doc.get("payload_hash"),
+                    "fingerprints_hash": stable_hash(doc.get("fingerprints") if isinstance(doc.get("fingerprints"), dict) else {}),
+                }
+            )
+        anchor = {
+            "schema_version": PTC_SCHEMA_VERSION,
+            "package_type": "musicforge_public_trust_center_delivery_anchor",
+            "center_id": center_id,
+            "zip_sha256": zip_info.get("sha256"),
+            "zip_size_bytes": zip_info.get("size_bytes"),
+            "manifest_hash": manifest.get("integrity_hash"),
+            "source_hash": manifest.get("source_hash"),
+            "fingerprint_sidecars": sorted(rows, key=lambda row: str(row.get("path") or "")),
+        }
+        anchor["anchor_hash"] = stable_hash({key: value for key, value in anchor.items() if key != "anchor_hash"})
+        _write_json(self.delivery_anchor_path(center_id), anchor)
+        return anchor
 
     def _release_summaries(self, selection: dict[str, Any]) -> list[dict[str, Any]]:
         ids = [str(item).strip() for item in selection.get("release_ids", []) if str(item).strip()] if isinstance(selection.get("release_ids"), list) else []

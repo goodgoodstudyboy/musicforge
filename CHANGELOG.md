@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.1.3 - 2026-06-13
+
+### Fixed
+- Public Trust Center delivery verification now requires an external delivery anchor when delivery requirements are enabled.
+- The delivery anchor binds the current Trust Center ZIP hash, manifest hash, source hash, and delivery fingerprint sidecar fingerprints, so a fully re-signed ZIP cannot pass delivery verification without the matching external anchor.
+- CLI/API verification paths now pass or auto-discover the delivery anchor, and v8.1 smoke covers summary-plus-fingerprint full re-sign tampering.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center.py tests\test_server_public_trust_center.py tests\test_cli_public_trust_center.py tests\test_release_check.py::test_v80_public_trust_center_smoke tests\test_release_check.py::test_v81_public_trust_center_delivery_smoke -q`
+
 ## v8.1.2 - 2026-06-13
 
 ### Fixed

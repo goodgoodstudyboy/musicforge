@@ -7205,6 +7205,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     require_operations_signed=bool(payload.get("require_operations_signed", False)),
                     require_operations_audit=bool(payload.get("require_operations_audit", False)),
                     require_operations_reviewer_pack=bool(payload.get("require_operations_reviewer_pack", False)),
+                    delivery_anchor_path=self.public_trust_center_store.delivery_anchor_path(center_id),
                 )
                 write_public_trust_center_verification_report(report, self.public_trust_center_store.verification_report_path(center_id))
                 self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})

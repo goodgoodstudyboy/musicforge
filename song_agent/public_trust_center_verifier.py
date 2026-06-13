@@ -88,6 +88,7 @@ def verify_public_trust_center_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
+    delivery_anchor_path: Path | str | None = None,
 ) -> dict[str, Any]:
     verifier = _PublicTrustCenterVerifier(
         Path(zip_path),
@@ -109,6 +110,7 @@ def verify_public_trust_center_package(
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
         now=now,
+        delivery_anchor_path=Path(delivery_anchor_path) if delivery_anchor_path is not None else None,
     )
     return verifier.run()
 
@@ -161,6 +163,7 @@ class _PublicTrustCenterVerifier:
         max_uncompressed_size_mb: int,
         max_entry_count: int,
         now: str | None,
+        delivery_anchor_path: Path | None,
     ) -> None:
         self.zip_path = zip_path
         self.strict = strict
@@ -181,6 +184,8 @@ class _PublicTrustCenterVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
+        self.delivery_anchor_path = delivery_anchor_path
+        self.delivery_anchor_doc: dict[str, Any] = {}
         self.checks: list[dict[str, Any]] = []
         self.files: list[dict[str, Any]] = []
         self.redaction_findings: list[dict[str, Any]] = []
@@ -208,6 +213,7 @@ class _PublicTrustCenterVerifier:
                 self._verify_documents()
                 self._verify_html(archive)
                 self._verify_requirements()
+                self._verify_delivery_anchor()
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -584,6 +590,40 @@ class _PublicTrustCenterVerifier:
             ok = bool(delivery_rows) and all(item.get(key) in allowed for item in delivery_rows if isinstance(item, dict))
             self._add_check("requirements", f"ptc_require_{name}", "passed" if ok else "failed", "blocking", passed_message if ok else f"{name} is required.")
 
+    def _verify_delivery_anchor(self) -> None:
+        required = any(
+            (
+                self.require_delivery_readiness,
+                self.require_distribution_ready,
+                self.require_submission_accepted,
+                self.require_submission_evidence,
+                self.require_operations_signed,
+                self.require_operations_audit,
+                self.require_operations_reviewer_pack,
+            )
+        )
+        if not required:
+            return
+        anchor_path = self.delivery_anchor_path or self.zip_path.with_name(self.zip_path.stem + ".delivery-anchor.json")
+        if not anchor_path.exists() or not anchor_path.is_file() or anchor_path.is_symlink():
+            self._add_check("requirements", "ptc_delivery_external_anchor", "failed", "blocking", "Delivery verification requires an external Public Trust Center delivery anchor.")
+            return
+        try:
+            anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            self._add_check("requirements", "ptc_delivery_external_anchor", "failed", "blocking", f"Delivery anchor cannot be read: {exc}")
+            return
+        self.delivery_anchor_doc = anchor if isinstance(anchor, dict) else {}
+        self._add_exact_check("requirements", "ptc_delivery_anchor_package_type", self.delivery_anchor_doc.get("package_type"), "musicforge_public_trust_center_delivery_anchor", "Delivery anchor package type")
+        self._add_exact_check("requirements", "ptc_delivery_anchor_hash", self.delivery_anchor_doc.get("anchor_hash"), stable_hash({key: value for key, value in self.delivery_anchor_doc.items() if key != "anchor_hash"}), "Delivery anchor integrity")
+        self._add_exact_check("requirements", "ptc_delivery_anchor_zip_sha256", self.delivery_anchor_doc.get("zip_sha256"), self.zip_sha256, "Delivery anchor ZIP sha256")
+        self._add_exact_check("requirements", "ptc_delivery_anchor_zip_size", self.delivery_anchor_doc.get("zip_size_bytes"), self.zip_size_bytes, "Delivery anchor ZIP size")
+        self._add_exact_check("requirements", "ptc_delivery_anchor_manifest_hash", self.delivery_anchor_doc.get("manifest_hash"), self.manifest.get("integrity_hash"), "Delivery anchor manifest hash")
+        self._add_exact_check("requirements", "ptc_delivery_anchor_source_hash", self.delivery_anchor_doc.get("source_hash"), self.report_doc.get("source_hash"), "Delivery anchor source hash")
+        expected = _delivery_anchor_rows_from_fingerprint_sidecars({name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-fingerprint-summaries/")})
+        actual = self.delivery_anchor_doc.get("fingerprint_sidecars") if isinstance(self.delivery_anchor_doc.get("fingerprint_sidecars"), list) else []
+        self._add_exact_check("requirements", "ptc_delivery_anchor_fingerprint_sidecars", actual, expected, "Delivery anchor binds fingerprint sidecars")
+
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:
             if not name.endswith((".json", ".txt", ".md", ".html")):
@@ -903,6 +943,22 @@ def _delivery_payloads_from_fingerprint_sidecars(sidecars: dict[str, dict[str, A
         payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
         rows.append(dict(payload))
     return sorted(rows, key=_delivery_payload_key)
+
+
+def _delivery_anchor_rows_from_fingerprint_sidecars(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path, doc in sorted(sidecars.items()):
+        if not isinstance(doc, dict):
+            continue
+        rows.append(
+            {
+                "path": path,
+                "fingerprint_hash": doc.get("fingerprint_hash"),
+                "payload_hash": doc.get("payload_hash"),
+                "fingerprints_hash": stable_hash(doc.get("fingerprints") if isinstance(doc.get("fingerprints"), dict) else {}),
+            }
+        )
+    return sorted(rows, key=lambda item: str(item.get("path") or ""))
 
 
 def _delivery_payloads_from_data_docs(data_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

@@ -885,6 +885,7 @@ def build_verify_public_trust_center_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-operations-signed", action="store_true", help="Require Release Operations Signoff evidence.")
     verify_parser.add_argument("--require-operations-audit", action="store_true", help="Require verified Release Operations Audit evidence.")
     verify_parser.add_argument("--require-operations-reviewer-pack", action="store_true", help="Require verified Release Operations Reviewer Pack evidence.")
+    verify_parser.add_argument("--delivery-anchor", type=Path, default=None, help="Path to an external Public Trust Center delivery anchor JSON file.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=250, help="Maximum number of ZIP entries.")
@@ -2118,6 +2119,7 @@ def _main() -> None:
             require_operations_signed=args.require_operations_signed,
             require_operations_audit=args.require_operations_audit,
             require_operations_reviewer_pack=args.require_operations_reviewer_pack,
+            delivery_anchor_path=args.delivery_anchor,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,

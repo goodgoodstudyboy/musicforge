@@ -163,10 +163,11 @@ def test_public_trust_center_verifier_rejects_delivery_full_resign(tmp_path: Pat
     store.build_zip("ptc-default")
 
     forged = _rewrite_zip(store.zip_path("ptc-default"), tmp_path / "delivery-full-resign.zip", _tamper_delivery_full_resign)
-    report = verify_public_trust_center_package(forged, strict=True)
+    _copy_delivery_anchor(store, forged)
+    report = verify_public_trust_center_package(forged, strict=True, require_distribution_ready=True)
 
     assert report["status"] == "failed"
-    assert any(item["check_id"] in {"ptc_delivery_full_resign_guard", "ptc_delivery_sidecar_fingerprint_payload_binding"} for item in report["blockers"])
+    assert any(item["check_id"] in {"ptc_delivery_anchor_zip_sha256", "ptc_delivery_anchor_fingerprint_sidecars"} for item in report["blockers"])
 
 
 def test_public_trust_center_delivery_requires_real_configured_evidence(tmp_path: Path, monkeypatch) -> None:
@@ -218,6 +219,12 @@ def _rewrite_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
         for name, data in docs.items():
             dst.writestr(name, data)
     return target_zip
+
+
+def _copy_delivery_anchor(store: PublicTrustCenterStore, target_zip: Path) -> None:
+    source_anchor = store.delivery_anchor_path("ptc-default")
+    target_anchor = target_zip.with_name(target_zip.stem + ".delivery-anchor.json")
+    shutil.copyfile(source_anchor, target_anchor)
 
 
 def _duplicate_zip(source_zip: Path, target_zip: Path) -> Path:
@@ -353,7 +360,7 @@ def _tamper_delivery_full_resign(docs: dict[str, bytes]) -> None:
     if delivery_verification.get("summaries"):
         delivery_verification["summaries"][0]["readiness"] = "ready"
         delivery_verification["summaries"][0]["risk_count"] = 0
-    sidecar_rows = _tamper_delivery_sidecars_without_fingerprint(docs)
+    sidecar_rows = _tamper_delivery_sidecars_and_fingerprints(docs)
     if sidecar_rows:
         rows_by_path = {row["sidecar_path"]: row for row in sidecar_rows}
         for row in delivery_verification.get("summaries", []) if isinstance(delivery_verification.get("summaries"), list) else []:
@@ -392,13 +399,13 @@ def _tamper_delivery_full_resign(docs: dict[str, bytes]) -> None:
     for path in ("trust-center-report.json", "data/trust-center-data.json", "data/delivery-index.json", "data/readiness-matrix.json", "data/delivery-verification-index.json", "index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
         _sync_manifest_file(manifest, path, docs[path])
     for path in docs:
-        if path.startswith("data/delivery-verification-summaries/"):
+        if path.startswith("data/delivery-verification-summaries/") or path.startswith("data/delivery-fingerprint-summaries/"):
             _sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
     docs["trust-center-manifest.json"] = _doc_bytes(manifest)
 
 
-def _tamper_delivery_sidecars_without_fingerprint(docs: dict[str, bytes]) -> list[dict]:
+def _tamper_delivery_sidecars_and_fingerprints(docs: dict[str, bytes]) -> list[dict]:
     rows: list[dict] = []
     for path in sorted(name for name in docs if name.startswith("data/delivery-verification-summaries/")):
         sidecar = _read_doc(docs, path)
@@ -418,6 +425,17 @@ def _tamper_delivery_sidecars_without_fingerprint(docs: dict[str, bytes]) -> lis
         sidecar["evidence"] = evidence
         sidecar["summary"] = summary
         sidecar["summary_hash"] = stable_hash({"summary": summary, "payload": payload, "evidence": sidecar.get("evidence") if isinstance(sidecar.get("evidence"), dict) else {}})
+        fingerprint_path = sidecar.get("fingerprint_sidecar_path")
+        if isinstance(fingerprint_path, str) and fingerprint_path:
+            full_fingerprint_path = "data/" + fingerprint_path
+            if full_fingerprint_path in docs:
+                fingerprint = _read_doc(docs, full_fingerprint_path)
+                fingerprint["payload"] = dict(payload)
+                fingerprint["payload_hash"] = stable_hash(payload)
+                fingerprint["fingerprint_hash"] = stable_hash({"payload_hash": fingerprint["payload_hash"], "fingerprints": fingerprint.get("fingerprints") if isinstance(fingerprint.get("fingerprints"), dict) else {}})
+                docs[full_fingerprint_path] = _doc_bytes(fingerprint)
+                sidecar["fingerprint_sidecar_hash"] = stable_hash(fingerprint)
+                summary["fingerprint_sidecar_hash"] = stable_hash(fingerprint)
         docs[path] = _doc_bytes(sidecar)
         public_path = path.removeprefix("data/")
         rows.append({**summary, "sidecar_path": public_path, "sidecar_hash": stable_hash(sidecar)})
