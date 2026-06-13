@@ -655,19 +655,21 @@ python -m song_agent.cli verify-release-portfolio-governance-attestation-transpa
 python -m song_agent.cli verify-release-portfolio-governance-attestation-transparency-acknowledgement path\to\transparency-acknowledgement-evidence.zip --strict --require-response --require-accepted --json
 ```
 
-Public Trust Center aggregates the public-safe evidence chain across Releases
-and Portfolio Governance into a static portal ZIP. It is read-only: refresh,
+Public Trust Center aggregates the public-safe evidence chain across Releases,
+Distribution targets, Submissions, Submission Evidence, Release Operations, and
+Portfolio Governance into a static portal ZIP. It is read-only: refresh,
 export, ZIP, verify, and archive never sign off, reset, approve, upload, or
-mutate underlying Release/Distribution/Submission/Portfolio evidence. The ZIP
-does not embed internal evidence packages; it references fingerprints and
-verification summaries, and the verifier can run in a clean directory without
-`.musicforge`. Public package fingerprints are checked against per-package
-verification summary sidecars exported from the underlying verification reports,
-so a fully re-signed forged summary is rejected:
+mutate underlying Release/Distribution/Submission/Operations/Portfolio
+evidence. The ZIP does not embed internal evidence packages; it references
+fingerprints and verification summaries, and the verifier can run in a clean
+directory without `.musicforge`. Public package fingerprints and delivery-chain
+summaries are checked against independent sidecars exported from the underlying
+verification reports, so fully re-signed forged package or delivery summaries
+are rejected:
 
 ```powershell
-python -m song_agent.cli public-trust-center --center-id ptc-default --refresh --export --zip --verify --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --json
-python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --json
+python -m song_agent.cli public-trust-center --center-id ptc-default --refresh --export --zip --verify --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --include-delivery --json
+python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-registry-current --require-portal-current --require-transparency-current --require-acknowledgement-current --require-delivery-readiness --require-distribution-ready --require-submission-accepted --require-submission-evidence --require-operations-signed --require-operations-audit --require-operations-reviewer-pack --json
 ```
 
 ```powershell

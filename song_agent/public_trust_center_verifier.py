@@ -40,9 +40,22 @@ REQUIRED_ENTRIES = {
     "data/risk-register.json",
     "data/transparency-index.json",
     "data/acknowledgement-index.json",
+    "data/delivery-index.json",
+    "data/distribution-index.json",
+    "data/submission-index.json",
+    "data/submission-evidence-index.json",
+    "data/operations-index.json",
+    "data/operations-package-index.json",
+    "data/readiness-matrix.json",
+    "data/delivery-risk-register.json",
+    "data/delivery-verification-index.json",
     "index.html",
     "releases.html",
     "portfolios.html",
+    "delivery.html",
+    "distribution.html",
+    "submissions.html",
+    "operations.html",
     "evidence.html",
     "risk.html",
     "verify.html",
@@ -64,6 +77,13 @@ def verify_public_trust_center_package(
     require_portal_current: bool = False,
     require_transparency_current: bool = False,
     require_acknowledgement_current: bool = False,
+    require_delivery_readiness: bool = False,
+    require_distribution_ready: bool = False,
+    require_submission_accepted: bool = False,
+    require_submission_evidence: bool = False,
+    require_operations_signed: bool = False,
+    require_operations_audit: bool = False,
+    require_operations_reviewer_pack: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -78,6 +98,13 @@ def verify_public_trust_center_package(
         require_portal_current=require_portal_current,
         require_transparency_current=require_transparency_current,
         require_acknowledgement_current=require_acknowledgement_current,
+        require_delivery_readiness=require_delivery_readiness,
+        require_distribution_ready=require_distribution_ready,
+        require_submission_accepted=require_submission_accepted,
+        require_submission_evidence=require_submission_evidence,
+        require_operations_signed=require_operations_signed,
+        require_operations_audit=require_operations_audit,
+        require_operations_reviewer_pack=require_operations_reviewer_pack,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -123,6 +150,13 @@ class _PublicTrustCenterVerifier:
         require_portal_current: bool,
         require_transparency_current: bool,
         require_acknowledgement_current: bool,
+        require_delivery_readiness: bool,
+        require_distribution_ready: bool,
+        require_submission_accepted: bool,
+        require_submission_evidence: bool,
+        require_operations_signed: bool,
+        require_operations_audit: bool,
+        require_operations_reviewer_pack: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -136,6 +170,13 @@ class _PublicTrustCenterVerifier:
         self.require_portal_current = require_portal_current
         self.require_transparency_current = require_transparency_current
         self.require_acknowledgement_current = require_acknowledgement_current
+        self.require_delivery_readiness = require_delivery_readiness
+        self.require_distribution_ready = require_distribution_ready
+        self.require_submission_accepted = require_submission_accepted
+        self.require_submission_evidence = require_submission_evidence
+        self.require_operations_signed = require_operations_signed
+        self.require_operations_audit = require_operations_audit
+        self.require_operations_reviewer_pack = require_operations_reviewer_pack
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -270,10 +311,28 @@ class _PublicTrustCenterVerifier:
             "risk-register.json",
             "transparency-index.json",
             "acknowledgement-index.json",
+            "delivery-index.json",
+            "distribution-index.json",
+            "submission-index.json",
+            "submission-evidence-index.json",
+            "operations-index.json",
+            "operations-package-index.json",
+            "readiness-matrix.json",
+            "delivery-risk-register.json",
+            "delivery-verification-index.json",
         ):
             self.data_docs[name] = self._read_json_entry(archive, f"data/{name}", "data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_parse")
         sidecar_index = self.data_docs.get("public-package-verification-index.json", {})
         for row in sidecar_index.get("sidecars", []) if isinstance(sidecar_index.get("sidecars"), list) else []:
+            if not isinstance(row, dict):
+                continue
+            path = str(row.get("path") or "")
+            if not path:
+                continue
+            entry = f"data/{path}"
+            self.data_docs[path] = self._read_json_entry(archive, entry, "data", f"ptc_data_{path.replace('/', '_').replace('-', '_').replace('.', '_')}_parse")
+        delivery_sidecar_index = self.data_docs.get("delivery-verification-index.json", {})
+        for row in delivery_sidecar_index.get("sidecars", []) if isinstance(delivery_sidecar_index.get("sidecars"), list) else []:
             if not isinstance(row, dict):
                 continue
             path = str(row.get("path") or "")
@@ -306,12 +365,15 @@ class _PublicTrustCenterVerifier:
         self._add_exact_check("report", "ptc_report_portfolio_readiness_semantics", self.report_doc.get("portfolio_readiness"), _portfolio_readiness(source), "Portfolio readiness")
         self._add_exact_check("report", "ptc_report_package_index_semantics", self.report_doc.get("package_index"), _package_index(source), "Package index")
         self._add_exact_check("report", "ptc_report_verification_index_semantics", self.report_doc.get("verification_index"), _verification_index(source), "Verification index")
+        self._add_exact_check("report", "ptc_report_delivery_readiness_semantics", self.report_doc.get("delivery_readiness"), _delivery_readiness(source), "Delivery readiness")
+        self._add_exact_check("report", "ptc_report_delivery_risk_register_semantics", self.report_doc.get("delivery_risk_register"), _delivery_risk_register(source), "Delivery risk register")
 
     def _verify_data_documents(self) -> None:
         sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
-        expected_docs, _expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs)
+        delivery_sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/")}
+        expected_docs, _expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs, delivery_sidecar_docs)
         for name, doc in self.data_docs.items():
-            if name.startswith("package-verification-summaries/"):
+            if name.startswith("package-verification-summaries/") or name.startswith("delivery-verification-summaries/"):
                 continue
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), self.report_doc.get("source_hash"), f"{name} source_hash")
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_semantics", doc, expected_docs.get(name), f"{name} semantic payload")
@@ -326,9 +388,23 @@ class _PublicTrustCenterVerifier:
             ("acknowledgement-index.json", "acknowledgements"),
         ):
             self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_trust_center_binding", self.data_docs.get(name, {}).get(key), data_doc.get(key), f"{name} binds trust-center-data.{key}")
+        for name, doc_key, data_key in (
+            ("delivery-index.json", "releases", "delivery"),
+            ("distribution-index.json", "targets", "distribution"),
+            ("submission-index.json", "submissions", "submissions"),
+            ("submission-evidence-index.json", "evidence", "submission_evidence"),
+            ("operations-index.json", "operations", "operations"),
+            ("operations-package-index.json", "packages", "operations_packages"),
+            ("readiness-matrix.json", "rows", "readiness_matrix"),
+            ("delivery-risk-register.json", "risks", "delivery_risks"),
+        ):
+            self._add_exact_check("data", f"ptc_data_{name.replace('-', '_').replace('.', '_')}_trust_center_binding", self.data_docs.get(name, {}).get(doc_key), data_doc.get(data_key), f"{name} binds trust-center-data.{data_key}")
         sidecar_doc = self.data_docs.get("public-package-verification-index.json", {})
         self._add_exact_check("data", "ptc_data_public_package_verification_index_json_trust_center_binding", sidecar_doc.get("packages"), data_doc.get("package_verification_summaries"), "public-package-verification-index.json binds trust-center-data.package_verification_summaries")
+        delivery_sidecar_doc = self.data_docs.get("delivery-verification-index.json", {})
+        self._add_exact_check("data", "ptc_data_delivery_verification_index_json_trust_center_binding", delivery_sidecar_doc.get("summaries"), data_doc.get("delivery_verification_summaries"), "delivery-verification-index.json binds trust-center-data.delivery_verification_summaries")
         self._verify_package_verification_sidecar()
+        self._verify_delivery_verification_sidecar()
 
     def _verify_manifest_bindings(self) -> None:
         data = self.manifest.get("data") if isinstance(self.manifest.get("data"), dict) else {}
@@ -337,13 +413,26 @@ class _PublicTrustCenterVerifier:
         self._add_exact_check("manifest", "ptc_manifest_data_verification_index_hash", data.get("verification_index_hash"), stable_hash(self.data_docs.get("verification-index.json", {})), "Manifest verification-index hash")
         self._add_exact_check("manifest", "ptc_manifest_data_public_package_verification_index_hash", data.get("public_package_verification_index_hash"), stable_hash(self.data_docs.get("public-package-verification-index.json", {})), "Manifest public-package-verification-index hash")
         self._add_exact_check("manifest", "ptc_manifest_data_risk_register_hash", data.get("risk_register_hash"), stable_hash(self.data_docs.get("risk-register.json", {})), "Manifest risk-register hash")
+        for name, key in (
+            ("delivery-index.json", "delivery_index_hash"),
+            ("distribution-index.json", "distribution_index_hash"),
+            ("submission-index.json", "submission_index_hash"),
+            ("submission-evidence-index.json", "submission_evidence_index_hash"),
+            ("operations-index.json", "operations_index_hash"),
+            ("operations-package-index.json", "operations_package_index_hash"),
+            ("readiness-matrix.json", "readiness_matrix_hash"),
+            ("delivery-risk-register.json", "delivery_risk_register_hash"),
+            ("delivery-verification-index.json", "delivery_verification_index_hash"),
+        ):
+            self._add_exact_check("manifest", f"ptc_manifest_data_{key}", data.get(key), stable_hash(self.data_docs.get(name, {})), f"Manifest {name} hash")
         summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
         for key in ("release_count", "portfolio_count", "public_package_count", "verification_count"):
             self._add_exact_check("manifest", f"ptc_manifest_{key}", self.manifest.get(key), summary.get(key), f"Manifest {key}")
 
     def _verify_html(self, archive: zipfile.ZipFile) -> None:
         sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
-        _expected_docs, expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs)
+        delivery_sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/")}
+        _expected_docs, expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs, delivery_sidecar_docs)
         pages = self.manifest.get("pages") if isinstance(self.manifest.get("pages"), list) else []
         page_rows = {str(item.get("path") or ""): item for item in pages if isinstance(item, dict)}
         source_hash = str(self.report_doc.get("source_hash") or "")
@@ -390,6 +479,16 @@ class _PublicTrustCenterVerifier:
         self._add_exact_check("data", "ptc_full_resign_verification_fingerprint", verifications, _verifications_from_sidecars(sidecar_verifications), "Verification index fingerprints match independent verification sidecar")
         self._verify_independent_sidecar_hashes(sidecar_doc, independent_sidecars)
 
+    def _verify_delivery_verification_sidecar(self) -> None:
+        delivery_doc = self.data_docs.get("delivery-verification-index.json", {})
+        independent_sidecars = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/")}
+        expected_index = _delivery_verification_index_from_independent_sidecars(self.report_doc.get("source_hash"), independent_sidecars)
+        self._add_exact_check("data", "ptc_delivery_verification_sidecar_binding", delivery_doc.get("summaries"), expected_index.get("summaries"), "Delivery verification index binds independent sidecars")
+        expected_payloads = _delivery_payloads_from_sidecars(independent_sidecars)
+        actual_payloads = _delivery_payloads_from_data_docs(self.data_docs)
+        self._add_exact_check("data", "ptc_delivery_full_resign_guard", actual_payloads, expected_payloads, "Delivery data payloads match independent sidecars")
+        self._verify_independent_delivery_sidecar_hashes(delivery_doc, independent_sidecars)
+
     def _verify_independent_sidecar_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
         rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
         declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
@@ -397,6 +496,14 @@ class _PublicTrustCenterVerifier:
         self._add_exact_check("data", "ptc_independent_verification_sidecar_set", sorted(declared), sorted(actual), "Declared independent verification sidecar set")
         for path, row in sorted(declared.items()):
             self._add_exact_check("data", "ptc_independent_verification_sidecar_hash", row.get("hash"), actual.get(path), f"Independent verification sidecar hash {path}")
+
+    def _verify_independent_delivery_sidecar_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
+        rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
+        declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
+        actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
+        self._add_exact_check("data", "ptc_independent_delivery_sidecar_set", sorted(declared), sorted(actual), "Declared independent delivery sidecar set")
+        for path, row in sorted(declared.items()):
+            self._add_exact_check("data", "ptc_independent_delivery_sidecar_hash", row.get("hash"), actual.get(path), f"Independent delivery sidecar hash {path}")
 
     def _verify_requirements(self) -> None:
         packages = self.report_doc.get("package_index") if isinstance(self.report_doc.get("package_index"), list) else []
@@ -419,6 +526,23 @@ class _PublicTrustCenterVerifier:
             matching = [item for item in packages if isinstance(item, dict) and item.get("package_type") == package_type]
             ok = bool(matching) and all(item.get("verification_status") == "passed" for item in matching)
             self._add_check("requirements", f"ptc_require_{package_type}", "passed" if ok else "failed", "blocking", f"{package_type} public evidence is verified." if ok else f"{package_type} public evidence is required.")
+        delivery_rows = self.report_doc.get("delivery_readiness") if isinstance(self.report_doc.get("delivery_readiness"), list) else []
+        if self.require_delivery_readiness:
+            ok = bool(delivery_rows) and all(item.get("readiness") == "ready" for item in delivery_rows if isinstance(item, dict))
+            self._add_check("requirements", "ptc_require_delivery_readiness", "passed" if ok else "failed", "blocking", "Delivery readiness is complete." if ok else "Delivery readiness is required.")
+        requirement_checks = (
+            ("distribution_ready", self.require_distribution_ready, "distribution_status", {"ready", "not_configured"}, "Distribution evidence is ready."),
+            ("submission_accepted", self.require_submission_accepted, "submission_status", {"accepted", "not_configured"}, "Submission evidence is accepted."),
+            ("submission_evidence", self.require_submission_evidence, "submission_evidence_status", {"signed", "not_configured"}, "Submission Evidence is signed."),
+            ("operations_signed", self.require_operations_signed, "operations_status", {"signed", "force_signed", "not_configured"}, "Release Operations is signed."),
+            ("operations_audit", self.require_operations_audit, "operations_audit_status", {"passed", "warning", "not_configured"}, "Release Operations Audit is verified."),
+            ("operations_reviewer_pack", self.require_operations_reviewer_pack, "operations_reviewer_pack_status", {"passed", "warning", "not_configured"}, "Release Operations Reviewer Pack is verified."),
+        )
+        for name, enabled, key, allowed, passed_message in requirement_checks:
+            if not enabled:
+                continue
+            ok = bool(delivery_rows) and all(item.get(key) in allowed for item in delivery_rows if isinstance(item, dict))
+            self._add_check("requirements", f"ptc_require_{name}", "passed" if ok else "failed", "blocking", passed_message if ok else f"{name} is required.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:
@@ -492,6 +616,10 @@ def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]],
     package_count = len(source.get("public_package_fingerprints", []) if isinstance(source.get("public_package_fingerprints"), list) else [])
     verification_count = len(source.get("verification_fingerprints", []) if isinstance(source.get("verification_fingerprints"), list) else [])
     passed_verifications = sum(1 for item in source.get("verification_fingerprints", []) if isinstance(item, dict) and item.get("verification_status") == "passed")
+    delivery_rows = source.get("release_delivery_summaries", []) if isinstance(source.get("release_delivery_summaries"), list) else []
+    distribution_rows = source.get("distribution_summaries", []) if isinstance(source.get("distribution_summaries"), list) else []
+    submission_rows = source.get("submission_summaries", []) if isinstance(source.get("submission_summaries"), list) else []
+    operations_rows = source.get("operations_summaries", []) if isinstance(source.get("operations_summaries"), list) else []
     return {
         "center_id": source.get("center_id"),
         "profile": source.get("profile"),
@@ -500,6 +628,12 @@ def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]],
         "public_package_count": package_count,
         "verification_count": verification_count,
         "passed_verification_count": passed_verifications,
+        "delivery_release_count": len(delivery_rows),
+        "delivery_ready_count": sum(1 for item in delivery_rows if isinstance(item, dict) and item.get("readiness") == "ready"),
+        "distribution_ready_count": sum(1 for item in distribution_rows if isinstance(item, dict) and item.get("readiness") == "ready"),
+        "submission_accepted_count": sum(1 for item in submission_rows if isinstance(item, dict) and item.get("accepted_count", 0)),
+        "operations_signed_count": sum(1 for item in operations_rows if isinstance(item, dict) and item.get("operations_signoff_status") in {"signed", "force_signed"}),
+        "delivery_risk_count": len(source.get("delivery_risk_register", []) if isinstance(source.get("delivery_risk_register"), list) else []),
         "blocker_count": len(blockers),
         "warning_count": len(warnings),
         "status": "failed" if blockers else "warning" if warnings else "passed",
@@ -524,6 +658,14 @@ def _release_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return sorted(rows, key=lambda item: str(item.get("release_id") or ""))
+
+
+def _delivery_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
+    return sorted([dict(item) for item in source.get("delivery_readiness_matrix", []) if isinstance(item, dict)], key=lambda item: str(item.get("release_id") or ""))
+
+
+def _delivery_risk_register(source: dict[str, Any]) -> list[dict[str, Any]]:
+    return sorted([dict(item) for item in source.get("delivery_risk_register", []) if isinstance(item, dict)], key=lambda item: str(item.get("risk_id") or ""))
 
 
 def _portfolio_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
@@ -609,6 +751,20 @@ def _package_verification_index_from_independent_sidecars(source_hash: Any, side
     }
 
 
+def _delivery_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    summaries: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    for path, doc in sorted(sidecars.items()):
+        if not isinstance(doc, dict):
+            continue
+        summary = dict(doc.get("summary") if isinstance(doc.get("summary"), dict) else {})
+        summary["sidecar_path"] = path
+        summary["sidecar_hash"] = stable_hash(doc)
+        summaries.append(summary)
+        rows.append({"path": path, "hash": stable_hash(doc)})
+    return {"source_hash": source_hash, "summaries": sorted(summaries, key=_delivery_summary_key), "sidecars": rows}
+
+
 def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
     packages = {
         _fingerprint_key(item): dict(item)
@@ -677,6 +833,100 @@ def _verifications_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
             }
         )
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
+
+
+def _delivery_payloads_from_sidecars(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path, doc in sorted(sidecars.items()):
+        del path
+        if not isinstance(doc, dict):
+            continue
+        payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+        row = dict(payload)
+        rows.append(row)
+    return sorted(rows, key=_delivery_payload_key)
+
+
+def _delivery_payloads_from_data_docs(data_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for domain, doc_name, row_key in (
+        ("release", "delivery-index.json", "releases"),
+        ("distribution", "distribution-index.json", "targets"),
+        ("submission", "submission-index.json", "submissions"),
+        ("submission_evidence", "submission-evidence-index.json", "evidence"),
+        ("operations", "operations-index.json", "operations"),
+    ):
+        doc = data_docs.get(doc_name, {})
+        values = doc.get(row_key) if isinstance(doc.get(row_key), list) else []
+        for item in values:
+            if isinstance(item, dict):
+                rows.append(_delivery_public_payload(domain, item))
+    return sorted(rows, key=_delivery_payload_key)
+
+
+def _delivery_public_payload(domain: str, item: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "release_id",
+        "target_id",
+        "submission_id",
+        "package_id",
+        "status",
+        "name",
+        "readiness",
+        "release_signoff_status",
+        "release_zip_status",
+        "distribution_status",
+        "submission_status",
+        "submission_evidence_status",
+        "operations_status",
+        "operations_audit_status",
+        "operations_reviewer_pack_status",
+        "portfolio_public_proof_status",
+        "risk_count",
+        "signoff_status",
+        "profile_id",
+        "platform",
+        "target_name",
+        "target_status",
+        "track_count",
+        "ready_count",
+        "submitted_count",
+        "accepted_count",
+        "latest_feedback_status",
+        "report_status",
+        "report_hash",
+        "signoff_hash",
+        "redaction_status",
+        "accepted_evidence_count",
+        "attachment_count",
+        "package_zip_sha256",
+        "package_zip_size_bytes",
+        "package_zip_status",
+        "manifest_hash",
+        "verification_status",
+        "verification_hash",
+        "verification_report_status",
+        "operations_report_status",
+        "operations_report_hash",
+        "operations_source_hash",
+        "operations_signoff_status",
+        "operations_signoff_hash",
+        "operations_archive_status",
+        "operations_audit_status",
+        "operations_reviewer_pack_status",
+        "runbook_status",
+        "change_request_count",
+        "fingerprint_hash",
+    }
+    return {"domain": domain, **{key: item.get(key) for key in sorted(allowed) if key in item}}
+
+
+def _delivery_summary_key(item: dict[str, Any]) -> tuple[str, str, str]:
+    return (str(item.get("release_id") or ""), str(item.get("domain") or ""), str(item.get("entity_id") or item.get("target_id") or item.get("submission_id") or ""))
+
+
+def _delivery_payload_key(item: dict[str, Any]) -> tuple[str, str, str, str]:
+    return (str(item.get("release_id") or ""), str(item.get("domain") or ""), str(item.get("target_id") or ""), str(item.get("submission_id") or item.get("entity_id") or ""))
 
 
 def _fingerprint_key(item: dict[str, Any]) -> tuple[str, str, str]:

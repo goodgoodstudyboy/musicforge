@@ -153,6 +153,22 @@ def test_public_trust_center_verifier_catches_full_resign_and_paths(tmp_path: Pa
     assert any(item["check_id"] == "ptc_redaction_scan" for item in verify_public_trust_center_package(redaction, strict=True)["blockers"])
 
 
+def test_public_trust_center_verifier_rejects_delivery_full_resign(tmp_path: Path, monkeypatch) -> None:
+    portfolio_id, _ack_store, store = _trust_center_fixture(tmp_path, monkeypatch)
+    release = store.release_store.create_release({"name": "Delivery Trust Fixture", "release_type": "demo_pack"})
+    store.release_store.write_signoff(release.release_id, {"status": "signed", "signed_by": "tester", "signed_at": "2026-06-13T00:00:00+00:00"})
+    store.release_store.update_signoff_summary(release.release_id, {"status": "signed"})
+    store.refresh_report("ptc-default", {"portfolio_ids": [portfolio_id], "release_ids": [release.release_id], "include_all_releases": False, "include_all_portfolios": False})
+    store.export_center("ptc-default")
+    store.build_zip("ptc-default")
+
+    forged = _rewrite_zip(store.zip_path("ptc-default"), tmp_path / "delivery-full-resign.zip", _tamper_delivery_full_resign)
+    report = verify_public_trust_center_package(forged, strict=True)
+
+    assert report["status"] == "failed"
+    assert any(item["check_id"] in {"ptc_delivery_full_resign_guard", "ptc_delivery_verification_sidecar_binding"} for item in report["blockers"])
+
+
 def _rewrite_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
     with zipfile.ZipFile(source_zip, "r") as src:
         docs = {info.filename: src.read(info.filename) for info in src.infolist()}
@@ -246,7 +262,7 @@ def _tamper_package_fingerprint_full_resign(docs: dict[str, bytes]) -> None:
     docs["data/package-index.json"] = _doc_bytes(package_index)
     docs["data/verification-index.json"] = _doc_bytes(verification_index)
     docs["data/public-package-verification-index.json"] = _doc_bytes(verification_sidecar)
-    for page in ("index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+    for page in ("index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
         text = docs[page].decode("utf-8").replace(old_source_hash, report["source_hash"]).replace(old_data_hash, stable_hash(trust_data)).replace("data-report-integrity=\"" + manifest["trust_center_report"]["integrity_hash"] + "\"", "data-report-integrity=\"" + report["integrity_hash"] + "\"")
         docs[page] = text.encode("utf-8")
     manifest["source_hash"] = report["source_hash"]
@@ -260,7 +276,67 @@ def _tamper_package_fingerprint_full_resign(docs: dict[str, bytes]) -> None:
         if isinstance(row, dict) and row.get("path") in docs:
             row["source_hash"] = report["source_hash"]
             row["content_hash"] = hashlib.sha256(docs[row["path"]]).hexdigest()
-    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/package-index.json", "data/verification-index.json", "data/public-package-verification-index.json", "index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/package-index.json", "data/verification-index.json", "data/public-package-verification-index.json", "index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
+        _sync_manifest_file(manifest, path, docs[path])
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    docs["trust-center-manifest.json"] = _doc_bytes(manifest)
+
+
+def _tamper_delivery_full_resign(docs: dict[str, bytes]) -> None:
+    report = _read_doc(docs, "trust-center-report.json")
+    manifest = _read_doc(docs, "trust-center-manifest.json")
+    trust_data = _read_doc(docs, "data/trust-center-data.json")
+    delivery_index = _read_doc(docs, "data/delivery-index.json")
+    readiness_matrix = _read_doc(docs, "data/readiness-matrix.json")
+    delivery_verification = _read_doc(docs, "data/delivery-verification-index.json")
+    old_source_hash = report["source_hash"]
+    old_data_hash = manifest["data"]["trust_center_data_hash"]
+    if report.get("source", {}).get("delivery_readiness_matrix"):
+        report["source"]["delivery_readiness_matrix"][0]["readiness"] = "ready"
+        report["source"]["delivery_readiness_matrix"][0]["risk_count"] = 0
+    if report.get("delivery_readiness"):
+        report["delivery_readiness"][0]["readiness"] = "ready"
+        report["delivery_readiness"][0]["risk_count"] = 0
+    if delivery_index.get("releases"):
+        delivery_index["releases"][0]["readiness"] = "ready"
+        delivery_index["releases"][0]["risk_count"] = 0
+    if readiness_matrix.get("rows"):
+        readiness_matrix["rows"][0]["readiness"] = "ready"
+        readiness_matrix["rows"][0]["risk_count"] = 0
+    if trust_data.get("delivery"):
+        trust_data["delivery"][0]["readiness"] = "ready"
+        trust_data["delivery"][0]["risk_count"] = 0
+    if trust_data.get("readiness_matrix"):
+        trust_data["readiness_matrix"][0]["readiness"] = "ready"
+        trust_data["readiness_matrix"][0]["risk_count"] = 0
+    if delivery_verification.get("summaries"):
+        delivery_verification["summaries"][0]["readiness"] = "ready"
+        delivery_verification["summaries"][0]["risk_count"] = 0
+    report["source_hash"] = stable_hash(report["source"])
+    for payload in (trust_data, delivery_index, readiness_matrix, delivery_verification):
+        payload["source_hash"] = report["source_hash"]
+    report["integrity_hash"] = public_trust_center_report_hash(report)
+    docs["trust-center-report.json"] = _doc_bytes(report)
+    docs["data/trust-center-data.json"] = _doc_bytes(trust_data)
+    docs["data/delivery-index.json"] = _doc_bytes(delivery_index)
+    docs["data/readiness-matrix.json"] = _doc_bytes(readiness_matrix)
+    docs["data/delivery-verification-index.json"] = _doc_bytes(delivery_verification)
+    new_data_hash = stable_hash(trust_data)
+    for page in ("index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
+        text = docs[page].decode("utf-8").replace(old_source_hash, report["source_hash"]).replace(old_data_hash, new_data_hash).replace("data-report-integrity=\"" + manifest["trust_center_report"]["integrity_hash"] + "\"", "data-report-integrity=\"" + report["integrity_hash"] + "\"")
+        docs[page] = text.encode("utf-8")
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("data", {})["trust_center_data_hash"] = stable_hash(trust_data)
+    manifest.setdefault("data", {})["delivery_index_hash"] = stable_hash(delivery_index)
+    manifest.setdefault("data", {})["readiness_matrix_hash"] = stable_hash(readiness_matrix)
+    manifest.setdefault("data", {})["delivery_verification_index_hash"] = stable_hash(delivery_verification)
+    for row in manifest.get("pages", []) if isinstance(manifest.get("pages"), list) else []:
+        if isinstance(row, dict) and row.get("path") in docs:
+            row["source_hash"] = report["source_hash"]
+            row["content_hash"] = hashlib.sha256(docs[row["path"]]).hexdigest()
+    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/delivery-index.json", "data/readiness-matrix.json", "data/delivery-verification-index.json", "index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
         _sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
     docs["trust-center-manifest.json"] = _doc_bytes(manifest)

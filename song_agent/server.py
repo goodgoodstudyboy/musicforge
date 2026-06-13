@@ -7197,6 +7197,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     require_portal_current=bool(payload.get("require_portal_current", False)),
                     require_transparency_current=bool(payload.get("require_transparency_current", False)),
                     require_acknowledgement_current=bool(payload.get("require_acknowledgement_current", False)),
+                    require_release_readiness=bool(payload.get("require_release_readiness", False)),
+                    require_delivery_readiness=bool(payload.get("require_delivery_readiness", False)),
+                    require_distribution_ready=bool(payload.get("require_distribution_ready", False)),
+                    require_submission_accepted=bool(payload.get("require_submission_accepted", False)),
+                    require_submission_evidence=bool(payload.get("require_submission_evidence", False)),
+                    require_operations_signed=bool(payload.get("require_operations_signed", False)),
+                    require_operations_audit=bool(payload.get("require_operations_audit", False)),
+                    require_operations_reviewer_pack=bool(payload.get("require_operations_reviewer_pack", False)),
                 )
                 write_public_trust_center_verification_report(report, self.public_trust_center_store.verification_report_path(center_id))
                 self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
@@ -16154,6 +16162,14 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             portal_store=self.release_portfolio_governance_attestation_portal_store,
             transparency_store=self.release_portfolio_governance_attestation_transparency_store,
             acknowledgement_store=self.release_portfolio_governance_attestation_transparency_acknowledgement_store,
+            distribution_store=self.distribution_store,
+            submission_store=self.submission_store,
+            submission_evidence_store=self.submission_evidence_store,
+            operations_store=self.release_operations_store,
+            operations_runbook_store=self.release_operations_runbook_store,
+            operations_signoff_store=self.release_operations_signoff_store,
+            operations_audit_store=self.release_operations_audit_store,
+            operations_reviewer_pack_store=self.release_operations_reviewer_pack_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

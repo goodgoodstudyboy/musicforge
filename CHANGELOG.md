@@ -1,5 +1,21 @@
 # Changelog
 
+## v8.1.0 - 2026-06-13
+
+### Added
+- Public Trust Center now aggregates delivery-chain evidence across Release, Distribution, Submission, Submission Evidence, and Release Operations.
+- Trust Center exports now include delivery indexes, readiness/risk reports, operations package fingerprints, and independent delivery verification sidecars.
+- CLI/API/verifier support delivery requirement flags for readiness, distribution, submission, submission evidence, operations signoff, operations audit, and operations reviewer pack checks.
+- Studio Public Trust Center controls now show delivery-chain scope and submit delivery-inclusive refresh/verify payloads.
+- release-check now includes `v81.public_trust_center_delivery_smoke` in the v8/latest/quick profiles.
+
+### Fixed
+- The Public Trust Center verifier now rejects fully re-signed forged delivery summaries by comparing data pages against independent delivery verification sidecars.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center.py tests\test_server_public_trust_center.py tests\test_cli_public_trust_center.py tests\test_release_check.py::test_v80_public_trust_center_smoke tests\test_release_check.py::test_v81_public_trust_center_delivery_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --skip-tests --json`
+
 ## v8.0.2 - 2026-06-13
 
 ### Fixed

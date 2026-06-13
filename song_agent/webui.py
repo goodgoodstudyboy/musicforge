@@ -3694,6 +3694,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <a class="button-link secondary" href="/api/release-portfolio-audits/${encodeURIComponent(portfolio.portfolio_id)}/governance-attestation-transparency-acknowledgement-evidence.zip">Download Ack Evidence ZIP</a>
         </div>
         <div class="panel-title subhead"><span>Public Trust Center</span></div>
+        <div class="summary-grid">
+          ${metric("Delivery", "Release / Distribution / Submission / Operations")}
+          ${metric("Requirement", "Current public proof + delivery sidecars")}
+        </div>
         <div class="actions">
           <button class="secondary" id="public-trust-center-refresh" type="button">Refresh Trust Center</button>
           <button class="secondary" id="public-trust-center-export" type="button">Export Trust Center</button>
@@ -4211,6 +4215,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         portfolio_ids: [portfolioId],
         include_all_releases: true,
         include_all_portfolios: false,
+        include_delivery: true,
+        include_distribution: true,
+        include_submission: true,
+        include_submission_evidence: true,
+        include_operations: true,
         attestation_profile: "public_summary",
         require_registry_current: true,
         require_portal_current: true,
@@ -4240,7 +4249,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/public-trust-centers/ptc-default/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ strict: true, require_registry_current: true, require_portal_current: true, require_transparency_current: true }),
+          body: JSON.stringify({ strict: true, require_registry_current: true, require_portal_current: true, require_transparency_current: true, require_delivery_readiness: false, require_distribution_ready: false, require_submission_accepted: false, require_submission_evidence: false, require_operations_signed: false, require_operations_audit: false, require_operations_reviewer_pack: false }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

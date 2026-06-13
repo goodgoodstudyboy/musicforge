@@ -878,6 +878,13 @@ def build_verify_public_trust_center_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
     verify_parser.add_argument("--require-transparency-current", action="store_true", help="Require current Transparency evidence.")
     verify_parser.add_argument("--require-acknowledgement-current", action="store_true", help="Require current accepted acknowledgement evidence.")
+    verify_parser.add_argument("--require-delivery-readiness", action="store_true", help="Require selected delivery chain rows to be ready.")
+    verify_parser.add_argument("--require-distribution-ready", action="store_true", help="Require distribution evidence to be signed and verified.")
+    verify_parser.add_argument("--require-submission-accepted", action="store_true", help="Require submission batches to be accepted.")
+    verify_parser.add_argument("--require-submission-evidence", action="store_true", help="Require signed submission evidence packages.")
+    verify_parser.add_argument("--require-operations-signed", action="store_true", help="Require Release Operations Signoff evidence.")
+    verify_parser.add_argument("--require-operations-audit", action="store_true", help="Require verified Release Operations Audit evidence.")
+    verify_parser.add_argument("--require-operations-reviewer-pack", action="store_true", help="Require verified Release Operations Reviewer Pack evidence.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=250, help="Maximum number of ZIP entries.")
@@ -901,6 +908,30 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
     parser.add_argument("--require-transparency-current", action="store_true", help="Require current Transparency evidence.")
     parser.add_argument("--require-acknowledgement-current", action="store_true", help="Require current accepted acknowledgement evidence.")
+    parser.add_argument("--include-delivery", dest="include_delivery", action="store_true", default=True, help="Include delivery chain summaries.")
+    parser.add_argument("--no-include-delivery", dest="include_delivery", action="store_false", help="Do not include delivery chain summaries.")
+    parser.add_argument("--include-distribution", dest="include_distribution", action="store_true", default=True, help="Include Distribution target summaries.")
+    parser.add_argument("--no-include-distribution", dest="include_distribution", action="store_false", help="Do not include Distribution target summaries.")
+    parser.add_argument("--include-submission", dest="include_submission", action="store_true", default=True, help="Include Submission batch summaries.")
+    parser.add_argument("--no-include-submission", dest="include_submission", action="store_false", help="Do not include Submission batch summaries.")
+    parser.add_argument("--include-submission-evidence", dest="include_submission_evidence", action="store_true", default=True, help="Include Submission Evidence summaries.")
+    parser.add_argument("--no-include-submission-evidence", dest="include_submission_evidence", action="store_false", help="Do not include Submission Evidence summaries.")
+    parser.add_argument("--include-operations", dest="include_operations", action="store_true", default=True, help="Include Release Operations summaries.")
+    parser.add_argument("--no-include-operations", dest="include_operations", action="store_false", help="Do not include Release Operations summaries.")
+    parser.add_argument("--require-release-signoff", dest="require_release_signoff", action="store_true", default=True, help="Require Release Signoff in the Trust Center report.")
+    parser.add_argument("--no-require-release-signoff", dest="require_release_signoff", action="store_false", help="Do not require Release Signoff in the Trust Center report.")
+    parser.add_argument("--require-distribution-signed", action="store_true", help="Require signed and verified Distribution packages in the report.")
+    parser.add_argument("--require-submission-accepted", action="store_true", help="Require accepted Submission batches in the report.")
+    parser.add_argument("--require-submission-evidence-signed", action="store_true", help="Require signed Submission Evidence packages in the report.")
+    parser.add_argument("--require-operations-signed", action="store_true", help="Require Release Operations Signoff in the report.")
+    parser.add_argument("--require-operations-audit-verified", action="store_true", help="Require verified Release Operations Audit evidence in the report.")
+    parser.add_argument("--require-operations-reviewer-pack-verified", action="store_true", help="Require verified Release Operations Reviewer Pack evidence in the report.")
+    parser.add_argument("--require-release-readiness", action="store_true", help="Verifier requires selected releases to be ready.")
+    parser.add_argument("--require-delivery-readiness", action="store_true", help="Verifier requires delivery readiness.")
+    parser.add_argument("--require-distribution-ready", action="store_true", help="Verifier requires distribution readiness.")
+    parser.add_argument("--require-submission-evidence", action="store_true", help="Verifier requires submission evidence.")
+    parser.add_argument("--require-operations-audit", action="store_true", help="Verifier requires operations audit evidence.")
+    parser.add_argument("--require-operations-reviewer-pack", action="store_true", help="Verifier requires operations reviewer pack evidence.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2080,6 +2111,13 @@ def _main() -> None:
             require_portal_current=args.require_portal_current,
             require_transparency_current=args.require_transparency_current,
             require_acknowledgement_current=args.require_acknowledgement_current,
+            require_delivery_readiness=args.require_delivery_readiness,
+            require_distribution_ready=args.require_distribution_ready,
+            require_submission_accepted=args.require_submission_accepted,
+            require_submission_evidence=args.require_submission_evidence,
+            require_operations_signed=args.require_operations_signed,
+            require_operations_audit=args.require_operations_audit,
+            require_operations_reviewer_pack=args.require_operations_reviewer_pack,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -3408,6 +3446,18 @@ def _main() -> None:
             "require_portal_current": True,
             "require_transparency_current": True,
             "require_acknowledgement_current": args.require_acknowledgement_current,
+            "include_delivery": args.include_delivery,
+            "include_distribution": args.include_delivery and args.include_distribution,
+            "include_submission": args.include_delivery and args.include_submission,
+            "include_submission_evidence": args.include_delivery and args.include_submission_evidence,
+            "include_operations": args.include_delivery and args.include_operations,
+            "require_release_signoff": args.require_release_signoff,
+            "require_distribution_signed": args.require_distribution_signed,
+            "require_submission_accepted": args.require_submission_accepted,
+            "require_submission_evidence_signed": args.require_submission_evidence_signed,
+            "require_operations_signed": args.require_operations_signed,
+            "require_operations_audit_verified": args.require_operations_audit_verified,
+            "require_operations_reviewer_pack_verified": args.require_operations_reviewer_pack_verified,
         }
         if args.name:
             payload["name"] = args.name
@@ -3435,6 +3485,14 @@ def _main() -> None:
                     "require_portal_current": args.require_portal_current,
                     "require_transparency_current": args.require_transparency_current,
                     "require_acknowledgement_current": args.require_acknowledgement_current,
+                    "require_release_readiness": args.require_release_readiness,
+                    "require_delivery_readiness": args.require_delivery_readiness,
+                    "require_distribution_ready": args.require_distribution_ready,
+                    "require_submission_accepted": args.require_submission_accepted,
+                    "require_submission_evidence": args.require_submission_evidence,
+                    "require_operations_signed": args.require_operations_signed,
+                    "require_operations_audit": args.require_operations_audit,
+                    "require_operations_reviewer_pack": args.require_operations_reviewer_pack,
                 },
             )
             result["verification"] = verification
@@ -4720,7 +4778,6 @@ def _build_public_trust_center_store():
     from song_agent.release_portfolio_governance_attestation_portal_review import ReleasePortfolioGovernanceAttestationPortalReviewStore
     from song_agent.release_portfolio_governance_attestation_transparency import ReleasePortfolioGovernanceAttestationTransparencyStore
     from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore
-    from song_agent.releases import ReleaseStore
 
     portal_store = _build_release_portfolio_governance_attestation_portal_store()
     review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
@@ -4732,13 +4789,22 @@ def _build_public_trust_center_store():
         accepted_evidence_store=accepted_store,
     )
     acknowledgement_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=transparency_store)
+    portfolio_store = portal_store.attestation_store.portfolio_store
     return PublicTrustCenterStore(
-        release_store=ReleaseStore(),
-        portfolio_store=portal_store.attestation_store.portfolio_store,
+        release_store=portfolio_store.release_store,
+        portfolio_store=portfolio_store,
         registry_store=portal_store.registry_store,
         portal_store=portal_store,
         transparency_store=transparency_store,
         acknowledgement_store=acknowledgement_store,
+        distribution_store=portfolio_store.operations_store.distribution_store,
+        submission_store=portfolio_store.operations_store.submission_store,
+        submission_evidence_store=portfolio_store.operations_store.submission_evidence_store,
+        operations_store=portfolio_store.operations_store,
+        operations_runbook_store=portfolio_store.runbook_store,
+        operations_signoff_store=portfolio_store.signoff_store,
+        operations_audit_store=portfolio_store.audit_store,
+        operations_reviewer_pack_store=portfolio_store.reviewer_pack_store,
     )
 
 

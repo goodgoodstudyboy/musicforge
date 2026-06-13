@@ -24,6 +24,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in definitions}
     assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in definitions}
     assert "v80.public_trust_center_smoke" in {definition.check_id for definition in definitions}
+    assert "v81.public_trust_center_delivery_smoke" in {definition.check_id for definition in definitions}
 
 
 def test_release_check_profile_and_filters() -> None:
@@ -41,8 +42,9 @@ def test_release_check_profile_and_filters() -> None:
     assert "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in latest}
     assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in latest}
     assert "v80.public_trust_center_smoke" in {definition.check_id for definition in latest}
+    assert "v81.public_trust_center_delivery_smoke" in {definition.check_id for definition in latest}
     assert "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
-    assert {definition.check_id for definition in v8} == {"v80.public_trust_center_smoke"}
+    assert {definition.check_id for definition in v8} == {"v80.public_trust_center_smoke", "v81.public_trust_center_delivery_smoke"}
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
         "v76.attestation_portal_review_response_smoke",

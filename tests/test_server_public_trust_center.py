@@ -38,6 +38,14 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
             portal_store=server.release_portfolio_governance_attestation_portal_store,
             transparency_store=server.release_portfolio_governance_attestation_transparency_store,
             acknowledgement_store=ack_store,
+            distribution_store=server.distribution_store,
+            submission_store=server.submission_store,
+            submission_evidence_store=server.submission_evidence_store,
+            operations_store=server.release_operations_store,
+            operations_runbook_store=server.release_operations_runbook_store,
+            operations_signoff_store=server.release_operations_signoff_store,
+            operations_audit_store=server.release_operations_audit_store,
+            operations_reviewer_pack_store=server.release_operations_reviewer_pack_store,
         )
         request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/pack/refresh", {"profile": "public_summary"})
         response_zip = review_store.build_response_zip(portfolio_id, _response_payload("accepted"))
@@ -96,10 +104,12 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
     assert refresh["summary"]["status"] == "passed"
     assert export_status == 201
     assert export["manifest"]["package_type"] == "musicforge_public_trust_center"
+    assert export["manifest"]["data"]["delivery_index_hash"]
     assert zip_status == 200
     assert zipped["zip"]["sha256"]
     assert verify_status == 200
     assert verify["verification"]["status"] == "passed"
+    assert any(item["check_id"] == "ptc_delivery_verification_sidecar_binding" for item in verify["verification"]["checks"])
     assert detail_status == 200
     assert detail["summary"]["status"] == "passed"
     assert archive_status == 200

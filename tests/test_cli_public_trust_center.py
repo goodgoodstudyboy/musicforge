@@ -33,6 +33,7 @@ def test_public_trust_center_cli_export_verify(tmp_path: Path, monkeypatch) -> N
             "--require-portal-current",
             "--require-transparency-current",
             "--require-acknowledgement-current",
+            "--no-require-release-signoff",
             "--json",
         ],
         cwd=tmp_path,

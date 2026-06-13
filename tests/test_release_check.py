@@ -55,6 +55,7 @@ from song_agent.release_checks import (
     _v78_attestation_transparency_feed_smoke,
     _v79_attestation_transparency_acknowledgement_smoke,
     _v80_public_trust_center_smoke,
+    _v81_public_trust_center_delivery_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -756,6 +757,13 @@ def test_v80_public_trust_center_smoke(tmp_path: Path) -> None:
     assert "redaction=failed" in detail
     assert "stale_export=True" in detail
     assert "stale_zip=True" in detail
+
+
+def test_v81_public_trust_center_delivery_smoke(tmp_path: Path) -> None:
+    ok, detail = _v81_public_trust_center_delivery_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "delivery_full_resign=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

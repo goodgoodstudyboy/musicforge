@@ -71,7 +71,7 @@ def test_release_check_cli_v8_profile_lists_public_trust_center() -> None:
 
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
-    assert [item["check_id"] for item in payload["checks"]] == ["v80.public_trust_center_smoke"]
+    assert [item["check_id"] for item in payload["checks"]] == ["v80.public_trust_center_smoke", "v81.public_trust_center_delivery_smoke"]
 
 
 def test_release_check_cli_empty_selection_fails() -> None:

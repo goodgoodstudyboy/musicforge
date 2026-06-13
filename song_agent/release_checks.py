@@ -12233,6 +12233,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
     try:
         from song_agent.public_trust_center import PublicTrustCenterStore, public_trust_center_manifest_hash, public_trust_center_report_hash
         from song_agent.public_trust_center_verifier import verify_public_trust_center_package
+        from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore
         from song_agent.release_operations_audit import ReleaseOperationsAuditStore
         from song_agent.release_operations_reviewer_pack import ReleaseOperationsReviewerPackStore
@@ -12256,10 +12257,15 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
         from song_agent.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore
         from song_agent.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
         from song_agent.releases import ReleaseStore
+        from song_agent.submission_evidence import SubmissionEvidenceStore
+        from song_agent.submissions import SubmissionStore
 
         release_store = ReleaseStore(base / "releases")
-        operations_store = ReleaseOperationsStore(release_store=release_store)
-        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store)
+        distribution_store = DistributionStore(release_store)
+        submission_store = SubmissionStore(release_store, distribution_store)
+        evidence_store = SubmissionEvidenceStore(submission_store)
+        operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
+        runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
         operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
         operations_audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=operations_signoff_store, release_store=release_store)
         operations_reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=operations_audit_store, signoff_store=operations_signoff_store, release_store=release_store)
@@ -12277,9 +12283,26 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
         accepted_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
         transparency_store = ReleasePortfolioGovernanceAttestationTransparencyStore(attestation_store=attestation_store, registry_store=registry_store, portal_store=portal_store, accepted_evidence_store=accepted_store)
         ack_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=transparency_store)
-        trust_store = PublicTrustCenterStore(release_store=release_store, portfolio_store=portfolio_store, registry_store=registry_store, portal_store=portal_store, transparency_store=transparency_store, acknowledgement_store=ack_store)
+        trust_store = PublicTrustCenterStore(
+            release_store=release_store,
+            portfolio_store=portfolio_store,
+            registry_store=registry_store,
+            portal_store=portal_store,
+            transparency_store=transparency_store,
+            acknowledgement_store=ack_store,
+            distribution_store=distribution_store,
+            submission_store=submission_store,
+            submission_evidence_store=evidence_store,
+            operations_store=operations_store,
+            operations_runbook_store=runbook_store,
+            operations_signoff_store=operations_signoff_store,
+            operations_audit_store=operations_audit_store,
+            operations_reviewer_pack_store=operations_reviewer_store,
+        )
 
         release = release_store.create_release({"name": "v8.0 Public Trust Center Release", "release_type": "single_pack", "primary_artist": "MusicForge"})
+        release_store.write_signoff(release.release_id, {"status": "signed", "signed_by": "release-check", "signed_at": "2026-06-13T00:00:00+00:00"})
+        release_store.update_signoff_summary(release.release_id, {"status": "signed"})
         portfolio = portfolio_store.create({"name": "v8.0 Public Trust Center Portfolio", "release_ids": [release.release_id]})
         portfolio_id = portfolio["portfolio_id"]
         _v73_write_minimal_attestation_zip(attestation_store.zip_path(portfolio_id), portfolio_id=portfolio_id, suffix="public-trust-center")
@@ -12329,7 +12352,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
         ack_report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(ack_store.evidence_zip_path(portfolio_id), strict=True, require_response=True, require_accepted=True)
         write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(ack_report, ack_store.evidence_verification_report_path(portfolio_id))
 
-        report = trust_store.refresh_report("ptc-default", {"portfolio_ids": [portfolio_id], "include_all_releases": False, "include_all_portfolios": False})
+        report = trust_store.refresh_report("ptc-default", {"portfolio_ids": [portfolio_id], "release_ids": [release.release_id], "include_all_releases": False, "include_all_portfolios": False})
         manifest = trust_store.export_center("ptc-default")
         zip_info = trust_store.build_zip("ptc-default")
         verification = verify_public_trust_center_package(trust_store.zip_path("ptc-default"), strict=True, require_registry_current=True, require_portal_current=True, require_transparency_current=True, require_acknowledgement_current=True)
@@ -12346,6 +12369,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
         nested = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-nested.zip", additions={"nested/fake.zip": b"PK\x05\x06" + (b"\0" * 18)}), strict=True)
         spoof = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-spoof.zip", additions={"extra.txt": b"extra"}, transforms={"trust-center-manifest.json": _v80_spoof_trust_center_manifest}), strict=True)
         redaction = verify_public_trust_center_package(_v38_rewrite_zip(source_zip, base / "ptc-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        delivery_full_resign = verify_public_trust_center_package(_v76_rewrite_zip(source_zip, base / "ptc-delivery-full-resign.zip", _v81_tamper_trust_center_delivery_full_resign), strict=True)
         ack_store.evidence_zip_path(portfolio_id).write_bytes(ack_store.evidence_zip_path(portfolio_id).read_bytes() + b"changed")
         stale_export = False
         stale_zip = False
@@ -12376,6 +12400,9 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(nested, "ptc_zip_no_nested_internal_entries") == "failed"
             and _v38_check_status(spoof, "ptc_manifest_zip_entries_reference_only") == "failed"
             and _v38_check_status(redaction, "ptc_redaction_scan") == "failed"
+            and _v38_check_status(delivery_full_resign, "ptc_delivery_verification_sidecar_binding") == "failed"
+            and manifest.get("data", {}).get("delivery_index_hash")
+            and "data/delivery-verification-index.json" in {item.get("path") for item in manifest.get("files", []) if isinstance(item, dict)}
             and stale_export
             and stale_zip
             and str(base) not in serialized
@@ -12387,6 +12414,7 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
             f"trust={report.get('status')}/{verification.get('status')}, zip={bool(zip_info.get('sha256'))}, archive={bool(archive.get('zip_sha256'))}, "
             f"report={_v38_check_status(report_tamper, 'ptc_report_summary_release_count')}, data={_v38_check_status(data_tamper, 'ptc_data_package_index_json_semantics')}, "
             f"html={_v38_check_status(html_tamper, 'ptc_html_index.html_semantics')}, full_resign={_v38_check_status(full_resign, 'ptc_package_fingerprint_verification_summary_binding')}, duplicate={_v38_check_status(duplicate, 'ptc_zip_duplicate_entries')}, "
+            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'ptc_delivery_verification_sidecar_binding')}, "
             f"dangerous={_v38_check_status(dangerous, 'ptc_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptc_zip_entry_path_safe')}, "
             f"case_musicforge={_v38_check_status(case_musicforge, 'ptc_zip_no_nested_internal_entries')}, nested={_v38_check_status(nested, 'ptc_zip_no_nested_internal_entries')}, "
             f"spoof={_v38_check_status(spoof, 'ptc_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptc_redaction_scan')}, "
@@ -12397,6 +12425,11 @@ def _v80_public_trust_center_smoke(root: Path) -> tuple[bool, str]:
     finally:
         if base.exists():
             shutil.rmtree(base, ignore_errors=True)
+
+
+def _v81_public_trust_center_delivery_smoke(root: Path) -> tuple[bool, str]:
+    ok, detail = _v80_public_trust_center_smoke(root)
+    return ok, "v8.1 delivery sidecar checks via v8.0 full trust smoke; " + detail
 
 
 def _v80_tamper_trust_center_report(docs: dict[str, bytes]) -> None:
@@ -12474,7 +12507,7 @@ def _v80_tamper_trust_center_package_fingerprint_full_resign(docs: dict[str, byt
     docs["data/package-index.json"] = _v74_json_doc(package_index)
     docs["data/verification-index.json"] = _v74_json_doc(verification_index)
     docs["data/public-package-verification-index.json"] = _v74_json_doc(verification_sidecar)
-    for page in ("index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+    for page in ("index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
         docs[page] = docs[page].decode("utf-8").replace(old_source_hash, report["source_hash"]).replace(old_report_hash, report["integrity_hash"]).replace(old_data_hash, stable_hash(trust_data)).encode("utf-8")
     manifest["source_hash"] = report["source_hash"]
     manifest.setdefault("trust_center_report", {})["source_hash"] = report["source_hash"]
@@ -12487,7 +12520,60 @@ def _v80_tamper_trust_center_package_fingerprint_full_resign(docs: dict[str, byt
         if isinstance(item, dict) and item.get("path") in docs:
             item["source_hash"] = report["source_hash"]
             item["content_hash"] = hashlib.sha256(docs[item["path"]]).hexdigest()
-    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/package-index.json", "data/verification-index.json", "data/public-package-verification-index.json", "index.html", "releases.html", "portfolios.html", "evidence.html", "risk.html", "verify.html"):
+    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/package-index.json", "data/verification-index.json", "data/public-package-verification-index.json", "index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
+        _v74_sync_manifest_file(manifest, path, docs[path])
+    manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
+    docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v81_tamper_trust_center_delivery_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center import public_trust_center_manifest_hash, public_trust_center_report_hash
+
+    report = _v74_read_json_doc(docs, "trust-center-report.json")
+    manifest = _v74_read_json_doc(docs, "trust-center-manifest.json")
+    trust_data = _v74_read_json_doc(docs, "data/trust-center-data.json")
+    delivery_index = _v74_read_json_doc(docs, "data/delivery-index.json")
+    readiness_matrix = _v74_read_json_doc(docs, "data/readiness-matrix.json")
+    delivery_verification = _v74_read_json_doc(docs, "data/delivery-verification-index.json")
+    old_source_hash = str(report.get("source_hash") or "")
+    old_report_hash = str(report.get("integrity_hash") or "")
+    old_data_hash = str(manifest.get("data", {}).get("trust_center_data_hash") or "")
+    if report.get("source", {}).get("delivery_readiness_matrix"):
+        report["source"]["delivery_readiness_matrix"][0]["readiness"] = "forged_ready"
+        report["source"]["delivery_readiness_matrix"][0]["release_signoff_status"] = "force_signed"
+    if report.get("delivery_readiness"):
+        report["delivery_readiness"][0]["readiness"] = "forged_ready"
+        report["delivery_readiness"][0]["release_signoff_status"] = "force_signed"
+    for payload, key in ((trust_data, "delivery"), (trust_data, "readiness_matrix"), (delivery_index, "releases"), (readiness_matrix, "rows")):
+        if payload.get(key):
+            payload[key][0]["readiness"] = "forged_ready"
+            payload[key][0]["release_signoff_status"] = "force_signed"
+    if delivery_verification.get("summaries"):
+        delivery_verification["summaries"][0]["readiness"] = "forged_ready"
+        delivery_verification["summaries"][0]["release_signoff_status"] = "force_signed"
+    report["source_hash"] = stable_hash(report["source"])
+    for payload in (trust_data, delivery_index, readiness_matrix, delivery_verification):
+        payload["source_hash"] = report["source_hash"]
+    report["integrity_hash"] = public_trust_center_report_hash(report)
+    docs["trust-center-report.json"] = _v74_json_doc(report)
+    docs["data/trust-center-data.json"] = _v74_json_doc(trust_data)
+    docs["data/delivery-index.json"] = _v74_json_doc(delivery_index)
+    docs["data/readiness-matrix.json"] = _v74_json_doc(readiness_matrix)
+    docs["data/delivery-verification-index.json"] = _v74_json_doc(delivery_verification)
+    for page in ("index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
+        docs[page] = docs[page].decode("utf-8").replace(old_source_hash, report["source_hash"]).replace(old_report_hash, report["integrity_hash"]).replace(old_data_hash, stable_hash(trust_data)).encode("utf-8")
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("trust_center_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("data", {})["trust_center_data_hash"] = stable_hash(trust_data)
+    manifest.setdefault("data", {})["delivery_index_hash"] = stable_hash(delivery_index)
+    manifest.setdefault("data", {})["readiness_matrix_hash"] = stable_hash(readiness_matrix)
+    manifest.setdefault("data", {})["delivery_verification_index_hash"] = stable_hash(delivery_verification)
+    for item in manifest.get("pages", []) if isinstance(manifest.get("pages"), list) else []:
+        if isinstance(item, dict) and item.get("path") in docs:
+            item["source_hash"] = report["source_hash"]
+            item["content_hash"] = hashlib.sha256(docs[item["path"]]).hexdigest()
+    for path in ("trust-center-report.json", "data/trust-center-data.json", "data/delivery-index.json", "data/readiness-matrix.json", "data/delivery-verification-index.json", "index.html", "releases.html", "portfolios.html", "delivery.html", "distribution.html", "submissions.html", "operations.html", "evidence.html", "risk.html", "verify.html"):
         _v74_sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = public_trust_center_manifest_hash(manifest)
     docs["trust-center-manifest.json"] = _v74_json_doc(manifest)
