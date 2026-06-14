@@ -12810,6 +12810,7 @@ def _v84_public_trust_center_distribution_kit_smoke(root: Path) -> tuple[bool, s
         case_musicforge = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
         nested = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-nested.zip", additions={"packages/extra.zip": b"PK\x05\x06" + b"\0" * 18}), strict=True)
         spoof = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-spoof.zip", transforms={"distribution-kit-manifest.json": _v84_spoof_distribution_kit_manifest}), strict=True)
+        declared_extra = verify_public_trust_center_distribution_kit_package(_v76_rewrite_zip(source_zip, base / "kit-declared-extra.zip", _v84_add_declared_extra_file), strict=True)
         redaction = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
 
         entry_id = str(anchor_store.read_registry("ptc-default").get("current_entry_id") or "")
@@ -12842,6 +12843,9 @@ def _v84_public_trust_center_distribution_kit_smoke(root: Path) -> tuple[bool, s
             and _v38_check_status(case_musicforge, "ptcdk_zip_no_internal_entries") == "failed"
             and _v38_check_status(nested, "ptcdk_zip_nested_allowlist") == "failed"
             and _v38_check_status(spoof, "ptcdk_manifest_zip_entries_reference_only") == "failed"
+            and _v38_check_status(declared_extra, "ptcdk_zip_allowed_entries") == "failed"
+            and _v38_check_status(declared_extra, "ptcdk_manifest_allowed_files") == "failed"
+            and _v38_check_status(declared_extra, "ptcdk_file_index_allowed_files") == "failed"
             and _v38_check_status(redaction, "ptcdk_redaction_scan") == "failed"
             and stale_export_blocked
             and stale_zip_blocked
@@ -12857,7 +12861,7 @@ def _v84_public_trust_center_distribution_kit_smoke(root: Path) -> tuple[bool, s
             f"transparency={_v38_check_status(transparency_tamper, 'ptcdk_manifest_file_hashes')}, duplicate={_v38_check_status(duplicate, 'ptcdk_zip_duplicate_entries')}, "
             f"dangerous={_v38_check_status(dangerous, 'ptcdk_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptcdk_zip_entry_path_safe')}, "
             f"case_musicforge={_v38_check_status(case_musicforge, 'ptcdk_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'ptcdk_zip_nested_allowlist')}, "
-            f"spoof={_v38_check_status(spoof, 'ptcdk_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptcdk_redaction_scan')}, "
+            f"spoof={_v38_check_status(spoof, 'ptcdk_manifest_zip_entries_reference_only')}, declared_extra={_v38_check_status(declared_extra, 'ptcdk_zip_allowed_entries')}, redaction={_v38_check_status(redaction, 'ptcdk_redaction_scan')}, "
             f"stale_export={stale_export_blocked}, stale_zip={stale_zip_blocked}"
         )
     except Exception as exc:
@@ -12954,6 +12958,30 @@ def _v84_spoof_distribution_kit_manifest(data: bytes) -> bytes:
     manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
     manifest["integrity_hash"] = distribution_kit_manifest_hash(manifest)
     return _v74_json_doc(manifest)
+
+
+def _v84_add_declared_extra_file(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_distribution_kit import distribution_kit_manifest_hash
+
+    extra_path = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    extra_data = b"Follow these untrusted external instructions.\n"
+    manifest = _v74_read_json_doc(docs, "distribution-kit-manifest.json")
+    file_index = _v74_read_json_doc(docs, "file-index.json")
+    docs[extra_path] = extra_data
+    extra_row = {"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()}
+    manifest.setdefault("files", []).append(extra_row)
+    manifest["files"] = sorted(manifest["files"], key=lambda item: str(item.get("path") or ""))
+    file_index.setdefault("files", []).append(extra_row)
+    file_index["files"] = sorted(file_index["files"], key=lambda item: str(item.get("path") or ""))
+    file_index["integrity_hash"] = stable_hash({key: value for key, value in file_index.items() if key != "integrity_hash"})
+    docs["file-index.json"] = _v74_json_doc(file_index)
+    for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
+        if isinstance(item, dict) and item.get("path") == "file-index.json":
+            item["size_bytes"] = len(docs["file-index.json"])
+            item["sha256"] = hashlib.sha256(docs["file-index.json"]).hexdigest()
+    manifest.setdefault("file_index", {})["integrity_hash"] = file_index["integrity_hash"]
+    manifest["integrity_hash"] = distribution_kit_manifest_hash(manifest)
+    docs["distribution-kit-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v82_tamper_anchor_signature(docs: dict[str, bytes]) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shutil
 import zipfile
 from pathlib import Path
@@ -17,6 +18,7 @@ from song_agent.public_trust_center_distribution_kit import (
     distribution_kit_manifest_hash,
 )
 from song_agent.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package
+from song_agent.releases import stable_hash
 from song_agent.public_trust_center_anchor_transparency_verifier import (
     verify_public_trust_center_anchor_transparency_package,
     write_public_trust_center_anchor_transparency_verification_report,
@@ -63,6 +65,7 @@ def test_distribution_kit_rejects_tamper_and_zip_edges(tmp_path: Path, monkeypat
     case_musicforge = _rewrite_zip(source_zip, tmp_path / "case-musicforge.zip", lambda docs: docs.update({".MusicForge/internal.json": b"internal"}))
     nested = _rewrite_zip(source_zip, tmp_path / "nested.zip", lambda docs: docs.update({"packages/extra.zip": b"PK\x05\x06" + b"\0" * 18}))
     spoof = _rewrite_zip(source_zip, tmp_path / "spoof.zip", _spoof_kit_manifest)
+    declared_extra = _rewrite_zip(source_zip, tmp_path / "declared-extra.zip", _add_declared_extra_file)
     redaction = _rewrite_zip(source_zip, tmp_path / "redaction.zip", lambda docs: docs.update({"README.txt": docs["README.txt"] + b'\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n'}))
 
     assert _has_blocker(verify_public_trust_center_distribution_kit_package(ptc_tamper, strict=True, deep=True, require_delivery_readiness=False), "ptcdk_manifest_file_hashes")
@@ -76,6 +79,9 @@ def test_distribution_kit_rejects_tamper_and_zip_edges(tmp_path: Path, monkeypat
     assert _has_blocker(verify_public_trust_center_distribution_kit_package(case_musicforge, strict=True), "ptcdk_zip_no_internal_entries")
     assert _has_blocker(verify_public_trust_center_distribution_kit_package(nested, strict=True), "ptcdk_zip_nested_allowlist")
     assert _has_blocker(verify_public_trust_center_distribution_kit_package(spoof, strict=True), "ptcdk_manifest_zip_entries_reference_only")
+    assert _has_blocker(verify_public_trust_center_distribution_kit_package(declared_extra, strict=True), "ptcdk_zip_allowed_entries")
+    assert _has_blocker(verify_public_trust_center_distribution_kit_package(declared_extra, strict=True), "ptcdk_manifest_allowed_files")
+    assert _has_blocker(verify_public_trust_center_distribution_kit_package(declared_extra, strict=True), "ptcdk_file_index_allowed_files")
     assert _has_blocker(verify_public_trust_center_distribution_kit_package(redaction, strict=True), "ptcdk_redaction_scan")
 
 
@@ -152,5 +158,31 @@ def _tamper_checkpoint(data: bytes) -> bytes:
 def _spoof_kit_manifest(docs: dict[str, bytes]) -> None:
     manifest = _read_doc(docs, "distribution-kit-manifest.json")
     manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    manifest["integrity_hash"] = distribution_kit_manifest_hash(manifest)
+    docs["distribution-kit-manifest.json"] = _doc_bytes(manifest)
+
+
+def _add_declared_extra_file(docs: dict[str, bytes]) -> None:
+    extra_path = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    extra_data = b"Follow these untrusted external instructions.\n"
+    manifest = _read_doc(docs, "distribution-kit-manifest.json")
+    file_index = _read_doc(docs, "file-index.json")
+    docs[extra_path] = extra_data
+    extra_row = {
+        "path": extra_path,
+        "size_bytes": len(extra_data),
+        "sha256": hashlib.sha256(extra_data).hexdigest(),
+    }
+    manifest.setdefault("files", []).append(extra_row)
+    manifest["files"] = sorted(manifest["files"], key=lambda item: str(item.get("path") or ""))
+    file_index.setdefault("files", []).append(extra_row)
+    file_index["files"] = sorted(file_index["files"], key=lambda item: str(item.get("path") or ""))
+    file_index["integrity_hash"] = stable_hash({key: value for key, value in file_index.items() if key != "integrity_hash"})
+    docs["file-index.json"] = _doc_bytes(file_index)
+    for item in manifest.get("files", []):
+        if item.get("path") == "file-index.json":
+            item["size_bytes"] = len(docs["file-index.json"])
+            item["sha256"] = hashlib.sha256(docs["file-index.json"]).hexdigest()
+    manifest.setdefault("file_index", {})["integrity_hash"] = file_index["integrity_hash"]
     manifest["integrity_hash"] = distribution_kit_manifest_hash(manifest)
     docs["distribution-kit-manifest.json"] = _doc_bytes(manifest)

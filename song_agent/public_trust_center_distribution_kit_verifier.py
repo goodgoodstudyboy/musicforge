@@ -55,6 +55,17 @@ ALLOWED_NESTED_ZIPS = {
     "packages/public-trust-center-anchor-registry.zip",
     "packages/public-trust-center-anchor-transparency.zip",
 }
+FILE_INDEX_ALLOWED_ENTRIES = {
+    "distribution-kit-report.json",
+    "packages/public-trust-center.zip",
+    "packages/public-trust-center-anchor-registry.zip",
+    "packages/public-trust-center-anchor-transparency.zip",
+    "anchors/public-trust-center.delivery-anchor.json",
+    "anchors/ptc-anchor-checkpoint-current.json",
+    "verification-reports/public-trust-center-verification-report.json",
+    "verification-reports/anchor-registry-verification-report.json",
+    "verification-reports/anchor-transparency-verification-report.json",
+}
 
 
 def verify_public_trust_center_distribution_kit_package(
@@ -220,6 +231,8 @@ class _DistributionKitVerifier:
         self._add_check("zip", "ptcdk_zip_duplicate_entries", "failed" if duplicates else "passed", "blocking", "Duplicate ZIP entries: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate ZIP entries.")
         missing = sorted(REQUIRED_ENTRIES - set(self.entry_names))
         self._add_check("zip", "ptcdk_zip_required_entries", "failed" if missing else "passed", "blocking", "Missing required entries: " + ", ".join(missing) if missing else "All required Distribution Kit entries exist.")
+        unexpected = sorted(set(self.entry_names) - REQUIRED_ENTRIES)
+        self._add_check("zip", "ptcdk_zip_allowed_entries", "failed" if unexpected else "passed", "blocking", "Unexpected Distribution Kit entries: " + ", ".join(unexpected[:5]) if unexpected else "Distribution Kit ZIP contains only fixed allowed entries.")
         forbidden = [name for name in self.entry_names if _is_forbidden_public_entry(name)]
         self._add_check("zip", "ptcdk_zip_no_internal_entries", "failed" if forbidden else "passed", "blocking", "Forbidden internal entries: " + ", ".join(forbidden[:5]) if forbidden else "No .musicforge entries are present.")
         nested = sorted(name for name in self.entry_names if name.lower().endswith(".zip") and name not in ALLOWED_NESTED_ZIPS)
@@ -248,6 +261,9 @@ class _DistributionKitVerifier:
             if _is_safe_zip_entry(path) and isinstance(item.get("size_bytes"), int) and HEX_SHA256.fullmatch(str(item.get("sha256") or "")):
                 valid.append(item)
         self._add_check("manifest", "ptcdk_manifest_files_shape", "failed" if errors else "passed", "blocking", "Invalid manifest file rows: " + "; ".join(errors[:5]) if errors else "Manifest file rows are valid.")
+        manifest_paths = {str(item.get("path") or "") for item in valid}
+        expected_manifest_paths = REQUIRED_ENTRIES - {"distribution-kit-manifest.json"}
+        self._add_exact_check("manifest", "ptcdk_manifest_allowed_files", sorted(manifest_paths), sorted(expected_manifest_paths), "Manifest file list matches fixed Distribution Kit structure")
         mismatches: list[str] = []
         for item in valid:
             path = str(item.get("path") or "")
@@ -283,6 +299,10 @@ class _DistributionKitVerifier:
         self._add_exact_check("report", "ptcdk_manifest_report_hash", (self.manifest.get("report") or {}).get("integrity_hash") if isinstance(self.manifest.get("report"), dict) else None, self.report_doc.get("integrity_hash"), "Manifest report hash")
         self._add_hash_check("file_index", "ptcdk_file_index_integrity", self.file_index.get("integrity_hash"), stable_hash({key: value for key, value in self.file_index.items() if key != "integrity_hash"}), "File index integrity")
         self._add_exact_check("file_index", "ptcdk_file_index_source_hash", self.file_index.get("source_hash"), self.report_doc.get("source_hash"), "File index source hash")
+        file_index_rows = self.file_index.get("files") if isinstance(self.file_index.get("files"), list) else []
+        file_index_paths = {str(item.get("path") or "") for item in file_index_rows if isinstance(item, dict)}
+        expected_file_index_paths = FILE_INDEX_ALLOWED_ENTRIES
+        self._add_exact_check("file_index", "ptcdk_file_index_allowed_files", sorted(file_index_paths), sorted(expected_file_index_paths), "File index list matches fixed Distribution Kit structure")
         self._add_hash_check("verification_index", "ptcdk_verification_index_integrity", self.verification_index.get("integrity_hash"), stable_hash({key: value for key, value in self.verification_index.items() if key != "integrity_hash"}), "Verification index integrity")
         self._add_exact_check("verification_index", "ptcdk_verification_index_source_hash", self.verification_index.get("source_hash"), self.report_doc.get("source_hash"), "Verification index source hash")
         self._add_hash_check("chain", "ptcdk_chain_integrity", self.chain.get("integrity_hash"), stable_hash({key: value for key, value in self.chain.items() if key != "integrity_hash"}), "Chain of custody integrity")

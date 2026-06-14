@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.4.1 - 2026-06-15
+
+### Fixed
+- Distribution Kit verifier now enforces a fixed ZIP entry allow-list instead of trusting `distribution-kit-manifest.json` to declare additional files.
+- `manifest.files[]` and `file-index.json.files[]` must match the fixed Distribution Kit structure, so a fully re-signed package with extra benign-looking text files is rejected.
+- release-check v8.4 smoke now covers declared extra file tampering with synchronized manifest/file-index hash recomputation.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_distribution_kit.py tests\test_release_check.py::test_v84_public_trust_center_distribution_kit_smoke -q`
+
 ## v8.4.0 - 2026-06-14
 
 ### Added
