@@ -1,5 +1,16 @@
 # Changelog
 
+## v8.5.0 - 2026-06-15
+
+### Added
+- Public Trust Center Distribution Kit Acceptance workflow for generating external response templates, importing explicitly bound receiver responses, and producing accepted evidence ZIPs.
+- `verify-public-trust-center-distribution-kit-accepted-evidence-package` CLI with fixed-entry ZIP validation, source binding checks, external Distribution Kit matching, redaction scan, and full-resign tamper coverage.
+- Public Trust Center CLI/API/Studio controls for Distribution Kit acceptance templates and accepted evidence export, ZIP, and verification.
+- release-check v8.5 smoke covering accepted evidence, missing binding rejection, wrong Kit hash rejection, public response full-resign tamper, declared extra files, redaction, and Kit mismatch.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_distribution_kit_acceptance.py tests\test_cli_public_trust_center.py::test_public_trust_center_distribution_kit_cli tests\test_server_public_trust_center.py::test_server_public_trust_center_api tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v85_public_trust_center_distribution_kit_acceptance_smoke -q`
+
 ## v8.4.1 - 2026-06-15
 
 ### Fixed

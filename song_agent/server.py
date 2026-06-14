@@ -350,6 +350,13 @@ from song_agent.public_trust_center_distribution_kit import (
     PublicTrustCenterDistributionKitStore,
     distribution_kit_summary as public_trust_center_distribution_kit_summary,
 )
+from song_agent.public_trust_center_distribution_kit_acceptance import (
+    PublicTrustCenterDistributionKitAcceptanceError,
+    PublicTrustCenterDistributionKitAcceptanceNotFoundError,
+    PublicTrustCenterDistributionKitAcceptanceStateError,
+    PublicTrustCenterDistributionKitAcceptanceStore,
+    accepted_evidence_summary as public_trust_center_distribution_kit_accepted_evidence_summary,
+)
 from song_agent.public_trust_center_verifier import (
     verify_public_trust_center_package,
     write_public_trust_center_verification_report,
@@ -2890,6 +2897,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def public_trust_center_distribution_kit_store(self) -> PublicTrustCenterDistributionKitStore:
         return self.server.public_trust_center_distribution_kit_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_distribution_kit_acceptance_store(self) -> PublicTrustCenterDistributionKitAcceptanceStore:
+        return self.server.public_trust_center_distribution_kit_acceptance_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -7387,6 +7398,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_json({"ok": True, "center_id": center_id, "report": report, "summary": self.public_trust_center_distribution_kit_store.summary(center_id)})
                     return
                 subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "acceptance":
+                    self._handle_public_trust_center_distribution_kit_acceptance(method, center_id, parts)
+                    return
                 if subaction == "download" and len(parts) == 3:
                     if method != "GET":
                         self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -7460,6 +7474,102 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except PublicTrustCenterDistributionKitStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except PublicTrustCenterDistributionKitError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except PublicTrustCenterDistributionKitAcceptanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterDistributionKitAcceptanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterDistributionKitAcceptanceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_public_trust_center_distribution_kit_acceptance(self, method: str, center_id: str, parts: list[str]) -> None:
+        try:
+            if len(parts) == 3:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json(
+                    {
+                        "ok": True,
+                        "center_id": center_id,
+                        "summary": self.public_trust_center_distribution_kit_acceptance_store.summary(center_id),
+                        "responses": self.public_trust_center_distribution_kit_acceptance_store.list_responses(center_id),
+                        "change_requests": self.public_trust_center_distribution_kit_acceptance_store.list_change_requests(center_id),
+                    }
+                )
+                return
+            if len(parts) == 4 and parts[3] == "template":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                template = self.public_trust_center_distribution_kit_acceptance_store.create_response_template(center_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "template": template}, status=HTTPStatus.CREATED)
+                return
+            if len(parts) == 4 and parts[3] == "import":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                imported = self.public_trust_center_distribution_kit_acceptance_store.import_response(center_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, **imported}, status=HTTPStatus.CREATED)
+                return
+            if len(parts) >= 5 and parts[3] == "responses":
+                response_id = parts[4]
+                if len(parts) == 5:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    response = self.public_trust_center_distribution_kit_acceptance_store.read_response(center_id, response_id)
+                    self._send_json({"ok": True, "center_id": center_id, "response": response})
+                    return
+                response_action = parts[5] if len(parts) > 5 else ""
+                if response_action == "verify" and len(parts) == 6:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.public_trust_center_distribution_kit_acceptance_store.verify_response(center_id, response_id, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "response_id": response_id, "verification": report, "summary": report.get("summary", {})})
+                    return
+                if response_action == "change-request-draft" and len(parts) == 6:
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    draft = self.public_trust_center_distribution_kit_acceptance_store.create_change_request_draft(center_id, response_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "draft": draft}, status=HTTPStatus.CREATED)
+                    return
+                if response_action == "evidence" and len(parts) >= 7:
+                    evidence_action = parts[6]
+                    if evidence_action == "download" and len(parts) == 7:
+                        if method != "GET":
+                            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                            return
+                        evidence = self.public_trust_center_distribution_kit_acceptance_store.refresh_accepted_evidence(center_id, {"response_id": response_id}, now=_utc_now())
+                        self._send_file(self.public_trust_center_distribution_kit_acceptance_store.evidence_zip_path(center_id, str(evidence.get("evidence_id") or "")), "application/zip", filename=f"musicforge-{center_id}-distribution-kit-accepted-evidence.zip")
+                        return
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    if evidence_action == "export" and len(parts) == 7:
+                        manifest = self.public_trust_center_distribution_kit_acceptance_store.export_accepted_evidence(center_id, response_id, now=_utc_now())
+                        self._send_json({"ok": True, "center_id": center_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                        return
+                    if evidence_action == "zip" and len(parts) == 7:
+                        zip_info = self.public_trust_center_distribution_kit_acceptance_store.build_accepted_evidence_zip(center_id, response_id, now=_utc_now())
+                        evidence = self.public_trust_center_distribution_kit_acceptance_store.read_evidence(center_id, str(zip_info.get("evidence_id") or ""), default={})
+                        self._send_json({"ok": True, "center_id": center_id, "zip": zip_info, "summary": public_trust_center_distribution_kit_accepted_evidence_summary(evidence)})
+                        return
+                    if evidence_action == "verify" and len(parts) == 7:
+                        evidence = self.public_trust_center_distribution_kit_acceptance_store.refresh_accepted_evidence(center_id, {"response_id": response_id}, now=_utc_now())
+                        report = self.public_trust_center_distribution_kit_acceptance_store.verify_accepted_evidence_zip(center_id, str(evidence.get("evidence_id") or ""), {"strict": True, "require_current": True})
+                        self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                        return
+            self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Distribution Kit Acceptance route not found.")
+        except PublicTrustCenterDistributionKitAcceptanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterDistributionKitAcceptanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterDistributionKitAcceptanceError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -16419,6 +16529,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             trust_center_store=self.public_trust_center_store,
             anchor_registry_store=self.public_trust_center_anchor_registry_store,
             anchor_transparency_store=self.public_trust_center_anchor_transparency_store,
+        )
+        self.public_trust_center_distribution_kit_acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(
+            distribution_kit_store=self.public_trust_center_distribution_kit_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

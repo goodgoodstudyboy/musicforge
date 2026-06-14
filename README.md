@@ -707,6 +707,19 @@ python -m song_agent.cli public-trust-center --center-id ptc-default --distribut
 python -m song_agent.cli verify-public-trust-center-distribution-kit-package path\to\public-trust-center-distribution-kit.zip --strict --deep --require-current --json
 ```
 
+Distribution Kit Acceptance records an external receiver response to the
+current Kit. Imported responses must explicitly bind the current Kit ZIP hash,
+manifest hash, report/source hash, and verification report hash; the importer
+does not fill those fields in for the reviewer. Only current
+`external_manual` accepted responses can produce public-safe Accepted Evidence
+ZIPs:
+
+```powershell
+python -m song_agent.cli public-trust-center --center-id ptc-default --distribution-kit-acceptance-template --json --report-out kit-acceptance-template.json
+python -m song_agent.cli public-trust-center --center-id ptc-default --distribution-kit-acceptance-response-file receiver-response.json --distribution-kit-accepted-evidence-export --distribution-kit-accepted-evidence-zip --distribution-kit-accepted-evidence-verify --strict --json
+python -m song_agent.cli verify-public-trust-center-distribution-kit-accepted-evidence-package path\to\accepted-evidence.zip --strict --require-current --distribution-kit path\to\public-trust-center-distribution-kit.zip --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

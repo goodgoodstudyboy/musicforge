@@ -3721,6 +3721,10 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="public-trust-center-distribution-kit-zip" type="button">Build Distribution Kit ZIP</button>
           <button class="secondary" id="public-trust-center-distribution-kit-verify" type="button">Verify Distribution Kit</button>
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/distribution-kit/download">Download Distribution Kit ZIP</a>
+          <button class="secondary" id="public-trust-center-distribution-kit-acceptance-template" type="button">Create Kit Acceptance Template</button>
+          <button class="secondary" id="public-trust-center-distribution-kit-accepted-evidence-export" type="button">Export Kit Accepted Evidence</button>
+          <button class="secondary" id="public-trust-center-distribution-kit-accepted-evidence-zip" type="button">Build Kit Accepted Evidence ZIP</button>
+          <button class="secondary" id="public-trust-center-distribution-kit-accepted-evidence-verify" type="button">Verify Kit Accepted Evidence</button>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4344,6 +4348,34 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ strict: true, deep: true, require_current: true }),
         });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-acceptance-template", async () => {
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance/template`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-accepted-evidence-export", async () => {
+        const data = await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance`);
+        const responses = data.responses || [];
+        const response = responses[responses.length - 1] || {};
+        if (!response.response_id) return;
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/${encodeURIComponent(response.response_id)}/evidence/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-accepted-evidence-zip", async () => {
+        const data = await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance`);
+        const responses = data.responses || [];
+        const response = responses[responses.length - 1] || {};
+        if (!response.response_id) return;
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/${encodeURIComponent(response.response_id)}/evidence/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-accepted-evidence-verify", async () => {
+        const data = await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance`);
+        const responses = data.responses || [];
+        const response = responses[responses.length - 1] || {};
+        if (!response.response_id) return;
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/${encodeURIComponent(response.response_id)}/evidence/verify`, { method: "POST" });
         await renderPortfolioAuditDetail(portfolioId);
       });
     }

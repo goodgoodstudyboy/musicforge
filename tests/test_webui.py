@@ -301,6 +301,10 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="public-trust-center-distribution-kit-export"' in html
     assert 'id="public-trust-center-distribution-kit-zip"' in html
     assert 'id="public-trust-center-distribution-kit-verify"' in html
+    assert 'id="public-trust-center-distribution-kit-acceptance-template"' in html
+    assert 'id="public-trust-center-distribution-kit-accepted-evidence-export"' in html
+    assert 'id="public-trust-center-distribution-kit-accepted-evidence-zip"' in html
+    assert 'id="public-trust-center-distribution-kit-accepted-evidence-verify"' in html
     assert "/api/public-trust-centers/ptc-default.zip" in html
     assert "/api/public-trust-centers/ptc-default/anchor-registry/download" in html
     assert "/api/public-trust-centers/ptc-default/distribution-kit/download" in html

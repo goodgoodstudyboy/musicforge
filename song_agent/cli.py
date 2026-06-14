@@ -953,6 +953,20 @@ def build_verify_public_trust_center_distribution_kit_parser() -> argparse.Argum
     return verify_parser
 
 
+def build_verify_public_trust_center_distribution_kit_accepted_evidence_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Distribution Kit Accepted Evidence ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Accepted Evidence ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict warnings as failures.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require the external Distribution Kit ZIP to match the evidence binding.")
+    verify_parser.add_argument("--distribution-kit", type=Path, default=None, help="External Distribution Kit ZIP for current binding checks.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=32, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=64, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build local MusicForge Public Trust Center reports and packages.")
     parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
@@ -981,6 +995,15 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--distribution-kit-export", action="store_true", help="Export the Public Trust Center Distribution Kit directory.")
     parser.add_argument("--distribution-kit-zip", action="store_true", help="Build the Public Trust Center Distribution Kit ZIP.")
     parser.add_argument("--distribution-kit-verify", action="store_true", help="Verify the Public Trust Center Distribution Kit ZIP.")
+    parser.add_argument("--distribution-kit-acceptance-template", action="store_true", help="Create a Distribution Kit external acceptance response template.")
+    parser.add_argument("--distribution-kit-acceptance-response-file", type=Path, default=None, help="Import a Distribution Kit acceptance response JSON file.")
+    parser.add_argument("--distribution-kit-acceptance-response-base64", default=None, help="Import a base64-encoded Distribution Kit acceptance response.")
+    parser.add_argument("--distribution-kit-acceptance-response-id", default=None, help="Distribution Kit acceptance response id.")
+    parser.add_argument("--distribution-kit-acceptance-verify-response", action="store_true", help="Verify an imported Distribution Kit acceptance response.")
+    parser.add_argument("--distribution-kit-accepted-evidence-export", action="store_true", help="Export accepted Distribution Kit evidence for the response.")
+    parser.add_argument("--distribution-kit-accepted-evidence-zip", action="store_true", help="Build accepted Distribution Kit evidence ZIP for the response.")
+    parser.add_argument("--distribution-kit-accepted-evidence-verify", action="store_true", help="Verify the accepted Distribution Kit evidence ZIP.")
+    parser.add_argument("--distribution-kit-acceptance-change-request", action="store_true", help="Create a draft follow-up from a needs_changes/rejected Distribution Kit response.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-registry-current", action="store_true", help="Require current Registry evidence.")
     parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
@@ -2309,6 +2332,32 @@ def _main() -> None:
         else:
             print_public_trust_center_distribution_kit_verification_report(report)
         raise SystemExit(public_trust_center_distribution_kit_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-distribution-kit-accepted-evidence-package":
+        from song_agent.public_trust_center_distribution_kit_acceptance_verifier import (
+            print_public_trust_center_distribution_kit_accepted_evidence_verification_report,
+            public_trust_center_distribution_kit_accepted_evidence_verification_exit_code,
+            verify_public_trust_center_distribution_kit_accepted_evidence_package,
+            write_public_trust_center_distribution_kit_accepted_evidence_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_distribution_kit_accepted_evidence_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_distribution_kit_accepted_evidence_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            distribution_kit_path=args.distribution_kit,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_distribution_kit_accepted_evidence_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_distribution_kit_accepted_evidence_verification_report(report)
+        raise SystemExit(public_trust_center_distribution_kit_accepted_evidence_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3621,6 +3670,7 @@ def _main() -> None:
             verify_public_trust_center_anchor_transparency_package,
             write_public_trust_center_anchor_transparency_verification_report,
         )
+        from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, accepted_evidence_summary
         from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore, distribution_kit_summary
 
         parser = build_public_trust_center_parser()
@@ -3633,6 +3683,7 @@ def _main() -> None:
             anchor_registry_store=anchor_store,
             anchor_transparency_store=anchor_transparency_store,
         )
+        distribution_kit_acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=distribution_kit_store)
         payload: dict[str, Any] = {
             "center_id": args.center_id,
             "attestation_profile": args.profile,
@@ -3787,6 +3838,43 @@ def _main() -> None:
             )
             result["distribution_kit_verification"] = kit_verification
             result["distribution_kit_verification_summary"] = kit_verification.get("summary", {})
+        if args.distribution_kit_acceptance_template:
+            template = distribution_kit_acceptance_store.create_response_template(args.center_id)
+            result["distribution_kit_acceptance_template"] = template
+        if args.distribution_kit_acceptance_response_file is not None or args.distribution_kit_acceptance_response_base64:
+            import_payload: dict[str, Any] = {}
+            if args.distribution_kit_acceptance_response_file is not None:
+                import_payload["content"] = args.distribution_kit_acceptance_response_file.read_text(encoding="utf-8")
+            if args.distribution_kit_acceptance_response_base64:
+                import_payload["content_base64"] = args.distribution_kit_acceptance_response_base64
+            imported = distribution_kit_acceptance_store.import_response(args.center_id, import_payload)
+            result["distribution_kit_acceptance_import"] = imported
+            result["distribution_kit_acceptance_summary"] = imported.get("response", {})
+        if args.distribution_kit_acceptance_verify_response:
+            if not args.distribution_kit_acceptance_response_id:
+                raise SystemExit("--distribution-kit-acceptance-response-id is required with --distribution-kit-acceptance-verify-response")
+            verification = distribution_kit_acceptance_store.verify_response(args.center_id, args.distribution_kit_acceptance_response_id)
+            result["distribution_kit_acceptance_response_verification"] = verification
+        if args.distribution_kit_accepted_evidence_export:
+            manifest = distribution_kit_acceptance_store.export_accepted_evidence(args.center_id, args.distribution_kit_acceptance_response_id)
+            result["distribution_kit_accepted_evidence_manifest"] = manifest
+        if args.distribution_kit_accepted_evidence_zip:
+            zip_info = distribution_kit_acceptance_store.build_accepted_evidence_zip(args.center_id, args.distribution_kit_acceptance_response_id)
+            result["distribution_kit_accepted_evidence_zip"] = zip_info
+            evidence = distribution_kit_acceptance_store.read_evidence(args.center_id, zip_info.get("evidence_id"), default={})
+            result["distribution_kit_accepted_evidence_summary"] = accepted_evidence_summary(evidence)
+        if args.distribution_kit_accepted_evidence_verify:
+            evidence_id = None
+            if args.distribution_kit_acceptance_response_id:
+                evidence = distribution_kit_acceptance_store.refresh_accepted_evidence(args.center_id, {"response_id": args.distribution_kit_acceptance_response_id})
+                evidence_id = str(evidence.get("evidence_id") or "")
+            verification = distribution_kit_acceptance_store.verify_accepted_evidence_zip(args.center_id, evidence_id, {"strict": args.strict, "require_current": True})
+            result["distribution_kit_accepted_evidence_verification"] = verification
+            result["distribution_kit_accepted_evidence_verification_summary"] = verification.get("summary", {})
+        if args.distribution_kit_acceptance_change_request:
+            if not args.distribution_kit_acceptance_response_id:
+                raise SystemExit("--distribution-kit-acceptance-response-id is required with --distribution-kit-acceptance-change-request")
+            result["distribution_kit_acceptance_change_request"] = distribution_kit_acceptance_store.create_change_request_draft(args.center_id, args.distribution_kit_acceptance_response_id, {"source": "cli"})
         if args.report_out is not None:
             write_json(args.report_out, result)
         if args.json:

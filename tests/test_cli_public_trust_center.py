@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -9,6 +10,7 @@ from pathlib import Path
 from tests.test_public_trust_center import _trust_center_fixture
 from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
 from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+from song_agent.public_trust_center_distribution_kit_acceptance import response_payload_hash as kit_acceptance_response_payload_hash
 
 
 def test_public_trust_center_cli_export_verify(tmp_path: Path, monkeypatch) -> None:
@@ -368,3 +370,95 @@ def test_public_trust_center_distribution_kit_cli(tmp_path: Path, monkeypatch) -
     saved = json.loads(report_out.read_text(encoding="utf-8"))
     assert verified["status"] == "passed"
     assert saved["summary"]["center_id"] == "ptc-default"
+
+    template_cmd = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "public-trust-center",
+            "--center-id",
+            "ptc-default",
+            "--distribution-kit-acceptance-template",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert template_cmd.returncode == 0, template_cmd.stderr
+    template_payload = json.loads(template_cmd.stdout)
+    response = dict(template_payload["distribution_kit_acceptance_template"]["response_template"])
+    response.update(
+        {
+            "response_id": "cli-kit-accepted-001",
+            "reviewer": {"name": "CLI Receiver", "organization": "Partner Org", "role": "receiver"},
+            "reviewed_at": "2026-06-15T00:00:00+00:00",
+            "comments": "Distribution Kit accepted from CLI smoke.",
+        }
+    )
+    response["response_hash"] = kit_acceptance_response_payload_hash(response)
+    response_file = tmp_path / "kit-acceptance-response.json"
+    response_file.write_text(json.dumps(response), encoding="utf-8")
+
+    acceptance = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "public-trust-center",
+            "--center-id",
+            "ptc-default",
+            "--distribution-kit-acceptance-response-file",
+            str(response_file),
+            "--distribution-kit-accepted-evidence-export",
+            "--distribution-kit-accepted-evidence-zip",
+            "--distribution-kit-accepted-evidence-verify",
+            "--strict",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert acceptance.returncode == 0, acceptance.stderr
+    acceptance_payload = json.loads(acceptance.stdout)
+    evidence_zip = tmp_path / ".musicforge" / "public-trust-centers" / "ptc-default" / "distribution-kit" / "acceptance" / "accepted-evidence" / acceptance_payload["distribution_kit_accepted_evidence_zip"]["evidence_id"] / "accepted-evidence.zip"
+    assert acceptance_payload["distribution_kit_acceptance_import"]["verification"]["status"] == "passed"
+    assert acceptance_payload["distribution_kit_accepted_evidence_verification"]["status"] == "passed"
+    assert evidence_zip.exists()
+
+    evidence_report_out = tmp_path / "accepted-evidence-verification.json"
+    evidence_verify = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-public-trust-center-distribution-kit-accepted-evidence-package",
+            str(evidence_zip),
+            "--json",
+            "--strict",
+            "--require-current",
+            "--distribution-kit",
+            str(kit_zip),
+            "--report-out",
+            str(evidence_report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert evidence_verify.returncode == 0, evidence_verify.stderr
+    evidence_verified = json.loads(evidence_verify.stdout)
+    evidence_saved = json.loads(evidence_report_out.read_text(encoding="utf-8"))
+    assert evidence_verified["status"] == "passed"
+    assert evidence_saved["summary"]["center_id"] == "ptc-default"

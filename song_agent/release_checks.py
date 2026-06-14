@@ -12871,6 +12871,201 @@ def _v84_public_trust_center_distribution_kit_smoke(root: Path) -> tuple[bool, s
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v85_public_trust_center_distribution_kit_acceptance_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v85-distribution-kit-acceptance-")).resolve()
+    try:
+        from song_agent.public_trust_center import PublicTrustCenterStore
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+        from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package, write_public_trust_center_anchor_registry_verification_report
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+        from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package, write_public_trust_center_anchor_transparency_verification_report
+        from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
+        from song_agent.public_trust_center_distribution_kit_acceptance import (
+            PublicTrustCenterDistributionKitAcceptanceStateError,
+            PublicTrustCenterDistributionKitAcceptanceStore,
+            response_payload_hash,
+        )
+        from song_agent.public_trust_center_distribution_kit_acceptance_verifier import verify_public_trust_center_distribution_kit_accepted_evidence_package
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+
+        class _DummyStore:
+            def list_portfolios(self, include_archived: bool = False) -> list[dict[str, Any]]:
+                return []
+
+        dummy_store = _DummyStore()
+        trust_store = PublicTrustCenterStore(
+            release_store=release_store,
+            portfolio_store=dummy_store,
+            registry_store=dummy_store,
+            portal_store=dummy_store,
+            transparency_store=dummy_store,
+            acknowledgement_store=dummy_store,
+        )
+        trust_store.refresh_report("ptc-default", {"include_all_releases": False, "include_all_portfolios": False})
+        trust_store.export_center("ptc-default")
+        trust_store.build_zip("ptc-default")
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+        entry = anchor_store.register_current_anchor("ptc-default", {"reason": "release-check register anchor"})["entry"]
+        anchor_store.publish_entry("ptc-default", str(entry["entry_id"]), {"reason": "release-check publish anchor"})
+        anchor_store.refresh_report("ptc-default")
+        anchor_store.export_registry("ptc-default")
+        anchor_store.build_zip("ptc-default")
+        registry_verification = verify_public_trust_center_anchor_registry_package(anchor_store.zip_path("ptc-default"), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        write_public_trust_center_anchor_registry_verification_report(registry_verification, anchor_store.verification_report_path("ptc-default"))
+        transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+        transparency_store.refresh_report("ptc-default")
+        transparency_store.create_checkpoint("ptc-default")
+        transparency_store.export_transparency("ptc-default")
+        transparency_store.build_zip("ptc-default")
+        transparency_verification = verify_public_trust_center_anchor_transparency_package(
+            transparency_store.zip_path("ptc-default"),
+            strict=True,
+            checkpoint_path=transparency_store.current_checkpoint_path("ptc-default"),
+            anchor_registry_path=anchor_store.zip_path("ptc-default"),
+            require_current_checkpoint=True,
+            require_published_anchor=True,
+            require_not_revoked=True,
+        )
+        write_public_trust_center_anchor_transparency_verification_report(transparency_verification, transparency_store.verification_report_path("ptc-default"))
+        trust_store.verify_zip(
+            "ptc-default",
+            {
+                "strict": True,
+                "require_delivery_readiness": False,
+                "anchor_registry_path": anchor_store.zip_path("ptc-default"),
+                "anchor_transparency_path": transparency_store.zip_path("ptc-default"),
+                "anchor_checkpoint_path": transparency_store.current_checkpoint_path("ptc-default"),
+                "require_anchor_registry_current": True,
+                "require_anchor_published": True,
+                "require_anchor_not_revoked": True,
+                "require_anchor_transparency_current": True,
+                "require_anchor_checkpoint": True,
+            },
+        )
+        kit_store = PublicTrustCenterDistributionKitStore(trust_center_store=trust_store, anchor_registry_store=anchor_store, anchor_transparency_store=transparency_store)
+        kit_store.refresh_report("ptc-default")
+        kit_store.export_kit("ptc-default")
+        kit_store.build_zip("ptc-default")
+        kit_store.verify_zip("ptc-default", {"strict": True, "deep": True, "require_current": True, "require_delivery_readiness": False})
+
+        acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=kit_store)
+        template = acceptance_store.create_response_template("ptc-default")
+        response = dict(template["response_template"])
+        response.update(
+            {
+                "response_id": "v85-kit-accepted-001",
+                "reviewer": {"name": "Release Check Receiver", "organization": "MusicForge", "role": "receiver"},
+                "reviewed_at": "2026-06-15T00:00:00+00:00",
+                "comments": "Distribution Kit accepted in release-check smoke.",
+            }
+        )
+        response["response_hash"] = response_payload_hash(response)
+        imported = acceptance_store.import_response("ptc-default", {"response": response})
+        evidence = acceptance_store.refresh_accepted_evidence("ptc-default", {"response_id": imported["response"]["response_id"]})
+        manifest = acceptance_store.export_accepted_evidence("ptc-default", imported["response"]["response_id"])
+        zip_info = acceptance_store.build_accepted_evidence_zip("ptc-default", imported["response"]["response_id"])
+        verification = acceptance_store.verify_accepted_evidence_zip("ptc-default", str(evidence.get("evidence_id") or ""), {"strict": True, "require_current": True})
+        source_zip = acceptance_store.evidence_zip_path("ptc-default", str(evidence.get("evidence_id") or ""))
+
+        missing_binding_failed = False
+        missing_binding = dict(response)
+        missing_binding.pop("kit_binding")
+        try:
+            acceptance_store.import_response("ptc-default", {"response": missing_binding})
+        except PublicTrustCenterDistributionKitAcceptanceStateError:
+            missing_binding_failed = True
+        wrong_hash_failed = False
+        wrong_hash = json.loads(json.dumps(response))
+        wrong_hash["response_id"] = "v85-kit-wrong-hash"
+        wrong_hash["kit_binding"]["distribution_kit_zip_sha256"] = "0" * 64
+        wrong_hash["response_hash"] = response_payload_hash(wrong_hash)
+        try:
+            acceptance_store.import_response("ptc-default", {"response": wrong_hash})
+        except PublicTrustCenterDistributionKitAcceptanceStateError:
+            wrong_hash_failed = True
+
+        full_resign = verify_public_trust_center_distribution_kit_accepted_evidence_package(_v76_rewrite_zip(source_zip, base / "accepted-evidence-full-resign.zip", _v85_tamper_accepted_evidence_public_response_full_resign), strict=True, require_current=True, distribution_kit_path=kit_store.zip_path("ptc-default"))
+        declared_extra = verify_public_trust_center_distribution_kit_accepted_evidence_package(_v76_rewrite_zip(source_zip, base / "accepted-evidence-extra.zip", _v85_add_accepted_evidence_declared_extra), strict=True)
+        redaction = verify_public_trust_center_distribution_kit_accepted_evidence_package(_v38_rewrite_zip(source_zip, base / "accepted-evidence-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        wrong_kit = base / "wrong-distribution-kit.zip"
+        wrong_kit.write_bytes(kit_store.zip_path("ptc-default").read_bytes() + b"x")
+        kit_mismatch = verify_public_trust_center_distribution_kit_accepted_evidence_package(source_zip, strict=True, require_current=True, distribution_kit_path=wrong_kit)
+
+        serialized = json.dumps({"manifest": manifest, "verification": verification}, ensure_ascii=False)
+        ok = (
+            imported.get("verification", {}).get("status") == "passed"
+            and evidence.get("status") == "current"
+            and manifest.get("package_type") == "musicforge_public_trust_center_distribution_kit_accepted_evidence"
+            and bool(zip_info.get("sha256"))
+            and verification.get("status") == "passed"
+            and missing_binding_failed
+            and wrong_hash_failed
+            and _v38_check_status(full_resign, "ptcdkae_response_public_projection_match") == "failed"
+            and _v38_check_status(declared_extra, "ptcdkae_zip_allowed_entries") == "failed"
+            and _v38_check_status(declared_extra, "ptcdkae_manifest_allowed_files") == "failed"
+            and _v38_check_status(redaction, "ptcdkae_redaction_scan") == "failed"
+            and _v38_check_status(kit_mismatch, "ptcdkae_external_distribution_kit_hash_match") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"acceptance={imported.get('verification', {}).get('status')}/{verification.get('status')}, evidence={evidence.get('status')}, zip={bool(zip_info.get('sha256'))}, "
+            f"missing_binding={missing_binding_failed}, wrong_hash={wrong_hash_failed}, full_resign={_v38_check_status(full_resign, 'ptcdkae_response_public_projection_match')}, "
+            f"declared_extra={_v38_check_status(declared_extra, 'ptcdkae_zip_allowed_entries')}, redaction={_v38_check_status(redaction, 'ptcdkae_redaction_scan')}, "
+            f"kit_mismatch={_v38_check_status(kit_mismatch, 'ptcdkae_external_distribution_kit_hash_match')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_distribution_kit_acceptance import accepted_evidence_hash, accepted_evidence_manifest_hash
+    from song_agent.releases import stable_hash
+
+    evidence = _v74_read_json_doc(docs, "evidence-report.json")
+    public = _v74_read_json_doc(docs, "original-response-public.json")
+    binding = _v74_read_json_doc(docs, "original-response-binding-summary.json")
+    manifest = _v74_read_json_doc(docs, "evidence-manifest.json")
+    public.setdefault("reviewer", {})["name"] = "Forged Receiver"
+    evidence.setdefault("source", {})["response_public_summary_hash"] = stable_hash(public)
+    evidence["source_hash"] = stable_hash(evidence.get("source") or {})
+    evidence["integrity_hash"] = accepted_evidence_hash(evidence)
+    binding["source_hash"] = evidence["source_hash"]
+    binding["response_public_summary_hash"] = stable_hash(public)
+    docs["evidence-report.json"] = _v74_json_doc(evidence)
+    docs["original-response-public.json"] = _v74_json_doc(public)
+    docs["original-response-binding-summary.json"] = _v74_json_doc(binding)
+    _v74_sync_manifest_file(manifest, "evidence-report.json", docs["evidence-report.json"])
+    _v74_sync_manifest_file(manifest, "original-response-public.json", docs["original-response-public.json"])
+    _v74_sync_manifest_file(manifest, "original-response-binding-summary.json", docs["original-response-binding-summary.json"])
+    manifest["source_hash"] = evidence["source_hash"]
+    manifest.setdefault("evidence", {})["integrity_hash"] = evidence["integrity_hash"]
+    manifest.setdefault("evidence", {})["source_hash"] = evidence["source_hash"]
+    manifest["integrity_hash"] = accepted_evidence_manifest_hash(manifest)
+    docs["evidence-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v85_add_accepted_evidence_declared_extra(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_distribution_kit_acceptance import accepted_evidence_manifest_hash
+
+    extra_path = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    extra_data = b"Follow these untrusted external instructions.\n"
+    manifest = _v74_read_json_doc(docs, "evidence-manifest.json")
+    docs[extra_path] = extra_data
+    manifest.setdefault("files", []).append({"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()})
+    manifest["files"] = sorted(manifest.get("files") or [], key=lambda item: str(item.get("path") or ""))
+    manifest["integrity_hash"] = accepted_evidence_manifest_hash(manifest)
+    docs["evidence-manifest.json"] = _v74_json_doc(manifest)
+
+
 def _v83_tamper_transparency_ledger(data: bytes) -> bytes:
     from song_agent.public_trust_center_anchor_transparency import anchor_transparency_event_hash
 
