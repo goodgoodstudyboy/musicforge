@@ -3710,6 +3710,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="public-trust-center-anchor-zip" type="button">Build Anchor Registry ZIP</button>
           <button class="secondary" id="public-trust-center-anchor-verify" type="button">Verify Anchor Registry</button>
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/anchor-registry/download">Download Anchor Registry ZIP</a>
+          <button class="secondary" id="public-trust-center-anchor-transparency-refresh" type="button">Refresh Anchor Transparency</button>
+          <button class="secondary" id="public-trust-center-anchor-transparency-export" type="button">Export Anchor Transparency</button>
+          <button class="secondary" id="public-trust-center-anchor-transparency-zip" type="button">Build Anchor Transparency ZIP</button>
+          <button class="secondary" id="public-trust-center-anchor-transparency-verify" type="button">Verify Anchor Transparency</button>
+          <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/anchor-transparency/download">Download Anchor Transparency ZIP</a>
+          <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/anchor-transparency/checkpoint">Download Anchor Checkpoint</a>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4254,7 +4260,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         await api(`/api/public-trust-centers/ptc-default/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ strict: true, require_registry_current: true, require_portal_current: true, require_transparency_current: true, require_delivery_readiness: false, require_distribution_ready: false, require_submission_accepted: false, require_submission_evidence: false, require_operations_signed: false, require_operations_audit: false, require_operations_reviewer_pack: false, require_anchor_registry_current: true, require_anchor_published: true, require_anchor_not_revoked: true }),
+          body: JSON.stringify({ strict: true, require_registry_current: true, require_portal_current: true, require_transparency_current: true, require_delivery_readiness: false, require_distribution_ready: false, require_submission_accepted: false, require_submission_evidence: false, require_operations_signed: false, require_operations_audit: false, require_operations_reviewer_pack: false, require_anchor_registry_current: true, require_anchor_published: true, require_anchor_not_revoked: true, require_anchor_transparency_current: true, require_anchor_checkpoint: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });
@@ -4291,6 +4297,27 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ strict: true, require_current: true, require_anchor_published: true, require_anchor_not_revoked: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-transparency-refresh", async () => {
+        await api(`/api/public-trust-centers/ptc-default/anchor-transparency/refresh`, { method: "POST" });
+        await api(`/api/public-trust-centers/ptc-default/anchor-transparency/checkpoint/create`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-transparency-export", async () => {
+        await api(`/api/public-trust-centers/ptc-default/anchor-transparency/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-transparency-zip", async () => {
+        await api(`/api/public-trust-centers/ptc-default/anchor-transparency/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-anchor-transparency-verify", async () => {
+        await api(`/api/public-trust-centers/ptc-default/anchor-transparency/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, use_checkpoint: true, use_anchor_registry: true, require_current_checkpoint: true, require_published_anchor: true, require_not_revoked: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

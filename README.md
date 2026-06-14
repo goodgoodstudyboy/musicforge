@@ -683,6 +683,17 @@ python -m song_agent.cli verify-public-trust-center-anchor-registry-package path
 python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-delivery-readiness --delivery-anchor path\to\public-trust-center.delivery-anchor.json --anchor-registry path\to\public-trust-center-anchor-registry.zip --require-anchor-registry-current --require-anchor-published --require-anchor-not-revoked --json
 ```
 
+Public Trust Center Anchor Transparency adds an append-only local ledger and a
+small external checkpoint on top of the Anchor Registry. The checkpoint can be
+saved outside the ZIP set and supplied back to the verifier to detect wholesale
+replacement of the Trust Center ZIP, delivery anchor, and Anchor Registry ZIP:
+
+```powershell
+python -m song_agent.cli public-trust-center --center-id ptc-default --anchor-transparency-refresh --anchor-checkpoint-create --anchor-transparency-export --anchor-transparency-zip --anchor-transparency-verify --strict --require-anchor-registry-current --require-anchor-published --require-anchor-not-revoked --require-anchor-transparency-current --require-anchor-checkpoint --json
+python -m song_agent.cli verify-public-trust-center-anchor-transparency-package path\to\public-trust-center-anchor-transparency.zip --strict --checkpoint path\to\ptc-anchor-checkpoint-current.json --anchor-registry path\to\public-trust-center-anchor-registry.zip --require-current-checkpoint --require-published-anchor --require-not-revoked --json
+python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-delivery-readiness --delivery-anchor path\to\public-trust-center.delivery-anchor.json --anchor-registry path\to\public-trust-center-anchor-registry.zip --anchor-transparency path\to\public-trust-center-anchor-transparency.zip --anchor-checkpoint path\to\ptc-anchor-checkpoint-current.json --require-anchor-registry-current --require-anchor-published --require-anchor-not-revoked --require-anchor-transparency-current --require-anchor-checkpoint --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

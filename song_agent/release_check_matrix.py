@@ -290,6 +290,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v80.public_trust_center_smoke", "v8.0 public trust center smoke", "_v80_public_trust_center_smoke", group="trust", version="8.0", risk="critical", timeout_seconds=600, tags=("v8", "trust", "portal", "attestation"), profiles=("full", "quick", "latest", "v8"), expected_warnings=("Duplicate name:",)),
     _callable("v81.public_trust_center_delivery_smoke", "v8.1 public trust center delivery smoke", "_v81_public_trust_center_delivery_smoke", group="trust", version="8.1", risk="critical", timeout_seconds=600, tags=("v8", "trust", "delivery", "operations", "submission"), profiles=("full", "quick", "latest", "v8"), expected_warnings=("Duplicate name:",)),
     _callable("v82.public_trust_center_anchor_registry_smoke", "v8.2 public trust center anchor registry smoke", "_v82_public_trust_center_anchor_registry_smoke", group="trust", version="8.2", risk="critical", timeout_seconds=600, tags=("v8", "trust", "anchor", "registry"), profiles=("full", "quick", "latest", "v8"), expected_warnings=("Duplicate name:",)),
+    _callable("v83.public_trust_center_anchor_transparency_smoke", "v8.3 public trust center anchor transparency smoke", "_v83_public_trust_center_anchor_transparency_smoke", group="trust", version="8.3", risk="critical", timeout_seconds=600, tags=("v8", "trust", "anchor", "transparency"), profiles=("full", "quick", "latest", "v8"), expected_warnings=("Duplicate name:",)),
 )
 
 KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "publish"}

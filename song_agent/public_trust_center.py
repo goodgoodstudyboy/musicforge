@@ -391,9 +391,13 @@ class PublicTrustCenterStore:
             require_operations_reviewer_pack=bool(payload.get("require_operations_reviewer_pack", False)),
             delivery_anchor_path=payload.get("delivery_anchor_path") or self.delivery_anchor_path(center_id),
             anchor_registry_path=payload.get("anchor_registry_path"),
+            anchor_transparency_path=payload.get("anchor_transparency_path"),
+            anchor_checkpoint_path=payload.get("anchor_checkpoint_path"),
             require_anchor_registry_current=bool(payload.get("require_anchor_registry_current", False)),
             require_anchor_published=bool(payload.get("require_anchor_published", False)),
             require_anchor_not_revoked=bool(payload.get("require_anchor_not_revoked", False)),
+            require_anchor_transparency_current=bool(payload.get("require_anchor_transparency_current", False)),
+            require_anchor_checkpoint=bool(payload.get("require_anchor_checkpoint", False)),
             now=now,
         )
         write_public_trust_center_verification_report(report, self.verification_report_path(center_id))

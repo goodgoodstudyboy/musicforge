@@ -887,9 +887,13 @@ def build_verify_public_trust_center_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-operations-reviewer-pack", action="store_true", help="Require verified Release Operations Reviewer Pack evidence.")
     verify_parser.add_argument("--delivery-anchor", type=Path, default=None, help="Path to an external Public Trust Center delivery anchor JSON file.")
     verify_parser.add_argument("--anchor-registry", type=Path, default=None, help="Path to a Public Trust Center Anchor Registry ZIP.")
+    verify_parser.add_argument("--anchor-transparency", type=Path, default=None, help="Path to a Public Trust Center Anchor Transparency ZIP.")
+    verify_parser.add_argument("--anchor-checkpoint", type=Path, default=None, help="Path to an external Anchor Transparency checkpoint JSON.")
     verify_parser.add_argument("--require-anchor-registry-current", action="store_true", help="Require the Anchor Registry current entry to match this package.")
     verify_parser.add_argument("--require-anchor-published", action="store_true", help="Require the Anchor Registry current entry to be published.")
     verify_parser.add_argument("--require-anchor-not-revoked", action="store_true", help="Require the Anchor Registry current entry not to be revoked.")
+    verify_parser.add_argument("--require-anchor-transparency-current", action="store_true", help="Require Anchor Transparency evidence to match this package.")
+    verify_parser.add_argument("--require-anchor-checkpoint", action="store_true", help="Require an external Anchor Transparency checkpoint.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=250, help="Maximum number of ZIP entries.")
@@ -908,6 +912,23 @@ def build_verify_public_trust_center_anchor_registry_parser() -> argparse.Argume
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=200, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_public_trust_center_anchor_transparency_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Anchor Transparency ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Anchor Transparency ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--checkpoint", type=Path, default=None, help="External Anchor Transparency checkpoint JSON.")
+    verify_parser.add_argument("--anchor-registry", type=Path, default=None, help="External Anchor Registry ZIP.")
+    verify_parser.add_argument("--require-current-checkpoint", action="store_true", help="Require a current checkpoint.")
+    verify_parser.add_argument("--require-published-anchor", action="store_true", help="Require the checkpoint current anchor to be published.")
+    verify_parser.add_argument("--require-not-revoked", action="store_true", help="Require the checkpoint current anchor not to be revoked.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=250, help="Maximum number of ZIP entries.")
     return verify_parser
 
 
@@ -930,6 +951,11 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--anchor-zip", action="store_true", help="Build the Anchor Registry ZIP.")
     parser.add_argument("--anchor-verify", action="store_true", help="Verify the Anchor Registry ZIP.")
     parser.add_argument("--anchor-reason", default="Public Trust Center anchor registry operation", help="Reason for Anchor Registry state changes.")
+    parser.add_argument("--anchor-transparency-refresh", action="store_true", help="Refresh the Anchor Transparency ledger/report.")
+    parser.add_argument("--anchor-checkpoint-create", action="store_true", help="Create the current Anchor Transparency checkpoint.")
+    parser.add_argument("--anchor-transparency-export", action="store_true", help="Export the Anchor Transparency package directory.")
+    parser.add_argument("--anchor-transparency-zip", action="store_true", help="Build the Anchor Transparency ZIP.")
+    parser.add_argument("--anchor-transparency-verify", action="store_true", help="Verify the Anchor Transparency ZIP.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-registry-current", action="store_true", help="Require current Registry evidence.")
     parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
@@ -962,6 +988,8 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-anchor-registry-current", action="store_true", help="Verifier requires current Anchor Registry evidence.")
     parser.add_argument("--require-anchor-published", action="store_true", help="Verifier requires a published Anchor Registry current entry.")
     parser.add_argument("--require-anchor-not-revoked", action="store_true", help="Verifier requires the Anchor Registry current entry not to be revoked.")
+    parser.add_argument("--require-anchor-transparency-current", action="store_true", help="Verifier requires current Anchor Transparency evidence.")
+    parser.add_argument("--require-anchor-checkpoint", action="store_true", help="Verifier requires an external Anchor Transparency checkpoint.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2150,9 +2178,13 @@ def _main() -> None:
             require_operations_reviewer_pack=args.require_operations_reviewer_pack,
             delivery_anchor_path=args.delivery_anchor,
             anchor_registry_path=args.anchor_registry,
+            anchor_transparency_path=args.anchor_transparency,
+            anchor_checkpoint_path=args.anchor_checkpoint,
             require_anchor_registry_current=args.require_anchor_registry_current,
             require_anchor_published=args.require_anchor_published,
             require_anchor_not_revoked=args.require_anchor_not_revoked,
+            require_anchor_transparency_current=args.require_anchor_transparency_current,
+            require_anchor_checkpoint=args.require_anchor_checkpoint,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -2191,6 +2223,35 @@ def _main() -> None:
         else:
             print_public_trust_center_anchor_registry_verification_report(report)
         raise SystemExit(public_trust_center_anchor_registry_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-anchor-transparency-package":
+        from song_agent.public_trust_center_anchor_transparency_verifier import (
+            print_public_trust_center_anchor_transparency_verification_report,
+            public_trust_center_anchor_transparency_verification_exit_code,
+            verify_public_trust_center_anchor_transparency_package,
+            write_public_trust_center_anchor_transparency_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_anchor_transparency_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_anchor_transparency_package(
+            args.zip_path,
+            strict=args.strict,
+            checkpoint_path=args.checkpoint,
+            anchor_registry_path=args.anchor_registry,
+            require_current_checkpoint=args.require_current_checkpoint,
+            require_published_anchor=args.require_published_anchor,
+            require_not_revoked=args.require_not_revoked,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_anchor_transparency_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_anchor_transparency_verification_report(report)
+        raise SystemExit(public_trust_center_anchor_transparency_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3498,11 +3559,17 @@ def _main() -> None:
             verify_public_trust_center_anchor_registry_package,
             write_public_trust_center_anchor_registry_verification_report,
         )
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore, anchor_transparency_summary
+        from song_agent.public_trust_center_anchor_transparency_verifier import (
+            verify_public_trust_center_anchor_transparency_package,
+            write_public_trust_center_anchor_transparency_verification_report,
+        )
 
         parser = build_public_trust_center_parser()
         args = parser.parse_args(raw_args[1:])
         store = _build_public_trust_center_store()
         anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=store)
+        anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
         payload: dict[str, Any] = {
             "center_id": args.center_id,
             "attestation_profile": args.profile,
@@ -3562,9 +3629,15 @@ def _main() -> None:
                 "require_anchor_registry_current": args.require_anchor_registry_current,
                 "require_anchor_published": args.require_anchor_published,
                 "require_anchor_not_revoked": args.require_anchor_not_revoked,
+                "require_anchor_transparency_current": args.require_anchor_transparency_current,
+                "require_anchor_checkpoint": args.require_anchor_checkpoint,
             }
             if args.require_anchor_registry_current or args.require_anchor_published or args.require_anchor_not_revoked:
                 verify_payload["anchor_registry_path"] = anchor_store.zip_path(args.center_id)
+            if args.require_anchor_transparency_current or args.require_anchor_checkpoint:
+                verify_payload["anchor_transparency_path"] = anchor_transparency_store.zip_path(args.center_id)
+            if args.require_anchor_checkpoint:
+                verify_payload["anchor_checkpoint_path"] = anchor_transparency_store.current_checkpoint_path(args.center_id)
             verification = store.verify_zip(args.center_id, verify_payload)
             result["verification"] = verification
             result["verification_summary"] = verification.get("summary", {})
@@ -3602,6 +3675,30 @@ def _main() -> None:
             write_public_trust_center_anchor_registry_verification_report(anchor_verification, anchor_store.verification_report_path(args.center_id))
             result["anchor_verification"] = anchor_verification
             result["anchor_verification_summary"] = anchor_verification.get("summary", {})
+        if args.anchor_transparency_refresh:
+            report = anchor_transparency_store.refresh_report(args.center_id, {"reason": args.anchor_reason})
+            result["anchor_transparency"] = report
+            result["anchor_transparency_summary"] = anchor_transparency_summary(report)
+        if args.anchor_checkpoint_create:
+            checkpoint = anchor_transparency_store.create_checkpoint(args.center_id, {"reason": args.anchor_reason})
+            result["anchor_checkpoint"] = checkpoint
+        if args.anchor_transparency_export:
+            result["anchor_transparency_manifest"] = anchor_transparency_store.export_transparency(args.center_id)
+        if args.anchor_transparency_zip:
+            result["anchor_transparency_zip"] = anchor_transparency_store.build_zip(args.center_id)
+        if args.anchor_transparency_verify:
+            transparency_verification = verify_public_trust_center_anchor_transparency_package(
+                anchor_transparency_store.zip_path(args.center_id),
+                strict=args.strict,
+                checkpoint_path=anchor_transparency_store.current_checkpoint_path(args.center_id),
+                anchor_registry_path=anchor_store.zip_path(args.center_id),
+                require_current_checkpoint=args.require_anchor_transparency_current or args.require_anchor_checkpoint,
+                require_published_anchor=args.require_anchor_published or args.require_anchor_registry_current,
+                require_not_revoked=args.require_anchor_not_revoked,
+            )
+            write_public_trust_center_anchor_transparency_verification_report(transparency_verification, anchor_transparency_store.verification_report_path(args.center_id))
+            result["anchor_transparency_verification"] = transparency_verification
+            result["anchor_transparency_verification_summary"] = transparency_verification.get("summary", {})
         if args.report_out is not None:
             write_json(args.report_out, result)
         if args.json:

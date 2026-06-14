@@ -1,5 +1,16 @@
 # Changelog
 
+## v8.3.0 - 2026-06-14
+
+### Added
+- Public Trust Center Anchor Transparency Ledger with checkpoint creation, export, ZIP, and offline verification.
+- `verify-public-trust-center-anchor-transparency-package` CLI and Public Trust Center CLI/API/Studio controls for transparency workflows.
+- Public Trust Center verifier support for `--anchor-transparency`, `--anchor-checkpoint`, `--require-anchor-transparency-current`, and `--require-anchor-checkpoint`.
+- release-check v8.3 smoke covering checkpoint binding, full ledger re-sign tamper, registry summary tamper, ZIP safety, manifest spoofing, and redaction.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_anchor_transparency.py tests\test_cli_public_trust_center.py::test_public_trust_center_anchor_transparency_cli tests\test_server_public_trust_center.py::test_server_public_trust_center_api tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v83_public_trust_center_anchor_transparency_smoke -q`
+
 ## v8.2.0 - 2026-06-13
 
 ### Added

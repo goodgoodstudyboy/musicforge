@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tests.test_public_trust_center import _trust_center_fixture
 from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
 
 
 def test_public_trust_center_cli_export_verify(tmp_path: Path, monkeypatch) -> None:
@@ -194,3 +195,88 @@ def test_public_trust_center_anchor_registry_cli(tmp_path: Path, monkeypatch) ->
     ptc_payload = json.loads(ptc_verify.stdout)
     assert any(item["check_id"] == "ptc_anchor_registry_current_anchor" for item in ptc_payload["checks"])
     assert all(not item["check_id"].startswith("ptc_anchor_registry") for item in ptc_payload["blockers"])
+
+
+def test_public_trust_center_anchor_transparency_cli(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    portfolio_id, _ack_store, store = _trust_center_fixture(Path(".musicforge"), monkeypatch)
+    store.refresh_report("ptc-default", {"portfolio_ids": [portfolio_id], "include_all_releases": False, "include_all_portfolios": False})
+    store.export_center("ptc-default")
+    store.build_zip("ptc-default")
+    anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=store)
+    anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "public-trust-center",
+            "--center-id",
+            "ptc-default",
+            "--anchor-register",
+            "--anchor-publish",
+            "--anchor-export",
+            "--anchor-zip",
+            "--anchor-verify",
+            "--anchor-transparency-refresh",
+            "--anchor-checkpoint-create",
+            "--anchor-transparency-export",
+            "--anchor-transparency-zip",
+            "--anchor-transparency-verify",
+            "--require-anchor-registry-current",
+            "--require-anchor-published",
+            "--require-anchor-not-revoked",
+            "--require-anchor-transparency-current",
+            "--require-anchor-checkpoint",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["anchor_transparency_verification"]["status"] == "passed"
+    assert payload["anchor_transparency_summary"]["status"] == "current"
+    assert anchor_transparency_store.zip_path("ptc-default").exists()
+    assert anchor_transparency_store.current_checkpoint_path("ptc-default").exists()
+
+    report_out = tmp_path / "anchor-transparency-verification.json"
+    verify = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-public-trust-center-anchor-transparency-package",
+            str(anchor_transparency_store.zip_path("ptc-default")),
+            "--json",
+            "--strict",
+            "--checkpoint",
+            str(anchor_transparency_store.current_checkpoint_path("ptc-default")),
+            "--anchor-registry",
+            str(anchor_store.zip_path("ptc-default")),
+            "--require-current-checkpoint",
+            "--require-published-anchor",
+            "--require-not-revoked",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert verify.returncode == 0, verify.stderr
+    verified = json.loads(verify.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+    assert verified["status"] == "passed"
+    assert saved["checkpoint_hash"]

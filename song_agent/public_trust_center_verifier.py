@@ -90,9 +90,13 @@ def verify_public_trust_center_package(
     now: str | None = None,
     delivery_anchor_path: Path | str | None = None,
     anchor_registry_path: Path | str | None = None,
+    anchor_transparency_path: Path | str | None = None,
+    anchor_checkpoint_path: Path | str | None = None,
     require_anchor_registry_current: bool = False,
     require_anchor_published: bool = False,
     require_anchor_not_revoked: bool = False,
+    require_anchor_transparency_current: bool = False,
+    require_anchor_checkpoint: bool = False,
 ) -> dict[str, Any]:
     verifier = _PublicTrustCenterVerifier(
         Path(zip_path),
@@ -116,9 +120,13 @@ def verify_public_trust_center_package(
         now=now,
         delivery_anchor_path=Path(delivery_anchor_path) if delivery_anchor_path is not None else None,
         anchor_registry_path=Path(anchor_registry_path) if anchor_registry_path is not None else None,
+        anchor_transparency_path=Path(anchor_transparency_path) if anchor_transparency_path is not None else None,
+        anchor_checkpoint_path=Path(anchor_checkpoint_path) if anchor_checkpoint_path is not None else None,
         require_anchor_registry_current=require_anchor_registry_current,
         require_anchor_published=require_anchor_published,
         require_anchor_not_revoked=require_anchor_not_revoked,
+        require_anchor_transparency_current=require_anchor_transparency_current,
+        require_anchor_checkpoint=require_anchor_checkpoint,
     )
     return verifier.run()
 
@@ -173,9 +181,13 @@ class _PublicTrustCenterVerifier:
         now: str | None,
         delivery_anchor_path: Path | None,
         anchor_registry_path: Path | None,
+        anchor_transparency_path: Path | None,
+        anchor_checkpoint_path: Path | None,
         require_anchor_registry_current: bool,
         require_anchor_published: bool,
         require_anchor_not_revoked: bool,
+        require_anchor_transparency_current: bool,
+        require_anchor_checkpoint: bool,
     ) -> None:
         self.zip_path = zip_path
         self.strict = strict
@@ -198,11 +210,16 @@ class _PublicTrustCenterVerifier:
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
         self.delivery_anchor_path = delivery_anchor_path
         self.anchor_registry_path = anchor_registry_path
+        self.anchor_transparency_path = anchor_transparency_path
+        self.anchor_checkpoint_path = anchor_checkpoint_path
         self.require_anchor_registry_current = require_anchor_registry_current
         self.require_anchor_published = require_anchor_published
         self.require_anchor_not_revoked = require_anchor_not_revoked
+        self.require_anchor_transparency_current = require_anchor_transparency_current
+        self.require_anchor_checkpoint = require_anchor_checkpoint
         self.delivery_anchor_doc: dict[str, Any] = {}
         self.anchor_registry_verification: dict[str, Any] = {}
+        self.anchor_transparency_verification: dict[str, Any] = {}
         self.checks: list[dict[str, Any]] = []
         self.files: list[dict[str, Any]] = []
         self.redaction_findings: list[dict[str, Any]] = []
@@ -232,6 +249,7 @@ class _PublicTrustCenterVerifier:
                 self._verify_requirements()
                 self._verify_delivery_anchor()
                 self._verify_anchor_registry()
+                self._verify_anchor_transparency()
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -618,6 +636,11 @@ class _PublicTrustCenterVerifier:
                 self.require_operations_signed,
                 self.require_operations_audit,
                 self.require_operations_reviewer_pack,
+                self.anchor_registry_path is not None,
+                self.anchor_transparency_path is not None,
+                self.require_anchor_registry_current,
+                self.require_anchor_transparency_current,
+                self.require_anchor_checkpoint,
             )
         )
         if not required:
@@ -683,6 +706,54 @@ class _PublicTrustCenterVerifier:
         if self.require_anchor_not_revoked:
             ok = bool(current) and current.get("status") != "revoked"
             self._add_check("requirements", "ptc_anchor_registry_not_revoked", "passed" if ok else "failed", "blocking", "Anchor Registry current entry is not revoked." if ok else "Anchor Registry current entry is revoked or missing.")
+
+    def _verify_anchor_transparency(self) -> None:
+        required = self.require_anchor_transparency_current or self.require_anchor_checkpoint or self.anchor_transparency_path is not None or self.anchor_checkpoint_path is not None
+        if not required:
+            return
+        if self.anchor_transparency_path is None:
+            self._add_check("requirements", "ptc_anchor_transparency_present", "failed", "blocking", "Anchor Transparency ZIP is required.")
+            return
+        if not self.anchor_transparency_path.exists() or not self.anchor_transparency_path.is_file() or self.anchor_transparency_path.is_symlink():
+            self._add_check("requirements", "ptc_anchor_transparency_present", "failed", "blocking", "Anchor Transparency ZIP does not exist or is not a regular file.")
+            return
+        if self.require_anchor_checkpoint and self.anchor_checkpoint_path is None:
+            self._add_check("requirements", "ptc_anchor_checkpoint_present", "failed", "blocking", "External anchor checkpoint is required.")
+            return
+        try:
+            from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package
+        except Exception as exc:
+            self._add_check("requirements", "ptc_anchor_transparency_import", "failed", "blocking", f"Anchor Transparency verifier cannot be imported: {exc}")
+            return
+        transparency_report = verify_public_trust_center_anchor_transparency_package(
+            self.anchor_transparency_path,
+            strict=self.strict,
+            checkpoint_path=self.anchor_checkpoint_path,
+            anchor_registry_path=self.anchor_registry_path,
+            require_current_checkpoint=self.require_anchor_transparency_current or self.require_anchor_checkpoint,
+            require_published_anchor=self.require_anchor_published or self.require_anchor_registry_current,
+            require_not_revoked=self.require_anchor_not_revoked,
+            max_zip_size_mb=self.max_zip_size_mb,
+            max_uncompressed_size_mb=self.max_uncompressed_size_mb,
+            max_entry_count=self.max_entry_count,
+            now=self.generated_at,
+        )
+        self.anchor_transparency_verification = transparency_report
+        self._add_exact_check("requirements", "ptc_anchor_transparency_verification_status", transparency_report.get("status"), "passed", "Anchor Transparency verification status")
+        source = _read_zip_json(self.anchor_transparency_path, "anchor-transparency-report.json").get("source", {})
+        if not isinstance(source, dict):
+            source = {}
+        self._add_hash_check("requirements", "ptc_anchor_transparency_ptc_zip_sha256", source.get("ptc_zip_sha256"), self.zip_sha256, "Anchor Transparency PTC ZIP sha256")
+        self._add_hash_check("requirements", "ptc_anchor_transparency_ptc_manifest_hash", source.get("ptc_manifest_hash"), self.manifest.get("integrity_hash"), "Anchor Transparency PTC manifest hash")
+        self._add_hash_check("requirements", "ptc_anchor_transparency_ptc_source_hash", source.get("ptc_source_hash"), self.report_doc.get("source_hash"), "Anchor Transparency PTC source hash")
+        if self.delivery_anchor_doc:
+            self._add_hash_check("requirements", "ptc_anchor_transparency_anchor_hash", source.get("current_anchor_hash"), self.delivery_anchor_doc.get("anchor_hash"), "Anchor Transparency current anchor hash")
+        if self.anchor_registry_verification:
+            self._add_hash_check("requirements", "ptc_anchor_transparency_registry_zip_sha256", source.get("registry_zip_sha256"), self.anchor_registry_verification.get("zip_sha256"), "Anchor Transparency Anchor Registry ZIP sha256")
+            self._add_hash_check("requirements", "ptc_anchor_transparency_registry_manifest_hash", source.get("registry_manifest_hash"), self.anchor_registry_verification.get("manifest_hash"), "Anchor Transparency Anchor Registry manifest hash")
+        if self.require_anchor_transparency_current:
+            checkpoint_hash = transparency_report.get("checkpoint_hash")
+            self._add_check("requirements", "ptc_anchor_transparency_checkpoint_current", "passed" if checkpoint_hash else "failed", "blocking", "Anchor Transparency current checkpoint is present." if checkpoint_hash else "Anchor Transparency current checkpoint is required.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:

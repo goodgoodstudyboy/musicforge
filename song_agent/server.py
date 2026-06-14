@@ -332,6 +332,17 @@ from song_agent.public_trust_center_anchor_registry_verifier import (
     verify_public_trust_center_anchor_registry_package,
     write_public_trust_center_anchor_registry_verification_report,
 )
+from song_agent.public_trust_center_anchor_transparency import (
+    PublicTrustCenterAnchorTransparencyError,
+    PublicTrustCenterAnchorTransparencyNotFoundError,
+    PublicTrustCenterAnchorTransparencyStateError,
+    PublicTrustCenterAnchorTransparencyStore,
+    anchor_transparency_summary as public_trust_center_anchor_transparency_summary,
+)
+from song_agent.public_trust_center_anchor_transparency_verifier import (
+    verify_public_trust_center_anchor_transparency_package,
+    write_public_trust_center_anchor_transparency_verification_report,
+)
 from song_agent.public_trust_center_verifier import (
     verify_public_trust_center_package,
     write_public_trust_center_verification_report,
@@ -2864,6 +2875,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def public_trust_center_anchor_registry_store(self) -> PublicTrustCenterAnchorRegistryStore:
         return self.server.public_trust_center_anchor_registry_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_anchor_transparency_store(self) -> PublicTrustCenterAnchorTransparencyStore:
+        return self.server.public_trust_center_anchor_transparency_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -7222,9 +7237,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     require_operations_reviewer_pack=bool(payload.get("require_operations_reviewer_pack", False)),
                     delivery_anchor_path=self.public_trust_center_store.delivery_anchor_path(center_id),
                     anchor_registry_path=self.public_trust_center_anchor_registry_store.zip_path(center_id) if bool(payload.get("require_anchor_registry_current", False)) or bool(payload.get("require_anchor_published", False)) or bool(payload.get("require_anchor_not_revoked", False)) or bool(payload.get("use_anchor_registry", False)) else None,
+                    anchor_transparency_path=self.public_trust_center_anchor_transparency_store.zip_path(center_id) if bool(payload.get("require_anchor_transparency_current", False)) or bool(payload.get("require_anchor_checkpoint", False)) or bool(payload.get("use_anchor_transparency", False)) else None,
+                    anchor_checkpoint_path=self.public_trust_center_anchor_transparency_store.current_checkpoint_path(center_id) if bool(payload.get("require_anchor_checkpoint", False)) or bool(payload.get("use_anchor_transparency", False)) else None,
                     require_anchor_registry_current=bool(payload.get("require_anchor_registry_current", False)),
                     require_anchor_published=bool(payload.get("require_anchor_published", False)),
                     require_anchor_not_revoked=bool(payload.get("require_anchor_not_revoked", False)),
+                    require_anchor_transparency_current=bool(payload.get("require_anchor_transparency_current", False)),
+                    require_anchor_checkpoint=bool(payload.get("require_anchor_checkpoint", False)),
                 )
                 write_public_trust_center_verification_report(report, self.public_trust_center_store.verification_report_path(center_id))
                 self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
@@ -7291,6 +7310,63 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Anchor Registry route not found.")
                 return
+            if action == "anchor-transparency":
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.public_trust_center_anchor_transparency_store.read_report(center_id, default={})
+                    checkpoint = self.public_trust_center_anchor_transparency_store.read_checkpoint(center_id, default={})
+                    self._send_json({"ok": True, "center_id": center_id, "report": report, "checkpoint": checkpoint, "summary": self.public_trust_center_anchor_transparency_store.summary(center_id)})
+                    return
+                subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "download" and len(parts) == 3:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.public_trust_center_anchor_transparency_store.zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-anchor-transparency.zip")
+                    return
+                if subaction == "checkpoint" and len(parts) == 3:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.public_trust_center_anchor_transparency_store.current_checkpoint_path(center_id), "application/json", filename=f"musicforge-{center_id}-anchor-checkpoint.json")
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                if subaction == "refresh" and len(parts) == 3:
+                    report = self.public_trust_center_anchor_transparency_store.refresh_report(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "report": report, "summary": public_trust_center_anchor_transparency_summary(report)}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "checkpoint" and len(parts) == 4 and parts[3] == "create":
+                    checkpoint = self.public_trust_center_anchor_transparency_store.create_checkpoint(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "checkpoint": checkpoint}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "export" and len(parts) == 3:
+                    manifest = self.public_trust_center_anchor_transparency_store.export_transparency(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "manifest": manifest, "summary": {"source_hash": manifest.get("source_hash"), "package_type": manifest.get("package_type")}}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "zip" and len(parts) == 3:
+                    zip_info = self.public_trust_center_anchor_transparency_store.build_zip(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "zip": zip_info})
+                    return
+                if subaction == "verify" and len(parts) == 3:
+                    report = verify_public_trust_center_anchor_transparency_package(
+                        self.public_trust_center_anchor_transparency_store.zip_path(center_id),
+                        strict=bool(payload.get("strict", True)),
+                        checkpoint_path=self.public_trust_center_anchor_transparency_store.current_checkpoint_path(center_id) if bool(payload.get("require_current_checkpoint", False)) or bool(payload.get("use_checkpoint", False)) else None,
+                        anchor_registry_path=self.public_trust_center_anchor_registry_store.zip_path(center_id) if bool(payload.get("use_anchor_registry", False)) or bool(payload.get("require_published_anchor", False)) or bool(payload.get("require_not_revoked", False)) else None,
+                        require_current_checkpoint=bool(payload.get("require_current_checkpoint", False)),
+                        require_published_anchor=bool(payload.get("require_published_anchor", False)),
+                        require_not_revoked=bool(payload.get("require_not_revoked", False)),
+                    )
+                    write_public_trust_center_anchor_transparency_verification_report(report, self.public_trust_center_anchor_transparency_store.verification_report_path(center_id))
+                    self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Anchor Transparency route not found.")
+                return
             if action == "archive" and len(parts) == 2:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -7310,6 +7386,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except PublicTrustCenterAnchorRegistryStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except PublicTrustCenterAnchorRegistryError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except PublicTrustCenterAnchorTransparencyNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterAnchorTransparencyStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterAnchorTransparencyError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -16261,6 +16343,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         )
         self.public_trust_center_anchor_registry_store = PublicTrustCenterAnchorRegistryStore(
             trust_center_store=self.public_trust_center_store,
+        )
+        self.public_trust_center_anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(
+            anchor_registry_store=self.public_trust_center_anchor_registry_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()
