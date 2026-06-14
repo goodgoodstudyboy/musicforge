@@ -12576,7 +12576,7 @@ def _v83_public_trust_center_anchor_transparency_smoke(root: Path) -> tuple[bool
         from song_agent.public_trust_center import PublicTrustCenterStore
         from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
         from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package, write_public_trust_center_anchor_registry_verification_report
-        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore, anchor_checkpoint_hash, anchor_transparency_event_hash, anchor_transparency_manifest_hash, anchor_transparency_report_hash
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStateError, PublicTrustCenterAnchorTransparencyStore, anchor_checkpoint_hash, anchor_transparency_event_hash, anchor_transparency_manifest_hash, anchor_transparency_report_hash
         from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package
         from song_agent.public_trust_center_verifier import verify_public_trust_center_package
         from song_agent.releases import ReleaseStore
@@ -12667,6 +12667,17 @@ def _v83_public_trust_center_anchor_transparency_smoke(root: Path) -> tuple[bool
         nested = verify_public_trust_center_anchor_transparency_package(_v38_rewrite_zip(source_zip, base / "transparency-nested.zip", additions={"nested/fake.zip": b"PK\x05\x06" + b"\0" * 18}), strict=True)
         spoof = verify_public_trust_center_anchor_transparency_package(_v38_rewrite_zip(source_zip, base / "transparency-spoof.zip", additions={"extra.txt": b"extra"}, transforms={"anchor-transparency-manifest.json": _v83_spoof_transparency_manifest}), strict=True)
         redaction = verify_public_trust_center_anchor_transparency_package(_v38_rewrite_zip(source_zip, base / "transparency-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        anchor_store.revoke_entry("ptc-default", str(report.get("source", {}).get("current_entry_id") or ""), {"reason": "release-check stale transparency"})
+        stale_export_blocked = False
+        stale_zip_blocked = False
+        try:
+            transparency_store.export_transparency("ptc-default")
+        except PublicTrustCenterAnchorTransparencyStateError:
+            stale_export_blocked = True
+        try:
+            transparency_store.build_zip("ptc-default")
+        except PublicTrustCenterAnchorTransparencyStateError:
+            stale_zip_blocked = True
 
         serialized = json.dumps({"report": report, "manifest": manifest, "verification": verification, "checkpoint": checkpoint}, ensure_ascii=False)
         ok = (
@@ -12686,6 +12697,8 @@ def _v83_public_trust_center_anchor_transparency_smoke(root: Path) -> tuple[bool
             and _v38_check_status(nested, "ptcat_zip_no_nested_internal_entries") == "failed"
             and _v38_check_status(spoof, "ptcat_manifest_zip_entries_reference_only") == "failed"
             and _v38_check_status(redaction, "ptcat_redaction_scan") == "failed"
+            and stale_export_blocked
+            and stale_zip_blocked
             and str(base) not in serialized
             and "sk-secret-value" not in serialized
             and "api_key" not in serialized
@@ -12698,7 +12711,8 @@ def _v83_public_trust_center_anchor_transparency_smoke(root: Path) -> tuple[bool
             f"checkpoint={_v38_check_status(checkpoint_tamper, 'ptcat_current_checkpoint_current_anchor_hash')}, registry={_v38_check_status(registry_summary_tamper, 'ptcat_registry_verification_zip_sha256')}, "
             f"duplicate={_v38_check_status(duplicate, 'ptcat_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'ptcat_zip_entry_path_safe')}, "
             f"backslash={_v38_check_status(backslash, 'ptcat_zip_entry_path_safe')}, case_musicforge={_v38_check_status(case_musicforge, 'ptcat_zip_no_nested_internal_entries')}, "
-            f"nested={_v38_check_status(nested, 'ptcat_zip_no_nested_internal_entries')}, spoof={_v38_check_status(spoof, 'ptcat_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptcat_redaction_scan')}"
+            f"nested={_v38_check_status(nested, 'ptcat_zip_no_nested_internal_entries')}, spoof={_v38_check_status(spoof, 'ptcat_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction, 'ptcat_redaction_scan')}, stale_export={stale_export_blocked}, stale_zip={stale_zip_blocked}"
         )
     except Exception as exc:
         return False, str(exc)

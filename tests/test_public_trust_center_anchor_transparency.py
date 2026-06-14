@@ -107,6 +107,27 @@ def test_anchor_transparency_verifier_rejects_tamper_and_zip_edges(tmp_path: Pat
     assert _has_blocker(verify_public_trust_center_anchor_transparency_package(redaction, strict=True), "ptcat_redaction_scan")
 
 
+def test_anchor_transparency_export_rejects_current_registry_stale(tmp_path: Path, monkeypatch) -> None:
+    _portfolio_id, _trust_store, anchor_store, transparency_store = _anchor_transparency_fixture(tmp_path, monkeypatch)
+    report = transparency_store.refresh_report("ptc-default")
+    entry_id = str(report["source"]["current_entry_id"])
+    anchor_store.revoke_entry("ptc-default", entry_id, {"reason": "stale transparency export"})
+
+    with pytest.raises(PublicTrustCenterAnchorTransparencyStateError, match="stale"):
+        transparency_store.export_transparency("ptc-default")
+
+
+def test_anchor_transparency_zip_rejects_current_registry_stale(tmp_path: Path, monkeypatch) -> None:
+    _portfolio_id, _trust_store, anchor_store, transparency_store = _anchor_transparency_fixture(tmp_path, monkeypatch)
+    report = transparency_store.refresh_report("ptc-default")
+    transparency_store.export_transparency("ptc-default")
+    entry_id = str(report["source"]["current_entry_id"])
+    anchor_store.revoke_entry("ptc-default", entry_id, {"reason": "stale transparency zip"})
+
+    with pytest.raises(PublicTrustCenterAnchorTransparencyStateError, match="stale"):
+        transparency_store.build_zip("ptc-default")
+
+
 def _anchor_transparency_fixture(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     portfolio_id, _ack_store, trust_store = _trust_center_fixture(tmp_path, monkeypatch)

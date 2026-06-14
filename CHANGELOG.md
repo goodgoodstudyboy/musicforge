@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.3.1 - 2026-06-14
+
+### Fixed
+- Anchor Transparency export and ZIP creation now re-check the current Anchor Registry state before writing artifacts, so a registry revoke/supersede after report refresh blocks stale transparency packages instead of producing verifier-failed ZIPs.
+- release-check v8.3 smoke now covers refresh -> registry revoke -> export/ZIP rejection.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_anchor_transparency.py tests\test_release_check.py::test_v83_public_trust_center_anchor_transparency_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --skip-tests --json`
+
 ## v8.3.0 - 2026-06-14
 
 ### Added

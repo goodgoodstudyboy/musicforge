@@ -264,7 +264,10 @@ class PublicTrustCenterAnchorTransparencyStore:
         with self.lock:
             now = now or now_iso()
             del payload
+            events = self.read_ledger(center_id)
             report = self.read_report(center_id, default={})
+            checkpoint = self.read_checkpoint(center_id, default={})
+            self._ensure_exportable(center_id, events, report, checkpoint)
             state = _state_row(report)
             if self._history_has_state_event(center_id, state, "transparency_zip_built"):
                 raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency ZIP already exists for this source state.")
@@ -430,6 +433,11 @@ class PublicTrustCenterAnchorTransparencyStore:
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report source hash failed.")
         current_source = self._source_from_current(center_id, events, checkpoint)
         if report.get("source") != current_source:
+            raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report is stale. Refresh before export.")
+        latest = events[-1] if events else {}
+        latest_state = latest.get("state") if isinstance(latest.get("state"), dict) else {}
+        registry_state = self._current_registry_state(center_id)
+        if latest_state.get("state_hash") != registry_state.get("state_hash"):
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report is stale. Refresh before export.")
         if report.get("status") == "failed":
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report is failed.")
