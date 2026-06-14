@@ -1,6 +1,6 @@
 [project]
 name = "song-agent"
-version = "8.3.1"
+version = "8.4.0"
 description = "Open songwriting agent that uses LLM APIs and open renderers."
 requires-python = ">=3.11"
 dependencies = []

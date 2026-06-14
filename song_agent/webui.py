@@ -3716,6 +3716,11 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="public-trust-center-anchor-transparency-verify" type="button">Verify Anchor Transparency</button>
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/anchor-transparency/download">Download Anchor Transparency ZIP</a>
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/anchor-transparency/checkpoint">Download Anchor Checkpoint</a>
+          <button class="secondary" id="public-trust-center-distribution-kit-refresh" type="button">Refresh Distribution Kit</button>
+          <button class="secondary" id="public-trust-center-distribution-kit-export" type="button">Export Distribution Kit</button>
+          <button class="secondary" id="public-trust-center-distribution-kit-zip" type="button">Build Distribution Kit ZIP</button>
+          <button class="secondary" id="public-trust-center-distribution-kit-verify" type="button">Verify Distribution Kit</button>
+          <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/distribution-kit/download">Download Distribution Kit ZIP</a>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4318,6 +4323,26 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ strict: true, use_checkpoint: true, use_anchor_registry: true, require_current_checkpoint: true, require_published_anchor: true, require_not_revoked: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-refresh", async () => {
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/refresh`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-export", async () => {
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-zip", async () => {
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-distribution-kit-verify", async () => {
+        await api(`/api/public-trust-centers/ptc-default/distribution-kit/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, deep: true, require_current: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

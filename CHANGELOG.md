@@ -1,5 +1,16 @@
 # Changelog
 
+## v8.4.0 - 2026-06-14
+
+### Added
+- Public Trust Center Distribution Kit for bundling the Public Trust Center ZIP, delivery anchor, Anchor Registry ZIP, Anchor Transparency ZIP, current checkpoint, and verification reports into one external handoff package.
+- `verify-public-trust-center-distribution-kit-package` CLI with strict/deep offline verification, nested ZIP allow-list checks, manifest/hash validation, redaction scan, and stale package protection.
+- Public Trust Center CLI/API/Studio controls for Distribution Kit refresh, export, ZIP, verify, and download.
+- release-check v8.4 smoke covering nested package tamper, anchor/checkpoint tamper, duplicate/path/backslash/.MusicForge/nested ZIP safety, manifest spoofing, redaction, and stale export/ZIP rejection.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_distribution_kit.py tests\test_cli_public_trust_center.py::test_public_trust_center_distribution_kit_cli tests\test_server_public_trust_center.py::test_server_public_trust_center_api tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v84_public_trust_center_distribution_kit_smoke -q`
+
 ## v8.3.1 - 2026-06-14
 
 ### Fixed

@@ -12721,6 +12721,152 @@ def _v83_public_trust_center_anchor_transparency_smoke(root: Path) -> tuple[bool
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v84_public_trust_center_distribution_kit_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v84-distribution-kit-")).resolve()
+    try:
+        from song_agent.public_trust_center import PublicTrustCenterStore
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+        from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package, write_public_trust_center_anchor_registry_verification_report
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+        from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package, write_public_trust_center_anchor_transparency_verification_report
+        from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStateError, PublicTrustCenterDistributionKitStore
+        from song_agent.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package
+        from song_agent.releases import ReleaseStore
+
+        release_store = ReleaseStore(base / "releases")
+
+        class _DummyStore:
+            def list_portfolios(self, include_archived: bool = False) -> list[dict[str, Any]]:
+                return []
+
+        dummy_store = _DummyStore()
+        trust_store = PublicTrustCenterStore(
+            release_store=release_store,
+            portfolio_store=dummy_store,
+            registry_store=dummy_store,
+            portal_store=dummy_store,
+            transparency_store=dummy_store,
+            acknowledgement_store=dummy_store,
+        )
+        trust_store.refresh_report("ptc-default", {"include_all_releases": False, "include_all_portfolios": False})
+        trust_store.export_center("ptc-default")
+        trust_store.build_zip("ptc-default")
+
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+        entry = anchor_store.register_current_anchor("ptc-default", {"reason": "release-check register anchor"})["entry"]
+        anchor_store.publish_entry("ptc-default", str(entry["entry_id"]), {"reason": "release-check publish anchor"})
+        anchor_store.refresh_report("ptc-default")
+        anchor_store.export_registry("ptc-default")
+        anchor_store.build_zip("ptc-default")
+        registry_verification = verify_public_trust_center_anchor_registry_package(anchor_store.zip_path("ptc-default"), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        write_public_trust_center_anchor_registry_verification_report(registry_verification, anchor_store.verification_report_path("ptc-default"))
+
+        transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+        transparency_store.refresh_report("ptc-default")
+        transparency_store.create_checkpoint("ptc-default")
+        transparency_store.export_transparency("ptc-default")
+        transparency_store.build_zip("ptc-default")
+        transparency_verification = verify_public_trust_center_anchor_transparency_package(
+            transparency_store.zip_path("ptc-default"),
+            strict=True,
+            checkpoint_path=transparency_store.current_checkpoint_path("ptc-default"),
+            anchor_registry_path=anchor_store.zip_path("ptc-default"),
+            require_current_checkpoint=True,
+            require_published_anchor=True,
+            require_not_revoked=True,
+        )
+        write_public_trust_center_anchor_transparency_verification_report(transparency_verification, transparency_store.verification_report_path("ptc-default"))
+        trust_store.verify_zip(
+            "ptc-default",
+            {
+                "strict": True,
+                "require_delivery_readiness": False,
+                "anchor_registry_path": anchor_store.zip_path("ptc-default"),
+                "anchor_transparency_path": transparency_store.zip_path("ptc-default"),
+                "anchor_checkpoint_path": transparency_store.current_checkpoint_path("ptc-default"),
+                "require_anchor_registry_current": True,
+                "require_anchor_published": True,
+                "require_anchor_not_revoked": True,
+                "require_anchor_transparency_current": True,
+                "require_anchor_checkpoint": True,
+            },
+        )
+
+        kit_store = PublicTrustCenterDistributionKitStore(trust_center_store=trust_store, anchor_registry_store=anchor_store, anchor_transparency_store=transparency_store)
+        report = kit_store.refresh_report("ptc-default")
+        manifest = kit_store.export_kit("ptc-default")
+        zip_info = kit_store.build_zip("ptc-default")
+        verification = verify_public_trust_center_distribution_kit_package(kit_store.zip_path("ptc-default"), strict=True, deep=True, require_current=True, require_delivery_readiness=False)
+        source_zip = kit_store.zip_path("ptc-default")
+        ptc_tamper = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-ptc.zip", transforms={"packages/public-trust-center.zip": lambda data: data + b"x"}), strict=True, deep=True, require_delivery_readiness=False)
+        anchor_tamper = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-anchor.zip", transforms={"anchors/public-trust-center.delivery-anchor.json": lambda data: data + b"\n"}), strict=True, deep=True, require_delivery_readiness=False)
+        checkpoint_tamper = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-checkpoint.zip", transforms={"anchors/ptc-anchor-checkpoint-current.json": lambda data: data.replace(b"anchor", b"tamper", 1)}), strict=True, deep=True, require_delivery_readiness=False)
+        registry_tamper = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-registry.zip", transforms={"packages/public-trust-center-anchor-registry.zip": lambda data: data + b"x"}), strict=True, deep=True, require_delivery_readiness=False)
+        transparency_tamper = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-transparency.zip", transforms={"packages/public-trust-center-anchor-transparency.zip": lambda data: data + b"x"}), strict=True, deep=True, require_delivery_readiness=False)
+        duplicate = verify_public_trust_center_distribution_kit_package(_v43_duplicate_submission_zip(source_zip, base / "kit-duplicate.zip"), strict=True)
+        dangerous = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_public_trust_center_distribution_kit_package(_v38_backslash_entry_zip(base / "kit-backslash.zip"), strict=True)
+        case_musicforge = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-nested.zip", additions={"packages/extra.zip": b"PK\x05\x06" + b"\0" * 18}), strict=True)
+        spoof = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-spoof.zip", transforms={"distribution-kit-manifest.json": _v84_spoof_distribution_kit_manifest}), strict=True)
+        redaction = verify_public_trust_center_distribution_kit_package(_v38_rewrite_zip(source_zip, base / "kit-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+
+        entry_id = str(anchor_store.read_registry("ptc-default").get("current_entry_id") or "")
+        anchor_store.revoke_entry("ptc-default", entry_id, {"reason": "release-check stale kit"})
+        stale_export_blocked = False
+        stale_zip_blocked = False
+        try:
+            kit_store.export_kit("ptc-default")
+        except PublicTrustCenterDistributionKitStateError:
+            stale_export_blocked = True
+        try:
+            kit_store.build_zip("ptc-default")
+        except PublicTrustCenterDistributionKitStateError:
+            stale_zip_blocked = True
+
+        serialized = json.dumps({"report": report, "manifest": manifest, "verification": verification}, ensure_ascii=False)
+        ok = (
+            report.get("status") == "ready"
+            and manifest.get("package_type") == "musicforge_public_trust_center_distribution_kit"
+            and bool(zip_info.get("sha256"))
+            and verification.get("status") == "passed"
+            and _v38_check_status(ptc_tamper, "ptcdk_manifest_file_hashes") == "failed"
+            and _v38_check_status(anchor_tamper, "ptcdk_manifest_file_hashes") == "failed"
+            and _v38_check_status(checkpoint_tamper, "ptcdk_manifest_file_hashes") == "failed"
+            and _v38_check_status(registry_tamper, "ptcdk_manifest_file_hashes") == "failed"
+            and _v38_check_status(transparency_tamper, "ptcdk_manifest_file_hashes") == "failed"
+            and _v38_check_status(duplicate, "ptcdk_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "ptcdk_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "ptcdk_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "ptcdk_zip_no_internal_entries") == "failed"
+            and _v38_check_status(nested, "ptcdk_zip_nested_allowlist") == "failed"
+            and _v38_check_status(spoof, "ptcdk_manifest_zip_entries_reference_only") == "failed"
+            and _v38_check_status(redaction, "ptcdk_redaction_scan") == "failed"
+            and stale_export_blocked
+            and stale_zip_blocked
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"kit={report.get('status')}/{verification.get('status')}, zip={bool(zip_info.get('sha256'))}, "
+            f"ptc={_v38_check_status(ptc_tamper, 'ptcdk_manifest_file_hashes')}, anchor={_v38_check_status(anchor_tamper, 'ptcdk_manifest_file_hashes')}, "
+            f"checkpoint={_v38_check_status(checkpoint_tamper, 'ptcdk_manifest_file_hashes')}, registry={_v38_check_status(registry_tamper, 'ptcdk_manifest_file_hashes')}, "
+            f"transparency={_v38_check_status(transparency_tamper, 'ptcdk_manifest_file_hashes')}, duplicate={_v38_check_status(duplicate, 'ptcdk_zip_duplicate_entries')}, "
+            f"dangerous={_v38_check_status(dangerous, 'ptcdk_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptcdk_zip_entry_path_safe')}, "
+            f"case_musicforge={_v38_check_status(case_musicforge, 'ptcdk_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'ptcdk_zip_nested_allowlist')}, "
+            f"spoof={_v38_check_status(spoof, 'ptcdk_manifest_zip_entries_reference_only')}, redaction={_v38_check_status(redaction, 'ptcdk_redaction_scan')}, "
+            f"stale_export={stale_export_blocked}, stale_zip={stale_zip_blocked}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v83_tamper_transparency_ledger(data: bytes) -> bytes:
     from song_agent.public_trust_center_anchor_transparency import anchor_transparency_event_hash
 
@@ -12798,6 +12944,15 @@ def _v83_spoof_transparency_manifest(data: bytes) -> bytes:
     manifest = json.loads(data.decode("utf-8"))
     manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
     manifest["integrity_hash"] = anchor_transparency_manifest_hash(manifest)
+    return _v74_json_doc(manifest)
+
+
+def _v84_spoof_distribution_kit_manifest(data: bytes) -> bytes:
+    from song_agent.public_trust_center_distribution_kit import distribution_kit_manifest_hash
+
+    manifest = json.loads(data.decode("utf-8"))
+    manifest.setdefault("zip", {})["entries"] = list(manifest.get("zip", {}).get("entries") or []) + ["extra.txt"]
+    manifest["integrity_hash"] = distribution_kit_manifest_hash(manifest)
     return _v74_json_doc(manifest)
 
 

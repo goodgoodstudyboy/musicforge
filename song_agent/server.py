@@ -343,6 +343,13 @@ from song_agent.public_trust_center_anchor_transparency_verifier import (
     verify_public_trust_center_anchor_transparency_package,
     write_public_trust_center_anchor_transparency_verification_report,
 )
+from song_agent.public_trust_center_distribution_kit import (
+    PublicTrustCenterDistributionKitError,
+    PublicTrustCenterDistributionKitNotFoundError,
+    PublicTrustCenterDistributionKitStateError,
+    PublicTrustCenterDistributionKitStore,
+    distribution_kit_summary as public_trust_center_distribution_kit_summary,
+)
 from song_agent.public_trust_center_verifier import (
     verify_public_trust_center_package,
     write_public_trust_center_verification_report,
@@ -2879,6 +2886,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def public_trust_center_anchor_transparency_store(self) -> PublicTrustCenterAnchorTransparencyStore:
         return self.server.public_trust_center_anchor_transparency_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_distribution_kit_store(self) -> PublicTrustCenterDistributionKitStore:
+        return self.server.public_trust_center_distribution_kit_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -7367,6 +7378,57 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Anchor Transparency route not found.")
                 return
+            if action == "distribution-kit":
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.public_trust_center_distribution_kit_store.read_report(center_id, default={})
+                    self._send_json({"ok": True, "center_id": center_id, "report": report, "summary": self.public_trust_center_distribution_kit_store.summary(center_id)})
+                    return
+                subaction = parts[2] if len(parts) > 2 else ""
+                if subaction == "download" and len(parts) == 3:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.public_trust_center_distribution_kit_store.zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-distribution-kit.zip")
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                if subaction == "refresh" and len(parts) == 3:
+                    report = self.public_trust_center_distribution_kit_store.refresh_report(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "report": report, "summary": public_trust_center_distribution_kit_summary(report)}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "export" and len(parts) == 3:
+                    manifest = self.public_trust_center_distribution_kit_store.export_kit(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "manifest": manifest, "summary": {"source_hash": manifest.get("source_hash"), "package_type": manifest.get("package_type")}}, status=HTTPStatus.CREATED)
+                    return
+                if subaction == "zip" and len(parts) == 3:
+                    zip_info = self.public_trust_center_distribution_kit_store.build_zip(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "zip": zip_info})
+                    return
+                if subaction == "verify" and len(parts) == 3:
+                    report = self.public_trust_center_distribution_kit_store.verify_zip(
+                        center_id,
+                        {
+                            "strict": bool(payload.get("strict", True)),
+                            "deep": bool(payload.get("deep", True)),
+                            "require_current": bool(payload.get("require_current", True)),
+                            "require_delivery_readiness": bool(payload.get("require_delivery_readiness", True)),
+                            "require_anchor_registry_current": bool(payload.get("require_anchor_registry_current", True)),
+                            "require_anchor_published": bool(payload.get("require_anchor_published", True)),
+                            "require_anchor_not_revoked": bool(payload.get("require_anchor_not_revoked", True)),
+                            "require_anchor_transparency_current": bool(payload.get("require_anchor_transparency_current", True)),
+                            "require_anchor_checkpoint": bool(payload.get("require_anchor_checkpoint", True)),
+                        },
+                        now=_utc_now(),
+                    )
+                    self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Distribution Kit route not found.")
+                return
             if action == "archive" and len(parts) == 2:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -7392,6 +7454,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except PublicTrustCenterAnchorTransparencyStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except PublicTrustCenterAnchorTransparencyError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except PublicTrustCenterDistributionKitNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterDistributionKitStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterDistributionKitError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -16346,6 +16414,11 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         )
         self.public_trust_center_anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(
             anchor_registry_store=self.public_trust_center_anchor_registry_store,
+        )
+        self.public_trust_center_distribution_kit_store = PublicTrustCenterDistributionKitStore(
+            trust_center_store=self.public_trust_center_store,
+            anchor_registry_store=self.public_trust_center_anchor_registry_store,
+            anchor_transparency_store=self.public_trust_center_anchor_transparency_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

@@ -694,6 +694,19 @@ python -m song_agent.cli verify-public-trust-center-anchor-transparency-package 
 python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-delivery-readiness --delivery-anchor path\to\public-trust-center.delivery-anchor.json --anchor-registry path\to\public-trust-center-anchor-registry.zip --anchor-transparency path\to\public-trust-center-anchor-transparency.zip --anchor-checkpoint path\to\ptc-anchor-checkpoint-current.json --require-anchor-registry-current --require-anchor-published --require-anchor-not-revoked --require-anchor-transparency-current --require-anchor-checkpoint --json
 ```
 
+Public Trust Center Distribution Kit packages the current Public Trust Center
+ZIP, delivery anchor, Anchor Registry ZIP, Anchor Transparency ZIP, current
+checkpoint, and their verification reports into one external handoff ZIP. The
+Kit verifier can run in a clean directory, re-run nested verification with
+`--deep`, only permits the three expected nested ZIP files, and rejects stale
+reports, path traversal, backslash entries, `.musicforge` entries, manifest
+spoofing, redaction leaks, and unexpected nested ZIPs:
+
+```powershell
+python -m song_agent.cli public-trust-center --center-id ptc-default --distribution-kit-refresh --distribution-kit-export --distribution-kit-zip --distribution-kit-verify --strict --require-anchor-registry-current --require-anchor-published --require-anchor-not-revoked --require-anchor-transparency-current --require-anchor-checkpoint --json
+python -m song_agent.cli verify-public-trust-center-distribution-kit-package path\to\public-trust-center-distribution-kit.zip --strict --deep --require-current --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

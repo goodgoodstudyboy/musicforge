@@ -280,3 +280,91 @@ def test_public_trust_center_anchor_transparency_cli(tmp_path: Path, monkeypatch
     saved = json.loads(report_out.read_text(encoding="utf-8"))
     assert verified["status"] == "passed"
     assert saved["checkpoint_hash"]
+
+
+def test_public_trust_center_distribution_kit_cli(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    portfolio_id, _ack_store, store = _trust_center_fixture(Path(".musicforge"), monkeypatch)
+    store.refresh_report("ptc-default", {"portfolio_ids": [portfolio_id], "include_all_releases": False, "include_all_portfolios": False})
+    store.export_center("ptc-default")
+    store.build_zip("ptc-default")
+    anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=store)
+    anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "public-trust-center",
+            "--center-id",
+            "ptc-default",
+            "--anchor-register",
+            "--anchor-publish",
+            "--anchor-export",
+            "--anchor-zip",
+            "--anchor-verify",
+            "--anchor-transparency-refresh",
+            "--anchor-checkpoint-create",
+            "--anchor-transparency-export",
+            "--anchor-transparency-zip",
+            "--anchor-transparency-verify",
+            "--distribution-kit-refresh",
+            "--distribution-kit-export",
+            "--distribution-kit-zip",
+            "--distribution-kit-verify",
+            "--require-anchor-registry-current",
+            "--require-anchor-published",
+            "--require-anchor-not-revoked",
+            "--require-anchor-transparency-current",
+            "--require-anchor-checkpoint",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["distribution_kit_summary"]["status"] == "ready"
+    assert payload["distribution_kit_zip"]["sha256"]
+    assert payload["distribution_kit_verification"]["status"] == "passed"
+    kit_zip = tmp_path / ".musicforge" / "public-trust-centers" / "ptc-default" / "distribution-kit" / "public-trust-center-distribution-kit.zip"
+    assert kit_zip.exists()
+    assert anchor_store.zip_path("ptc-default").exists()
+    assert anchor_transparency_store.zip_path("ptc-default").exists()
+
+    report_out = tmp_path / "distribution-kit-verification.json"
+    verify = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-public-trust-center-distribution-kit-package",
+            str(kit_zip),
+            "--json",
+            "--strict",
+            "--deep",
+            "--require-current",
+            "--no-require-delivery-readiness",
+            "--report-out",
+            str(report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert verify.returncode == 0, verify.stderr
+    verified = json.loads(verify.stdout)
+    saved = json.loads(report_out.read_text(encoding="utf-8"))
+    assert verified["status"] == "passed"
+    assert saved["summary"]["center_id"] == "ptc-default"

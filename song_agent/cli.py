@@ -932,6 +932,27 @@ def build_verify_public_trust_center_anchor_transparency_parser() -> argparse.Ar
     return verify_parser
 
 
+def build_verify_public_trust_center_distribution_kit_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Distribution Kit ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Distribution Kit ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat extra ZIP entries and strict warnings as failures.")
+    verify_parser.add_argument("--deep", action="store_true", help="Re-run nested Public Trust Center, Anchor Registry, and Anchor Transparency verification.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require current nested evidence.")
+    verify_parser.add_argument("--require-delivery-readiness", dest="require_delivery_readiness", action="store_true", default=True, help="Require delivery readiness in nested PTC verification.")
+    verify_parser.add_argument("--no-require-delivery-readiness", dest="require_delivery_readiness", action="store_false", help="Do not require delivery readiness in nested PTC verification.")
+    verify_parser.add_argument("--require-anchor-registry-current", action="store_true", default=True, help="Require current Anchor Registry evidence.")
+    verify_parser.add_argument("--require-anchor-published", action="store_true", default=True, help="Require published current anchor.")
+    verify_parser.add_argument("--require-anchor-not-revoked", action="store_true", default=True, help="Require current anchor not revoked.")
+    verify_parser.add_argument("--require-anchor-transparency-current", action="store_true", default=True, help="Require current Anchor Transparency evidence.")
+    verify_parser.add_argument("--require-anchor-checkpoint", action="store_true", default=True, help="Require the included checkpoint.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=256, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=400, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build local MusicForge Public Trust Center reports and packages.")
     parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
@@ -956,6 +977,10 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--anchor-transparency-export", action="store_true", help="Export the Anchor Transparency package directory.")
     parser.add_argument("--anchor-transparency-zip", action="store_true", help="Build the Anchor Transparency ZIP.")
     parser.add_argument("--anchor-transparency-verify", action="store_true", help="Verify the Anchor Transparency ZIP.")
+    parser.add_argument("--distribution-kit-refresh", action="store_true", help="Refresh the Public Trust Center Distribution Kit report.")
+    parser.add_argument("--distribution-kit-export", action="store_true", help="Export the Public Trust Center Distribution Kit directory.")
+    parser.add_argument("--distribution-kit-zip", action="store_true", help="Build the Public Trust Center Distribution Kit ZIP.")
+    parser.add_argument("--distribution-kit-verify", action="store_true", help="Verify the Public Trust Center Distribution Kit ZIP.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-registry-current", action="store_true", help="Require current Registry evidence.")
     parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
@@ -2252,6 +2277,38 @@ def _main() -> None:
         else:
             print_public_trust_center_anchor_transparency_verification_report(report)
         raise SystemExit(public_trust_center_anchor_transparency_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-distribution-kit-package":
+        from song_agent.public_trust_center_distribution_kit_verifier import (
+            print_public_trust_center_distribution_kit_verification_report,
+            public_trust_center_distribution_kit_verification_exit_code,
+            verify_public_trust_center_distribution_kit_package,
+            write_public_trust_center_distribution_kit_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_distribution_kit_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_distribution_kit_package(
+            args.zip_path,
+            strict=args.strict,
+            deep=args.deep,
+            require_current=args.require_current,
+            require_delivery_readiness=args.require_delivery_readiness,
+            require_anchor_registry_current=args.require_anchor_registry_current,
+            require_anchor_published=args.require_anchor_published,
+            require_anchor_not_revoked=args.require_anchor_not_revoked,
+            require_anchor_transparency_current=args.require_anchor_transparency_current,
+            require_anchor_checkpoint=args.require_anchor_checkpoint,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_distribution_kit_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_distribution_kit_verification_report(report)
+        raise SystemExit(public_trust_center_distribution_kit_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3564,12 +3621,18 @@ def _main() -> None:
             verify_public_trust_center_anchor_transparency_package,
             write_public_trust_center_anchor_transparency_verification_report,
         )
+        from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore, distribution_kit_summary
 
         parser = build_public_trust_center_parser()
         args = parser.parse_args(raw_args[1:])
         store = _build_public_trust_center_store()
         anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=store)
         anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+        distribution_kit_store = PublicTrustCenterDistributionKitStore(
+            trust_center_store=store,
+            anchor_registry_store=anchor_store,
+            anchor_transparency_store=anchor_transparency_store,
+        )
         payload: dict[str, Any] = {
             "center_id": args.center_id,
             "attestation_profile": args.profile,
@@ -3699,6 +3762,31 @@ def _main() -> None:
             write_public_trust_center_anchor_transparency_verification_report(transparency_verification, anchor_transparency_store.verification_report_path(args.center_id))
             result["anchor_transparency_verification"] = transparency_verification
             result["anchor_transparency_verification_summary"] = transparency_verification.get("summary", {})
+        if args.distribution_kit_refresh:
+            kit_report = distribution_kit_store.refresh_report(args.center_id)
+            result["distribution_kit"] = kit_report
+            result["distribution_kit_summary"] = distribution_kit_summary(kit_report)
+        if args.distribution_kit_export:
+            result["distribution_kit_manifest"] = distribution_kit_store.export_kit(args.center_id)
+        if args.distribution_kit_zip:
+            result["distribution_kit_zip"] = distribution_kit_store.build_zip(args.center_id)
+        if args.distribution_kit_verify:
+            kit_verification = distribution_kit_store.verify_zip(
+                args.center_id,
+                {
+                    "strict": args.strict,
+                    "deep": True,
+                    "require_current": True,
+                    "require_delivery_readiness": args.require_delivery_readiness,
+                    "require_anchor_registry_current": True,
+                    "require_anchor_published": True,
+                    "require_anchor_not_revoked": True,
+                    "require_anchor_transparency_current": True,
+                    "require_anchor_checkpoint": True,
+                },
+            )
+            result["distribution_kit_verification"] = kit_verification
+            result["distribution_kit_verification_summary"] = kit_verification.get("summary", {})
         if args.report_out is not None:
             write_json(args.report_out, result)
         if args.json:

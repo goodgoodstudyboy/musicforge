@@ -11,6 +11,7 @@ from tests.test_server_release_portfolio_governance_attestation_transparency imp
 from song_agent.public_trust_center import PublicTrustCenterStore
 from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
 from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
 from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
 from song_agent.release_portfolio_governance_attestation_transparency import ReleasePortfolioGovernanceAttestationTransparencyStore
 from song_agent.release_portfolio_governance_attestation_transparency_acknowledgement import ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore, response_payload_hash, response_template
@@ -51,6 +52,11 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
         )
         server.public_trust_center_anchor_registry_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=server.public_trust_center_store)
         server.public_trust_center_anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=server.public_trust_center_anchor_registry_store)
+        server.public_trust_center_distribution_kit_store = PublicTrustCenterDistributionKitStore(
+            trust_center_store=server.public_trust_center_store,
+            anchor_registry_store=server.public_trust_center_anchor_registry_store,
+            anchor_transparency_store=server.public_trust_center_anchor_transparency_store,
+        )
         request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/pack/refresh", {"profile": "public_summary"})
         response_zip = review_store.build_response_zip(portfolio_id, _response_payload("accepted"))
         _portal_import_status, portal_imported = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/responses/import", {"content_base64": base64.b64encode(response_zip.read_bytes()).decode("ascii")})
@@ -108,6 +114,12 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
         anchor_transparency_detail_status, anchor_transparency_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/anchor-transparency")
         anchor_checkpoint_download_status, anchor_checkpoint_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/anchor-transparency/checkpoint")
         anchor_transparency_download_status, anchor_transparency_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/anchor-transparency/download")
+        distribution_kit_refresh_status, distribution_kit_refresh = request_json(server, "POST", "/api/public-trust-centers/ptc-default/distribution-kit/refresh", {})
+        distribution_kit_export_status, distribution_kit_export = request_json(server, "POST", "/api/public-trust-centers/ptc-default/distribution-kit/export", {})
+        distribution_kit_zip_status, distribution_kit_zip = request_json(server, "POST", "/api/public-trust-centers/ptc-default/distribution-kit/zip", {})
+        distribution_kit_verify_status, distribution_kit_verify = request_json(server, "POST", "/api/public-trust-centers/ptc-default/distribution-kit/verify", {"strict": True, "deep": True, "require_current": True, "require_delivery_readiness": False})
+        distribution_kit_detail_status, distribution_kit_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/distribution-kit")
+        distribution_kit_download_status, distribution_kit_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/distribution-kit/download")
         anchor_detail_status, anchor_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/anchor-registry")
         anchor_download_status, anchor_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/anchor-registry/download")
         verify_anchor_status, verify_anchor = request_json(server, "POST", "/api/public-trust-centers/ptc-default/verify", {"strict": True, "require_delivery_readiness": True, "require_anchor_registry_current": True, "require_anchor_published": True, "require_anchor_not_revoked": True, "require_anchor_transparency_current": True, "require_anchor_checkpoint": True})
@@ -159,6 +171,18 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
     assert b"musicforge_public_trust_center_anchor_checkpoint" in anchor_checkpoint_body
     assert anchor_transparency_download_status == 200
     assert anchor_transparency_body.startswith(b"PK")
+    assert distribution_kit_refresh_status == 201
+    assert distribution_kit_refresh["report"]["status"] == "ready"
+    assert distribution_kit_export_status == 201
+    assert distribution_kit_export["manifest"]["package_type"] == "musicforge_public_trust_center_distribution_kit"
+    assert distribution_kit_zip_status == 200
+    assert distribution_kit_zip["zip"]["sha256"]
+    assert distribution_kit_verify_status == 200
+    assert distribution_kit_verify["verification"]["status"] == "passed"
+    assert distribution_kit_detail_status == 200
+    assert distribution_kit_detail["summary"]["verification_status"] == "passed"
+    assert distribution_kit_download_status == 200
+    assert distribution_kit_body.startswith(b"PK")
     assert anchor_detail_status == 200
     assert anchor_detail["summary"]["current_entry_status"] == "published"
     assert anchor_download_status == 200
