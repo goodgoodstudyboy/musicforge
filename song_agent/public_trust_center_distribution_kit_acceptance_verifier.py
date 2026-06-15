@@ -38,6 +38,8 @@ REQUIRED_ENTRIES = {
     "original-response-public.json",
     "original-response-binding-summary.json",
     "response-verification-summary.json",
+    "response-verification-report-summary.json",
+    "original-response-binding-proof.json",
     "distribution-kit-verification-summary.json",
     "README.txt",
     "VERIFY.txt",
@@ -118,6 +120,8 @@ class _AcceptedEvidenceVerifier:
         self.public_response: dict[str, Any] = {}
         self.binding_summary: dict[str, Any] = {}
         self.response_verification: dict[str, Any] = {}
+        self.response_verification_report_summary: dict[str, Any] = {}
+        self.response_binding_proof: dict[str, Any] = {}
         self.distribution_kit_summary: dict[str, Any] = {}
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
@@ -184,6 +188,8 @@ class _AcceptedEvidenceVerifier:
         self.public_response = self._read_json_entry(archive, "original-response-public.json", "response", "ptcdkae_public_response_parse")
         self.binding_summary = self._read_json_entry(archive, "original-response-binding-summary.json", "binding", "ptcdkae_binding_summary_parse")
         self.response_verification = self._read_json_entry(archive, "response-verification-summary.json", "verification", "ptcdkae_response_verification_parse")
+        self.response_verification_report_summary = self._read_json_entry(archive, "response-verification-report-summary.json", "verification", "ptcdkae_response_verification_report_summary_parse")
+        self.response_binding_proof = self._read_json_entry(archive, "original-response-binding-proof.json", "binding", "ptcdkae_response_binding_proof_parse")
         self.distribution_kit_summary = self._read_json_entry(archive, "distribution-kit-verification-summary.json", "kit", "ptcdkae_distribution_kit_summary_parse")
 
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
@@ -238,12 +244,22 @@ class _AcceptedEvidenceVerifier:
         self._add_exact_check("manifest", "ptcdkae_manifest_evidence_hash", row.get("integrity_hash"), self.evidence.get("integrity_hash"), "Manifest evidence hash")
         self._add_exact_check("manifest", "ptcdkae_manifest_source_hash", self.manifest.get("source_hash"), self.evidence.get("source_hash"), "Manifest source hash")
         self._add_exact_check("response", "ptcdkae_response_public_projection_match", self.public_response, self.evidence.get("public_response"), "Public response projection")
+        self._add_exact_check("response", "ptcdkae_response_reviewer_summary_match", self.evidence.get("reviewer_summary"), self.public_response.get("reviewer"), "Reviewer public summary")
         for key, value in source.items():
             self._add_exact_check("binding", f"ptcdkae_original_response_binding_{key}", self.binding_summary.get(key), value, f"Original response binding {key}")
         self._add_exact_check("binding", "ptcdkae_original_response_public_hash", self.binding_summary.get("response_public_summary_hash"), stable_hash(self.public_response), "Original response public summary hash")
         self._add_exact_check("verification", "ptcdkae_response_verification_status", self.response_verification.get("status"), source.get("response_verification_status"), "Response verification status")
         self._add_exact_check("verification", "ptcdkae_response_verification_hash", self.response_verification.get("verification_hash"), source.get("response_verification_hash"), "Response verification hash")
         self._add_exact_check("verification", "ptcdkae_response_verification_payload", self.response_verification.get("response_payload_hash"), source.get("response_payload_hash"), "Response payload hash")
+        self._add_exact_check("verification", "ptcdkae_response_verification_report_status", self.response_verification_report_summary.get("status"), source.get("response_verification_status"), "Stored response verification status")
+        self._add_exact_check("verification", "ptcdkae_response_verification_report_hash", self.response_verification_report_summary.get("response_verification_hash"), source.get("response_verification_hash"), "Stored response verification report hash")
+        self._add_exact_check("verification", "ptcdkae_original_response_payload_hash", self.response_verification_report_summary.get("response_payload_hash"), source.get("response_payload_hash"), "Stored original response payload hash")
+        self._add_exact_check("verification", "ptcdkae_original_response_raw_sha256", self.response_verification_report_summary.get("raw_response_sha256"), source.get("raw_response_sha256"), "Stored original response raw sha256")
+        self._add_exact_check("verification", "ptcdkae_original_response_public_summary", self.response_verification_report_summary.get("response_public_summary_hash"), stable_hash(self.public_response), "Stored original response public summary hash")
+        self._add_exact_check("verification", "ptcdkae_original_response_public_summary_source", self.response_verification_report_summary.get("response_public_summary_hash"), source.get("response_public_summary_hash"), "Stored original response public summary source")
+        self._add_exact_check("binding", "ptcdkae_original_response_binding_proof_hash", self.response_binding_proof.get("binding_summary_hash"), source.get("binding_summary_hash"), "Stored original response binding summary hash")
+        self._add_exact_check("binding", "ptcdkae_original_response_binding_proof_public_summary", self.response_binding_proof.get("response_public_summary_hash"), stable_hash(self.public_response), "Stored original response binding proof public hash")
+        self._add_exact_check("binding", "ptcdkae_original_response_binding_proof_payload_hash", self.response_binding_proof.get("response_payload_hash"), source.get("response_payload_hash"), "Stored original response binding proof payload hash")
         self._add_exact_check("kit", "ptcdkae_distribution_kit_verification_summary_match", self.distribution_kit_summary.get("distribution_kit_verification_report_hash"), source.get("distribution_kit_verification_report_hash"), "Distribution Kit verification report hash")
         for key in ("distribution_kit_zip_sha256", "distribution_kit_manifest_hash", "distribution_kit_report_hash", "distribution_kit_source_hash"):
             self._add_exact_check("kit", f"ptcdkae_distribution_kit_{key}", self.distribution_kit_summary.get(key), source.get(key), f"Distribution Kit {key}")

@@ -712,7 +712,10 @@ current Kit. Imported responses must explicitly bind the current Kit ZIP hash,
 manifest hash, report/source hash, and verification report hash; the importer
 does not fill those fields in for the reviewer. Only current
 `external_manual` accepted responses can produce public-safe Accepted Evidence
-ZIPs:
+ZIPs. Accepted Evidence also carries stored response verification and binding
+proof sidecars, so verifier checks the public reviewer projection against the
+original imported response evidence instead of trusting package-internal
+re-signing:
 
 ```powershell
 python -m song_agent.cli public-trust-center --center-id ptc-default --distribution-kit-acceptance-template --json --report-out kit-acceptance-template.json

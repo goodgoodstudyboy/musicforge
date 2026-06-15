@@ -122,7 +122,7 @@ def test_distribution_kit_accepted_evidence_verifier_rejects_public_response_ful
     report = verify_public_trust_center_distribution_kit_accepted_evidence_package(forged, strict=True, require_current=True, distribution_kit_path=kit_store.zip_path("ptc-default"))
 
     assert report["status"] == "failed"
-    assert _has_blocker(report, "ptcdkae_response_public_projection_match")
+    assert _has_blocker(report, "ptcdkae_original_response_public_summary")
 
 
 def _ready_distribution_kit(tmp_path: Path, monkeypatch):
@@ -167,10 +167,15 @@ def _full_resign_public_response(docs: dict[str, bytes]) -> None:
     binding = _read_doc(docs, "original-response-binding-summary.json")
     manifest = _read_doc(docs, "evidence-manifest.json")
     public["reviewer"]["name"] = "Forged Receiver"
+    public["reviewer"]["organization"] = "Forged Org"
+    public["comments_excerpt"] = "Forged acceptance comments."
+    evidence["public_response"] = public
+    evidence["reviewer_summary"] = public["reviewer"]
     evidence["source"]["response_public_summary_hash"] = stable_hash(public)
     evidence["source_hash"] = stable_hash(evidence["source"])
     evidence["integrity_hash"] = accepted_evidence_hash(evidence)
     binding["source_hash"] = evidence["source_hash"]
+    binding["public_response"] = public
     binding["response_public_summary_hash"] = stable_hash(public)
     docs["evidence-report.json"] = _doc_bytes(evidence)
     docs["original-response-public.json"] = _doc_bytes(public)
@@ -178,6 +183,16 @@ def _full_resign_public_response(docs: dict[str, bytes]) -> None:
     _sync_manifest_file(manifest, "evidence-report.json", docs["evidence-report.json"])
     _sync_manifest_file(manifest, "original-response-public.json", docs["original-response-public.json"])
     _sync_manifest_file(manifest, "original-response-binding-summary.json", docs["original-response-binding-summary.json"])
+    if "response-verification-summary.json" in docs:
+        verification = _read_doc(docs, "response-verification-summary.json")
+        verification["source_hash"] = evidence["source_hash"]
+        docs["response-verification-summary.json"] = _doc_bytes(verification)
+        _sync_manifest_file(manifest, "response-verification-summary.json", docs["response-verification-summary.json"])
+    if "distribution-kit-verification-summary.json" in docs:
+        kit = _read_doc(docs, "distribution-kit-verification-summary.json")
+        kit["source_hash"] = evidence["source_hash"]
+        docs["distribution-kit-verification-summary.json"] = _doc_bytes(kit)
+        _sync_manifest_file(manifest, "distribution-kit-verification-summary.json", docs["distribution-kit-verification-summary.json"])
     manifest["source_hash"] = evidence["source_hash"]
     manifest["evidence"]["integrity_hash"] = evidence["integrity_hash"]
     manifest["evidence"]["source_hash"] = evidence["source_hash"]

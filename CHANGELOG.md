@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.5.1 - 2026-06-15
+
+### Fixed
+- Accepted Evidence ZIPs now include stored response verification and binding proof sidecars, so reviewer public fields cannot be forged by fully re-signing the evidence report, public response, binding summary, and manifest together.
+- Accepted Evidence verifier now cross-checks public response projection hashes, raw response SHA-256, response payload hash, verification hash, and binding summary hash against the stored response artifacts.
+- release-check v8.5 smoke now covers full public response re-sign tampering that updates the evidence report and manifest in sync.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_distribution_kit_acceptance.py -q`
+
 ## v8.5.0 - 2026-06-15
 
 ### Added

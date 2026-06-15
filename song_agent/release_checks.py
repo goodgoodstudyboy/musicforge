@@ -13003,7 +13003,7 @@ def _v85_public_trust_center_distribution_kit_acceptance_smoke(root: Path) -> tu
             and verification.get("status") == "passed"
             and missing_binding_failed
             and wrong_hash_failed
-            and _v38_check_status(full_resign, "ptcdkae_response_public_projection_match") == "failed"
+            and _v38_check_status(full_resign, "ptcdkae_original_response_public_summary") == "failed"
             and _v38_check_status(declared_extra, "ptcdkae_zip_allowed_entries") == "failed"
             and _v38_check_status(declared_extra, "ptcdkae_manifest_allowed_files") == "failed"
             and _v38_check_status(redaction, "ptcdkae_redaction_scan") == "failed"
@@ -13015,7 +13015,7 @@ def _v85_public_trust_center_distribution_kit_acceptance_smoke(root: Path) -> tu
         )
         return ok, (
             f"acceptance={imported.get('verification', {}).get('status')}/{verification.get('status')}, evidence={evidence.get('status')}, zip={bool(zip_info.get('sha256'))}, "
-            f"missing_binding={missing_binding_failed}, wrong_hash={wrong_hash_failed}, full_resign={_v38_check_status(full_resign, 'ptcdkae_response_public_projection_match')}, "
+            f"missing_binding={missing_binding_failed}, wrong_hash={wrong_hash_failed}, full_resign={_v38_check_status(full_resign, 'ptcdkae_original_response_public_summary')}, "
             f"declared_extra={_v38_check_status(declared_extra, 'ptcdkae_zip_allowed_entries')}, redaction={_v38_check_status(redaction, 'ptcdkae_redaction_scan')}, "
             f"kit_mismatch={_v38_check_status(kit_mismatch, 'ptcdkae_external_distribution_kit_hash_match')}"
         )
@@ -13035,10 +13035,15 @@ def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, by
     binding = _v74_read_json_doc(docs, "original-response-binding-summary.json")
     manifest = _v74_read_json_doc(docs, "evidence-manifest.json")
     public.setdefault("reviewer", {})["name"] = "Forged Receiver"
+    public.setdefault("reviewer", {})["organization"] = "Forged Org"
+    public["comments_excerpt"] = "Forged acceptance comments."
+    evidence["public_response"] = public
+    evidence["reviewer_summary"] = public.get("reviewer") or {}
     evidence.setdefault("source", {})["response_public_summary_hash"] = stable_hash(public)
     evidence["source_hash"] = stable_hash(evidence.get("source") or {})
     evidence["integrity_hash"] = accepted_evidence_hash(evidence)
     binding["source_hash"] = evidence["source_hash"]
+    binding["public_response"] = public
     binding["response_public_summary_hash"] = stable_hash(public)
     docs["evidence-report.json"] = _v74_json_doc(evidence)
     docs["original-response-public.json"] = _v74_json_doc(public)
@@ -13046,6 +13051,16 @@ def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, by
     _v74_sync_manifest_file(manifest, "evidence-report.json", docs["evidence-report.json"])
     _v74_sync_manifest_file(manifest, "original-response-public.json", docs["original-response-public.json"])
     _v74_sync_manifest_file(manifest, "original-response-binding-summary.json", docs["original-response-binding-summary.json"])
+    if "response-verification-summary.json" in docs:
+        verification = _v74_read_json_doc(docs, "response-verification-summary.json")
+        verification["source_hash"] = evidence["source_hash"]
+        docs["response-verification-summary.json"] = _v74_json_doc(verification)
+        _v74_sync_manifest_file(manifest, "response-verification-summary.json", docs["response-verification-summary.json"])
+    if "distribution-kit-verification-summary.json" in docs:
+        kit = _v74_read_json_doc(docs, "distribution-kit-verification-summary.json")
+        kit["source_hash"] = evidence["source_hash"]
+        docs["distribution-kit-verification-summary.json"] = _v74_json_doc(kit)
+        _v74_sync_manifest_file(manifest, "distribution-kit-verification-summary.json", docs["distribution-kit-verification-summary.json"])
     manifest["source_hash"] = evidence["source_hash"]
     manifest.setdefault("evidence", {})["integrity_hash"] = evidence["integrity_hash"]
     manifest.setdefault("evidence", {})["source_hash"] = evidence["source_hash"]

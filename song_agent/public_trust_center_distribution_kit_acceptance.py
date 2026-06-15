@@ -275,7 +275,13 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            docs = _evidence_documents(evidence)
+            source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
+            response_id = str(source.get("response_id") or evidence.get("response_id") or "")
+            docs = _evidence_documents(
+                evidence,
+                response_verification_report=_read_json_default(self.response_verification_report_path(center_id, response_id), default={}),
+                response_binding_summary=_read_json_default(self.response_binding_summary_path(center_id, response_id), default={}),
+            )
             for name, doc in docs.items():
                 if name.endswith(".json"):
                     _write_json(export_dir / name, doc)
@@ -417,6 +423,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
                 "center_id": center_id,
                 "response_id": response_id,
                 "response_payload_hash": response.get("response_payload_hash"),
+                "raw_response_sha256": response.get("raw_response_sha256"),
                 "response_integrity_hash": response.get("integrity_hash"),
                 "response_verification_hash": verification_hash(verification),
                 "response_verification_status": verification.get("status"),
@@ -559,10 +566,12 @@ def redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings)}
 
 
-def _evidence_documents(evidence: dict[str, Any]) -> dict[str, Any]:
+def _evidence_documents(evidence: dict[str, Any], *, response_verification_report: dict[str, Any] | None = None, response_binding_summary: dict[str, Any] | None = None) -> dict[str, Any]:
     source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
     public = evidence.get("public_response") if isinstance(evidence.get("public_response"), dict) else {}
     binding = evidence.get("kit_binding") if isinstance(evidence.get("kit_binding"), dict) else {}
+    response_verification_report = response_verification_report if isinstance(response_verification_report, dict) else {}
+    response_binding_summary = response_binding_summary if isinstance(response_binding_summary, dict) else {}
     response_verification = {
         "source_hash": evidence.get("source_hash"),
         "response_id": source.get("response_id"),
@@ -571,11 +580,39 @@ def _evidence_documents(evidence: dict[str, Any]) -> dict[str, Any]:
         "response_integrity_hash": source.get("response_integrity_hash"),
         "verification_hash": source.get("response_verification_hash"),
     }
+    response_verification_report_summary = _sanitize(
+        {
+            "source_hash": evidence.get("source_hash"),
+            "response_id": source.get("response_id"),
+            "status": response_verification_report.get("status"),
+            "response_payload_hash": source.get("response_payload_hash"),
+            "raw_response_sha256": source.get("raw_response_sha256"),
+            "response_public_summary_hash": source.get("response_public_summary_hash"),
+            "response_verification_hash": verification_hash(response_verification_report),
+            "check_count": len(response_verification_report.get("checks") if isinstance(response_verification_report.get("checks"), list) else []),
+            "blocker_count": len(response_verification_report.get("blockers") if isinstance(response_verification_report.get("blockers"), list) else []),
+        }
+    )
+    response_binding_proof = _sanitize(
+        {
+            "source_hash": evidence.get("source_hash"),
+            "response_id": source.get("response_id"),
+            "binding_summary_hash": stable_hash(response_binding_summary),
+            "response_payload_hash": source.get("response_payload_hash"),
+            "raw_response_sha256": source.get("raw_response_sha256"),
+            "response_public_summary_hash": source.get("response_public_summary_hash"),
+            "kit_binding_status": response_binding_summary.get("kit_binding_status") or response_binding_summary.get("status"),
+            "response_binding": response_binding_summary.get("response_binding") if isinstance(response_binding_summary.get("response_binding"), dict) else {},
+            "current_binding": response_binding_summary.get("current_binding") if isinstance(response_binding_summary.get("current_binding"), dict) else {},
+        }
+    )
     return {
         "evidence-report.json": evidence,
         "original-response-public.json": public,
         "original-response-binding-summary.json": {"source_hash": evidence.get("source_hash"), **source, "public_response": public, "response_public_summary_hash": source.get("response_public_summary_hash"), **binding},
         "response-verification-summary.json": response_verification,
+        "response-verification-report-summary.json": response_verification_report_summary,
+        "original-response-binding-proof.json": response_binding_proof,
         "distribution-kit-verification-summary.json": {"source_hash": evidence.get("source_hash"), **binding},
         "README.txt": _evidence_readme(evidence),
         "VERIFY.txt": _evidence_verify_text(),
