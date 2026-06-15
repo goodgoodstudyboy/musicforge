@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.6.1 - 2026-06-15
+
+### Fixed
+- Acceptance Board verification now binds quorum participants to external Accepted Evidence ZIPs when ready/quorum/role requirements are requested.
+- `accepted_evidence_dir` is now an active verifier input, and the verifier cross-checks participant role, organization, result, response payload hash, binding hash, evidence hash, and accepted evidence verification hash against external evidence packages.
+- release-check v8.6 smoke now covers a full package re-sign attack that forges a receiver role into a required role.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_acceptance_board.py tests\test_cli_public_trust_center.py::test_public_trust_center_distribution_kit_cli tests\test_release_check.py::test_v86_public_trust_center_acceptance_board_smoke -q`
+
 ## v8.6.0 - 2026-06-15
 
 ### Added

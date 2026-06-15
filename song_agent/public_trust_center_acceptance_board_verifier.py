@@ -23,6 +23,8 @@ from song_agent.public_trust_center_acceptance_board import (
     sidecar_hash,
 )
 from song_agent.public_trust_center_distribution_kit import distribution_kit_manifest_hash
+from song_agent.public_trust_center_distribution_kit_acceptance import verification_hash as accepted_evidence_verification_hash
+from song_agent.public_trust_center_distribution_kit_acceptance_verifier import verify_public_trust_center_distribution_kit_accepted_evidence_package
 from song_agent.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
@@ -168,6 +170,7 @@ class _AcceptanceBoardVerifier:
                 self._verify_documents()
                 self._verify_gates()
                 self._verify_external_distribution_kit()
+                self._verify_external_accepted_evidence()
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -391,6 +394,111 @@ class _AcceptanceBoardVerifier:
         self._add_hash_check("external", "ptcab_external_distribution_kit_manifest_integrity", manifest.get("integrity_hash"), distribution_kit_manifest_hash(manifest), "External Distribution Kit manifest integrity")
         verification = verify_public_trust_center_distribution_kit_package(self.distribution_kit_path, strict=True, deep=True, require_current=True, require_delivery_readiness=False)
         self._add_check("external", "ptcab_external_distribution_kit_verification", "passed" if verification.get("status") == "passed" else "failed", "blocking", "External Distribution Kit verification passed.")
+
+    def _verify_external_accepted_evidence(self) -> None:
+        participants = [item for item in (self.report.get("participants") if isinstance(self.report.get("participants"), list) else []) if isinstance(item, dict)]
+        counted = [item for item in participants if item.get("counts_for_quorum")]
+        strong_gate = bool(self.require_ready or self.require_quorum or self.min_accepted_count or self.min_accepted_organizations or self.required_roles)
+        if not strong_gate and self.accepted_evidence_dir is None:
+            return
+        if self.accepted_evidence_dir is None:
+            self._add_check("external", "ptcab_external_accepted_evidence_dir_required", "failed", "blocking", "External Accepted Evidence directory is required for ready/quorum Acceptance Board verification.")
+            return
+        if not self.accepted_evidence_dir.exists():
+            self._add_check("external", "ptcab_external_accepted_evidence_dir_exists", "failed", "blocking", "External Accepted Evidence directory is missing.")
+            return
+        self._add_check("external", "ptcab_external_accepted_evidence_dir_exists", "passed", "blocking", "External Accepted Evidence directory exists.")
+        missing: list[str] = []
+        unverified: list[str] = []
+        mismatches: list[str] = []
+        for participant in counted:
+            response_id = str(participant.get("response_id") or "")
+            evidence_id = str(participant.get("evidence_id") or "")
+            if not response_id or not evidence_id:
+                missing.append(response_id or evidence_id or "participant")
+                continue
+            evidence_zip = self._find_external_accepted_evidence_zip(evidence_id)
+            if evidence_zip is None:
+                missing.append(evidence_id)
+                continue
+            verification = verify_public_trust_center_distribution_kit_accepted_evidence_package(
+                evidence_zip,
+                strict=True,
+                require_current=True,
+                distribution_kit_path=self.distribution_kit_path,
+            )
+            if verification.get("status") != "passed":
+                unverified.append(evidence_id)
+            evidence = _read_zip_json(evidence_zip, "evidence-report.json")
+            public = _read_zip_json(evidence_zip, "original-response-public.json")
+            manifest = _read_zip_json(evidence_zip, "evidence-manifest.json")
+            reviewer = public.get("reviewer") if isinstance(public.get("reviewer"), dict) else {}
+            response_row = _find_row(self.response_index.get("items"), "response_id", response_id)
+            evidence_row = _find_row(self.evidence_index.get("items"), "evidence_id", evidence_id)
+            expected_public = {
+                "result": public.get("result"),
+                "review_mode": public.get("review_mode"),
+                "reviewer_name": reviewer.get("name"),
+                "organization": reviewer.get("organization"),
+                "role": reviewer.get("role"),
+            }
+            actual_public = {key: participant.get(key) for key in expected_public}
+            if actual_public != expected_public:
+                mismatches.append(response_id + ":public")
+            if evidence.get("evidence_id") != evidence_id or evidence.get("response_id") != response_id:
+                mismatches.append(response_id + ":identity")
+            if evidence.get("status") != "current" or evidence.get("result") != "accepted" or evidence.get("review_mode") != "external_manual":
+                mismatches.append(response_id + ":state")
+            source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
+            if source.get("response_payload_hash") != response_row.get("response_payload_hash"):
+                mismatches.append(response_id + ":payload")
+            if source.get("raw_response_sha256") != response_row.get("raw_response_sha256"):
+                mismatches.append(response_id + ":raw")
+            if source.get("response_verification_hash") != response_row.get("verification_hash"):
+                mismatches.append(response_id + ":verification")
+            if source.get("binding_summary_hash") != response_row.get("binding_summary_hash"):
+                mismatches.append(response_id + ":binding")
+            if source.get("response_public_summary_hash") != response_row.get("public_response_hash") or source.get("response_public_summary_hash") != stable_hash(public):
+                mismatches.append(response_id + ":public_hash")
+            if evidence.get("source_hash") != evidence_row.get("evidence_source_hash"):
+                mismatches.append(response_id + ":evidence_source")
+            if evidence.get("integrity_hash") != evidence_row.get("evidence_integrity_hash"):
+                mismatches.append(response_id + ":evidence_integrity")
+            if _sha256_file(evidence_zip) != evidence_row.get("zip_sha256"):
+                mismatches.append(response_id + ":evidence_zip")
+            if manifest.get("integrity_hash") and manifest.get("integrity_hash") != verification.get("manifest_hash"):
+                mismatches.append(response_id + ":manifest")
+            if accepted_evidence_verification_hash(verification) != evidence_row.get("verification_report_hash"):
+                mismatches.append(response_id + ":verification_report")
+        self._add_check("external", "ptcab_external_accepted_evidence_present", "failed" if missing else "passed", "blocking", "Missing external Accepted Evidence ZIPs: " + ", ".join(missing[:5]) if missing else "External Accepted Evidence ZIPs are present for quorum participants.")
+        self._add_check("external", "ptcab_external_accepted_evidence_verified", "failed" if unverified else "passed", "blocking", "External Accepted Evidence verification failed: " + ", ".join(unverified[:5]) if unverified else "External Accepted Evidence ZIPs verify against the Distribution Kit.")
+        self._add_check("external", "ptcab_participant_external_response_binding", "failed" if mismatches else "passed", "blocking", "Participant external Accepted Evidence mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Participants match external Accepted Evidence public response and verification fingerprints.")
+
+    def _find_external_accepted_evidence_zip(self, evidence_id: str) -> Path | None:
+        root = self.accepted_evidence_dir
+        if root is None:
+            return None
+        safe = _safe_id(evidence_id)
+        if root.is_file() and root.suffix.lower() == ".zip":
+            evidence = _read_zip_json(root, "evidence-report.json")
+            return root if evidence.get("evidence_id") == evidence_id else None
+        candidates = [
+            root / safe / "accepted-evidence.zip",
+            root / evidence_id / "accepted-evidence.zip",
+            root / f"{safe}.zip",
+            root / f"{evidence_id}.zip",
+        ]
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_file() and not candidate.is_symlink():
+                return candidate
+        if root.exists() and root.is_dir():
+            for candidate in sorted(root.rglob("accepted-evidence.zip")):
+                if not candidate.is_file() or candidate.is_symlink():
+                    continue
+                evidence = _read_zip_json(candidate, "evidence-report.json")
+                if evidence.get("evidence_id") == evidence_id:
+                    return candidate
+        return None
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for info in self.entry_infos:

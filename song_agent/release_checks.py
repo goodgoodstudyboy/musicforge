@@ -13132,6 +13132,7 @@ def _v86_public_trust_center_acceptance_board_smoke(root: Path) -> tuple[bool, s
 
         first = _accepted("v86-kit-accepted-001", "Legal Org", "legal")
         second = _accepted("v86-kit-accepted-002", "Distribution Org", "distribution_partner")
+        receiver = _accepted("v86-kit-accepted-003", "Receiver Org", "receiver")
         board = board_store.refresh_report("ptc-default")
         manifest = board_store.export_board("ptc-default")
         zip_info = board_store.build_zip("ptc-default")
@@ -13167,7 +13168,19 @@ def _v86_public_trust_center_acceptance_board_smoke(root: Path) -> tuple[bool, s
         board_store.export_board("ptc-default")
         board_store.build_zip("ptc-default")
 
-        full_resign = verify_public_trust_center_acceptance_board_package(_v76_rewrite_zip(source_zip, base / "board-full-resign.zip", _v86_tamper_acceptance_board_participant_full_resign), strict=True, require_ready=True)
+        full_resign = verify_public_trust_center_acceptance_board_package(_v76_rewrite_zip(source_zip, base / "board-full-resign.zip", _v86_tamper_acceptance_board_participant_full_resign), strict=True, require_ready=True, accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"))
+        role_full_resign = verify_public_trust_center_acceptance_board_package(
+            _v76_rewrite_zip(source_zip, base / "board-role-full-resign.zip", _v86_forge_acceptance_board_second_role_full_resign),
+            strict=True,
+            require_ready=True,
+            require_quorum=True,
+            require_no_conflicts=True,
+            min_accepted_count=2,
+            min_accepted_organizations=2,
+            required_roles=["legal", "distribution_partner", "finance"],
+            distribution_kit_path=kit_store.zip_path("ptc-default"),
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
         declared_extra = verify_public_trust_center_acceptance_board_package(_v76_rewrite_zip(source_zip, base / "board-extra.zip", _v86_add_acceptance_board_declared_extra), strict=True)
         wrong_kit = base / "wrong-distribution-kit.zip"
         wrong_kit.write_bytes(kit_store.zip_path("ptc-default").read_bytes() + b"x")
@@ -13184,6 +13197,7 @@ def _v86_public_trust_center_acceptance_board_smoke(root: Path) -> tuple[bool, s
             and rejected_report.get("readiness") == "rejected"
             and stale.get("readiness") == "stale"
             and _v38_check_status(full_resign, "ptcab_response_proofs_match") == "failed"
+            and _v38_check_status(role_full_resign, "ptcab_participant_external_response_binding") == "failed"
             and _v38_check_status(declared_extra, "ptcab_zip_allowed_entries") == "failed"
             and _v38_check_status(kit_mismatch, "ptcab_external_distribution_kit_hash") == "failed"
             and str(base) not in serialized
@@ -13194,7 +13208,7 @@ def _v86_public_trust_center_acceptance_board_smoke(root: Path) -> tuple[bool, s
         return ok, (
             f"board={board.get('readiness')}/{verification.get('status')}, quorum={board.get('summary', {}).get('quorum_status')}, "
             f"missing_role={missing_role.get('readiness')}, needs_changes={needs_changes.get('readiness')}, rejected={rejected_report.get('readiness')}, stale={stale.get('readiness')}, "
-            f"full_resign={_v38_check_status(full_resign, 'ptcab_response_proofs_match')}, declared_extra={_v38_check_status(declared_extra, 'ptcab_zip_allowed_entries')}, "
+            f"full_resign={_v38_check_status(full_resign, 'ptcab_response_proofs_match')}, role_full_resign={_v38_check_status(role_full_resign, 'ptcab_participant_external_response_binding')}, declared_extra={_v38_check_status(declared_extra, 'ptcab_zip_allowed_entries')}, "
             f"kit_mismatch={_v38_check_status(kit_mismatch, 'ptcab_external_distribution_kit_hash')}"
         )
     except Exception as exc:
@@ -13275,6 +13289,87 @@ def _v86_tamper_acceptance_board_participant_full_resign(docs: dict[str, bytes])
     manifest.setdefault("board_report", {})["source_hash"] = report["source_hash"]
     manifest["integrity_hash"] = acceptance_board_manifest_hash(manifest)
     docs["acceptance-board-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v86_forge_acceptance_board_second_role_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_acceptance_board import acceptance_board_manifest_hash, acceptance_board_report_hash, sidecar_hash
+    from song_agent.releases import stable_hash
+
+    report = _v74_read_json_doc(docs, "board-report.json")
+    manifest = _v74_read_json_doc(docs, "acceptance-board-manifest.json")
+    participants = report.get("participants") if isinstance(report.get("participants"), list) else []
+    if len(participants) < 2:
+        return
+    target = None
+    for participant in participants:
+        if isinstance(participant, dict) and participant.get("role") == "receiver":
+            target = participant
+            break
+    target = target if isinstance(target, dict) else participants[-1]
+    response_id = str(target.get("response_id") or "")
+    target["role"] = "finance"
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary["required_roles_status"] = "passed"
+    report["readiness"] = "ready"
+    report["status"] = "passed"
+    report["warnings"] = []
+    report["summary"] = summary
+    report["checks"] = _v86_pass_board_checks(report.get("checks"))
+    report["source_hash"] = stable_hash(report.get("source"))
+    report["integrity_hash"] = acceptance_board_report_hash(report)
+    docs["board-report.json"] = _v74_json_doc(report)
+    board_summary = _v74_read_json_doc(docs, "board-summary.json")
+    board_summary["source_hash"] = report["source_hash"]
+    board_summary["summary"] = report.get("summary")
+    board_summary["readiness"] = "ready"
+    board_summary["status"] = "passed"
+    board_summary["integrity_hash"] = sidecar_hash(board_summary)
+    docs["board-summary.json"] = _v74_json_doc(board_summary)
+    quorum = _v74_read_json_doc(docs, "quorum-evidence.json")
+    quorum["source_hash"] = report["source_hash"]
+    quorum.setdefault("decision", {})["readiness"] = "ready"
+    quorum.setdefault("decision", {})["required_roles_status"] = "passed"
+    quorum.setdefault("required_roles", {})["finance"] = "passed"
+    quorum["integrity_hash"] = sidecar_hash(quorum)
+    docs["quorum-evidence.json"] = _v74_json_doc(quorum)
+    conflict = _v74_read_json_doc(docs, "conflict-report.json")
+    conflict["source_hash"] = report["source_hash"]
+    conflict["status"] = "passed"
+    conflict["conflicts"] = []
+    conflict["integrity_hash"] = acceptance_board_report_hash(conflict)
+    docs["conflict-report.json"] = _v74_json_doc(conflict)
+    binding_path = f"response-proofs/{response_id}-binding-proof.json"
+    verification_path = f"response-proofs/{response_id}-verification-summary.json"
+    if binding_path in docs:
+        binding = _v74_read_json_doc(docs, binding_path)
+        binding.setdefault("public_response", {}).setdefault("reviewer", {})["role"] = "finance"
+        binding["response_public_summary_hash"] = stable_hash(binding.get("public_response") or {})
+        docs[binding_path] = _v74_json_doc(binding)
+    if verification_path in docs:
+        verification = _v74_read_json_doc(docs, verification_path)
+        public = _v74_read_json_doc(docs, binding_path).get("public_response") if binding_path in docs else {}
+        verification["response_public_summary_hash"] = stable_hash(public if isinstance(public, dict) else {})
+        docs[verification_path] = _v74_json_doc(verification)
+    for path in ["board-report.json", "board-summary.json", "quorum-evidence.json", "conflict-report.json", binding_path, verification_path]:
+        if path in docs:
+            _v74_sync_manifest_file(manifest, path, docs[path])
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("board_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("board_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("conflict_report", {})["integrity_hash"] = conflict["integrity_hash"]
+    manifest.setdefault("conflict_report", {})["source_hash"] = report["source_hash"]
+    manifest["integrity_hash"] = acceptance_board_manifest_hash(manifest)
+    docs["acceptance-board-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v86_pass_board_checks(checks: object) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in checks if isinstance(checks, list) else []:
+        if isinstance(item, dict):
+            row = dict(item)
+            row["status"] = "passed"
+            rows.append(row)
+    return rows
 
 
 def _v86_add_acceptance_board_declared_extra(docs: dict[str, bytes]) -> None:

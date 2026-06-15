@@ -26,7 +26,7 @@ from song_agent.releases import stable_hash
 
 
 def test_acceptance_board_roundtrip_ready(tmp_path: Path, monkeypatch) -> None:
-    board_store, kit_store, _acceptance_store = _ready_board(tmp_path, monkeypatch)
+    board_store, kit_store, acceptance_store = _ready_board(tmp_path, monkeypatch)
 
     report = board_store.refresh_report("ptc-default")
     manifest = board_store.export_board("ptc-default")
@@ -41,6 +41,7 @@ def test_acceptance_board_roundtrip_ready(tmp_path: Path, monkeypatch) -> None:
         min_accepted_organizations=2,
         required_roles=["legal", "distribution_partner"],
         distribution_kit_path=kit_store.zip_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
     )
 
     assert report["readiness"] == "ready"
@@ -85,7 +86,7 @@ def test_acceptance_board_stale_source_blocks_export_and_zip(tmp_path: Path, mon
 
 
 def test_acceptance_board_verifier_rejects_edges_and_full_resign(tmp_path: Path, monkeypatch) -> None:
-    board_store, kit_store, _acceptance_store = _ready_board(tmp_path, monkeypatch)
+    board_store, kit_store, acceptance_store = _ready_board(tmp_path, monkeypatch)
     board_store.refresh_report("ptc-default")
     board_store.export_board("ptc-default")
     board_store.build_zip("ptc-default")
@@ -105,9 +106,58 @@ def test_acceptance_board_verifier_rejects_edges_and_full_resign(tmp_path: Path,
     assert _has_blocker(verify_public_trust_center_acceptance_board_package(declared_extra, strict=True), "ptcab_zip_allowed_entries")
     assert _has_blocker(verify_public_trust_center_acceptance_board_package(full_resign, strict=True, require_ready=True), "ptcab_response_proofs_match")
     assert _has_blocker(
-        verify_public_trust_center_acceptance_board_package(source_zip, strict=True, require_ready=True, distribution_kit_path=kit_mismatch),
+        verify_public_trust_center_acceptance_board_package(
+            source_zip,
+            strict=True,
+            require_ready=True,
+            distribution_kit_path=kit_mismatch,
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        ),
         "ptcab_external_distribution_kit_hash",
     )
+
+
+def test_acceptance_board_verifier_rejects_role_full_resign_with_external_evidence(tmp_path: Path, monkeypatch) -> None:
+    board_store, kit_store, acceptance_store = _ready_board(tmp_path, monkeypatch, second_role="receiver")
+    blocked = board_store.refresh_report("ptc-default")
+    board_store.export_board("ptc-default")
+    board_store.build_zip("ptc-default")
+
+    assert blocked["readiness"] == "blocked"
+    assert blocked["summary"]["required_roles_status"] == "failed"
+
+    forged = _rewrite_zip(
+        board_store.zip_path("ptc-default"),
+        tmp_path / "forged-role.zip",
+        lambda docs: _forge_second_participant_role_and_resign(docs, "distribution_partner"),
+    )
+    package_only = verify_public_trust_center_acceptance_board_package(
+        forged,
+        strict=True,
+        require_ready=True,
+        require_quorum=True,
+        require_no_conflicts=True,
+        min_accepted_count=2,
+        min_accepted_organizations=2,
+        required_roles=["legal", "distribution_partner"],
+        distribution_kit_path=kit_store.zip_path("ptc-default"),
+    )
+    anchored = verify_public_trust_center_acceptance_board_package(
+        forged,
+        strict=True,
+        require_ready=True,
+        require_quorum=True,
+        require_no_conflicts=True,
+        min_accepted_count=2,
+        min_accepted_organizations=2,
+        required_roles=["legal", "distribution_partner"],
+        distribution_kit_path=kit_store.zip_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+    )
+
+    assert package_only["status"] == "failed"
+    assert _has_blocker(package_only, "ptcab_external_accepted_evidence_dir_required")
+    assert _has_blocker(anchored, "ptcab_participant_external_response_binding")
 
 
 def _ready_board(tmp_path: Path, monkeypatch, *, second_role: str = "distribution_partner") -> tuple[PublicTrustCenterAcceptanceBoardStore, object, PublicTrustCenterDistributionKitAcceptanceStore]:
@@ -199,3 +249,87 @@ def _tamper_participant_and_resign(docs: dict[str, bytes]) -> None:
     manifest.setdefault("board_report", {})["source_hash"] = report["source_hash"]
     manifest["integrity_hash"] = acceptance_board_manifest_hash(manifest)
     docs["acceptance-board-manifest.json"] = _doc_bytes(manifest)
+
+
+def _forge_second_participant_role_and_resign(docs: dict[str, bytes], role: str) -> None:
+    report = _read_doc(docs, "board-report.json")
+    manifest = _read_doc(docs, "acceptance-board-manifest.json")
+    participants = report.get("participants") if isinstance(report.get("participants"), list) else []
+    if len(participants) < 2:
+        return
+    response_id = str(participants[1].get("response_id") or "")
+    participants[1]["role"] = role
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary["required_roles_status"] = "passed"
+    report["readiness"] = "ready"
+    report["status"] = "passed"
+    report["warnings"] = []
+    report["summary"] = summary
+    report["checks"] = _pass_board_checks(report.get("checks"))
+    report["source_hash"] = stable_hash(report.get("source"))
+    report["integrity_hash"] = acceptance_board_report_hash(report)
+    docs["board-report.json"] = _doc_bytes(report)
+
+    board_summary = _read_doc(docs, "board-summary.json")
+    board_summary["source_hash"] = report["source_hash"]
+    board_summary["summary"] = report["summary"]
+    board_summary["readiness"] = "ready"
+    board_summary["status"] = "passed"
+    board_summary["integrity_hash"] = sidecar_hash(board_summary)
+    docs["board-summary.json"] = _doc_bytes(board_summary)
+
+    quorum = _read_doc(docs, "quorum-evidence.json")
+    quorum["source_hash"] = report["source_hash"]
+    quorum.setdefault("decision", {})["readiness"] = "ready"
+    quorum.setdefault("decision", {})["required_roles_status"] = "passed"
+    quorum.setdefault("required_roles", {})[role] = "passed"
+    quorum["integrity_hash"] = sidecar_hash(quorum)
+    docs["quorum-evidence.json"] = _doc_bytes(quorum)
+
+    conflict = _read_doc(docs, "conflict-report.json")
+    conflict["source_hash"] = report["source_hash"]
+    conflict["status"] = "passed"
+    conflict["conflicts"] = []
+    conflict["integrity_hash"] = acceptance_board_report_hash(conflict)
+    docs["conflict-report.json"] = _doc_bytes(conflict)
+
+    binding_path = f"response-proofs/{response_id}-binding-proof.json"
+    verification_path = f"response-proofs/{response_id}-verification-summary.json"
+    if binding_path in docs:
+        binding = _read_doc(docs, binding_path)
+        binding.setdefault("public_response", {}).setdefault("reviewer", {})["role"] = role
+        binding["response_public_summary_hash"] = stable_hash(binding.get("public_response") or {})
+        docs[binding_path] = _doc_bytes(binding)
+    if verification_path in docs:
+        verification = _read_doc(docs, verification_path)
+        public = _read_doc(docs, binding_path).get("public_response") if binding_path in docs else {}
+        verification["response_public_summary_hash"] = stable_hash(public if isinstance(public, dict) else {})
+        docs[verification_path] = _doc_bytes(verification)
+
+    for path in [
+        "board-report.json",
+        "board-summary.json",
+        "quorum-evidence.json",
+        "conflict-report.json",
+        binding_path,
+        verification_path,
+    ]:
+        if path in docs:
+            _sync_manifest_file(manifest, path, docs[path])
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("board_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("board_report", {})["source_hash"] = report["source_hash"]
+    manifest.setdefault("conflict_report", {})["integrity_hash"] = conflict["integrity_hash"]
+    manifest.setdefault("conflict_report", {})["source_hash"] = report["source_hash"]
+    manifest["integrity_hash"] = acceptance_board_manifest_hash(manifest)
+    docs["acceptance-board-manifest.json"] = _doc_bytes(manifest)
+
+
+def _pass_board_checks(checks: object) -> list[dict]:
+    rows: list[dict] = []
+    for item in checks if isinstance(checks, list) else []:
+        if isinstance(item, dict):
+            row = dict(item)
+            row["status"] = "passed"
+            rows.append(row)
+    return rows

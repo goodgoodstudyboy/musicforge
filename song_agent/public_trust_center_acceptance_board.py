@@ -268,6 +268,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             min_accepted_organizations=int(payload.get("min_accepted_organizations") or 0),
             required_roles=[str(item) for item in payload.get("required_roles", [])] if isinstance(payload.get("required_roles"), list) else [],
             distribution_kit_path=self.distribution_kit_store.zip_path(center_id) if bool(payload.get("use_distribution_kit", True)) else None,
+            accepted_evidence_dir=self.acceptance_store.accepted_evidence_root(center_id) if bool(payload.get("use_accepted_evidence", True)) else None,
         )
         write_public_trust_center_acceptance_board_verification_report(report, self.verification_report_path(center_id))
         return report

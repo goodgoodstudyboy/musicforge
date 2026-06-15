@@ -547,6 +547,7 @@ def test_public_trust_center_distribution_kit_cli(tmp_path: Path, monkeypatch) -
     assert board_zip.exists()
 
     board_report_out = tmp_path / "acceptance-board-verification.json"
+    accepted_evidence_dir = tmp_path / ".musicforge" / "public-trust-centers" / "ptc-default" / "distribution-kit" / "acceptance" / "accepted-evidence"
     board_verify = subprocess.run(
         [
             sys.executable,
@@ -561,6 +562,8 @@ def test_public_trust_center_distribution_kit_cli(tmp_path: Path, monkeypatch) -
             "--require-no-conflicts",
             "--distribution-kit",
             str(kit_zip),
+            "--accepted-evidence-dir",
+            str(accepted_evidence_dir),
             "--report-out",
             str(board_report_out),
         ],

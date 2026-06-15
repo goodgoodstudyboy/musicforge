@@ -730,11 +730,14 @@ distribution partner. `needs_changes`, `rejected`, critical findings, stale
 responses, and stale accepted evidence block readiness by default. The Board
 ZIP carries response proofs, accepted evidence summaries, and quorum evidence;
 the verifier cross-checks those sidecars instead of trusting a re-signed board
-report alone:
+report alone. For ready/quorum/role-gated verification, provide the external
+Accepted Evidence directory so the verifier can bind each counted participant
+back to the original accepted evidence ZIP rather than package-internal
+sidecars:
 
 ```powershell
 python -m song_agent.cli public-trust-center --center-id ptc-default --acceptance-board-policy-save acceptance-board-policy.json --acceptance-board-refresh --acceptance-board-export --acceptance-board-zip --acceptance-board-verify --strict --require-ready --require-quorum --require-no-conflicts --json
-python -m song_agent.cli verify-public-trust-center-acceptance-board-package path\to\public-trust-center-acceptance-board.zip --strict --require-ready --require-quorum --require-no-conflicts --distribution-kit path\to\public-trust-center-distribution-kit.zip --json
+python -m song_agent.cli verify-public-trust-center-acceptance-board-package path\to\public-trust-center-acceptance-board.zip --strict --require-ready --require-quorum --require-no-conflicts --distribution-kit path\to\public-trust-center-distribution-kit.zip --accepted-evidence-dir path\to\accepted-evidence --json
 ```
 
 ```powershell
