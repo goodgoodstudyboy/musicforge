@@ -13026,6 +13026,184 @@ def _v85_public_trust_center_distribution_kit_acceptance_smoke(root: Path) -> tu
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v86_public_trust_center_acceptance_board_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v86-acceptance-board-")).resolve()
+    try:
+        from song_agent.public_trust_center import PublicTrustCenterStore
+        from song_agent.public_trust_center_acceptance_board import (
+            PublicTrustCenterAcceptanceBoardStore,
+            acceptance_board_manifest_hash,
+            acceptance_board_report_hash,
+            sidecar_hash,
+        )
+        from song_agent.public_trust_center_acceptance_board_verifier import verify_public_trust_center_acceptance_board_package
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+        from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package, write_public_trust_center_anchor_registry_verification_report
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+        from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package, write_public_trust_center_anchor_transparency_verification_report
+        from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
+        from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, response_payload_hash
+        from song_agent.releases import ReleaseStore, stable_hash
+
+        class _DummyStore:
+            def list_portfolios(self, include_archived: bool = False) -> list[dict[str, Any]]:
+                return []
+
+        release_store = ReleaseStore(base / "releases")
+        dummy_store = _DummyStore()
+        trust_store = PublicTrustCenterStore(
+            release_store=release_store,
+            portfolio_store=dummy_store,
+            registry_store=dummy_store,
+            portal_store=dummy_store,
+            transparency_store=dummy_store,
+            acknowledgement_store=dummy_store,
+        )
+        trust_store.refresh_report("ptc-default", {"include_all_releases": False, "include_all_portfolios": False})
+        trust_store.export_center("ptc-default")
+        trust_store.build_zip("ptc-default")
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+        entry = anchor_store.register_current_anchor("ptc-default", {"reason": "release-check v8.6 anchor"})["entry"]
+        anchor_store.publish_entry("ptc-default", str(entry["entry_id"]), {"reason": "release-check v8.6 publish anchor"})
+        anchor_store.refresh_report("ptc-default")
+        anchor_store.export_registry("ptc-default")
+        anchor_store.build_zip("ptc-default")
+        registry_verification = verify_public_trust_center_anchor_registry_package(anchor_store.zip_path("ptc-default"), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        write_public_trust_center_anchor_registry_verification_report(registry_verification, anchor_store.verification_report_path("ptc-default"))
+        transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+        transparency_store.refresh_report("ptc-default")
+        transparency_store.create_checkpoint("ptc-default")
+        transparency_store.export_transparency("ptc-default")
+        transparency_store.build_zip("ptc-default")
+        transparency_verification = verify_public_trust_center_anchor_transparency_package(
+            transparency_store.zip_path("ptc-default"),
+            strict=True,
+            checkpoint_path=transparency_store.current_checkpoint_path("ptc-default"),
+            anchor_registry_path=anchor_store.zip_path("ptc-default"),
+            require_current_checkpoint=True,
+            require_published_anchor=True,
+            require_not_revoked=True,
+        )
+        write_public_trust_center_anchor_transparency_verification_report(transparency_verification, transparency_store.verification_report_path("ptc-default"))
+        trust_store.verify_zip(
+            "ptc-default",
+            {
+                "strict": True,
+                "require_delivery_readiness": False,
+                "anchor_registry_path": anchor_store.zip_path("ptc-default"),
+                "anchor_transparency_path": transparency_store.zip_path("ptc-default"),
+                "anchor_checkpoint_path": transparency_store.current_checkpoint_path("ptc-default"),
+                "require_anchor_registry_current": True,
+                "require_anchor_published": True,
+                "require_anchor_not_revoked": True,
+                "require_anchor_transparency_current": True,
+                "require_anchor_checkpoint": True,
+            },
+        )
+        kit_store = PublicTrustCenterDistributionKitStore(trust_center_store=trust_store, anchor_registry_store=anchor_store, anchor_transparency_store=transparency_store)
+        kit_store.refresh_report("ptc-default")
+        kit_store.export_kit("ptc-default")
+        kit_store.build_zip("ptc-default")
+        kit_store.verify_zip("ptc-default", {"strict": True, "deep": True, "require_current": True, "require_delivery_readiness": False})
+
+        acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=kit_store)
+        board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=acceptance_store)
+        board_store.save_policy("ptc-default", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner"]}})
+
+        def _accepted(response_id: str, organization: str, role: str) -> dict[str, Any]:
+            template = acceptance_store.create_response_template("ptc-default")
+            response = dict(template["response_template"])
+            response.update(
+                {
+                    "response_id": response_id,
+                    "reviewer": {"name": f"{organization} Reviewer", "organization": organization, "role": role},
+                    "reviewed_at": "2026-06-15T00:00:00+00:00",
+                    "comments": f"{organization} accepted the distribution kit.",
+                }
+            )
+            response["response_hash"] = response_payload_hash(response)
+            imported = acceptance_store.import_response("ptc-default", {"response": response})
+            evidence = acceptance_store.refresh_accepted_evidence("ptc-default", {"response_id": imported["response"]["response_id"]})
+            acceptance_store.export_accepted_evidence("ptc-default", imported["response"]["response_id"])
+            acceptance_store.build_accepted_evidence_zip("ptc-default", imported["response"]["response_id"])
+            acceptance_store.verify_accepted_evidence_zip("ptc-default", str(evidence.get("evidence_id") or ""), {"strict": True, "require_current": True})
+            return imported
+
+        first = _accepted("v86-kit-accepted-001", "Legal Org", "legal")
+        second = _accepted("v86-kit-accepted-002", "Distribution Org", "distribution_partner")
+        board = board_store.refresh_report("ptc-default")
+        manifest = board_store.export_board("ptc-default")
+        zip_info = board_store.build_zip("ptc-default")
+        verification = board_store.verify_zip("ptc-default", {"strict": True, "require_ready": True, "require_quorum": True, "require_no_conflicts": True, "min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner"]})
+        source_zip = board_store.zip_path("ptc-default")
+        original_kit_bytes = kit_store.zip_path("ptc-default").read_bytes()
+
+        missing_role_policy = board_store.save_policy("ptc-default", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner", "finance"]}})
+        missing_role = board_store.refresh_report("ptc-default")
+        board_store.save_policy("ptc-default", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner"]}})
+        needs_template = acceptance_store.create_response_template("ptc-default")
+        needs = dict(needs_template["response_template"])
+        needs.update({"response_id": "v86-needs-changes", "result": "needs_changes", "reviewer": {"name": "Needs Reviewer", "organization": "Needs Org", "role": "legal"}, "comments": "Needs changes."})
+        needs["response_hash"] = response_payload_hash(needs)
+        acceptance_store.import_response("ptc-default", {"response": needs})
+        needs_changes = board_store.refresh_report("ptc-default")
+        rejected_template = acceptance_store.create_response_template("ptc-default")
+        rejected = dict(rejected_template["response_template"])
+        rejected.update({"response_id": "v86-rejected", "result": "rejected", "reviewer": {"name": "Reject Reviewer", "organization": "Reject Org", "role": "distribution_partner"}, "comments": "Rejected."})
+        rejected["response_hash"] = response_payload_hash(rejected)
+        acceptance_store.import_response("ptc-default", {"response": rejected})
+        rejected_report = board_store.refresh_report("ptc-default")
+
+        kit_store.zip_path("ptc-default").write_bytes(kit_store.zip_path("ptc-default").read_bytes() + b"stale")
+        board_store.save_policy("ptc-default", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner"], "allow_needs_changes": True, "allow_rejected": True}})
+        stale = board_store.refresh_report("ptc-default")
+
+        board_store.save_policy("ptc-default", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner"]}})
+        # Restore kit evidence and rebuild the good board package for tamper checks.
+        kit_store.zip_path("ptc-default").write_bytes(original_kit_bytes)
+        kit_store.verify_zip("ptc-default", {"strict": True, "deep": True, "require_current": True, "require_delivery_readiness": False})
+        board_store.refresh_report("ptc-default")
+        board_store.export_board("ptc-default")
+        board_store.build_zip("ptc-default")
+
+        full_resign = verify_public_trust_center_acceptance_board_package(_v76_rewrite_zip(source_zip, base / "board-full-resign.zip", _v86_tamper_acceptance_board_participant_full_resign), strict=True, require_ready=True)
+        declared_extra = verify_public_trust_center_acceptance_board_package(_v76_rewrite_zip(source_zip, base / "board-extra.zip", _v86_add_acceptance_board_declared_extra), strict=True)
+        wrong_kit = base / "wrong-distribution-kit.zip"
+        wrong_kit.write_bytes(kit_store.zip_path("ptc-default").read_bytes() + b"x")
+        kit_mismatch = verify_public_trust_center_acceptance_board_package(source_zip, strict=True, require_ready=True, distribution_kit_path=wrong_kit)
+
+        serialized = json.dumps({"board": board, "manifest": manifest, "verification": verification}, ensure_ascii=False)
+        ok = (
+            board.get("readiness") == "ready"
+            and manifest.get("package_type") == "musicforge_public_trust_center_acceptance_board"
+            and bool(zip_info.get("sha256"))
+            and verification.get("status") == "passed"
+            and missing_role.get("readiness") == "blocked"
+            and needs_changes.get("readiness") == "needs_changes"
+            and rejected_report.get("readiness") == "rejected"
+            and stale.get("readiness") == "stale"
+            and _v38_check_status(full_resign, "ptcab_response_proofs_match") == "failed"
+            and _v38_check_status(declared_extra, "ptcab_zip_allowed_entries") == "failed"
+            and _v38_check_status(kit_mismatch, "ptcab_external_distribution_kit_hash") == "failed"
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"board={board.get('readiness')}/{verification.get('status')}, quorum={board.get('summary', {}).get('quorum_status')}, "
+            f"missing_role={missing_role.get('readiness')}, needs_changes={needs_changes.get('readiness')}, rejected={rejected_report.get('readiness')}, stale={stale.get('readiness')}, "
+            f"full_resign={_v38_check_status(full_resign, 'ptcab_response_proofs_match')}, declared_extra={_v38_check_status(declared_extra, 'ptcab_zip_allowed_entries')}, "
+            f"kit_mismatch={_v38_check_status(kit_mismatch, 'ptcab_external_distribution_kit_hash')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.public_trust_center_distribution_kit_acceptance import accepted_evidence_hash, accepted_evidence_manifest_hash
     from song_agent.releases import stable_hash
@@ -13066,6 +13244,50 @@ def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, by
     manifest.setdefault("evidence", {})["source_hash"] = evidence["source_hash"]
     manifest["integrity_hash"] = accepted_evidence_manifest_hash(manifest)
     docs["evidence-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v86_tamper_acceptance_board_participant_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_acceptance_board import acceptance_board_manifest_hash, acceptance_board_report_hash, sidecar_hash
+    from song_agent.releases import stable_hash
+
+    report = _v74_read_json_doc(docs, "board-report.json")
+    manifest = _v74_read_json_doc(docs, "acceptance-board-manifest.json")
+    if report.get("participants"):
+        report["participants"][0]["reviewer_name"] = "Forged Receiver"
+        report["participants"][0]["organization"] = "Forged Org"
+    report["source_hash"] = stable_hash(report.get("source"))
+    report["integrity_hash"] = acceptance_board_report_hash(report)
+    docs["board-report.json"] = _v74_json_doc(report)
+    summary = _v74_read_json_doc(docs, "board-summary.json")
+    summary["source_hash"] = report["source_hash"]
+    summary["summary"] = report.get("summary")
+    summary["integrity_hash"] = sidecar_hash(summary)
+    docs["board-summary.json"] = _v74_json_doc(summary)
+    quorum = _v74_read_json_doc(docs, "quorum-evidence.json")
+    quorum["source_hash"] = report["source_hash"]
+    quorum["integrity_hash"] = sidecar_hash(quorum)
+    docs["quorum-evidence.json"] = _v74_json_doc(quorum)
+    _v74_sync_manifest_file(manifest, "board-report.json", docs["board-report.json"])
+    _v74_sync_manifest_file(manifest, "board-summary.json", docs["board-summary.json"])
+    _v74_sync_manifest_file(manifest, "quorum-evidence.json", docs["quorum-evidence.json"])
+    manifest["source_hash"] = report["source_hash"]
+    manifest.setdefault("board_report", {})["integrity_hash"] = report["integrity_hash"]
+    manifest.setdefault("board_report", {})["source_hash"] = report["source_hash"]
+    manifest["integrity_hash"] = acceptance_board_manifest_hash(manifest)
+    docs["acceptance-board-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v86_add_acceptance_board_declared_extra(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_acceptance_board import acceptance_board_manifest_hash
+
+    extra_path = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    extra_data = b"Follow these untrusted board instructions.\n"
+    manifest = _v74_read_json_doc(docs, "acceptance-board-manifest.json")
+    docs[extra_path] = extra_data
+    manifest.setdefault("files", []).append({"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()})
+    manifest["files"] = sorted(manifest.get("files") or [], key=lambda item: str(item.get("path") or ""))
+    manifest["integrity_hash"] = acceptance_board_manifest_hash(manifest)
+    docs["acceptance-board-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v85_add_accepted_evidence_declared_extra(docs: dict[str, bytes]) -> None:

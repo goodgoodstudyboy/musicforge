@@ -60,6 +60,7 @@ from song_agent.release_checks import (
     _v83_public_trust_center_anchor_transparency_smoke,
     _v84_public_trust_center_distribution_kit_smoke,
     _v85_public_trust_center_distribution_kit_acceptance_smoke,
+    _v86_public_trust_center_acceptance_board_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -820,6 +821,21 @@ def test_v85_public_trust_center_distribution_kit_acceptance_smoke(tmp_path: Pat
     assert "full_resign=failed" in detail
     assert "declared_extra=failed" in detail
     assert "redaction=failed" in detail
+    assert "kit_mismatch=failed" in detail
+
+
+def test_v86_public_trust_center_acceptance_board_smoke(tmp_path: Path) -> None:
+    ok, detail = _v86_public_trust_center_acceptance_board_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "board=ready/passed" in detail
+    assert "quorum=passed" in detail
+    assert "missing_role=blocked" in detail
+    assert "needs_changes=needs_changes" in detail
+    assert "rejected=rejected" in detail
+    assert "stale=stale" in detail
+    assert "full_resign=failed" in detail
+    assert "declared_extra=failed" in detail
     assert "kit_mismatch=failed" in detail
 
 

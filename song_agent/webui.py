@@ -3725,6 +3725,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="public-trust-center-distribution-kit-accepted-evidence-export" type="button">Export Kit Accepted Evidence</button>
           <button class="secondary" id="public-trust-center-distribution-kit-accepted-evidence-zip" type="button">Build Kit Accepted Evidence ZIP</button>
           <button class="secondary" id="public-trust-center-distribution-kit-accepted-evidence-verify" type="button">Verify Kit Accepted Evidence</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-refresh" type="button">Refresh Acceptance Board</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-export" type="button">Export Acceptance Board</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-zip" type="button">Build Acceptance Board ZIP</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-verify" type="button">Verify Acceptance Board</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-signoff-draft" type="button">Create Board Signoff Draft</button>
+          <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/acceptance-board/download">Download Acceptance Board ZIP</a>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4376,6 +4382,34 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         const response = responses[responses.length - 1] || {};
         if (!response.response_id) return;
         await api(`/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/${encodeURIComponent(response.response_id)}/evidence/verify`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-refresh", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/refresh`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-export", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-zip", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-verify", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true, require_ready: true, require_quorum: true, require_no_conflicts: true, use_distribution_kit: true }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-signoff-draft", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/signoff-draft`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: "studio" }),
+        });
         await renderPortfolioAuditDetail(portfolioId);
       });
     }

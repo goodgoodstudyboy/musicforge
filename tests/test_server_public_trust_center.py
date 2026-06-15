@@ -11,6 +11,7 @@ from tests.test_server_release_portfolio_governance_attestation_transparency imp
 from song_agent.public_trust_center import PublicTrustCenterStore
 from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
 from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+from song_agent.public_trust_center_acceptance_board import PublicTrustCenterAcceptanceBoardStore
 from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
 from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, response_payload_hash as kit_acceptance_response_payload_hash
 from song_agent.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore
@@ -59,6 +60,7 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
             anchor_transparency_store=server.public_trust_center_anchor_transparency_store,
         )
         server.public_trust_center_distribution_kit_acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=server.public_trust_center_distribution_kit_store)
+        server.public_trust_center_acceptance_board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=server.public_trust_center_distribution_kit_acceptance_store)
         request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/pack/refresh", {"profile": "public_summary"})
         response_zip = review_store.build_response_zip(portfolio_id, _response_payload("accepted"))
         _portal_import_status, portal_imported = request_json(server, "POST", f"/api/release-portfolio-audits/{portfolio_id}/governance-attestation-portal-review/responses/import", {"content_base64": base64.b64encode(response_zip.read_bytes()).decode("ascii")})
@@ -138,6 +140,29 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
         accepted_evidence_export_status, accepted_evidence_export = request_json(server, "POST", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_id}/evidence/export", {})
         accepted_evidence_zip_status, accepted_evidence_zip = request_json(server, "POST", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_id}/evidence/zip", {})
         accepted_evidence_verify_status, accepted_evidence_verify = request_json(server, "POST", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_id}/evidence/verify", {})
+        acceptance_payload_two = dict(acceptance_template["template"]["response_template"])
+        acceptance_payload_two.update(
+            {
+                "response_id": "server-kit-accepted-002",
+                "reviewer": {"name": "External Legal", "organization": "Legal Org", "role": "legal"},
+                "reviewed_at": "2026-06-15T00:05:00+00:00",
+                "comments": "Distribution Kit accepted by legal through server API.",
+            }
+        )
+        acceptance_payload_two["response_hash"] = kit_acceptance_response_payload_hash(acceptance_payload_two)
+        acceptance_import_two_status, acceptance_import_two = request_json(server, "POST", "/api/public-trust-centers/ptc-default/distribution-kit/acceptance/import", {"content_base64": base64.b64encode(json.dumps(acceptance_payload_two).encode("utf-8")).decode("ascii")})
+        acceptance_response_two_id = acceptance_import_two["response"]["response_id"]
+        request_json(server, "POST", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_two_id}/evidence/export", {})
+        request_json(server, "POST", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_two_id}/evidence/zip", {})
+        request_json(server, "POST", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_two_id}/evidence/verify", {})
+        board_policy_status, board_policy = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/policy", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["receiver", "legal"]}})
+        board_refresh_status, board_refresh = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/refresh", {})
+        board_export_status, board_export = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/export", {})
+        board_zip_status, board_zip = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/zip", {})
+        board_verify_status, board_verify = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/verify", {"strict": True, "require_ready": True, "require_quorum": True, "require_no_conflicts": True})
+        board_detail_status, board_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/acceptance-board")
+        board_download_status, board_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/acceptance-board/download")
+        board_draft_status, board_draft = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/signoff-draft", {"reason": "server smoke"})
         acceptance_detail_status, acceptance_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/distribution-kit/acceptance")
         accepted_evidence_download_status, accepted_evidence_body = request_bytes(server, "GET", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_id}/evidence/download")
         acceptance_path_status, acceptance_path_error = request_json(server, "POST", "/api/public-trust-centers/ptc-default/distribution-kit/acceptance/import", {"source_path": "C:\\Users\\demo\\response.json"})
@@ -214,6 +239,23 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
     assert accepted_evidence_zip["zip"]["sha256"]
     assert accepted_evidence_verify_status == 200
     assert accepted_evidence_verify["verification"]["status"] == "passed"
+    assert acceptance_import_two_status == 201
+    assert board_policy_status == 201
+    assert board_policy["policy"]["requirements"]["min_accepted_count"] == 2
+    assert board_refresh_status == 201
+    assert board_refresh["summary"]["readiness"] == "ready"
+    assert board_export_status == 201
+    assert board_export["manifest"]["package_type"] == "musicforge_public_trust_center_acceptance_board"
+    assert board_zip_status == 200
+    assert board_zip["zip"]["sha256"]
+    assert board_verify_status == 200
+    assert board_verify["verification"]["status"] == "passed"
+    assert board_detail_status == 200
+    assert board_detail["summary"]["accepted_count"] == 2
+    assert board_download_status == 200
+    assert board_body.startswith(b"PK")
+    assert board_draft_status == 201
+    assert board_draft["draft"]["status"] == "draft"
     assert acceptance_detail_status == 200
     assert acceptance_detail["summary"]["accepted_evidence_status"] == "current"
     assert accepted_evidence_download_status == 200

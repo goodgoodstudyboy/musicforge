@@ -462,3 +462,117 @@ def test_public_trust_center_distribution_kit_cli(tmp_path: Path, monkeypatch) -
     evidence_saved = json.loads(evidence_report_out.read_text(encoding="utf-8"))
     assert evidence_verified["status"] == "passed"
     assert evidence_saved["summary"]["center_id"] == "ptc-default"
+
+    response_two = dict(template_payload["distribution_kit_acceptance_template"]["response_template"])
+    response_two.update(
+        {
+            "response_id": "cli-kit-accepted-002",
+            "reviewer": {"name": "CLI Legal", "organization": "Legal Org", "role": "legal"},
+            "reviewed_at": "2026-06-15T00:05:00+00:00",
+            "comments": "Legal receiver accepted from CLI smoke.",
+        }
+    )
+    response_two["response_hash"] = kit_acceptance_response_payload_hash(response_two)
+    response_two_file = tmp_path / "kit-acceptance-response-two.json"
+    response_two_file.write_text(json.dumps(response_two), encoding="utf-8")
+    second_acceptance = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "public-trust-center",
+            "--center-id",
+            "ptc-default",
+            "--distribution-kit-acceptance-response-file",
+            str(response_two_file),
+            "--distribution-kit-accepted-evidence-export",
+            "--distribution-kit-accepted-evidence-zip",
+            "--distribution-kit-accepted-evidence-verify",
+            "--strict",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert second_acceptance.returncode == 0, second_acceptance.stderr
+    policy_file = tmp_path / "acceptance-board-policy.json"
+    policy_file.write_text(
+        json.dumps({"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["receiver", "legal"]}}),
+        encoding="utf-8",
+    )
+    board = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "public-trust-center",
+            "--center-id",
+            "ptc-default",
+            "--acceptance-board-policy-save",
+            str(policy_file),
+            "--acceptance-board-refresh",
+            "--acceptance-board-export",
+            "--acceptance-board-zip",
+            "--acceptance-board-verify",
+            "--strict",
+            "--require-ready",
+            "--require-quorum",
+            "--require-no-conflicts",
+            "--min-accepted-count",
+            "2",
+            "--min-accepted-organizations",
+            "2",
+            "--required-role",
+            "receiver",
+            "--required-role",
+            "legal",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert board.returncode == 0, board.stderr
+    board_payload = json.loads(board.stdout)
+    board_zip = tmp_path / ".musicforge" / "public-trust-centers" / "ptc-default" / "acceptance-board" / "public-trust-center-acceptance-board.zip"
+    assert board_payload["acceptance_board_summary"]["readiness"] == "ready"
+    assert board_payload["acceptance_board_verification"]["status"] == "passed"
+    assert board_zip.exists()
+
+    board_report_out = tmp_path / "acceptance-board-verification.json"
+    board_verify = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-public-trust-center-acceptance-board-package",
+            str(board_zip),
+            "--json",
+            "--strict",
+            "--require-ready",
+            "--require-quorum",
+            "--require-no-conflicts",
+            "--distribution-kit",
+            str(kit_zip),
+            "--report-out",
+            str(board_report_out),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert board_verify.returncode == 0, board_verify.stderr
+    board_verified = json.loads(board_verify.stdout)
+    board_saved = json.loads(board_report_out.read_text(encoding="utf-8"))
+    assert board_verified["status"] == "passed"
+    assert board_saved["summary"]["center_id"] == "ptc-default"

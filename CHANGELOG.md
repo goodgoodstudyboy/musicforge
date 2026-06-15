@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.6.0 - 2026-06-15
+
+### Added
+- Public Trust Center Acceptance Board for aggregating multiple Distribution Kit external acceptance responses into a quorum-based ready/blocked decision.
+- Board policy requirements for accepted count, organization count, required roles, needs_changes/rejected handling, critical findings, and current accepted evidence.
+- `verify-public-trust-center-acceptance-board-package` CLI with response proof, accepted evidence summary, quorum evidence, external Distribution Kit binding, fixed-entry ZIP, and redaction checks.
+- Public Trust Center CLI/API/Studio controls for Acceptance Board policy, refresh, export, ZIP, verify, download, and signoff draft creation.
+- release-check v8.6 smoke covering ready quorum, missing role, needs_changes, rejected, stale source, participant full-resign tamper, declared extra file, and Kit mismatch.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_acceptance_board.py tests\test_cli_public_trust_center.py::test_public_trust_center_distribution_kit_cli tests\test_server_public_trust_center.py::test_server_public_trust_center_api tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v86_public_trust_center_acceptance_board_smoke -q`
+
 ## v8.5.1 - 2026-06-15
 
 ### Fixed

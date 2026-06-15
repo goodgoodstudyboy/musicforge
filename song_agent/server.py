@@ -357,6 +357,12 @@ from song_agent.public_trust_center_distribution_kit_acceptance import (
     PublicTrustCenterDistributionKitAcceptanceStore,
     accepted_evidence_summary as public_trust_center_distribution_kit_accepted_evidence_summary,
 )
+from song_agent.public_trust_center_acceptance_board import (
+    PublicTrustCenterAcceptanceBoardError,
+    PublicTrustCenterAcceptanceBoardNotFoundError,
+    PublicTrustCenterAcceptanceBoardStateError,
+    PublicTrustCenterAcceptanceBoardStore,
+)
 from song_agent.public_trust_center_verifier import (
     verify_public_trust_center_package,
     write_public_trust_center_verification_report,
@@ -2901,6 +2907,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def public_trust_center_distribution_kit_acceptance_store(self) -> PublicTrustCenterDistributionKitAcceptanceStore:
         return self.server.public_trust_center_distribution_kit_acceptance_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_acceptance_board_store(self) -> PublicTrustCenterAcceptanceBoardStore:
+        return self.server.public_trust_center_acceptance_board_store  # type: ignore[attr-defined]
 
     @property
     def audio_review_store(self) -> AudioReviewEvidenceStore:
@@ -7443,6 +7453,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Distribution Kit route not found.")
                 return
+            if action == "acceptance-board":
+                self._handle_public_trust_center_acceptance_board(method, center_id, parts)
+                return
             if action == "archive" and len(parts) == 2:
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -7480,6 +7493,93 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except PublicTrustCenterDistributionKitAcceptanceStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except PublicTrustCenterDistributionKitAcceptanceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except PublicTrustCenterAcceptanceBoardNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterAcceptanceBoardStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterAcceptanceBoardError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_public_trust_center_acceptance_board(self, method: str, center_id: str, parts: list[str]) -> None:
+        try:
+            if len(parts) == 2:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json(
+                    {
+                        "ok": True,
+                        "center_id": center_id,
+                        "report": self.public_trust_center_acceptance_board_store.read_report(center_id, default={}),
+                        "conflict_report": self.public_trust_center_acceptance_board_store.read_conflict_report(center_id, default={}),
+                        "policy": self.public_trust_center_acceptance_board_store.read_policy(center_id),
+                        "summary": self.public_trust_center_acceptance_board_store.summary(center_id),
+                    }
+                )
+                return
+            subaction = parts[2] if len(parts) > 2 else ""
+            if subaction == "download" and len(parts) == 3:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.public_trust_center_acceptance_board_store.zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-acceptance-board.zip")
+                return
+            if subaction == "policy" and len(parts) == 3:
+                if method == "GET":
+                    policy = self.public_trust_center_acceptance_board_store.read_policy(center_id)
+                    self._send_json({"ok": True, "center_id": center_id, "policy": policy})
+                    return
+                if method == "POST":
+                    policy = self.public_trust_center_acceptance_board_store.save_policy(center_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "policy": policy}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            if subaction == "refresh" and len(parts) == 3:
+                report = self.public_trust_center_acceptance_board_store.refresh_report(center_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "report": report, "summary": self.public_trust_center_acceptance_board_store.summary(center_id)}, status=HTTPStatus.CREATED)
+                return
+            if subaction == "export" and len(parts) == 3:
+                manifest = self.public_trust_center_acceptance_board_store.export_board(center_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "manifest": manifest, "summary": {"source_hash": manifest.get("source_hash"), "package_type": manifest.get("package_type")}}, status=HTTPStatus.CREATED)
+                return
+            if subaction == "zip" and len(parts) == 3:
+                zip_info = self.public_trust_center_acceptance_board_store.build_zip(center_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "zip": zip_info})
+                return
+            if subaction == "verify" and len(parts) == 3:
+                report = self.public_trust_center_acceptance_board_store.verify_zip(
+                    center_id,
+                    {
+                        "strict": bool(payload.get("strict", True)),
+                        "require_ready": bool(payload.get("require_ready", False)),
+                        "require_quorum": bool(payload.get("require_quorum", False)),
+                        "require_no_conflicts": bool(payload.get("require_no_conflicts", False)),
+                        "min_accepted_count": int(payload.get("min_accepted_count") or 0),
+                        "min_accepted_organizations": int(payload.get("min_accepted_organizations") or 0),
+                        "required_roles": payload.get("required_roles") if isinstance(payload.get("required_roles"), list) else [],
+                        "use_distribution_kit": bool(payload.get("use_distribution_kit", True)),
+                    },
+                )
+                self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                return
+            if subaction == "signoff-draft" and len(parts) == 3:
+                draft = self.public_trust_center_acceptance_board_store.create_signoff_draft(center_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "draft": draft}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Acceptance Board route not found.")
+        except PublicTrustCenterAcceptanceBoardNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except PublicTrustCenterAcceptanceBoardStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except PublicTrustCenterAcceptanceBoardError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except FileNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -16532,6 +16632,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         )
         self.public_trust_center_distribution_kit_acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(
             distribution_kit_store=self.public_trust_center_distribution_kit_store,
+        )
+        self.public_trust_center_acceptance_board_store = PublicTrustCenterAcceptanceBoardStore(
+            acceptance_store=self.public_trust_center_distribution_kit_acceptance_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

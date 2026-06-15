@@ -723,6 +723,20 @@ python -m song_agent.cli public-trust-center --center-id ptc-default --distribut
 python -m song_agent.cli verify-public-trust-center-distribution-kit-accepted-evidence-package path\to\accepted-evidence.zip --strict --require-current --distribution-kit path\to\public-trust-center-distribution-kit.zip --json
 ```
 
+Public Trust Center Acceptance Board aggregates multiple current external
+receiver acceptances into a quorum decision. A board policy can require a
+minimum accepted count, distinct organizations, and roles such as legal or
+distribution partner. `needs_changes`, `rejected`, critical findings, stale
+responses, and stale accepted evidence block readiness by default. The Board
+ZIP carries response proofs, accepted evidence summaries, and quorum evidence;
+the verifier cross-checks those sidecars instead of trusting a re-signed board
+report alone:
+
+```powershell
+python -m song_agent.cli public-trust-center --center-id ptc-default --acceptance-board-policy-save acceptance-board-policy.json --acceptance-board-refresh --acceptance-board-export --acceptance-board-zip --acceptance-board-verify --strict --require-ready --require-quorum --require-no-conflicts --json
+python -m song_agent.cli verify-public-trust-center-acceptance-board-package path\to\public-trust-center-acceptance-board.zip --strict --require-ready --require-quorum --require-no-conflicts --distribution-kit path\to\public-trust-center-distribution-kit.zip --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

@@ -967,6 +967,26 @@ def build_verify_public_trust_center_distribution_kit_accepted_evidence_parser()
     return verify_parser
 
 
+def build_verify_public_trust_center_acceptance_board_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Acceptance Board ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Acceptance Board ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict warnings as failures.")
+    verify_parser.add_argument("--require-ready", action="store_true", help="Require the board to be ready.")
+    verify_parser.add_argument("--require-quorum", action="store_true", help="Require the board quorum gate to pass.")
+    verify_parser.add_argument("--require-no-conflicts", action="store_true", help="Require no blocking board conflicts.")
+    verify_parser.add_argument("--min-accepted-count", type=int, default=0, help="Minimum accepted evidence count required by the verifier.")
+    verify_parser.add_argument("--min-accepted-organizations", type=int, default=0, help="Minimum accepted organization count required by the verifier.")
+    verify_parser.add_argument("--required-role", action="append", dest="required_roles", default=[], help="Required reviewer role. Can be repeated.")
+    verify_parser.add_argument("--distribution-kit", type=Path, default=None, help="External Distribution Kit ZIP for binding checks.")
+    verify_parser.add_argument("--accepted-evidence-dir", type=Path, default=None, help="Directory containing Accepted Evidence ZIPs for future deep checks.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=32, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=64, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=160, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build local MusicForge Public Trust Center reports and packages.")
     parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
@@ -1004,7 +1024,19 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--distribution-kit-accepted-evidence-zip", action="store_true", help="Build accepted Distribution Kit evidence ZIP for the response.")
     parser.add_argument("--distribution-kit-accepted-evidence-verify", action="store_true", help="Verify the accepted Distribution Kit evidence ZIP.")
     parser.add_argument("--distribution-kit-acceptance-change-request", action="store_true", help="Create a draft follow-up from a needs_changes/rejected Distribution Kit response.")
+    parser.add_argument("--acceptance-board-policy-save", type=Path, default=None, help="Save Acceptance Board policy from a JSON file.")
+    parser.add_argument("--acceptance-board-refresh", action="store_true", help="Refresh the Acceptance Board report.")
+    parser.add_argument("--acceptance-board-export", action="store_true", help="Export the Acceptance Board directory.")
+    parser.add_argument("--acceptance-board-zip", action="store_true", help="Build the Acceptance Board ZIP.")
+    parser.add_argument("--acceptance-board-verify", action="store_true", help="Verify the Acceptance Board ZIP.")
+    parser.add_argument("--acceptance-board-signoff-draft", action="store_true", help="Create an Acceptance Board signoff draft.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--require-ready", action="store_true", help="Verifier requires ready board/package state.")
+    parser.add_argument("--require-quorum", action="store_true", help="Verifier requires board quorum.")
+    parser.add_argument("--require-no-conflicts", action="store_true", help="Verifier requires no board conflicts.")
+    parser.add_argument("--min-accepted-count", type=int, default=0, help="Minimum accepted evidence count required by the verifier.")
+    parser.add_argument("--min-accepted-organizations", type=int, default=0, help="Minimum accepted organization count required by the verifier.")
+    parser.add_argument("--required-role", action="append", dest="required_roles", default=[], help="Required Acceptance Board role. Can be repeated.")
     parser.add_argument("--require-registry-current", action="store_true", help="Require current Registry evidence.")
     parser.add_argument("--require-portal-current", action="store_true", help="Require current Portal evidence.")
     parser.add_argument("--require-transparency-current", action="store_true", help="Require current Transparency evidence.")
@@ -2358,6 +2390,38 @@ def _main() -> None:
         else:
             print_public_trust_center_distribution_kit_accepted_evidence_verification_report(report)
         raise SystemExit(public_trust_center_distribution_kit_accepted_evidence_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-acceptance-board-package":
+        from song_agent.public_trust_center_acceptance_board_verifier import (
+            print_public_trust_center_acceptance_board_verification_report,
+            public_trust_center_acceptance_board_verification_exit_code,
+            verify_public_trust_center_acceptance_board_package,
+            write_public_trust_center_acceptance_board_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_acceptance_board_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_acceptance_board_package(
+            args.zip_path,
+            strict=args.strict,
+            require_ready=args.require_ready,
+            require_quorum=args.require_quorum,
+            require_no_conflicts=args.require_no_conflicts,
+            min_accepted_count=args.min_accepted_count,
+            min_accepted_organizations=args.min_accepted_organizations,
+            required_roles=args.required_roles,
+            distribution_kit_path=args.distribution_kit,
+            accepted_evidence_dir=args.accepted_evidence_dir,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_acceptance_board_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_acceptance_board_verification_report(report)
+        raise SystemExit(public_trust_center_acceptance_board_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3670,6 +3734,7 @@ def _main() -> None:
             verify_public_trust_center_anchor_transparency_package,
             write_public_trust_center_anchor_transparency_verification_report,
         )
+        from song_agent.public_trust_center_acceptance_board import PublicTrustCenterAcceptanceBoardStore
         from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, accepted_evidence_summary
         from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore, distribution_kit_summary
 
@@ -3684,6 +3749,7 @@ def _main() -> None:
             anchor_transparency_store=anchor_transparency_store,
         )
         distribution_kit_acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=distribution_kit_store)
+        acceptance_board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=distribution_kit_acceptance_store)
         payload: dict[str, Any] = {
             "center_id": args.center_id,
             "attestation_profile": args.profile,
@@ -3875,6 +3941,34 @@ def _main() -> None:
             if not args.distribution_kit_acceptance_response_id:
                 raise SystemExit("--distribution-kit-acceptance-response-id is required with --distribution-kit-acceptance-change-request")
             result["distribution_kit_acceptance_change_request"] = distribution_kit_acceptance_store.create_change_request_draft(args.center_id, args.distribution_kit_acceptance_response_id, {"source": "cli"})
+        if args.acceptance_board_policy_save is not None:
+            result["acceptance_board_policy"] = acceptance_board_store.save_policy(args.center_id, read_json(args.acceptance_board_policy_save))
+        if args.acceptance_board_refresh:
+            board = acceptance_board_store.refresh_report(args.center_id)
+            result["acceptance_board"] = board
+            result["acceptance_board_summary"] = acceptance_board_store.summary(args.center_id)
+        if args.acceptance_board_export:
+            result["acceptance_board_manifest"] = acceptance_board_store.export_board(args.center_id)
+        if args.acceptance_board_zip:
+            result["acceptance_board_zip"] = acceptance_board_store.build_zip(args.center_id)
+        if args.acceptance_board_verify:
+            board_verification = acceptance_board_store.verify_zip(
+                args.center_id,
+                {
+                    "strict": args.strict,
+                    "require_ready": args.require_ready,
+                    "require_quorum": args.require_quorum,
+                    "require_no_conflicts": args.require_no_conflicts,
+                    "min_accepted_count": args.min_accepted_count,
+                    "min_accepted_organizations": args.min_accepted_organizations,
+                    "required_roles": args.required_roles,
+                    "use_distribution_kit": True,
+                },
+            )
+            result["acceptance_board_verification"] = board_verification
+            result["acceptance_board_verification_summary"] = board_verification.get("summary", {})
+        if args.acceptance_board_signoff_draft:
+            result["acceptance_board_signoff_draft"] = acceptance_board_store.create_signoff_draft(args.center_id, {"source": "cli"})
         if args.report_out is not None:
             write_json(args.report_out, result)
         if args.json:
@@ -4743,6 +4837,12 @@ def print_release_operations_result(result: dict[str, Any]) -> None:
         print(f"zip: {(result.get('zip') or {}).get('filename')}")
     if verification:
         print(f"verify: {verification.get('status')}")
+    board_summary = result.get("acceptance_board_summary") if isinstance(result.get("acceptance_board_summary"), dict) else {}
+    board_verification = result.get("acceptance_board_verification") if isinstance(result.get("acceptance_board_verification"), dict) else {}
+    if board_summary:
+        print(f"acceptance board: {board_summary.get('readiness') or '-'} / accepted={board_summary.get('accepted_count', 0)}")
+    if board_verification:
+        print(f"acceptance board verify: {board_verification.get('status')}")
 
 
 def print_release_operations_runbook_result(result: dict[str, Any]) -> None:
