@@ -13231,6 +13231,8 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
         from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package, write_public_trust_center_anchor_transparency_verification_report
         from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
         from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, response_payload_hash
+        from song_agent.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package
+        from song_agent.public_trust_center_verifier import verify_public_trust_center_package
         from song_agent.releases import ReleaseStore
 
         class _DummyStore:
@@ -13313,6 +13315,26 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
         board_store.refresh_report("ptc-default")
         board_store.export_board("ptc-default")
         board_store.build_zip("ptc-default")
+        ptc_missing_signoff = verify_public_trust_center_package(
+            trust_store.zip_path("ptc-default"),
+            strict=True,
+            require_acceptance_board_signoff=True,
+            acceptance_board_path=board_store.zip_path("ptc-default"),
+            acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+            distribution_kit_path=kit_store.zip_path("ptc-default"),
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
+        kit_missing_signoff = verify_public_trust_center_distribution_kit_package(
+            kit_store.zip_path("ptc-default"),
+            strict=True,
+            deep=True,
+            require_current=True,
+            require_delivery_readiness=False,
+            require_acceptance_board_signoff=True,
+            acceptance_board_path=board_store.zip_path("ptc-default"),
+            acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
         signoff = board_store.signoff("ptc-default", {"signed_by": "release-check", "reason": "v8.7 acceptance board signoff smoke."})
 
         def _blocked(func) -> bool:
@@ -13329,6 +13351,28 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
         manifest = board_store.export_signoff_archive("ptc-default")
         zip_info = board_store.build_signoff_archive_zip("ptc-default")
         verification = board_store.verify_signoff_archive_zip("ptc-default", {"strict": True, "require_signed": True, "require_current": True, "require_ready": True})
+        ptc_signoff_required = verify_public_trust_center_package(
+            trust_store.zip_path("ptc-default"),
+            strict=True,
+            require_acceptance_board_signoff=True,
+            acceptance_board_signoff_archive_path=board_store.signoff_archive_zip_path("ptc-default"),
+            acceptance_board_path=board_store.zip_path("ptc-default"),
+            acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+            distribution_kit_path=kit_store.zip_path("ptc-default"),
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
+        kit_signoff_required = verify_public_trust_center_distribution_kit_package(
+            kit_store.zip_path("ptc-default"),
+            strict=True,
+            deep=True,
+            require_current=True,
+            require_delivery_readiness=False,
+            require_acceptance_board_signoff=True,
+            acceptance_board_signoff_archive_path=board_store.signoff_archive_zip_path("ptc-default"),
+            acceptance_board_path=board_store.zip_path("ptc-default"),
+            acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
 
         wrong_board = base / "wrong-board.zip"
         wrong_board.write_bytes(board_store.zip_path("ptc-default").read_bytes() + b"x")
@@ -13393,6 +13437,10 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
             and signed_export_blocked
             and signed_zip_blocked
             and signed_draft_blocked
+            and _v38_check_status(ptc_missing_signoff, "ptc_require_acceptance_board_signoff") == "failed"
+            and _v38_check_status(kit_missing_signoff, "ptcdk_require_acceptance_board_signoff") == "failed"
+            and ptc_signoff_required.get("status") == "passed"
+            and kit_signoff_required.get("status") == "passed"
             and _v38_check_status(board_replaced, "ptcabs_external_board_zip_sha256") == "failed"
             and _v38_check_status(kit_replaced, "ptcabs_external_distribution_kit_sha256") == "failed"
             and _v38_check_status(evidence_replaced, "ptcabs_external_accepted_evidence_binding") == "failed"
@@ -13406,6 +13454,7 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
         return ok, (
             f"signoff={signoff.get('status')}, archive={verification.get('status')}, signed_refresh={signed_refresh_blocked}, signed_export={signed_export_blocked}, signed_zip={signed_zip_blocked}, "
             f"signed_draft={signed_draft_blocked}, "
+            f"ptc_require={_v38_check_status(ptc_missing_signoff, 'ptc_require_acceptance_board_signoff')}/{ptc_signoff_required.get('status')}, kit_require={_v38_check_status(kit_missing_signoff, 'ptcdk_require_acceptance_board_signoff')}/{kit_signoff_required.get('status')}, "
             f"board_replaced={_v38_check_status(board_replaced, 'ptcabs_external_board_zip_sha256')}, kit_replaced={_v38_check_status(kit_replaced, 'ptcabs_external_distribution_kit_sha256')}, evidence_replaced={_v38_check_status(evidence_replaced, 'ptcabs_external_accepted_evidence_binding')}, "
             f"delete_reexport={delete_reexport_blocked}, delete_rezip={delete_rezip_blocked}, reset_without_cr={reset_without_cr}, draft_reset={draft_reset_blocked}, reset={reset.get('status')}, reuse_reset={reuse_reset_blocked}"
         )

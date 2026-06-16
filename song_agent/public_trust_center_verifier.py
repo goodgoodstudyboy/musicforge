@@ -84,6 +84,7 @@ def verify_public_trust_center_package(
     require_operations_signed: bool = False,
     require_operations_audit: bool = False,
     require_operations_reviewer_pack: bool = False,
+    require_acceptance_board_signoff: bool = False,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -92,6 +93,11 @@ def verify_public_trust_center_package(
     anchor_registry_path: Path | str | None = None,
     anchor_transparency_path: Path | str | None = None,
     anchor_checkpoint_path: Path | str | None = None,
+    acceptance_board_signoff_archive_path: Path | str | None = None,
+    acceptance_board_path: Path | str | None = None,
+    acceptance_board_verification_report_path: Path | str | None = None,
+    distribution_kit_path: Path | str | None = None,
+    accepted_evidence_dir: Path | str | None = None,
     require_anchor_registry_current: bool = False,
     require_anchor_published: bool = False,
     require_anchor_not_revoked: bool = False,
@@ -114,6 +120,7 @@ def verify_public_trust_center_package(
         require_operations_signed=require_operations_signed,
         require_operations_audit=require_operations_audit,
         require_operations_reviewer_pack=require_operations_reviewer_pack,
+        require_acceptance_board_signoff=require_acceptance_board_signoff,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -122,6 +129,11 @@ def verify_public_trust_center_package(
         anchor_registry_path=Path(anchor_registry_path) if anchor_registry_path is not None else None,
         anchor_transparency_path=Path(anchor_transparency_path) if anchor_transparency_path is not None else None,
         anchor_checkpoint_path=Path(anchor_checkpoint_path) if anchor_checkpoint_path is not None else None,
+        acceptance_board_signoff_archive_path=Path(acceptance_board_signoff_archive_path) if acceptance_board_signoff_archive_path is not None else None,
+        acceptance_board_path=Path(acceptance_board_path) if acceptance_board_path is not None else None,
+        acceptance_board_verification_report_path=Path(acceptance_board_verification_report_path) if acceptance_board_verification_report_path is not None else None,
+        distribution_kit_path=Path(distribution_kit_path) if distribution_kit_path is not None else None,
+        accepted_evidence_dir=Path(accepted_evidence_dir) if accepted_evidence_dir is not None else None,
         require_anchor_registry_current=require_anchor_registry_current,
         require_anchor_published=require_anchor_published,
         require_anchor_not_revoked=require_anchor_not_revoked,
@@ -175,6 +187,7 @@ class _PublicTrustCenterVerifier:
         require_operations_signed: bool,
         require_operations_audit: bool,
         require_operations_reviewer_pack: bool,
+        require_acceptance_board_signoff: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -183,6 +196,11 @@ class _PublicTrustCenterVerifier:
         anchor_registry_path: Path | None,
         anchor_transparency_path: Path | None,
         anchor_checkpoint_path: Path | None,
+        acceptance_board_signoff_archive_path: Path | None,
+        acceptance_board_path: Path | None,
+        acceptance_board_verification_report_path: Path | None,
+        distribution_kit_path: Path | None,
+        accepted_evidence_dir: Path | None,
         require_anchor_registry_current: bool,
         require_anchor_published: bool,
         require_anchor_not_revoked: bool,
@@ -204,6 +222,7 @@ class _PublicTrustCenterVerifier:
         self.require_operations_signed = require_operations_signed
         self.require_operations_audit = require_operations_audit
         self.require_operations_reviewer_pack = require_operations_reviewer_pack
+        self.require_acceptance_board_signoff = require_acceptance_board_signoff
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -212,6 +231,11 @@ class _PublicTrustCenterVerifier:
         self.anchor_registry_path = anchor_registry_path
         self.anchor_transparency_path = anchor_transparency_path
         self.anchor_checkpoint_path = anchor_checkpoint_path
+        self.acceptance_board_signoff_archive_path = acceptance_board_signoff_archive_path
+        self.acceptance_board_path = acceptance_board_path
+        self.acceptance_board_verification_report_path = acceptance_board_verification_report_path
+        self.distribution_kit_path = distribution_kit_path
+        self.accepted_evidence_dir = accepted_evidence_dir
         self.require_anchor_registry_current = require_anchor_registry_current
         self.require_anchor_published = require_anchor_published
         self.require_anchor_not_revoked = require_anchor_not_revoked
@@ -250,6 +274,7 @@ class _PublicTrustCenterVerifier:
                 self._verify_delivery_anchor()
                 self._verify_anchor_registry()
                 self._verify_anchor_transparency()
+                self._verify_acceptance_board_signoff()
                 self._verify_redaction(archive)
         finally:
             if archive is not None:
@@ -754,6 +779,38 @@ class _PublicTrustCenterVerifier:
         if self.require_anchor_transparency_current:
             checkpoint_hash = transparency_report.get("checkpoint_hash")
             self._add_check("requirements", "ptc_anchor_transparency_checkpoint_current", "passed" if checkpoint_hash else "failed", "blocking", "Anchor Transparency current checkpoint is present." if checkpoint_hash else "Anchor Transparency current checkpoint is required.")
+
+    def _verify_acceptance_board_signoff(self) -> None:
+        required = self.require_acceptance_board_signoff or self.acceptance_board_signoff_archive_path is not None
+        if not required:
+            return
+        if self.acceptance_board_signoff_archive_path is None:
+            self._add_check("requirements", "ptc_require_acceptance_board_signoff", "failed", "blocking", "Acceptance Board signoff archive is required.")
+            return
+        if not self.acceptance_board_signoff_archive_path.exists() or not self.acceptance_board_signoff_archive_path.is_file() or self.acceptance_board_signoff_archive_path.is_symlink():
+            self._add_check("requirements", "ptc_acceptance_board_signoff_archive_present", "failed", "blocking", "Acceptance Board signoff archive ZIP does not exist or is not a regular file.")
+            return
+        try:
+            from song_agent.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package
+        except Exception as exc:
+            self._add_check("requirements", "ptc_acceptance_board_signoff_import", "failed", "blocking", f"Acceptance Board signoff verifier cannot be imported: {exc}")
+            return
+        report = verify_public_trust_center_acceptance_board_signoff_archive_package(
+            self.acceptance_board_signoff_archive_path,
+            strict=True,
+            require_signed=True,
+            require_current=bool(self.acceptance_board_path or self.distribution_kit_path or self.accepted_evidence_dir),
+            require_ready=True,
+            board_zip_path=self.acceptance_board_path,
+            board_verification_report_path=self.acceptance_board_verification_report_path,
+            distribution_kit_path=self.distribution_kit_path,
+            accepted_evidence_dir=self.accepted_evidence_dir,
+            now=self.generated_at,
+        )
+        self._add_exact_check("requirements", "ptc_acceptance_board_signoff_verification_status", report.get("status"), "passed", "Acceptance Board signoff archive verification status")
+        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        self._add_exact_check("requirements", "ptc_acceptance_board_signoff_status", summary.get("signoff_status"), "signed", "Acceptance Board signoff status")
+        self._add_exact_check("requirements", "ptc_acceptance_board_signoff_ready", summary.get("board_readiness"), "ready", "Acceptance Board readiness")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         for name in self.entry_names:

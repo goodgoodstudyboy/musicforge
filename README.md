@@ -751,6 +751,14 @@ python -m song_agent.cli public-trust-center --center-id ptc-default --acceptanc
 python -m song_agent.cli verify-public-trust-center-acceptance-board-signoff-archive-package path\to\public-trust-center-acceptance-board-signoff-archive.zip --strict --require-signed --require-current --require-ready --board-zip path\to\public-trust-center-acceptance-board.zip --board-verification-report path\to\acceptance-board-verification-report.json --distribution-kit path\to\public-trust-center-distribution-kit.zip --accepted-evidence-dir path\to\accepted-evidence --json
 ```
 
+Top-level Public Trust Center and Distribution Kit verification can require the
+same signed Board evidence:
+
+```powershell
+python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-acceptance-board-signoff --acceptance-board-signoff-archive path\to\public-trust-center-acceptance-board-signoff-archive.zip --acceptance-board path\to\public-trust-center-acceptance-board.zip --acceptance-board-verification-report path\to\acceptance-board-verification-report.json --distribution-kit path\to\public-trust-center-distribution-kit.zip --accepted-evidence-dir path\to\accepted-evidence --json
+python -m song_agent.cli verify-public-trust-center-distribution-kit-package path\to\public-trust-center-distribution-kit.zip --strict --deep --require-current --no-require-delivery-readiness --require-acceptance-board-signoff --acceptance-board-signoff-archive path\to\public-trust-center-acceptance-board-signoff-archive.zip --acceptance-board path\to\public-trust-center-acceptance-board.zip --acceptance-board-verification-report path\to\acceptance-board-verification-report.json --accepted-evidence-dir path\to\accepted-evidence --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

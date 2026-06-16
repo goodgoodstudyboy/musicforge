@@ -1,5 +1,16 @@
 # Changelog
 
+## v8.7.1 - 2026-06-16
+
+### Fixed
+- Public Trust Center verifier now supports `--require-acceptance-board-signoff` with an external Acceptance Board Signoff Archive, Board ZIP, Board verification report, Distribution Kit ZIP, and Accepted Evidence directory.
+- Public Trust Center Distribution Kit verifier now supports the same Acceptance Board Signoff gate and binds the signoff archive back to the current Kit ZIP.
+- release-check v8.7 smoke now covers missing signoff failure and signed signoff success for both top-level Public Trust Center and Distribution Kit verification.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_acceptance_board.py::test_acceptance_board_signoff_required_by_ptc_and_distribution_kit tests\test_release_check.py::test_v87_public_trust_center_acceptance_board_signoff_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --only v87.public_trust_center_acceptance_board_signoff_smoke --skip-tests --json`
+
 ## v8.7.0 - 2026-06-16
 
 ### Added

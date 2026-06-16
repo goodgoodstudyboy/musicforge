@@ -19,6 +19,8 @@ from song_agent.public_trust_center_acceptance_board import (
 )
 from song_agent.public_trust_center_acceptance_board_verifier import verify_public_trust_center_acceptance_board_package
 from song_agent.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package
+from song_agent.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package
+from song_agent.public_trust_center_verifier import verify_public_trust_center_package
 from song_agent.public_trust_center_distribution_kit_acceptance import (
     PublicTrustCenterDistributionKitAcceptanceStore,
     response_payload_hash,
@@ -259,6 +261,67 @@ def test_acceptance_board_signoff_archive_verifier_rejects_external_evidence_rep
 
     assert verification["status"] == "failed"
     assert _has_blocker(verification, "ptcabs_external_accepted_evidence_binding")
+
+
+def test_acceptance_board_signoff_required_by_ptc_and_distribution_kit(tmp_path: Path, monkeypatch) -> None:
+    board_store, kit_store, acceptance_store = _ready_board(tmp_path, monkeypatch)
+    board_store.refresh_report("ptc-default")
+    board_store.export_board("ptc-default")
+    board_store.build_zip("ptc-default")
+
+    ptc_missing = verify_public_trust_center_package(
+        kit_store.trust_center_store.zip_path("ptc-default"),
+        strict=True,
+        require_acceptance_board_signoff=True,
+        acceptance_board_path=board_store.zip_path("ptc-default"),
+        acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+        distribution_kit_path=kit_store.zip_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+    )
+    kit_missing = verify_public_trust_center_distribution_kit_package(
+        kit_store.zip_path("ptc-default"),
+        strict=True,
+        deep=True,
+        require_current=True,
+        require_delivery_readiness=False,
+        require_acceptance_board_signoff=True,
+        acceptance_board_path=board_store.zip_path("ptc-default"),
+        acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+    )
+
+    assert _has_blocker(ptc_missing, "ptc_require_acceptance_board_signoff")
+    assert _has_blocker(kit_missing, "ptcdk_require_acceptance_board_signoff")
+
+    board_store.signoff("ptc-default", {"signed_by": "Reviewer", "reason": "Board quorum is ready for release."})
+    board_store.export_signoff_archive("ptc-default")
+    board_store.build_signoff_archive_zip("ptc-default")
+
+    ptc_report = verify_public_trust_center_package(
+        kit_store.trust_center_store.zip_path("ptc-default"),
+        strict=True,
+        require_acceptance_board_signoff=True,
+        acceptance_board_signoff_archive_path=board_store.signoff_archive_zip_path("ptc-default"),
+        acceptance_board_path=board_store.zip_path("ptc-default"),
+        acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+        distribution_kit_path=kit_store.zip_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+    )
+    kit_report = verify_public_trust_center_distribution_kit_package(
+        kit_store.zip_path("ptc-default"),
+        strict=True,
+        deep=True,
+        require_current=True,
+        require_delivery_readiness=False,
+        require_acceptance_board_signoff=True,
+        acceptance_board_signoff_archive_path=board_store.signoff_archive_zip_path("ptc-default"),
+        acceptance_board_path=board_store.zip_path("ptc-default"),
+        acceptance_board_verification_report_path=board_store.verification_report_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+    )
+
+    assert ptc_report["status"] == "passed"
+    assert kit_report["status"] == "passed"
 
 
 def _ready_board(tmp_path: Path, monkeypatch, *, second_role: str = "distribution_partner") -> tuple[PublicTrustCenterAcceptanceBoardStore, object, PublicTrustCenterDistributionKitAcceptanceStore]:

@@ -885,10 +885,16 @@ def build_verify_public_trust_center_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-operations-signed", action="store_true", help="Require Release Operations Signoff evidence.")
     verify_parser.add_argument("--require-operations-audit", action="store_true", help="Require verified Release Operations Audit evidence.")
     verify_parser.add_argument("--require-operations-reviewer-pack", action="store_true", help="Require verified Release Operations Reviewer Pack evidence.")
+    verify_parser.add_argument("--require-acceptance-board-signoff", action="store_true", help="Require current Acceptance Board signoff archive evidence.")
     verify_parser.add_argument("--delivery-anchor", type=Path, default=None, help="Path to an external Public Trust Center delivery anchor JSON file.")
     verify_parser.add_argument("--anchor-registry", type=Path, default=None, help="Path to a Public Trust Center Anchor Registry ZIP.")
     verify_parser.add_argument("--anchor-transparency", type=Path, default=None, help="Path to a Public Trust Center Anchor Transparency ZIP.")
     verify_parser.add_argument("--anchor-checkpoint", type=Path, default=None, help="Path to an external Anchor Transparency checkpoint JSON.")
+    verify_parser.add_argument("--acceptance-board-signoff-archive", type=Path, default=None, help="Path to an external Acceptance Board Signoff Archive ZIP.")
+    verify_parser.add_argument("--acceptance-board", type=Path, default=None, help="Path to an external Acceptance Board ZIP.")
+    verify_parser.add_argument("--acceptance-board-verification-report", type=Path, default=None, help="Path to the stored Acceptance Board verification report.")
+    verify_parser.add_argument("--distribution-kit", type=Path, default=None, help="Path to an external Distribution Kit ZIP for signoff archive binding.")
+    verify_parser.add_argument("--accepted-evidence-dir", type=Path, default=None, help="Directory containing Accepted Evidence ZIPs for signoff archive binding.")
     verify_parser.add_argument("--require-anchor-registry-current", action="store_true", help="Require the Anchor Registry current entry to match this package.")
     verify_parser.add_argument("--require-anchor-published", action="store_true", help="Require the Anchor Registry current entry to be published.")
     verify_parser.add_argument("--require-anchor-not-revoked", action="store_true", help="Require the Anchor Registry current entry not to be revoked.")
@@ -947,6 +953,11 @@ def build_verify_public_trust_center_distribution_kit_parser() -> argparse.Argum
     verify_parser.add_argument("--require-anchor-not-revoked", action="store_true", default=True, help="Require current anchor not revoked.")
     verify_parser.add_argument("--require-anchor-transparency-current", action="store_true", default=True, help="Require current Anchor Transparency evidence.")
     verify_parser.add_argument("--require-anchor-checkpoint", action="store_true", default=True, help="Require the included checkpoint.")
+    verify_parser.add_argument("--require-acceptance-board-signoff", action="store_true", help="Require current Acceptance Board signoff archive evidence.")
+    verify_parser.add_argument("--acceptance-board-signoff-archive", type=Path, default=None, help="Path to an external Acceptance Board Signoff Archive ZIP.")
+    verify_parser.add_argument("--acceptance-board", type=Path, default=None, help="Path to an external Acceptance Board ZIP.")
+    verify_parser.add_argument("--acceptance-board-verification-report", type=Path, default=None, help="Path to the stored Acceptance Board verification report.")
+    verify_parser.add_argument("--accepted-evidence-dir", type=Path, default=None, help="Directory containing Accepted Evidence ZIPs for signoff archive binding.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=256, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=512, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=400, help="Maximum number of ZIP entries.")
@@ -2285,10 +2296,16 @@ def _main() -> None:
             require_operations_signed=args.require_operations_signed,
             require_operations_audit=args.require_operations_audit,
             require_operations_reviewer_pack=args.require_operations_reviewer_pack,
+            require_acceptance_board_signoff=args.require_acceptance_board_signoff,
             delivery_anchor_path=args.delivery_anchor,
             anchor_registry_path=args.anchor_registry,
             anchor_transparency_path=args.anchor_transparency,
             anchor_checkpoint_path=args.anchor_checkpoint,
+            acceptance_board_signoff_archive_path=args.acceptance_board_signoff_archive,
+            acceptance_board_path=args.acceptance_board,
+            acceptance_board_verification_report_path=args.acceptance_board_verification_report,
+            distribution_kit_path=args.distribution_kit,
+            accepted_evidence_dir=args.accepted_evidence_dir,
             require_anchor_registry_current=args.require_anchor_registry_current,
             require_anchor_published=args.require_anchor_published,
             require_anchor_not_revoked=args.require_anchor_not_revoked,
@@ -2382,6 +2399,11 @@ def _main() -> None:
             require_anchor_not_revoked=args.require_anchor_not_revoked,
             require_anchor_transparency_current=args.require_anchor_transparency_current,
             require_anchor_checkpoint=args.require_anchor_checkpoint,
+            require_acceptance_board_signoff=args.require_acceptance_board_signoff,
+            acceptance_board_signoff_archive_path=args.acceptance_board_signoff_archive,
+            acceptance_board_path=args.acceptance_board,
+            acceptance_board_verification_report_path=args.acceptance_board_verification_report,
+            accepted_evidence_dir=args.accepted_evidence_dir,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,

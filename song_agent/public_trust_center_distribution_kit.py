@@ -212,6 +212,11 @@ class PublicTrustCenterDistributionKitStore:
             require_anchor_not_revoked=bool(payload.get("require_anchor_not_revoked", True)),
             require_anchor_transparency_current=bool(payload.get("require_anchor_transparency_current", True)),
             require_anchor_checkpoint=bool(payload.get("require_anchor_checkpoint", True)),
+            require_acceptance_board_signoff=bool(payload.get("require_acceptance_board_signoff", False)),
+            acceptance_board_signoff_archive_path=payload.get("acceptance_board_signoff_archive_path"),
+            acceptance_board_path=payload.get("acceptance_board_path"),
+            acceptance_board_verification_report_path=payload.get("acceptance_board_verification_report_path"),
+            accepted_evidence_dir=payload.get("accepted_evidence_dir"),
             now=now,
         )
         write_public_trust_center_distribution_kit_verification_report(report, self.verification_report_path(center_id))
