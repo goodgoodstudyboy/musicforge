@@ -1,5 +1,18 @@
 # Changelog
 
+## v8.7.0 - 2026-06-16
+
+### Added
+- Public Trust Center Acceptance Board Signoff with immutable signed state for board policy, report refresh, export, and board ZIP rebuilds.
+- Acceptance Board Signoff Archive export/ZIP/verifier with fixed-entry ZIP validation, signoff/source integrity checks, Board ZIP binding, Board verification report binding, Distribution Kit binding, and external Accepted Evidence binding.
+- Acceptance Board Change Request workflow for approved signoff reset; draft requests cannot reset signoff and applied requests cannot be reused.
+- CLI/API/Studio controls for Acceptance Board signoff, signoff archive export, ZIP, verification, download, and reset via approved Change Request.
+- release-check v8.7 smoke covering signoff, signed mutation blocking, archive verification, Board ZIP replacement, Distribution Kit replacement, Accepted Evidence replacement, delete-and-rebuild blocking, and Change Request reset semantics.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_acceptance_board.py::test_acceptance_board_signoff_archive_roundtrip_and_immutability tests\test_public_trust_center_acceptance_board.py::test_acceptance_board_signoff_reset_requires_approved_change_request tests\test_public_trust_center_acceptance_board.py::test_acceptance_board_signoff_archive_verifier_rejects_external_evidence_replacement tests\test_cli_public_trust_center.py::test_public_trust_center_distribution_kit_cli tests\test_server_public_trust_center.py::test_server_public_trust_center_api tests\test_release_check.py::test_v87_public_trust_center_acceptance_board_signoff_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --only v87.public_trust_center_acceptance_board_signoff_smoke --skip-tests --json`
+
 ## v8.6.1 - 2026-06-15
 
 ### Fixed

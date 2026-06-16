@@ -987,6 +987,25 @@ def build_verify_public_trust_center_acceptance_board_parser() -> argparse.Argum
     return verify_parser
 
 
+def build_verify_public_trust_center_acceptance_board_signoff_archive_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Acceptance Board Signoff Archive ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Acceptance Board Signoff Archive ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict warnings as failures.")
+    verify_parser.add_argument("--require-signed", action="store_true", help="Require a signed Acceptance Board signoff.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require external current board/evidence bindings.")
+    verify_parser.add_argument("--require-ready", action="store_true", help="Require a ready and verified board.")
+    verify_parser.add_argument("--board-zip", type=Path, default=None, help="External Acceptance Board ZIP for current checks.")
+    verify_parser.add_argument("--board-verification-report", type=Path, default=None, help="Stored Acceptance Board verification report.")
+    verify_parser.add_argument("--distribution-kit", type=Path, default=None, help="External Distribution Kit ZIP for binding checks.")
+    verify_parser.add_argument("--accepted-evidence-dir", type=Path, default=None, help="Directory containing Accepted Evidence ZIPs.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=32, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=64, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build local MusicForge Public Trust Center reports and packages.")
     parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
@@ -1030,6 +1049,16 @@ def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--acceptance-board-zip", action="store_true", help="Build the Acceptance Board ZIP.")
     parser.add_argument("--acceptance-board-verify", action="store_true", help="Verify the Acceptance Board ZIP.")
     parser.add_argument("--acceptance-board-signoff-draft", action="store_true", help="Create an Acceptance Board signoff draft.")
+    parser.add_argument("--acceptance-board-signoff", action="store_true", help="Sign the current ready Acceptance Board.")
+    parser.add_argument("--acceptance-board-signed-by", default="MusicForge Operator", help="Signer name for Acceptance Board signoff.")
+    parser.add_argument("--acceptance-board-signoff-reason", default="Acceptance Board ready for public release.", help="Reason for Acceptance Board signoff.")
+    parser.add_argument("--acceptance-board-change-request-create", action="store_true", help="Create an Acceptance Board signoff Change Request.")
+    parser.add_argument("--acceptance-board-change-request-approve", action="store_true", help="Approve an Acceptance Board signoff Change Request.")
+    parser.add_argument("--acceptance-board-change-request-id", default=None, help="Acceptance Board Change Request id.")
+    parser.add_argument("--acceptance-board-reset-signoff", action="store_true", help="Reset Acceptance Board signoff using an approved Change Request.")
+    parser.add_argument("--acceptance-board-signoff-archive-export", action="store_true", help="Export the Acceptance Board signoff archive directory.")
+    parser.add_argument("--acceptance-board-signoff-archive-zip", action="store_true", help="Build the Acceptance Board signoff archive ZIP.")
+    parser.add_argument("--acceptance-board-signoff-archive-verify", action="store_true", help="Verify the Acceptance Board signoff archive ZIP.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-ready", action="store_true", help="Verifier requires ready board/package state.")
     parser.add_argument("--require-quorum", action="store_true", help="Verifier requires board quorum.")
@@ -2422,6 +2451,37 @@ def _main() -> None:
         else:
             print_public_trust_center_acceptance_board_verification_report(report)
         raise SystemExit(public_trust_center_acceptance_board_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-acceptance-board-signoff-archive-package":
+        from song_agent.public_trust_center_acceptance_board_signoff_verifier import (
+            print_public_trust_center_acceptance_board_signoff_archive_verification_report,
+            public_trust_center_acceptance_board_signoff_archive_verification_exit_code,
+            verify_public_trust_center_acceptance_board_signoff_archive_package,
+            write_public_trust_center_acceptance_board_signoff_archive_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_acceptance_board_signoff_archive_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_acceptance_board_signoff_archive_package(
+            args.zip_path,
+            strict=args.strict,
+            require_signed=args.require_signed,
+            require_current=args.require_current,
+            require_ready=args.require_ready,
+            board_zip_path=args.board_zip,
+            board_verification_report_path=args.board_verification_report,
+            distribution_kit_path=args.distribution_kit,
+            accepted_evidence_dir=args.accepted_evidence_dir,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_acceptance_board_signoff_archive_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_acceptance_board_signoff_archive_verification_report(report)
+        raise SystemExit(public_trust_center_acceptance_board_signoff_archive_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3969,6 +4029,44 @@ def _main() -> None:
             result["acceptance_board_verification_summary"] = board_verification.get("summary", {})
         if args.acceptance_board_signoff_draft:
             result["acceptance_board_signoff_draft"] = acceptance_board_store.create_signoff_draft(args.center_id, {"source": "cli"})
+        if args.acceptance_board_signoff:
+            signoff = acceptance_board_store.signoff(args.center_id, {"signed_by": args.acceptance_board_signed_by, "reason": args.acceptance_board_signoff_reason})
+            result["acceptance_board_signoff"] = signoff
+            result["acceptance_board_summary"] = acceptance_board_store.summary(args.center_id)
+        if args.acceptance_board_change_request_create:
+            change = acceptance_board_store.create_change_request(args.center_id, {"reason": args.acceptance_board_signoff_reason, "requested_by": args.acceptance_board_signed_by})
+            result["acceptance_board_change_request"] = change
+        if args.acceptance_board_change_request_approve:
+            if not args.acceptance_board_change_request_id:
+                raise SystemExit("--acceptance-board-change-request-id is required with --acceptance-board-change-request-approve")
+            change = acceptance_board_store.approve_change_request(args.center_id, args.acceptance_board_change_request_id, {"approved_by": args.acceptance_board_signed_by, "reason": args.acceptance_board_signoff_reason})
+            result["acceptance_board_change_request"] = change
+        if args.acceptance_board_reset_signoff:
+            if not args.acceptance_board_change_request_id:
+                raise SystemExit("--acceptance-board-change-request-id is required with --acceptance-board-reset-signoff")
+            reset = acceptance_board_store.reset_signoff(args.center_id, {"change_request_id": args.acceptance_board_change_request_id, "reason": args.acceptance_board_signoff_reason})
+            result["acceptance_board_signoff_reset"] = reset
+            result["acceptance_board_summary"] = acceptance_board_store.summary(args.center_id)
+        if args.acceptance_board_signoff_archive_export:
+            result["acceptance_board_signoff_archive_manifest"] = acceptance_board_store.export_signoff_archive(args.center_id)
+        if args.acceptance_board_signoff_archive_zip:
+            result["acceptance_board_signoff_archive_zip"] = acceptance_board_store.build_signoff_archive_zip(args.center_id)
+        if args.acceptance_board_signoff_archive_verify:
+            archive_verification = acceptance_board_store.verify_signoff_archive_zip(
+                args.center_id,
+                {
+                    "strict": args.strict,
+                    "require_signed": True,
+                    "require_current": True,
+                    "require_ready": True,
+                    "use_board_zip": True,
+                    "use_board_verification": True,
+                    "use_distribution_kit": True,
+                    "use_accepted_evidence": True,
+                },
+            )
+            result["acceptance_board_signoff_archive_verification"] = archive_verification
+            result["acceptance_board_signoff_archive_verification_summary"] = archive_verification.get("summary", {})
         if args.report_out is not None:
             write_json(args.report_out, result)
         if args.json:
@@ -4843,6 +4941,14 @@ def print_release_operations_result(result: dict[str, Any]) -> None:
         print(f"acceptance board: {board_summary.get('readiness') or '-'} / accepted={board_summary.get('accepted_count', 0)}")
     if board_verification:
         print(f"acceptance board verify: {board_verification.get('status')}")
+    signoff = result.get("acceptance_board_signoff") if isinstance(result.get("acceptance_board_signoff"), dict) else {}
+    archive_verification = result.get("acceptance_board_signoff_archive_verification") if isinstance(result.get("acceptance_board_signoff_archive_verification"), dict) else {}
+    if signoff:
+        print(f"acceptance board signoff: {signoff.get('status')}")
+    if result.get("acceptance_board_signoff_archive_zip"):
+        print(f"acceptance board signoff archive zip: {(result.get('acceptance_board_signoff_archive_zip') or {}).get('sha256')}")
+    if archive_verification:
+        print(f"acceptance board signoff archive verify: {archive_verification.get('status')}")
 
 
 def print_release_operations_runbook_result(result: dict[str, Any]) -> None:

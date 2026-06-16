@@ -7527,6 +7527,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_file(self.public_trust_center_acceptance_board_store.zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-acceptance-board.zip")
                 return
+            if subaction == "signoff-archive" and len(parts) >= 4 and parts[3] == "download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.public_trust_center_acceptance_board_store.signoff_archive_zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-acceptance-board-signoff-archive.zip")
+                return
             if subaction == "policy" and len(parts) == 3:
                 if method == "GET":
                     policy = self.public_trust_center_acceptance_board_store.read_policy(center_id)
@@ -7574,6 +7580,36 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 draft = self.public_trust_center_acceptance_board_store.create_signoff_draft(center_id, payload, now=_utc_now())
                 self._send_json({"ok": True, "center_id": center_id, "draft": draft}, status=HTTPStatus.CREATED)
                 return
+            if subaction == "signoff" and len(parts) == 3:
+                signoff = self.public_trust_center_acceptance_board_store.signoff(center_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "signoff": signoff, "summary": self.public_trust_center_acceptance_board_store.summary(center_id)}, status=HTTPStatus.CREATED)
+                return
+            if subaction == "change-request" and len(parts) == 3:
+                change = self.public_trust_center_acceptance_board_store.create_change_request(center_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "change_request": change}, status=HTTPStatus.CREATED)
+                return
+            if subaction == "change-requests" and len(parts) >= 5 and parts[4] == "approve":
+                change = self.public_trust_center_acceptance_board_store.approve_change_request(center_id, parts[3], payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "change_request": change})
+                return
+            if subaction == "reset-signoff" and len(parts) == 3:
+                reset = self.public_trust_center_acceptance_board_store.reset_signoff(center_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "reset": reset, "summary": self.public_trust_center_acceptance_board_store.summary(center_id)})
+                return
+            if subaction == "signoff-archive" and len(parts) == 4:
+                archive_action = parts[3]
+                if archive_action == "export":
+                    manifest = self.public_trust_center_acceptance_board_store.export_signoff_archive(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                    return
+                if archive_action == "zip":
+                    zip_info = self.public_trust_center_acceptance_board_store.build_signoff_archive_zip(center_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "center_id": center_id, "zip": zip_info})
+                    return
+                if archive_action == "verify":
+                    report = self.public_trust_center_acceptance_board_store.verify_signoff_archive_zip(center_id, {"strict": bool(payload.get("strict", True)), "require_signed": True, "require_current": True, "require_ready": True})
+                    self._send_json({"ok": True, "center_id": center_id, "verification": report, "summary": report.get("summary", {})})
+                    return
             self._send_error(HTTPStatus.NOT_FOUND, "Public Trust Center Acceptance Board route not found.")
         except PublicTrustCenterAcceptanceBoardNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))

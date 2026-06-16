@@ -13218,6 +13218,204 @@ def _v86_public_trust_center_acceptance_board_smoke(root: Path) -> tuple[bool, s
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v87-acceptance-board-signoff-")).resolve()
+    try:
+        from song_agent.public_trust_center import PublicTrustCenterStore
+        from song_agent.public_trust_center_acceptance_board import PublicTrustCenterAcceptanceBoardStateError, PublicTrustCenterAcceptanceBoardStore
+        from song_agent.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+        from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package, write_public_trust_center_anchor_registry_verification_report
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+        from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package, write_public_trust_center_anchor_transparency_verification_report
+        from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
+        from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, response_payload_hash
+        from song_agent.releases import ReleaseStore
+
+        class _DummyStore:
+            def list_portfolios(self, include_archived: bool = False) -> list[dict[str, Any]]:
+                return []
+
+        release_store = ReleaseStore(base / "releases")
+        dummy_store = _DummyStore()
+        trust_store = PublicTrustCenterStore(
+            release_store=release_store,
+            portfolio_store=dummy_store,
+            registry_store=dummy_store,
+            portal_store=dummy_store,
+            transparency_store=dummy_store,
+            acknowledgement_store=dummy_store,
+        )
+        trust_store.refresh_report("ptc-default", {"include_all_releases": False, "include_all_portfolios": False})
+        trust_store.export_center("ptc-default")
+        trust_store.build_zip("ptc-default")
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+        entry = anchor_store.register_current_anchor("ptc-default", {"reason": "release-check v8.7 anchor"})["entry"]
+        anchor_store.publish_entry("ptc-default", str(entry["entry_id"]), {"reason": "release-check v8.7 publish anchor"})
+        anchor_store.refresh_report("ptc-default")
+        anchor_store.export_registry("ptc-default")
+        anchor_store.build_zip("ptc-default")
+        registry_verification = verify_public_trust_center_anchor_registry_package(anchor_store.zip_path("ptc-default"), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        write_public_trust_center_anchor_registry_verification_report(registry_verification, anchor_store.verification_report_path("ptc-default"))
+        transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+        transparency_store.refresh_report("ptc-default")
+        transparency_store.create_checkpoint("ptc-default")
+        transparency_store.export_transparency("ptc-default")
+        transparency_store.build_zip("ptc-default")
+        transparency_verification = verify_public_trust_center_anchor_transparency_package(
+            transparency_store.zip_path("ptc-default"),
+            strict=True,
+            checkpoint_path=transparency_store.current_checkpoint_path("ptc-default"),
+            anchor_registry_path=anchor_store.zip_path("ptc-default"),
+            require_current_checkpoint=True,
+            require_published_anchor=True,
+            require_not_revoked=True,
+        )
+        write_public_trust_center_anchor_transparency_verification_report(transparency_verification, transparency_store.verification_report_path("ptc-default"))
+        trust_store.verify_zip(
+            "ptc-default",
+            {
+                "strict": True,
+                "require_delivery_readiness": False,
+                "anchor_registry_path": anchor_store.zip_path("ptc-default"),
+                "anchor_transparency_path": transparency_store.zip_path("ptc-default"),
+                "anchor_checkpoint_path": transparency_store.current_checkpoint_path("ptc-default"),
+                "require_anchor_registry_current": True,
+                "require_anchor_published": True,
+                "require_anchor_not_revoked": True,
+                "require_anchor_transparency_current": True,
+                "require_anchor_checkpoint": True,
+            },
+        )
+        kit_store = PublicTrustCenterDistributionKitStore(trust_center_store=trust_store, anchor_registry_store=anchor_store, anchor_transparency_store=transparency_store)
+        kit_store.refresh_report("ptc-default")
+        kit_store.export_kit("ptc-default")
+        kit_store.build_zip("ptc-default")
+        kit_store.verify_zip("ptc-default", {"strict": True, "deep": True, "require_current": True, "require_delivery_readiness": False})
+        acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=kit_store)
+        board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=acceptance_store)
+        board_store.save_policy("ptc-default", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner"]}})
+
+        def _accepted(response_id: str, organization: str, role: str) -> None:
+            template = acceptance_store.create_response_template("ptc-default")
+            response = dict(template["response_template"])
+            response.update({"response_id": response_id, "reviewer": {"name": f"{organization} Reviewer", "organization": organization, "role": role}, "reviewed_at": "2026-06-15T00:00:00+00:00", "comments": f"{organization} accepted the distribution kit."})
+            response["response_hash"] = response_payload_hash(response)
+            imported = acceptance_store.import_response("ptc-default", {"response": response})
+            evidence = acceptance_store.refresh_accepted_evidence("ptc-default", {"response_id": imported["response"]["response_id"]})
+            acceptance_store.export_accepted_evidence("ptc-default", imported["response"]["response_id"])
+            acceptance_store.build_accepted_evidence_zip("ptc-default", imported["response"]["response_id"])
+            acceptance_store.verify_accepted_evidence_zip("ptc-default", str(evidence.get("evidence_id") or ""), {"strict": True, "require_current": True})
+
+        _accepted("v87-kit-accepted-001", "Legal Org", "legal")
+        _accepted("v87-kit-accepted-002", "Distribution Org", "distribution_partner")
+        board_store.refresh_report("ptc-default")
+        board_store.export_board("ptc-default")
+        board_store.build_zip("ptc-default")
+        signoff = board_store.signoff("ptc-default", {"signed_by": "release-check", "reason": "v8.7 acceptance board signoff smoke."})
+
+        def _blocked(func) -> bool:
+            try:
+                func()
+            except PublicTrustCenterAcceptanceBoardStateError:
+                return True
+            return False
+
+        signed_refresh_blocked = _blocked(lambda: board_store.refresh_report("ptc-default"))
+        signed_export_blocked = _blocked(lambda: board_store.export_board("ptc-default"))
+        signed_zip_blocked = _blocked(lambda: board_store.build_zip("ptc-default"))
+        signed_draft_blocked = _blocked(lambda: board_store.create_signoff_draft("ptc-default", {"source": "release-check"}))
+        manifest = board_store.export_signoff_archive("ptc-default")
+        zip_info = board_store.build_signoff_archive_zip("ptc-default")
+        verification = board_store.verify_signoff_archive_zip("ptc-default", {"strict": True, "require_signed": True, "require_current": True, "require_ready": True})
+
+        wrong_board = base / "wrong-board.zip"
+        wrong_board.write_bytes(board_store.zip_path("ptc-default").read_bytes() + b"x")
+        board_replaced = verify_public_trust_center_acceptance_board_signoff_archive_package(
+            board_store.signoff_archive_zip_path("ptc-default"),
+            strict=True,
+            require_signed=True,
+            require_current=True,
+            require_ready=True,
+            board_zip_path=wrong_board,
+            board_verification_report_path=board_store.verification_report_path("ptc-default"),
+            distribution_kit_path=kit_store.zip_path("ptc-default"),
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
+        wrong_kit = base / "wrong-kit.zip"
+        wrong_kit.write_bytes(kit_store.zip_path("ptc-default").read_bytes() + b"x")
+        kit_replaced = verify_public_trust_center_acceptance_board_signoff_archive_package(
+            board_store.signoff_archive_zip_path("ptc-default"),
+            strict=True,
+            require_signed=True,
+            require_current=True,
+            require_ready=True,
+            board_zip_path=board_store.zip_path("ptc-default"),
+            board_verification_report_path=board_store.verification_report_path("ptc-default"),
+            distribution_kit_path=wrong_kit,
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
+        first_evidence_zip = next(acceptance_store.accepted_evidence_root("ptc-default").rglob("accepted-evidence.zip"))
+        original_evidence_bytes = first_evidence_zip.read_bytes()
+        first_evidence_zip.write_bytes(original_evidence_bytes + b"x")
+        evidence_replaced = verify_public_trust_center_acceptance_board_signoff_archive_package(
+            board_store.signoff_archive_zip_path("ptc-default"),
+            strict=True,
+            require_signed=True,
+            require_current=True,
+            require_ready=True,
+            board_zip_path=board_store.zip_path("ptc-default"),
+            board_verification_report_path=board_store.verification_report_path("ptc-default"),
+            distribution_kit_path=kit_store.zip_path("ptc-default"),
+            accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+        )
+        first_evidence_zip.write_bytes(original_evidence_bytes)
+
+        shutil.rmtree(board_store.signoff_archive_dir("ptc-default"), ignore_errors=True)
+        board_store.signoff_archive_zip_path("ptc-default").unlink(missing_ok=True)
+        delete_reexport_blocked = _blocked(lambda: board_store.export_signoff_archive("ptc-default"))
+        delete_rezip_blocked = _blocked(lambda: board_store.build_signoff_archive_zip("ptc-default"))
+
+        reset_without_cr = _blocked(lambda: board_store.reset_signoff("ptc-default", {"reason": "missing approved change request."}))
+        change = board_store.create_change_request("ptc-default", {"reason": "Need to reset signed Acceptance Board archive."})
+        draft_reset_blocked = _blocked(lambda: board_store.reset_signoff("ptc-default", {"change_request_id": change["change_request_id"], "reason": "draft reset"}))
+        approved = board_store.approve_change_request("ptc-default", change["change_request_id"], {"reason": "Approved reset."})
+        reset = board_store.reset_signoff("ptc-default", {"change_request_id": approved["change_request_id"], "reason": "Reset signed board."})
+        reuse_reset_blocked = _blocked(lambda: board_store.reset_signoff("ptc-default", {"change_request_id": approved["change_request_id"], "reason": "reuse"}))
+
+        ok = (
+            signoff.get("status") == "signed"
+            and manifest.get("package_type") == "musicforge_public_trust_center_acceptance_board_signoff_archive"
+            and bool(zip_info.get("sha256"))
+            and verification.get("status") == "passed"
+            and signed_refresh_blocked
+            and signed_export_blocked
+            and signed_zip_blocked
+            and signed_draft_blocked
+            and _v38_check_status(board_replaced, "ptcabs_external_board_zip_sha256") == "failed"
+            and _v38_check_status(kit_replaced, "ptcabs_external_distribution_kit_sha256") == "failed"
+            and _v38_check_status(evidence_replaced, "ptcabs_external_accepted_evidence_binding") == "failed"
+            and delete_reexport_blocked
+            and delete_rezip_blocked
+            and reset_without_cr
+            and draft_reset_blocked
+            and reset.get("status") == "reset"
+            and reuse_reset_blocked
+        )
+        return ok, (
+            f"signoff={signoff.get('status')}, archive={verification.get('status')}, signed_refresh={signed_refresh_blocked}, signed_export={signed_export_blocked}, signed_zip={signed_zip_blocked}, "
+            f"signed_draft={signed_draft_blocked}, "
+            f"board_replaced={_v38_check_status(board_replaced, 'ptcabs_external_board_zip_sha256')}, kit_replaced={_v38_check_status(kit_replaced, 'ptcabs_external_distribution_kit_sha256')}, evidence_replaced={_v38_check_status(evidence_replaced, 'ptcabs_external_accepted_evidence_binding')}, "
+            f"delete_reexport={delete_reexport_blocked}, delete_rezip={delete_rezip_blocked}, reset_without_cr={reset_without_cr}, draft_reset={draft_reset_blocked}, reset={reset.get('status')}, reuse_reset={reuse_reset_blocked}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.public_trust_center_distribution_kit_acceptance import accepted_evidence_hash, accepted_evidence_manifest_hash
     from song_agent.releases import stable_hash

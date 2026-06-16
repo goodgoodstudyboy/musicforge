@@ -18,6 +18,7 @@ from song_agent.public_trust_center_acceptance_board import (
     sidecar_hash,
 )
 from song_agent.public_trust_center_acceptance_board_verifier import verify_public_trust_center_acceptance_board_package
+from song_agent.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package
 from song_agent.public_trust_center_distribution_kit_acceptance import (
     PublicTrustCenterDistributionKitAcceptanceStore,
     response_payload_hash,
@@ -158,6 +159,106 @@ def test_acceptance_board_verifier_rejects_role_full_resign_with_external_eviden
     assert package_only["status"] == "failed"
     assert _has_blocker(package_only, "ptcab_external_accepted_evidence_dir_required")
     assert _has_blocker(anchored, "ptcab_participant_external_response_binding")
+
+
+def test_acceptance_board_signoff_archive_roundtrip_and_immutability(tmp_path: Path, monkeypatch) -> None:
+    board_store, kit_store, acceptance_store = _ready_board(tmp_path, monkeypatch)
+    board_store.refresh_report("ptc-default")
+    board_store.export_board("ptc-default")
+    board_store.build_zip("ptc-default")
+
+    signoff = board_store.signoff("ptc-default", {"signed_by": "Reviewer", "reason": "Board quorum is ready for release."})
+
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="signed"):
+        board_store.refresh_report("ptc-default")
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="signed"):
+        board_store.export_board("ptc-default")
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="signed"):
+        board_store.build_zip("ptc-default")
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="signed"):
+        board_store.create_signoff_draft("ptc-default", {"source": "test"})
+
+    manifest = board_store.export_signoff_archive("ptc-default")
+    zip_info = board_store.build_signoff_archive_zip("ptc-default")
+    verification = verify_public_trust_center_acceptance_board_signoff_archive_package(
+        board_store.signoff_archive_zip_path("ptc-default"),
+        strict=True,
+        require_signed=True,
+        require_current=True,
+        require_ready=True,
+        board_zip_path=board_store.zip_path("ptc-default"),
+        board_verification_report_path=board_store.verification_report_path("ptc-default"),
+        distribution_kit_path=kit_store.zip_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+    )
+
+    assert signoff["status"] == "signed"
+    assert manifest["package_type"] == "musicforge_public_trust_center_acceptance_board_signoff_archive"
+    assert zip_info["sha256"]
+    assert verification["status"] == "passed"
+
+    # Deleting generated artifacts must not allow silent rebuild after signoff archive history exists.
+    for path in [board_store.signoff_archive_zip_path("ptc-default"), board_store.signoff_archive_dir("ptc-default")]:
+        if path.is_dir():
+            import shutil
+
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="already exported"):
+        board_store.export_signoff_archive("ptc-default")
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="already built"):
+        board_store.build_signoff_archive_zip("ptc-default")
+
+
+def test_acceptance_board_signoff_reset_requires_approved_change_request(tmp_path: Path, monkeypatch) -> None:
+    board_store, _kit_store, _acceptance_store = _ready_board(tmp_path, monkeypatch)
+    board_store.refresh_report("ptc-default")
+    board_store.export_board("ptc-default")
+    board_store.build_zip("ptc-default")
+    board_store.signoff("ptc-default", {"signed_by": "Reviewer", "reason": "Board quorum is ready for release."})
+
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="Change Request"):
+        board_store.reset_signoff("ptc-default", {"reason": "Reset without approved change request."})
+
+    change = board_store.create_change_request("ptc-default", {"reason": "Need to revise signed board evidence."})
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="approved"):
+        board_store.reset_signoff("ptc-default", {"change_request_id": change["change_request_id"], "reason": "Draft cannot reset."})
+
+    approved = board_store.approve_change_request("ptc-default", change["change_request_id"], {"reason": "Approved reset."})
+    reset = board_store.reset_signoff("ptc-default", {"change_request_id": approved["change_request_id"], "reason": "Reset with approved CR."})
+
+    assert reset["status"] == "reset"
+    assert board_store.read_signoff("ptc-default", default={}) == {}
+    with pytest.raises(PublicTrustCenterAcceptanceBoardStateError, match="missing"):
+        board_store.reset_signoff("ptc-default", {"change_request_id": approved["change_request_id"], "reason": "Reuse CR."})
+
+
+def test_acceptance_board_signoff_archive_verifier_rejects_external_evidence_replacement(tmp_path: Path, monkeypatch) -> None:
+    board_store, kit_store, acceptance_store = _ready_board(tmp_path, monkeypatch)
+    board_store.refresh_report("ptc-default")
+    board_store.export_board("ptc-default")
+    board_store.build_zip("ptc-default")
+    board_store.signoff("ptc-default", {"signed_by": "Reviewer", "reason": "Board quorum is ready for release."})
+    board_store.export_signoff_archive("ptc-default")
+    board_store.build_signoff_archive_zip("ptc-default")
+
+    evidence_zip = next(acceptance_store.accepted_evidence_root("ptc-default").rglob("accepted-evidence.zip"))
+    evidence_zip.write_bytes(evidence_zip.read_bytes() + b"tamper")
+    verification = verify_public_trust_center_acceptance_board_signoff_archive_package(
+        board_store.signoff_archive_zip_path("ptc-default"),
+        strict=True,
+        require_signed=True,
+        require_current=True,
+        require_ready=True,
+        board_zip_path=board_store.zip_path("ptc-default"),
+        board_verification_report_path=board_store.verification_report_path("ptc-default"),
+        distribution_kit_path=kit_store.zip_path("ptc-default"),
+        accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
+    )
+
+    assert verification["status"] == "failed"
+    assert _has_blocker(verification, "ptcabs_external_accepted_evidence_binding")
 
 
 def _ready_board(tmp_path: Path, monkeypatch, *, second_role: str = "distribution_partner") -> tuple[PublicTrustCenterAcceptanceBoardStore, object, PublicTrustCenterDistributionKitAcceptanceStore]:

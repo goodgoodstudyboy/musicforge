@@ -740,6 +740,17 @@ python -m song_agent.cli public-trust-center --center-id ptc-default --acceptanc
 python -m song_agent.cli verify-public-trust-center-acceptance-board-package path\to\public-trust-center-acceptance-board.zip --strict --require-ready --require-quorum --require-no-conflicts --distribution-kit path\to\public-trust-center-distribution-kit.zip --accepted-evidence-dir path\to\accepted-evidence --json
 ```
 
+When the Acceptance Board is ready, it can be formally signed and archived.
+Signoff freezes the Board policy/report/export/ZIP until an approved Board
+Change Request is applied. The signoff archive binds the Board ZIP, Board
+verification report, Distribution Kit ZIP, quorum participants, and external
+Accepted Evidence fingerprints:
+
+```powershell
+python -m song_agent.cli public-trust-center --center-id ptc-default --acceptance-board-signoff --acceptance-board-signed-by "Release Reviewer" --acceptance-board-signoff-reason "Board quorum is ready." --acceptance-board-signoff-archive-export --acceptance-board-signoff-archive-zip --acceptance-board-signoff-archive-verify --strict --json
+python -m song_agent.cli verify-public-trust-center-acceptance-board-signoff-archive-package path\to\public-trust-center-acceptance-board-signoff-archive.zip --strict --require-signed --require-current --require-ready --board-zip path\to\public-trust-center-acceptance-board.zip --board-verification-report path\to\acceptance-board-verification-report.json --distribution-kit path\to\public-trust-center-distribution-kit.zip --accepted-evidence-dir path\to\accepted-evidence --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

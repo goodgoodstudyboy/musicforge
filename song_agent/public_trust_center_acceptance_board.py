@@ -36,12 +36,34 @@ ACCEPTANCE_BOARD_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board
 ACCEPTANCE_BOARD_REPORT_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board_report"
 ACCEPTANCE_BOARD_CONFLICT_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board_conflict_report"
 ACCEPTANCE_BOARD_POLICY_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board_policy"
+ACCEPTANCE_BOARD_SIGNOFF_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board_signoff"
+ACCEPTANCE_BOARD_CHANGE_REQUEST_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board_change_request"
+ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board_signoff_archive"
+ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_REPORT_PACKAGE_TYPE = "musicforge_public_trust_center_acceptance_board_signoff_archive_report"
 ACCEPTANCE_BOARD_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", "zip"}
 ACCEPTANCE_BOARD_REPORT_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at"}
 ACCEPTANCE_BOARD_POLICY_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at"}
+ACCEPTANCE_BOARD_SIGNOFF_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at"}
+ACCEPTANCE_BOARD_CHANGE_REQUEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at"}
+ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", "zip"}
 ACCEPTANCE_BOARD_SIDECAR_HASH_EXCLUDE_KEYS = {"integrity_hash"}
 ACCEPTANCE_BOARD_BLOCKED_KEYS = ACCEPTANCE_BLOCKED_KEYS | (DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"})
 DEFAULT_POLICY_ID = "ptcab-policy-default"
+SIGNOFF_ARCHIVE_ENTRIES = {
+    "board-signoff-archive-manifest.json",
+    "board-signoff-archive-report.json",
+    "board-signoff.json",
+    "board-verification-summary.json",
+    "board-fingerprint-summary.json",
+    "quorum-fingerprint-summary.json",
+    "accepted-evidence-fingerprint-index.json",
+    "accepted-evidence-verification-index.json",
+    "distribution-kit-fingerprint-summary.json",
+    "change-request-summary.json",
+    "chain-of-custody.json",
+    "README.txt",
+    "VERIFY.txt",
+}
 
 
 class PublicTrustCenterAcceptanceBoardError(ValueError):
@@ -89,6 +111,30 @@ class PublicTrustCenterAcceptanceBoardStore:
     def verification_report_path(self, center_id: str = "ptc-default") -> Path:
         return self.root_dir(center_id) / "acceptance-board-verification-report.json"
 
+    def signoff_dir(self, center_id: str = "ptc-default") -> Path:
+        return self.root_dir(center_id) / "signoff"
+
+    def signoff_path(self, center_id: str = "ptc-default") -> Path:
+        return self.signoff_dir(center_id) / "board-signoff.json"
+
+    def signoff_history_path(self, center_id: str = "ptc-default") -> Path:
+        return self.signoff_dir(center_id) / "board-signoff-history.jsonl"
+
+    def change_requests_dir(self, center_id: str = "ptc-default") -> Path:
+        return self.signoff_dir(center_id) / "board-change-requests"
+
+    def change_request_path(self, center_id: str, change_request_id: str) -> Path:
+        return self.change_requests_dir(center_id) / f"{_safe_id(change_request_id)}.json"
+
+    def signoff_archive_dir(self, center_id: str = "ptc-default") -> Path:
+        return self.signoff_dir(center_id) / "archive"
+
+    def signoff_archive_zip_path(self, center_id: str = "ptc-default") -> Path:
+        return self.signoff_dir(center_id) / "public-trust-center-acceptance-board-signoff-archive.zip"
+
+    def signoff_archive_verification_report_path(self, center_id: str = "ptc-default") -> Path:
+        return self.signoff_dir(center_id) / "board-signoff-archive-verification-report.json"
+
     def read_policy(self, center_id: str = "ptc-default") -> dict[str, Any]:
         policy = _read_json_default(self.policy_path(center_id), default={})
         if policy:
@@ -97,6 +143,7 @@ class PublicTrustCenterAcceptanceBoardStore:
 
     def save_policy(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
+            self._ensure_unsigned(center_id, "change Acceptance Board policy")
             now = now or now_iso()
             payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
             current = self.read_policy(center_id)
@@ -126,6 +173,7 @@ class PublicTrustCenterAcceptanceBoardStore:
 
     def refresh_report(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
+            self._ensure_unsigned(center_id, "refresh Acceptance Board report")
             now = now or now_iso()
             payload = payload or {}
             if payload.get("policy"):
@@ -174,6 +222,7 @@ class PublicTrustCenterAcceptanceBoardStore:
 
     def export_board(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
+            self._ensure_unsigned(center_id, "export Acceptance Board")
             now = now or now_iso()
             del payload
             report = self.read_report(center_id, default={})
@@ -232,6 +281,7 @@ class PublicTrustCenterAcceptanceBoardStore:
 
     def build_zip(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
+            self._ensure_unsigned(center_id, "build Acceptance Board ZIP")
             now = now or now_iso()
             del payload
             report = self.read_report(center_id, default={})
@@ -275,6 +325,7 @@ class PublicTrustCenterAcceptanceBoardStore:
 
     def create_signoff_draft(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
+            self._ensure_unsigned(center_id, "create Acceptance Board signoff draft")
             now = now or now_iso()
             payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
             report = self.read_report(center_id, default={})
@@ -295,10 +346,239 @@ class PublicTrustCenterAcceptanceBoardStore:
             _append_jsonl(self.events_path(center_id), {"event_type": "board_signoff_draft_created", "created_at": now, "source_hash": report.get("source_hash")})
             return _sanitize(draft)
 
+    def read_signoff(self, center_id: str = "ptc-default", *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        return _read_json_default(self.signoff_path(center_id), default=default)
+
+    def signoff(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        with self.lock:
+            self._ensure_unsigned(center_id, "sign Acceptance Board")
+            now = now or now_iso()
+            payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
+            self._ensure_board_package_current(center_id)
+            policy = self.read_policy(center_id)
+            requirements = policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}
+            verification = self.verify_zip(
+                center_id,
+                {
+                    "strict": True,
+                    "require_ready": True,
+                    "require_quorum": True,
+                    "require_no_conflicts": True,
+                    "min_accepted_count": int(requirements.get("min_accepted_count") or 0),
+                    "min_accepted_organizations": int(requirements.get("min_accepted_organizations") or 0),
+                    "required_roles": requirements.get("required_roles") if isinstance(requirements.get("required_roles"), list) else [],
+                    "use_distribution_kit": True,
+                    "use_accepted_evidence": True,
+                },
+            )
+            if verification.get("status") != "passed":
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board verification must pass before signoff.")
+            report = self.read_report(center_id, default={})
+            if report.get("readiness") != "ready" or report.get("status") != "passed":
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board must be ready before signoff.")
+            source = self._signoff_source(center_id, verification)
+            signoff_sequence = 1 + len([item for item in self._history_events(center_id) if item.get("event_type") == "board_signoff_signed"])
+            signoff = {
+                "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
+                "package_type": ACCEPTANCE_BOARD_SIGNOFF_PACKAGE_TYPE,
+                "signoff_id": "ptcabs-" + stable_hash({"center_id": center_id, "source": source, "sequence": signoff_sequence})[:12],
+                "signoff_sequence": signoff_sequence,
+                "center_id": center_id,
+                "created_at": now,
+                "updated_at": now,
+                "status": "signed",
+                "signed_by": str(payload.get("signed_by") or "MusicForge Operator")[:120],
+                "reason": sanitize_sensitive_text(str(payload.get("reason") or "Acceptance Board ready for public release.")[:1000]),
+                "source": source,
+                "source_hash": stable_hash(source),
+                "board": source.get("board"),
+                "verification": source.get("verification"),
+                "quorum": source.get("quorum"),
+                "accepted_evidence": source.get("accepted_evidence"),
+                "distribution_kit": source.get("distribution_kit"),
+                "warnings": [],
+            }
+            signoff["integrity_hash"] = acceptance_board_signoff_hash(signoff)
+            self.signoff_dir(center_id).mkdir(parents=True, exist_ok=True)
+            _write_json(self.signoff_path(center_id), signoff)
+            self._append_signoff_history(center_id, {"event_type": "board_signoff_signed", "created_at": now, "signoff_hash": signoff["integrity_hash"], "source_hash": signoff["source_hash"]})
+            _append_jsonl(self.events_path(center_id), {"event_type": "board_signoff_signed", "created_at": now, "signoff_hash": signoff["integrity_hash"], "source_hash": signoff["source_hash"]})
+            return _sanitize(signoff)
+
+    def create_change_request(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        with self.lock:
+            now = now or now_iso()
+            payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
+            reason = sanitize_sensitive_text(str(payload.get("reason") or "").strip())
+            if len(reason) < 12:
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board Change Request reason must be at least 12 characters.")
+            change_request_id = _next_change_request_id(self.change_requests_dir(center_id))
+            current_signoff = self.read_signoff(center_id, default={})
+            request = {
+                "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
+                "package_type": ACCEPTANCE_BOARD_CHANGE_REQUEST_PACKAGE_TYPE,
+                "change_request_id": change_request_id,
+                "center_id": center_id,
+                "created_at": now,
+                "updated_at": now,
+                "status": "draft",
+                "reason": reason[:1000],
+                "requested_by": str(payload.get("requested_by") or "MusicForge Operator")[:120],
+                "target_signoff_hash": current_signoff.get("integrity_hash"),
+                "applied_at": None,
+                "applied_signoff_hash": None,
+            }
+            request["integrity_hash"] = acceptance_board_change_request_hash(request)
+            _write_json(self.change_request_path(center_id, change_request_id), request)
+            self._append_signoff_history(center_id, {"event_type": "board_change_request_created", "created_at": now, "change_request_id": change_request_id, "target_signoff_hash": request.get("target_signoff_hash")})
+            return _sanitize(request)
+
+    def approve_change_request(self, center_id: str, change_request_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        with self.lock:
+            now = now or now_iso()
+            payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
+            request = self._read_change_request(center_id, change_request_id)
+            self._ensure_change_request_integrity(request)
+            if request.get("status") not in {"draft", "submitted"}:
+                raise PublicTrustCenterAcceptanceBoardStateError("Only draft/submitted Acceptance Board Change Requests can be approved.")
+            request.update(
+                {
+                    "updated_at": now,
+                    "status": "approved",
+                    "approved_by": str(payload.get("approved_by") or "MusicForge Operator")[:120],
+                    "approval_reason": sanitize_sensitive_text(str(payload.get("approval_reason") or payload.get("reason") or "Approved Acceptance Board signoff reset.")[:1000]),
+                }
+            )
+            request["integrity_hash"] = acceptance_board_change_request_hash(request)
+            _write_json(self.change_request_path(center_id, change_request_id), request)
+            self._append_signoff_history(center_id, {"event_type": "board_change_request_approved", "created_at": now, "change_request_id": change_request_id})
+            return _sanitize(request)
+
+    def reset_signoff(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        with self.lock:
+            now = now or now_iso()
+            payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
+            change_request_id = str(payload.get("change_request_id") or "").strip()
+            if not change_request_id:
+                raise PublicTrustCenterAcceptanceBoardStateError("Approved Acceptance Board Change Request is required to reset signoff.")
+            signoff = self.read_signoff(center_id, default={})
+            if not signoff:
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff is missing.")
+            self._ensure_signoff_integrity(signoff)
+            request = self._read_change_request(center_id, change_request_id)
+            self._ensure_change_request_integrity(request)
+            if request.get("status") != "approved":
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board Change Request must be approved before reset.")
+            if request.get("applied_at") or request.get("applied_signoff_hash"):
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board Change Request has already been applied.")
+            target_hash = request.get("target_signoff_hash")
+            if target_hash and target_hash != signoff.get("integrity_hash"):
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board Change Request does not target the current signoff.")
+            request.update({"updated_at": now, "status": "applied", "applied_at": now, "applied_signoff_hash": signoff.get("integrity_hash")})
+            request["integrity_hash"] = acceptance_board_change_request_hash(request)
+            _write_json(self.change_request_path(center_id, change_request_id), request)
+            reset_record = {
+                "event_type": "board_signoff_reset",
+                "created_at": now,
+                "change_request_id": change_request_id,
+                "signoff_hash": signoff.get("integrity_hash"),
+                "reset_reason": sanitize_sensitive_text(str(payload.get("reason") or request.get("reason") or "")[:1000]),
+                "reset_hash": stable_hash({"signoff_hash": signoff.get("integrity_hash"), "change_request_id": change_request_id, "request_hash": request.get("integrity_hash")}),
+            }
+            self._append_signoff_history(center_id, reset_record)
+            try:
+                self.signoff_path(center_id).unlink()
+            except FileNotFoundError:
+                pass
+            _append_jsonl(self.events_path(center_id), reset_record)
+            return {"status": "reset", "center_id": center_id, "change_request": _sanitize(request), "previous_signoff_hash": signoff.get("integrity_hash"), "reset_hash": reset_record["reset_hash"]}
+
+    def export_signoff_archive(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        with self.lock:
+            now = now or now_iso()
+            del payload
+            signoff = self.read_signoff(center_id, default={})
+            self._ensure_signoff_current(center_id, signoff)
+            self._ensure_archive_not_exported(center_id, str(signoff.get("integrity_hash") or ""))
+            archive_dir = self.signoff_archive_dir(center_id).resolve()
+            _ensure_within(self.signoff_dir(center_id).resolve(), archive_dir)
+            if archive_dir.exists():
+                shutil.rmtree(archive_dir)
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            docs = self._signoff_archive_documents(center_id, signoff, now)
+            for name, doc in docs.items():
+                if name.endswith(".json"):
+                    _write_json(archive_dir / name, doc if isinstance(doc, dict) else {})
+                else:
+                    _write_text(archive_dir / name, str(doc))
+            files = [_file_record(archive_dir, path) for path in sorted(archive_dir.rglob("*")) if _is_file(path) and path.name != "board-signoff-archive-manifest.json"]
+            manifest = {
+                "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
+                "package_type": ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_PACKAGE_TYPE,
+                "tool": {"name": "MusicForge Public Trust Center Acceptance Board Signoff Archive", "version": __version__},
+                "center_id": center_id,
+                "created_at": now,
+                "source_hash": signoff.get("source_hash"),
+                "signoff_hash": signoff.get("integrity_hash"),
+                "files": sorted(files, key=lambda item: str(item.get("path") or "")),
+                "zip": {},
+                "redaction_summary": redaction_summary(docs),
+            }
+            manifest["integrity_hash"] = acceptance_board_signoff_archive_hash(manifest)
+            _write_json(archive_dir / "board-signoff-archive-manifest.json", manifest)
+            self._append_signoff_history(center_id, {"event_type": "board_signoff_archive_exported", "created_at": now, "signoff_hash": signoff.get("integrity_hash"), "manifest_hash": manifest["integrity_hash"]})
+            return _sanitize(manifest)
+
+    def build_signoff_archive_zip(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        with self.lock:
+            now = now or now_iso()
+            del payload
+            signoff = self.read_signoff(center_id, default={})
+            self._ensure_signoff_current(center_id, signoff)
+            signoff_hash = str(signoff.get("integrity_hash") or "")
+            self._ensure_archive_not_zipped(center_id, signoff_hash)
+            archive_dir = self.signoff_archive_dir(center_id).resolve()
+            manifest_path = archive_dir / "board-signoff-archive-manifest.json"
+            manifest = _read_json_default(manifest_path, default={})
+            if manifest.get("signoff_hash") != signoff_hash or manifest.get("source_hash") != signoff.get("source_hash"):
+                raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff archive export is stale. Re-export before ZIP.")
+            zip_path = self.signoff_archive_zip_path(center_id).resolve()
+            _ensure_within(self.signoff_dir(center_id).resolve(), zip_path)
+            entries = _zip_entries(archive_dir)
+            manifest["zip"] = {"created_at": now, "filename": zip_path.name, "entry_count": len(entries), "entries": [entry for _path, entry in entries], "total_uncompressed_size_bytes": sum(os.stat(_fs_path(path)).st_size for path, _entry in entries)}
+            manifest["integrity_hash"] = acceptance_board_signoff_archive_hash(manifest)
+            _write_json(manifest_path, manifest)
+            _write_zip(zip_path, archive_dir)
+            info = {"created_at": now, "filename": zip_path.name, "size_bytes": os.stat(_fs_path(zip_path)).st_size, "sha256": _sha256(zip_path), "entry_count": len(entries), "signoff_hash": signoff_hash}
+            self._append_signoff_history(center_id, {"event_type": "board_signoff_archive_zip_built", "created_at": now, "signoff_hash": signoff_hash, "zip_sha256": info["sha256"]})
+            return _sanitize(info)
+
+    def verify_signoff_archive_zip(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        from song_agent.public_trust_center_acceptance_board_signoff_verifier import (
+            verify_public_trust_center_acceptance_board_signoff_archive_package,
+            write_public_trust_center_acceptance_board_signoff_archive_verification_report,
+        )
+
+        payload = payload or {}
+        report = verify_public_trust_center_acceptance_board_signoff_archive_package(
+            self.signoff_archive_zip_path(center_id),
+            strict=bool(payload.get("strict", True)),
+            require_signed=bool(payload.get("require_signed", True)),
+            require_current=bool(payload.get("require_current", True)),
+            require_ready=bool(payload.get("require_ready", True)),
+            board_zip_path=self.zip_path(center_id) if bool(payload.get("use_board_zip", True)) else None,
+            board_verification_report_path=self.verification_report_path(center_id) if bool(payload.get("use_board_verification", True)) else None,
+            distribution_kit_path=self.distribution_kit_store.zip_path(center_id) if bool(payload.get("use_distribution_kit", True)) else None,
+            accepted_evidence_dir=self.acceptance_store.accepted_evidence_root(center_id) if bool(payload.get("use_accepted_evidence", True)) else None,
+        )
+        write_public_trust_center_acceptance_board_signoff_archive_verification_report(report, self.signoff_archive_verification_report_path(center_id))
+        return report
+
     def summary(self, center_id: str = "ptc-default") -> dict[str, Any]:
         report = self.read_report(center_id, default={})
         summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-        return {"center_id": center_id, "readiness": report.get("readiness") or "missing", "status": report.get("status") or "missing", **summary}
+        signoff = self.read_signoff(center_id, default={})
+        return {"center_id": center_id, "readiness": report.get("readiness") or "missing", "status": report.get("status") or "missing", "signoff_status": signoff.get("status") or "unsigned", **summary}
 
     def _build_source(self, center_id: str, policy: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
         distribution_kit = _distribution_kit_state(self.distribution_kit_store, center_id)
@@ -460,6 +740,213 @@ class PublicTrustCenterAcceptanceBoardStore:
         if report.get("integrity_hash") != acceptance_board_report_hash(report):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board report integrity failed.")
 
+    def _ensure_unsigned(self, center_id: str, action: str) -> None:
+        signoff = self.read_signoff(center_id, default={})
+        if signoff.get("status") == "signed":
+            raise PublicTrustCenterAcceptanceBoardStateError(f"Acceptance Board is signed. Reset signoff with an approved Change Request before attempting to {action}.")
+
+    def _ensure_board_package_current(self, center_id: str) -> None:
+        report = self.read_report(center_id, default={})
+        self._ensure_exportable(center_id, report)
+        manifest = _read_json_default(self.export_dir(center_id) / "acceptance-board-manifest.json", default={})
+        if manifest.get("source_hash") != report.get("source_hash") or manifest.get("integrity_hash") != acceptance_board_manifest_hash(manifest):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board export is stale. Re-export before signoff.")
+        zip_path = self.zip_path(center_id)
+        if not zip_path.exists() or not zip_path.is_file():
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board ZIP is missing. Build ZIP before signoff.")
+        zip_manifest = _read_zip_json(zip_path, "acceptance-board-manifest.json")
+        if zip_manifest.get("integrity_hash") != manifest.get("integrity_hash"):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board ZIP manifest does not match current export.")
+
+    def _signoff_source(self, center_id: str, verification: dict[str, Any]) -> dict[str, Any]:
+        board_zip = self.zip_path(center_id)
+        board_manifest = _read_zip_json(board_zip, "acceptance-board-manifest.json")
+        report = self.read_report(center_id, default={})
+        policy = self.read_policy(center_id)
+        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        participants = [item for item in (report.get("participants") if isinstance(report.get("participants"), list) else []) if isinstance(item, dict)]
+        counted = [item for item in participants if item.get("counts_for_quorum")]
+        accepted_rows = []
+        for row in (report.get("source") if isinstance(report.get("source"), dict) else {}).get("accepted_evidence", []):
+            if isinstance(row, dict) and any(item.get("evidence_id") == row.get("evidence_id") for item in counted):
+                accepted_rows.append(row)
+        return _sanitize(
+            {
+                "center_id": center_id,
+                "board": {
+                    "zip_sha256": _sha256(board_zip),
+                    "zip_size_bytes": board_zip.stat().st_size if board_zip.exists() else None,
+                    "manifest_hash": board_manifest.get("integrity_hash"),
+                    "report_hash": report.get("integrity_hash"),
+                    "source_hash": report.get("source_hash"),
+                    "policy_hash": policy.get("integrity_hash"),
+                    "readiness": report.get("readiness"),
+                    "status": report.get("status"),
+                },
+                "verification": {
+                    "status": verification.get("status"),
+                    "verification_report_hash": acceptance_board_verification_hash(verification),
+                    "zip_sha256": verification.get("zip_sha256"),
+                    "zip_size_bytes": verification.get("zip_size_bytes"),
+                    "manifest_hash": verification.get("manifest_hash"),
+                    "blocker_count": len(verification.get("blockers") if isinstance(verification.get("blockers"), list) else []),
+                },
+                "quorum": {
+                    "requirements": policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {},
+                    "summary": summary,
+                    "participant_count": len(counted),
+                    "participants": [
+                        {
+                            "response_id": item.get("response_id"),
+                            "evidence_id": item.get("evidence_id"),
+                            "organization": item.get("organization"),
+                            "role": item.get("role"),
+                            "reviewer_name": item.get("reviewer_name"),
+                        }
+                        for item in counted
+                    ],
+                },
+                "accepted_evidence": sorted(accepted_rows, key=lambda item: str(item.get("evidence_id") or "")),
+                "distribution_kit": (report.get("source") if isinstance(report.get("source"), dict) else {}).get("distribution_kit") if isinstance((report.get("source") if isinstance(report.get("source"), dict) else {}).get("distribution_kit"), dict) else {},
+            }
+        )
+
+    def _ensure_signoff_integrity(self, signoff: dict[str, Any]) -> None:
+        if not signoff:
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff is missing.")
+        if signoff.get("integrity_hash") != acceptance_board_signoff_hash(signoff):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff integrity failed.")
+        if signoff.get("source_hash") != stable_hash(signoff.get("source") if isinstance(signoff.get("source"), dict) else {}):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff source hash failed.")
+
+    def _ensure_signoff_current(self, center_id: str, signoff: dict[str, Any]) -> None:
+        self._ensure_signoff_integrity(signoff)
+        current_verification = _read_json_default(self.verification_report_path(center_id), default={})
+        source = self._signoff_source(center_id, current_verification)
+        if stable_hash(source) != signoff.get("source_hash"):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff source is stale. Reset signoff before archiving.")
+
+    def _append_signoff_history(self, center_id: str, payload: dict[str, Any]) -> None:
+        _append_jsonl(self.signoff_history_path(center_id), payload)
+
+    def _history_events(self, center_id: str) -> list[dict[str, Any]]:
+        path = self.signoff_history_path(center_id)
+        if not path.exists():
+            return []
+        events: list[dict[str, Any]] = []
+        try:
+            for line in _read_text(path).splitlines():
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(item, dict):
+                    events.append(_sanitize(item))
+        except OSError:
+            return []
+        return events
+
+    def _history_has_event(self, center_id: str, event_type: str, signoff_hash: str) -> bool:
+        return any(item.get("event_type") == event_type and item.get("signoff_hash") == signoff_hash for item in self._history_events(center_id))
+
+    def _ensure_archive_not_exported(self, center_id: str, signoff_hash: str) -> None:
+        if self._history_has_event(center_id, "board_signoff_archive_exported", signoff_hash):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff archive was already exported for this signoff. Reset signoff before rebuilding archive.")
+
+    def _ensure_archive_not_zipped(self, center_id: str, signoff_hash: str) -> None:
+        if self._history_has_event(center_id, "board_signoff_archive_zip_built", signoff_hash):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff archive ZIP was already built for this signoff. Reset signoff before rebuilding archive ZIP.")
+
+    def _read_change_request(self, center_id: str, change_request_id: str) -> dict[str, Any]:
+        request = _read_json_default(self.change_request_path(center_id, change_request_id), default={})
+        if not request:
+            raise PublicTrustCenterAcceptanceBoardNotFoundError(f"Acceptance Board Change Request not found: {change_request_id}")
+        return request
+
+    def _ensure_change_request_integrity(self, request: dict[str, Any]) -> None:
+        if request.get("integrity_hash") != acceptance_board_change_request_hash(request):
+            raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board Change Request integrity failed.")
+
+    def _signoff_archive_documents(self, center_id: str, signoff: dict[str, Any], now: str) -> dict[str, Any]:
+        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        verification = _read_json_default(self.verification_report_path(center_id), default={})
+        board_fingerprint = {
+            "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
+            "source_hash": signoff.get("source_hash"),
+            "board": source.get("board") if isinstance(source.get("board"), dict) else {},
+            "verification": source.get("verification") if isinstance(source.get("verification"), dict) else {},
+        }
+        board_fingerprint["integrity_hash"] = sidecar_hash(board_fingerprint)
+        verification_summary = {
+            "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
+            "source_hash": signoff.get("source_hash"),
+            "status": verification.get("status"),
+            "verification_report_hash": acceptance_board_verification_hash(verification),
+            "zip_sha256": verification.get("zip_sha256"),
+            "zip_size_bytes": verification.get("zip_size_bytes"),
+            "manifest_hash": verification.get("manifest_hash"),
+            "summary": verification.get("summary") if isinstance(verification.get("summary"), dict) else {},
+        }
+        verification_summary["integrity_hash"] = sidecar_hash(verification_summary)
+        quorum = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "quorum": source.get("quorum") if isinstance(source.get("quorum"), dict) else {}}
+        quorum["integrity_hash"] = sidecar_hash(quorum)
+        accepted_index = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "items": source.get("accepted_evidence") if isinstance(source.get("accepted_evidence"), list) else []}
+        accepted_index["integrity_hash"] = sidecar_hash(accepted_index)
+        accepted_verification = {
+            "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
+            "source_hash": signoff.get("source_hash"),
+            "items": [
+                {
+                    "evidence_id": item.get("evidence_id"),
+                    "response_id": item.get("response_id"),
+                    "verification_status": item.get("verification_status"),
+                    "verification_report_hash": item.get("verification_report_hash"),
+                    "zip_sha256": item.get("zip_sha256"),
+                }
+                for item in accepted_index["items"]
+                if isinstance(item, dict)
+            ],
+        }
+        accepted_verification["integrity_hash"] = sidecar_hash(accepted_verification)
+        distribution = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "distribution_kit": source.get("distribution_kit") if isinstance(source.get("distribution_kit"), dict) else {}}
+        distribution["integrity_hash"] = sidecar_hash(distribution)
+        latest_cr = _latest_applied_change_request(self.change_requests_dir(center_id), signoff.get("integrity_hash"))
+        change = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "latest_applied_change_request": latest_cr}
+        change["integrity_hash"] = sidecar_hash(change)
+        chain = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "events": self._history_events(center_id)}
+        chain["integrity_hash"] = sidecar_hash(chain)
+        report = {
+            "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
+            "package_type": ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_REPORT_PACKAGE_TYPE,
+            "center_id": center_id,
+            "created_at": now,
+            "status": "passed",
+            "source_hash": signoff.get("source_hash"),
+            "signoff_hash": signoff.get("integrity_hash"),
+            "summary": {
+                "signoff_status": signoff.get("status"),
+                "board_readiness": (source.get("board") if isinstance(source.get("board"), dict) else {}).get("readiness"),
+                "verification_status": (source.get("verification") if isinstance(source.get("verification"), dict) else {}).get("status"),
+                "accepted_evidence_count": len(accepted_index["items"]),
+            },
+            "warnings": [],
+        }
+        report["integrity_hash"] = acceptance_board_signoff_archive_hash(report)
+        return {
+            "board-signoff-archive-report.json": report,
+            "board-signoff.json": signoff,
+            "board-verification-summary.json": verification_summary,
+            "board-fingerprint-summary.json": board_fingerprint,
+            "quorum-fingerprint-summary.json": quorum,
+            "accepted-evidence-fingerprint-index.json": accepted_index,
+            "accepted-evidence-verification-index.json": accepted_verification,
+            "distribution-kit-fingerprint-summary.json": distribution,
+            "change-request-summary.json": change,
+            "chain-of-custody.json": chain,
+            "README.txt": _signoff_archive_readme(signoff),
+            "VERIFY.txt": _signoff_archive_verify_text(),
+        }
+
     def _write_cached_sidecars(self, center_id: str, source_hash: str, response_index: dict[str, Any], evidence_index: dict[str, Any], response_proofs: list[dict[str, Any]], evidence_summaries: list[dict[str, Any]]) -> None:
         cache_dir = self._cache_dir(center_id, source_hash)
         if cache_dir.exists():
@@ -516,6 +1003,22 @@ def acceptance_board_conflict_hash(report: dict[str, Any]) -> str:
 
 def acceptance_board_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in ACCEPTANCE_BOARD_MANIFEST_HASH_EXCLUDE_KEYS})
+
+
+def acceptance_board_signoff_hash(signoff: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (signoff or {}).items() if key not in ACCEPTANCE_BOARD_SIGNOFF_HASH_EXCLUDE_KEYS})
+
+
+def acceptance_board_change_request_hash(change_request: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (change_request or {}).items() if key not in ACCEPTANCE_BOARD_CHANGE_REQUEST_HASH_EXCLUDE_KEYS})
+
+
+def acceptance_board_signoff_archive_hash(payload: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (payload or {}).items() if key not in ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_HASH_EXCLUDE_KEYS})
+
+
+def acceptance_board_verification_hash(report: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (report or {}).items() if key != "generated_at"})
 
 
 def sidecar_hash(payload: dict[str, Any]) -> str:
@@ -723,6 +1226,25 @@ def _verify_text() -> str:
     return "Verify this board package:\npython -m song_agent.cli verify-public-trust-center-acceptance-board-package public-trust-center-acceptance-board.zip --strict --require-ready --json\n"
 
 
+def _signoff_archive_readme(signoff: dict[str, Any]) -> str:
+    return sanitize_sensitive_text(
+        "\n".join(
+            [
+                "MusicForge Public Trust Center Acceptance Board Signoff Archive",
+                "",
+                f"Center ID: {signoff.get('center_id')}",
+                f"Signoff ID: {signoff.get('signoff_id')}",
+                f"Status: {signoff.get('status')}",
+                "",
+            ]
+        )
+    )
+
+
+def _signoff_archive_verify_text() -> str:
+    return "Verify this signoff archive:\npython -m song_agent.cli verify-public-trust-center-acceptance-board-signoff-archive-package public-trust-center-acceptance-board-signoff-archive.zip --strict --require-signed --json\n"
+
+
 def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
@@ -740,6 +1262,37 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     except Exception:
         return dict(default or {})
     return _sanitize(value if isinstance(value, dict) else dict(default or {}))
+
+
+def _next_change_request_id(root: Path) -> str:
+    root.mkdir(parents=True, exist_ok=True)
+    max_index = 0
+    for path in root.glob("bcr-*.json"):
+        stem = path.stem
+        try:
+            max_index = max(max_index, int(stem.split("-", 1)[1]))
+        except (IndexError, ValueError):
+            continue
+    return f"bcr-{max_index + 1:06d}"
+
+
+def _latest_applied_change_request(root: Path, signoff_hash: Any) -> dict[str, Any] | None:
+    if not root.exists():
+        return None
+    rows: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.json")):
+        item = _read_json_default(path, default={})
+        if item.get("status") == "applied" and item.get("applied_signoff_hash") == signoff_hash:
+            rows.append(item)
+    if not rows:
+        return None
+    latest = rows[-1]
+    return {
+        "change_request_id": latest.get("change_request_id"),
+        "status": latest.get("status"),
+        "applied_at": latest.get("applied_at"),
+        "integrity_hash": latest.get("integrity_hash"),
+    }
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> Path:

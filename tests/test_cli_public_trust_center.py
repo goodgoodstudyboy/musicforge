@@ -579,3 +579,68 @@ def test_public_trust_center_distribution_kit_cli(tmp_path: Path, monkeypatch) -
     board_saved = json.loads(board_report_out.read_text(encoding="utf-8"))
     assert board_verified["status"] == "passed"
     assert board_saved["summary"]["center_id"] == "ptc-default"
+
+    signoff_archive = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "public-trust-center",
+            "--center-id",
+            "ptc-default",
+            "--acceptance-board-signoff",
+            "--acceptance-board-signed-by",
+            "CLI Reviewer",
+            "--acceptance-board-signoff-reason",
+            "CLI Acceptance Board quorum is ready for release.",
+            "--acceptance-board-signoff-archive-export",
+            "--acceptance-board-signoff-archive-zip",
+            "--acceptance-board-signoff-archive-verify",
+            "--strict",
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert signoff_archive.returncode == 0, signoff_archive.stderr
+    signoff_payload = json.loads(signoff_archive.stdout)
+    archive_zip = tmp_path / ".musicforge" / "public-trust-centers" / "ptc-default" / "acceptance-board" / "signoff" / "public-trust-center-acceptance-board-signoff-archive.zip"
+    assert signoff_payload["acceptance_board_signoff"]["status"] == "signed"
+    assert signoff_payload["acceptance_board_signoff_archive_verification"]["status"] == "passed"
+    assert archive_zip.exists()
+    board_store_report = tmp_path / ".musicforge" / "public-trust-centers" / "ptc-default" / "acceptance-board" / "acceptance-board-verification-report.json"
+
+    archive_verify = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "song_agent.cli",
+            "verify-public-trust-center-acceptance-board-signoff-archive-package",
+            str(archive_zip),
+            "--json",
+            "--strict",
+            "--require-signed",
+            "--require-current",
+            "--require-ready",
+            "--board-zip",
+            str(board_zip),
+            "--board-verification-report",
+            str(board_store_report),
+            "--distribution-kit",
+            str(kit_zip),
+            "--accepted-evidence-dir",
+            str(accepted_evidence_dir),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert archive_verify.returncode == 0, archive_verify.stderr
+    assert json.loads(archive_verify.stdout)["status"] == "passed"

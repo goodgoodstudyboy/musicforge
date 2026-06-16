@@ -163,6 +163,16 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
         board_detail_status, board_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/acceptance-board")
         board_download_status, board_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/acceptance-board/download")
         board_draft_status, board_draft = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/signoff-draft", {"reason": "server smoke"})
+        board_signoff_status, board_signoff = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/signoff", {"signed_by": "Server Reviewer", "reason": "Server Acceptance Board quorum is ready."})
+        board_signed_export_status, _board_signed_export = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/export", {})
+        board_archive_export_status, board_archive_export = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/export", {})
+        board_archive_zip_status, board_archive_zip = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/zip", {})
+        board_archive_verify_status, board_archive_verify = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/verify", {"strict": True})
+        board_archive_download_status, board_archive_body = request_bytes(server, "GET", "/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/download")
+        board_cr_status, board_cr = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/change-request", {"reason": "Need to reset signed board archive."})
+        board_draft_reset_status, _board_draft_reset = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/reset-signoff", {"change_request_id": board_cr["change_request"]["change_request_id"], "reason": "draft reset"})
+        board_cr_approve_status, board_cr_approve = request_json(server, "POST", f"/api/public-trust-centers/ptc-default/acceptance-board/change-requests/{board_cr['change_request']['change_request_id']}/approve", {"reason": "Approved reset."})
+        board_reset_status, board_reset = request_json(server, "POST", "/api/public-trust-centers/ptc-default/acceptance-board/reset-signoff", {"change_request_id": board_cr_approve["change_request"]["change_request_id"], "reason": "Reset signed board."})
         acceptance_detail_status, acceptance_detail = request_json(server, "GET", "/api/public-trust-centers/ptc-default/distribution-kit/acceptance")
         accepted_evidence_download_status, accepted_evidence_body = request_bytes(server, "GET", f"/api/public-trust-centers/ptc-default/distribution-kit/acceptance/responses/{acceptance_response_id}/evidence/download")
         acceptance_path_status, acceptance_path_error = request_json(server, "POST", "/api/public-trust-centers/ptc-default/distribution-kit/acceptance/import", {"source_path": "C:\\Users\\demo\\response.json"})
@@ -256,6 +266,22 @@ def test_server_public_trust_center_api(tmp_path: Path, monkeypatch) -> None:
     assert board_body.startswith(b"PK")
     assert board_draft_status == 201
     assert board_draft["draft"]["status"] == "draft"
+    assert board_signoff_status == 201
+    assert board_signoff["signoff"]["status"] == "signed"
+    assert board_signed_export_status == 409
+    assert board_archive_export_status == 201
+    assert board_archive_export["manifest"]["package_type"] == "musicforge_public_trust_center_acceptance_board_signoff_archive"
+    assert board_archive_zip_status == 200
+    assert board_archive_zip["zip"]["sha256"]
+    assert board_archive_verify_status == 200
+    assert board_archive_verify["verification"]["status"] == "passed"
+    assert board_archive_download_status == 200
+    assert board_archive_body.startswith(b"PK")
+    assert board_cr_status == 201
+    assert board_draft_reset_status == 409
+    assert board_cr_approve_status == 200
+    assert board_reset_status == 200
+    assert board_reset["reset"]["status"] == "reset"
     assert acceptance_detail_status == 200
     assert acceptance_detail["summary"]["accepted_evidence_status"] == "current"
     assert accepted_evidence_download_status == 200

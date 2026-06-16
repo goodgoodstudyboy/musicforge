@@ -3730,7 +3730,12 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="public-trust-center-acceptance-board-zip" type="button">Build Acceptance Board ZIP</button>
           <button class="secondary" id="public-trust-center-acceptance-board-verify" type="button">Verify Acceptance Board</button>
           <button class="secondary" id="public-trust-center-acceptance-board-signoff-draft" type="button">Create Board Signoff Draft</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-signoff" type="button">Sign Acceptance Board</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-signoff-archive-export" type="button">Export Board Signoff Archive</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-signoff-archive-zip" type="button">Build Board Signoff Archive ZIP</button>
+          <button class="secondary" id="public-trust-center-acceptance-board-signoff-archive-verify" type="button">Verify Board Signoff Archive</button>
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/acceptance-board/download">Download Acceptance Board ZIP</a>
+          <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/download">Download Board Signoff Archive ZIP</a>
         </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
@@ -4409,6 +4414,30 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ source: "studio" }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-signoff", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/signoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signed_by: "Studio Reviewer", reason: "Acceptance Board quorum is ready for public release." }),
+        });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-signoff-archive-export", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/export`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-signoff-archive-zip", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/zip`, { method: "POST" });
+        await renderPortfolioAuditDetail(portfolioId);
+      });
+      bindAction("public-trust-center-acceptance-board-signoff-archive-verify", async () => {
+        await api(`/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict: true }),
         });
         await renderPortfolioAuditDetail(portfolioId);
       });

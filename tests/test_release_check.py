@@ -61,6 +61,7 @@ from song_agent.release_checks import (
     _v84_public_trust_center_distribution_kit_smoke,
     _v85_public_trust_center_distribution_kit_acceptance_smoke,
     _v86_public_trust_center_acceptance_board_smoke,
+    _v87_public_trust_center_acceptance_board_signoff_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -837,6 +838,27 @@ def test_v86_public_trust_center_acceptance_board_smoke(tmp_path: Path) -> None:
     assert "full_resign=failed" in detail
     assert "declared_extra=failed" in detail
     assert "kit_mismatch=failed" in detail
+
+
+def test_v87_public_trust_center_acceptance_board_signoff_smoke(tmp_path: Path) -> None:
+    ok, detail = _v87_public_trust_center_acceptance_board_signoff_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "signoff=signed" in detail
+    assert "archive=passed" in detail
+    assert "signed_refresh=True" in detail
+    assert "signed_export=True" in detail
+    assert "signed_zip=True" in detail
+    assert "signed_draft=True" in detail
+    assert "board_replaced=failed" in detail
+    assert "kit_replaced=failed" in detail
+    assert "evidence_replaced=failed" in detail
+    assert "delete_reexport=True" in detail
+    assert "delete_rezip=True" in detail
+    assert "reset_without_cr=True" in detail
+    assert "draft_reset=True" in detail
+    assert "reset=reset" in detail
+    assert "reuse_reset=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:
