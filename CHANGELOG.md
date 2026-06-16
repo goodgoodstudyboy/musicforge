@@ -1,5 +1,16 @@
 # Changelog
 
+## v8.7.2 - 2026-06-16
+
+### Fixed
+- Public Trust Center `--require-acceptance-board-signoff` now always requires current external evidence instead of accepting an archive-only verification path.
+- The PTC verifier now requires the Acceptance Board ZIP, Board verification report, Distribution Kit ZIP, and Accepted Evidence directory when enforcing Acceptance Board Signoff Archive evidence.
+- release-check v8.7 smoke now covers the archive-only downgrade path with `ptc_archive_only=failed`.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_acceptance_board.py::test_acceptance_board_signoff_required_by_ptc_and_distribution_kit tests\test_release_check.py::test_v87_public_trust_center_acceptance_board_signoff_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --only v87.public_trust_center_acceptance_board_signoff_smoke --skip-tests --json`
+
 ## v8.7.1 - 2026-06-16
 
 ### Fixed

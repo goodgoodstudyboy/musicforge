@@ -297,6 +297,12 @@ def test_acceptance_board_signoff_required_by_ptc_and_distribution_kit(tmp_path:
     board_store.export_signoff_archive("ptc-default")
     board_store.build_signoff_archive_zip("ptc-default")
 
+    ptc_archive_only = verify_public_trust_center_package(
+        kit_store.trust_center_store.zip_path("ptc-default"),
+        strict=True,
+        require_acceptance_board_signoff=True,
+        acceptance_board_signoff_archive_path=board_store.signoff_archive_zip_path("ptc-default"),
+    )
     ptc_report = verify_public_trust_center_package(
         kit_store.trust_center_store.zip_path("ptc-default"),
         strict=True,
@@ -320,6 +326,8 @@ def test_acceptance_board_signoff_required_by_ptc_and_distribution_kit(tmp_path:
         accepted_evidence_dir=acceptance_store.accepted_evidence_root("ptc-default"),
     )
 
+    assert ptc_archive_only["status"] == "failed"
+    assert _has_blocker(ptc_archive_only, "ptc_acceptance_board_signoff_current_evidence_required")
     assert ptc_report["status"] == "passed"
     assert kit_report["status"] == "passed"
 

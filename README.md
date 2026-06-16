@@ -752,7 +752,10 @@ python -m song_agent.cli verify-public-trust-center-acceptance-board-signoff-arc
 ```
 
 Top-level Public Trust Center and Distribution Kit verification can require the
-same signed Board evidence:
+same signed Board evidence. Public Trust Center verification does not accept an
+archive-only shortcut for this gate; the Board ZIP, Board verification report,
+Distribution Kit ZIP, and Accepted Evidence directory must be supplied so the
+signoff archive is checked against current external evidence:
 
 ```powershell
 python -m song_agent.cli verify-public-trust-center-package path\to\public-trust-center.zip --strict --require-acceptance-board-signoff --acceptance-board-signoff-archive path\to\public-trust-center-acceptance-board-signoff-archive.zip --acceptance-board path\to\public-trust-center-acceptance-board.zip --acceptance-board-verification-report path\to\acceptance-board-verification-report.json --distribution-kit path\to\public-trust-center-distribution-kit.zip --accepted-evidence-dir path\to\accepted-evidence --json

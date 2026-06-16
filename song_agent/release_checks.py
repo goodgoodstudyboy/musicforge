@@ -13351,6 +13351,12 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
         manifest = board_store.export_signoff_archive("ptc-default")
         zip_info = board_store.build_signoff_archive_zip("ptc-default")
         verification = board_store.verify_signoff_archive_zip("ptc-default", {"strict": True, "require_signed": True, "require_current": True, "require_ready": True})
+        ptc_archive_only = verify_public_trust_center_package(
+            trust_store.zip_path("ptc-default"),
+            strict=True,
+            require_acceptance_board_signoff=True,
+            acceptance_board_signoff_archive_path=board_store.signoff_archive_zip_path("ptc-default"),
+        )
         ptc_signoff_required = verify_public_trust_center_package(
             trust_store.zip_path("ptc-default"),
             strict=True,
@@ -13439,6 +13445,7 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
             and signed_draft_blocked
             and _v38_check_status(ptc_missing_signoff, "ptc_require_acceptance_board_signoff") == "failed"
             and _v38_check_status(kit_missing_signoff, "ptcdk_require_acceptance_board_signoff") == "failed"
+            and _v38_check_status(ptc_archive_only, "ptc_acceptance_board_signoff_current_evidence_required") == "failed"
             and ptc_signoff_required.get("status") == "passed"
             and kit_signoff_required.get("status") == "passed"
             and _v38_check_status(board_replaced, "ptcabs_external_board_zip_sha256") == "failed"
@@ -13454,7 +13461,7 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
         return ok, (
             f"signoff={signoff.get('status')}, archive={verification.get('status')}, signed_refresh={signed_refresh_blocked}, signed_export={signed_export_blocked}, signed_zip={signed_zip_blocked}, "
             f"signed_draft={signed_draft_blocked}, "
-            f"ptc_require={_v38_check_status(ptc_missing_signoff, 'ptc_require_acceptance_board_signoff')}/{ptc_signoff_required.get('status')}, kit_require={_v38_check_status(kit_missing_signoff, 'ptcdk_require_acceptance_board_signoff')}/{kit_signoff_required.get('status')}, "
+            f"ptc_require={_v38_check_status(ptc_missing_signoff, 'ptc_require_acceptance_board_signoff')}/{ptc_signoff_required.get('status')}, ptc_archive_only={_v38_check_status(ptc_archive_only, 'ptc_acceptance_board_signoff_current_evidence_required')}, kit_require={_v38_check_status(kit_missing_signoff, 'ptcdk_require_acceptance_board_signoff')}/{kit_signoff_required.get('status')}, "
             f"board_replaced={_v38_check_status(board_replaced, 'ptcabs_external_board_zip_sha256')}, kit_replaced={_v38_check_status(kit_replaced, 'ptcabs_external_distribution_kit_sha256')}, evidence_replaced={_v38_check_status(evidence_replaced, 'ptcabs_external_accepted_evidence_binding')}, "
             f"delete_reexport={delete_reexport_blocked}, delete_rezip={delete_rezip_blocked}, reset_without_cr={reset_without_cr}, draft_reset={draft_reset_blocked}, reset={reset.get('status')}, reuse_reset={reuse_reset_blocked}"
         )

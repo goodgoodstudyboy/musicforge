@@ -790,6 +790,25 @@ class _PublicTrustCenterVerifier:
         if not self.acceptance_board_signoff_archive_path.exists() or not self.acceptance_board_signoff_archive_path.is_file() or self.acceptance_board_signoff_archive_path.is_symlink():
             self._add_check("requirements", "ptc_acceptance_board_signoff_archive_present", "failed", "blocking", "Acceptance Board signoff archive ZIP does not exist or is not a regular file.")
             return
+        missing_current_evidence = [
+            name
+            for name, path in [
+                ("acceptance_board", self.acceptance_board_path),
+                ("acceptance_board_verification_report", self.acceptance_board_verification_report_path),
+                ("distribution_kit", self.distribution_kit_path),
+                ("accepted_evidence_dir", self.accepted_evidence_dir),
+            ]
+            if path is None
+        ]
+        self._add_check(
+            "requirements",
+            "ptc_acceptance_board_signoff_current_evidence_required",
+            "failed" if missing_current_evidence else "passed",
+            "blocking",
+            "Acceptance Board signoff current evidence is complete."
+            if not missing_current_evidence
+            else "Acceptance Board signoff current evidence is missing: " + ", ".join(missing_current_evidence) + ".",
+        )
         try:
             from song_agent.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package
         except Exception as exc:
@@ -799,7 +818,7 @@ class _PublicTrustCenterVerifier:
             self.acceptance_board_signoff_archive_path,
             strict=True,
             require_signed=True,
-            require_current=bool(self.acceptance_board_path or self.distribution_kit_path or self.accepted_evidence_dir),
+            require_current=True,
             require_ready=True,
             board_zip_path=self.acceptance_board_path,
             board_verification_report_path=self.acceptance_board_verification_report_path,
