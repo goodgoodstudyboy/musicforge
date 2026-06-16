@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.8.0 - 2026-06-16
+
+### Added
+- Public Trust Center Publication Channels for creating local publication snapshots, static mirror directories, and publication ZIP packages from the current Trust Center, Distribution Kit, Anchor Registry, Anchor Transparency, and Acceptance Board signoff evidence.
+- `verify-public-trust-center-publication-package` and `verify-public-trust-center-publication-mirror` CLIs with strict/deep verification, fixed-entry package checks, manifest/file-index/checksum binding, mirror policy validation, nested package allow-list verification, HTML safety, redaction checks, and revoked/current requirement gates.
+- `public-trust-center-publication` CLI for channel creation, refresh, export, ZIP, mirror verification, package verification, revoke, and supersede workflows.
+- release-check v8.8 smoke covering ready publication, mirror verification, package tamper, declared extra file, duplicate ZIP entry, dangerous/backslash paths, `.MusicForge` variants, nested ZIP rejection, redaction, and revoked publication rejection.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_publication.py tests\test_release_check.py::test_v88_public_trust_center_publication_channels_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --skip-tests --json`
+
 ## v8.7.2 - 2026-06-16
 
 ### Fixed

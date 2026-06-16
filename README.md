@@ -762,6 +762,17 @@ python -m song_agent.cli verify-public-trust-center-package path\to\public-trust
 python -m song_agent.cli verify-public-trust-center-distribution-kit-package path\to\public-trust-center-distribution-kit.zip --strict --deep --require-current --no-require-delivery-readiness --require-acceptance-board-signoff --acceptance-board-signoff-archive path\to\public-trust-center-acceptance-board-signoff-archive.zip --acceptance-board path\to\public-trust-center-acceptance-board.zip --acceptance-board-verification-report path\to\acceptance-board-verification-report.json --accepted-evidence-dir path\to\accepted-evidence --json
 ```
 
+Public Trust Center Publication Channels turn the current public evidence set
+into a static publication mirror and a portable publication ZIP. The verifier
+uses a fixed package structure, checksum binding, mirror policy checks, nested
+package allow-lists, and optional current-anchor / no-revoked gates:
+
+```powershell
+python -m song_agent.cli public-trust-center-publication --center-id ptc-default --channel-id public-release --create-channel --refresh --export --zip --verify --verify-mirror --strict --deep --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --json
+python -m song_agent.cli verify-public-trust-center-publication-package path\to\public-trust-center-publication.zip --strict --deep --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --json
+python -m song_agent.cli verify-public-trust-center-publication-mirror path\to\publication-mirror --strict --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

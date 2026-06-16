@@ -1017,6 +1017,68 @@ def build_verify_public_trust_center_acceptance_board_signoff_archive_parser() -
     return verify_parser
 
 
+def build_verify_public_trust_center_publication_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Publication ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Publication ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict warnings as failures.")
+    verify_parser.add_argument("--deep", action="store_true", help="Re-run nested package verifiers.")
+    verify_parser.add_argument("--require-ready", action="store_true", help="Require publication ready status.")
+    verify_parser.add_argument("--require-acceptance-board-signoff", action="store_true", help="Require Acceptance Board signoff evidence.")
+    verify_parser.add_argument("--require-anchor-current", action="store_true", help="Require current Anchor Registry and Transparency evidence.")
+    verify_parser.add_argument("--require-no-revoked", action="store_true", help="Fail revoked publication snapshots.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=512, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_public_trust_center_publication_mirror_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Publication mirror directory.")
+    verify_parser.add_argument("mirror_dir", type=Path, help="Path to the Publication mirror directory to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict warnings as failures.")
+    verify_parser.add_argument("--require-ready", action="store_true", help="Require publication ready status.")
+    verify_parser.add_argument("--require-acceptance-board-signoff", action="store_true", help="Require Acceptance Board signoff evidence.")
+    verify_parser.add_argument("--require-anchor-current", action="store_true", help="Require current Anchor Registry and Anchor Transparency evidence.")
+    verify_parser.add_argument("--require-no-revoked", action="store_true", help="Fail if the publication snapshot is revoked.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=512, help="Maximum number of mirror files.")
+    return verify_parser
+
+
+def build_public_trust_center_publication_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build and verify MusicForge Public Trust Center Publication channels.")
+    parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
+    parser.add_argument("--channel-id", default="public-release", help="Publication channel id.")
+    parser.add_argument("--channel-name", default="Public Release Channel", help="Publication channel name.")
+    parser.add_argument("--channel-type", default="public_release", help="Publication channel type.")
+    parser.add_argument("--create-channel", action="store_true", help="Create the publication channel if needed.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh the current publication report.")
+    parser.add_argument("--export", action="store_true", help="Export the publication mirror directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the publication ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify the publication ZIP.")
+    parser.add_argument("--verify-mirror", action="store_true", help="Verify the publication mirror directory.")
+    parser.add_argument("--mirror-dir", type=Path, default=None, help="External mirror directory to verify. Defaults to current export.")
+    parser.add_argument("--publication-id", default=None, help="Publication id. Defaults to the current publication.")
+    parser.add_argument("--revoke", action="store_true", help="Revoke the publication snapshot.")
+    parser.add_argument("--supersede", action="store_true", help="Create a new publication and mark the previous current one superseded.")
+    parser.add_argument("--reason", default="Public Trust Center publication operation.", help="Reason for revoke/supersede operations.")
+    parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--deep", action="store_true", help="Run nested package verification.")
+    parser.add_argument("--require-ready", action="store_true", default=True, help="Verifier requires ready publication state.")
+    parser.add_argument("--no-require-ready", dest="require_ready", action="store_false", help="Do not require ready publication state.")
+    parser.add_argument("--require-acceptance-board-signoff", action="store_true", default=True, help="Verifier requires Acceptance Board signoff.")
+    parser.add_argument("--no-require-acceptance-board-signoff", dest="require_acceptance_board_signoff", action="store_false", help="Do not require Acceptance Board signoff.")
+    parser.add_argument("--require-anchor-current", action="store_true", default=True, help="Verifier requires current anchor evidence.")
+    parser.add_argument("--no-require-anchor-current", dest="require_anchor_current", action="store_false", help="Do not require current anchor evidence.")
+    parser.add_argument("--require-no-revoked", action="store_true", help="Verifier fails revoked snapshots.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
 def build_public_trust_center_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build local MusicForge Public Trust Center reports and packages.")
     parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
@@ -2504,6 +2566,61 @@ def _main() -> None:
         else:
             print_public_trust_center_acceptance_board_signoff_archive_verification_report(report)
         raise SystemExit(public_trust_center_acceptance_board_signoff_archive_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-publication-package":
+        from song_agent.public_trust_center_publication_verifier import (
+            print_public_trust_center_publication_verification_report,
+            public_trust_center_publication_verification_exit_code,
+            verify_public_trust_center_publication_package,
+            write_public_trust_center_publication_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_publication_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_publication_package(
+            args.zip_path,
+            strict=args.strict,
+            deep=args.deep,
+            require_ready=args.require_ready,
+            require_acceptance_board_signoff=args.require_acceptance_board_signoff,
+            require_anchor_current=args.require_anchor_current,
+            require_no_revoked=args.require_no_revoked,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_publication_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_publication_verification_report(report)
+        raise SystemExit(public_trust_center_publication_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-publication-mirror":
+        from song_agent.public_trust_center_publication_verifier import (
+            print_public_trust_center_publication_verification_report,
+            public_trust_center_publication_verification_exit_code,
+            verify_public_trust_center_publication_mirror,
+            write_public_trust_center_publication_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_publication_mirror_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_publication_mirror(
+            args.mirror_dir,
+            strict=args.strict,
+            require_ready=args.require_ready,
+            require_acceptance_board_signoff=args.require_acceptance_board_signoff,
+            require_anchor_current=args.require_anchor_current,
+            require_no_revoked=args.require_no_revoked,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_publication_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_publication_verification_report(report)
+        raise SystemExit(public_trust_center_publication_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -3803,6 +3920,112 @@ def _main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print_release_portfolio_governance_attestation_transparency_acknowledgement_result(result)
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "public-trust-center-publication":
+        from song_agent.public_trust_center_publication import PublicTrustCenterPublicationStore, publication_summary
+        from song_agent.public_trust_center_publication_verifier import (
+            print_public_trust_center_publication_verification_report,
+        )
+
+        parser = build_public_trust_center_publication_parser()
+        args = parser.parse_args(raw_args[1:])
+        trust_store = _build_public_trust_center_store()
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+        from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
+        from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore
+        from song_agent.public_trust_center_acceptance_board import PublicTrustCenterAcceptanceBoardStore
+
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+        anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+        distribution_kit_store = PublicTrustCenterDistributionKitStore(trust_center_store=trust_store, anchor_registry_store=anchor_store, anchor_transparency_store=anchor_transparency_store)
+        acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=distribution_kit_store)
+        board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=acceptance_store)
+        store = PublicTrustCenterPublicationStore(
+            trust_center_store=trust_store,
+            distribution_kit_store=distribution_kit_store,
+            anchor_registry_store=anchor_store,
+            anchor_transparency_store=anchor_transparency_store,
+            acceptance_store=acceptance_store,
+            acceptance_board_store=board_store,
+        )
+        result: dict[str, Any] = {"ok": True, "center_id": args.center_id, "channel_id": args.channel_id}
+        if args.create_channel:
+            result["channel"] = store.create_channel(args.center_id, {"channel_id": args.channel_id, "name": args.channel_name, "channel_type": args.channel_type})
+        else:
+            try:
+                result["channel"] = store.read_channel(args.center_id, args.channel_id)
+            except Exception:
+                result["channel"] = store.create_channel(args.center_id, {"channel_id": args.channel_id, "name": args.channel_name, "channel_type": args.channel_type})
+        publication_id = args.publication_id
+        if args.refresh:
+            report = store.refresh_publication(args.center_id, args.channel_id)
+            publication_id = str(report.get("publication_id") or publication_id or "")
+            result["publication"] = report
+            result["summary"] = publication_summary(report)
+        if args.supersede:
+            report = store.supersede_publication(args.center_id, args.channel_id, publication_id, {"reason": args.reason})
+            publication_id = str(report.get("publication_id") or publication_id or "")
+            result["publication"] = report
+            result["summary"] = publication_summary(report)
+        if args.revoke:
+            if not publication_id:
+                publication_id = store._current_publication_id(args.center_id, args.channel_id)
+            report = store.revoke_publication(args.center_id, args.channel_id, publication_id, {"reason": args.reason})
+            result["publication"] = report
+            result["summary"] = publication_summary(report)
+        if args.export:
+            result["manifest"] = store.export_publication(args.center_id, args.channel_id, publication_id)
+            publication_id = str(result["manifest"].get("publication_id") or publication_id or "")
+        if args.zip:
+            result["zip"] = store.build_publication_zip(args.center_id, args.channel_id, publication_id)
+            publication_id = str(result["zip"].get("publication_id") or publication_id or "")
+        if args.verify:
+            verification = store.verify_publication_zip(
+                args.center_id,
+                args.channel_id,
+                publication_id,
+                {
+                    "strict": args.strict,
+                    "deep": args.deep,
+                    "require_ready": args.require_ready,
+                    "require_acceptance_board_signoff": args.require_acceptance_board_signoff,
+                    "require_anchor_current": args.require_anchor_current,
+                    "require_no_revoked": args.require_no_revoked,
+                },
+            )
+            result["verification"] = verification
+            result["verification_summary"] = verification.get("summary", {})
+        if args.verify_mirror:
+            if not publication_id:
+                publication_id = store._current_publication_id(args.center_id, args.channel_id)
+            mirror_dir = args.mirror_dir or store.export_dir(args.center_id, args.channel_id, publication_id)
+            verification = store.verify_mirror_directory(
+                args.center_id,
+                args.channel_id,
+                publication_id,
+                mirror_dir,
+                {
+                    "strict": args.strict,
+                    "require_ready": args.require_ready,
+                    "require_acceptance_board_signoff": args.require_acceptance_board_signoff,
+                    "require_anchor_current": args.require_anchor_current,
+                    "require_no_revoked": args.require_no_revoked,
+                },
+            )
+            result["mirror_verification"] = verification
+            result["mirror_verification_summary"] = verification.get("summary", {})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            if "verification" in result:
+                print_public_trust_center_publication_verification_report(result["verification"])
+            elif "mirror_verification" in result:
+                print_public_trust_center_publication_verification_report(result["mirror_verification"])
+            else:
+                print(json.dumps(result.get("summary") or {"status": "ok"}, ensure_ascii=False, indent=2))
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "public-trust-center":
         from song_agent.public_trust_center import public_trust_center_summary

@@ -13472,6 +13472,163 @@ def _v87_public_trust_center_acceptance_board_signoff_smoke(root: Path) -> tuple
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v88_public_trust_center_publication_channels_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v88-publication-")).resolve()
+    try:
+        from song_agent.public_trust_center import PublicTrustCenterStore
+        from song_agent.public_trust_center_acceptance_board import PublicTrustCenterAcceptanceBoardStore
+        from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+        from song_agent.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package, write_public_trust_center_anchor_registry_verification_report
+        from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+        from song_agent.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package, write_public_trust_center_anchor_transparency_verification_report
+        from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
+        from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, response_payload_hash
+        from song_agent.public_trust_center_publication import PublicTrustCenterPublicationStore
+        from song_agent.public_trust_center_publication_verifier import verify_public_trust_center_publication_mirror, verify_public_trust_center_publication_package
+        from song_agent.releases import ReleaseStore
+
+        class _DummyStore:
+            def list_portfolios(self, include_archived: bool = False) -> list[dict[str, Any]]:
+                return []
+
+        release_store = ReleaseStore(base / "releases")
+        dummy_store = _DummyStore()
+        trust_store = PublicTrustCenterStore(
+            release_store=release_store,
+            portfolio_store=dummy_store,
+            registry_store=dummy_store,
+            portal_store=dummy_store,
+            transparency_store=dummy_store,
+            acknowledgement_store=dummy_store,
+        )
+        trust_store.refresh_report("ptc-default", {"include_all_releases": False, "include_all_portfolios": False})
+        trust_store.export_center("ptc-default")
+        trust_store.build_zip("ptc-default")
+        anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+        entry = anchor_store.register_current_anchor("ptc-default", {"reason": "release-check v8.8 anchor"})["entry"]
+        anchor_store.publish_entry("ptc-default", str(entry["entry_id"]), {"reason": "release-check v8.8 publish anchor"})
+        anchor_store.refresh_report("ptc-default")
+        anchor_store.export_registry("ptc-default")
+        anchor_store.build_zip("ptc-default")
+        registry_verification = verify_public_trust_center_anchor_registry_package(anchor_store.zip_path("ptc-default"), strict=True, require_current=True, require_anchor_published=True, require_anchor_not_revoked=True)
+        write_public_trust_center_anchor_registry_verification_report(registry_verification, anchor_store.verification_report_path("ptc-default"))
+        transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+        transparency_store.refresh_report("ptc-default")
+        transparency_store.create_checkpoint("ptc-default")
+        transparency_store.export_transparency("ptc-default")
+        transparency_store.build_zip("ptc-default")
+        transparency_verification = verify_public_trust_center_anchor_transparency_package(
+            transparency_store.zip_path("ptc-default"),
+            strict=True,
+            checkpoint_path=transparency_store.current_checkpoint_path("ptc-default"),
+            anchor_registry_path=anchor_store.zip_path("ptc-default"),
+            require_current_checkpoint=True,
+            require_published_anchor=True,
+            require_not_revoked=True,
+        )
+        write_public_trust_center_anchor_transparency_verification_report(transparency_verification, transparency_store.verification_report_path("ptc-default"))
+        trust_store.verify_zip(
+            "ptc-default",
+            {
+                "strict": True,
+                "require_delivery_readiness": False,
+                "delivery_anchor_path": trust_store.delivery_anchor_path("ptc-default"),
+                "anchor_registry_path": anchor_store.zip_path("ptc-default"),
+                "anchor_transparency_path": transparency_store.zip_path("ptc-default"),
+                "anchor_checkpoint_path": transparency_store.current_checkpoint_path("ptc-default"),
+                "require_anchor_registry_current": True,
+                "require_anchor_published": True,
+                "require_anchor_not_revoked": True,
+                "require_anchor_transparency_current": True,
+                "require_anchor_checkpoint": True,
+            },
+        )
+        kit_store = PublicTrustCenterDistributionKitStore(trust_center_store=trust_store, anchor_registry_store=anchor_store, anchor_transparency_store=transparency_store)
+        kit_store.refresh_report("ptc-default")
+        kit_store.export_kit("ptc-default")
+        kit_store.build_zip("ptc-default")
+        kit_store.verify_zip("ptc-default", {"strict": True, "deep": True, "require_current": True, "require_delivery_readiness": False})
+        acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=kit_store)
+        board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=acceptance_store)
+        board_store.save_policy("ptc-default", {"requirements": {"min_accepted_count": 2, "min_accepted_organizations": 2, "required_roles": ["legal", "distribution_partner"]}})
+
+        def _accepted(response_id: str, organization: str, role: str) -> None:
+            template = acceptance_store.create_response_template("ptc-default")
+            response = dict(template["response_template"])
+            response.update({"response_id": response_id, "reviewer": {"name": f"{organization} Reviewer", "organization": organization, "role": role}, "reviewed_at": "2026-06-16T00:00:00+00:00", "comments": f"{organization} accepted the publication kit."})
+            response["response_hash"] = response_payload_hash(response)
+            imported = acceptance_store.import_response("ptc-default", {"response": response})
+            evidence = acceptance_store.refresh_accepted_evidence("ptc-default", {"response_id": imported["response"]["response_id"]})
+            acceptance_store.export_accepted_evidence("ptc-default", imported["response"]["response_id"])
+            acceptance_store.build_accepted_evidence_zip("ptc-default", imported["response"]["response_id"])
+            acceptance_store.verify_accepted_evidence_zip("ptc-default", str(evidence.get("evidence_id") or ""), {"strict": True, "require_current": True})
+
+        _accepted("v88-kit-accepted-001", "Legal Org", "legal")
+        _accepted("v88-kit-accepted-002", "Distribution Org", "distribution_partner")
+        board_store.refresh_report("ptc-default")
+        board_store.export_board("ptc-default")
+        board_store.build_zip("ptc-default")
+        board_store.verify_zip("ptc-default", {"strict": True, "require_ready": True, "require_quorum": True, "require_no_conflicts": True, "use_distribution_kit": True, "use_accepted_evidence": True})
+        board_store.signoff("ptc-default", {"signed_by": "release-check", "reason": "v8.8 publication channel smoke."})
+        board_store.export_signoff_archive("ptc-default")
+        board_store.build_signoff_archive_zip("ptc-default")
+        board_store.verify_signoff_archive_zip("ptc-default", {"strict": True, "require_signed": True, "require_current": True, "require_ready": True, "use_board_zip": True, "use_board_verification": True, "use_distribution_kit": True, "use_accepted_evidence": True})
+
+        publication_store = PublicTrustCenterPublicationStore(
+            trust_center_store=trust_store,
+            distribution_kit_store=kit_store,
+            anchor_registry_store=anchor_store,
+            anchor_transparency_store=transparency_store,
+            acceptance_store=acceptance_store,
+            acceptance_board_store=board_store,
+        )
+        publication_store.create_channel("ptc-default", {"channel_id": "release", "name": "Release Channel"})
+        publication = publication_store.refresh_publication("ptc-default", "release")
+        publication_store.export_publication("ptc-default", "release", publication["publication_id"])
+        publication_store.build_publication_zip("ptc-default", "release", publication["publication_id"])
+        verification = verify_public_trust_center_publication_package(publication_store.zip_path("ptc-default", "release", publication["publication_id"]), strict=True, deep=True, require_ready=True, require_acceptance_board_signoff=True, require_anchor_current=True, require_no_revoked=True)
+        mirror = verify_public_trust_center_publication_mirror(publication_store.export_dir("ptc-default", "release", publication["publication_id"]), strict=True, require_ready=True, require_acceptance_board_signoff=True)
+        source_zip = publication_store.zip_path("ptc-default", "release", publication["publication_id"])
+        package_tamper = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-package-tamper.zip", transforms={"packages/public-trust-center.zip": lambda data: data + b"x"}), strict=True)
+        declared_extra = verify_public_trust_center_publication_package(_v76_rewrite_zip(source_zip, base / "publication-declared-extra.zip", _v88_add_publication_declared_extra), strict=True)
+        duplicate = verify_public_trust_center_publication_package(_v43_duplicate_submission_zip(source_zip, base / "publication-duplicate.zip"), strict=True)
+        dangerous = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_public_trust_center_publication_package(_v38_backslash_entry_zip(base / "publication-backslash.zip"), strict=True)
+        case_musicforge = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-nested.zip", additions={"packages/extra.zip": b"PK\x05\x06" + b"\0" * 18}), strict=True)
+        redaction = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        revoked_report = publication_store.revoke_publication("ptc-default", "release", publication["publication_id"], {"reason": "Withdraw publication."})
+        revoked = verify_public_trust_center_publication_package(_v76_rewrite_zip(source_zip, base / "publication-revoked.zip", _v88_mark_publication_revoked), strict=True, require_no_revoked=True)
+
+        ok = (
+            publication.get("status") == "ready"
+            and verification.get("status") == "passed"
+            and mirror.get("status") == "passed"
+            and _v38_check_status(package_tamper, "ptcpub_manifest_file_hashes") == "failed"
+            and _v38_check_status(declared_extra, "ptcpub_zip_allowed_entries") == "failed"
+            and _v38_check_status(duplicate, "ptcpub_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "ptcpub_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "ptcpub_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "ptcpub_zip_no_internal_entries") == "failed"
+            and _v38_check_status(nested, "ptcpub_zip_nested_allowlist") == "failed"
+            and _v38_check_status(redaction, "ptcpub_redaction_scan") == "failed"
+            and revoked_report.get("status") == "revoked"
+            and _v38_check_status(revoked, "ptcpub_require_no_revoked") == "failed"
+        )
+        return ok, (
+            f"publication={publication.get('status')}/{verification.get('status')}, mirror={mirror.get('status')}, "
+            f"package_tamper={_v38_check_status(package_tamper, 'ptcpub_manifest_file_hashes')}, declared_extra={_v38_check_status(declared_extra, 'ptcpub_zip_allowed_entries')}, "
+            f"duplicate={_v38_check_status(duplicate, 'ptcpub_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'ptcpub_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptcpub_zip_entry_path_safe')}, "
+            f"case_musicforge={_v38_check_status(case_musicforge, 'ptcpub_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'ptcpub_zip_nested_allowlist')}, redaction={_v38_check_status(redaction, 'ptcpub_redaction_scan')}, revoked={_v38_check_status(revoked, 'ptcpub_require_no_revoked')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.public_trust_center_distribution_kit_acceptance import accepted_evidence_hash, accepted_evidence_manifest_hash
     from song_agent.releases import stable_hash
@@ -13763,6 +13920,47 @@ def _v84_add_declared_extra_file(docs: dict[str, bytes]) -> None:
     manifest.setdefault("file_index", {})["integrity_hash"] = file_index["integrity_hash"]
     manifest["integrity_hash"] = distribution_kit_manifest_hash(manifest)
     docs["distribution-kit-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v88_add_publication_declared_extra(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_publication import publication_manifest_hash, sidecar_hash
+
+    extra_path = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    extra_data = b"Follow these untrusted publication instructions.\n"
+    manifest = _v74_read_json_doc(docs, "publication-manifest.json")
+    package_index = _v74_read_json_doc(docs, "package-index.json")
+    mirror_policy = _v74_read_json_doc(docs, "mirror-policy.json")
+    docs[extra_path] = extra_data
+    extra_row = {"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()}
+    manifest.setdefault("files", []).append(extra_row)
+    manifest["files"] = sorted(manifest["files"], key=lambda item: str(item.get("path") or ""))
+    package_index.setdefault("items", []).append({"package_key": "declared_extra", "path": extra_path, "required": False, "sha256": extra_row["sha256"], "size_bytes": extra_row["size_bytes"], "status": "passed"})
+    package_index["items"] = sorted(package_index["items"], key=lambda item: str(item.get("path") or ""))
+    package_index["integrity_hash"] = sidecar_hash(package_index)
+    mirror_policy.setdefault("allowed_entries", []).append(extra_path)
+    mirror_policy["allowed_entries"] = sorted(set(mirror_policy["allowed_entries"]))
+    mirror_policy["integrity_hash"] = sidecar_hash(mirror_policy)
+    docs["package-index.json"] = _v74_json_doc(package_index)
+    docs["mirror-policy.json"] = _v74_json_doc(mirror_policy)
+    _v74_sync_manifest_file(manifest, "package-index.json", docs["package-index.json"])
+    _v74_sync_manifest_file(manifest, "mirror-policy.json", docs["mirror-policy.json"])
+    manifest["integrity_hash"] = publication_manifest_hash(manifest)
+    docs["publication-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v88_mark_publication_revoked(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_publication import publication_manifest_hash, publication_report_hash
+
+    report = _v74_read_json_doc(docs, "publication-report.json")
+    manifest = _v74_read_json_doc(docs, "publication-manifest.json")
+    report["status"] = "revoked"
+    report["revocation"] = {"reason": "release-check revoked fixture"}
+    report["integrity_hash"] = publication_report_hash(report)
+    docs["publication-report.json"] = _v74_json_doc(report)
+    manifest["report_hash"] = report["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "publication-report.json", docs["publication-report.json"])
+    manifest["integrity_hash"] = publication_manifest_hash(manifest)
+    docs["publication-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v82_tamper_anchor_signature(docs: dict[str, bytes]) -> None:
