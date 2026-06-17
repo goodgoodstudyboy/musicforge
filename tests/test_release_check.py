@@ -886,6 +886,7 @@ def test_v89_public_trust_center_publication_monitoring_smoke(tmp_path: Path) ->
     assert "monitor=passed" in detail
     assert "missing_state=failed" in detail
     assert "incident_tamper=failed" in detail
+    assert "incident_full_resign=failed" in detail
     assert "duplicate=failed" in detail
     assert "backslash=failed" in detail
     assert "case_musicforge=failed" in detail

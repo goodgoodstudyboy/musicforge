@@ -13685,6 +13685,16 @@ def _v89_public_trust_center_publication_monitoring_smoke(root: Path) -> tuple[b
         spoof = verify_public_trust_center_publication_monitoring_package(_v76_rewrite_zip(source_zip, base / "monitor-spoof.zip", _v89_spoof_monitoring_manifest_zip_entries), strict=True)
         redaction = verify_public_trust_center_publication_monitoring_package(_v38_rewrite_zip(source_zip, base / "monitor-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
 
+        mirror = publication_store.export_dir("ptc-default", "release", publication["publication_id"])
+        (mirror / "README.txt").write_text("tampered mirror", encoding="utf-8")
+        monitoring_store.create_monitor("ptc-default", "release", {"monitor_id": "monitor-drift"})
+        drift_run = monitoring_store.run_monitor("ptc-default", "release", "monitor-drift")
+        drift_run_id = str(drift_run["monitor_run"]["run_id"])
+        monitoring_store.export_monitoring_run("ptc-default", "release", "monitor-drift", drift_run_id)
+        monitoring_store.build_monitoring_zip("ptc-default", "release", "monitor-drift", drift_run_id)
+        drift_source_zip = monitoring_store.zip_path("ptc-default", "release", "monitor-drift", drift_run_id)
+        incident_full_resign = verify_public_trust_center_publication_monitoring_package(_v76_rewrite_zip(drift_source_zip, base / "monitor-incident-full-resign.zip", _v89_tamper_monitoring_incident_full_resign), strict=True, require_no_open_critical_incidents=True)
+
         publication_store.revoke_publication("ptc-default", "release", publication["publication_id"], {"reason": "Withdraw monitored publication."})
         revoked = verify_public_trust_center_publication_monitoring_package(source_zip, strict=True, require_current=True, require_no_revoked=True, publication_channel_state_path=channel_state)
 
@@ -13713,6 +13723,7 @@ def _v89_public_trust_center_publication_monitoring_smoke(root: Path) -> tuple[b
             and _v38_check_status(missing_state, "ptcpm_channel_state_required") == "failed"
             and _v38_check_status(drift_tamper, "ptcpm_manifest_file_hashes") == "failed"
             and _v38_check_status(incident_tamper, "ptcpm_incident_summary_matches_incidents") == "failed"
+            and _v38_check_status(incident_full_resign, "ptcpm_incident_report_matches_events") == "failed"
             and _v38_check_status(duplicate, "ptcpm_zip_duplicate_entries") == "failed"
             and _v38_check_status(dangerous, "ptcpm_zip_entry_path_safe") == "failed"
             and _v38_check_status(backslash, "ptcpm_zip_entry_path_safe") == "failed"
@@ -13725,7 +13736,7 @@ def _v89_public_trust_center_publication_monitoring_smoke(root: Path) -> tuple[b
         )
         return ok, (
             f"monitor={verification.get('status')}, drift={run['monitor_run'].get('status')}, missing_state={_v38_check_status(missing_state, 'ptcpm_channel_state_required')}, "
-            f"drift_tamper={_v38_check_status(drift_tamper, 'ptcpm_manifest_file_hashes')}, incident_tamper={_v38_check_status(incident_tamper, 'ptcpm_incident_summary_matches_incidents')}, "
+            f"drift_tamper={_v38_check_status(drift_tamper, 'ptcpm_manifest_file_hashes')}, incident_tamper={_v38_check_status(incident_tamper, 'ptcpm_incident_summary_matches_incidents')}, incident_full_resign={_v38_check_status(incident_full_resign, 'ptcpm_incident_report_matches_events')}, "
             f"duplicate={_v38_check_status(duplicate, 'ptcpm_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'ptcpm_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptcpm_zip_entry_path_safe')}, "
             f"case_musicforge={_v38_check_status(case_musicforge, 'ptcpm_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'ptcpm_zip_nested_allowlist')}, spoof={_v38_check_status(spoof, 'ptcpm_manifest_zip_entries_reference_only')}, "
             f"redaction={_v38_check_status(redaction, 'ptcpm_redaction_scan')}, revoked={_v38_check_status(revoked, 'ptcpm_require_no_revoked')}, superseded={superseded_status}"
@@ -13892,6 +13903,9 @@ def _v89_fake_mirror_verifier(mirror_dir: Path, **kwargs: Any) -> dict[str, Any]
     del kwargs
     mirror_dir = Path(mirror_dir)
     manifest = read_json(mirror_dir / "publication-manifest.json")
+    if (mirror_dir / "README.txt").exists():
+        blocker = {"check_id": "ptcpub_manifest_file_hashes", "status": "failed", "severity": "blocking", "message": "Fixture mirror hash mismatch."}
+        return {"status": "failed", "manifest_hash": manifest.get("integrity_hash"), "checks": [blocker], "blockers": [blocker], "warnings": []}
     return {"status": "passed", "manifest_hash": manifest.get("integrity_hash"), "checks": [{"check_id": "ptcpub_fixture_mirror", "status": "passed"}], "blockers": [], "warnings": []}
 
 
@@ -13921,6 +13935,53 @@ def _v89_tamper_monitoring_incident_report(docs: dict[str, bytes]) -> None:
     _v74_sync_manifest_file(manifest, "incident-report.json", docs["incident-report.json"])
     manifest["integrity_hash"] = monitoring_manifest_hash(manifest)
     docs["monitoring-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v89_tamper_monitoring_incident_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_publication_monitoring import monitoring_hash, monitoring_manifest_hash
+
+    incident = _v74_read_json_doc(docs, "incident-report.json")
+    run = _v74_read_json_doc(docs, "monitor-run.json")
+    manifest = _v74_read_json_doc(docs, "monitoring-manifest.json")
+    file_index = _v74_read_json_doc(docs, "file-index.json")
+    checksum = _v74_read_json_doc(docs, "checksum/SHA256SUMS.json")
+    rows = incident.get("incidents") if isinstance(incident.get("incidents"), list) else []
+    for row in rows:
+        if isinstance(row, dict):
+            row["status"] = "resolved"
+    incident["summary"] = {"incident_count": len(rows), "open_count": 0, "critical_count": 0, "waived_count": 0, "resolved_count": len(rows)}
+    incident["integrity_hash"] = monitoring_hash(incident)
+    run["status"] = "passed"
+    run.setdefault("summary", {})["open_incidents"] = 0
+    run.setdefault("summary", {})["critical_incidents"] = 0
+    run.setdefault("source", {})["incident_report_hash"] = incident["integrity_hash"]
+    run["integrity_hash"] = monitoring_hash(run)
+    manifest.setdefault("source", {})["monitor_run_hash"] = run["integrity_hash"]
+    manifest.setdefault("source", {})["incident_report_hash"] = incident["integrity_hash"]
+    docs["incident-report.json"] = _v74_json_doc(incident)
+    docs["monitor-run.json"] = _v74_json_doc(run)
+    for path in ("incident-report.json", "monitor-run.json"):
+        _v74_sync_manifest_file(manifest, path, docs[path])
+        _v89_sync_file_record(file_index, path, docs[path])
+        _v89_sync_file_record(checksum, path, docs[path])
+    file_index["integrity_hash"] = monitoring_hash(file_index)
+    docs["file-index.json"] = _v74_json_doc(file_index)
+    _v74_sync_manifest_file(manifest, "file-index.json", docs["file-index.json"])
+    _v89_sync_file_record(checksum, "file-index.json", docs["file-index.json"])
+    checksum["integrity_hash"] = monitoring_hash(checksum)
+    docs["checksum/SHA256SUMS.json"] = _v74_json_doc(checksum)
+    _v74_sync_manifest_file(manifest, "checksum/SHA256SUMS.json", docs["checksum/SHA256SUMS.json"])
+    docs["checksum/SHA256SUMS.txt"] = ("\n".join(f"{item.get('sha256')}  {item.get('path')}" for item in checksum.get("files", []) if isinstance(item, dict)) + "\n").encode("utf-8")
+    _v74_sync_manifest_file(manifest, "checksum/SHA256SUMS.txt", docs["checksum/SHA256SUMS.txt"])
+    manifest["integrity_hash"] = monitoring_manifest_hash(manifest)
+    docs["monitoring-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v89_sync_file_record(payload: dict[str, Any], path: str, data: bytes) -> None:
+    for item in payload.get("files", []) if isinstance(payload.get("files"), list) else []:
+        if isinstance(item, dict) and item.get("path") == path:
+            item["size_bytes"] = len(data)
+            item["sha256"] = hashlib.sha256(data).hexdigest()
 
 
 def _v89_spoof_monitoring_manifest_zip_entries(docs: dict[str, bytes]) -> None:

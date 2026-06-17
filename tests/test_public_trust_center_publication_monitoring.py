@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from pathlib import Path
 
 from tests.test_public_trust_center import _backslash_zip, _duplicate_zip, _rewrite_zip, _sync_manifest_file
@@ -122,6 +123,29 @@ def test_publication_monitoring_verifier_rejects_tamper_and_zip_edges(tmp_path: 
     assert _has_blocker(redaction, "ptcpm_redaction_scan")
 
 
+def test_publication_monitoring_verifier_rejects_incident_full_resign(tmp_path: Path, monkeypatch) -> None:
+    publication_store, publication = _ready_publication(tmp_path, monkeypatch)
+    mirror = publication_store.export_dir("ptc-default", "c", publication["publication_id"])
+    (mirror / "README.txt").write_text("tampered", encoding="utf-8")
+    store = PublicTrustCenterPublicationMonitoringStore(publication_store=publication_store)
+    store.create_monitor("ptc-default", "c", {"monitor_id": "mon"})
+    result = store.run_monitor("ptc-default", "c", "mon")
+    run_id = result["monitor_run"]["run_id"]
+    store.export_monitoring_run("ptc-default", "c", "mon", run_id)
+    store.build_monitoring_zip("ptc-default", "c", "mon", run_id)
+    source_zip = store.zip_path("ptc-default", "c", "mon", run_id)
+    short_source_zip = tmp_path / "monitoring-drift.zip"
+    _copy_zip(source_zip, short_source_zip)
+
+    baseline = verify_public_trust_center_publication_monitoring_package(short_source_zip, strict=True, require_no_open_critical_incidents=True)
+    forged = verify_public_trust_center_publication_monitoring_package(_rewrite_zip(short_source_zip, tmp_path / "incident-full-resign.zip", _tamper_incident_full_resign_resolved), strict=True, require_no_open_critical_incidents=True)
+
+    assert _has_blocker(baseline, "ptcpm_require_no_open_critical_incidents")
+    assert _has_blocker(forged, "ptcpm_incident_report_matches_events")
+    assert _has_blocker(forged, "ptcpm_incident_summary_matches_events")
+    assert _has_blocker(forged, "ptcpm_require_no_open_critical_incidents")
+
+
 def _has_blocker(report: dict, check_id: str) -> bool:
     return any(check_id in item["check_id"] for item in report.get("blockers", []))
 
@@ -160,6 +184,65 @@ def _tamper_incident_summary(docs: dict[str, bytes]) -> None:
     _sync_manifest_file(manifest, "incident-report.json", docs["incident-report.json"])
     manifest["integrity_hash"] = monitoring_manifest_hash(manifest)
     docs["monitoring-manifest.json"] = _doc_bytes(manifest)
+
+
+def _tamper_incident_full_resign_resolved(docs: dict[str, bytes]) -> None:
+    incident_doc = _read_doc(docs, "incident-report.json")
+    run_doc = _read_doc(docs, "monitor-run.json")
+    manifest = _read_doc(docs, "monitoring-manifest.json")
+    file_index = _read_doc(docs, "file-index.json")
+    checksum = _read_doc(docs, "checksum/SHA256SUMS.json")
+    rows = incident_doc.get("incidents") if isinstance(incident_doc.get("incidents"), list) else []
+    for row in rows:
+        if isinstance(row, dict):
+            row["status"] = "resolved"
+    incident_doc["summary"] = {
+        "incident_count": len(rows),
+        "open_count": 0,
+        "critical_count": 0,
+        "waived_count": 0,
+        "resolved_count": len(rows),
+    }
+    incident_doc["integrity_hash"] = monitoring_hash(incident_doc)
+    run_doc["status"] = "passed"
+    run_doc.setdefault("summary", {})["open_incidents"] = 0
+    run_doc.setdefault("summary", {})["critical_incidents"] = 0
+    run_doc.setdefault("source", {})["incident_report_hash"] = incident_doc["integrity_hash"]
+    run_doc["integrity_hash"] = monitoring_hash(run_doc)
+    manifest.setdefault("source", {})["monitor_run_hash"] = run_doc["integrity_hash"]
+    manifest.setdefault("source", {})["incident_report_hash"] = incident_doc["integrity_hash"]
+    docs["incident-report.json"] = _doc_bytes(incident_doc)
+    docs["monitor-run.json"] = _doc_bytes(run_doc)
+    _sync_monitoring_auxiliary_indexes(docs, manifest, file_index, checksum)
+
+
+def _sync_monitoring_auxiliary_indexes(docs: dict[str, bytes], manifest: dict, file_index: dict, checksum: dict) -> None:
+    for path in ("incident-report.json", "monitor-run.json"):
+        _sync_manifest_file(manifest, path, docs[path])
+        _sync_file_record(file_index, path, docs[path])
+        _sync_file_record(checksum, path, docs[path])
+    file_index["integrity_hash"] = monitoring_hash(file_index)
+    docs["file-index.json"] = _doc_bytes(file_index)
+    _sync_manifest_file(manifest, "file-index.json", docs["file-index.json"])
+    _sync_file_record(checksum, "file-index.json", docs["file-index.json"])
+    checksum["integrity_hash"] = monitoring_hash(checksum)
+    docs["checksum/SHA256SUMS.json"] = _doc_bytes(checksum)
+    _sync_manifest_file(manifest, "checksum/SHA256SUMS.json", docs["checksum/SHA256SUMS.json"])
+    sha_lines = []
+    for item in checksum.get("files", []) if isinstance(checksum.get("files"), list) else []:
+        if isinstance(item, dict):
+            sha_lines.append(f"{item.get('sha256')}  {item.get('path')}")
+    docs["checksum/SHA256SUMS.txt"] = ("\n".join(sha_lines) + "\n").encode("utf-8")
+    _sync_manifest_file(manifest, "checksum/SHA256SUMS.txt", docs["checksum/SHA256SUMS.txt"])
+    manifest["integrity_hash"] = monitoring_manifest_hash(manifest)
+    docs["monitoring-manifest.json"] = _doc_bytes(manifest)
+
+
+def _sync_file_record(payload: dict, path: str, data: bytes) -> None:
+    for item in payload.get("files", []) if isinstance(payload.get("files"), list) else []:
+        if isinstance(item, dict) and item.get("path") == path:
+            item["size_bytes"] = len(data)
+            item["sha256"] = hashlib.sha256(data).hexdigest()
 
 
 def _spoof_manifest_zip_entries(docs: dict[str, bytes]) -> None:

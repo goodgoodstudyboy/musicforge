@@ -42,6 +42,7 @@ REQUIRED_ENTRIES = {
     "probe-results.json",
     "drift-report.json",
     "incident-report.json",
+    "incident-events.jsonl",
     "channel-state-snapshot.json",
     "file-index.json",
     "verification-reports/publication-verification-report.json",
@@ -149,6 +150,9 @@ class _MonitoringVerifier:
         self.probe_results: dict[str, Any] = {}
         self.drift_report: dict[str, Any] = {}
         self.incident_report: dict[str, Any] = {}
+        self.incident_events: list[dict[str, Any]] = []
+        self.rebuilt_incidents: list[dict[str, Any]] = []
+        self.rebuilt_incident_summary: dict[str, int] = {}
         self.channel_state_snapshot: dict[str, Any] = {}
         self.file_index: dict[str, Any] = {}
         self.checksum_json: dict[str, Any] = {}
@@ -221,6 +225,7 @@ class _MonitoringVerifier:
         self.probe_results = self._read_json_entry(archive, "probe-results.json", "probe_results", "ptcpm_probe_results_parse")
         self.drift_report = self._read_json_entry(archive, "drift-report.json", "drift_report", "ptcpm_drift_report_parse")
         self.incident_report = self._read_json_entry(archive, "incident-report.json", "incident_report", "ptcpm_incident_report_parse")
+        self.incident_events = self._read_jsonl_entry(archive, "incident-events.jsonl", "incident_events", "ptcpm_incident_events_parse")
         self.channel_state_snapshot = self._read_json_entry(archive, "channel-state-snapshot.json", "channel_state", "ptcpm_channel_state_snapshot_parse")
         self.file_index = self._read_json_entry(archive, "file-index.json", "file_index", "ptcpm_file_index_parse")
         self.checksum_json = self._read_json_entry(archive, "checksum/SHA256SUMS.json", "checksum", "ptcpm_checksum_json_parse")
@@ -268,6 +273,7 @@ class _MonitoringVerifier:
         self._add_exact_check("manifest", "ptcpm_manifest_probe_hash", self.manifest.get("source", {}).get("probe_results_hash"), self.probe_results.get("integrity_hash"), "Manifest probe hash")
         self._add_exact_check("manifest", "ptcpm_manifest_drift_hash", self.manifest.get("source", {}).get("drift_report_hash"), self.drift_report.get("integrity_hash"), "Manifest drift hash")
         self._add_exact_check("manifest", "ptcpm_manifest_incident_hash", self.manifest.get("source", {}).get("incident_report_hash"), self.incident_report.get("integrity_hash"), "Manifest incident hash")
+        self._add_exact_check("manifest", "ptcpm_manifest_incident_events_hash", self.manifest.get("source", {}).get("incident_events_hash"), stable_hash(self.incident_events), "Manifest incident events hash")
         expected_file_index = sorted(REQUIRED_ENTRIES - {"monitoring-manifest.json", "file-index.json", "checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt"})
         actual_file_index = sorted(str(item.get("path") or "") for item in self.file_index.get("files", []) if isinstance(item, dict))
         self._add_exact_check("file_index", "ptcpm_file_index_allowed_files", actual_file_index, expected_file_index, "File index fixed entries")
@@ -284,8 +290,23 @@ class _MonitoringVerifier:
         summary = self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {}
         actual = {key: summary.get(key) for key in expected_summary}
         self._add_exact_check("incident_report", "ptcpm_incident_summary_matches_incidents", actual, expected_summary, "Incident summary derives from incident rows")
-        invalid = [str(item.get("incident_id") or "") for item in incidents if isinstance(item, dict) and item.get("event_chain_valid") is False]
-        self._add_check("incident_report", "ptcpm_incident_event_chain", "failed" if invalid else "passed", "blocking", "Invalid incident event chain: " + ", ".join(invalid[:5]) if invalid else "Incident event chain summaries are valid.")
+        rebuilt_rows, rebuilt_summary, invalid = _rebuild_incidents_from_events(
+            self.incident_events,
+            center_id=str(self.incident_report.get("center_id") or self.manifest.get("center_id") or ""),
+            channel_id=str(self.incident_report.get("channel_id") or self.manifest.get("channel_id") or ""),
+            monitor_id=str(self.incident_report.get("monitor_id") or self.manifest.get("monitor_id") or ""),
+            publication_id=self.incident_report.get("publication_id") or self.manifest.get("publication_id"),
+        )
+        self.rebuilt_incidents = rebuilt_rows
+        self.rebuilt_incident_summary = rebuilt_summary
+        self._add_check("incident_events", "ptcpm_incident_event_chain", "failed" if invalid else "passed", "blocking", "Invalid incident event chain: " + ", ".join(invalid[:5]) if invalid else "Incident event chain is valid.")
+        expected_event_ids = sorted(str(item.get("incident_id") or "") for item in incidents if isinstance(item, dict))
+        actual_event_ids = sorted(str(item.get("incident_id") or "") for item in rebuilt_rows if isinstance(item, dict))
+        self._add_exact_check("incident_events", "ptcpm_incident_events_cover_report", actual_event_ids, expected_event_ids, "Incident event log covers incident report rows")
+        comparable_report_rows = [_incident_comparable(item) for item in sorted(incidents, key=lambda row: str(row.get("incident_id") or "")) if isinstance(item, dict)]
+        comparable_event_rows = [_incident_comparable(item) for item in sorted(rebuilt_rows, key=lambda row: str(row.get("incident_id") or "")) if isinstance(item, dict)]
+        self._add_exact_check("incident_events", "ptcpm_incident_report_matches_events", comparable_event_rows, comparable_report_rows, "Incident report rows derive from event log")
+        self._add_exact_check("incident_events", "ptcpm_incident_summary_matches_events", rebuilt_summary, expected_summary, "Incident summary derives from event log")
         waived = [str(item.get("incident_id") or "") for item in incidents if isinstance(item, dict) and item.get("status") == "waived" and item.get("severity") in {"critical", "high"}]
         if waived and not self.allow_waived_incidents:
             self._add_check("incident_report", "ptcpm_waived_incidents_blocking", "failed", "blocking", "Waived high/critical incidents require --allow-waived-incidents.")
@@ -325,7 +346,7 @@ class _MonitoringVerifier:
 
     def _verify_requirements(self) -> None:
         drift_summary = self.drift_report.get("summary") if isinstance(self.drift_report.get("summary"), dict) else {}
-        incident_summary = self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {}
+        incident_summary = self.rebuilt_incident_summary or (self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {})
         if self.require_ready:
             self._add_exact_check("requirements", "ptcpm_require_ready", [self.run_doc.get("status"), self.drift_report.get("status"), self.publication_verification.get("status")], ["passed", "passed", "passed"], "Monitoring ready state")
         if self.require_no_drift:
@@ -370,7 +391,7 @@ class _MonitoringVerifier:
             if int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
                 continue
             name = info.filename
-            if not name.lower().endswith((".json", ".txt", ".md", ".html", ".csv")):
+            if not name.lower().endswith((".json", ".jsonl", ".txt", ".md", ".html", ".csv")):
                 continue
             try:
                 text = archive.read(info).decode("utf-8", errors="replace")
@@ -399,10 +420,37 @@ class _MonitoringVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return value if isinstance(value, dict) else {}
 
+    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[dict[str, Any]]:
+        info = self.entry_map.get(name)
+        if info is None:
+            self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
+            return []
+        try:
+            text = archive.read(info).decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be read: {exc}")
+            return []
+        rows: list[dict[str, Any]] = []
+        bad_lines: list[int] = []
+        for index, line in enumerate(text.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                bad_lines.append(index)
+                continue
+            if isinstance(value, dict):
+                rows.append(value)
+            else:
+                bad_lines.append(index)
+        self._add_check(scope, check_id, "failed" if bad_lines else "passed", "blocking", "Invalid incident event JSONL lines: " + ", ".join(str(item) for item in bad_lines[:8]) if bad_lines else f"{name} parses as JSONL.")
+        return rows
+
     def _build_report(self) -> dict[str, Any]:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        incident_summary = self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {}
+        incident_summary = self.rebuilt_incident_summary or (self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {})
         summary = {
             "run_id": self.run_doc.get("run_id") or self.manifest.get("run_id"),
             "monitor_id": self.run_doc.get("monitor_id") or self.manifest.get("monitor_id"),
@@ -450,6 +498,142 @@ def _probe(probe_results: dict[str, Any], target_type: str) -> dict[str, Any]:
         if isinstance(probe, dict) and probe.get("target_type") == target_type:
             return probe
     return {}
+
+
+def _rebuild_incidents_from_events(events: list[dict[str, Any]], *, center_id: str, channel_id: str, monitor_id: str, publication_id: Any) -> tuple[list[dict[str, Any]], dict[str, int], list[str]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    invalid: list[str] = []
+    for event in events:
+        incident_id = str(event.get("incident_id") or "")
+        if not incident_id:
+            invalid.append("<missing-incident-id>")
+            continue
+        grouped.setdefault(incident_id, []).append(event)
+    rows: list[dict[str, Any]] = []
+    for incident_id, incident_events in sorted(grouped.items()):
+        ordered = sorted(incident_events, key=lambda item: int(item.get("sequence") or 0))
+        if not _incident_event_chain_valid(ordered):
+            invalid.append(incident_id)
+        row = _incident_from_events(center_id, channel_id, monitor_id, incident_id, ordered)
+        if row:
+            row["publication_id"] = publication_id
+            row["event_count"] = len(ordered)
+            row["latest_event_hash"] = ordered[-1].get("event_hash") if ordered else None
+            row["event_chain_valid"] = _incident_event_chain_valid(ordered)
+            rows.append(row)
+    summary = {
+        "incident_count": len(rows),
+        "open_count": sum(1 for item in rows if item.get("status") == "open"),
+        "critical_count": sum(1 for item in rows if item.get("status") == "open" and item.get("severity") == "critical"),
+        "waived_count": sum(1 for item in rows if item.get("status") == "waived"),
+        "resolved_count": sum(1 for item in rows if item.get("status") == "resolved"),
+    }
+    return rows, summary, invalid
+
+
+def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, incident_id: str, events: list[dict[str, Any]]) -> dict[str, Any]:
+    if not events:
+        return {}
+    opened = next((event for event in events if event.get("event_type") == "opened"), events[0])
+    payload = opened.get("payload") if isinstance(opened.get("payload"), dict) else {}
+    status = "open"
+    evidence = {
+        "drift_report_hash": payload.get("drift_report_hash"),
+        "probe_results_hash": payload.get("probe_results_hash"),
+        "channel_state_latest_event_hash": payload.get("channel_state_latest_event_hash"),
+    }
+    latest_run_id = payload.get("run_id")
+    for event in events:
+        event_type = str(event.get("event_type") or "")
+        epayload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if epayload.get("run_id"):
+            latest_run_id = epayload.get("run_id")
+        if event_type in {"opened", "reopened"}:
+            status = "open"
+        elif event_type == "acknowledged":
+            status = "open"
+        elif event_type == "resolved":
+            status = "resolved"
+        elif event_type == "waived":
+            status = "waived"
+    issue_type = str(payload.get("issue_type") or "monitoring_drift")
+    severity = str(payload.get("severity") or "critical")
+    return {
+        "schema_version": PUBLICATION_MONITORING_SCHEMA_VERSION,
+        "package_type": PUBLICATION_INCIDENT_REPORT_PACKAGE_TYPE,
+        "incident_id": incident_id,
+        "monitor_id": monitor_id,
+        "center_id": center_id,
+        "channel_id": channel_id,
+        "first_run_id": payload.get("run_id"),
+        "latest_run_id": latest_run_id,
+        "publication_id": None,
+        "status": status,
+        "severity": severity,
+        "issue_type": issue_type,
+        "title": _incident_title(issue_type),
+        "evidence": evidence,
+        "manual_actions": [{"action_type": _manual_action_for_drift(issue_type), "status": "manual_required", "reason": _incident_title(issue_type)}],
+    }
+
+
+def _incident_comparable(incident: dict[str, Any]) -> dict[str, Any]:
+    return {key: incident.get(key) for key in (
+        "schema_version",
+        "package_type",
+        "incident_id",
+        "monitor_id",
+        "center_id",
+        "channel_id",
+        "first_run_id",
+        "latest_run_id",
+        "publication_id",
+        "status",
+        "severity",
+        "issue_type",
+        "title",
+        "evidence",
+        "manual_actions",
+        "event_count",
+        "latest_event_hash",
+        "event_chain_valid",
+    )}
+
+
+def _incident_title(issue_type: str) -> str:
+    return {
+        "publication_revoked": "Published snapshot has been revoked",
+        "publication_superseded": "Published snapshot has been superseded",
+        "mirror_file_missing": "Publication mirror is missing files",
+        "mirror_file_hash_mismatch": "Publication mirror file hash mismatch",
+        "mirror_extra_file": "Publication mirror contains unexpected files",
+        "publication_zip_hash_mismatch": "Publication ZIP does not match channel state",
+    }.get(issue_type, "Publication monitoring drift detected")
+
+
+def _manual_action_for_drift(issue_type: str) -> str:
+    if issue_type.startswith("mirror_"):
+        return "refresh_publication_mirror"
+    if issue_type.startswith("publication_"):
+        return "review_publication_channel_state"
+    return "investigate_publication_monitoring_drift"
+
+
+def _incident_event_chain_valid(events: list[dict[str, Any]]) -> bool:
+    previous: str | None = None
+    for index, event in enumerate(events, start=1):
+        if int(event.get("sequence") or 0) != index:
+            return False
+        if event.get("previous_event_hash") != previous:
+            return False
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event.get("payload_hash") != stable_hash(payload):
+            return False
+        expected = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        if event.get("event_hash") != expected:
+            return False
+        previous = str(event.get("event_hash") or "")
+    return True
 
 
 def _publication_state_row(channel_state: dict[str, Any], publication_id: str) -> dict[str, Any]:

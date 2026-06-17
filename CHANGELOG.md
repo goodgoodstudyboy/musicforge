@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.9.1 - 2026-06-17
+
+### Fixed
+- Monitoring ZIPs now include `incident-events.jsonl`, the raw incident event evidence for each exported incident.
+- The monitoring verifier rebuilds incident status, severity, event counts, latest event hashes, and summaries from the event log instead of trusting `incident-report.json` fields such as `event_chain_valid`.
+- `--require-no-open-critical-incidents` is now enforced from the rebuilt event-log summary, so full-resigning an open critical incident into a resolved summary is rejected.
+- release-check v8.9 smoke now covers `incident_full_resign=failed`.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_publication_monitoring.py tests\test_release_check.py::test_v89_public_trust_center_publication_monitoring_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --only v89.public_trust_center_publication_monitoring_smoke --skip-tests --json`
+
 ## v8.9.0 - 2026-06-17
 
 ### Added

@@ -315,6 +315,7 @@ class PublicTrustCenterPublicationMonitoringStore:
             probe_results = _read_json_default(self.probe_results_path(center_id, channel_id, monitor_id, run_id), default={})
             drift_report = _read_json_default(self.drift_report_path(center_id, channel_id, monitor_id, run_id), default={})
             incident_report = _read_json_default(self.incident_report_path(center_id, channel_id, monitor_id, run_id), default={})
+            incident_events = self._incident_events_for_report(center_id, channel_id, monitor_id, incident_report)
             channel_state_snapshot = _read_json_default(self.channel_state_snapshot_path(center_id, channel_id, monitor_id, run_id), default={})
             self._assert_run_artifacts_current(run, probe_results, drift_report, incident_report, channel_state_snapshot)
             export_dir = self.export_dir(center_id, channel_id, monitor_id, run_id).resolve()
@@ -327,6 +328,7 @@ class PublicTrustCenterPublicationMonitoringStore:
             _write_json(export_dir / "probe-results.json", probe_results)
             _write_json(export_dir / "drift-report.json", drift_report)
             _write_json(export_dir / "incident-report.json", incident_report)
+            _write_jsonl(export_dir / "incident-events.jsonl", incident_events)
             _write_json(export_dir / "channel-state-snapshot.json", channel_state_snapshot)
             _safe_copy(self.publication_verification_report_path(center_id, channel_id, monitor_id, run_id), export_dir / "verification-reports" / "publication-verification-report.json", export_dir)
             mirror_report_path = self.mirror_verification_report_path(center_id, channel_id, monitor_id, run_id)
@@ -346,6 +348,7 @@ class PublicTrustCenterPublicationMonitoringStore:
                 "probe_results_hash": probe_results.get("integrity_hash"),
                 "drift_report_hash": drift_report.get("integrity_hash"),
                 "incident_report_hash": incident_report.get("integrity_hash"),
+                "incident_events_hash": stable_hash(incident_events),
                 "channel_state_snapshot_hash": publication_channel_state_hash(channel_state_snapshot) if channel_state_snapshot else None,
                 "publication_zip_sha256": (probe_results.get("summary") or {}).get("publication_zip_sha256"),
                 "publication_manifest_hash": (probe_results.get("summary") or {}).get("publication_manifest_hash"),
@@ -648,6 +651,20 @@ class PublicTrustCenterPublicationMonitoringStore:
             incident = self._rebuild_incident(center_id, channel_id, monitor_id, incident_id, None, now)
             return _sanitize(incident)
 
+    def _incident_events_for_report(self, center_id: str, channel_id: str, monitor_id: str, incident_report: dict[str, Any]) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for incident in incident_report.get("incidents", []) if isinstance(incident_report.get("incidents"), list) else []:
+            if not isinstance(incident, dict):
+                continue
+            incident_id = _safe_id(str(incident.get("incident_id") or ""))
+            if not incident_id or incident_id in seen:
+                continue
+            seen.add(incident_id)
+            events = _read_jsonl(self.incident_events_path(center_id, channel_id, monitor_id, incident_id))
+            rows.extend(events)
+        return sorted(rows, key=lambda item: (str(item.get("incident_id") or ""), int(item.get("sequence") or 0), str(item.get("event_id") or "")))
+
     def _append_monitor_event(self, center_id: str, channel_id: str, monitor_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> dict[str, Any]:
         events = _read_jsonl(self.events_path(center_id, channel_id, monitor_id))
         event = _event(str(event_type), payload, events[-1].get("event_hash") if events else None, now, "ptc-pub-mon-event", len(events) + 1)
@@ -923,6 +940,13 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    _mkdir(path.parent)
+    with open(_fs_path(path), "w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(_sanitize(row), ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
