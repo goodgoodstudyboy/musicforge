@@ -1050,6 +1050,25 @@ def build_verify_public_trust_center_publication_mirror_parser() -> argparse.Arg
     return verify_parser
 
 
+def build_verify_public_trust_center_publication_monitoring_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Public Trust Center Publication Monitoring ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Publication Monitoring ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict warnings as failures.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require the monitoring run to match current external channel state.")
+    verify_parser.add_argument("--require-no-revoked", action="store_true", help="Fail revoked or superseded monitored publications.")
+    verify_parser.add_argument("--require-ready", action="store_true", help="Require a passed monitoring run and publication verification.")
+    verify_parser.add_argument("--require-no-drift", action="store_true", help="Require no critical/high drift.")
+    verify_parser.add_argument("--require-no-open-critical-incidents", action="store_true", help="Require no open critical incident.")
+    verify_parser.add_argument("--allow-waived-incidents", action="store_true", help="Allow waived high/critical incidents as warnings.")
+    verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for current/revoke checks.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=256, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_public_trust_center_publication_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build and verify MusicForge Public Trust Center Publication channels.")
     parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
@@ -1077,6 +1096,38 @@ def build_public_trust_center_publication_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-require-anchor-current", dest="require_anchor_current", action="store_false", help="Do not require current anchor evidence.")
     parser.add_argument("--require-no-revoked", action="store_true", help="Verifier fails revoked snapshots.")
     parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for revoke/supersede checks.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_public_trust_center_publication_monitor_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run and export MusicForge Public Trust Center Publication monitoring.")
+    parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
+    parser.add_argument("--channel-id", default="public-release", help="Publication channel id.")
+    parser.add_argument("--monitor-id", default=None, help="Publication monitor id.")
+    parser.add_argument("--run-id", default=None, help="Monitoring run id.")
+    parser.add_argument("--create-monitor", action="store_true", help="Create a monitor if needed.")
+    parser.add_argument("--monitor-name", default="Public Release Monitor", help="Monitor display name.")
+    parser.add_argument("--publication-id", default=None, help="Publication id, or current.")
+    parser.add_argument("--mirror-dir", type=Path, default=None, help="Mirror directory to monitor. Defaults to publication export dir.")
+    parser.add_argument("--run", action="store_true", help="Run the monitor.")
+    parser.add_argument("--export", action="store_true", help="Export the monitoring package directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the monitoring ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify the monitoring ZIP.")
+    parser.add_argument("--ack-incident", default=None, help="Acknowledge an incident id.")
+    parser.add_argument("--resolve-incident", default=None, help="Resolve an incident id.")
+    parser.add_argument("--waive-incident", default=None, help="Waive an incident id.")
+    parser.add_argument("--reopen-incident", default=None, help="Reopen an incident id.")
+    parser.add_argument("--reason", default="Publication monitoring operation.", help="Reason for incident transitions.")
+    parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for current/revoke checks.")
+    parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--require-current", action="store_true", help="Verifier requires current external channel state.")
+    parser.add_argument("--require-no-revoked", action="store_true", help="Verifier fails revoked/superseded monitored publications.")
+    parser.add_argument("--require-ready", action="store_true", help="Verifier requires a passed monitoring run.")
+    parser.add_argument("--require-no-drift", action="store_true", help="Verifier requires no critical/high drift.")
+    parser.add_argument("--require-no-open-critical-incidents", action="store_true", help="Verifier requires no open critical incident.")
+    parser.add_argument("--allow-waived-incidents", action="store_true", help="Allow waived high/critical incidents as warnings.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2626,6 +2677,37 @@ def _main() -> None:
         else:
             print_public_trust_center_publication_verification_report(report)
         raise SystemExit(public_trust_center_publication_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-public-trust-center-publication-monitoring-package":
+        from song_agent.public_trust_center_publication_monitoring_verifier import (
+            print_public_trust_center_publication_monitoring_verification_report,
+            public_trust_center_publication_monitoring_verification_exit_code,
+            verify_public_trust_center_publication_monitoring_package,
+            write_public_trust_center_publication_monitoring_verification_report,
+        )
+
+        parser = build_verify_public_trust_center_publication_monitoring_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_public_trust_center_publication_monitoring_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_no_revoked=args.require_no_revoked,
+            require_ready=args.require_ready,
+            require_no_drift=args.require_no_drift,
+            require_no_open_critical_incidents=args.require_no_open_critical_incidents,
+            allow_waived_incidents=args.allow_waived_incidents,
+            publication_channel_state_path=args.publication_channel_state,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_public_trust_center_publication_monitoring_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_public_trust_center_publication_monitoring_verification_report(report)
+        raise SystemExit(public_trust_center_publication_monitoring_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -4031,6 +4113,86 @@ def _main() -> None:
                 print_public_trust_center_publication_verification_report(result["verification"])
             elif "mirror_verification" in result:
                 print_public_trust_center_publication_verification_report(result["mirror_verification"])
+            else:
+                print(json.dumps(result.get("summary") or {"status": "ok"}, ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "public-trust-center-publication-monitor":
+        from song_agent.public_trust_center_publication_monitoring import PublicTrustCenterPublicationMonitoringStore, monitoring_summary
+        from song_agent.public_trust_center_publication_monitoring_verifier import print_public_trust_center_publication_monitoring_verification_report
+
+        parser = build_public_trust_center_publication_monitor_parser()
+        args = parser.parse_args(raw_args[1:])
+        publication_store = _build_public_trust_center_publication_store()
+        store = PublicTrustCenterPublicationMonitoringStore(publication_store=publication_store)
+        result: dict[str, Any] = {"ok": True, "center_id": args.center_id, "channel_id": args.channel_id}
+        monitor_id = args.monitor_id
+        if args.create_monitor:
+            monitor = store.create_monitor(args.center_id, args.channel_id, {"monitor_id": monitor_id, "name": args.monitor_name, "publication_id": args.publication_id, "mirror_dir": args.mirror_dir})
+            monitor_id = str(monitor.get("monitor_id") or monitor_id or "")
+            result["monitor"] = monitor
+        elif monitor_id:
+            result["monitor"] = store.read_monitor(args.center_id, args.channel_id, monitor_id)
+        else:
+            monitors = store.list_monitors(args.center_id, args.channel_id)
+            if monitors:
+                monitor_id = str(monitors[0].get("monitor_id") or "")
+                result["monitor"] = monitors[0]
+            else:
+                monitor = store.create_monitor(args.center_id, args.channel_id, {"name": args.monitor_name, "publication_id": args.publication_id, "mirror_dir": args.mirror_dir})
+                monitor_id = str(monitor.get("monitor_id") or "")
+                result["monitor"] = monitor
+        if not monitor_id:
+            raise ValueError("--monitor-id is required.")
+        run_id = args.run_id
+        if args.run:
+            run_result = store.run_monitor(args.center_id, args.channel_id, monitor_id, {"publication_id": args.publication_id, "mirror_dir": args.mirror_dir, "publication_channel_state_path": args.publication_channel_state})
+            run_id = str((run_result.get("monitor_run") or {}).get("run_id") or run_id or "")
+            result.update(run_result)
+            result["summary"] = monitoring_summary(run_result.get("monitor_run") or {})
+        if args.ack_incident:
+            result["incident"] = store.acknowledge_incident(args.center_id, args.channel_id, monitor_id, args.ack_incident, {"reason": args.reason})
+        if args.resolve_incident:
+            result["incident"] = store.resolve_incident(args.center_id, args.channel_id, monitor_id, args.resolve_incident, {"resolution_note": args.reason})
+        if args.waive_incident:
+            result["incident"] = store.waive_incident(args.center_id, args.channel_id, monitor_id, args.waive_incident, {"waiver_reason": args.reason})
+        if args.reopen_incident:
+            result["incident"] = store.reopen_incident(args.center_id, args.channel_id, monitor_id, args.reopen_incident, {"reason": args.reason})
+        if args.export:
+            if not run_id:
+                raise ValueError("--run-id is required for --export unless --run was used.")
+            result["manifest"] = store.export_monitoring_run(args.center_id, args.channel_id, monitor_id, run_id)
+        if args.zip:
+            if not run_id:
+                raise ValueError("--run-id is required for --zip unless --run was used.")
+            result["zip"] = store.build_monitoring_zip(args.center_id, args.channel_id, monitor_id, run_id)
+        if args.verify:
+            if not run_id:
+                raise ValueError("--run-id is required for --verify unless --run was used.")
+            verification = store.verify_monitoring_zip(
+                args.center_id,
+                args.channel_id,
+                monitor_id,
+                run_id,
+                {
+                    "strict": args.strict,
+                    "require_current": args.require_current,
+                    "require_no_revoked": args.require_no_revoked,
+                    "require_ready": args.require_ready,
+                    "require_no_drift": args.require_no_drift,
+                    "require_no_open_critical_incidents": args.require_no_open_critical_incidents,
+                    "allow_waived_incidents": args.allow_waived_incidents,
+                    "publication_channel_state_path": args.publication_channel_state,
+                },
+            )
+            result["verification"] = verification
+            result["verification_summary"] = verification.get("summary", {})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            if "verification" in result:
+                print_public_trust_center_publication_monitoring_verification_report(result["verification"])
             else:
                 print(json.dumps(result.get("summary") or {"status": "ok"}, ensure_ascii=False, indent=2))
         raise SystemExit(0)
@@ -5639,6 +5801,34 @@ def _build_public_trust_center_store():
         operations_signoff_store=portfolio_store.signoff_store,
         operations_audit_store=portfolio_store.audit_store,
         operations_reviewer_pack_store=portfolio_store.reviewer_pack_store,
+    )
+
+
+def _build_public_trust_center_publication_store():
+    from song_agent.public_trust_center_acceptance_board import PublicTrustCenterAcceptanceBoardStore
+    from song_agent.public_trust_center_anchor_registry import PublicTrustCenterAnchorRegistryStore
+    from song_agent.public_trust_center_anchor_transparency import PublicTrustCenterAnchorTransparencyStore
+    from song_agent.public_trust_center_distribution_kit import PublicTrustCenterDistributionKitStore
+    from song_agent.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore
+    from song_agent.public_trust_center_publication import PublicTrustCenterPublicationStore
+
+    trust_store = _build_public_trust_center_store()
+    anchor_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=trust_store)
+    anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=anchor_store)
+    distribution_kit_store = PublicTrustCenterDistributionKitStore(
+        trust_center_store=trust_store,
+        anchor_registry_store=anchor_store,
+        anchor_transparency_store=anchor_transparency_store,
+    )
+    acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=distribution_kit_store)
+    board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=acceptance_store)
+    return PublicTrustCenterPublicationStore(
+        trust_center_store=trust_store,
+        distribution_kit_store=distribution_kit_store,
+        anchor_registry_store=anchor_store,
+        anchor_transparency_store=anchor_transparency_store,
+        acceptance_store=acceptance_store,
+        acceptance_board_store=board_store,
     )
 
 

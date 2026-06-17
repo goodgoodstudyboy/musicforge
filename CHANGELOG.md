@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.9.0 - 2026-06-17
+
+### Added
+- Public Trust Center Publication Monitoring for running local publication probes, drift detection, incident summaries, monitoring exports, and fixed-structure monitoring ZIP packages.
+- `public-trust-center-publication-monitor` CLI for monitor creation, run, export, ZIP, verify, and incident acknowledgement/resolution/waiver workflows.
+- `verify-public-trust-center-publication-monitoring-package` CLI with strict ZIP structure checks, manifest/file-index/checksum binding, probe/drift/incident integrity, redaction checks, and external `publication-channel-state.json` current/revoke/supersede gates.
+- release-check v8.9 smoke covering passed monitoring, missing external channel state, drift tamper, incident summary tamper, duplicate/dangerous/backslash/.MusicForge/nested/spoof/redaction ZIP defenses, and old monitoring ZIP rejection after real revoke/supersede.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_publication_monitoring.py tests\test_release_check.py::test_v89_public_trust_center_publication_monitoring_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --only v89.public_trust_center_publication_monitoring_smoke --skip-tests --json`
+
 ## v8.8.1 - 2026-06-17
 
 ### Fixed

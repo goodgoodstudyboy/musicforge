@@ -13639,6 +13639,299 @@ def _v88_public_trust_center_publication_channels_smoke(root: Path) -> tuple[boo
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v89_public_trust_center_publication_monitoring_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v89-monitoring-")).resolve()
+    monitoring_module = None
+    original_publication_verifier = None
+    original_mirror_verifier = None
+    try:
+        import song_agent.public_trust_center_publication_monitoring as monitoring_module
+        from song_agent.public_trust_center_publication_monitoring import PublicTrustCenterPublicationMonitoringStore, monitoring_hash, monitoring_manifest_hash
+        from song_agent.public_trust_center_publication_monitoring_verifier import verify_public_trust_center_publication_monitoring_package
+
+        original_publication_verifier = monitoring_module.verify_public_trust_center_publication_package
+        original_mirror_verifier = monitoring_module.verify_public_trust_center_publication_mirror
+        monitoring_module.verify_public_trust_center_publication_package = _v89_fake_publication_verifier
+        monitoring_module.verify_public_trust_center_publication_mirror = _v89_fake_mirror_verifier
+        publication_store, publication = _v89_ready_publication_fixture(base, "v8.9")
+        monitoring_store = PublicTrustCenterPublicationMonitoringStore(publication_store=publication_store)
+        monitoring_store.create_monitor("ptc-default", "release", {"monitor_id": "monitor"})
+        run = monitoring_store.run_monitor("ptc-default", "release", "monitor")
+        run_id = str(run["monitor_run"]["run_id"])
+        monitoring_store.export_monitoring_run("ptc-default", "release", "monitor", run_id)
+        monitoring_store.build_monitoring_zip("ptc-default", "release", "monitor", run_id)
+        source_zip = monitoring_store.zip_path("ptc-default", "release", "monitor", run_id)
+        channel_state = publication_store.channel_state_path("ptc-default", "release")
+        verification = verify_public_trust_center_publication_monitoring_package(
+            source_zip,
+            strict=True,
+            require_current=True,
+            require_no_revoked=True,
+            require_ready=True,
+            require_no_drift=True,
+            require_no_open_critical_incidents=True,
+            publication_channel_state_path=channel_state,
+        )
+
+        missing_state = verify_public_trust_center_publication_monitoring_package(source_zip, strict=True, require_current=True)
+        drift_tamper = verify_public_trust_center_publication_monitoring_package(_v76_rewrite_zip(source_zip, base / "monitor-drift-tamper.zip", _v89_tamper_monitoring_drift_report), strict=True)
+        incident_tamper = verify_public_trust_center_publication_monitoring_package(_v76_rewrite_zip(source_zip, base / "monitor-incident-tamper.zip", _v89_tamper_monitoring_incident_report), strict=True)
+        duplicate = verify_public_trust_center_publication_monitoring_package(_v43_duplicate_submission_zip(source_zip, base / "monitor-duplicate.zip"), strict=True)
+        dangerous = verify_public_trust_center_publication_monitoring_package(_v38_rewrite_zip(source_zip, base / "monitor-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_public_trust_center_publication_monitoring_package(_v38_backslash_entry_zip(base / "monitor-backslash.zip"), strict=True)
+        case_musicforge = verify_public_trust_center_publication_monitoring_package(_v38_rewrite_zip(source_zip, base / "monitor-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_public_trust_center_publication_monitoring_package(_v38_rewrite_zip(source_zip, base / "monitor-nested.zip", additions={"nested.zip": b"PK\x05\x06" + b"\0" * 18}), strict=True)
+        spoof = verify_public_trust_center_publication_monitoring_package(_v76_rewrite_zip(source_zip, base / "monitor-spoof.zip", _v89_spoof_monitoring_manifest_zip_entries), strict=True)
+        redaction = verify_public_trust_center_publication_monitoring_package(_v38_rewrite_zip(source_zip, base / "monitor-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+
+        publication_store.revoke_publication("ptc-default", "release", publication["publication_id"], {"reason": "Withdraw monitored publication."})
+        revoked = verify_public_trust_center_publication_monitoring_package(source_zip, strict=True, require_current=True, require_no_revoked=True, publication_channel_state_path=channel_state)
+
+        replacement = publication_store.refresh_publication("ptc-default", "release", {"publication_id": "monitoring-superseded"})
+        publication_store.export_publication("ptc-default", "release", replacement["publication_id"])
+        publication_store.build_publication_zip("ptc-default", "release", replacement["publication_id"])
+        monitoring_store.create_monitor("ptc-default", "release", {"monitor_id": "monitor-supersede", "publication_id": replacement["publication_id"]})
+        run2 = monitoring_store.run_monitor("ptc-default", "release", "monitor-supersede")
+        run_id2 = str(run2["monitor_run"]["run_id"])
+        monitoring_store.export_monitoring_run("ptc-default", "release", "monitor-supersede", run_id2)
+        monitoring_store.build_monitoring_zip("ptc-default", "release", "monitor-supersede", run_id2)
+        supersede_zip = monitoring_store.zip_path("ptc-default", "release", "monitor-supersede", run_id2)
+        publication_store.supersede_publication("ptc-default", "release", replacement["publication_id"], {"reason": "Replace monitored publication."})
+        superseded = verify_public_trust_center_publication_monitoring_package(supersede_zip, strict=True, require_current=True, require_no_revoked=True, publication_channel_state_path=channel_state)
+
+        superseded_failed = (
+            _v38_check_status(superseded, "ptcpm_require_no_revoked") == "failed"
+            or _v38_check_status(superseded, "ptcpm_require_current_latest_event") == "failed"
+            or _v38_check_status(superseded, "ptcpm_channel_state_publication_present") == "failed"
+        )
+        superseded_status = _v38_check_status(superseded, "ptcpm_require_no_revoked") or _v38_check_status(superseded, "ptcpm_require_current_latest_event") or _v38_check_status(superseded, "ptcpm_channel_state_publication_present")
+        ok = (
+            publication.get("status") == "ready"
+            and run["monitor_run"].get("status") == "passed"
+            and verification.get("status") == "passed"
+            and _v38_check_status(missing_state, "ptcpm_channel_state_required") == "failed"
+            and _v38_check_status(drift_tamper, "ptcpm_manifest_file_hashes") == "failed"
+            and _v38_check_status(incident_tamper, "ptcpm_incident_summary_matches_incidents") == "failed"
+            and _v38_check_status(duplicate, "ptcpm_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "ptcpm_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "ptcpm_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "ptcpm_zip_no_internal_entries") == "failed"
+            and _v38_check_status(nested, "ptcpm_zip_nested_allowlist") == "failed"
+            and _v38_check_status(spoof, "ptcpm_manifest_zip_entries_reference_only") == "failed"
+            and _v38_check_status(redaction, "ptcpm_redaction_scan") == "failed"
+            and _v38_check_status(revoked, "ptcpm_require_no_revoked") == "failed"
+            and superseded_failed
+        )
+        return ok, (
+            f"monitor={verification.get('status')}, drift={run['monitor_run'].get('status')}, missing_state={_v38_check_status(missing_state, 'ptcpm_channel_state_required')}, "
+            f"drift_tamper={_v38_check_status(drift_tamper, 'ptcpm_manifest_file_hashes')}, incident_tamper={_v38_check_status(incident_tamper, 'ptcpm_incident_summary_matches_incidents')}, "
+            f"duplicate={_v38_check_status(duplicate, 'ptcpm_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'ptcpm_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptcpm_zip_entry_path_safe')}, "
+            f"case_musicforge={_v38_check_status(case_musicforge, 'ptcpm_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'ptcpm_zip_nested_allowlist')}, spoof={_v38_check_status(spoof, 'ptcpm_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction, 'ptcpm_redaction_scan')}, revoked={_v38_check_status(revoked, 'ptcpm_require_no_revoked')}, superseded={superseded_status}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if monitoring_module is not None and original_publication_verifier is not None and original_mirror_verifier is not None:
+            monitoring_module.verify_public_trust_center_publication_package = original_publication_verifier
+            monitoring_module.verify_public_trust_center_publication_mirror = original_mirror_verifier
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+class _V89DummyPublicationStore:
+    def __init__(self, root: Path) -> None:
+        from song_agent.public_trust_center_publication import publication_channel_state_hash
+
+        self.root = root / "publication-fixture"
+        self.center_id = "ptc-default"
+        self.channel_id = "release"
+        self.publication_id = "ptc-pub-v89"
+        self._state_hash = publication_channel_state_hash
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.create_channel(self.center_id, {"channel_id": self.channel_id, "name": "release"})
+        self._write_publication(self.publication_id, status="ready")
+
+    def read_channel(self, center_id: str, channel_id: str) -> dict[str, Any]:
+        if center_id != self.center_id or channel_id != self.channel_id:
+            raise ValueError("Unknown v8.9 fixture channel.")
+        return {"center_id": center_id, "channel_id": channel_id, "status": "active", "integrity_hash": stable_hash({"channel": channel_id})}
+
+    def create_channel(self, center_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        del now
+        payload = payload or {}
+        self.center_id = center_id
+        self.channel_id = str(payload.get("channel_id") or self.channel_id)
+        self.channel_dir(center_id, self.channel_id).mkdir(parents=True, exist_ok=True)
+        return self.read_channel(center_id, self.channel_id)
+
+    def channel_dir(self, center_id: str, channel_id: str) -> Path:
+        return self.root / "public-trust-centers" / center_id / "publications" / "channels" / channel_id
+
+    def snapshots_dir(self, center_id: str, channel_id: str) -> Path:
+        return self.channel_dir(center_id, channel_id) / "snapshots"
+
+    def snapshot_dir(self, center_id: str, channel_id: str, publication_id: str) -> Path:
+        return self.snapshots_dir(center_id, channel_id) / publication_id
+
+    def export_dir(self, center_id: str, channel_id: str, publication_id: str) -> Path:
+        return self.snapshot_dir(center_id, channel_id, publication_id) / "export"
+
+    def zip_path(self, center_id: str, channel_id: str, publication_id: str) -> Path:
+        return self.snapshot_dir(center_id, channel_id, publication_id) / "public-trust-center-publication.zip"
+
+    def report_path(self, center_id: str, channel_id: str, publication_id: str) -> Path:
+        return self.snapshot_dir(center_id, channel_id, publication_id) / "publication-report.json"
+
+    def channel_state_path(self, center_id: str, channel_id: str) -> Path:
+        return self.channel_dir(center_id, channel_id) / "publication-channel-state.json"
+
+    def _current_publication_id(self, center_id: str, channel_id: str) -> str:
+        current = read_json(self.channel_dir(center_id, channel_id) / "current-publication.json")
+        return str(current.get("publication_id") or self.publication_id)
+
+    def refresh_publication(self, center_id: str, channel_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        del now
+        publication_id = str((payload or {}).get("publication_id") or self.publication_id)
+        return self._write_publication(publication_id, status="ready")
+
+    def export_publication(self, center_id: str, channel_id: str, publication_id: str) -> dict[str, Any]:
+        export_dir = self.export_dir(center_id, channel_id, publication_id)
+        if export_dir.exists():
+            shutil.rmtree(export_dir, ignore_errors=True)
+        export_dir.mkdir(parents=True, exist_ok=True)
+        report = read_json(self.report_path(center_id, channel_id, publication_id))
+        write_json(export_dir / "publication-report.json", report)
+        manifest = {"package_type": "musicforge_public_trust_center_publication", "publication_id": publication_id, "channel_id": channel_id, "source_hash": report.get("source_hash"), "report_hash": report.get("integrity_hash"), "files": [{"path": "publication-report.json", "sha256": _v89_sha256(export_dir / "publication-report.json")}], "zip": {}}
+        manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+        write_json(export_dir / "publication-manifest.json", manifest)
+        return manifest
+
+    def build_publication_zip(self, center_id: str, channel_id: str, publication_id: str) -> dict[str, Any]:
+        export_dir = self.export_dir(center_id, channel_id, publication_id)
+        zip_path = self.zip_path(center_id, channel_id, publication_id)
+        zip_path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(export_dir.rglob("*")):
+                if path.is_file():
+                    archive.write(path, path.relative_to(export_dir).as_posix())
+        info = {"sha256": _v89_sha256(zip_path), "size_bytes": zip_path.stat().st_size, "publication_id": publication_id}
+        report = read_json(self.report_path(center_id, channel_id, publication_id))
+        report["zip_sha256"] = info["sha256"]
+        write_json(self.report_path(center_id, channel_id, publication_id), report)
+        self._write_channel_state(center_id, channel_id, publication_id, status=str(report.get("status") or "ready"), event_type="publication_zip_built")
+        return info
+
+    def revoke_publication(self, center_id: str, channel_id: str, publication_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        del payload, now
+        return self._write_publication(publication_id, status="revoked", event_type="publication_revoked")
+
+    def supersede_publication(self, center_id: str, channel_id: str, publication_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+        del now
+        old = self._write_publication(publication_id, status="superseded", event_type="publication_superseded")
+        replacement_id = str((payload or {}).get("publication_id") or f"{publication_id}-replacement")
+        replacement = self._write_publication(replacement_id, status="ready", event_type="publication_refreshed")
+        return {"old_publication": old, "new_publication": replacement}
+
+    def _write_publication(self, publication_id: str, *, status: str, event_type: str = "publication_refreshed") -> dict[str, Any]:
+        center_id = self.center_id
+        channel_id = self.channel_id
+        report_dir = self.snapshot_dir(center_id, channel_id, publication_id)
+        report_dir.mkdir(parents=True, exist_ok=True)
+        source = {"center_id": center_id, "channel_id": channel_id, "publication_id": publication_id, "fixture": "v89"}
+        report = {"package_type": "musicforge_public_trust_center_publication_report", "publication_id": publication_id, "channel_id": channel_id, "center_id": center_id, "status": status, "source": source, "source_hash": stable_hash(source), "summary": {"ready_for_publication": status == "ready"}}
+        report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+        write_json(self.report_path(center_id, channel_id, publication_id), report)
+        write_json(self.channel_dir(center_id, channel_id) / "current-publication.json", {"publication_id": publication_id, "source_hash": report["source_hash"], "report_hash": report["integrity_hash"], "status": status})
+        self.export_publication(center_id, channel_id, publication_id)
+        self.build_publication_zip(center_id, channel_id, publication_id)
+        self._write_channel_state(center_id, channel_id, publication_id, status=status, event_type=event_type)
+        return report
+
+    def _write_channel_state(self, center_id: str, channel_id: str, publication_id: str, *, status: str, event_type: str) -> dict[str, Any]:
+        report = read_json(self.report_path(center_id, channel_id, publication_id))
+        zip_path = self.zip_path(center_id, channel_id, publication_id)
+        manifest = read_json(self.export_dir(center_id, channel_id, publication_id) / "publication-manifest.json")
+        previous = None
+        events_path = self.channel_dir(center_id, channel_id) / "events.jsonl"
+        if events_path.exists():
+            rows = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            previous = rows[-1].get("event_hash") if rows else None
+        payload = {"publication_id": publication_id, "status": status, "source_hash": report.get("source_hash")}
+        event = {"event_id": f"ptc-pub-event-{stable_hash(payload)[:8]}", "event_type": event_type, "payload": payload, "payload_hash": stable_hash(payload), "previous_event_hash": previous}
+        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        events_path.parent.mkdir(parents=True, exist_ok=True)
+        with events_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+        events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        state = {"package_type": "musicforge_public_trust_center_publication_channel_state", "center_id": center_id, "channel_id": channel_id, "current_publication": {"publication_id": publication_id, "source_hash": report.get("source_hash"), "report_hash": report.get("integrity_hash"), "status": status}, "publications": [{"publication_id": publication_id, "status": status, "source_hash": report.get("source_hash"), "report_hash": report.get("integrity_hash"), "manifest_hash": manifest.get("integrity_hash"), "zip_sha256": _v89_sha256(zip_path), "latest_event_hash": event["event_hash"]}], "events": events, "event_count": len(events), "latest_event_hash": event["event_hash"]}
+        from song_agent.public_trust_center_publication import publication_channel_state_hash
+
+        state["integrity_hash"] = publication_channel_state_hash(state)
+        write_json(self.channel_state_path(center_id, channel_id), state)
+        return state
+
+
+def _v89_ready_publication_fixture(base: Path, label: str) -> tuple[_V89DummyPublicationStore, dict[str, Any]]:
+    del label
+    store = _V89DummyPublicationStore(base)
+    publication = read_json(store.report_path("ptc-default", "release", store.publication_id))
+    return store, publication
+
+
+def _v89_fake_publication_verifier(zip_path: Path, **kwargs: Any) -> dict[str, Any]:
+    del kwargs
+    zip_path = Path(zip_path)
+    manifest = read_json(zip_path.parent / "export" / "publication-manifest.json")
+    report = read_json(zip_path.parent / "publication-report.json")
+    return {"status": "passed", "zip_sha256": _v89_sha256(zip_path), "manifest_hash": manifest.get("integrity_hash"), "source_hash": report.get("source_hash"), "report_hash": report.get("integrity_hash"), "checks": [{"check_id": "ptcpub_fixture", "status": "passed"}], "blockers": [], "warnings": []}
+
+
+def _v89_fake_mirror_verifier(mirror_dir: Path, **kwargs: Any) -> dict[str, Any]:
+    del kwargs
+    mirror_dir = Path(mirror_dir)
+    manifest = read_json(mirror_dir / "publication-manifest.json")
+    return {"status": "passed", "manifest_hash": manifest.get("integrity_hash"), "checks": [{"check_id": "ptcpub_fixture_mirror", "status": "passed"}], "blockers": [], "warnings": []}
+
+
+def _v89_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _v89_tamper_monitoring_drift_report(docs: dict[str, bytes]) -> None:
+    drift = _v74_read_json_doc(docs, "drift-report.json")
+    drift["status"] = "passed"
+    drift["summary"] = {"drift_count": 0, "critical_count": 0, "high_count": 0, "warning_count": 0}
+    docs["drift-report.json"] = _v74_json_doc(drift)
+
+
+def _v89_tamper_monitoring_incident_report(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_publication_monitoring import monitoring_hash, monitoring_manifest_hash
+
+    incident = _v74_read_json_doc(docs, "incident-report.json")
+    incident["summary"] = {"incident_count": len(incident.get("incidents", [])) + 1, "open_count": 1, "critical_count": 1, "waived_count": 0, "resolved_count": 0}
+    incident["integrity_hash"] = monitoring_hash(incident)
+    docs["incident-report.json"] = _v74_json_doc(incident)
+    manifest = _v74_read_json_doc(docs, "monitoring-manifest.json")
+    _v74_sync_manifest_file(manifest, "incident-report.json", docs["incident-report.json"])
+    manifest["integrity_hash"] = monitoring_manifest_hash(manifest)
+    docs["monitoring-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v89_spoof_monitoring_manifest_zip_entries(docs: dict[str, bytes]) -> None:
+    from song_agent.public_trust_center_publication_monitoring import monitoring_manifest_hash
+
+    manifest = _v74_read_json_doc(docs, "monitoring-manifest.json")
+    manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    manifest["integrity_hash"] = monitoring_manifest_hash(manifest)
+    docs["monitoring-manifest.json"] = _v74_json_doc(manifest)
+
+
 def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.public_trust_center_distribution_kit_acceptance import accepted_evidence_hash, accepted_evidence_manifest_hash
     from song_agent.releases import stable_hash

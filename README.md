@@ -778,6 +778,18 @@ previously exported ZIP is immutable, so revoke/supersede status must be checked
 against the current publication channel ledger rather than the ZIP's internal
 report alone.
 
+Public Trust Center Publication Monitoring runs repeatable probes against a
+publication ZIP, its mirror directory, and the external channel state. It writes
+probe results, drift reports, incident summaries, and a fixed-structure
+monitoring ZIP that can be verified offline. Current/revoke/supersede gates
+require the external `publication-channel-state.json`; the monitoring ZIP does
+not self-certify whether a publication has since been withdrawn or replaced.
+
+```powershell
+python -m song_agent.cli public-trust-center-publication-monitor --center-id ptc-default --channel-id public-release --create-monitor --run --export --zip --verify --strict --require-current --require-no-revoked --require-ready --require-no-drift --require-no-open-critical-incidents --json
+python -m song_agent.cli verify-public-trust-center-publication-monitoring-package path\to\public-trust-center-publication-monitoring.zip --strict --require-current --require-no-revoked --require-ready --require-no-drift --require-no-open-critical-incidents --publication-channel-state path\to\publication-channel-state.json --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```
