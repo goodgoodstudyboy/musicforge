@@ -1,5 +1,16 @@
 # Changelog
 
+## v8.8.1 - 2026-06-17
+
+### Fixed
+- Publication ZIP and mirror verification now require an external `publication-channel-state.json` when `--require-no-revoked` is enabled, so already-built ZIPs are rejected after a real Store revoke or supersede operation.
+- Publication channel state records current publication status, ZIP sha256, manifest hash, source hash, report hash, event chain hash, and revoke/supersede lifecycle evidence.
+- release-check v8.8 smoke now covers build ZIP -> verify passed, real `revoke_publication()` -> same ZIP failed with channel state, and real `supersede_publication()` -> old ZIP failed with channel state.
+
+### Verified
+- `python -m pytest tests\test_public_trust_center_publication.py tests\test_release_check.py::test_v88_public_trust_center_publication_channels_smoke -q`
+- `python -m song_agent.cli release-check --profile v8 --only v88.public_trust_center_publication_channels_smoke --skip-tests --json`
+
 ## v8.8.0 - 2026-06-16
 
 ### Added

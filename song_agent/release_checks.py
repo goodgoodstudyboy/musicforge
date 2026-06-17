@@ -13587,8 +13587,10 @@ def _v88_public_trust_center_publication_channels_smoke(root: Path) -> tuple[boo
         publication = publication_store.refresh_publication("ptc-default", "release")
         publication_store.export_publication("ptc-default", "release", publication["publication_id"])
         publication_store.build_publication_zip("ptc-default", "release", publication["publication_id"])
-        verification = verify_public_trust_center_publication_package(publication_store.zip_path("ptc-default", "release", publication["publication_id"]), strict=True, deep=True, require_ready=True, require_acceptance_board_signoff=True, require_anchor_current=True, require_no_revoked=True)
-        mirror = verify_public_trust_center_publication_mirror(publication_store.export_dir("ptc-default", "release", publication["publication_id"]), strict=True, require_ready=True, require_acceptance_board_signoff=True)
+        channel_state = publication_store.channel_state_path("ptc-default", "release")
+        verification = verify_public_trust_center_publication_package(publication_store.zip_path("ptc-default", "release", publication["publication_id"]), strict=True, deep=True, require_ready=True, require_acceptance_board_signoff=True, require_anchor_current=True, require_no_revoked=True, publication_channel_state_path=channel_state)
+        mirror = verify_public_trust_center_publication_mirror(publication_store.export_dir("ptc-default", "release", publication["publication_id"]), strict=True, require_ready=True, require_acceptance_board_signoff=True, require_anchor_current=True, require_no_revoked=True, publication_channel_state_path=channel_state)
+        missing_state = verify_public_trust_center_publication_package(publication_store.zip_path("ptc-default", "release", publication["publication_id"]), strict=True, require_no_revoked=True)
         source_zip = publication_store.zip_path("ptc-default", "release", publication["publication_id"])
         package_tamper = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-package-tamper.zip", transforms={"packages/public-trust-center.zip": lambda data: data + b"x"}), strict=True)
         declared_extra = verify_public_trust_center_publication_package(_v76_rewrite_zip(source_zip, base / "publication-declared-extra.zip", _v88_add_publication_declared_extra), strict=True)
@@ -13599,12 +13601,19 @@ def _v88_public_trust_center_publication_channels_smoke(root: Path) -> tuple[boo
         nested = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-nested.zip", additions={"packages/extra.zip": b"PK\x05\x06" + b"\0" * 18}), strict=True)
         redaction = verify_public_trust_center_publication_package(_v38_rewrite_zip(source_zip, base / "publication-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
         revoked_report = publication_store.revoke_publication("ptc-default", "release", publication["publication_id"], {"reason": "Withdraw publication."})
-        revoked = verify_public_trust_center_publication_package(_v76_rewrite_zip(source_zip, base / "publication-revoked.zip", _v88_mark_publication_revoked), strict=True, require_no_revoked=True)
+        revoked = verify_public_trust_center_publication_package(source_zip, strict=True, require_no_revoked=True, publication_channel_state_path=channel_state)
+        replacement = publication_store.refresh_publication("ptc-default", "release", {"publication_id": "publication-for-supersede"})
+        publication_store.export_publication("ptc-default", "release", replacement["publication_id"])
+        publication_store.build_publication_zip("ptc-default", "release", replacement["publication_id"])
+        supersede_source_zip = publication_store.zip_path("ptc-default", "release", replacement["publication_id"])
+        publication_store.supersede_publication("ptc-default", "release", replacement["publication_id"], {"reason": "Replace publication."})
+        superseded = verify_public_trust_center_publication_package(supersede_source_zip, strict=True, require_no_revoked=True, publication_channel_state_path=channel_state)
 
         ok = (
             publication.get("status") == "ready"
             and verification.get("status") == "passed"
             and mirror.get("status") == "passed"
+            and _v38_check_status(missing_state, "ptcpub_channel_state_required") == "failed"
             and _v38_check_status(package_tamper, "ptcpub_manifest_file_hashes") == "failed"
             and _v38_check_status(declared_extra, "ptcpub_zip_allowed_entries") == "failed"
             and _v38_check_status(duplicate, "ptcpub_zip_duplicate_entries") == "failed"
@@ -13615,12 +13624,13 @@ def _v88_public_trust_center_publication_channels_smoke(root: Path) -> tuple[boo
             and _v38_check_status(redaction, "ptcpub_redaction_scan") == "failed"
             and revoked_report.get("status") == "revoked"
             and _v38_check_status(revoked, "ptcpub_require_no_revoked") == "failed"
+            and _v38_check_status(superseded, "ptcpub_require_no_revoked") == "failed"
         )
         return ok, (
             f"publication={publication.get('status')}/{verification.get('status')}, mirror={mirror.get('status')}, "
-            f"package_tamper={_v38_check_status(package_tamper, 'ptcpub_manifest_file_hashes')}, declared_extra={_v38_check_status(declared_extra, 'ptcpub_zip_allowed_entries')}, "
+            f"missing_state={_v38_check_status(missing_state, 'ptcpub_channel_state_required')}, package_tamper={_v38_check_status(package_tamper, 'ptcpub_manifest_file_hashes')}, declared_extra={_v38_check_status(declared_extra, 'ptcpub_zip_allowed_entries')}, "
             f"duplicate={_v38_check_status(duplicate, 'ptcpub_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'ptcpub_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'ptcpub_zip_entry_path_safe')}, "
-            f"case_musicforge={_v38_check_status(case_musicforge, 'ptcpub_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'ptcpub_zip_nested_allowlist')}, redaction={_v38_check_status(redaction, 'ptcpub_redaction_scan')}, revoked={_v38_check_status(revoked, 'ptcpub_require_no_revoked')}"
+            f"case_musicforge={_v38_check_status(case_musicforge, 'ptcpub_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'ptcpub_zip_nested_allowlist')}, redaction={_v38_check_status(redaction, 'ptcpub_redaction_scan')}, revoked={_v38_check_status(revoked, 'ptcpub_require_no_revoked')}, superseded={_v38_check_status(superseded, 'ptcpub_require_no_revoked')}"
         )
     except Exception as exc:
         return False, str(exc)

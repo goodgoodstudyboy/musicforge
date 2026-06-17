@@ -24,6 +24,8 @@ from song_agent.public_trust_center_publication import (
     PUBLICATION_BLOCKED_KEYS,
     PUBLICATION_PACKAGE_TYPE,
     PUBLICATION_REQUIRED_PACKAGE_KEYS,
+    PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE,
+    publication_channel_state_hash,
     publication_manifest_hash,
     publication_report_hash,
     sidecar_hash,
@@ -84,6 +86,8 @@ def verify_public_trust_center_publication_package(
     require_acceptance_board_signoff: bool = False,
     require_anchor_current: bool = False,
     require_no_revoked: bool = False,
+    publication_channel_state_path: Path | str | None = None,
+    require_channel_state_zip_match: bool = True,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -97,6 +101,8 @@ def verify_public_trust_center_publication_package(
         require_acceptance_board_signoff=require_acceptance_board_signoff,
         require_anchor_current=require_anchor_current,
         require_no_revoked=require_no_revoked,
+        publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
+        require_channel_state_zip_match=require_channel_state_zip_match,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -113,6 +119,7 @@ def verify_public_trust_center_publication_mirror(
     require_acceptance_board_signoff: bool = False,
     require_anchor_current: bool = False,
     require_no_revoked: bool = False,
+    publication_channel_state_path: Path | str | None = None,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
 ) -> dict[str, Any]:
@@ -138,6 +145,8 @@ def verify_public_trust_center_publication_mirror(
                 require_acceptance_board_signoff=require_acceptance_board_signoff,
                 require_anchor_current=require_anchor_current,
                 require_no_revoked=require_no_revoked,
+                publication_channel_state_path=publication_channel_state_path,
+                require_channel_state_zip_match=False,
                 now=now,
             )
             report["package_kind"] = "public_trust_center_publication_mirror"
@@ -176,6 +185,8 @@ class _PublicationVerifier:
         require_acceptance_board_signoff: bool,
         require_anchor_current: bool,
         require_no_revoked: bool,
+        publication_channel_state_path: Path | None,
+        require_channel_state_zip_match: bool,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -188,6 +199,8 @@ class _PublicationVerifier:
         self.require_acceptance_board_signoff = require_acceptance_board_signoff
         self.require_anchor_current = require_anchor_current
         self.require_no_revoked = require_no_revoked
+        self.publication_channel_state_path = publication_channel_state_path
+        self.require_channel_state_zip_match = require_channel_state_zip_match
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -208,6 +221,7 @@ class _PublicationVerifier:
         self.verification_index: dict[str, Any] = {}
         self.mirror_policy: dict[str, Any] = {}
         self.checksum_json: dict[str, Any] = {}
+        self.channel_state: dict[str, Any] = {}
         self.deep_summary: dict[str, str] = {}
 
     def run(self) -> dict[str, Any]:
@@ -354,7 +368,36 @@ class _PublicationVerifier:
             self._add_exact_check("requirements", "ptcpub_require_anchor_registry_current", (verifications.get("anchor_registry") or {}).get("status"), "passed", "Anchor Registry verification status")
             self._add_exact_check("requirements", "ptcpub_require_anchor_transparency_current", (verifications.get("anchor_transparency") or {}).get("status"), "passed", "Anchor Transparency verification status")
         if self.require_no_revoked:
-            self._add_check("requirements", "ptcpub_require_no_revoked", "failed" if self.report_doc.get("status") == "revoked" else "passed", "blocking", "Publication is not revoked." if self.report_doc.get("status") != "revoked" else "Publication is revoked.")
+            self._verify_channel_state_requirement()
+
+    def _verify_channel_state_requirement(self) -> None:
+        if self.publication_channel_state_path is None:
+            self._add_check("requirements", "ptcpub_channel_state_required", "failed", "blocking", "Publication channel state is required for --require-no-revoked.")
+            return
+        state = _read_json_file(self.publication_channel_state_path)
+        self.channel_state = state
+        if not state:
+            self._add_check("requirements", "ptcpub_channel_state_parse", "failed", "blocking", "Publication channel state cannot be read.")
+            return
+        self._add_check("requirements", "ptcpub_channel_state_parse", "passed", "blocking", "Publication channel state parses as JSON.")
+        self._add_hash_check("requirements", "ptcpub_channel_state_integrity", state.get("integrity_hash"), publication_channel_state_hash(state), "Publication channel state integrity")
+        self._add_exact_check("requirements", "ptcpub_channel_state_package_type", state.get("package_type"), PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE, "Publication channel state package_type")
+        self._add_exact_check("requirements", "ptcpub_channel_state_channel_id", state.get("channel_id"), self.manifest.get("channel_id") or self.report_doc.get("channel_id"), "Publication channel state channel_id")
+        rows = state.get("publications") if isinstance(state.get("publications"), list) else []
+        publication_id = str(self.manifest.get("publication_id") or self.report_doc.get("publication_id") or "")
+        row = next((item for item in rows if isinstance(item, dict) and str(item.get("publication_id") or "") == publication_id), None)
+        if row is None:
+            self._add_check("requirements", "ptcpub_channel_state_publication_present", "failed", "blocking", "Publication is missing from channel state.")
+            return
+        self._add_check("requirements", "ptcpub_channel_state_publication_present", "passed", "blocking", "Publication is present in channel state.")
+        if self.require_channel_state_zip_match:
+            self._add_exact_check("requirements", "ptcpub_channel_state_zip_sha256", row.get("zip_sha256"), self.zip_sha256, "Publication channel state ZIP sha256")
+        self._add_exact_check("requirements", "ptcpub_channel_state_manifest_hash", row.get("manifest_hash"), self.manifest.get("integrity_hash"), "Publication channel state manifest hash")
+        self._add_exact_check("requirements", "ptcpub_channel_state_source_hash", row.get("source_hash"), self.report_doc.get("source_hash"), "Publication channel state source hash")
+        self._add_exact_check("requirements", "ptcpub_channel_state_report_hash", row.get("report_hash"), self.report_doc.get("integrity_hash"), "Publication channel state report hash")
+        status = str(row.get("status") or self.report_doc.get("status") or "")
+        allowed = status not in {"revoked", "superseded"}
+        self._add_check("requirements", "ptcpub_require_no_revoked", "passed" if allowed else "failed", "blocking", f"Publication channel state status is {status}." if status else "Publication channel state status is missing.")
 
     def _verify_html(self, archive: zipfile.ZipFile) -> None:
         bad: list[str] = []
@@ -485,6 +528,7 @@ class _PublicationVerifier:
                 "zip_sha256": self.zip_sha256,
                 "zip_size_bytes": self.zip_size_bytes,
                 "manifest_hash": self.manifest.get("integrity_hash") if isinstance(self.manifest, dict) else None,
+                "channel_state_hash": self.channel_state.get("integrity_hash") if isinstance(self.channel_state, dict) else None,
                 "summary": summary,
                 "checks": self.checks,
                 "files": self.files,
@@ -585,6 +629,16 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
             return json.loads(archive.read(entry).decode("utf-8"))
     except Exception:
         return {}
+
+
+def _read_json_file(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def _counts(values: list[str]) -> dict[str, int]:

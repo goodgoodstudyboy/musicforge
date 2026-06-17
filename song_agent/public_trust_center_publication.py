@@ -50,11 +50,13 @@ from song_agent.releases import stable_hash
 
 PUBLICATION_SCHEMA_VERSION = 1
 PUBLICATION_CHANNEL_PACKAGE_TYPE = "musicforge_public_trust_center_publication_channel"
+PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE = "musicforge_public_trust_center_publication_channel_state"
 PUBLICATION_REPORT_PACKAGE_TYPE = "musicforge_public_trust_center_publication_report"
 PUBLICATION_PACKAGE_TYPE = "musicforge_public_trust_center_publication"
 PUBLICATION_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", "zip"}
 PUBLICATION_REPORT_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at"}
 PUBLICATION_CHANNEL_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at"}
+PUBLICATION_CHANNEL_STATE_HASH_EXCLUDE_KEYS = {"integrity_hash"}
 PUBLICATION_SIDECAR_HASH_EXCLUDE_KEYS = {"integrity_hash"}
 PUBLICATION_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"}
 PUBLICATION_ALLOWED_CHANNEL_TYPES = {"internal_preview", "partner_handoff", "public_release", "archive_mirror"}
@@ -116,6 +118,9 @@ class PublicTrustCenterPublicationStore:
 
     def current_publication_path(self, center_id: str, channel_id: str) -> Path:
         return self.channel_dir(center_id, channel_id) / "current-publication.json"
+
+    def channel_state_path(self, center_id: str, channel_id: str) -> Path:
+        return self.channel_dir(center_id, channel_id) / "publication-channel-state.json"
 
     def snapshots_dir(self, center_id: str, channel_id: str) -> Path:
         return self.channel_dir(center_id, channel_id) / "snapshots"
@@ -322,6 +327,7 @@ class PublicTrustCenterPublicationStore:
             require_acceptance_board_signoff=bool(payload.get("require_acceptance_board_signoff", True)),
             require_anchor_current=bool(payload.get("require_anchor_current", True)),
             require_no_revoked=bool(payload.get("require_no_revoked", False)),
+            publication_channel_state_path=payload.get("publication_channel_state_path") or self.channel_state_path(center_id, channel_id),
         )
         write_public_trust_center_publication_verification_report(report, self.verification_report_path(center_id, channel_id, publication_id))
         self._append_event(center_id, channel_id, "publication_verified", {"publication_id": publication_id, "verification_status": report.get("status"), "verification_hash": _verification_hash(report)}, now=now_iso())
@@ -338,6 +344,7 @@ class PublicTrustCenterPublicationStore:
             require_acceptance_board_signoff=bool(payload.get("require_acceptance_board_signoff", True)),
             require_anchor_current=bool(payload.get("require_anchor_current", True)),
             require_no_revoked=bool(payload.get("require_no_revoked", False)),
+            publication_channel_state_path=payload.get("publication_channel_state_path") or self.channel_state_path(center_id, channel_id),
         )
         write_public_trust_center_publication_verification_report(report, self.mirror_verification_report_path(center_id, channel_id, publication_id))
         self._append_event(center_id, channel_id, "publication_mirror_verified", {"publication_id": publication_id, "verification_status": report.get("status"), "verification_hash": _verification_hash(report)}, now=now_iso())
@@ -587,6 +594,41 @@ class PublicTrustCenterPublicationStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+        self._write_channel_state(center_id, channel_id, now=now)
+
+    def _write_channel_state(self, center_id: str, channel_id: str, *, now: str) -> dict[str, Any]:
+        events = _read_jsonl(self.events_path(center_id, channel_id))
+        event_state = _publication_lifecycle_from_events(events)
+        current = _read_json_default(self.current_publication_path(center_id, channel_id), default={})
+        publications: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        snapshots = self.snapshots_dir(center_id, channel_id)
+        if snapshots.exists():
+            for report_path in sorted(snapshots.glob("*/publication-report.json")):
+                report = _read_json_default(report_path, default={})
+                publication_id = str(report.get("publication_id") or report_path.parent.name)
+                seen.add(publication_id)
+                derived = event_state.get(publication_id, {})
+                publications.append(_publication_state_row(publication_id, report, derived, current, report_path.parent))
+        for publication_id, derived in sorted(event_state.items()):
+            if publication_id in seen:
+                continue
+            publications.append(_publication_state_row(publication_id, {}, derived, current, None))
+        state = {
+            "schema_version": PUBLICATION_SCHEMA_VERSION,
+            "package_type": PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE,
+            "center_id": center_id,
+            "channel_id": channel_id,
+            "generated_at": now,
+            "current_publication": current,
+            "publications": sorted(publications, key=lambda item: str(item.get("publication_id") or "")),
+            "events": events,
+            "event_count": len(events),
+            "latest_event_hash": events[-1].get("event_hash") if events else None,
+        }
+        state["integrity_hash"] = publication_channel_state_hash(state)
+        _write_json(self.channel_state_path(center_id, channel_id), state)
+        return state
 
     def _history_has_state_event(self, center_id: str, channel_id: str, report: dict[str, Any], event_type: str) -> bool:
         for event in _read_jsonl(self.events_path(center_id, channel_id)):
@@ -600,6 +642,10 @@ class PublicTrustCenterPublicationStore:
 
 def publication_channel_hash(channel: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (channel or {}).items() if key not in PUBLICATION_CHANNEL_HASH_EXCLUDE_KEYS})
+
+
+def publication_channel_state_hash(state: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (state or {}).items() if key not in PUBLICATION_CHANNEL_STATE_HASH_EXCLUDE_KEYS})
 
 
 def publication_report_hash(report: dict[str, Any]) -> str:
@@ -616,6 +662,65 @@ def publication_manifest_hash(manifest: dict[str, Any]) -> str:
 
 def sidecar_hash(doc: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (doc or {}).items() if key not in PUBLICATION_SIDECAR_HASH_EXCLUDE_KEYS})
+
+
+def _publication_lifecycle_from_events(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    for event in events:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        publication_id = str(payload.get("publication_id") or "")
+        if not publication_id:
+            continue
+        row = rows.setdefault(publication_id, {"publication_id": publication_id, "status_from_events": "unknown", "events": []})
+        row["events"].append({"event_id": event.get("event_id"), "event_type": event.get("event_type"), "event_hash": event.get("event_hash"), "created_at": event.get("created_at")})
+        row["latest_event_hash"] = event.get("event_hash")
+        row["latest_event_type"] = event.get("event_type")
+        event_type = str(event.get("event_type") or "")
+        if event_type in {"publication_refreshed", "publication_exported", "publication_zip_built", "publication_verified", "publication_mirror_verified"} and row.get("status_from_events") not in {"revoked", "superseded"}:
+            row["status_from_events"] = "published"
+        elif event_type == "publication_revoked":
+            row["status_from_events"] = "revoked"
+            row["revoked_at"] = event.get("created_at")
+            row["revocation_event_hash"] = event.get("event_hash")
+        elif event_type == "publication_superseded":
+            row["status_from_events"] = "superseded"
+            row["superseded_at"] = event.get("created_at")
+            row["superseded_by_publication_id"] = payload.get("replacement_publication_id")
+            row["supersede_event_hash"] = event.get("event_hash")
+    return rows
+
+
+def _publication_state_row(publication_id: str, report: dict[str, Any], derived: dict[str, Any], current: dict[str, Any], snapshot_root: Path | None) -> dict[str, Any]:
+    snapshot = report.get("status") if report else None
+    status = str(derived.get("status_from_events") or snapshot or "missing")
+    if snapshot in {"revoked", "superseded"}:
+        status = str(snapshot)
+    row = {
+        "publication_id": publication_id,
+        "status": status,
+        "report_status": snapshot,
+        "source_hash": report.get("source_hash"),
+        "report_hash": report.get("integrity_hash"),
+        "manifest_hash": None,
+        "zip_sha256": None,
+        "zip_size_bytes": None,
+        "current": current.get("publication_id") == publication_id and current.get("status") != "revoked",
+        "latest_event_hash": derived.get("latest_event_hash"),
+        "latest_event_type": derived.get("latest_event_type"),
+        "superseded_by_publication_id": report.get("superseded_by_publication_id") or derived.get("superseded_by_publication_id"),
+        "revoked_at": derived.get("revoked_at"),
+        "superseded_at": derived.get("superseded_at"),
+        "revocation_event_hash": derived.get("revocation_event_hash"),
+        "supersede_event_hash": derived.get("supersede_event_hash"),
+        "event_hashes": [str(item.get("event_hash") or "") for item in derived.get("events", []) if isinstance(item, dict) and item.get("event_hash")],
+    }
+    if report and snapshot_root is not None:
+        export_manifest = _read_json_default(snapshot_root / "export" / "publication-manifest.json", default={})
+        zip_path = snapshot_root / "public-trust-center-publication.zip"
+        row["manifest_hash"] = export_manifest.get("integrity_hash")
+        row["zip_sha256"] = _sha256(zip_path)
+        row["zip_size_bytes"] = os.stat(_fs_path(zip_path)).st_size if os.path.isfile(_fs_path(zip_path)) else None
+    return _sanitize(row)
 
 
 def publication_summary(report: dict[str, Any]) -> dict[str, Any]:

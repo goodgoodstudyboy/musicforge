@@ -1028,6 +1028,7 @@ def build_verify_public_trust_center_publication_parser() -> argparse.ArgumentPa
     verify_parser.add_argument("--require-acceptance-board-signoff", action="store_true", help="Require Acceptance Board signoff evidence.")
     verify_parser.add_argument("--require-anchor-current", action="store_true", help="Require current Anchor Registry and Transparency evidence.")
     verify_parser.add_argument("--require-no-revoked", action="store_true", help="Fail revoked publication snapshots.")
+    verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for revoke/supersede checks.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=512, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=512, help="Maximum number of ZIP entries.")
@@ -1044,6 +1045,7 @@ def build_verify_public_trust_center_publication_mirror_parser() -> argparse.Arg
     verify_parser.add_argument("--require-acceptance-board-signoff", action="store_true", help="Require Acceptance Board signoff evidence.")
     verify_parser.add_argument("--require-anchor-current", action="store_true", help="Require current Anchor Registry and Anchor Transparency evidence.")
     verify_parser.add_argument("--require-no-revoked", action="store_true", help="Fail if the publication snapshot is revoked.")
+    verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for revoke/supersede checks.")
     verify_parser.add_argument("--max-entry-count", type=int, default=512, help="Maximum number of mirror files.")
     return verify_parser
 
@@ -1074,6 +1076,7 @@ def build_public_trust_center_publication_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-anchor-current", action="store_true", default=True, help="Verifier requires current anchor evidence.")
     parser.add_argument("--no-require-anchor-current", dest="require_anchor_current", action="store_false", help="Do not require current anchor evidence.")
     parser.add_argument("--require-no-revoked", action="store_true", help="Verifier fails revoked snapshots.")
+    parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for revoke/supersede checks.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2584,6 +2587,7 @@ def _main() -> None:
             require_acceptance_board_signoff=args.require_acceptance_board_signoff,
             require_anchor_current=args.require_anchor_current,
             require_no_revoked=args.require_no_revoked,
+            publication_channel_state_path=args.publication_channel_state,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -2612,6 +2616,7 @@ def _main() -> None:
             require_acceptance_board_signoff=args.require_acceptance_board_signoff,
             require_anchor_current=args.require_anchor_current,
             require_no_revoked=args.require_no_revoked,
+            publication_channel_state_path=args.publication_channel_state,
             max_entry_count=args.max_entry_count,
         )
         if args.report_out is not None:
@@ -3992,6 +3997,7 @@ def _main() -> None:
                     "require_acceptance_board_signoff": args.require_acceptance_board_signoff,
                     "require_anchor_current": args.require_anchor_current,
                     "require_no_revoked": args.require_no_revoked,
+                    "publication_channel_state_path": args.publication_channel_state,
                 },
             )
             result["verification"] = verification
@@ -4011,6 +4017,7 @@ def _main() -> None:
                     "require_acceptance_board_signoff": args.require_acceptance_board_signoff,
                     "require_anchor_current": args.require_anchor_current,
                     "require_no_revoked": args.require_no_revoked,
+                    "publication_channel_state_path": args.publication_channel_state,
                 },
             )
             result["mirror_verification"] = verification

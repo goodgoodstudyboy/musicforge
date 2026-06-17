@@ -33,18 +33,50 @@ def test_public_trust_center_publication_roundtrip_and_mirror(tmp_path: Path, mo
         require_acceptance_board_signoff=True,
         require_anchor_current=True,
         require_no_revoked=True,
+        publication_channel_state_path=store.channel_state_path("ptc-default", "c"),
     )
     mirror = verify_public_trust_center_publication_mirror(
         store.export_dir("ptc-default", "c", report["publication_id"]),
         strict=True,
         require_ready=True,
         require_acceptance_board_signoff=True,
+        require_anchor_current=True,
+        require_no_revoked=True,
+        publication_channel_state_path=store.channel_state_path("ptc-default", "c"),
     )
 
     assert report["status"] == "ready"
     assert verification["status"] == "passed", verification.get("blockers")
     assert mirror["status"] == "passed", mirror.get("blockers")
     assert verification["summary"]["deep_verification"]["public_trust_center"] == "passed"
+
+
+def test_public_trust_center_publication_require_no_revoked_uses_channel_state(tmp_path: Path, monkeypatch) -> None:
+    store, report = _ready_publication(tmp_path, monkeypatch)
+    source_zip = store.zip_path("ptc-default", "c", report["publication_id"])
+    state = store.channel_state_path("ptc-default", "c")
+
+    missing_state = verify_public_trust_center_publication_package(source_zip, strict=True, require_no_revoked=True)
+    baseline = verify_public_trust_center_publication_package(source_zip, strict=True, require_no_revoked=True, publication_channel_state_path=state)
+    store.revoke_publication("ptc-default", "c", report["publication_id"], {"reason": "Withdraw published channel."})
+    revoked = verify_public_trust_center_publication_package(source_zip, strict=True, require_no_revoked=True, publication_channel_state_path=state)
+
+    assert _has_blocker(missing_state, "ptcpub_channel_state_required")
+    assert baseline["status"] == "passed", baseline.get("blockers")
+    assert _has_blocker(revoked, "ptcpub_require_no_revoked")
+
+
+def test_public_trust_center_publication_require_no_revoked_blocks_superseded_zip(tmp_path: Path, monkeypatch) -> None:
+    store, report = _ready_publication(tmp_path, monkeypatch)
+    source_zip = store.zip_path("ptc-default", "c", report["publication_id"])
+    state = store.channel_state_path("ptc-default", "c")
+
+    baseline = verify_public_trust_center_publication_package(source_zip, strict=True, require_no_revoked=True, publication_channel_state_path=state)
+    store.supersede_publication("ptc-default", "c", report["publication_id"], {"reason": "Replace published channel."})
+    superseded = verify_public_trust_center_publication_package(source_zip, strict=True, require_no_revoked=True, publication_channel_state_path=state)
+
+    assert baseline["status"] == "passed", baseline.get("blockers")
+    assert _has_blocker(superseded, "ptcpub_require_no_revoked")
 
 
 def test_public_trust_center_publication_verifier_rejects_edges(tmp_path: Path, monkeypatch) -> None:

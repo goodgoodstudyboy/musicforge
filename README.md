@@ -769,9 +769,14 @@ package allow-lists, and optional current-anchor / no-revoked gates:
 
 ```powershell
 python -m song_agent.cli public-trust-center-publication --center-id ptc-default --channel-id public-release --create-channel --refresh --export --zip --verify --verify-mirror --strict --deep --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --json
-python -m song_agent.cli verify-public-trust-center-publication-package path\to\public-trust-center-publication.zip --strict --deep --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --json
-python -m song_agent.cli verify-public-trust-center-publication-mirror path\to\publication-mirror --strict --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --json
+python -m song_agent.cli verify-public-trust-center-publication-package path\to\public-trust-center-publication.zip --strict --deep --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --publication-channel-state path\to\publication-channel-state.json --json
+python -m song_agent.cli verify-public-trust-center-publication-mirror path\to\publication-mirror --strict --require-ready --require-acceptance-board-signoff --require-anchor-current --require-no-revoked --publication-channel-state path\to\publication-channel-state.json --json
 ```
+
+`--require-no-revoked` intentionally needs the external channel state file. A
+previously exported ZIP is immutable, so revoke/supersede status must be checked
+against the current publication channel ledger rather than the ZIP's internal
+report alone.
 
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
