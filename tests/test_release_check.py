@@ -64,6 +64,7 @@ from song_agent.release_checks import (
     _v87_public_trust_center_acceptance_board_signoff_smoke,
     _v88_public_trust_center_publication_channels_smoke,
     _v89_public_trust_center_publication_monitoring_smoke,
+    _v90_trust_operations_hub_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -894,6 +895,27 @@ def test_v89_public_trust_center_publication_monitoring_smoke(tmp_path: Path) ->
     assert "redaction=failed" in detail
     assert "revoked=failed" in detail
     assert "superseded=failed" in detail
+
+
+def test_v90_trust_operations_hub_smoke(tmp_path: Path) -> None:
+    ok, detail = _v90_trust_operations_hub_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "hub=passed" in detail
+    assert "signoff=signed" in detail
+    assert "signed_mutation=True/True" in detail
+    assert "reset=reset/True" in detail
+    assert "matrix_full_resign=failed" in detail
+    assert "blockers_full_resign=failed" in detail
+    assert "evidence_full_resign=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "backslash=failed" in detail
+    assert "case_musicforge=failed" in detail
+    assert "nested=failed" in detail
+    assert "redaction=failed" in detail
+    assert "revoked=failed" in detail
+    assert "stale_export=True" in detail
+    assert "critical=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

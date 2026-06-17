@@ -23,6 +23,7 @@ def test_release_check_cli_list_json() -> None:
     assert "v78.attestation_transparency_feed_smoke" in ids
     assert "v79.attestation_transparency_acknowledgement_smoke" in ids
     assert "v80.public_trust_center_smoke" in ids
+    assert "v90.trust_operations_hub_smoke" in ids
 
 
 def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
@@ -71,7 +72,18 @@ def test_release_check_cli_v8_profile_lists_public_trust_center() -> None:
 
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
-    assert [item["check_id"] for item in payload["checks"]] == ["v80.public_trust_center_smoke", "v81.public_trust_center_delivery_smoke"]
+    ids = [item["check_id"] for item in payload["checks"]]
+    assert ids[0] == "v80.public_trust_center_smoke"
+    assert ids[-1] == "v89.public_trust_center_publication_monitoring_smoke"
+    assert len(ids) == 10
+
+
+def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
+    completed = _run_cli(["release-check", "--profile", "v9", "--list", "--json"])
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert [item["check_id"] for item in payload["checks"]] == ["v90.trust_operations_hub_smoke"]
 
 
 def test_release_check_cli_empty_selection_fails() -> None:
@@ -85,7 +97,7 @@ def test_release_check_cli_empty_selection_fails() -> None:
 
 
 def test_release_check_cli_empty_since_fails() -> None:
-    completed = _run_cli(["release-check", "--profile", "latest", "--since", "9.0", "--json"])
+    completed = _run_cli(["release-check", "--profile", "latest", "--since", "10.0", "--json"])
 
     assert completed.returncode == 1
     payload = json.loads(completed.stdout)

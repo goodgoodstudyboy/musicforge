@@ -3737,6 +3737,21 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/acceptance-board/download">Download Acceptance Board ZIP</a>
           <a class="button-link secondary" href="/api/public-trust-centers/ptc-default/acceptance-board/signoff-archive/download">Download Board Signoff Archive ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Trust Operations Hub</span></div>
+        <div class="summary-grid">
+          ${metric("Scope", "Release / Distribution / Submission / Operations / PTC / Publication")}
+          ${metric("Evidence", "Readiness matrix + blocker register + verification index")}
+        </div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-hub-refresh" type="button">Refresh Hub</button>
+          <button class="secondary" id="trust-operations-hub-export" type="button">Export Hub</button>
+          <button class="secondary" id="trust-operations-hub-zip" type="button">Build Hub ZIP</button>
+          <button class="secondary" id="trust-operations-hub-verify" type="button">Verify Hub ZIP</button>
+          <button class="secondary" id="trust-operations-hub-signoff" type="button">Sign Hub</button>
+          <button class="secondary" id="trust-operations-hub-change-request" type="button">Create Hub Change Request</button>
+          <button class="secondary" id="trust-operations-hub-reset" type="button">Reset Hub Signoff</button>
+          <a class="button-link secondary" href="/api/trust-operations/hubs/default.zip">Download Hub ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);

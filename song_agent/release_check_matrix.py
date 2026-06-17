@@ -203,7 +203,7 @@ LATEST_PROFILES = ("full", "quick", "latest")
 V7_PROFILES = ("full", "v7")
 
 CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
-    _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=4200),
+    _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000),
     _command("git.diff_check", "git diff --check", ("git", "diff", "--check"), group="git", kind="git", risk="high", timeout_seconds=60, profiles=BASE_PROFILES),
     _callable("git.status", "git status", "_git_status_check", group="git", risk="high", timeout_seconds=60),
     _callable("git.remote_url_token", "remote url token check", "_remote_url_token_check", group="git", risk="high", timeout_seconds=60),
@@ -297,6 +297,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v87.public_trust_center_acceptance_board_signoff_smoke", "v8.7 public trust center acceptance board signoff archive smoke", "_v87_public_trust_center_acceptance_board_signoff_smoke", group="trust", version="8.7", risk="critical", timeout_seconds=600, tags=("v8", "trust", "acceptance-board", "signoff"), profiles=("full", "quick", "latest", "v8"), expected_warnings=("Duplicate name:",)),
     _callable("v88.public_trust_center_publication_channels_smoke", "v8.8 public trust center publication channels smoke", "_v88_public_trust_center_publication_channels_smoke", group="trust", version="8.8", risk="critical", timeout_seconds=600, tags=("v8", "trust", "publication", "mirror"), profiles=("full", "quick", "latest", "v8"), expected_warnings=("Duplicate name:",)),
     _callable("v89.public_trust_center_publication_monitoring_smoke", "v8.9 public trust center publication monitoring smoke", "_v89_public_trust_center_publication_monitoring_smoke", group="trust", version="8.9", risk="critical", timeout_seconds=600, tags=("v8", "trust", "publication", "monitoring", "incident"), profiles=("full", "quick", "latest", "v8"), expected_warnings=("Duplicate name:",)),
+    _callable("v90.trust_operations_hub_smoke", "v9.0 trust operations hub smoke", "_v90_trust_operations_hub_smoke", group="trust", version="9.0", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "operations"), profiles=("full", "quick", "latest", "v9"), expected_warnings=("Duplicate name:",)),
 )
 
-KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "publish"}
+KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "publish"}

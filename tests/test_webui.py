@@ -288,6 +288,15 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/pack/verify" in html
     assert "/release-portfolio-audits/${encodeURIComponent(portfolioId)}/governance-attestation-transparency-acknowledgement/evidence/verify" in html
     assert "Public Trust Center" in html
+    assert "Trust Operations Hub" in html
+    assert 'id="trust-operations-hub-refresh"' in html
+    assert 'id="trust-operations-hub-export"' in html
+    assert 'id="trust-operations-hub-zip"' in html
+    assert 'id="trust-operations-hub-verify"' in html
+    assert 'id="trust-operations-hub-signoff"' in html
+    assert 'id="trust-operations-hub-change-request"' in html
+    assert 'id="trust-operations-hub-reset"' in html
+    assert "/api/trust-operations/hubs/default.zip" in html
     assert 'id="public-trust-center-refresh"' in html
     assert 'id="public-trust-center-export"' in html
     assert 'id="public-trust-center-zip"' in html

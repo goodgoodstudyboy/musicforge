@@ -65,7 +65,7 @@ def build_doctor_parser() -> argparse.ArgumentParser:
 
 def build_release_check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
-    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "publish"], help="Release-check profile to run.")
     parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
     parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
     parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")
@@ -1069,6 +1069,26 @@ def build_verify_public_trust_center_publication_monitoring_parser() -> argparse
     return verify_parser
 
 
+def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Trust Operations Hub ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Trust Operations Hub ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict package checks as failures.")
+    verify_parser.add_argument("--require-ready", action="store_true", help="Require Hub readiness to be ready.")
+    verify_parser.add_argument("--require-signed", action="store_true", help="Require Hub signoff summary.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require current external source evidence.")
+    verify_parser.add_argument("--require-no-critical-blockers", action="store_true", help="Require no critical blockers.")
+    verify_parser.add_argument("--require-publication-monitoring-clean", action="store_true", help="Require clean publication monitoring evidence.")
+    verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for current/revoke checks.")
+    verify_parser.add_argument("--public-trust-center-verification", type=Path, default=None, help="External Public Trust Center verification report.")
+    verify_parser.add_argument("--publication-monitoring-verification", type=Path, default=None, help="External Publication Monitoring verification report.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=256, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
 def build_public_trust_center_publication_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build and verify MusicForge Public Trust Center Publication channels.")
     parser.add_argument("--center-id", default="ptc-default", help="Public Trust Center id.")
@@ -1128,6 +1148,39 @@ def build_public_trust_center_publication_monitor_parser() -> argparse.ArgumentP
     parser.add_argument("--require-no-drift", action="store_true", help="Verifier requires no critical/high drift.")
     parser.add_argument("--require-no-open-critical-incidents", action="store_true", help="Verifier requires no open critical incident.")
     parser.add_argument("--allow-waived-incidents", action="store_true", help="Allow waived high/critical incidents as warnings.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_trust_operations_hub_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build, sign, and verify MusicForge Trust Operations Hub packages.")
+    parser.add_argument("--hub-id", default=None, help="Trust Operations Hub id.")
+    parser.add_argument("--name", default="Default Trust Operations Hub", help="Hub display name.")
+    parser.add_argument("--create", action="store_true", help="Create the Hub if it does not exist.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh the Hub report.")
+    parser.add_argument("--report-id", default=None, help="Hub report id. Defaults to current report when possible.")
+    parser.add_argument("--export", action="store_true", help="Export the Hub package directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Hub ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Hub ZIP.")
+    parser.add_argument("--signoff", action="store_true", help="Sign off the verified Hub ZIP.")
+    parser.add_argument("--signed-by", default="local-reviewer", help="Signer name for Hub signoff.")
+    parser.add_argument("--reason", default="Trust Operations Hub operation.", help="Reason for signoff/change request/reset.")
+    parser.add_argument("--force", action="store_true", help="Force signoff when allowed.")
+    parser.add_argument("--override-reason", default="", help="Required reason for forced signoff.")
+    parser.add_argument("--create-change-request", action="store_true", help="Create a Hub change request.")
+    parser.add_argument("--approve-change-request", default=None, help="Approve a Hub change request id.")
+    parser.add_argument("--reset-signoff", action="store_true", help="Reset Hub signoff with an approved change request.")
+    parser.add_argument("--change-request-id", default=None, help="Change request id for reset.")
+    parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json.")
+    parser.add_argument("--public-trust-center-verification", type=Path, default=None, help="External Public Trust Center verification report.")
+    parser.add_argument("--publication-monitoring-verification", type=Path, default=None, help="External Publication Monitoring verification report.")
+    parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--require-ready", action="store_true", help="Verifier requires ready Hub.")
+    parser.add_argument("--require-signed", action="store_true", help="Verifier requires Hub signoff summary.")
+    parser.add_argument("--require-current", action="store_true", help="Verifier requires current external source evidence.")
+    parser.add_argument("--require-no-critical-blockers", action="store_true", help="Verifier requires no critical blockers.")
+    parser.add_argument("--require-publication-monitoring-clean", action="store_true", help="Verifier requires clean publication monitoring evidence.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2708,6 +2761,38 @@ def _main() -> None:
         else:
             print_public_trust_center_publication_monitoring_verification_report(report)
         raise SystemExit(public_trust_center_publication_monitoring_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-trust-operations-hub-package":
+        from song_agent.trust_operations_hub_verifier import (
+            print_trust_operations_hub_verification_report,
+            trust_operations_hub_verification_exit_code,
+            verify_trust_operations_hub_package,
+            write_trust_operations_hub_verification_report,
+        )
+
+        parser = build_verify_trust_operations_hub_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_trust_operations_hub_package(
+            args.zip_path,
+            strict=args.strict,
+            require_ready=args.require_ready,
+            require_signed=args.require_signed,
+            require_current=args.require_current,
+            require_no_critical_blockers=args.require_no_critical_blockers,
+            require_publication_monitoring_clean=args.require_publication_monitoring_clean,
+            publication_channel_state_path=args.publication_channel_state,
+            public_trust_center_verification_path=args.public_trust_center_verification,
+            publication_monitoring_verification_path=args.publication_monitoring_verification,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_trust_operations_hub_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_trust_operations_hub_verification_report(report)
+        raise SystemExit(trust_operations_hub_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-operations":
         from song_agent.distribution import DistributionStore
         from song_agent.release_operations import ReleaseOperationsStore, operations_report_summary
@@ -4195,6 +4280,94 @@ def _main() -> None:
                 print_public_trust_center_publication_monitoring_verification_report(result["verification"])
             else:
                 print(json.dumps(result.get("summary") or {"status": "ok"}, ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "trust-operations-hub":
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_verifier import print_trust_operations_hub_verification_report
+
+        parser = build_trust_operations_hub_parser()
+        args = parser.parse_args(raw_args[1:])
+        store = TrustOperationsHubStore()
+        result: dict[str, Any] = {"ok": True}
+        hub_id = args.hub_id
+        if args.create or not hub_id:
+            if hub_id and store.hub_path(hub_id).exists():
+                hub = store.read_hub(hub_id)
+            else:
+                hub = store.create_hub({"hub_id": hub_id, "name": args.name})
+            hub_id = str(hub.get("hub_id") or hub_id or "")
+            result["hub"] = hub
+        if not hub_id:
+            hubs = store.list_hubs()
+            if not hubs:
+                hub = store.create_hub({"name": args.name})
+                hubs = [hub]
+            hub_id = str(hubs[0].get("hub_id") or "")
+            result["hub"] = hubs[0]
+        if not hub_id:
+            raise ValueError("--hub-id is required.")
+        report_id = args.report_id
+        source_payload = {
+            "publication_channel_state_path": args.publication_channel_state,
+            "public_trust_center_verification_path": args.public_trust_center_verification,
+            "publication_monitoring_verification_path": args.publication_monitoring_verification,
+        }
+        if args.refresh:
+            refreshed = store.refresh_report(hub_id, source_payload)
+            report_id = str((refreshed.get("hub_report") or {}).get("report_id") or report_id or "")
+            result.update(refreshed)
+        if not report_id:
+            current = read_json(store.current_report_path(hub_id)) if store.current_report_path(hub_id).exists() else {}
+            report_id = str(current.get("report_id") or "")
+        if args.create_change_request:
+            result["change_request"] = store.create_change_request(hub_id, {"reason": args.reason, "change_request_id": args.change_request_id})
+        if args.approve_change_request:
+            result["change_request"] = store.approve_change_request(hub_id, args.approve_change_request)
+        if args.reset_signoff:
+            if not args.change_request_id:
+                raise ValueError("--change-request-id is required for --reset-signoff.")
+            result["reset"] = store.reset_signoff(hub_id, args.change_request_id)
+        if args.export:
+            if not report_id:
+                raise ValueError("--report-id is required for --export unless --refresh was used.")
+            result["manifest"] = store.export_report(hub_id, report_id)
+        if args.zip:
+            if not report_id:
+                raise ValueError("--report-id is required for --zip unless --refresh was used.")
+            result["zip"] = store.build_zip(hub_id, report_id)
+        if args.verify:
+            if not report_id:
+                raise ValueError("--report-id is required for --verify unless --refresh was used.")
+            verification = store.verify_zip(
+                hub_id,
+                report_id,
+                {
+                    "strict": args.strict,
+                    "require_ready": args.require_ready,
+                    "require_signed": args.require_signed,
+                    "require_current": args.require_current,
+                    "require_no_critical_blockers": args.require_no_critical_blockers,
+                    "require_publication_monitoring_clean": args.require_publication_monitoring_clean,
+                    "publication_channel_state_path": args.publication_channel_state,
+                    "public_trust_center_verification_path": args.public_trust_center_verification,
+                    "publication_monitoring_verification_path": args.publication_monitoring_verification,
+                },
+            )
+            result["verification"] = verification
+            result["verification_summary"] = verification.get("summary", {})
+        if args.signoff:
+            if not report_id:
+                raise ValueError("--report-id is required for --signoff unless --refresh was used.")
+            result["signoff"] = store.signoff(hub_id, report_id, {"signed_by": args.signed_by, "reason": args.reason, "force": args.force, "override_reason": args.override_reason})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            if "verification" in result:
+                print_trust_operations_hub_verification_report(result["verification"])
+            else:
+                print(json.dumps(result.get("summary") or {"status": "ok", "hub_id": hub_id, "report_id": report_id}, ensure_ascii=False, indent=2))
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "public-trust-center":
         from song_agent.public_trust_center import public_trust_center_summary

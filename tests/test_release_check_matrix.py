@@ -15,6 +15,7 @@ from song_agent.release_check_runner import run_release_check_matrix
 def test_release_check_definitions_are_valid() -> None:
     validate_check_definitions()
     definitions = all_check_definitions()
+    by_id = {definition.check_id: definition for definition in definitions}
 
     assert len({definition.check_id for definition in definitions}) == len(definitions)
     assert "v74.attestation_portal_smoke" in {definition.check_id for definition in definitions}
@@ -25,6 +26,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in definitions}
     assert "v80.public_trust_center_smoke" in {definition.check_id for definition in definitions}
     assert "v81.public_trust_center_delivery_smoke" in {definition.check_id for definition in definitions}
+    assert by_id["pytest.full"].timeout_seconds >= 6000
 
 
 def test_release_check_profile_and_filters() -> None:
@@ -44,7 +46,18 @@ def test_release_check_profile_and_filters() -> None:
     assert "v80.public_trust_center_smoke" in {definition.check_id for definition in latest}
     assert "v81.public_trust_center_delivery_smoke" in {definition.check_id for definition in latest}
     assert "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
-    assert {definition.check_id for definition in v8} == {"v80.public_trust_center_smoke", "v81.public_trust_center_delivery_smoke"}
+    assert [definition.check_id for definition in v8] == [
+        "v80.public_trust_center_smoke",
+        "v81.public_trust_center_delivery_smoke",
+        "v82.public_trust_center_anchor_registry_smoke",
+        "v83.public_trust_center_anchor_transparency_smoke",
+        "v84.public_trust_center_distribution_kit_smoke",
+        "v85.public_trust_center_distribution_kit_acceptance_smoke",
+        "v86.public_trust_center_acceptance_board_smoke",
+        "v87.public_trust_center_acceptance_board_signoff_smoke",
+        "v88.public_trust_center_publication_channels_smoke",
+        "v89.public_trust_center_publication_monitoring_smoke",
+    ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
         "v76.attestation_portal_review_response_smoke",

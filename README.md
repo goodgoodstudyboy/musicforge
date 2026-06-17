@@ -793,6 +793,22 @@ python -m song_agent.cli public-trust-center-publication-monitor --center-id ptc
 python -m song_agent.cli verify-public-trust-center-publication-monitoring-package path\to\public-trust-center-publication-monitoring.zip --strict --require-current --require-no-revoked --require-ready --require-no-drift --require-no-open-critical-incidents --publication-channel-state path\to\publication-channel-state.json --json
 ```
 
+Trust Operations Hub aggregates the top-level public trust and operations
+readiness evidence into a single local readiness matrix, blocker register,
+manual action queue, and fixed-structure Hub ZIP. Hub verification never relies
+only on the package's own summary for current-state gates: `--require-current`
+must be paired with the external publication channel state and the current
+verification reports used to build the Hub.
+
+```powershell
+python -m song_agent.cli trust-operations-hub --hub-id hub-default --create --refresh --export --zip --verify --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
+python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
+python -m song_agent.cli trust-operations-hub --hub-id hub-default --signoff --signed-by reviewer --reason "Trust Operations Hub accepted." --json
+python -m song_agent.cli trust-operations-hub --hub-id hub-default --create-change-request --change-request-id toh-cr-000001 --reason "Approved Hub evidence refresh." --json
+python -m song_agent.cli trust-operations-hub --hub-id hub-default --approve-change-request toh-cr-000001 --json
+python -m song_agent.cli trust-operations-hub --hub-id hub-default --reset-signoff --change-request-id toh-cr-000001 --json
+```
+
 ```powershell
 python -m song_agent.cli verify-submission-package path\to\submission-package.zip --json --deep --report-out submission-verification-report.json
 ```

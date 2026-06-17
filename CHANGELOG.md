@@ -1,5 +1,18 @@
 # Changelog
 
+## v9.0.0 - 2026-06-18
+
+### Added
+- Trust Operations Hub for aggregating Public Trust Center, publication channel state, and publication monitoring verification into a cross-link readiness matrix, blocker register, manual action queue, evidence binding index, and verification summary index.
+- Fixed-structure Trust Operations Hub export and ZIP package with offline verifier, strict ZIP safety checks, redaction scan, external current-state binding, and full-resign semantic checks.
+- `trust-operations-hub` CLI for create, refresh, export, ZIP, verify, signoff, approved change-request reset, and signed immutability workflows.
+- `verify-trust-operations-hub-package` CLI with `--require-ready`, `--require-current`, `--require-signed`, `--require-no-critical-blockers`, and `--require-publication-monitoring-clean`.
+- release-check v9 profile and `v90.trust_operations_hub_smoke` covering signed mutation guards, CR reset, stale external publication state, open critical monitoring incidents, full-resign tamper, ZIP safety, and redaction.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_hub.py tests\test_cli_trust_operations_hub.py tests\test_release_check.py::test_v90_trust_operations_hub_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v8.9.1 - 2026-06-17
 
 ### Fixed

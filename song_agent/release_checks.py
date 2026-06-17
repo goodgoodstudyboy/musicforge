@@ -80,6 +80,7 @@ from song_agent.release_portfolio_governance_attestation_registry_verifier impor
 from song_agent.release_portfolio_governance_attestation_transparency_verifier import verify_release_portfolio_governance_attestation_transparency
 from song_agent.human_review_verifier import verify_human_review_pack
 from song_agent.music_acceptance import AcceptanceStore
+from song_agent.public_trust_center_publication import publication_channel_state_hash
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
@@ -89,6 +90,7 @@ from song_agent.release_check_runner import (
     print_release_check_report,
     run_release_check_matrix,
 )
+from song_agent.trust_operations_hub import TrustOperationsHubStateError
 
 
 SECRET_PATTERNS = [
@@ -11505,7 +11507,7 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
         portal = select_check_definitions(profile="latest", groups=["portal"])
         empty_group = select_check_definitions(profile="latest", groups=["audio"])
         since = select_check_definitions(profile="v7", since="7.2")
-        empty_since = select_check_definitions(profile="latest", since="9.0")
+        empty_since = select_check_definitions(profile="latest", since="10.0")
         only = select_check_definitions(profile="full", only=["v74.attestation_portal_smoke"])
         base = Path(tempfile.mkdtemp(prefix="release-check-v75-"))
         fake_script = base / "v75_timeout_fake.py"
@@ -13751,6 +13753,133 @@ def _v89_public_trust_center_publication_monitoring_smoke(root: Path) -> tuple[b
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v90_trust_operations_hub_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v90-trust-operations-hub-")).resolve()
+    try:
+        from song_agent.trust_operations_hub import TrustOperationsHubStateError, TrustOperationsHubStore, hub_hash, hub_manifest_hash
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+
+        fixture = _v90_fixture(base)
+        store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        hub = store.create_hub({"hub_id": "hub"})
+        report_id = str(store.refresh_report(hub["hub_id"], fixture["payload"])["hub_report"]["report_id"])
+        store.export_report("hub", report_id)
+        store.build_zip("hub", report_id)
+        source_zip = store.zip_path("hub", report_id)
+        verification = store.verify_zip("hub", report_id, {**fixture["verify_payload"], "strict": True, "require_ready": True, "require_current": True, "require_publication_monitoring_clean": True, "require_no_critical_blockers": True})
+        signoff = store.signoff("hub", report_id, {"signed_by": "release-check", "reason": "Trust Operations Hub v9.0 smoke accepted."})
+        signed_export = _v90_blocked(lambda: store.export_report("hub", report_id))
+        signed_zip = _v90_blocked(lambda: store.build_zip("hub", report_id))
+        cr = store.create_change_request("hub", {"change_request_id": "cr", "reason": "Refresh signed Hub evidence."})
+        store.approve_change_request("hub", "cr")
+        reset = store.reset_signoff("hub", "cr")
+        cr_reuse = _v90_blocked(lambda: store.reset_signoff("hub", "cr"))
+
+        matrix = verify_trust_operations_hub_package(_v76_rewrite_zip(source_zip, base / "matrix-full-resign.zip", _v90_tamper_matrix_full_resign), strict=True)
+        blockers = verify_trust_operations_hub_package(_v76_rewrite_zip(source_zip, base / "blockers-full-resign.zip", _v90_clear_blockers_full_resign), strict=True)
+        evidence = verify_trust_operations_hub_package(_v76_rewrite_zip(source_zip, base / "evidence-full-resign.zip", _v90_tamper_evidence_full_resign), strict=True)
+        duplicate = verify_trust_operations_hub_package(_v43_duplicate_submission_zip(source_zip, base / "hub-duplicate.zip"), strict=True)
+        dangerous = verify_trust_operations_hub_package(_v38_rewrite_zip(source_zip, base / "hub-dangerous.zip", additions={"../evil.txt": b"x"}), strict=True)
+        backslash = verify_trust_operations_hub_package(_v38_backslash_entry_zip(base / "hub-backslash.zip"), strict=True)
+        case_musicforge = verify_trust_operations_hub_package(_v38_rewrite_zip(source_zip, base / "hub-case-musicforge.zip", additions={".MusicForge/internal.json": b"internal"}), strict=True)
+        nested = verify_trust_operations_hub_package(_v38_rewrite_zip(source_zip, base / "hub-nested.zip", additions={"nested.zip": b"PK\x05\x06" + b"\0" * 18}), strict=True)
+        spoof = verify_trust_operations_hub_package(_v76_rewrite_zip(source_zip, base / "hub-spoof.zip", _v90_spoof_hub_manifest_zip_entries), strict=True)
+        redaction = verify_trust_operations_hub_package(_v38_rewrite_zip(source_zip, base / "hub-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+
+        revoked_state = read_json(fixture["channel_state_path"])
+        revoked_state["current_publication"]["status"] = "revoked"
+        revoked_state["publications"][0]["status"] = "revoked"
+        revoked_state["latest_event_hash"] = "revoked-event"
+        revoked_state["integrity_hash"] = publication_channel_state_hash(revoked_state)
+        write_json(fixture["channel_state_path"], revoked_state)
+        revoked = verify_trust_operations_hub_package(source_zip, strict=True, require_current=True, publication_channel_state_path=fixture["channel_state_path"], public_trust_center_verification_path=fixture["ptc_verification_path"], publication_monitoring_verification_path=fixture["monitoring_verification_path"])
+        stale_export = _v90_blocked(lambda: store.export_report("hub", report_id))
+
+        fixture2 = _v90_fixture(base / "critical")
+        monitoring = read_json(fixture2["monitoring_verification_path"])
+        monitoring["status"] = "failed"
+        monitoring.setdefault("summary", {})["critical_incidents"] = 1
+        write_json(fixture2["monitoring_verification_path"], monitoring)
+        store2 = TrustOperationsHubStore(base / ".musicforge" / "trust-operations-critical")
+        hub2 = store2.create_hub({"hub_id": "hub-critical"})
+        critical_report_id = str(store2.refresh_report("hub-critical", fixture2["payload"])["hub_report"]["report_id"])
+        store2.export_report("hub-critical", critical_report_id)
+        store2.build_zip("hub-critical", critical_report_id)
+        critical = verify_trust_operations_hub_package(store2.zip_path("hub-critical", critical_report_id), strict=True, require_publication_monitoring_clean=True)
+
+        ok = (
+            verification.get("status") == "passed"
+            and signoff.get("status") == "signed"
+            and signed_export
+            and signed_zip
+            and reset.get("status") == "reset"
+            and cr_reuse
+            and _v38_check_status(matrix, "toh_readiness_matrix_semantics_match") == "failed"
+            and _v38_check_status(blockers, "toh_blocker_register_matches_readiness") == "failed"
+            and (_v38_check_status(evidence, "toh_readiness_matrix_semantics_match") == "failed" or _v38_check_status(evidence, "toh_verification_index_matches_evidence") == "failed")
+            and _v38_check_status(duplicate, "toh_zip_duplicate_entries") == "failed"
+            and _v38_check_status(dangerous, "toh_zip_entry_path_safe") == "failed"
+            and _v38_check_status(backslash, "toh_zip_entry_path_safe") == "failed"
+            and _v38_check_status(case_musicforge, "toh_zip_no_internal_entries") == "failed"
+            and _v38_check_status(nested, "toh_zip_nested_allowlist") == "failed"
+            and _v38_check_status(spoof, "toh_manifest_zip_entries_reference_only") == "failed"
+            and _v38_check_status(redaction, "toh_redaction_scan") == "failed"
+            and _v38_check_status(revoked, "toh_external_channel_state_current") == "failed"
+            and stale_export
+            and _v38_check_status(critical, "toh_require_publication_monitoring_clean") == "failed"
+        )
+        return ok, (
+            f"hub={verification.get('status')}, signoff={signoff.get('status')}, signed_mutation={signed_export}/{signed_zip}, reset={reset.get('status')}/{cr_reuse}, "
+            f"matrix_full_resign={_v38_check_status(matrix, 'toh_readiness_matrix_semantics_match')}, blockers_full_resign={_v38_check_status(blockers, 'toh_blocker_register_matches_readiness')}, "
+            f"evidence_full_resign={_v38_check_status(evidence, 'toh_readiness_matrix_semantics_match') or _v38_check_status(evidence, 'toh_verification_index_matches_evidence')}, "
+            f"duplicate={_v38_check_status(duplicate, 'toh_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'toh_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'toh_zip_entry_path_safe')}, "
+            f"case_musicforge={_v38_check_status(case_musicforge, 'toh_zip_no_internal_entries')}, nested={_v38_check_status(nested, 'toh_zip_nested_allowlist')}, spoof={_v38_check_status(spoof, 'toh_manifest_zip_entries_reference_only')}, "
+            f"redaction={_v38_check_status(redaction, 'toh_redaction_scan')}, revoked={_v38_check_status(revoked, 'toh_external_channel_state_current')}, stale_export={stale_export}, critical={_v38_check_status(critical, 'toh_require_publication_monitoring_clean')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v90_fixture(base: Path) -> dict[str, Any]:
+    root = base / "external"
+    root.mkdir(parents=True, exist_ok=True)
+    state = {
+        "package_type": "musicforge_public_trust_center_publication_channel_state",
+        "center_id": "ptc-default",
+        "channel_id": "public-release",
+        "current_publication": {"publication_id": "pub-1", "status": "ready", "source_hash": "a" * 64, "report_hash": "b" * 64},
+        "publications": [{"publication_id": "pub-1", "status": "ready", "source_hash": "a" * 64, "report_hash": "b" * 64, "manifest_hash": "c" * 64, "zip_sha256": "d" * 64, "latest_event_hash": "e" * 64}],
+        "events": [{"event_id": "evt-1", "event_hash": "e" * 64}],
+        "event_count": 1,
+        "latest_event_hash": "e" * 64,
+    }
+    state["integrity_hash"] = publication_channel_state_hash(state)
+    state_path = write_json(root / "publication-channel-state.json", state)
+    ptc = {"package_type": "musicforge_public_trust_center_verification", "status": "passed", "zip_sha256": "1" * 64, "manifest_hash": "2" * 64, "source_hash": "3" * 64, "summary": {"readiness": "ready"}, "checks": []}
+    ptc_path = write_json(root / "ptc-verification-report.json", ptc)
+    monitoring = {"package_type": "musicforge_public_trust_center_publication_monitoring_verification", "status": "passed", "zip_sha256": "4" * 64, "manifest_hash": "5" * 64, "source_hash": "6" * 64, "summary": {"status": "passed", "critical_incidents": 0, "open_incidents": 0}, "checks": []}
+    monitoring_path = write_json(root / "monitoring-verification-report.json", monitoring)
+    return {
+        "channel_state_path": state_path,
+        "ptc_verification_path": ptc_path,
+        "monitoring_verification_path": monitoring_path,
+        "payload": {"publication_channel_state_path": state_path, "public_trust_center_verification_path": ptc_path, "publication_monitoring_verification_path": monitoring_path},
+        "verify_payload": {"publication_channel_state_path": state_path, "public_trust_center_verification_path": ptc_path, "publication_monitoring_verification_path": monitoring_path},
+    }
+
+
+def _v90_blocked(fn) -> bool:
+    try:
+        fn()
+    except TrustOperationsHubStateError:
+        return True
+    return False
+
+
 class _V89DummyPublicationStore:
     def __init__(self, root: Path) -> None:
         from song_agent.public_trust_center_publication import publication_channel_state_hash
@@ -13991,6 +14120,110 @@ def _v89_spoof_monitoring_manifest_zip_entries(docs: dict[str, bytes]) -> None:
     manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
     manifest["integrity_hash"] = monitoring_manifest_hash(manifest)
     docs["monitoring-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v90_tamper_matrix_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub import hub_hash
+
+    matrix = _v74_read_json_doc(docs, "readiness-matrix.json")
+    for index, row in enumerate(matrix.get("rows", [])):
+        if isinstance(row, dict) and index == 0:
+            row["status"] = "blocked"
+            row["summary"] = "Forged blocker inserted without matching evidence."
+    matrix["summary"] = {"row_count": len(matrix.get("rows", [])), "ready_count": max(0, len(matrix.get("rows", [])) - 1), "blocked_count": 1, "warning_count": 0, "stale_count": 0, "missing_count": 0}
+    matrix["integrity_hash"] = hub_hash(matrix)
+    docs["readiness-matrix.json"] = _v74_json_doc(matrix)
+    _v90_resign_hub_docs(docs)
+
+
+def _v90_clear_blockers_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub import hub_hash
+
+    matrix = _v74_read_json_doc(docs, "readiness-matrix.json")
+    for index, row in enumerate(matrix.get("rows", [])):
+        if isinstance(row, dict) and index == 0:
+            row["status"] = "blocked"
+            row["summary"] = "Forged blocker inserted and hidden."
+    matrix["summary"] = {"row_count": len(matrix.get("rows", [])), "ready_count": max(0, len(matrix.get("rows", [])) - 1), "blocked_count": 1, "warning_count": 0, "stale_count": 0, "missing_count": 0}
+    matrix["integrity_hash"] = hub_hash(matrix)
+    docs["readiness-matrix.json"] = _v74_json_doc(matrix)
+    blockers = _v74_read_json_doc(docs, "blocker-register.json")
+    blockers["blockers"] = []
+    blockers["summary"] = {"blocker_count": 0, "critical_count": 0, "high_count": 0}
+    blockers["integrity_hash"] = hub_hash(blockers)
+    docs["blocker-register.json"] = _v74_json_doc(blockers)
+    _v90_resign_hub_docs(docs)
+
+
+def _v90_tamper_evidence_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub import hub_hash
+
+    evidence = _v74_read_json_doc(docs, "evidence-binding-index.json")
+    for row in evidence.get("evidence", []):
+        if isinstance(row, dict) and row.get("component_type") == "publication_monitoring_verification":
+            row["status"] = "failed"
+            row.setdefault("summary", {})["critical_incidents"] = 1
+    evidence["summary"] = {"evidence_count": len(evidence.get("evidence", [])), "failed_count": 1, "stale_count": 0}
+    evidence["integrity_hash"] = hub_hash(evidence)
+    docs["evidence-binding-index.json"] = _v74_json_doc(evidence)
+    _v90_resign_hub_docs(docs)
+
+
+def _v90_spoof_hub_manifest_zip_entries(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub import hub_manifest_hash
+
+    manifest = _v74_read_json_doc(docs, "trust-operations-hub-manifest.json")
+    manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
+    manifest["integrity_hash"] = hub_manifest_hash(manifest)
+    docs["trust-operations-hub-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v90_resign_hub_docs(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub import hub_hash, hub_manifest_hash
+
+    report = _v74_read_json_doc(docs, "hub-report.json")
+    matrix = _v74_read_json_doc(docs, "readiness-matrix.json")
+    blockers = _v74_read_json_doc(docs, "blocker-register.json")
+    actions = _v74_read_json_doc(docs, "manual-action-queue.json")
+    evidence = _v74_read_json_doc(docs, "evidence-binding-index.json")
+    verifications = _v74_read_json_doc(docs, "verification-summary-index.json")
+    source_state = _v74_read_json_doc(docs, "source-state.json")
+    signoff = _v74_read_json_doc(docs, "signoff-summary.json")
+    checksum = _v74_read_json_doc(docs, "checksum/SHA256SUMS.json")
+    manifest = _v74_read_json_doc(docs, "trust-operations-hub-manifest.json")
+    report["source"] = {
+        "hub_hash": report.get("source", {}).get("hub_hash"),
+        "source_state_hash": source_state.get("integrity_hash"),
+        "readiness_matrix_hash": matrix.get("integrity_hash"),
+        "blocker_register_hash": blockers.get("integrity_hash"),
+        "manual_action_queue_hash": actions.get("integrity_hash"),
+        "evidence_binding_index_hash": evidence.get("integrity_hash"),
+        "verification_summary_index_hash": verifications.get("integrity_hash"),
+    }
+    report["status"] = "ready" if matrix.get("summary", {}).get("blocked_count") == 0 and matrix.get("summary", {}).get("missing_count") == 0 and matrix.get("summary", {}).get("stale_count") == 0 and blockers.get("summary", {}).get("blocker_count") == 0 else "blocked"
+    report["readiness"] = {"overall_status": report["status"], **matrix.get("summary", {})}
+    report["integrity_hash"] = hub_hash(report)
+    docs["hub-report.json"] = _v74_json_doc(report)
+    manifest["source"] = {
+        "hub_report_hash": report.get("integrity_hash"),
+        "readiness_matrix_hash": matrix.get("integrity_hash"),
+        "blocker_register_hash": blockers.get("integrity_hash"),
+        "manual_action_queue_hash": actions.get("integrity_hash"),
+        "evidence_binding_index_hash": evidence.get("integrity_hash"),
+        "verification_summary_index_hash": verifications.get("integrity_hash"),
+        "source_state_hash": source_state.get("integrity_hash"),
+        "signoff_summary_hash": signoff.get("integrity_hash"),
+    }
+    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json"):
+        _v74_sync_manifest_file(manifest, path, docs[path])
+        _v89_sync_file_record(checksum, path, docs[path])
+    checksum["integrity_hash"] = hub_hash(checksum)
+    docs["checksum/SHA256SUMS.json"] = _v74_json_doc(checksum)
+    _v74_sync_manifest_file(manifest, "checksum/SHA256SUMS.json", docs["checksum/SHA256SUMS.json"])
+    docs["checksum/SHA256SUMS.txt"] = ("\n".join(f"{item.get('sha256')}  {item.get('path')}" for item in checksum.get("files", []) if isinstance(item, dict)) + "\n").encode("utf-8")
+    _v74_sync_manifest_file(manifest, "checksum/SHA256SUMS.txt", docs["checksum/SHA256SUMS.txt"])
+    manifest["integrity_hash"] = hub_manifest_hash(manifest)
+    docs["trust-operations-hub-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v85_tamper_accepted_evidence_public_response_full_resign(docs: dict[str, bytes]) -> None:
