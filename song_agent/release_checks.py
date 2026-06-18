@@ -13769,8 +13769,26 @@ def _v90_trust_operations_hub_smoke(root: Path) -> tuple[bool, str]:
         source_zip = store.zip_path("hub", report_id)
         verification = store.verify_zip("hub", report_id, {**fixture["verify_payload"], "strict": True, "require_ready": True, "require_current": True, "require_publication_monitoring_clean": True, "require_no_critical_blockers": True})
         signoff = store.signoff("hub", report_id, {"signed_by": "release-check", "reason": "Trust Operations Hub v9.0 smoke accepted."})
+        signed_required_missing = verify_trust_operations_hub_package(source_zip, strict=True, require_signed=True)
+        hub_verification_path = store.verification_report_path("hub", report_id)
+        signed_required = verify_trust_operations_hub_package(source_zip, strict=True, require_signed=True, hub_signoff_path=store.signoff_path("hub"), hub_verification_report_path=hub_verification_path, publication_channel_state_path=fixture["channel_state_path"], public_trust_center_verification_path=fixture["ptc_verification_path"], publication_monitoring_verification_path=fixture["monitoring_verification_path"])
+        old_zip = verify_trust_operations_hub_package(_v38_rewrite_zip(source_zip, base / "hub-old-zip.zip", transforms={"README.txt": lambda data: data + b"\nold hub zip\n"}), strict=True, require_signed=True, hub_signoff_path=store.signoff_path("hub"), hub_verification_report_path=hub_verification_path, publication_channel_state_path=fixture["channel_state_path"], public_trust_center_verification_path=fixture["ptc_verification_path"], publication_monitoring_verification_path=fixture["monitoring_verification_path"])
+        old_hub_verification = read_json(hub_verification_path)
+        old_hub_verification["zip_sha256"] = "0" * 64
+        old_hub_verification_path = write_json(base / "old-hub-verification-report.json", old_hub_verification)
+        old_verification = verify_trust_operations_hub_package(source_zip, strict=True, require_signed=True, hub_signoff_path=store.signoff_path("hub"), hub_verification_report_path=old_hub_verification_path, publication_channel_state_path=fixture["channel_state_path"], public_trust_center_verification_path=fixture["ptc_verification_path"], publication_monitoring_verification_path=fixture["monitoring_verification_path"])
+        old_signoff = dict(signoff)
+        old_signoff["source"] = dict(old_signoff.get("source") or {})
+        old_signoff["source"]["zip_sha256"] = "1" * 64
+        old_signoff["integrity_hash"] = hub_hash(old_signoff)
+        old_signoff_path = write_json(base / "old-hub-signoff.json", old_signoff)
+        old_signoff_report = verify_trust_operations_hub_package(source_zip, strict=True, require_signed=True, hub_signoff_path=old_signoff_path, hub_verification_report_path=hub_verification_path, publication_channel_state_path=fixture["channel_state_path"], public_trust_center_verification_path=fixture["ptc_verification_path"], publication_monitoring_verification_path=fixture["monitoring_verification_path"])
         signed_export = _v90_blocked(lambda: store.export_report("hub", report_id))
         signed_zip = _v90_blocked(lambda: store.build_zip("hub", report_id))
+        store.signoff_path("hub").unlink()
+        delete_refresh = _v90_blocked(lambda: store.refresh_report("hub", fixture["payload"]))
+        delete_export = _v90_blocked(lambda: store.export_report("hub", report_id))
+        delete_zip = _v90_blocked(lambda: store.build_zip("hub", report_id))
         cr = store.create_change_request("hub", {"change_request_id": "cr", "reason": "Refresh signed Hub evidence."})
         store.approve_change_request("hub", "cr")
         reset = store.reset_signoff("hub", "cr")
@@ -13811,8 +13829,16 @@ def _v90_trust_operations_hub_smoke(root: Path) -> tuple[bool, str]:
         ok = (
             verification.get("status") == "passed"
             and signoff.get("status") == "signed"
+            and _v38_check_status(signed_required_missing, "toh_hub_signoff_required") == "failed"
+            and signed_required.get("status") == "passed"
+            and _v38_check_status(old_zip, "toh_hub_signoff_zip_sha256") == "failed"
+            and _v38_check_status(old_verification, "toh_hub_signoff_verification_report_hash") == "failed"
+            and _v38_check_status(old_signoff_report, "toh_hub_signoff_zip_sha256") == "failed"
             and signed_export
             and signed_zip
+            and delete_refresh
+            and delete_export
+            and delete_zip
             and reset.get("status") == "reset"
             and cr_reuse
             and _v38_check_status(matrix, "toh_readiness_matrix_semantics_match") == "failed"
@@ -13830,7 +13856,9 @@ def _v90_trust_operations_hub_smoke(root: Path) -> tuple[bool, str]:
             and _v38_check_status(critical, "toh_require_publication_monitoring_clean") == "failed"
         )
         return ok, (
-            f"hub={verification.get('status')}, signoff={signoff.get('status')}, signed_mutation={signed_export}/{signed_zip}, reset={reset.get('status')}/{cr_reuse}, "
+            f"hub={verification.get('status')}, signoff={signoff.get('status')}, require_signed={_v38_check_status(signed_required_missing, 'toh_hub_signoff_required')}/{signed_required.get('status')}, "
+            f"signed_binding={_v38_check_status(old_zip, 'toh_hub_signoff_zip_sha256')}/{_v38_check_status(old_verification, 'toh_hub_signoff_verification_report_hash')}/{_v38_check_status(old_signoff_report, 'toh_hub_signoff_zip_sha256')}, "
+            f"signed_mutation={signed_export}/{signed_zip}, deleted_signoff_guard={delete_refresh}/{delete_export}/{delete_zip}, reset={reset.get('status')}/{cr_reuse}, "
             f"matrix_full_resign={_v38_check_status(matrix, 'toh_readiness_matrix_semantics_match')}, blockers_full_resign={_v38_check_status(blockers, 'toh_blocker_register_matches_readiness')}, "
             f"evidence_full_resign={_v38_check_status(evidence, 'toh_readiness_matrix_semantics_match') or _v38_check_status(evidence, 'toh_verification_index_matches_evidence')}, "
             f"duplicate={_v38_check_status(duplicate, 'toh_zip_duplicate_entries')}, dangerous={_v38_check_status(dangerous, 'toh_zip_entry_path_safe')}, backslash={_v38_check_status(backslash, 'toh_zip_entry_path_safe')}, "

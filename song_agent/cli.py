@@ -1083,6 +1083,8 @@ def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for current/revoke checks.")
     verify_parser.add_argument("--public-trust-center-verification", type=Path, default=None, help="External Public Trust Center verification report.")
     verify_parser.add_argument("--publication-monitoring-verification", type=Path, default=None, help="External Publication Monitoring verification report.")
+    verify_parser.add_argument("--hub-signoff", type=Path, default=None, help="External Trust Operations Hub signoff sidecar JSON.")
+    verify_parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report used for signoff.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=256, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
@@ -1175,6 +1177,8 @@ def build_trust_operations_hub_parser() -> argparse.ArgumentParser:
     parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json.")
     parser.add_argument("--public-trust-center-verification", type=Path, default=None, help="External Public Trust Center verification report.")
     parser.add_argument("--publication-monitoring-verification", type=Path, default=None, help="External Publication Monitoring verification report.")
+    parser.add_argument("--hub-signoff", type=Path, default=None, help="External Trust Operations Hub signoff sidecar JSON.")
+    parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report used for signoff.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-ready", action="store_true", help="Verifier requires ready Hub.")
     parser.add_argument("--require-signed", action="store_true", help="Verifier requires Hub signoff summary.")
@@ -2782,6 +2786,8 @@ def _main() -> None:
             publication_channel_state_path=args.publication_channel_state,
             public_trust_center_verification_path=args.public_trust_center_verification,
             publication_monitoring_verification_path=args.publication_monitoring_verification,
+            hub_signoff_path=args.hub_signoff,
+            hub_verification_report_path=args.hub_verification_report,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -4351,6 +4357,8 @@ def _main() -> None:
                     "publication_channel_state_path": args.publication_channel_state,
                     "public_trust_center_verification_path": args.public_trust_center_verification,
                     "publication_monitoring_verification_path": args.publication_monitoring_verification,
+                    "hub_signoff_path": args.hub_signoff,
+                    "hub_verification_report_path": args.hub_verification_report,
                 },
             )
             result["verification"] = verification

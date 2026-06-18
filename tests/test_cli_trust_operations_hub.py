@@ -18,6 +18,8 @@ def test_verify_trust_operations_hub_cli_json_report_out(tmp_path: Path) -> None
     report_id = store.refresh_report(hub["hub_id"], fixture.payload)["hub_report"]["report_id"]
     store.export_report("hub", report_id)
     store.build_zip("hub", report_id)
+    store.verify_zip("hub", report_id, {**fixture.verify_payload, "strict": True, "require_ready": True, "require_current": True, "require_publication_monitoring_clean": True})
+    store.signoff("hub", report_id, {"signed_by": "cli", "reason": "Trust hub CLI accepted."})
     report_out = tmp_path / "hub-verification.json"
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
 
@@ -32,6 +34,7 @@ def test_verify_trust_operations_hub_cli_json_report_out(tmp_path: Path) -> None
             "--strict",
             "--require-ready",
             "--require-current",
+            "--require-signed",
             "--require-publication-monitoring-clean",
             "--publication-channel-state",
             str(fixture.channel_state_path),
@@ -39,6 +42,10 @@ def test_verify_trust_operations_hub_cli_json_report_out(tmp_path: Path) -> None
             str(fixture.ptc_verification_path),
             "--publication-monitoring-verification",
             str(fixture.monitoring_verification_path),
+            "--hub-signoff",
+            str(store.signoff_path("hub")),
+            "--hub-verification-report",
+            str(store.verification_report_path("hub", report_id)),
             "--report-out",
             str(report_out),
         ],

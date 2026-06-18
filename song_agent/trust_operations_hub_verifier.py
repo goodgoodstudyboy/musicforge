@@ -18,6 +18,7 @@ from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
 from song_agent.trust_operations_hub import (
     HUB_EXPORT_ENTRIES,
     TRUST_OPERATIONS_HUB_PACKAGE_TYPE,
+    TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE,
     TRUST_OPERATIONS_SCHEMA_VERSION,
     hub_hash,
     hub_manifest_hash,
@@ -45,6 +46,8 @@ def verify_trust_operations_hub_package(
     publication_channel_state_path: Path | str | None = None,
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
+    hub_signoff_path: Path | str | None = None,
+    hub_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -61,6 +64,8 @@ def verify_trust_operations_hub_package(
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
+        hub_signoff_path=Path(hub_signoff_path) if hub_signoff_path else None,
+        hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -101,6 +106,8 @@ class _HubVerifier:
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
+        hub_signoff_path: Path | None,
+        hub_verification_report_path: Path | None,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -116,6 +123,8 @@ class _HubVerifier:
         self.publication_channel_state_path = publication_channel_state_path
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
+        self.hub_signoff_path = hub_signoff_path
+        self.hub_verification_report_path = hub_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -143,6 +152,8 @@ class _HubVerifier:
         self.external_channel_state: dict[str, Any] = {}
         self.external_ptc_verification: dict[str, Any] = {}
         self.external_monitoring_verification: dict[str, Any] = {}
+        self.external_hub_signoff: dict[str, Any] = {}
+        self.external_hub_verification_report: dict[str, Any] = {}
 
     def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
@@ -330,6 +341,17 @@ class _HubVerifier:
         self._add_exact_check("hub_report", "toh_report_readiness_matches_matrix", {key: report_readiness.get(key) for key in ["row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count"]}, expected_summary, "Hub report readiness summary matches matrix")
 
     def _verify_external_bindings(self) -> None:
+        if self.hub_verification_report_path:
+            self.external_hub_verification_report = _read_json_file(self.hub_verification_report_path)
+        elif self.require_signed or self.hub_signoff_path:
+            self._add_check("external", "toh_hub_verification_report_required", "failed", "blocking", "--require-signed requires the Hub verification report used for signoff.")
+
+        if self.hub_signoff_path:
+            self.external_hub_signoff = _read_json_file(self.hub_signoff_path)
+            self._verify_external_signoff(self.external_hub_signoff)
+        elif self.require_signed:
+            self._add_check("external", "toh_hub_signoff_required", "failed", "blocking", "--require-signed requires an external Hub signoff sidecar.")
+
         if self.publication_channel_state_path:
             self.external_channel_state = _read_json_file(self.publication_channel_state_path)
             expected_hash = publication_channel_state_hash(self.external_channel_state)
@@ -367,11 +389,30 @@ class _HubVerifier:
             critical = int(summary.get("critical_incidents") or summary.get("open_critical_incidents") or 0)
             self._add_check("external", "toh_external_monitoring_no_open_critical_incidents", "passed" if critical == 0 else "failed", "blocking", "External monitoring report has no open critical incidents." if critical == 0 else "External monitoring report has open critical incidents.")
 
+    def _verify_external_signoff(self, signoff: dict[str, Any]) -> None:
+        self._add_exact_check("external", "toh_hub_signoff_package_type", signoff.get("package_type"), TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE, "Hub signoff package_type")
+        self._add_exact_check("external", "toh_hub_signoff_status", signoff.get("status"), "signed", "Hub signoff status")
+        self._add_hash_check("external", "toh_hub_signoff_integrity", signoff.get("integrity_hash"), hub_hash(signoff), "Hub signoff integrity")
+        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        self._add_exact_check("external", "toh_hub_signoff_zip_sha256", source.get("zip_sha256"), self.zip_sha256, "Hub signoff ZIP sha256")
+        self._add_exact_check("external", "toh_hub_signoff_zip_size_bytes", source.get("zip_size_bytes"), self.zip_size_bytes, "Hub signoff ZIP size")
+        self._add_exact_check("external", "toh_hub_signoff_manifest_hash", source.get("manifest_hash"), self.manifest.get("integrity_hash"), "Hub signoff manifest hash")
+        self._add_exact_check("external", "toh_hub_signoff_report_hash", source.get("hub_report_hash"), self.report.get("integrity_hash"), "Hub signoff report hash")
+        report = self.external_hub_verification_report
+        if report:
+            self._add_exact_check("external", "toh_hub_verification_package_type", report.get("package_type"), TRUST_OPERATIONS_HUB_VERIFICATION_PACKAGE_TYPE, "Hub verification package_type")
+            self._add_exact_check("external", "toh_hub_signoff_verification_report_hash", source.get("verification_report_hash"), verification_hash(report), "Hub signoff verification report hash")
+            self._add_exact_check("external", "toh_hub_verification_status", report.get("status"), source.get("verification_status"), "Hub verification status")
+            self._add_exact_check("external", "toh_hub_verification_zip_sha256", report.get("zip_sha256"), self.zip_sha256, "Hub verification ZIP sha256")
+            self._add_exact_check("external", "toh_hub_verification_zip_size_bytes", report.get("zip_size_bytes"), self.zip_size_bytes, "Hub verification ZIP size")
+            self._add_exact_check("external", "toh_hub_verification_manifest_hash", report.get("manifest_hash"), self.manifest.get("integrity_hash"), "Hub verification manifest hash")
+            self._add_exact_check("external", "toh_hub_verification_source_hash", report.get("source_hash"), self.report.get("integrity_hash"), "Hub verification source hash")
+
     def _verify_requirements(self) -> None:
         report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
         ready = self.report.get("status") == "ready" and report_readiness.get("blocked_count") == 0 and report_readiness.get("stale_count") == 0 and report_readiness.get("missing_count") == 0
         self._add_check("requirements", "toh_require_ready", "passed" if ready or not self.require_ready else "failed", "blocking", "Hub is ready." if ready else "Hub is not ready.")
-        signed = self.signoff_summary.get("status") == "signed"
+        signed = self.external_hub_signoff.get("status") == "signed"
         self._add_check("requirements", "toh_require_signed", "passed" if signed or not self.require_signed else "failed", "blocking", "Hub is signed." if signed else "Hub is not signed.")
         critical = int((self.blockers_doc.get("summary") if isinstance(self.blockers_doc.get("summary"), dict) else {}).get("critical_count") or 0)
         self._add_check("requirements", "toh_require_no_critical_blockers", "passed" if critical == 0 or not self.require_no_critical_blockers else "failed", "blocking", "No critical Hub blockers." if critical == 0 else "Hub has critical blockers.")
@@ -401,6 +442,8 @@ class _HubVerifier:
             "verification_summary_index": self.verifications,
             "source_state": self.source_state,
             "signoff_summary": self.signoff_summary,
+            "hub_signoff": self.external_hub_signoff,
+            "hub_verification_report": self.external_hub_verification_report,
         }.items():
             for path, value in _walk_json_values(doc):
                 if _contains_sensitive_text(str(value)):

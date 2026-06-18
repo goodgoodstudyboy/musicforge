@@ -313,6 +313,8 @@ class TrustOperationsHubStore:
             publication_channel_state_path=payload.get("publication_channel_state_path"),
             public_trust_center_verification_path=payload.get("public_trust_center_verification_path"),
             publication_monitoring_verification_path=payload.get("publication_monitoring_verification_path"),
+            hub_signoff_path=payload.get("hub_signoff_path"),
+            hub_verification_report_path=payload.get("hub_verification_report_path"),
         )
         _write_json(self.verification_report_path(hub_id, report_id), report)
         return report
@@ -321,7 +323,7 @@ class TrustOperationsHubStore:
         with self.lock:
             now = now or _now()
             payload = payload or {}
-            if self.signoff_path(hub_id).exists():
+            if self.signoff_path(hub_id).exists() or self._signoff_state(hub_id)["status"] == "signed":
                 raise TrustOperationsHubStateError("Trust Operations Hub is already signed.")
             docs = self._read_report_docs(hub_id, report_id)
             verification = _read_json_default(self.verification_report_path(hub_id, report_id), default={})
@@ -330,6 +332,8 @@ class TrustOperationsHubStore:
                 raise TrustOperationsHubStateError("Trust Operations Hub verification report is required before signoff.")
             if verification.get("zip_sha256") != _sha256(zip_path) or verification.get("manifest_hash") != _read_json_default(self.export_dir(hub_id, report_id) / "trust-operations-hub-manifest.json", default={}).get("integrity_hash"):
                 raise TrustOperationsHubStateError("Trust Operations Hub verification is stale.")
+            if self._signoff_state(hub_id)["status"] == "signed":
+                raise TrustOperationsHubStateError("Trust Operations Hub is already signed.")
             self._assert_external_sources_current(docs, self._read_source_paths(hub_id, report_id))
             force = bool(payload.get("force", False))
             if verification.get("status") == "failed":
@@ -350,7 +354,14 @@ class TrustOperationsHubStore:
                 "reason": sanitize_sensitive_text(str(payload.get("reason") or "Trust Operations Hub is ready.")[:500]),
                 "force": force,
                 "override_reason": override_reason if force else None,
-                "source": {"hub_report_hash": docs["hub_report"].get("integrity_hash"), "manifest_hash": verification.get("manifest_hash"), "zip_sha256": verification.get("zip_sha256"), "verification_report_hash": verification_hash(verification)},
+                "source": {
+                    "hub_report_hash": docs["hub_report"].get("integrity_hash"),
+                    "manifest_hash": verification.get("manifest_hash"),
+                    "zip_sha256": verification.get("zip_sha256"),
+                    "zip_size_bytes": verification.get("zip_size_bytes"),
+                    "verification_report_hash": verification_hash(verification),
+                    "verification_status": verification.get("status"),
+                },
             }
             signoff["integrity_hash"] = hub_hash(signoff)
             _write_json(self.signoff_path(hub_id), signoff)
@@ -389,9 +400,12 @@ class TrustOperationsHubStore:
     def reset_signoff(self, hub_id: str, change_request_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or _now()
+            state = self._signoff_state(hub_id)
             signoff = _read_json_default(self.signoff_path(hub_id), default={})
-            if not signoff:
+            if state["status"] != "signed":
                 raise TrustOperationsHubStateError("Trust Operations Hub is not signed.")
+            if not signoff:
+                signoff = {"integrity_hash": state.get("signoff_hash")}
             cr = self._read_change_request(hub_id, change_request_id)
             if cr.get("integrity_hash") != hub_hash(cr):
                 raise TrustOperationsHubStateError("Change request integrity failed.")
@@ -403,7 +417,8 @@ class TrustOperationsHubStore:
             cr["integrity_hash"] = hub_hash(cr)
             _write_json(self.change_request_path(hub_id, change_request_id), cr)
             _append_jsonl(self.signoff_history_path(hub_id), {"event_type": "reset", "created_at": now, "signoff_hash": signoff.get("integrity_hash"), "change_request_id": change_request_id, "change_request_hash": cr["integrity_hash"]})
-            os.remove(_fs_path(self.signoff_path(hub_id)))
+            if self.signoff_path(hub_id).exists():
+                os.remove(_fs_path(self.signoff_path(hub_id)))
             self._append_event(hub_id, "hub_signoff_reset", {"change_request_id": change_request_id}, now=now)
             return {"status": "reset", "change_request": _sanitize(cr)}
 
@@ -548,8 +563,40 @@ class TrustOperationsHubStore:
                     raise TrustOperationsHubStateError("Trust Operations Hub external verification report changed. Refresh before export.")
 
     def _ensure_unsigned(self, hub_id: str) -> None:
-        if self.signoff_path(hub_id).exists():
+        if self._signoff_state(hub_id)["status"] == "signed":
             raise TrustOperationsHubStateError("Signed Trust Operations Hub cannot be modified. Reset signoff with an approved change request first.")
+
+    def _signoff_state(self, hub_id: str) -> dict[str, Any]:
+        state: dict[str, Any] = {"status": "unsigned", "signoff_hash": None, "change_request_id": None}
+        for row in _read_jsonl(self.signoff_history_path(hub_id)):
+            event_type = str(row.get("event_type") or "")
+            if event_type == "signed" and row.get("signoff_hash"):
+                state = {"status": "signed", "signoff_hash": row.get("signoff_hash"), "report_id": row.get("report_id")}
+            elif event_type == "reset" and state.get("status") == "signed":
+                if row.get("signoff_hash") != state.get("signoff_hash"):
+                    continue
+                change_request_id = str(row.get("change_request_id") or "")
+                try:
+                    cr = self._read_change_request(hub_id, change_request_id)
+                except TrustOperationsHubError:
+                    continue
+                if (
+                    cr.get("status") == "applied"
+                    and cr.get("applied_at")
+                    and cr.get("applied_signoff_hash") == row.get("signoff_hash")
+                    and cr.get("integrity_hash") == hub_hash(cr)
+                    and cr.get("integrity_hash") == row.get("change_request_hash")
+                ):
+                    state = {"status": "reset", "signoff_hash": row.get("signoff_hash"), "change_request_id": change_request_id}
+        if state.get("status") == "signed":
+            signoff = _read_json_default(self.signoff_path(hub_id), default={})
+            if signoff and signoff.get("integrity_hash") != state.get("signoff_hash"):
+                state["signoff_file_status"] = "mismatch"
+            elif signoff:
+                state["signoff_file_status"] = "present"
+            else:
+                state["signoff_file_status"] = "missing"
+        return state
 
     def _signoff_summary(self, hub_id: str) -> dict[str, Any]:
         signoff = _read_json_default(self.signoff_path(hub_id), default={})

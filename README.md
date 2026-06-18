@@ -799,11 +799,15 @@ manual action queue, and fixed-structure Hub ZIP. Hub verification never relies
 only on the package's own summary for current-state gates: `--require-current`
 must be paired with the external publication channel state and the current
 verification reports used to build the Hub.
+Signed Hub verification is also an external-evidence gate: use
+`--require-signed` with both the Hub `signoff.json` sidecar and the Hub
+verification report that was written before signoff.
 
 ```powershell
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create --refresh --export --zip --verify --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
 python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --signoff --signed-by reviewer --reason "Trust Operations Hub accepted." --json
+python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-signed --hub-signoff path\to\signoff.json --hub-verification-report path\to\hub-verification-report.json --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create-change-request --change-request-id toh-cr-000001 --reason "Approved Hub evidence refresh." --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --approve-change-request toh-cr-000001 --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --reset-signoff --change-request-id toh-cr-000001 --json

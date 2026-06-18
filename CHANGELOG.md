@@ -1,5 +1,16 @@
 # Changelog
 
+## v9.0.1 - 2026-06-18
+
+### Fixed
+- Trust Operations Hub signed immutability now uses `signoff-history.jsonl`, so deleting `signoff.json` no longer unlocks refresh/export/ZIP mutation.
+- `verify-trust-operations-hub-package --require-signed` now requires an external Hub signoff sidecar and the Hub verification report used for signoff, binding signed evidence to the current ZIP sha256, ZIP size, manifest hash, Hub report hash, and verification report hash.
+- release-check v9 smoke now covers deleted-signoff mutation bypass, missing signed sidecar failure, valid signed sidecar success, old ZIP rejection, and old verification/signoff rejection.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_hub.py tests\test_cli_trust_operations_hub.py tests\test_release_check.py::test_v90_trust_operations_hub_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.0.0 - 2026-06-18
 
 ### Added

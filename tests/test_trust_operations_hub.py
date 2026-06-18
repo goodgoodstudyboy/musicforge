@@ -38,6 +38,62 @@ def test_trust_operations_hub_roundtrip_signoff_and_reset(tmp_path: Path) -> Non
     assert reuse is True
 
 
+def test_trust_operations_hub_signed_state_survives_deleted_signoff_file(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    store = TrustOperationsHubStore(tmp_path / ".musicforge" / "trust-operations")
+    hub = store.create_hub({"hub_id": "hub"})
+    report_id = store.refresh_report(hub["hub_id"], fixture.payload)["hub_report"]["report_id"]
+    store.export_report("hub", report_id)
+    store.build_zip("hub", report_id)
+    store.verify_zip("hub", report_id, {**fixture.verify_payload, "strict": True, "require_ready": True, "require_current": True})
+    store.signoff("hub", report_id, {"signed_by": "qa", "reason": "Trust hub accepted."})
+    store.signoff_path("hub").unlink()
+
+    assert _blocked(lambda: store.refresh_report("hub", fixture.payload))
+    assert _blocked(lambda: store.export_report("hub", report_id))
+    assert _blocked(lambda: store.build_zip("hub", report_id))
+
+
+def test_trust_operations_hub_require_signed_uses_external_sidecar(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    store = TrustOperationsHubStore(tmp_path / ".musicforge" / "trust-operations")
+    hub = store.create_hub({"hub_id": "hub"})
+    report_id = store.refresh_report(hub["hub_id"], fixture.payload)["hub_report"]["report_id"]
+    store.export_report("hub", report_id)
+    store.build_zip("hub", report_id)
+    zip_path = store.zip_path("hub", report_id)
+    pre_sign = store.verify_zip("hub", report_id, {**fixture.verify_payload, "strict": True, "require_ready": True, "require_current": True})
+    signoff = store.signoff("hub", report_id, {"signed_by": "qa", "reason": "Trust hub accepted."})
+
+    missing = verify_trust_operations_hub_package(zip_path, strict=True, require_signed=True)
+    hub_verification_path = store.verification_report_path("hub", report_id)
+    signed = verify_trust_operations_hub_package(zip_path, strict=True, require_signed=True, hub_signoff_path=store.signoff_path("hub"), hub_verification_report_path=hub_verification_path, **fixture.verify_kwargs())
+    old_zip = _rewrite_zip(zip_path, tmp_path / "old-zip.zip", lambda docs: docs.__setitem__("README.txt", docs["README.txt"] + b"\nold zip\n"))
+    old_zip_report = verify_trust_operations_hub_package(old_zip, strict=True, require_signed=True, hub_signoff_path=store.signoff_path("hub"), hub_verification_report_path=hub_verification_path, **fixture.verify_kwargs())
+    old_verification = read_json(hub_verification_path)
+    old_verification["zip_sha256"] = "0" * 64
+    old_verification_path = write_json(tmp_path / "old-hub-verification-report.json", old_verification)
+    old_verification_report = verify_trust_operations_hub_package(zip_path, strict=True, require_signed=True, hub_signoff_path=store.signoff_path("hub"), hub_verification_report_path=old_verification_path, **fixture.verify_kwargs())
+    forged_signoff = read_json(store.signoff_path("hub"))
+    forged_signoff["source"]["verification_report_hash"] = "0" * 64
+    forged_signoff["integrity_hash"] = hub_hash(forged_signoff)
+    forged_signoff_path = write_json(tmp_path / "forged-signoff-verification.json", forged_signoff)
+    forged_signoff_report = verify_trust_operations_hub_package(zip_path, strict=True, require_signed=True, hub_signoff_path=forged_signoff_path, hub_verification_report_path=hub_verification_path, **fixture.verify_kwargs())
+    old_signoff = dict(signoff)
+    old_signoff["source"]["zip_sha256"] = "1" * 64
+    old_signoff["integrity_hash"] = hub_hash(old_signoff)
+    old_signoff_path = write_json(tmp_path / "old-signoff.json", old_signoff)
+    old_signoff_report = verify_trust_operations_hub_package(zip_path, strict=True, require_signed=True, hub_signoff_path=old_signoff_path, hub_verification_report_path=hub_verification_path, **fixture.verify_kwargs())
+
+    assert pre_sign["status"] == "passed"
+    assert _has_blocker(missing, "toh_hub_signoff_required")
+    assert signed["status"] == "passed", signed.get("blockers")
+    assert _has_blocker(old_zip_report, "toh_hub_signoff_zip_sha256")
+    assert _has_blocker(old_verification_report, "toh_hub_signoff_verification_report_hash")
+    assert _has_blocker(forged_signoff_report, "toh_hub_signoff_verification_report_hash")
+    assert _has_blocker(old_signoff_report, "toh_hub_signoff_zip_sha256")
+
+
 def test_trust_operations_hub_external_revoke_blocks_export_and_verify(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     store = TrustOperationsHubStore(tmp_path / ".musicforge" / "trust-operations")
@@ -111,6 +167,13 @@ class _Fixture:
             "publication_channel_state_path": channel_state_path,
             "public_trust_center_verification_path": ptc_verification_path,
             "publication_monitoring_verification_path": monitoring_verification_path,
+        }
+
+    def verify_kwargs(self) -> dict[str, Path]:
+        return {
+            "publication_channel_state_path": self.channel_state_path,
+            "public_trust_center_verification_path": self.ptc_verification_path,
+            "publication_monitoring_verification_path": self.monitoring_verification_path,
         }
 
 
