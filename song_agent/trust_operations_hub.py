@@ -400,6 +400,7 @@ class TrustOperationsHubStore:
             require_no_critical_blockers=bool(payload.get("require_no_critical_blockers", False)),
             require_publication_monitoring_clean=bool(payload.get("require_publication_monitoring_clean", False)),
             require_delivery_ready=bool(payload.get("require_delivery_ready", False)),
+            require_incident_closeout=bool(payload.get("require_incident_closeout", False)),
             publication_channel_state_path=payload.get("publication_channel_state_path"),
             public_trust_center_verification_path=payload.get("public_trust_center_verification_path"),
             publication_monitoring_verification_path=payload.get("publication_monitoring_verification_path"),
@@ -415,6 +416,8 @@ class TrustOperationsHubStore:
             release_operations_verification_paths=payload.get("release_operations_verification_paths"),
             hub_signoff_path=payload.get("hub_signoff_path"),
             hub_verification_report_path=payload.get("hub_verification_report_path"),
+            incident_board_package_path=payload.get("incident_board_package_path"),
+            incident_board_verification_report_path=payload.get("incident_board_verification_report_path"),
         )
         _write_json(self.verification_report_path(hub_id, report_id), report)
         return report

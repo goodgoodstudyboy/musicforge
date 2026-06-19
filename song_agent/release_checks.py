@@ -14065,6 +14065,147 @@ def _v91_runbook_blocked(fn) -> bool:
     return False
 
 
+def _v92_trust_operations_hub_incident_response_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v92-trust-operations-incidents-")).resolve()
+    try:
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_incident_verifier import verify_trust_operations_hub_incident_package
+        from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStore
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+
+        fixture = _v90_fixture(base)
+        delivery = _v91_delivery_fixture(base)
+        second_distribution = _v91_copy_delivery_report(delivery["distribution_verification_path"], base / "target-002-verification.json", "target-002", "8" * 64)
+        store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        store.create_hub({"hub_id": "hub"})
+        payload = {**fixture["payload"], **delivery["payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        report_id = str(store.refresh_report("hub", payload)["hub_report"]["report_id"])
+        store.export_report("hub", report_id)
+        store.build_zip("hub", report_id)
+        hub_zip = store.zip_path("hub", report_id)
+        failed_hub_verification = store.verify_zip(
+            "hub",
+            report_id,
+            {
+                **fixture["verify_payload"],
+                **delivery["verify_payload"],
+                "strict": True,
+                "require_delivery_ready": True,
+                "require_current": True,
+            },
+        )
+        incident_store = TrustOperationsIncidentStore(base / ".musicforge" / "trust-operations-incidents", hub_store=store)
+        first_board = incident_store.refresh_board("hub")["incident_board"]
+        second_board = incident_store.refresh_board("hub")["incident_board"]
+        incidents = incident_store.list_incidents("hub")
+        incident = incidents[0] if incidents else {}
+        incident_id = str(incident.get("incident_id") or "")
+        incident_store.triage_incident("hub", incident_id, {"severity": "high", "owner": "release-check", "notes": "Close v9.2 delivery verification coverage incident."})
+        incident_store.create_plan("hub", incident_id)
+        incident_store.add_evidence("hub", incident_id, {"component_type": incident.get("detected_from", {}).get("component_type"), "component_id": incident.get("detected_from", {}).get("component_id"), "report": read_json(second_distribution)})
+        fix = incident_store.verify_fix("hub", incident_id)
+        closeout = incident_store.close_incident("hub", incident_id, {"closed_by": "release-check", "reason": "Second distribution target verification report supplied."})
+        incident_store.export_board("hub")
+        incident_store.build_zip("hub")
+        incident_zip = incident_store.zip_path("hub")
+        incident_verification = incident_store.verify_zip("hub", {"strict": True, "require_no_open_blocking": True, "require_current_hub": True, "hub_verification_report_path": store.verification_report_path("hub", report_id)})
+        hub_gate_missing = verify_trust_operations_hub_package(hub_zip, strict=True, require_incident_closeout=True, **fixture["verify_payload"], **delivery["verify_payload"])
+        full_delivery_verify_payload = {**delivery["verify_payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify_payload.pop("distribution_verification_path", None)
+        hub_gate = verify_trust_operations_hub_package(
+            hub_zip,
+            strict=True,
+            require_incident_closeout=True,
+            incident_board_package_path=incident_zip,
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            hub_verification_report_path=store.verification_report_path("hub", report_id),
+            **fixture["verify_payload"],
+            **full_delivery_verify_payload,
+        )
+        incident_full_resign = verify_trust_operations_hub_incident_package(_v76_rewrite_zip(incident_zip, base / "incident-full-resign.zip", _v92_tamper_closed_incident_full_resign), strict=True, require_no_open_blocking=True, hub_verification_report_path=store.verification_report_path("hub", report_id), require_current_hub=True)
+        extra = verify_trust_operations_hub_incident_package(_v38_rewrite_zip(incident_zip, base / "incident-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
+        backslash = verify_trust_operations_hub_incident_package(_v38_backslash_entry_zip(base / "incident-backslash.zip"), strict=True)
+        duplicate = verify_trust_operations_hub_incident_package(_v43_duplicate_submission_zip(incident_zip, base / "incident-duplicate.zip"), strict=True)
+        redaction = verify_trust_operations_hub_incident_package(_v38_rewrite_zip(incident_zip, base / "incident-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+        missing_current = verify_trust_operations_hub_incident_package(incident_zip, strict=True, require_current_hub=True)
+        tampered_hub_report = read_json(store.verification_report_path("hub", report_id))
+        tampered_hub_report["zip_sha256"] = "0" * 64
+        tampered_hub_report_path = write_json(base / "tampered-hub-verification.json", tampered_hub_report)
+        stale_hub = verify_trust_operations_hub_incident_package(incident_zip, strict=True, require_current_hub=True, hub_verification_report_path=tampered_hub_report_path)
+
+        ok = (
+            failed_hub_verification.get("status") == "failed"
+            and first_board.get("summary", {}).get("blocking_open_count") == 1
+            and second_board.get("summary", {}).get("total_incidents") == 1
+            and fix.get("status") == "passed"
+            and closeout.get("status") == "passed"
+            and incident_verification.get("status") == "passed"
+            and _v38_check_status(hub_gate_missing, "toh_incident_board_package_required") == "failed"
+            and hub_gate.get("status") == "passed"
+            and _v38_check_status(incident_full_resign, "tohi_incident_status_matches_events") == "failed"
+            and _v38_check_status(extra, "tohi_zip_no_extra_entries") == "failed"
+            and _v38_check_status(backslash, "tohi_zip_entry_path_safe") == "failed"
+            and _v38_check_status(duplicate, "tohi_zip_no_duplicate_entries") == "failed"
+            and _v38_check_status(redaction, "tohi_redaction_scan") == "failed"
+            and _v38_check_status(missing_current, "tohi_hub_verification_required") == "failed"
+            and _v38_check_status(stale_hub, "tohi_hub_verification_zip_sha256") == "failed"
+        )
+        return ok, (
+            f"hub_missing_second={failed_hub_verification.get('status')}, incident_count={second_board.get('summary', {}).get('total_incidents')}, "
+            f"closeout={closeout.get('status')}, incident_verify={incident_verification.get('status')}, hub_gate_missing={_v38_check_status(hub_gate_missing, 'toh_incident_board_package_required')}, hub_gate={hub_gate.get('status')}, "
+            f"incident_full_resign={_v38_check_status(incident_full_resign, 'tohi_incident_status_matches_events')}, extra={_v38_check_status(extra, 'tohi_zip_no_extra_entries')}, backslash={_v38_check_status(backslash, 'tohi_zip_entry_path_safe')}, duplicate={_v38_check_status(duplicate, 'tohi_zip_no_duplicate_entries')}, "
+            f"redaction={_v38_check_status(redaction, 'tohi_redaction_scan')}, missing_current={_v38_check_status(missing_current, 'tohi_hub_verification_required')}, stale_hub={_v38_check_status(stale_hub, 'tohi_hub_verification_zip_sha256')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v92_tamper_closed_incident_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub_incidents import incident_hash, incident_manifest_hash
+
+    board = _v74_read_json_doc(docs, "incident-board.json")
+    report = _v74_read_json_doc(docs, "incident-board-report.json")
+    incidents_doc = _v74_read_json_doc(docs, "incidents.json")
+    manifest = _v74_read_json_doc(docs, "trust-operations-incident-manifest.json")
+    for incident in incidents_doc.get("incidents", []) if isinstance(incidents_doc.get("incidents"), list) else []:
+        if isinstance(incident, dict):
+            incident["status"] = "open"
+            incident["blocking"] = True
+            incident["integrity_hash"] = incident_hash(incident)
+            break
+    for doc in (board, report):
+        summary = doc.setdefault("summary", {})
+        summary["open_count"] = 1
+        summary["blocking_open_count"] = 1
+        summary["ready_for_hub_signoff"] = False
+        doc["status"] = "blocked"
+    board["integrity_hash"] = incident_hash(board)
+    report.setdefault("source", {})["board_hash"] = board["integrity_hash"]
+    report["integrity_hash"] = incident_hash(report)
+    incidents_doc["integrity_hash"] = incident_hash(incidents_doc)
+    docs["incident-board.json"] = _v74_json_doc(board)
+    docs["incident-board-report.json"] = _v74_json_doc(report)
+    docs["incidents.json"] = _v74_json_doc(incidents_doc)
+    _v92_sync_manifest_file(manifest, "incident-board.json", docs["incident-board.json"])
+    _v92_sync_manifest_file(manifest, "incident-board-report.json", docs["incident-board-report.json"])
+    _v92_sync_manifest_file(manifest, "incidents.json", docs["incidents.json"])
+    manifest.setdefault("integrity", {})["board_hash"] = board["integrity_hash"]
+    manifest.setdefault("integrity", {})["report_hash"] = report["integrity_hash"]
+    manifest["integrity_hash"] = incident_manifest_hash(manifest)
+    docs["trust-operations-incident-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v92_sync_manifest_file(manifest: dict[str, Any], path: str, data: bytes) -> None:
+    for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
+        if isinstance(item, dict) and item.get("path") == path:
+            item["size_bytes"] = len(data)
+            item["sha256"] = hashlib.sha256(data).hexdigest()
+
+
 class _V89DummyPublicationStore:
     def __init__(self, root: Path) -> None:
         from song_agent.public_trust_center_publication import publication_channel_state_hash

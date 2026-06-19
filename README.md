@@ -813,6 +813,11 @@ Trust Operations Hub Runbook turns Hub blockers and next steps into a safe local
 queue. Only refresh-free Hub export, ZIP, and verify actions are automated;
 signoff, reset, submit, accept, provider, and manual review actions remain
 manual-required.
+Trust Operations Hub Incidents turn Hub blockers and failed delivery verification
+checks into auditable remediation records. Incident evidence must be uploaded as
+JSON content, never by `source_path`; closeout exports include the raw event
+chain and are verified before they can satisfy the Hub
+`--require-incident-closeout` gate.
 
 ```powershell
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create --refresh --export --zip --verify --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
@@ -822,6 +827,10 @@ python -m song_agent.cli trust-operations-hub --hub-id hub-default --signoff --s
 python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-signed --hub-signoff path\to\signoff.json --hub-verification-report path\to\hub-verification-report.json --json
 python -m song_agent.cli trust-operations-hub-runbook --hub-id hub-default --report-id trust-hub-report-000001 --create --run-safe --export --zip --verify --strict --require-completed --require-no-blocked --json
 python -m song_agent.cli verify-trust-operations-hub-runbook-package path\to\trust-operations-hub-runbook.zip --strict --require-completed --require-no-blocked --json
+python -m song_agent.cli trust-operations-hub-incidents --hub-id hub-default --refresh --list --json
+python -m song_agent.cli trust-operations-hub-incidents --hub-id hub-default --incident-id inc-000001 --triage --create-plan --evidence-file path\to\verification-report.json --verify-fix --close --export --zip --verify --strict --require-no-open-blocking --hub-verification-report path\to\hub-verification-report.json --json
+python -m song_agent.cli verify-trust-operations-hub-incident-package path\to\trust-operations-incident-board.zip --strict --require-no-open-blocking --require-current-hub --hub-verification-report path\to\hub-verification-report.json --json
+python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-delivery-ready --require-incident-closeout --incident-board-package path\to\trust-operations-incident-board.zip --incident-board-verification-report path\to\incident-verification-report.json --hub-verification-report path\to\hub-verification-report.json --release-verification path\to\release-verification.json --distribution-verification path\to\distribution-verification.json --submission-verification path\to\submission-verification.json --submission-evidence-verification path\to\submission-evidence-verification.json --release-operations-verification path\to\operations-verification.json --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create-change-request --change-request-id toh-cr-000001 --reason "Approved Hub evidence refresh." --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --approve-change-request toh-cr-000001 --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --reset-signoff --change-request-id toh-cr-000001 --json

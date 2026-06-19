@@ -45,6 +45,7 @@ def verify_trust_operations_hub_package(
     require_no_critical_blockers: bool = False,
     require_publication_monitoring_clean: bool = False,
     require_delivery_ready: bool = False,
+    require_incident_closeout: bool = False,
     publication_channel_state_path: Path | str | None = None,
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
@@ -60,6 +61,8 @@ def verify_trust_operations_hub_package(
     release_operations_verification_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     hub_signoff_path: Path | str | None = None,
     hub_verification_report_path: Path | str | None = None,
+    incident_board_package_path: Path | str | None = None,
+    incident_board_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -74,6 +77,7 @@ def verify_trust_operations_hub_package(
         require_no_critical_blockers=require_no_critical_blockers,
         require_publication_monitoring_clean=require_publication_monitoring_clean,
         require_delivery_ready=require_delivery_ready,
+        require_incident_closeout=require_incident_closeout,
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
@@ -84,6 +88,8 @@ def verify_trust_operations_hub_package(
         release_operations_verification_paths=_combine_paths(release_operations_verification_paths, release_operations_verification_path),
         hub_signoff_path=Path(hub_signoff_path) if hub_signoff_path else None,
         hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
+        incident_board_package_path=Path(incident_board_package_path) if incident_board_package_path else None,
+        incident_board_verification_report_path=Path(incident_board_verification_report_path) if incident_board_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -122,6 +128,7 @@ class _HubVerifier:
         require_no_critical_blockers: bool,
         require_publication_monitoring_clean: bool,
         require_delivery_ready: bool,
+        require_incident_closeout: bool,
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
@@ -132,6 +139,8 @@ class _HubVerifier:
         release_operations_verification_paths: list[Path],
         hub_signoff_path: Path | None,
         hub_verification_report_path: Path | None,
+        incident_board_package_path: Path | None,
+        incident_board_verification_report_path: Path | None,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -145,6 +154,7 @@ class _HubVerifier:
         self.require_no_critical_blockers = require_no_critical_blockers
         self.require_publication_monitoring_clean = require_publication_monitoring_clean
         self.require_delivery_ready = require_delivery_ready
+        self.require_incident_closeout = require_incident_closeout
         self.publication_channel_state_path = publication_channel_state_path
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
@@ -157,6 +167,8 @@ class _HubVerifier:
         }
         self.hub_signoff_path = hub_signoff_path
         self.hub_verification_report_path = hub_verification_report_path
+        self.incident_board_package_path = incident_board_package_path
+        self.incident_board_verification_report_path = incident_board_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -191,6 +203,7 @@ class _HubVerifier:
         self.external_delivery_verifications: dict[str, list[dict[str, Any]]] = {}
         self.external_hub_signoff: dict[str, Any] = {}
         self.external_hub_verification_report: dict[str, Any] = {}
+        self.external_incident_verification_report: dict[str, Any] = {}
 
     def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
@@ -451,6 +464,7 @@ class _HubVerifier:
                 self._verify_external_delivery_reports(component_type, expected_rows, reports, "toh_external_" + component_type)
             elif self.require_delivery_ready or (self.require_current and expected_rows):
                 self._add_check("external", "toh_external_" + component_type + "_required", "failed", "blocking", f"Current delivery verification requires external {component_type} report.")
+        self._verify_external_incidents()
 
     def _verify_external_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
         expected = _evidence_by_type(self.evidence, component_type)
@@ -508,6 +522,32 @@ class _HubVerifier:
             self._add_exact_check("external", "toh_hub_verification_manifest_hash", report.get("manifest_hash"), self.manifest.get("integrity_hash"), "Hub verification manifest hash")
             self._add_exact_check("external", "toh_hub_verification_source_hash", report.get("source_hash"), self.report.get("integrity_hash"), "Hub verification source hash")
 
+    def _verify_external_incidents(self) -> None:
+        if not (self.require_incident_closeout or self.incident_board_package_path or self.incident_board_verification_report_path):
+            return
+        if not self.incident_board_package_path:
+            self._add_check("external", "toh_incident_board_package_required", "failed", "blocking", "Incident closeout requires an external Incident Board ZIP.")
+            return
+        if not self.incident_board_verification_report_path:
+            self._add_check("external", "toh_incident_board_verification_required", "failed", "blocking", "Incident closeout requires an external Incident Board verification report.")
+            return
+        report = _read_json_file(self.incident_board_verification_report_path)
+        self.external_incident_verification_report = report
+        zip_path = self.incident_board_package_path
+        zip_sha256 = _sha256_file(zip_path) if zip_path.exists() else None
+        zip_size = os.stat(_fs_path(zip_path)).st_size if zip_path.exists() else None
+        self._add_exact_check("external", "toh_incident_verification_status", report.get("status"), "passed", "Incident verification status")
+        self._add_exact_check("external", "toh_incident_verification_zip_sha256", report.get("zip_sha256"), zip_sha256, "Incident verification ZIP sha256")
+        self._add_exact_check("external", "toh_incident_verification_zip_size_bytes", report.get("zip_size_bytes"), zip_size, "Incident verification ZIP size")
+        self._add_exact_check("external", "toh_incident_verification_hub_report_hash", report.get("hub_report_hash"), self.report.get("integrity_hash"), "Incident package Hub report hash")
+        hub_report_hash = None
+        if self.external_hub_verification_report:
+            hub_report_hash = verification_hash(self.external_hub_verification_report)
+        self._add_exact_check("external", "toh_incident_verification_hub_verification_hash", report.get("hub_verification_report_hash"), hub_report_hash, "Incident package Hub verification hash")
+        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        self._add_check("external", "toh_incident_verification_no_open_blocking", "passed" if int(summary.get("blocking_open_count") or 0) == 0 else "failed", "blocking", "Incident package has no open blocking incidents." if int(summary.get("blocking_open_count") or 0) == 0 else "Incident package has open blocking incidents.")
+        self._add_check("external", "toh_incident_verification_no_stale", "passed" if int(summary.get("stale_count") or 0) == 0 else "failed", "blocking", "Incident package has no stale incidents." if int(summary.get("stale_count") or 0) == 0 else "Incident package has stale incidents.")
+
     def _verify_requirements(self) -> None:
         report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
         ready = self.report.get("status") == "ready" and report_readiness.get("blocked_count") == 0 and report_readiness.get("stale_count") == 0 and report_readiness.get("missing_count") == 0
@@ -525,6 +565,8 @@ class _HubVerifier:
         expected_types = {str(spec["component_type"]) for spec in DELIVERY_VERIFICATION_COMPONENTS}
         delivery_ready = bool(delivery_rows) and expected_types.issubset(present_types) and delivery_summary.get("blocked_count") == 0 and delivery_summary.get("stale_count") == 0 and delivery_summary.get("missing_count") == 0
         self._add_check("requirements", "toh_require_delivery_ready", "passed" if delivery_ready or not self.require_delivery_ready else "failed", "blocking", "Delivery evidence is ready." if delivery_ready else "Delivery evidence is not ready.")
+        incident_ready = self.external_incident_verification_report.get("status") == "passed"
+        self._add_check("requirements", "toh_require_incident_closeout", "passed" if incident_ready or not self.require_incident_closeout else "failed", "blocking", "Incident closeout evidence is passed." if incident_ready else "Incident closeout evidence is missing or failed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         findings: list[dict[str, Any]] = []

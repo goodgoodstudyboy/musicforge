@@ -1,5 +1,21 @@
 # Changelog
 
+## v9.2.0 - 2026-06-19
+
+### Added
+- Trust Operations Hub Incident Board for turning Hub blockers and failed delivery verification checks into triage, remediation plan, evidence, fix verification, closeout, export, ZIP, and offline verification records.
+- `trust-operations-hub-incidents` CLI for refresh/list/triage/plan/evidence/verify-fix/close/export/ZIP/verify workflows.
+- `verify-trust-operations-hub-incident-package` CLI with fixed ZIP structure, event-chain status rebuild, closeout evidence checks, external Hub verification binding, redaction scan, and ZIP safety checks.
+- `verify-trust-operations-hub-package --require-incident-closeout` for binding Hub signoff readiness to a current Incident Board package and verification report.
+- release-check `v92.trust_operations_hub_incident_response_smoke`.
+
+### Fixed
+- Trust Operations Incident Board refresh is idempotent by source fingerprint and no longer creates duplicate incidents for the same unresolved Hub blocker.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_hub_incidents.py tests\test_cli_trust_operations_hub_incidents.py tests\test_server_trust_operations_hub_incidents.py tests\test_release_check.py::test_v92_trust_operations_hub_incident_response_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.1.1 - 2026-06-19
 
 ### Fixed

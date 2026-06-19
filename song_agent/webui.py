@@ -3760,6 +3760,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-runbook-zip" type="button">Build Runbook ZIP</button>
           <button class="secondary" id="trust-operations-runbook-verify" type="button">Verify Runbook</button>
         </div>
+        <div class="panel-title subhead"><span>Trust Operations Incidents</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-incidents-refresh" type="button">Refresh Incidents</button>
+          <button class="secondary" id="trust-operations-incidents-triage" type="button">Triage Incident</button>
+          <button class="secondary" id="trust-operations-incidents-plan" type="button">Create Remediation Plan</button>
+          <button class="secondary" id="trust-operations-incidents-evidence" type="button">Add Evidence</button>
+          <button class="secondary" id="trust-operations-incidents-close" type="button">Close Incident</button>
+          <button class="secondary" id="trust-operations-incidents-export" type="button">Export Incident Board</button>
+          <button class="secondary" id="trust-operations-incidents-zip" type="button">Build Incident ZIP</button>
+          <button class="secondary" id="trust-operations-incidents-verify" type="button">Verify Incident ZIP</button>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
