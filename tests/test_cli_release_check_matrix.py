@@ -24,6 +24,7 @@ def test_release_check_cli_list_json() -> None:
     assert "v79.attestation_transparency_acknowledgement_smoke" in ids
     assert "v80.public_trust_center_smoke" in ids
     assert "v90.trust_operations_hub_smoke" in ids
+    assert "v91.trust_operations_hub_delivery_runbook_smoke" in ids
 
 
 def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
@@ -83,7 +84,7 @@ def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
 
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
-    assert [item["check_id"] for item in payload["checks"]] == ["v90.trust_operations_hub_smoke"]
+    assert [item["check_id"] for item in payload["checks"]] == ["v90.trust_operations_hub_smoke", "v91.trust_operations_hub_delivery_runbook_smoke"]
 
 
 def test_release_check_cli_empty_selection_fails() -> None:

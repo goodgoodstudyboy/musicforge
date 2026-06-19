@@ -3752,6 +3752,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-hub-reset" type="button">Reset Hub Signoff</button>
           <a class="button-link secondary" href="/api/trust-operations/hubs/default.zip">Download Hub ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Trust Operations Runbook</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-runbook-create" type="button">Create Runbook</button>
+          <button class="secondary" id="trust-operations-runbook-run-safe" type="button">Run Safe Actions</button>
+          <button class="secondary" id="trust-operations-runbook-export" type="button">Export Runbook</button>
+          <button class="secondary" id="trust-operations-runbook-zip" type="button">Build Runbook ZIP</button>
+          <button class="secondary" id="trust-operations-runbook-verify" type="button">Verify Runbook</button>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);

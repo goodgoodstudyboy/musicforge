@@ -297,6 +297,12 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="trust-operations-hub-change-request"' in html
     assert 'id="trust-operations-hub-reset"' in html
     assert "/api/trust-operations/hubs/default.zip" in html
+    assert "Trust Operations Runbook" in html
+    assert 'id="trust-operations-runbook-create"' in html
+    assert 'id="trust-operations-runbook-run-safe"' in html
+    assert 'id="trust-operations-runbook-export"' in html
+    assert 'id="trust-operations-runbook-zip"' in html
+    assert 'id="trust-operations-runbook-verify"' in html
     assert 'id="public-trust-center-refresh"' in html
     assert 'id="public-trust-center-export"' in html
     assert 'id="public-trust-center-zip"' in html

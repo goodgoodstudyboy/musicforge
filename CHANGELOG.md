@@ -1,5 +1,19 @@
 # Changelog
 
+## v9.1.0 - 2026-06-19
+
+### Added
+- Trust Operations Hub now accepts delivery-chain verification evidence for Release, Distribution, Submission, Submission Evidence, and Release Operations packages.
+- Hub exports include delivery evidence, delivery readiness, delivery blockers, and delivery manual action queues as fixed-structure sidecars.
+- `verify-trust-operations-hub-package --require-delivery-ready` requires current external delivery verification reports instead of trusting Hub ZIP self-summaries.
+- Added Trust Operations Hub Runbook packages for safe local actions: Hub export, ZIP, and verify. Manual, signoff, reset, provider, submit, accept, and review actions remain manual-only.
+- Added `trust-operations-hub-runbook` and `verify-trust-operations-hub-runbook-package` CLIs.
+- Added release-check `v91.trust_operations_hub_delivery_runbook_smoke`.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_hub.py tests\test_trust_operations_hub_runbook.py tests\test_cli_trust_operations_hub.py tests\test_cli_trust_operations_hub_runbook.py tests\test_release_check.py::test_v91_trust_operations_hub_delivery_runbook_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.0.1 - 2026-06-18
 
 ### Fixed

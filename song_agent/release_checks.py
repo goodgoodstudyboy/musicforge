@@ -13908,6 +13908,120 @@ def _v90_blocked(fn) -> bool:
     return False
 
 
+def _v91_trust_operations_hub_delivery_runbook_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v91-trust-operations-hub-")).resolve()
+    try:
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_runbook import TrustOperationsHubRunbookStateError, TrustOperationsHubRunbookStore, runbook_hash
+        from song_agent.trust_operations_hub_runbook_verifier import verify_trust_operations_hub_runbook_package
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+
+        fixture = _v90_fixture(base)
+        delivery = _v91_delivery_fixture(base)
+        store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        hub = store.create_hub({"hub_id": "hub"})
+        report_id = str(store.refresh_report("hub", {**fixture["payload"], **delivery["payload"]})["hub_report"]["report_id"])
+        store.export_report("hub", report_id)
+        store.build_zip("hub", report_id)
+        source_zip = store.zip_path("hub", report_id)
+        delivery_verify = store.verify_zip(
+            "hub",
+            report_id,
+            {
+                **fixture["verify_payload"],
+                **delivery["verify_payload"],
+                "strict": True,
+                "require_ready": True,
+                "require_current": True,
+                "require_delivery_ready": True,
+                "require_publication_monitoring_clean": True,
+            },
+        )
+        missing_external = verify_trust_operations_hub_package(source_zip, strict=True, require_delivery_ready=True)
+        delivery_full_resign = verify_trust_operations_hub_package(_v76_rewrite_zip(source_zip, base / "delivery-full-resign.zip", _v91_tamper_delivery_matrix_full_resign), strict=True, require_delivery_ready=True, **fixture["verify_payload"], **delivery["verify_payload"])
+
+        release_report = read_json(delivery["release_verification_path"])
+        release_report["zip_sha256"] = "0" * 64
+        write_json(delivery["release_verification_path"], release_report)
+        stale_delivery_verify = verify_trust_operations_hub_package(source_zip, strict=True, require_delivery_ready=True, **fixture["verify_payload"], **delivery["verify_payload"])
+        stale_export = _v90_blocked(lambda: store.export_report("hub", report_id))
+
+        # Restore release verification for runbook execution.
+        delivery = _v91_delivery_fixture(base / "runbook")
+        store2 = TrustOperationsHubStore(base / ".musicforge" / "trust-operations-runbook-hub")
+        store2.create_hub({"hub_id": "hub-runbook"})
+        report_id2 = str(store2.refresh_report("hub-runbook", {**fixture["payload"], **delivery["payload"]})["hub_report"]["report_id"])
+        runbook_store = TrustOperationsHubRunbookStore(hub_store=store2, root=base / ".musicforge" / "trust-operations-runbooks")
+        runbook = runbook_store.create_runbook("hub-runbook", report_id2)
+        result = runbook_store.run_safe_actions("hub-runbook", str(runbook["runbook_id"]))
+        runbook_store.export_runbook("hub-runbook", str(runbook["runbook_id"]))
+        runbook_store.build_zip("hub-runbook", str(runbook["runbook_id"]))
+        runbook_report = verify_trust_operations_hub_runbook_package(runbook_store.zip_path("hub-runbook", str(runbook["runbook_id"])), strict=True, require_completed=True, require_no_blocked=True)
+        runbook_tamper = verify_trust_operations_hub_runbook_package(_v76_rewrite_zip(runbook_store.zip_path("hub-runbook", str(runbook["runbook_id"])), base / "runbook-result-full-resign.zip", _v91_tamper_runbook_result_full_resign), strict=True, require_completed=True, require_no_blocked=True)
+        store2.verify_zip("hub-runbook", report_id2, {**fixture["verify_payload"], **delivery["verify_payload"], "strict": True, "require_current": True, "require_delivery_ready": True})
+        store2.signoff("hub-runbook", report_id2, {"signed_by": "release-check", "reason": "Trust Operations Hub v9.1 runbook signed guard."})
+        signed_runbook = _v91_runbook_blocked(lambda: runbook_store.run_safe_actions("hub-runbook", str(runbook["runbook_id"])))
+
+        ok = (
+            delivery_verify.get("status") == "passed"
+            and _v38_check_status(missing_external, "toh_external_release_verification_required") == "failed"
+            and _v38_check_status(delivery_full_resign, "toh_delivery_readiness_semantics_match") == "failed"
+            and _v38_check_status(stale_delivery_verify, "toh_external_release_verification_hash") == "failed"
+            and stale_export
+            and result.get("summary", {}).get("completed_count") == 3
+            and runbook_report.get("status") == "passed"
+            and _v38_check_status(runbook_tamper, "tohr_safe_results_match_events") == "failed"
+            and signed_runbook
+        )
+        return ok, (
+            f"delivery={delivery_verify.get('status')}, missing_external={_v38_check_status(missing_external, 'toh_external_release_verification_required')}, "
+            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'toh_delivery_readiness_semantics_match')}, stale_delivery={_v38_check_status(stale_delivery_verify, 'toh_external_release_verification_hash')}, stale_export={stale_export}, "
+            f"runbook_completed={result.get('summary', {}).get('completed_count')}, runbook_verify={runbook_report.get('status')}, runbook_tamper={_v38_check_status(runbook_tamper, 'tohr_safe_results_match_events')}, signed_runbook={signed_runbook}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v91_delivery_fixture(base: Path) -> dict[str, Any]:
+    root = base / "delivery-external"
+    root.mkdir(parents=True, exist_ok=True)
+    specs = {
+        "release_verification_path": ("musicforge_release_verification", "release-001", "release"),
+        "distribution_verification_path": ("musicforge_distribution_verification", "target-001", "target"),
+        "submission_verification_path": ("musicforge_submission_verification", "submission-001", "submission"),
+        "submission_evidence_verification_path": ("musicforge_submission_evidence_verification", "evidence-001", "evidence"),
+        "release_operations_verification_path": ("musicforge_release_operations_verification", "ops-001", "operations"),
+    }
+    paths: dict[str, Path] = {}
+    for index, (key, (package_type, item_id, summary_key)) in enumerate(specs.items(), start=1):
+        report = {
+            "package_type": package_type,
+            "status": "passed",
+            "zip_sha256": str(index) * 64,
+            "zip_size_bytes": index * 100,
+            "manifest_hash": chr(96 + index) * 64,
+            "source_hash": chr(102 + index) * 64,
+            "summary": {"status": "passed", summary_key + "_id": item_id},
+            "checks": [],
+        }
+        paths[key] = write_json(root / f"{key}.json", report)
+    return {"payload": dict(paths), "verify_payload": dict(paths), **paths}
+
+
+def _v91_runbook_blocked(fn) -> bool:
+    from song_agent.trust_operations_hub_runbook import TrustOperationsHubRunbookStateError
+
+    try:
+        fn()
+    except (TrustOperationsHubStateError, TrustOperationsHubRunbookStateError):
+        return True
+    return False
+
+
 class _V89DummyPublicationStore:
     def __init__(self, root: Path) -> None:
         from song_agent.public_trust_center_publication import publication_channel_state_hash
@@ -14164,6 +14278,60 @@ def _v90_tamper_matrix_full_resign(docs: dict[str, bytes]) -> None:
     _v90_resign_hub_docs(docs)
 
 
+def _v91_tamper_delivery_matrix_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub import hub_hash
+
+    matrix = _v74_read_json_doc(docs, "delivery-readiness-matrix.json")
+    for row in matrix.get("rows", []):
+        if isinstance(row, dict) and row.get("component_type") == "release_verification":
+            row["status"] = "blocked"
+            row["summary"] = "Forged delivery blocker."
+            break
+    matrix["summary"] = {
+        "row_count": len(matrix.get("rows", [])),
+        "ready_count": max(0, len(matrix.get("rows", [])) - 1),
+        "blocked_count": 1,
+        "warning_count": 0,
+        "stale_count": 0,
+        "missing_count": 0,
+    }
+    matrix["integrity_hash"] = hub_hash(matrix)
+    docs["delivery-readiness-matrix.json"] = _v74_json_doc(matrix)
+    _v90_resign_hub_docs(docs)
+
+
+def _v91_tamper_runbook_result_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_hub_runbook import runbook_hash
+
+    result = _v74_read_json_doc(docs, "runbook-result.json")
+    for item in result.get("results", []):
+        if isinstance(item, dict) and item.get("status") == "completed":
+            item["status"] = "manual_required"
+            item["reason"] = "Forged into manual state."
+            break
+    result["status"] = "completed_with_manual_actions"
+    result["summary"] = {
+        "result_count": len(result.get("results", [])),
+        "completed_count": sum(1 for item in result.get("results", []) if isinstance(item, dict) and item.get("status") == "completed"),
+        "blocked_count": 0,
+        "manual_required_count": sum(1 for item in result.get("results", []) if isinstance(item, dict) and item.get("status") == "manual_required"),
+    }
+    result["integrity_hash"] = runbook_hash(result)
+    docs["runbook-result.json"] = _v74_json_doc(result)
+    manifest = _v74_read_json_doc(docs, "trust-operations-hub-runbook-manifest.json")
+    manifest.setdefault("source", {})["result_hash"] = result["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "runbook-result.json", docs["runbook-result.json"])
+    checksum = _v74_read_json_doc(docs, "checksum/SHA256SUMS.json")
+    _v89_sync_file_record(checksum, "runbook-result.json", docs["runbook-result.json"])
+    checksum["integrity_hash"] = runbook_hash(checksum)
+    docs["checksum/SHA256SUMS.json"] = _v74_json_doc(checksum)
+    _v74_sync_manifest_file(manifest, "checksum/SHA256SUMS.json", docs["checksum/SHA256SUMS.json"])
+    docs["checksum/SHA256SUMS.txt"] = ("\n".join(f"{item.get('sha256')}  {item.get('path')}" for item in checksum.get("files", []) if isinstance(item, dict)) + "\n").encode("utf-8")
+    _v74_sync_manifest_file(manifest, "checksum/SHA256SUMS.txt", docs["checksum/SHA256SUMS.txt"])
+    manifest["integrity_hash"] = runbook_hash(manifest)
+    docs["trust-operations-hub-runbook-manifest.json"] = _v74_json_doc(manifest)
+
+
 def _v90_clear_blockers_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.trust_operations_hub import hub_hash
 
@@ -14216,6 +14384,10 @@ def _v90_resign_hub_docs(docs: dict[str, bytes]) -> None:
     evidence = _v74_read_json_doc(docs, "evidence-binding-index.json")
     verifications = _v74_read_json_doc(docs, "verification-summary-index.json")
     source_state = _v74_read_json_doc(docs, "source-state.json")
+    delivery_evidence = _v74_read_json_doc(docs, "delivery-evidence-index.json")
+    delivery_matrix = _v74_read_json_doc(docs, "delivery-readiness-matrix.json")
+    delivery_blockers = _v74_read_json_doc(docs, "delivery-blocker-register.json")
+    delivery_actions = _v74_read_json_doc(docs, "delivery-manual-action-queue.json")
     signoff = _v74_read_json_doc(docs, "signoff-summary.json")
     checksum = _v74_read_json_doc(docs, "checksum/SHA256SUMS.json")
     manifest = _v74_read_json_doc(docs, "trust-operations-hub-manifest.json")
@@ -14227,9 +14399,14 @@ def _v90_resign_hub_docs(docs: dict[str, bytes]) -> None:
         "manual_action_queue_hash": actions.get("integrity_hash"),
         "evidence_binding_index_hash": evidence.get("integrity_hash"),
         "verification_summary_index_hash": verifications.get("integrity_hash"),
+        "delivery_evidence_index_hash": delivery_evidence.get("integrity_hash"),
+        "delivery_readiness_matrix_hash": delivery_matrix.get("integrity_hash"),
+        "delivery_blocker_register_hash": delivery_blockers.get("integrity_hash"),
+        "delivery_manual_action_queue_hash": delivery_actions.get("integrity_hash"),
     }
-    report["status"] = "ready" if matrix.get("summary", {}).get("blocked_count") == 0 and matrix.get("summary", {}).get("missing_count") == 0 and matrix.get("summary", {}).get("stale_count") == 0 and blockers.get("summary", {}).get("blocker_count") == 0 else "blocked"
-    report["readiness"] = {"overall_status": report["status"], **matrix.get("summary", {})}
+    combined = {key: int(matrix.get("summary", {}).get(key) or 0) + int(delivery_matrix.get("summary", {}).get(key) or 0) for key in ("row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count")}
+    report["status"] = "ready" if combined.get("blocked_count") == 0 and combined.get("missing_count") == 0 and combined.get("stale_count") == 0 and blockers.get("summary", {}).get("blocker_count") == 0 and delivery_blockers.get("summary", {}).get("blocker_count") == 0 else "blocked"
+    report["readiness"] = {"overall_status": report["status"], **combined}
     report["integrity_hash"] = hub_hash(report)
     docs["hub-report.json"] = _v74_json_doc(report)
     manifest["source"] = {
@@ -14240,9 +14417,13 @@ def _v90_resign_hub_docs(docs: dict[str, bytes]) -> None:
         "evidence_binding_index_hash": evidence.get("integrity_hash"),
         "verification_summary_index_hash": verifications.get("integrity_hash"),
         "source_state_hash": source_state.get("integrity_hash"),
+        "delivery_evidence_index_hash": delivery_evidence.get("integrity_hash"),
+        "delivery_readiness_matrix_hash": delivery_matrix.get("integrity_hash"),
+        "delivery_blocker_register_hash": delivery_blockers.get("integrity_hash"),
+        "delivery_manual_action_queue_hash": delivery_actions.get("integrity_hash"),
         "signoff_summary_hash": signoff.get("integrity_hash"),
     }
-    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json"):
+    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json", "delivery-readiness-matrix.json"):
         _v74_sync_manifest_file(manifest, path, docs[path])
         _v89_sync_file_record(checksum, path, docs[path])
     checksum["integrity_hash"] = hub_hash(checksum)

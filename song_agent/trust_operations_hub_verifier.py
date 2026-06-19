@@ -16,6 +16,7 @@ from song_agent.public_trust_center_publication_monitoring import verification_h
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
 from song_agent.trust_operations_hub import (
+    DELIVERY_VERIFICATION_COMPONENTS,
     HUB_EXPORT_ENTRIES,
     TRUST_OPERATIONS_HUB_PACKAGE_TYPE,
     TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE,
@@ -43,9 +44,15 @@ def verify_trust_operations_hub_package(
     require_current: bool = False,
     require_no_critical_blockers: bool = False,
     require_publication_monitoring_clean: bool = False,
+    require_delivery_ready: bool = False,
     publication_channel_state_path: Path | str | None = None,
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
+    release_verification_path: Path | str | None = None,
+    distribution_verification_path: Path | str | None = None,
+    submission_verification_path: Path | str | None = None,
+    submission_evidence_verification_path: Path | str | None = None,
+    release_operations_verification_path: Path | str | None = None,
     hub_signoff_path: Path | str | None = None,
     hub_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
@@ -61,9 +68,15 @@ def verify_trust_operations_hub_package(
         require_current=require_current,
         require_no_critical_blockers=require_no_critical_blockers,
         require_publication_monitoring_clean=require_publication_monitoring_clean,
+        require_delivery_ready=require_delivery_ready,
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
+        release_verification_path=Path(release_verification_path) if release_verification_path else None,
+        distribution_verification_path=Path(distribution_verification_path) if distribution_verification_path else None,
+        submission_verification_path=Path(submission_verification_path) if submission_verification_path else None,
+        submission_evidence_verification_path=Path(submission_evidence_verification_path) if submission_evidence_verification_path else None,
+        release_operations_verification_path=Path(release_operations_verification_path) if release_operations_verification_path else None,
         hub_signoff_path=Path(hub_signoff_path) if hub_signoff_path else None,
         hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
@@ -103,9 +116,15 @@ class _HubVerifier:
         require_current: bool,
         require_no_critical_blockers: bool,
         require_publication_monitoring_clean: bool,
+        require_delivery_ready: bool,
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
+        release_verification_path: Path | None,
+        distribution_verification_path: Path | None,
+        submission_verification_path: Path | None,
+        submission_evidence_verification_path: Path | None,
+        release_operations_verification_path: Path | None,
         hub_signoff_path: Path | None,
         hub_verification_report_path: Path | None,
         max_zip_size_mb: int,
@@ -120,9 +139,17 @@ class _HubVerifier:
         self.require_current = require_current
         self.require_no_critical_blockers = require_no_critical_blockers
         self.require_publication_monitoring_clean = require_publication_monitoring_clean
+        self.require_delivery_ready = require_delivery_ready
         self.publication_channel_state_path = publication_channel_state_path
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
+        self.delivery_verification_paths = {
+            "release_verification": release_verification_path,
+            "distribution_verification": distribution_verification_path,
+            "submission_verification": submission_verification_path,
+            "submission_evidence_verification": submission_evidence_verification_path,
+            "release_operations_verification": release_operations_verification_path,
+        }
         self.hub_signoff_path = hub_signoff_path
         self.hub_verification_report_path = hub_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
@@ -147,11 +174,16 @@ class _HubVerifier:
         self.evidence: dict[str, Any] = {}
         self.verifications: dict[str, Any] = {}
         self.source_state: dict[str, Any] = {}
+        self.delivery_evidence: dict[str, Any] = {}
+        self.delivery_matrix: dict[str, Any] = {}
+        self.delivery_blockers: dict[str, Any] = {}
+        self.delivery_actions: dict[str, Any] = {}
         self.signoff_summary: dict[str, Any] = {}
         self.checksum_json: dict[str, Any] = {}
         self.external_channel_state: dict[str, Any] = {}
         self.external_ptc_verification: dict[str, Any] = {}
         self.external_monitoring_verification: dict[str, Any] = {}
+        self.external_delivery_verifications: dict[str, dict[str, Any]] = {}
         self.external_hub_signoff: dict[str, Any] = {}
         self.external_hub_verification_report: dict[str, Any] = {}
 
@@ -225,6 +257,10 @@ class _HubVerifier:
         self.evidence = self._read_json_entry(archive, "evidence-binding-index.json", "evidence_binding_index", "toh_evidence_binding_index_parse")
         self.verifications = self._read_json_entry(archive, "verification-summary-index.json", "verification_summary_index", "toh_verification_summary_index_parse")
         self.source_state = self._read_json_entry(archive, "source-state.json", "source_state", "toh_source_state_parse")
+        self.delivery_evidence = self._read_json_entry(archive, "delivery-evidence-index.json", "delivery_evidence_index", "toh_delivery_evidence_index_parse")
+        self.delivery_matrix = self._read_json_entry(archive, "delivery-readiness-matrix.json", "delivery_readiness_matrix", "toh_delivery_readiness_matrix_parse")
+        self.delivery_blockers = self._read_json_entry(archive, "delivery-blocker-register.json", "delivery_blocker_register", "toh_delivery_blocker_register_parse")
+        self.delivery_actions = self._read_json_entry(archive, "delivery-manual-action-queue.json", "delivery_manual_action_queue", "toh_delivery_manual_action_queue_parse")
         self.signoff_summary = self._read_json_entry(archive, "signoff-summary.json", "signoff_summary", "toh_signoff_summary_parse")
         self.checksum_json = self._read_json_entry(archive, "checksum/SHA256SUMS.json", "checksum", "toh_checksum_json_parse")
 
@@ -262,6 +298,10 @@ class _HubVerifier:
             "evidence_binding_index": self.evidence,
             "verification_summary_index": self.verifications,
             "source_state": self.source_state,
+            "delivery_evidence_index": self.delivery_evidence,
+            "delivery_readiness_matrix": self.delivery_matrix,
+            "delivery_blocker_register": self.delivery_blockers,
+            "delivery_manual_action_queue": self.delivery_actions,
             "signoff_summary": self.signoff_summary,
             "checksum": self.checksum_json,
         }
@@ -276,6 +316,10 @@ class _HubVerifier:
             "manual_action_queue_hash": self.actions.get("integrity_hash"),
             "evidence_binding_index_hash": self.evidence.get("integrity_hash"),
             "verification_summary_index_hash": self.verifications.get("integrity_hash"),
+            "delivery_evidence_index_hash": self.delivery_evidence.get("integrity_hash"),
+            "delivery_readiness_matrix_hash": self.delivery_matrix.get("integrity_hash"),
+            "delivery_blocker_register_hash": self.delivery_blockers.get("integrity_hash"),
+            "delivery_manual_action_queue_hash": self.delivery_actions.get("integrity_hash"),
         }
         for key, value in expected_source.items():
             self._add_exact_check("hub_report", "toh_report_source_" + key, source.get(key), value, f"Hub report source {key}")
@@ -335,10 +379,24 @@ class _HubVerifier:
             key=lambda item: (str(item.get("component_id") or ""), str(item.get("requirement") or "")),
         )
         self._add_exact_check("readiness", "toh_readiness_matrix_semantics_match", actual_matrix_projection, expected_matrix_rows, "Readiness matrix matches source and evidence semantics")
-        expected_status = "ready" if expected_summary.get("blocked_count") == 0 and expected_summary.get("stale_count") == 0 and expected_summary.get("missing_count") == 0 and len(expected_blockers) == 0 else "blocked"
+        delivery_rows = [row for row in self.delivery_matrix.get("rows", []) if isinstance(row, dict)]
+        delivery_expected_summary = _readiness_summary(delivery_rows)
+        self._add_exact_check("delivery", "toh_delivery_readiness_summary_matches_rows", self.delivery_matrix.get("summary"), delivery_expected_summary, "Delivery readiness summary matches rows")
+        delivery_expected_rows = _expected_delivery_matrix_rows(self.delivery_evidence)
+        delivery_actual_rows = sorted((_matrix_projection(row) for row in delivery_rows), key=lambda item: (str(item.get("component_id") or ""), str(item.get("requirement") or "")))
+        self._add_exact_check("delivery", "toh_delivery_readiness_semantics_match", delivery_actual_rows, delivery_expected_rows, "Delivery readiness matrix matches delivery evidence")
+        delivery_expected_blockers = _expected_blockers(delivery_rows)
+        delivery_actual_blockers = _normalize_blockers(self.delivery_blockers.get("blockers") if isinstance(self.delivery_blockers.get("blockers"), list) else [])
+        self._add_exact_check("delivery", "toh_delivery_blockers_match_readiness", delivery_actual_blockers, delivery_expected_blockers, "Delivery blocker register matches delivery readiness")
+        delivery_actions = self.delivery_actions.get("actions") if isinstance(self.delivery_actions.get("actions"), list) else []
+        delivery_action_ids = sorted(str(item.get("action_id") or "") for item in delivery_actions if isinstance(item, dict))
+        delivery_expected_action_ids = sorted(str(item.get("manual_action_id") or "") for item in self.delivery_blockers.get("blockers", []) if isinstance(item, dict))
+        self._add_exact_check("delivery", "toh_delivery_actions_match_blockers", delivery_action_ids, delivery_expected_action_ids, "Delivery manual actions match delivery blockers")
+        combined_summary = _combine_readiness_summaries(expected_summary, delivery_expected_summary)
+        expected_status = "ready" if combined_summary.get("blocked_count") == 0 and combined_summary.get("stale_count") == 0 and combined_summary.get("missing_count") == 0 and len(expected_blockers) == 0 and len(delivery_expected_blockers) == 0 else "blocked"
         self._add_exact_check("hub_report", "toh_report_status_matches_readiness", self.report.get("status"), expected_status, "Hub report status matches readiness")
         report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
-        self._add_exact_check("hub_report", "toh_report_readiness_matches_matrix", {key: report_readiness.get(key) for key in ["row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count"]}, expected_summary, "Hub report readiness summary matches matrix")
+        self._add_exact_check("hub_report", "toh_report_readiness_matches_matrix", {key: report_readiness.get(key) for key in ["row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count"]}, combined_summary, "Hub report readiness summary matches matrix")
 
     def _verify_external_bindings(self) -> None:
         if self.hub_verification_report_path:
@@ -378,6 +436,16 @@ class _HubVerifier:
         elif self.require_current or self.require_publication_monitoring_clean:
             self._add_check("external", "toh_external_monitoring_verification_required", "failed", "blocking", "Current monitoring verification requires a Publication Monitoring verification report.")
 
+        for spec in DELIVERY_VERIFICATION_COMPONENTS:
+            component_type = str(spec["component_type"])
+            path = self.delivery_verification_paths.get(component_type)
+            if path:
+                report = _read_json_file(path)
+                self.external_delivery_verifications[component_type] = report
+                self._verify_external_delivery_report(component_type, report, "toh_external_" + component_type)
+            elif self.require_delivery_ready or (self.require_current and _delivery_evidence_by_type(self.delivery_evidence, component_type)):
+                self._add_check("external", "toh_external_" + component_type + "_required", "failed", "blocking", f"Current delivery verification requires external {component_type} report.")
+
     def _verify_external_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
         expected = _evidence_by_type(self.evidence, component_type)
         report_hash = verification_hash(report)
@@ -388,6 +456,15 @@ class _HubVerifier:
             summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
             critical = int(summary.get("critical_incidents") or summary.get("open_critical_incidents") or 0)
             self._add_check("external", "toh_external_monitoring_no_open_critical_incidents", "passed" if critical == 0 else "failed", "blocking", "External monitoring report has no open critical incidents." if critical == 0 else "External monitoring report has open critical incidents.")
+
+    def _verify_external_delivery_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
+        expected = _delivery_evidence_by_type(self.delivery_evidence, component_type)
+        report_hash = verification_hash(report)
+        status = "passed" if report and report_hash == expected.get("verification_report_hash") else "failed"
+        self._add_check("external", check_prefix + "_hash", status, "blocking", f"External {component_type} report matches delivery evidence." if status == "passed" else f"External {component_type} report does not match delivery evidence.")
+        self._add_exact_check("external", check_prefix + "_status", report.get("status"), expected.get("status"), f"External {component_type} status")
+        self._add_exact_check("external", check_prefix + "_zip_sha256", report.get("zip_sha256"), expected.get("zip_sha256"), f"External {component_type} ZIP sha256")
+        self._add_exact_check("external", check_prefix + "_manifest_hash", report.get("manifest_hash"), expected.get("manifest_hash"), f"External {component_type} manifest hash")
 
     def _verify_external_signoff(self, signoff: dict[str, Any]) -> None:
         self._add_exact_check("external", "toh_hub_signoff_package_type", signoff.get("package_type"), TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE, "Hub signoff package_type")
@@ -419,6 +496,12 @@ class _HubVerifier:
         monitoring_row = next((row for row in self.matrix.get("rows", []) if isinstance(row, dict) and row.get("requirement") == "publication_monitoring_clean"), {})
         monitoring_ready = monitoring_row.get("status") == "ready"
         self._add_check("requirements", "toh_require_publication_monitoring_clean", "passed" if monitoring_ready or not self.require_publication_monitoring_clean else "failed", "blocking", "Publication monitoring is clean." if monitoring_ready else "Publication monitoring is not clean.")
+        delivery_summary = self.delivery_matrix.get("summary") if isinstance(self.delivery_matrix.get("summary"), dict) else {}
+        delivery_rows = self.delivery_matrix.get("rows") if isinstance(self.delivery_matrix.get("rows"), list) else []
+        present_types = {str(row.get("component_type") or "") for row in delivery_rows if isinstance(row, dict)}
+        expected_types = {str(spec["component_type"]) for spec in DELIVERY_VERIFICATION_COMPONENTS}
+        delivery_ready = bool(delivery_rows) and expected_types.issubset(present_types) and delivery_summary.get("blocked_count") == 0 and delivery_summary.get("stale_count") == 0 and delivery_summary.get("missing_count") == 0
+        self._add_check("requirements", "toh_require_delivery_ready", "passed" if delivery_ready or not self.require_delivery_ready else "failed", "blocking", "Delivery evidence is ready." if delivery_ready else "Delivery evidence is not ready.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         findings: list[dict[str, Any]] = []
@@ -441,6 +524,10 @@ class _HubVerifier:
             "evidence_binding_index": self.evidence,
             "verification_summary_index": self.verifications,
             "source_state": self.source_state,
+            "delivery_evidence_index": self.delivery_evidence,
+            "delivery_readiness_matrix": self.delivery_matrix,
+            "delivery_blocker_register": self.delivery_blockers,
+            "delivery_manual_action_queue": self.delivery_actions,
             "signoff_summary": self.signoff_summary,
             "hub_signoff": self.external_hub_signoff,
             "hub_verification_report": self.external_hub_verification_report,
@@ -523,6 +610,23 @@ def _expected_matrix_rows(source_state: dict[str, Any], evidence: dict[str, Any]
     return sorted(rows, key=lambda item: (str(item.get("component_id") or ""), str(item.get("requirement") or "")))
 
 
+def _expected_delivery_matrix_rows(delivery_evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    evidence_rows = [row for row in delivery_evidence.get("evidence", []) if isinstance(row, dict)]
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for row in evidence_rows:
+        by_type.setdefault(str(row.get("component_type") or ""), []).append(row)
+    for spec in DELIVERY_VERIFICATION_COMPONENTS:
+        component_type = str(spec["component_type"])
+        requirement = str(spec["requirement"])
+        typed = by_type.get(component_type, [])
+        if not typed:
+            continue
+        for row in typed:
+            rows.append(_matrix_row_projection(str(row.get("component_id") or component_type + ":missing"), component_type, requirement, _status_from_evidence(row)))
+    return sorted(rows, key=lambda item: (str(item.get("component_id") or ""), str(item.get("requirement") or "")))
+
+
 def _status_from_evidence(evidence: dict[str, Any]) -> str:
     if not evidence:
         return "missing"
@@ -553,6 +657,11 @@ def _readiness_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
         "stale_count": sum(1 for row in rows if row.get("status") == "stale"),
         "missing_count": sum(1 for row in rows if row.get("status") in {"missing", "not_configured"}),
     }
+
+
+def _combine_readiness_summaries(*summaries: dict[str, Any]) -> dict[str, int]:
+    keys = ("row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count")
+    return {key: sum(int(summary.get(key) or 0) for summary in summaries if isinstance(summary, dict)) for key in keys}
 
 
 def _expected_blockers(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -607,6 +716,13 @@ def _requirement_for_component(component_type: str) -> str:
 
 
 def _evidence_by_type(evidence: dict[str, Any], component_type: str) -> dict[str, Any]:
+    for row in evidence.get("evidence", []) if isinstance(evidence.get("evidence"), list) else []:
+        if isinstance(row, dict) and row.get("component_type") == component_type:
+            return row
+    return {}
+
+
+def _delivery_evidence_by_type(evidence: dict[str, Any], component_type: str) -> dict[str, Any]:
     for row in evidence.get("evidence", []) if isinstance(evidence.get("evidence"), list) else []:
         if isinstance(row, dict) and row.get("component_type") == component_type:
             return row

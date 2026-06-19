@@ -799,15 +799,27 @@ manual action queue, and fixed-structure Hub ZIP. Hub verification never relies
 only on the package's own summary for current-state gates: `--require-current`
 must be paired with the external publication channel state and the current
 verification reports used to build the Hub.
+It can also bind full delivery-chain evidence from Release, Distribution,
+Submission, Submission Evidence, and Release Operations verification reports.
+When `--require-delivery-ready` is enabled, those external reports are required
+and are checked against the Hub delivery sidecars; the Hub ZIP cannot self-certify
+delivery readiness.
 Signed Hub verification is also an external-evidence gate: use
 `--require-signed` with both the Hub `signoff.json` sidecar and the Hub
 verification report that was written before signoff.
+Trust Operations Hub Runbook turns Hub blockers and next steps into a safe local
+queue. Only refresh-free Hub export, ZIP, and verify actions are automated;
+signoff, reset, submit, accept, provider, and manual review actions remain
+manual-required.
 
 ```powershell
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create --refresh --export --zip --verify --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
 python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
+python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-delivery-ready --release-verification path\to\release-verification.json --distribution-verification path\to\distribution-verification.json --submission-verification path\to\submission-verification.json --submission-evidence-verification path\to\submission-evidence-verification.json --release-operations-verification path\to\operations-verification.json --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --signoff --signed-by reviewer --reason "Trust Operations Hub accepted." --json
 python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-signed --hub-signoff path\to\signoff.json --hub-verification-report path\to\hub-verification-report.json --json
+python -m song_agent.cli trust-operations-hub-runbook --hub-id hub-default --report-id trust-hub-report-000001 --create --run-safe --export --zip --verify --strict --require-completed --require-no-blocked --json
+python -m song_agent.cli verify-trust-operations-hub-runbook-package path\to\trust-operations-hub-runbook.zip --strict --require-completed --require-no-blocked --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create-change-request --change-request-id toh-cr-000001 --reason "Approved Hub evidence refresh." --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --approve-change-request toh-cr-000001 --json
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --reset-signoff --change-request-id toh-cr-000001 --json

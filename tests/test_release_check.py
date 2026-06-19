@@ -65,6 +65,7 @@ from song_agent.release_checks import (
     _v88_public_trust_center_publication_channels_smoke,
     _v89_public_trust_center_publication_monitoring_smoke,
     _v90_trust_operations_hub_smoke,
+    _v91_trust_operations_hub_delivery_runbook_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -916,6 +917,21 @@ def test_v90_trust_operations_hub_smoke(tmp_path: Path) -> None:
     assert "revoked=failed" in detail
     assert "stale_export=True" in detail
     assert "critical=failed" in detail
+
+
+def test_v91_trust_operations_hub_delivery_runbook_smoke(tmp_path: Path) -> None:
+    ok, detail = _v91_trust_operations_hub_delivery_runbook_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "delivery=passed" in detail
+    assert "missing_external=failed" in detail
+    assert "delivery_full_resign=failed" in detail
+    assert "stale_delivery=failed" in detail
+    assert "stale_export=True" in detail
+    assert "runbook_completed=3" in detail
+    assert "runbook_verify=passed" in detail
+    assert "runbook_tamper=failed" in detail
+    assert "signed_runbook=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

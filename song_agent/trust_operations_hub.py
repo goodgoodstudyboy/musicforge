@@ -27,6 +27,10 @@ TRUST_OPERATIONS_MANUAL_ACTION_QUEUE_PACKAGE_TYPE = "musicforge_trust_operations
 TRUST_OPERATIONS_EVIDENCE_BINDING_INDEX_PACKAGE_TYPE = "musicforge_trust_operations_evidence_binding_index"
 TRUST_OPERATIONS_VERIFICATION_SUMMARY_INDEX_PACKAGE_TYPE = "musicforge_trust_operations_verification_summary_index"
 TRUST_OPERATIONS_SOURCE_STATE_PACKAGE_TYPE = "musicforge_trust_operations_source_state"
+TRUST_OPERATIONS_DELIVERY_EVIDENCE_INDEX_PACKAGE_TYPE = "musicforge_trust_operations_delivery_evidence_index"
+TRUST_OPERATIONS_DELIVERY_READINESS_MATRIX_PACKAGE_TYPE = "musicforge_trust_operations_delivery_readiness_matrix"
+TRUST_OPERATIONS_DELIVERY_BLOCKER_REGISTER_PACKAGE_TYPE = "musicforge_trust_operations_delivery_blocker_register"
+TRUST_OPERATIONS_DELIVERY_MANUAL_ACTION_QUEUE_PACKAGE_TYPE = "musicforge_trust_operations_delivery_manual_action_queue"
 TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE = "musicforge_trust_operations_hub_signoff"
 TRUST_OPERATIONS_CHANGE_REQUEST_PACKAGE_TYPE = "musicforge_trust_operations_hub_change_request"
 TRUST_OPERATIONS_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"}
@@ -42,10 +46,52 @@ HUB_EXPORT_ENTRIES = {
     "evidence-binding-index.json",
     "verification-summary-index.json",
     "source-state.json",
+    "delivery-evidence-index.json",
+    "delivery-readiness-matrix.json",
+    "delivery-blocker-register.json",
+    "delivery-manual-action-queue.json",
     "signoff-summary.json",
     "checksum/SHA256SUMS.json",
     "checksum/SHA256SUMS.txt",
 }
+
+DELIVERY_VERIFICATION_COMPONENTS = (
+    {
+        "component_type": "release_verification",
+        "component_id_prefix": "release",
+        "requirement": "release_verified",
+        "payload_key": "release_verification_path",
+        "payload_keys": "release_verification_paths",
+    },
+    {
+        "component_type": "distribution_verification",
+        "component_id_prefix": "distribution",
+        "requirement": "distribution_verified",
+        "payload_key": "distribution_verification_path",
+        "payload_keys": "distribution_verification_paths",
+    },
+    {
+        "component_type": "submission_verification",
+        "component_id_prefix": "submission",
+        "requirement": "submission_verified",
+        "payload_key": "submission_verification_path",
+        "payload_keys": "submission_verification_paths",
+    },
+    {
+        "component_type": "submission_evidence_verification",
+        "component_id_prefix": "submission-evidence",
+        "requirement": "submission_evidence_verified",
+        "payload_key": "submission_evidence_verification_path",
+        "payload_keys": "submission_evidence_verification_paths",
+    },
+    {
+        "component_type": "release_operations_verification",
+        "component_id_prefix": "release-operations",
+        "requirement": "release_operations_verified",
+        "payload_key": "release_operations_verification_path",
+        "payload_keys": "release_operations_verification_paths",
+    },
+)
 
 
 class TrustOperationsHubError(ValueError):
@@ -106,6 +152,18 @@ class TrustOperationsHubStore:
 
     def source_state_path(self, hub_id: str, report_id: str) -> Path:
         return self.report_dir(hub_id, report_id) / "source-state.json"
+
+    def delivery_evidence_index_path(self, hub_id: str, report_id: str) -> Path:
+        return self.report_dir(hub_id, report_id) / "delivery-evidence-index.json"
+
+    def delivery_readiness_matrix_path(self, hub_id: str, report_id: str) -> Path:
+        return self.report_dir(hub_id, report_id) / "delivery-readiness-matrix.json"
+
+    def delivery_blocker_register_path(self, hub_id: str, report_id: str) -> Path:
+        return self.report_dir(hub_id, report_id) / "delivery-blocker-register.json"
+
+    def delivery_manual_action_queue_path(self, hub_id: str, report_id: str) -> Path:
+        return self.report_dir(hub_id, report_id) / "delivery-manual-action-queue.json"
 
     def source_paths_path(self, hub_id: str, report_id: str) -> Path:
         return self.report_dir(hub_id, report_id) / "source-paths.json"
@@ -190,14 +248,29 @@ class TrustOperationsHubStore:
             readiness = self._readiness_matrix(hub, report_id, evidence_index, verification_index, source_state)
             blockers = self._blocker_register(hub, report_id, readiness)
             actions = self._manual_action_queue(hub, report_id, blockers)
+            delivery_evidence = self._delivery_evidence_index(hub, report_id, payload)
+            delivery_readiness = self._delivery_readiness_matrix(hub, report_id, delivery_evidence)
+            delivery_blockers = self._delivery_blocker_register(hub, report_id, delivery_readiness)
+            delivery_actions = self._delivery_manual_action_queue(hub, report_id, delivery_blockers)
+            total_blockers = int(blockers["summary"]["blocker_count"] or 0) + int(delivery_blockers["summary"]["blocker_count"] or 0)
+            total_blocked = int(readiness["summary"]["blocked_count"] or 0) + int(delivery_readiness["summary"]["blocked_count"] or 0)
+            total_stale = int(readiness["summary"]["stale_count"] or 0) + int(delivery_readiness["summary"]["stale_count"] or 0)
+            total_missing = int(readiness["summary"].get("missing_count") or 0) + int(delivery_readiness["summary"].get("missing_count") or 0)
+            overall_ready = total_blockers == 0 and total_blocked == 0 and total_stale == 0 and total_missing == 0
+            combined_summary = _combine_readiness_summaries(readiness["summary"], delivery_readiness["summary"])
             report = {
                 "schema_version": TRUST_OPERATIONS_SCHEMA_VERSION,
                 "package_type": TRUST_OPERATIONS_HUB_REPORT_PACKAGE_TYPE,
                 "hub_id": hub_id,
                 "report_id": report_id,
                 "generated_at": now,
-                "status": "ready" if blockers["summary"]["blocker_count"] == 0 and readiness["summary"]["blocked_count"] == 0 and readiness["summary"]["stale_count"] == 0 else "blocked",
-                "readiness": {"overall_status": "ready" if blockers["summary"]["blocker_count"] == 0 and readiness["summary"]["blocked_count"] == 0 and readiness["summary"]["stale_count"] == 0 else "blocked", **readiness["summary"]},
+                "status": "ready" if overall_ready else "blocked",
+                "readiness": {"overall_status": "ready" if overall_ready else "blocked", **combined_summary},
+                "delivery": {
+                    "readiness": delivery_readiness.get("summary"),
+                    "blockers": delivery_blockers.get("summary"),
+                    "actions": delivery_actions.get("summary"),
+                },
                 "scope": hub.get("scope") or {},
                 "source": {
                     "hub_hash": hub.get("integrity_hash"),
@@ -207,6 +280,10 @@ class TrustOperationsHubStore:
                     "manual_action_queue_hash": actions.get("integrity_hash"),
                     "evidence_binding_index_hash": evidence_index.get("integrity_hash"),
                     "verification_summary_index_hash": verification_index.get("integrity_hash"),
+                    "delivery_evidence_index_hash": delivery_evidence.get("integrity_hash"),
+                    "delivery_readiness_matrix_hash": delivery_readiness.get("integrity_hash"),
+                    "delivery_blocker_register_hash": delivery_blockers.get("integrity_hash"),
+                    "delivery_manual_action_queue_hash": delivery_actions.get("integrity_hash"),
                 },
             }
             report["integrity_hash"] = hub_hash(report)
@@ -216,11 +293,15 @@ class TrustOperationsHubStore:
             _write_json(self.readiness_matrix_path(hub_id, report_id), readiness)
             _write_json(self.blocker_register_path(hub_id, report_id), blockers)
             _write_json(self.manual_action_queue_path(hub_id, report_id), actions)
+            _write_json(self.delivery_evidence_index_path(hub_id, report_id), delivery_evidence)
+            _write_json(self.delivery_readiness_matrix_path(hub_id, report_id), delivery_readiness)
+            _write_json(self.delivery_blocker_register_path(hub_id, report_id), delivery_blockers)
+            _write_json(self.delivery_manual_action_queue_path(hub_id, report_id), delivery_actions)
             _write_json(self.report_path(hub_id, report_id), report)
             write_json(self.source_paths_path(hub_id, report_id), _source_paths(payload))
             _write_json(self.current_report_path(hub_id), {"hub_id": hub_id, "report_id": report_id, "report_hash": report["integrity_hash"], "updated_at": now})
             self._append_event(hub_id, "hub_report_refreshed", {"report_id": report_id, "report_hash": report["integrity_hash"]}, now=now)
-            return _sanitize({"hub_report": report, "readiness_matrix": readiness, "blocker_register": blockers, "manual_action_queue": actions, "evidence_binding_index": evidence_index, "verification_summary_index": verification_index, "source_state": source_state})
+            return _sanitize({"hub_report": report, "readiness_matrix": readiness, "blocker_register": blockers, "manual_action_queue": actions, "evidence_binding_index": evidence_index, "verification_summary_index": verification_index, "source_state": source_state, "delivery_evidence_index": delivery_evidence, "delivery_readiness_matrix": delivery_readiness, "delivery_blocker_register": delivery_blockers, "delivery_manual_action_queue": delivery_actions})
 
     def export_report(self, hub_id: str, report_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
@@ -241,6 +322,10 @@ class TrustOperationsHubStore:
                 ("evidence_binding_index", "evidence-binding-index.json"),
                 ("verification_summary_index", "verification-summary-index.json"),
                 ("source_state", "source-state.json"),
+                ("delivery_evidence_index", "delivery-evidence-index.json"),
+                ("delivery_readiness_matrix", "delivery-readiness-matrix.json"),
+                ("delivery_blocker_register", "delivery-blocker-register.json"),
+                ("delivery_manual_action_queue", "delivery-manual-action-queue.json"),
             ):
                 _write_json(export_dir / target_name, docs[source_name])
             signoff_summary = self._signoff_summary(hub_id)
@@ -257,6 +342,10 @@ class TrustOperationsHubStore:
                 "evidence_binding_index_hash": docs["evidence_binding_index"].get("integrity_hash"),
                 "verification_summary_index_hash": docs["verification_summary_index"].get("integrity_hash"),
                 "source_state_hash": docs["source_state"].get("integrity_hash"),
+                "delivery_evidence_index_hash": docs["delivery_evidence_index"].get("integrity_hash"),
+                "delivery_readiness_matrix_hash": docs["delivery_readiness_matrix"].get("integrity_hash"),
+                "delivery_blocker_register_hash": docs["delivery_blocker_register"].get("integrity_hash"),
+                "delivery_manual_action_queue_hash": docs["delivery_manual_action_queue"].get("integrity_hash"),
                 "signoff_summary_hash": signoff_summary.get("integrity_hash"),
             }
             manifest = {
@@ -310,9 +399,15 @@ class TrustOperationsHubStore:
             require_current=bool(payload.get("require_current", False)),
             require_no_critical_blockers=bool(payload.get("require_no_critical_blockers", False)),
             require_publication_monitoring_clean=bool(payload.get("require_publication_monitoring_clean", False)),
+            require_delivery_ready=bool(payload.get("require_delivery_ready", False)),
             publication_channel_state_path=payload.get("publication_channel_state_path"),
             public_trust_center_verification_path=payload.get("public_trust_center_verification_path"),
             publication_monitoring_verification_path=payload.get("publication_monitoring_verification_path"),
+            release_verification_path=payload.get("release_verification_path"),
+            distribution_verification_path=payload.get("distribution_verification_path"),
+            submission_verification_path=payload.get("submission_verification_path"),
+            submission_evidence_verification_path=payload.get("submission_evidence_verification_path"),
+            release_operations_verification_path=payload.get("release_operations_verification_path"),
             hub_signoff_path=payload.get("hub_signoff_path"),
             hub_verification_report_path=payload.get("hub_verification_report_path"),
         )
@@ -501,6 +596,134 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
+    def _delivery_evidence_index(self, hub: dict[str, Any], report_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        rows: list[dict[str, Any]] = []
+        for spec in DELIVERY_VERIFICATION_COMPONENTS:
+            paths = _paths(payload.get(spec["payload_keys"]) or payload.get(spec["payload_key"]))
+            for index, report_path in enumerate(paths, start=1):
+                report = _read_json_default(report_path, default={})
+                component_id = _delivery_component_id(spec, report, index)
+                rows.append(_delivery_evidence_from_verification(component_id, spec["component_type"], spec["requirement"], report, report_path))
+        data = {
+            "schema_version": TRUST_OPERATIONS_SCHEMA_VERSION,
+            "package_type": TRUST_OPERATIONS_DELIVERY_EVIDENCE_INDEX_PACKAGE_TYPE,
+            "hub_id": hub.get("hub_id"),
+            "report_id": report_id,
+            "evidence": sorted(rows, key=lambda row: (str(row.get("component_type") or ""), str(row.get("component_id") or ""))),
+            "summary": _delivery_evidence_summary(rows),
+        }
+        data["integrity_hash"] = hub_hash(data)
+        return data
+
+    def _delivery_readiness_matrix(self, hub: dict[str, Any], report_id: str, delivery_evidence: dict[str, Any]) -> dict[str, Any]:
+        requirements = hub.get("requirements") if isinstance(hub.get("requirements"), dict) else {}
+        rows: list[dict[str, Any]] = []
+        evidence_rows = [row for row in delivery_evidence.get("evidence", []) if isinstance(row, dict)]
+        by_type: dict[str, list[dict[str, Any]]] = {}
+        for row in evidence_rows:
+            by_type.setdefault(str(row.get("component_type") or ""), []).append(row)
+        for spec in DELIVERY_VERIFICATION_COMPONENTS:
+            requirement = str(spec["requirement"])
+            required = bool(requirements.get("require_" + requirement, False))
+            typed_rows = by_type.get(str(spec["component_type"]), [])
+            if not typed_rows:
+                if not required:
+                    continue
+                rows.append(
+                    {
+                        "component_id": str(spec["component_id_prefix"]) + ":missing",
+                        "component_type": spec["component_type"],
+                        "requirement": requirement,
+                        "status": "missing",
+                        "severity": "blocking",
+                        "evidence_refs": [],
+                        "source_check_id": requirement,
+                        "summary": f"{requirement} evidence is missing.",
+                    }
+                )
+                continue
+            for evidence in typed_rows:
+                status = _status_from_verification_evidence(evidence)
+                rows.append(
+                    {
+                        "component_id": evidence.get("component_id"),
+                        "component_type": evidence.get("component_type"),
+                        "requirement": requirement,
+                        "status": status,
+                        "severity": "blocking",
+                        "evidence_refs": [str(evidence.get("evidence_id") or evidence.get("component_id") or "")],
+                        "source_check_id": requirement,
+                        "summary": f"{requirement} is {status}.",
+                    }
+                )
+        data = {
+            "schema_version": TRUST_OPERATIONS_SCHEMA_VERSION,
+            "package_type": TRUST_OPERATIONS_DELIVERY_READINESS_MATRIX_PACKAGE_TYPE,
+            "hub_id": hub.get("hub_id"),
+            "report_id": report_id,
+            "rows": sorted(rows, key=lambda row: (str(row.get("component_type") or ""), str(row.get("component_id") or ""), str(row.get("requirement") or ""))),
+            "summary": _readiness_summary(rows),
+            "source": {"delivery_evidence_index_hash": delivery_evidence.get("integrity_hash")},
+        }
+        data["integrity_hash"] = hub_hash(data)
+        return data
+
+    def _delivery_blocker_register(self, hub: dict[str, Any], report_id: str, delivery_readiness: dict[str, Any]) -> dict[str, Any]:
+        blockers = []
+        for index, row in enumerate([row for row in delivery_readiness.get("rows", []) if isinstance(row, dict) and row.get("status") in {"blocked", "stale", "missing", "not_configured"} and row.get("severity") == "blocking"], start=1):
+            blockers.append(
+                {
+                    "blocker_id": f"hub-delivery-blocker-{index:06d}",
+                    "component_id": row.get("component_id"),
+                    "requirement": row.get("requirement"),
+                    "severity": "critical" if row.get("status") == "blocked" else "high",
+                    "status": "open",
+                    "source_check_id": row.get("source_check_id") or row.get("requirement"),
+                    "evidence_ref": (row.get("evidence_refs") or [None])[0],
+                    "manual_action_id": f"hub-delivery-action-{index:06d}",
+                    "message": row.get("summary"),
+                }
+            )
+        data = {
+            "schema_version": TRUST_OPERATIONS_SCHEMA_VERSION,
+            "package_type": TRUST_OPERATIONS_DELIVERY_BLOCKER_REGISTER_PACKAGE_TYPE,
+            "hub_id": hub.get("hub_id"),
+            "report_id": report_id,
+            "blockers": blockers,
+            "summary": {"blocker_count": len(blockers), "critical_count": sum(1 for row in blockers if row.get("severity") == "critical"), "high_count": sum(1 for row in blockers if row.get("severity") == "high")},
+            "source": {"delivery_readiness_matrix_hash": delivery_readiness.get("integrity_hash")},
+        }
+        data["integrity_hash"] = hub_hash(data)
+        return data
+
+    def _delivery_manual_action_queue(self, hub: dict[str, Any], report_id: str, delivery_blockers: dict[str, Any]) -> dict[str, Any]:
+        actions = []
+        for blocker in delivery_blockers.get("blockers", []) if isinstance(delivery_blockers.get("blockers"), list) else []:
+            if not isinstance(blocker, dict):
+                continue
+            actions.append(
+                {
+                    "action_id": blocker.get("manual_action_id"),
+                    "action_type": _delivery_action_type(str(blocker.get("requirement") or "")),
+                    "status": "manual_required",
+                    "component_id": blocker.get("component_id"),
+                    "reason": blocker.get("message"),
+                    "allowed_automation": False,
+                    "suggested_cli": "python -m song_agent.cli trust-operations-hub --refresh --export --zip --verify",
+                }
+            )
+        data = {
+            "schema_version": TRUST_OPERATIONS_SCHEMA_VERSION,
+            "package_type": TRUST_OPERATIONS_DELIVERY_MANUAL_ACTION_QUEUE_PACKAGE_TYPE,
+            "hub_id": hub.get("hub_id"),
+            "report_id": report_id,
+            "actions": actions,
+            "summary": {"manual_required_count": len(actions), "safe_action_count": 0},
+            "source": {"delivery_blocker_register_hash": delivery_blockers.get("integrity_hash")},
+        }
+        data["integrity_hash"] = hub_hash(data)
+        return data
+
     def _read_report_docs(self, hub_id: str, report_id: str) -> dict[str, dict[str, Any]]:
         docs = {
             "hub_report": _read_required(self.report_path(hub_id, report_id)),
@@ -510,6 +733,10 @@ class TrustOperationsHubStore:
             "evidence_binding_index": _read_required(self.evidence_binding_index_path(hub_id, report_id)),
             "verification_summary_index": _read_required(self.verification_summary_index_path(hub_id, report_id)),
             "source_state": _read_required(self.source_state_path(hub_id, report_id)),
+            "delivery_evidence_index": _read_required(self.delivery_evidence_index_path(hub_id, report_id)),
+            "delivery_readiness_matrix": _read_required(self.delivery_readiness_matrix_path(hub_id, report_id)),
+            "delivery_blocker_register": _read_required(self.delivery_blocker_register_path(hub_id, report_id)),
+            "delivery_manual_action_queue": _read_required(self.delivery_manual_action_queue_path(hub_id, report_id)),
         }
         return docs
 
@@ -519,7 +746,7 @@ class TrustOperationsHubStore:
     def _assert_report_docs_current(self, docs: dict[str, dict[str, Any]]) -> None:
         if docs["hub_report"].get("integrity_hash") != hub_hash(docs["hub_report"]):
             raise TrustOperationsHubStateError("Hub report integrity failed.")
-        for key in ("readiness_matrix", "blocker_register", "manual_action_queue", "evidence_binding_index", "verification_summary_index", "source_state"):
+        for key in ("readiness_matrix", "blocker_register", "manual_action_queue", "evidence_binding_index", "verification_summary_index", "source_state", "delivery_evidence_index", "delivery_readiness_matrix", "delivery_blocker_register", "delivery_manual_action_queue"):
             if docs[key].get("integrity_hash") != hub_hash(docs[key]):
                 raise TrustOperationsHubStateError(f"{key} integrity failed.")
         source = docs["hub_report"].get("source") if isinstance(docs["hub_report"].get("source"), dict) else {}
@@ -530,6 +757,10 @@ class TrustOperationsHubStore:
             "evidence_binding_index_hash": docs["evidence_binding_index"].get("integrity_hash"),
             "verification_summary_index_hash": docs["verification_summary_index"].get("integrity_hash"),
             "source_state_hash": docs["source_state"].get("integrity_hash"),
+            "delivery_evidence_index_hash": docs["delivery_evidence_index"].get("integrity_hash"),
+            "delivery_readiness_matrix_hash": docs["delivery_readiness_matrix"].get("integrity_hash"),
+            "delivery_blocker_register_hash": docs["delivery_blocker_register"].get("integrity_hash"),
+            "delivery_manual_action_queue_hash": docs["delivery_manual_action_queue"].get("integrity_hash"),
         }
         for key, value in expected.items():
             if source.get(key) != value:
@@ -561,6 +792,14 @@ class TrustOperationsHubStore:
                 report = _read_json_default(report_path, default={})
                 if verification_hash(report) not in expected_hashes:
                     raise TrustOperationsHubStateError("Trust Operations Hub external verification report changed. Refresh before export.")
+        delivery_rows = [row for row in docs["delivery_evidence_index"].get("evidence", []) if isinstance(row, dict)]
+        for spec in DELIVERY_VERIFICATION_COMPONENTS:
+            expected_rows = [row for row in delivery_rows if row.get("component_type") == spec["component_type"]]
+            expected_hashes = {str(row.get("verification_report_hash") or "") for row in expected_rows}
+            for report_path in _paths(source_paths.get(spec["payload_keys"])):
+                report = _read_json_default(report_path, default={})
+                if verification_hash(report) not in expected_hashes:
+                    raise TrustOperationsHubStateError("Trust Operations Hub delivery verification report changed. Refresh before export.")
 
     def _ensure_unsigned(self, hub_id: str) -> None:
         if self._signoff_state(hub_id)["status"] == "signed":
@@ -627,7 +866,17 @@ def hub_manifest_hash(manifest: dict[str, Any]) -> str:
 
 
 def _default_requirements() -> dict[str, bool]:
-    return {"require_public_trust_center_verified": True, "require_publication_current": True, "require_publication_monitoring_clean": True, "require_no_open_critical_incidents": True}
+    return {
+        "require_public_trust_center_verified": True,
+        "require_publication_current": True,
+        "require_publication_monitoring_clean": True,
+        "require_no_open_critical_incidents": True,
+        "require_release_verified": False,
+        "require_distribution_verified": False,
+        "require_submission_verified": False,
+        "require_submission_evidence_verified": False,
+        "require_release_operations_verified": False,
+    }
 
 
 def _scope(payload: dict[str, Any]) -> dict[str, Any]:
@@ -635,15 +884,66 @@ def _scope(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _source_paths(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
+    paths = {
         "publication_channel_state_paths": [str(path) for path in _paths(payload.get("publication_channel_state_paths") or payload.get("publication_channel_state_path"))],
         "public_trust_center_verification_paths": [str(path) for path in _paths(payload.get("public_trust_center_verification_paths") or payload.get("public_trust_center_verification_path"))],
         "publication_monitoring_verification_paths": [str(path) for path in _paths(payload.get("publication_monitoring_verification_paths") or payload.get("publication_monitoring_verification_path"))],
     }
+    for spec in DELIVERY_VERIFICATION_COMPONENTS:
+        paths[str(spec["payload_keys"])] = [str(path) for path in _paths(payload.get(spec["payload_keys"]) or payload.get(spec["payload_key"]))]
+    return paths
 
 
 def _evidence_from_verification(evidence_id: str, component_type: str, report: dict[str, Any], path: Path) -> dict[str, Any]:
     return {"evidence_id": evidence_id, "component_type": component_type, "path_hint": str(path.name), "package_type": report.get("package_type"), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash"), "verification_report_hash": verification_hash(report), "source_hash": report.get("source_hash"), "status": report.get("status") or "missing", "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {}, "current_state_refs": {"publication_channel_state_hash": report.get("channel_state_hash")}}
+
+
+def _delivery_component_id(spec: dict[str, str], report: dict[str, Any], index: int) -> str:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    for key in ("release_id", "target_id", "submission_id", "evidence_id", "operations_id", "package_id"):
+        value = report.get(key) or summary.get(key)
+        if value:
+            return f"{spec['component_id_prefix']}:{_safe_id(str(value))}"
+    return f"{spec['component_id_prefix']}:{index:03d}"
+
+
+def _delivery_evidence_from_verification(component_id: str, component_type: str, requirement: str, report: dict[str, Any], path: Path) -> dict[str, Any]:
+    return {
+        "evidence_id": component_id + ":verification",
+        "component_id": component_id,
+        "component_type": component_type,
+        "requirement": requirement,
+        "path_hint": str(path.name),
+        "package_type": report.get("package_type"),
+        "zip_sha256": report.get("zip_sha256"),
+        "zip_size_bytes": report.get("zip_size_bytes"),
+        "manifest_hash": report.get("manifest_hash"),
+        "verification_report_hash": verification_hash(report),
+        "source_hash": report.get("source_hash"),
+        "status": report.get("status") or "missing",
+        "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
+    }
+
+
+def _delivery_evidence_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "evidence_count": len(rows),
+        "passed_count": sum(1 for row in rows if row.get("status") == "passed"),
+        "failed_count": sum(1 for row in rows if row.get("status") == "failed"),
+        "stale_count": sum(1 for row in rows if row.get("status") == "stale"),
+        "missing_count": sum(1 for row in rows if not row.get("status") or row.get("status") == "missing"),
+    }
+
+
+def _status_from_verification_evidence(evidence: dict[str, Any]) -> str:
+    status = str(evidence.get("status") or "")
+    if status == "passed":
+        return "ready"
+    if status == "failed":
+        return "blocked"
+    if status == "stale":
+        return "stale"
+    return "missing"
 
 
 def _readiness_row(component_id: str, component_type: str, requirement: str, evidence: dict[str, Any] | None) -> dict[str, Any]:
@@ -657,6 +957,11 @@ def _readiness_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
     return {"row_count": len(rows), "ready_count": sum(1 for row in rows if row.get("status") == "ready"), "blocked_count": sum(1 for row in rows if row.get("status") == "blocked"), "warning_count": sum(1 for row in rows if row.get("status") == "warning"), "stale_count": sum(1 for row in rows if row.get("status") == "stale"), "missing_count": sum(1 for row in rows if row.get("status") in {"missing", "not_configured"})}
 
 
+def _combine_readiness_summaries(*summaries: dict[str, Any]) -> dict[str, int]:
+    keys = ("row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count")
+    return {key: sum(int(summary.get(key) or 0) for summary in summaries if isinstance(summary, dict)) for key in keys}
+
+
 def _requirement_for_component(component_type: str) -> str:
     return {"public_trust_center_verification": "public_trust_center_verified", "publication_monitoring_verification": "publication_monitoring_clean"}.get(component_type, component_type)
 
@@ -667,6 +972,16 @@ def _action_type(requirement: str) -> str:
     if "publication" in requirement:
         return "refresh_publication_channel"
     return "review_trust_operations_evidence"
+
+
+def _delivery_action_type(requirement: str) -> str:
+    return {
+        "release_verified": "verify_release_package",
+        "distribution_verified": "verify_distribution_package",
+        "submission_verified": "verify_submission_package",
+        "submission_evidence_verified": "verify_submission_evidence_package",
+        "release_operations_verified": "verify_release_operations_package",
+    }.get(requirement, "review_delivery_evidence")
 
 
 def _paths(value: Any) -> list[Path]:

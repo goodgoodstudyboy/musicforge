@@ -117,6 +117,67 @@ def test_trust_operations_hub_external_revoke_blocks_export_and_verify(tmp_path:
     assert _has_blocker(current, "toh_external_channel_state_current")
 
 
+def test_trust_operations_hub_delivery_evidence_requires_external_bindings(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    delivery = _delivery_fixture(tmp_path)
+    store = TrustOperationsHubStore(tmp_path / ".musicforge" / "trust-operations-delivery")
+    hub = store.create_hub({"hub_id": "hub"})
+    payload = {**fixture.payload, **delivery.payload}
+    report_id = store.refresh_report(hub["hub_id"], payload)["hub_report"]["report_id"]
+    store.export_report("hub", report_id)
+    store.build_zip("hub", report_id)
+
+    passed = store.verify_zip(
+        "hub",
+        report_id,
+        {
+            **fixture.verify_payload,
+            **delivery.verify_payload,
+            "strict": True,
+            "require_ready": True,
+            "require_current": True,
+            "require_delivery_ready": True,
+            "require_publication_monitoring_clean": True,
+        },
+    )
+    missing_external = verify_trust_operations_hub_package(store.zip_path("hub", report_id), strict=True, require_delivery_ready=True)
+    release_report = read_json(delivery.release_verification_path)
+    release_report["zip_sha256"] = "0" * 64
+    write_json(delivery.release_verification_path, release_report)
+    stale_verify = verify_trust_operations_hub_package(
+        store.zip_path("hub", report_id),
+        strict=True,
+        require_delivery_ready=True,
+        **fixture.verify_kwargs(),
+        **delivery.verify_kwargs(),
+    )
+
+    assert passed["status"] == "passed", passed.get("blockers")
+    assert _has_blocker(missing_external, "toh_external_release_verification_required")
+    assert _has_blocker(stale_verify, "toh_external_release_verification_hash")
+    assert _blocked(lambda: store.export_report("hub", report_id))
+
+
+def test_trust_operations_hub_delivery_full_resign_is_rejected(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    delivery = _delivery_fixture(tmp_path)
+    store = TrustOperationsHubStore(tmp_path / ".musicforge" / "trust-operations-delivery-resign")
+    hub = store.create_hub({"hub_id": "hub"})
+    report_id = store.refresh_report(hub["hub_id"], {**fixture.payload, **delivery.payload})["hub_report"]["report_id"]
+    store.export_report("hub", report_id)
+    store.build_zip("hub", report_id)
+
+    forged = verify_trust_operations_hub_package(
+        _rewrite_zip(store.zip_path("hub", report_id), tmp_path / "delivery-full-resign.zip", _tamper_delivery_matrix_full_resign),
+        strict=True,
+        require_delivery_ready=True,
+        **fixture.verify_kwargs(),
+        **delivery.verify_kwargs(),
+    )
+
+    assert _has_blocker(forged, "toh_delivery_readiness_semantics_match")
+
+
 def test_trust_operations_hub_verifier_rejects_tamper_and_zip_edges(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     source_zip = _ready_zip(tmp_path, fixture)
@@ -177,6 +238,16 @@ class _Fixture:
         }
 
 
+class _DeliveryFixture:
+    def __init__(self, paths: dict[str, Path]) -> None:
+        self.release_verification_path = paths["release_verification_path"]
+        self.payload = paths
+        self.verify_payload = dict(paths)
+
+    def verify_kwargs(self) -> dict[str, Path]:
+        return dict(self.verify_payload)
+
+
 def _fixture(tmp_path: Path) -> _Fixture:
     root = tmp_path / "external"
     root.mkdir(parents=True, exist_ok=True)
@@ -199,6 +270,32 @@ def _fixture(tmp_path: Path) -> _Fixture:
     assert verification_hash(read_json(ptc_path))
     assert verification_hash(read_json(monitoring_path))
     return _Fixture(state_path, ptc_path, monitoring_path)
+
+
+def _delivery_fixture(tmp_path: Path) -> _DeliveryFixture:
+    root = tmp_path / "delivery-external"
+    root.mkdir(parents=True, exist_ok=True)
+    specs = {
+        "release_verification_path": ("musicforge_release_verification", "release-001", "release"),
+        "distribution_verification_path": ("musicforge_distribution_verification", "target-001", "target"),
+        "submission_verification_path": ("musicforge_submission_verification", "submission-001", "submission"),
+        "submission_evidence_verification_path": ("musicforge_submission_evidence_verification", "evidence-001", "evidence"),
+        "release_operations_verification_path": ("musicforge_release_operations_verification", "ops-001", "operations"),
+    }
+    paths: dict[str, Path] = {}
+    for index, (key, (package_type, item_id, summary_key)) in enumerate(specs.items(), start=1):
+        report = {
+            "package_type": package_type,
+            "status": "passed",
+            "zip_sha256": str(index) * 64,
+            "zip_size_bytes": index * 100,
+            "manifest_hash": chr(96 + index) * 64,
+            "source_hash": chr(102 + index) * 64,
+            "summary": {"status": "passed", summary_key + "_id": item_id},
+            "checks": [],
+        }
+        paths[key] = write_json(root / f"{key}.json", report)
+    return _DeliveryFixture(paths)
 
 
 def _blocked(fn) -> bool:
@@ -279,6 +376,26 @@ def _tamper_evidence_full_resign(docs: dict[str, bytes]) -> None:
     _resign_hub_docs(docs)
 
 
+def _tamper_delivery_matrix_full_resign(docs: dict[str, bytes]) -> None:
+    matrix = _read_doc(docs, "delivery-readiness-matrix.json")
+    for row in matrix.get("rows", []):
+        if isinstance(row, dict) and row.get("component_type") == "release_verification":
+            row["status"] = "blocked"
+            row["summary"] = "Forged delivery blocker."
+            break
+    matrix["summary"] = {
+        "row_count": len(matrix.get("rows", [])),
+        "ready_count": max(0, len(matrix.get("rows", [])) - 1),
+        "blocked_count": 1,
+        "warning_count": 0,
+        "stale_count": 0,
+        "missing_count": 0,
+    }
+    matrix["integrity_hash"] = hub_hash(matrix)
+    docs["delivery-readiness-matrix.json"] = _doc_bytes(matrix)
+    _resign_hub_docs(docs)
+
+
 def _spoof_manifest_zip_entries(docs: dict[str, bytes]) -> None:
     manifest = _read_doc(docs, "trust-operations-hub-manifest.json")
     manifest.setdefault("zip", {}).setdefault("entries", []).append("extra.txt")
@@ -295,6 +412,10 @@ def _resign_hub_docs(docs: dict[str, bytes]) -> None:
     verifications = _read_doc(docs, "verification-summary-index.json")
     source_state = _read_doc(docs, "source-state.json")
     signoff = _read_doc(docs, "signoff-summary.json")
+    delivery_evidence = _read_doc(docs, "delivery-evidence-index.json")
+    delivery_matrix = _read_doc(docs, "delivery-readiness-matrix.json")
+    delivery_blockers = _read_doc(docs, "delivery-blocker-register.json")
+    delivery_actions = _read_doc(docs, "delivery-manual-action-queue.json")
     checksum = _read_doc(docs, "checksum/SHA256SUMS.json")
     manifest = _read_doc(docs, "trust-operations-hub-manifest.json")
     report["source"] = {
@@ -305,9 +426,17 @@ def _resign_hub_docs(docs: dict[str, bytes]) -> None:
         "manual_action_queue_hash": actions.get("integrity_hash"),
         "evidence_binding_index_hash": evidence.get("integrity_hash"),
         "verification_summary_index_hash": verifications.get("integrity_hash"),
+        "delivery_evidence_index_hash": delivery_evidence.get("integrity_hash"),
+        "delivery_readiness_matrix_hash": delivery_matrix.get("integrity_hash"),
+        "delivery_blocker_register_hash": delivery_blockers.get("integrity_hash"),
+        "delivery_manual_action_queue_hash": delivery_actions.get("integrity_hash"),
     }
-    report["readiness"] = {"overall_status": report.get("status"), **matrix.get("summary", {})}
-    report["status"] = "ready" if matrix.get("summary", {}).get("blocked_count") == 0 and matrix.get("summary", {}).get("missing_count") == 0 and matrix.get("summary", {}).get("stale_count") == 0 and blockers.get("summary", {}).get("blocker_count") == 0 else "blocked"
+    combined = {
+        key: int(matrix.get("summary", {}).get(key) or 0) + int(delivery_matrix.get("summary", {}).get(key) or 0)
+        for key in ("row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count")
+    }
+    report["readiness"] = {"overall_status": report.get("status"), **combined}
+    report["status"] = "ready" if combined.get("blocked_count") == 0 and combined.get("missing_count") == 0 and combined.get("stale_count") == 0 and blockers.get("summary", {}).get("blocker_count") == 0 and delivery_blockers.get("summary", {}).get("blocker_count") == 0 else "blocked"
     report["integrity_hash"] = hub_hash(report)
     docs["hub-report.json"] = _doc_bytes(report)
     manifest["source"] = {
@@ -318,16 +447,20 @@ def _resign_hub_docs(docs: dict[str, bytes]) -> None:
         "evidence_binding_index_hash": evidence.get("integrity_hash"),
         "verification_summary_index_hash": verifications.get("integrity_hash"),
         "source_state_hash": source_state.get("integrity_hash"),
+        "delivery_evidence_index_hash": delivery_evidence.get("integrity_hash"),
+        "delivery_readiness_matrix_hash": delivery_matrix.get("integrity_hash"),
+        "delivery_blocker_register_hash": delivery_blockers.get("integrity_hash"),
+        "delivery_manual_action_queue_hash": delivery_actions.get("integrity_hash"),
         "signoff_summary_hash": signoff.get("integrity_hash"),
     }
-    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json"):
+    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json", "delivery-readiness-matrix.json"):
         _sync_file_record(checksum, path, docs[path])
     checksum["integrity_hash"] = hub_hash(checksum)
     docs["checksum/SHA256SUMS.json"] = _doc_bytes(checksum)
     _sync_manifest_file(manifest, "checksum/SHA256SUMS.json", docs["checksum/SHA256SUMS.json"])
     docs["checksum/SHA256SUMS.txt"] = ("\n".join(f"{item.get('sha256')}  {item.get('path')}" for item in checksum.get("files", []) if isinstance(item, dict)) + "\n").encode("utf-8")
     _sync_manifest_file(manifest, "checksum/SHA256SUMS.txt", docs["checksum/SHA256SUMS.txt"])
-    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json"):
+    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json", "delivery-readiness-matrix.json"):
         _sync_manifest_file(manifest, path, docs[path])
     manifest["integrity_hash"] = hub_manifest_hash(manifest)
     docs["trust-operations-hub-manifest.json"] = _doc_bytes(manifest)
