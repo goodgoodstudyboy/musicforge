@@ -49,10 +49,15 @@ def verify_trust_operations_hub_package(
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
     release_verification_path: Path | str | None = None,
+    release_verification_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     distribution_verification_path: Path | str | None = None,
+    distribution_verification_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     submission_verification_path: Path | str | None = None,
+    submission_verification_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     submission_evidence_verification_path: Path | str | None = None,
+    submission_evidence_verification_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     release_operations_verification_path: Path | str | None = None,
+    release_operations_verification_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     hub_signoff_path: Path | str | None = None,
     hub_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
@@ -72,11 +77,11 @@ def verify_trust_operations_hub_package(
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
-        release_verification_path=Path(release_verification_path) if release_verification_path else None,
-        distribution_verification_path=Path(distribution_verification_path) if distribution_verification_path else None,
-        submission_verification_path=Path(submission_verification_path) if submission_verification_path else None,
-        submission_evidence_verification_path=Path(submission_evidence_verification_path) if submission_evidence_verification_path else None,
-        release_operations_verification_path=Path(release_operations_verification_path) if release_operations_verification_path else None,
+        release_verification_paths=_combine_paths(release_verification_paths, release_verification_path),
+        distribution_verification_paths=_combine_paths(distribution_verification_paths, distribution_verification_path),
+        submission_verification_paths=_combine_paths(submission_verification_paths, submission_verification_path),
+        submission_evidence_verification_paths=_combine_paths(submission_evidence_verification_paths, submission_evidence_verification_path),
+        release_operations_verification_paths=_combine_paths(release_operations_verification_paths, release_operations_verification_path),
         hub_signoff_path=Path(hub_signoff_path) if hub_signoff_path else None,
         hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
@@ -120,11 +125,11 @@ class _HubVerifier:
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
-        release_verification_path: Path | None,
-        distribution_verification_path: Path | None,
-        submission_verification_path: Path | None,
-        submission_evidence_verification_path: Path | None,
-        release_operations_verification_path: Path | None,
+        release_verification_paths: list[Path],
+        distribution_verification_paths: list[Path],
+        submission_verification_paths: list[Path],
+        submission_evidence_verification_paths: list[Path],
+        release_operations_verification_paths: list[Path],
         hub_signoff_path: Path | None,
         hub_verification_report_path: Path | None,
         max_zip_size_mb: int,
@@ -144,11 +149,11 @@ class _HubVerifier:
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
         self.delivery_verification_paths = {
-            "release_verification": release_verification_path,
-            "distribution_verification": distribution_verification_path,
-            "submission_verification": submission_verification_path,
-            "submission_evidence_verification": submission_evidence_verification_path,
-            "release_operations_verification": release_operations_verification_path,
+            "release_verification": release_verification_paths,
+            "distribution_verification": distribution_verification_paths,
+            "submission_verification": submission_verification_paths,
+            "submission_evidence_verification": submission_evidence_verification_paths,
+            "release_operations_verification": release_operations_verification_paths,
         }
         self.hub_signoff_path = hub_signoff_path
         self.hub_verification_report_path = hub_verification_report_path
@@ -183,7 +188,7 @@ class _HubVerifier:
         self.external_channel_state: dict[str, Any] = {}
         self.external_ptc_verification: dict[str, Any] = {}
         self.external_monitoring_verification: dict[str, Any] = {}
-        self.external_delivery_verifications: dict[str, dict[str, Any]] = {}
+        self.external_delivery_verifications: dict[str, list[dict[str, Any]]] = {}
         self.external_hub_signoff: dict[str, Any] = {}
         self.external_hub_verification_report: dict[str, Any] = {}
 
@@ -438,12 +443,13 @@ class _HubVerifier:
 
         for spec in DELIVERY_VERIFICATION_COMPONENTS:
             component_type = str(spec["component_type"])
-            path = self.delivery_verification_paths.get(component_type)
-            if path:
-                report = _read_json_file(path)
-                self.external_delivery_verifications[component_type] = report
-                self._verify_external_delivery_report(component_type, report, "toh_external_" + component_type)
-            elif self.require_delivery_ready or (self.require_current and _delivery_evidence_by_type(self.delivery_evidence, component_type)):
+            paths = self.delivery_verification_paths.get(component_type) or []
+            expected_rows = _delivery_evidence_rows(self.delivery_evidence, component_type)
+            reports = [_read_json_file(path) for path in paths]
+            self.external_delivery_verifications[component_type] = reports
+            if reports:
+                self._verify_external_delivery_reports(component_type, expected_rows, reports, "toh_external_" + component_type)
+            elif self.require_delivery_ready or (self.require_current and expected_rows):
                 self._add_check("external", "toh_external_" + component_type + "_required", "failed", "blocking", f"Current delivery verification requires external {component_type} report.")
 
     def _verify_external_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
@@ -457,14 +463,31 @@ class _HubVerifier:
             critical = int(summary.get("critical_incidents") or summary.get("open_critical_incidents") or 0)
             self._add_check("external", "toh_external_monitoring_no_open_critical_incidents", "passed" if critical == 0 else "failed", "blocking", "External monitoring report has no open critical incidents." if critical == 0 else "External monitoring report has open critical incidents.")
 
-    def _verify_external_delivery_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
-        expected = _delivery_evidence_by_type(self.delivery_evidence, component_type)
-        report_hash = verification_hash(report)
-        status = "passed" if report and report_hash == expected.get("verification_report_hash") else "failed"
-        self._add_check("external", check_prefix + "_hash", status, "blocking", f"External {component_type} report matches delivery evidence." if status == "passed" else f"External {component_type} report does not match delivery evidence.")
-        self._add_exact_check("external", check_prefix + "_status", report.get("status"), expected.get("status"), f"External {component_type} status")
-        self._add_exact_check("external", check_prefix + "_zip_sha256", report.get("zip_sha256"), expected.get("zip_sha256"), f"External {component_type} ZIP sha256")
-        self._add_exact_check("external", check_prefix + "_manifest_hash", report.get("manifest_hash"), expected.get("manifest_hash"), f"External {component_type} manifest hash")
+    def _verify_external_delivery_reports(self, component_type: str, expected_rows: list[dict[str, Any]], reports: list[dict[str, Any]], check_prefix: str) -> None:
+        expected_by_id = {str(row.get("component_id") or ""): row for row in expected_rows if str(row.get("component_id") or "")}
+        report_by_id: dict[str, dict[str, Any]] = {}
+        duplicate_ids: list[str] = []
+        unknown_ids: list[str] = []
+        for index, report in enumerate(reports, start=1):
+            component_id = _external_delivery_component_id(component_type, report, index)
+            if component_id in report_by_id:
+                duplicate_ids.append(component_id)
+            report_by_id[component_id] = report
+            if component_id not in expected_by_id:
+                unknown_ids.append(component_id)
+        missing_ids = sorted(set(expected_by_id) - set(report_by_id))
+        extra_ids = sorted(set(report_by_id) - set(expected_by_id))
+        self._add_check("external", check_prefix + "_component_coverage", "failed" if missing_ids or extra_ids or duplicate_ids else "passed", "blocking", f"External {component_type} reports do not match Hub delivery evidence. missing={missing_ids[:5]}, extra={extra_ids[:5]}, duplicates={duplicate_ids[:5]}" if missing_ids or extra_ids or duplicate_ids else f"External {component_type} reports cover all delivery evidence rows.")
+        for component_id in sorted(set(expected_by_id) & set(report_by_id)):
+            expected = expected_by_id[component_id]
+            report = report_by_id[component_id]
+            report_hash = verification_hash(report)
+            safe_id = _check_safe_id(component_id)
+            status = "passed" if report and report_hash == expected.get("verification_report_hash") else "failed"
+            self._add_check("external", f"{check_prefix}_{safe_id}_hash", status, "blocking", f"External {component_type} report {component_id} matches delivery evidence." if status == "passed" else f"External {component_type} report {component_id} does not match delivery evidence.")
+            self._add_exact_check("external", f"{check_prefix}_{safe_id}_status", report.get("status"), expected.get("status"), f"External {component_type} {component_id} status")
+            self._add_exact_check("external", f"{check_prefix}_{safe_id}_zip_sha256", report.get("zip_sha256"), expected.get("zip_sha256"), f"External {component_type} {component_id} ZIP sha256")
+            self._add_exact_check("external", f"{check_prefix}_{safe_id}_manifest_hash", report.get("manifest_hash"), expected.get("manifest_hash"), f"External {component_type} {component_id} manifest hash")
 
     def _verify_external_signoff(self, signoff: dict[str, Any]) -> None:
         self._add_exact_check("external", "toh_hub_signoff_package_type", signoff.get("package_type"), TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE, "Hub signoff package_type")
@@ -727,6 +750,54 @@ def _delivery_evidence_by_type(evidence: dict[str, Any], component_type: str) ->
         if isinstance(row, dict) and row.get("component_type") == component_type:
             return row
     return {}
+
+
+def _delivery_evidence_rows(evidence: dict[str, Any], component_type: str) -> list[dict[str, Any]]:
+    return [row for row in evidence.get("evidence", []) if isinstance(row, dict) and row.get("component_type") == component_type]
+
+
+def _combine_paths(paths: list[Path | str] | tuple[Path | str, ...] | None, path: Path | str | None = None) -> list[Path]:
+    combined: list[Path] = []
+    seen: set[str] = set()
+    for item in paths or []:
+        if item:
+            candidate = Path(item)
+            key = str(candidate)
+            if key not in seen:
+                combined.append(candidate)
+                seen.add(key)
+    if path:
+        candidate = Path(path)
+        key = str(candidate)
+        if key not in seen:
+            combined.append(candidate)
+    return combined
+
+
+def _external_delivery_component_id(component_type: str, report: dict[str, Any], index: int) -> str:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    prefix = {
+        "release_verification": "release",
+        "distribution_verification": "distribution",
+        "submission_verification": "submission",
+        "submission_evidence_verification": "submission-evidence",
+        "release_operations_verification": "release-operations",
+    }.get(component_type, component_type)
+    for key in ("release_id", "target_id", "submission_id", "evidence_id", "operations_id", "package_id"):
+        value = report.get(key) or summary.get(key)
+        if value:
+            return f"{prefix}:{_safe_component_id(str(value))}"
+    return f"{prefix}:{index:03d}"
+
+
+def _safe_component_id(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.:-]+", "-", value.strip()).strip("-")
+    return cleaned or "unknown"
+
+
+def _check_safe_id(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_]+", "_", value.strip()).strip("_")
+    return cleaned or "unknown"
 
 
 def _source_publication_states(source_state: dict[str, Any]) -> list[dict[str, Any]]:

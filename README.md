@@ -803,7 +803,9 @@ It can also bind full delivery-chain evidence from Release, Distribution,
 Submission, Submission Evidence, and Release Operations verification reports.
 When `--require-delivery-ready` is enabled, those external reports are required
 and are checked against the Hub delivery sidecars; the Hub ZIP cannot self-certify
-delivery readiness.
+delivery readiness. Repeat delivery verification arguments such as
+`--distribution-verification` when a release has multiple targets of the same
+type.
 Signed Hub verification is also an external-evidence gate: use
 `--require-signed` with both the Hub `signoff.json` sidecar and the Hub
 verification report that was written before signoff.

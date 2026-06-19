@@ -1,5 +1,16 @@
 # Changelog
 
+## v9.1.1 - 2026-06-19
+
+### Fixed
+- Trust Operations Hub delivery verification now validates every same-type delivery evidence row by `component_type` and `component_id`, instead of accepting the first matching type.
+- `verify-trust-operations-hub-package` and `trust-operations-hub` now accept repeated delivery verification report arguments for multi-target delivery chains.
+- release-check v9.1 smoke now covers multi-distribution delivery evidence, missing external reports, and full-resign tampering of the second same-type delivery evidence row.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_hub.py tests\test_release_check.py::test_v91_trust_operations_hub_delivery_runbook_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.1.0 - 2026-06-19
 
 ### Added

@@ -13940,6 +13940,17 @@ def _v91_trust_operations_hub_delivery_runbook_smoke(root: Path) -> tuple[bool, 
         )
         missing_external = verify_trust_operations_hub_package(source_zip, strict=True, require_delivery_ready=True)
         delivery_full_resign = verify_trust_operations_hub_package(_v76_rewrite_zip(source_zip, base / "delivery-full-resign.zip", _v91_tamper_delivery_matrix_full_resign), strict=True, require_delivery_ready=True, **fixture["verify_payload"], **delivery["verify_payload"])
+        second_distribution = _v91_copy_delivery_report(delivery["distribution_verification_path"], base / "target-002-verification.json", "target-002", "8" * 64)
+        multi_store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations-multi-delivery")
+        multi_store.create_hub({"hub_id": "hub-multi"})
+        multi_payload = {**fixture["payload"], **delivery["payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        multi_report_id = str(multi_store.refresh_report("hub-multi", multi_payload)["hub_report"]["report_id"])
+        multi_store.export_report("hub-multi", multi_report_id)
+        multi_store.build_zip("hub-multi", multi_report_id)
+        multi_verify_payload = {**fixture["verify_payload"], **delivery["verify_payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        multi_passed = verify_trust_operations_hub_package(multi_store.zip_path("hub-multi", multi_report_id), strict=True, require_delivery_ready=True, **multi_verify_payload)
+        multi_missing = verify_trust_operations_hub_package(multi_store.zip_path("hub-multi", multi_report_id), strict=True, require_delivery_ready=True, **fixture["verify_payload"], **delivery["verify_payload"])
+        multi_forged = verify_trust_operations_hub_package(_v76_rewrite_zip(multi_store.zip_path("hub-multi", multi_report_id), base / "multi-delivery-forged.zip", _v91_tamper_second_distribution_delivery_evidence_full_resign), strict=True, require_delivery_ready=True, **multi_verify_payload)
 
         release_report = read_json(delivery["release_verification_path"])
         release_report["zip_sha256"] = "0" * 64
@@ -13967,7 +13978,10 @@ def _v91_trust_operations_hub_delivery_runbook_smoke(root: Path) -> tuple[bool, 
             delivery_verify.get("status") == "passed"
             and _v38_check_status(missing_external, "toh_external_release_verification_required") == "failed"
             and _v38_check_status(delivery_full_resign, "toh_delivery_readiness_semantics_match") == "failed"
-            and _v38_check_status(stale_delivery_verify, "toh_external_release_verification_hash") == "failed"
+            and multi_passed.get("status") == "passed"
+            and _v38_check_status(multi_missing, "toh_external_distribution_verification_component_coverage") == "failed"
+            and _v38_check_status(multi_forged, "toh_external_distribution_verification_distribution_target_002_hash") == "failed"
+            and _v38_check_status(stale_delivery_verify, "toh_external_release_verification_release_release_001_hash") == "failed"
             and stale_export
             and result.get("summary", {}).get("completed_count") == 3
             and runbook_report.get("status") == "passed"
@@ -13976,7 +13990,7 @@ def _v91_trust_operations_hub_delivery_runbook_smoke(root: Path) -> tuple[bool, 
         )
         return ok, (
             f"delivery={delivery_verify.get('status')}, missing_external={_v38_check_status(missing_external, 'toh_external_release_verification_required')}, "
-            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'toh_delivery_readiness_semantics_match')}, stale_delivery={_v38_check_status(stale_delivery_verify, 'toh_external_release_verification_hash')}, stale_export={stale_export}, "
+            f"delivery_full_resign={_v38_check_status(delivery_full_resign, 'toh_delivery_readiness_semantics_match')}, multi_delivery={multi_passed.get('status')}/{_v38_check_status(multi_missing, 'toh_external_distribution_verification_component_coverage')}/{_v38_check_status(multi_forged, 'toh_external_distribution_verification_distribution_target_002_hash')}, stale_delivery={_v38_check_status(stale_delivery_verify, 'toh_external_release_verification_release_release_001_hash')}, stale_export={stale_export}, "
             f"runbook_completed={result.get('summary', {}).get('completed_count')}, runbook_verify={runbook_report.get('status')}, runbook_tamper={_v38_check_status(runbook_tamper, 'tohr_safe_results_match_events')}, signed_runbook={signed_runbook}"
         )
     except Exception as exc:
@@ -14010,6 +14024,35 @@ def _v91_delivery_fixture(base: Path) -> dict[str, Any]:
         }
         paths[key] = write_json(root / f"{key}.json", report)
     return {"payload": dict(paths), "verify_payload": dict(paths), **paths}
+
+
+def _v91_copy_delivery_report(source: Path, destination: Path, item_id: str, zip_sha256: str) -> Path:
+    report = read_json(source)
+    summary = report.setdefault("summary", {})
+    if "target_id" in summary:
+        summary["target_id"] = item_id
+    elif "release_id" in summary:
+        summary["release_id"] = item_id
+    elif "submission_id" in summary:
+        summary["submission_id"] = item_id
+    elif "evidence_id" in summary:
+        summary["evidence_id"] = item_id
+    elif "operations_id" in summary:
+        summary["operations_id"] = item_id
+    report["zip_sha256"] = zip_sha256
+    return write_json(destination, report)
+
+
+def _v91_tamper_second_distribution_delivery_evidence_full_resign(docs: dict[str, bytes]) -> None:
+    evidence = _v74_read_json_doc(docs, "delivery-evidence-index.json")
+    for row in evidence.get("evidence", []) if isinstance(evidence.get("evidence"), list) else []:
+        if isinstance(row, dict) and row.get("component_type") == "distribution_verification" and row.get("component_id") == "distribution:target-002":
+            row["verification_report_hash"] = "0" * 64
+            row["zip_sha256"] = "9" * 64
+            break
+    evidence["integrity_hash"] = stable_hash({key: value for key, value in evidence.items() if key not in {"integrity_hash", "created_at", "updated_at", "generated_at", "zip"}})
+    docs["delivery-evidence-index.json"] = _v74_json_doc(evidence)
+    _v90_resign_hub_docs(docs)
 
 
 def _v91_runbook_blocked(fn) -> bool:
@@ -14423,7 +14466,7 @@ def _v90_resign_hub_docs(docs: dict[str, bytes]) -> None:
         "delivery_manual_action_queue_hash": delivery_actions.get("integrity_hash"),
         "signoff_summary_hash": signoff.get("integrity_hash"),
     }
-    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json", "delivery-readiness-matrix.json"):
+    for path in ("hub-report.json", "readiness-matrix.json", "blocker-register.json", "manual-action-queue.json", "evidence-binding-index.json", "delivery-evidence-index.json", "delivery-readiness-matrix.json"):
         _v74_sync_manifest_file(manifest, path, docs[path])
         _v89_sync_file_record(checksum, path, docs[path])
     checksum["integrity_hash"] = hub_hash(checksum)
