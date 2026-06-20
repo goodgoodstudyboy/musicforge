@@ -31,6 +31,14 @@ DEFAULT_MAX_UNCOMPRESSED_SIZE_MB = 128
 DEFAULT_MAX_ENTRY_COUNT = 64
 MAX_TEXT_SCAN_BYTES = 2 * 1024 * 1024
 VERIFIER_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"}
+EVIDENCE_PACKAGE_TYPES = {
+    "release_verification": "musicforge_release_verification",
+    "distribution_verification": "musicforge_distribution_verification",
+    "submission_verification": "musicforge_submission_verification",
+    "submission_evidence_verification": "musicforge_submission_evidence_verification",
+    "release_operations_verification": "musicforge_release_operations_verification",
+    "publication_monitoring_verification": "musicforge_public_trust_center_publication_monitoring_verification",
+}
 
 
 def verify_trust_operations_hub_incident_package(
@@ -77,6 +85,57 @@ def print_trust_operations_hub_incident_verification_report(report: dict[str, An
 
 def trust_operations_hub_incident_verification_exit_code(report: dict[str, Any]) -> int:
     return 1 if report.get("status") == "failed" else 0
+
+
+def _invalid_passed_evidence_bindings(rows: list[Any]) -> list[str]:
+    invalid = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("status") != "passed":
+            continue
+        if not _evidence_binding_valid(row):
+            invalid.append(str(row.get("evidence_id") or row.get("component_id") or "unknown"))
+    return invalid
+
+
+def _evidence_binding_valid(evidence: dict[str, Any]) -> bool:
+    expected_package = EVIDENCE_PACKAGE_TYPES.get(str(evidence.get("component_type") or ""))
+    if expected_package and evidence.get("package_type") != expected_package:
+        return False
+    if evidence.get("binding_status") != "passed":
+        return False
+    if evidence.get("package_type") != evidence.get("expected_package_type"):
+        return False
+    if evidence.get("component_type") != evidence.get("expected_component_type"):
+        return False
+    if evidence.get("component_id") != evidence.get("expected_component_id"):
+        return False
+    if evidence.get("verification_report_hash") != evidence.get("expected_verification_report_hash"):
+        return False
+    for key in ("zip_sha256", "zip_size_bytes", "manifest_hash", "source_hash"):
+        expected_key = "expected_" + key
+        if evidence.get(expected_key) is not None and evidence.get(key) != evidence.get(expected_key):
+            return False
+    checks = evidence.get("binding_checks") if isinstance(evidence.get("binding_checks"), list) else []
+    return bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
+
+
+def _missing_components_from_hub_verification(report: dict[str, Any]) -> set[str]:
+    missing: set[str] = set()
+    for item in report.get("blockers", []) if isinstance(report.get("blockers"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        check_id = str(item.get("check_id") or "")
+        message = str(item.get("message") or "")
+        if not check_id.endswith("_component_coverage"):
+            continue
+        match = re.search(r"missing=\[(.*?)\]", message)
+        if not match:
+            continue
+        for component_id in re.findall(r"'([^']+)'|\"([^\"]+)\"", match.group(1)):
+            value = component_id[0] or component_id[1]
+            if value:
+                missing.add(value)
+    return missing
 
 
 class _IncidentVerifier:
@@ -256,12 +315,32 @@ class _IncidentVerifier:
         self._add_check("events", "tohi_incident_events_chain", "passed" if _event_chain_ok(self.events) else "failed", "blocking", "Incident event chain is intact." if _event_chain_ok(self.events) else "Incident event chain is broken.")
         self._add_check("events", "tohi_incident_status_matches_events", "failed" if mismatches else "passed", "blocking", "Incident status differs from event chain: " + ", ".join(mismatches[:5]) if mismatches else "Incident status matches event chain.")
         closeout_by_id = {str(row.get("incident_id") or ""): row for row in closeouts if isinstance(row, dict)}
+        evidence_rows = self.evidence_index.get("evidence") if isinstance(self.evidence_index.get("evidence"), list) else []
+        invalid_evidence = _invalid_passed_evidence_bindings(evidence_rows)
+        self._add_check("evidence", "tohi_evidence_binding_integrity", "failed" if invalid_evidence else "passed", "blocking", "Invalid passed evidence bindings: " + ", ".join(invalid_evidence[:5]) if invalid_evidence else "Passed evidence is bound to current Hub verification evidence.")
+        hub_verification_report = self.hub_verification_report
+        if not hub_verification_report and self.hub_verification_report_path:
+            hub_verification_report = _read_json_file(self.hub_verification_report_path)
+        missing_components = _missing_components_from_hub_verification(hub_verification_report)
+        evidence_components = {str(evidence.get("component_id") or "") for evidence in evidence_rows if isinstance(evidence, dict) and _evidence_binding_valid(evidence)}
+        missing_uncovered = sorted(component_id for component_id in missing_components if component_id not in evidence_components)
+        self._add_check("evidence", "tohi_evidence_covers_hub_verifier_blockers", "failed" if missing_uncovered else "passed", "blocking", "Incident evidence does not cover Hub verifier blockers: " + ", ".join(missing_uncovered[:5]) if missing_uncovered else "Incident evidence covers Hub verifier blockers.")
+        valid_evidence_by_incident: dict[str, list[dict[str, Any]]] = {}
+        for evidence in evidence_rows:
+            if isinstance(evidence, dict) and _evidence_binding_valid(evidence):
+                valid_evidence_by_incident.setdefault(str(evidence.get("incident_id") or ""), []).append(evidence)
         closeout_mismatches = [
             str(item.get("incident_id") or "")
             for item in incidents
             if isinstance(item, dict) and item.get("status") == "closed" and closeout_by_id.get(str(item.get("incident_id") or ""), {}).get("status") != "passed"
         ]
         self._add_check("closeouts", "tohi_closeout_summary_integrity", "failed" if closeout_mismatches else "passed", "blocking", "Closed incidents missing passed closeout: " + ", ".join(closeout_mismatches[:5]) if closeout_mismatches else "Closed incidents have passed closeout evidence.")
+        valid_evidence_missing = [
+            str(item.get("incident_id") or "")
+            for item in incidents
+            if isinstance(item, dict) and item.get("status") == "closed" and not valid_evidence_by_incident.get(str(item.get("incident_id") or ""))
+        ]
+        self._add_check("evidence", "tohi_closed_incident_valid_evidence", "failed" if valid_evidence_missing else "passed", "blocking", "Closed incidents missing valid external evidence: " + ", ".join(valid_evidence_missing[:5]) if valid_evidence_missing else "Closed incidents have valid external evidence.")
         report_source = self.report.get("source") if isinstance(self.report.get("source"), dict) else {}
         self._add_exact_check("report", "tohi_report_source_board_hash", report_source.get("board_hash"), self.board.get("integrity_hash"), "Report board hash")
         self._add_exact_check("report", "tohi_report_source_event_chain_hash", report_source.get("event_chain_hash"), self.events[-1].get("event_hash") if self.events else None, "Report event chain hash")

@@ -14103,6 +14103,25 @@ def _v92_trust_operations_hub_incident_response_smoke(root: Path) -> tuple[bool,
         incident_id = str(incident.get("incident_id") or "")
         incident_store.triage_incident("hub", incident_id, {"severity": "high", "owner": "release-check", "notes": "Close v9.2 delivery verification coverage incident."})
         incident_store.create_plan("hub", incident_id)
+        forged_evidence_blocked = _v92_incident_state_blocked(
+            lambda: incident_store.add_evidence(
+                "hub",
+                incident_id,
+                {
+                    "component_type": incident.get("detected_from", {}).get("component_type"),
+                    "component_id": incident.get("detected_from", {}).get("component_id"),
+                    "report": {
+                        "package_type": "not_a_real_verification_package",
+                        "status": "passed",
+                        "zip_sha256": "0" * 64,
+                        "zip_size_bytes": 123,
+                        "manifest_hash": "1" * 64,
+                        "source_hash": "2" * 64,
+                        "summary": {"target_id": "target-002"},
+                    },
+                },
+            )
+        )
         incident_store.add_evidence("hub", incident_id, {"component_type": incident.get("detected_from", {}).get("component_type"), "component_id": incident.get("detected_from", {}).get("component_id"), "report": read_json(second_distribution)})
         fix = incident_store.verify_fix("hub", incident_id)
         closeout = incident_store.close_incident("hub", incident_id, {"closed_by": "release-check", "reason": "Second distribution target verification report supplied."})
@@ -14138,6 +14157,7 @@ def _v92_trust_operations_hub_incident_response_smoke(root: Path) -> tuple[bool,
             failed_hub_verification.get("status") == "failed"
             and first_board.get("summary", {}).get("blocking_open_count") == 1
             and second_board.get("summary", {}).get("total_incidents") == 1
+            and forged_evidence_blocked
             and fix.get("status") == "passed"
             and closeout.get("status") == "passed"
             and incident_verification.get("status") == "passed"
@@ -14153,7 +14173,7 @@ def _v92_trust_operations_hub_incident_response_smoke(root: Path) -> tuple[bool,
         )
         return ok, (
             f"hub_missing_second={failed_hub_verification.get('status')}, incident_count={second_board.get('summary', {}).get('total_incidents')}, "
-            f"closeout={closeout.get('status')}, incident_verify={incident_verification.get('status')}, hub_gate_missing={_v38_check_status(hub_gate_missing, 'toh_incident_board_package_required')}, hub_gate={hub_gate.get('status')}, "
+            f"forged_evidence={forged_evidence_blocked}, closeout={closeout.get('status')}, incident_verify={incident_verification.get('status')}, hub_gate_missing={_v38_check_status(hub_gate_missing, 'toh_incident_board_package_required')}, hub_gate={hub_gate.get('status')}, "
             f"incident_full_resign={_v38_check_status(incident_full_resign, 'tohi_incident_status_matches_events')}, extra={_v38_check_status(extra, 'tohi_zip_no_extra_entries')}, backslash={_v38_check_status(backslash, 'tohi_zip_entry_path_safe')}, duplicate={_v38_check_status(duplicate, 'tohi_zip_no_duplicate_entries')}, "
             f"redaction={_v38_check_status(redaction, 'tohi_redaction_scan')}, missing_current={_v38_check_status(missing_current, 'tohi_hub_verification_required')}, stale_hub={_v38_check_status(stale_hub, 'tohi_hub_verification_zip_sha256')}"
         )
@@ -14162,6 +14182,16 @@ def _v92_trust_operations_hub_incident_response_smoke(root: Path) -> tuple[bool,
     finally:
         if base.exists():
             shutil.rmtree(base, ignore_errors=True)
+
+
+def _v92_incident_state_blocked(fn) -> bool:
+    from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStateError
+
+    try:
+        fn()
+    except TrustOperationsIncidentStateError:
+        return True
+    return False
 
 
 def _v92_tamper_closed_incident_full_resign(docs: dict[str, bytes]) -> None:

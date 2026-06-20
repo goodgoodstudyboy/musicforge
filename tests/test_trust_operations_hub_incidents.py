@@ -88,6 +88,53 @@ def test_trust_operations_incident_refuses_source_path_evidence(tmp_path: Path) 
         incident_store.add_evidence("hub", incident["incident_id"], {"source_path": str(tmp_path / "report.json"), "report": {"status": "passed"}})
 
 
+def test_trust_operations_incident_rejects_forged_passed_evidence(tmp_path: Path) -> None:
+    _hub_store, incident_store, _fixture_obj, _delivery, _second_distribution, _report_id = _incident_fixture(tmp_path)
+    incident = incident_store.list_incidents("hub")[0]
+    forged = {
+        "package_type": "not_a_real_verification_package",
+        "status": "passed",
+        "zip_sha256": "0" * 64,
+        "zip_size_bytes": 123,
+        "manifest_hash": "1" * 64,
+        "source_hash": "2" * 64,
+        "summary": {"target_id": "target-002"},
+    }
+
+    with pytest.raises(TrustOperationsIncidentStateError):
+        incident_store.add_evidence(
+            "hub",
+            incident["incident_id"],
+            {
+                "component_type": incident["detected_from"]["component_type"],
+                "component_id": incident["detected_from"]["component_id"],
+                "report": forged,
+            },
+        )
+
+    fix = incident_store.verify_fix("hub", incident["incident_id"])
+    assert fix["status"] == "failed"
+
+
+def test_trust_operations_incident_verifier_rejects_forged_evidence_binding(tmp_path: Path) -> None:
+    hub_store, incident_store, _fixture_obj, _delivery, second_distribution, report_id = _incident_fixture(tmp_path)
+    incident = incident_store.list_incidents("hub")[0]
+    incident_store.add_evidence("hub", incident["incident_id"], {"component_id": incident["detected_from"]["component_id"], "component_type": incident["detected_from"]["component_type"], "report": read_json(second_distribution)})
+    incident_store.close_incident("hub", incident["incident_id"], {"reason": "External verification evidence is current.", "closed_by": "qa"})
+    incident_store.export_board("hub")
+    incident_store.build_zip("hub")
+
+    forged = verify_trust_operations_hub_incident_package(
+        _rewrite_zip(incident_store.zip_path("hub"), tmp_path / "forged-evidence.zip", _tamper_evidence_binding_full_resign),
+        strict=True,
+        require_no_open_blocking=True,
+        hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+        require_current_hub=True,
+    )
+
+    assert _has_blocker(forged, "tohi_evidence_binding_integrity")
+
+
 def _incident_fixture(tmp_path: Path):
     fixture = _fixture(tmp_path)
     delivery = _delivery_fixture(tmp_path)
@@ -166,6 +213,38 @@ def _tamper_closed_to_open_full_resign(docs: dict[str, bytes]) -> None:
         _sync_manifest_file(manifest, path, docs[path])
     manifest["integrity"]["board_hash"] = board["integrity_hash"]
     manifest["integrity"]["report_hash"] = report["integrity_hash"]
+    manifest["integrity_hash"] = incident_manifest_hash(manifest)
+    docs["trust-operations-incident-manifest.json"] = _doc_bytes(manifest)
+
+
+def _tamper_evidence_binding_full_resign(docs: dict[str, bytes]) -> None:
+    evidence = _read_doc(docs, "evidence-index.json")
+    closeouts = _read_doc(docs, "closeout-summary.json")
+    manifest = _read_doc(docs, "trust-operations-incident-manifest.json")
+    for row in evidence.get("evidence", []):
+        if isinstance(row, dict):
+            row["package_type"] = "not_a_real_verification_package"
+            row["expected_package_type"] = "not_a_real_verification_package"
+            row["verification_report_hash"] = "9" * 64
+            row["expected_verification_report_hash"] = "9" * 64
+            for check in row.get("binding_checks", []):
+                if isinstance(check, dict):
+                    check["status"] = "passed"
+                    check["actual"] = check.get("expected")
+            break
+    evidence["summary"] = {"evidence_count": len(evidence.get("evidence", [])), "passed_count": 1, "failed_count": 0, "invalid_count": 0}
+    evidence["integrity_hash"] = incident_hash(evidence)
+    for closeout in closeouts.get("closeouts", []):
+        if isinstance(closeout, dict):
+            closeout.setdefault("source", {})["evidence_index_hash"] = evidence["integrity_hash"]
+            closeout["integrity_hash"] = incident_hash(closeout)
+    closeouts["integrity_hash"] = incident_hash(closeouts)
+    docs["evidence-index.json"] = _doc_bytes(evidence)
+    docs["closeout-summary.json"] = _doc_bytes(closeouts)
+    _sync_manifest_file(manifest, "evidence-index.json", docs["evidence-index.json"])
+    _sync_manifest_file(manifest, "closeout-summary.json", docs["closeout-summary.json"])
+    manifest["integrity"]["evidence_index_hash"] = evidence["integrity_hash"]
+    manifest["integrity"]["closeout_summary_hash"] = closeouts["integrity_hash"]
     manifest["integrity_hash"] = incident_manifest_hash(manifest)
     docs["trust-operations-incident-manifest.json"] = _doc_bytes(manifest)
 

@@ -17,7 +17,7 @@ from song_agent.projectio import read_json, write_json
 from song_agent.public_trust_center_publication_monitoring import verification_hash
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
 from song_agent.releases import stable_hash
-from song_agent.trust_operations_hub import TrustOperationsHubStore, hub_hash
+from song_agent.trust_operations_hub import DELIVERY_VERIFICATION_COMPONENTS, TrustOperationsHubStore, hub_hash
 
 
 TRUST_OPERATIONS_INCIDENT_SCHEMA_VERSION = 1
@@ -26,6 +26,14 @@ TRUST_OPERATIONS_INCIDENT_REPORT_PACKAGE_TYPE = "musicforge_trust_operations_hub
 TRUST_OPERATIONS_INCIDENT_MANIFEST_PACKAGE_TYPE = "musicforge_trust_operations_hub_incident_manifest"
 TRUST_OPERATIONS_INCIDENT_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", "generated_at", "zip"}
 TRUST_OPERATIONS_INCIDENT_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"}
+EVIDENCE_PACKAGE_TYPES = {
+    "release_verification": "musicforge_release_verification",
+    "distribution_verification": "musicforge_distribution_verification",
+    "submission_verification": "musicforge_submission_verification",
+    "submission_evidence_verification": "musicforge_submission_evidence_verification",
+    "release_operations_verification": "musicforge_release_operations_verification",
+    "publication_monitoring_verification": "musicforge_public_trust_center_publication_monitoring_verification",
+}
 
 INCIDENT_EXPORT_ENTRIES = {
     "README.txt",
@@ -359,21 +367,39 @@ class TrustOperationsIncidentStore:
                 raise TrustOperationsIncidentStateError("Evidence contains sensitive or local-path content.")
             component_type = str(payload.get("component_type") or incident.get("detected_from", {}).get("component_type") or "")
             component_id = str(payload.get("component_id") or incident.get("detected_from", {}).get("component_id") or "")
+            binding = self._bind_evidence_to_hub(hub_id, incident, report, component_type, component_id)
+            if binding.get("binding_status") != "passed":
+                raise TrustOperationsIncidentStateError("Evidence does not match current Trust Operations Hub verification evidence.")
             evidence_id = _safe_id(str(payload.get("evidence_id") or _next_id(self.evidence_dir(hub_id, incident_id), "ev")))
             evidence = {
                 "schema_version": TRUST_OPERATIONS_INCIDENT_SCHEMA_VERSION,
                 "evidence_id": evidence_id,
                 "incident_id": incident_id,
                 "kind": str(payload.get("kind") or "external_verification_report"),
-                "component_type": component_type,
-                "component_id": component_id,
+                "component_type": binding.get("component_type") or component_type,
+                "component_id": binding.get("component_id") or component_id,
+                "requested_component_id": component_id,
+                "incident_component_id": incident.get("detected_from", {}).get("component_id"),
                 "status": report.get("status") or "missing",
+                "package_type": report.get("package_type"),
                 "payload_hash": stable_hash(report),
                 "verification_report_hash": verification_hash(report),
                 "zip_sha256": report.get("zip_sha256"),
                 "zip_size_bytes": report.get("zip_size_bytes"),
                 "manifest_hash": report.get("manifest_hash"),
                 "source_hash": report.get("source_hash"),
+                "binding_status": binding.get("binding_status"),
+                "binding_checks": binding.get("binding_checks") or [],
+                "expected_evidence_id": binding.get("expected_evidence_id"),
+                "expected_component_id": binding.get("expected_component_id"),
+                "expected_component_type": binding.get("expected_component_type"),
+                "expected_package_type": binding.get("expected_package_type"),
+                "expected_verification_report_hash": binding.get("expected_verification_report_hash"),
+                "expected_zip_sha256": binding.get("expected_zip_sha256"),
+                "expected_zip_size_bytes": binding.get("expected_zip_size_bytes"),
+                "expected_manifest_hash": binding.get("expected_manifest_hash"),
+                "expected_source_hash": binding.get("expected_source_hash"),
+                "expected_status": binding.get("expected_status"),
                 "created_at": now,
                 "redaction_status": "passed",
                 "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
@@ -393,13 +419,7 @@ class TrustOperationsIncidentStore:
             incident = self._mutable_incident(hub_id, incident_id)
             evidence_index = self._read_evidence_index(hub_id, incident_id)
             current = self._incident_source_current(hub_id, incident)
-            passed_evidence = [
-                item
-                for item in evidence_index.get("evidence", [])
-                if isinstance(item, dict)
-                and item.get("status") == "passed"
-                and item.get("component_id") == incident.get("detected_from", {}).get("component_id")
-            ]
+            passed_evidence = _valid_passed_evidence_for_incident(evidence_index, incident)
             result = {
                 "schema_version": TRUST_OPERATIONS_INCIDENT_SCHEMA_VERSION,
                 "hub_id": hub_id,
@@ -440,7 +460,7 @@ class TrustOperationsIncidentStore:
             source = self._current_source_for_closeout(hub_id, incident)
             checks = [
                 {"check_id": "incident_source_current", "status": "passed" if self._incident_source_current(hub_id, incident) else "failed", "severity": "blocking"},
-                {"check_id": "required_external_verification_present", "status": "passed" if _evidence_summary(evidence_index)["passed_count"] else "failed", "severity": "blocking"},
+                {"check_id": "required_external_verification_present", "status": "passed" if _valid_passed_evidence_for_incident(evidence_index, incident) else "failed", "severity": "blocking"},
             ]
             if any(item["status"] == "failed" for item in checks):
                 raise TrustOperationsIncidentStateError("Incident closeout checks failed.")
@@ -702,6 +722,37 @@ class TrustOperationsIncidentStore:
         _write_json(self.evidence_index_path(hub_id, incident_id), index)
         return index
 
+    def _bind_evidence_to_hub(self, hub_id: str, incident: dict[str, Any], report: dict[str, Any], component_type: str, component_id: str) -> dict[str, Any]:
+        report_id = str(incident.get("detected_from", {}).get("hub_report_id") or "")
+        if not report_id:
+            return _failed_binding(component_type, component_id, "hub_report_id_missing")
+        try:
+            docs = self.hub_store._read_report_docs(hub_id, report_id)
+            self.hub_store._assert_report_docs_current(docs)
+        except Exception:
+            return _failed_binding(component_type, component_id, "hub_report_not_current")
+        rows = _expected_evidence_rows_for_component(docs, component_type)
+        if not rows:
+            return _failed_binding(component_type, component_id, "expected_evidence_missing")
+        requested_component_id = str(component_id or "")
+        generic_component = _is_generic_component_id(requested_component_id)
+        best_binding: dict[str, Any] | None = None
+        best_score = -1
+        for row in rows:
+            expected_component_id = str(row.get("component_id") or "")
+            if requested_component_id and not generic_component and requested_component_id != expected_component_id:
+                continue
+            binding = _binding_for_expected_row(row, report)
+            score = sum(1 for check in binding.get("binding_checks", []) if isinstance(check, dict) and check.get("status") == "passed")
+            if score > best_score:
+                best_binding = binding
+                best_score = score
+            if binding.get("binding_status") == "passed":
+                return binding
+        if best_binding is not None:
+            return best_binding
+        return _failed_binding(component_type, component_id, "component_id_not_expected")
+
     def _incident_source_current(self, hub_id: str, incident: dict[str, Any]) -> bool:
         report_id = str(incident.get("detected_from", {}).get("hub_report_id") or "")
         if not report_id:
@@ -823,9 +874,107 @@ def _evidence_summary(index: dict[str, Any]) -> dict[str, int]:
     rows = index.get("evidence") if isinstance(index.get("evidence"), list) else []
     return {
         "evidence_count": len(rows),
-        "passed_count": sum(1 for row in rows if isinstance(row, dict) and row.get("status") == "passed"),
+        "passed_count": sum(1 for row in rows if isinstance(row, dict) and _evidence_binding_valid(row) and row.get("status") == "passed"),
         "failed_count": sum(1 for row in rows if isinstance(row, dict) and row.get("status") == "failed"),
+        "invalid_count": sum(1 for row in rows if isinstance(row, dict) and row.get("status") == "passed" and not _evidence_binding_valid(row)),
     }
+
+
+def _expected_evidence_rows_for_component(docs: dict[str, dict[str, Any]], component_type: str) -> list[dict[str, Any]]:
+    delivery_types = {str(spec.get("component_type") or "") for spec in DELIVERY_VERIFICATION_COMPONENTS}
+    if component_type in delivery_types:
+        source = docs.get("delivery_evidence_index") if isinstance(docs.get("delivery_evidence_index"), dict) else {}
+    else:
+        source = docs.get("evidence_binding_index") if isinstance(docs.get("evidence_binding_index"), dict) else {}
+    return [row for row in source.get("evidence", []) if isinstance(row, dict) and row.get("component_type") == component_type]
+
+
+def _binding_for_expected_row(expected: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
+    expected_component_id = str(expected.get("component_id") or expected.get("evidence_id") or expected.get("component_type") or "")
+    expected_component_type = str(expected.get("component_type") or "")
+    report_hash = verification_hash(report)
+    checks = [
+        _binding_check("known_package_type", report.get("package_type"), EVIDENCE_PACKAGE_TYPES.get(expected_component_type)) if EVIDENCE_PACKAGE_TYPES.get(expected_component_type) else {"name": "known_package_type", "status": "passed", "actual": report.get("package_type"), "expected": report.get("package_type")},
+        _binding_check("package_type", report.get("package_type"), expected.get("package_type")),
+        _binding_check("status", report.get("status") or "missing", expected.get("status") or "missing"),
+        _binding_check("verification_report_hash", report_hash, expected.get("verification_report_hash")),
+        _binding_check("zip_sha256", report.get("zip_sha256"), expected.get("zip_sha256")),
+        _binding_check("manifest_hash", report.get("manifest_hash"), expected.get("manifest_hash")),
+        _binding_check("source_hash", report.get("source_hash"), expected.get("source_hash")),
+    ]
+    if expected.get("zip_size_bytes") is not None or report.get("zip_size_bytes") is not None:
+        checks.append(_binding_check("zip_size_bytes", report.get("zip_size_bytes"), expected.get("zip_size_bytes")))
+    passed = all(check["status"] == "passed" for check in checks)
+    return {
+        "binding_status": "passed" if passed else "failed",
+        "binding_checks": checks,
+        "component_type": expected_component_type,
+        "component_id": expected_component_id,
+        "expected_evidence_id": expected.get("evidence_id"),
+        "expected_component_id": expected_component_id,
+        "expected_component_type": expected_component_type,
+        "expected_package_type": expected.get("package_type"),
+        "expected_verification_report_hash": expected.get("verification_report_hash"),
+        "expected_zip_sha256": expected.get("zip_sha256"),
+        "expected_zip_size_bytes": expected.get("zip_size_bytes"),
+        "expected_manifest_hash": expected.get("manifest_hash"),
+        "expected_source_hash": expected.get("source_hash"),
+        "expected_status": expected.get("status"),
+    }
+
+
+def _binding_check(name: str, actual: Any, expected: Any) -> dict[str, Any]:
+    return {"name": name, "status": "passed" if actual == expected else "failed", "actual": actual, "expected": expected}
+
+
+def _failed_binding(component_type: str, component_id: str, reason: str) -> dict[str, Any]:
+    return {
+        "binding_status": "failed",
+        "binding_checks": [{"name": reason, "status": "failed", "actual": component_id, "expected": component_type}],
+        "component_type": component_type,
+        "component_id": component_id,
+    }
+
+
+def _is_generic_component_id(component_id: str) -> bool:
+    return component_id.endswith(":coverage") or component_id.endswith(":verification") or component_id.endswith(":missing")
+
+
+def _evidence_binding_valid(evidence: dict[str, Any]) -> bool:
+    if evidence.get("status") != "passed":
+        return False
+    if evidence.get("binding_status") != "passed":
+        return False
+    if evidence.get("package_type") != evidence.get("expected_package_type"):
+        return False
+    if evidence.get("component_type") != evidence.get("expected_component_type"):
+        return False
+    if evidence.get("component_id") != evidence.get("expected_component_id"):
+        return False
+    if evidence.get("verification_report_hash") != evidence.get("expected_verification_report_hash"):
+        return False
+    for key in ("zip_sha256", "zip_size_bytes", "manifest_hash", "source_hash"):
+        expected_key = "expected_" + key
+        if evidence.get(expected_key) is not None and evidence.get(key) != evidence.get(expected_key):
+            return False
+    checks = evidence.get("binding_checks") if isinstance(evidence.get("binding_checks"), list) else []
+    return bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
+
+
+def _valid_passed_evidence_for_incident(index: dict[str, Any], incident: dict[str, Any]) -> list[dict[str, Any]]:
+    detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+    incident_component_type = str(detected.get("component_type") or "")
+    incident_component_id = str(detected.get("component_id") or "")
+    rows = []
+    for row in index.get("evidence", []) if isinstance(index.get("evidence"), list) else []:
+        if not isinstance(row, dict) or not _evidence_binding_valid(row):
+            continue
+        if incident_component_type and row.get("component_type") != incident_component_type:
+            continue
+        if incident_component_id and not _is_generic_component_id(incident_component_id) and row.get("component_id") != incident_component_id:
+            continue
+        rows.append(row)
+    return rows
 
 
 def _category(requirement: str, source_type: str) -> str:

@@ -1,5 +1,17 @@
 # Changelog
 
+## v9.2.1 - 2026-06-20
+
+### Fixed
+- Trust Operations Incident evidence import now rejects forged passed JSON that does not match current Hub delivery verification evidence.
+- Incident closeout and Incident ZIP verification now count only passed evidence with valid Hub evidence binding.
+- Incident ZIP verifier now blocks forged evidence bindings and confirms closed incidents cover the relevant Hub verifier blocker components.
+- release-check v9.2 smoke now covers forged incident evidence rejection.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_hub_incidents.py tests\test_cli_trust_operations_hub_incidents.py tests\test_server_trust_operations_hub_incidents.py tests\test_release_check.py::test_v92_trust_operations_hub_incident_response_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.2.0 - 2026-06-19
 
 ### Added
