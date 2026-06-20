@@ -84,7 +84,12 @@ def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
 
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
-    assert [item["check_id"] for item in payload["checks"]] == ["v90.trust_operations_hub_smoke", "v91.trust_operations_hub_delivery_runbook_smoke"]
+    assert [item["check_id"] for item in payload["checks"]] == [
+        "v90.trust_operations_hub_smoke",
+        "v91.trust_operations_hub_delivery_runbook_smoke",
+        "v92.trust_operations_hub_incident_response_smoke",
+        "v93.trust_operations_incident_knowledge_smoke",
+    ]
 
 
 def test_release_check_cli_empty_selection_fails() -> None:

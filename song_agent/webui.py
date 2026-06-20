@@ -3771,6 +3771,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-incidents-zip" type="button">Build Incident ZIP</button>
           <button class="secondary" id="trust-operations-incidents-verify" type="button">Verify Incident ZIP</button>
         </div>
+        <div class="panel-title subhead"><span>Trust Operations Knowledge</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-knowledge-refresh" type="button">Refresh Knowledge</button>
+          <button class="secondary" id="trust-operations-knowledge-create-guard" type="button">Create Regression Guard</button>
+          <button class="secondary" id="trust-operations-knowledge-run-guards" type="button">Run Regression Guards</button>
+          <button class="secondary" id="trust-operations-knowledge-recurrence" type="button">Refresh Recurrence</button>
+          <button class="secondary" id="trust-operations-knowledge-export" type="button">Export Knowledge</button>
+          <button class="secondary" id="trust-operations-knowledge-zip" type="button">Build Knowledge ZIP</button>
+          <button class="secondary" id="trust-operations-knowledge-verify" type="button">Verify Knowledge ZIP</button>
+          <a class="button-link secondary" href="/api/trust-operations/hubs/default/knowledge.zip">Download Knowledge ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);

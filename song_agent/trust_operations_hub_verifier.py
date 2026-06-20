@@ -46,6 +46,7 @@ def verify_trust_operations_hub_package(
     require_publication_monitoring_clean: bool = False,
     require_delivery_ready: bool = False,
     require_incident_closeout: bool = False,
+    require_incident_regression_guards: bool = False,
     publication_channel_state_path: Path | str | None = None,
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
@@ -63,6 +64,8 @@ def verify_trust_operations_hub_package(
     hub_verification_report_path: Path | str | None = None,
     incident_board_package_path: Path | str | None = None,
     incident_board_verification_report_path: Path | str | None = None,
+    incident_knowledge_package_path: Path | str | None = None,
+    incident_knowledge_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -78,6 +81,7 @@ def verify_trust_operations_hub_package(
         require_publication_monitoring_clean=require_publication_monitoring_clean,
         require_delivery_ready=require_delivery_ready,
         require_incident_closeout=require_incident_closeout,
+        require_incident_regression_guards=require_incident_regression_guards,
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
@@ -90,6 +94,8 @@ def verify_trust_operations_hub_package(
         hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
         incident_board_package_path=Path(incident_board_package_path) if incident_board_package_path else None,
         incident_board_verification_report_path=Path(incident_board_verification_report_path) if incident_board_verification_report_path else None,
+        incident_knowledge_package_path=Path(incident_knowledge_package_path) if incident_knowledge_package_path else None,
+        incident_knowledge_verification_report_path=Path(incident_knowledge_verification_report_path) if incident_knowledge_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -129,6 +135,7 @@ class _HubVerifier:
         require_publication_monitoring_clean: bool,
         require_delivery_ready: bool,
         require_incident_closeout: bool,
+        require_incident_regression_guards: bool,
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
@@ -141,6 +148,8 @@ class _HubVerifier:
         hub_verification_report_path: Path | None,
         incident_board_package_path: Path | None,
         incident_board_verification_report_path: Path | None,
+        incident_knowledge_package_path: Path | None,
+        incident_knowledge_verification_report_path: Path | None,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -155,6 +164,7 @@ class _HubVerifier:
         self.require_publication_monitoring_clean = require_publication_monitoring_clean
         self.require_delivery_ready = require_delivery_ready
         self.require_incident_closeout = require_incident_closeout
+        self.require_incident_regression_guards = require_incident_regression_guards
         self.publication_channel_state_path = publication_channel_state_path
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
@@ -169,6 +179,8 @@ class _HubVerifier:
         self.hub_verification_report_path = hub_verification_report_path
         self.incident_board_package_path = incident_board_package_path
         self.incident_board_verification_report_path = incident_board_verification_report_path
+        self.incident_knowledge_package_path = incident_knowledge_package_path
+        self.incident_knowledge_verification_report_path = incident_knowledge_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -204,6 +216,7 @@ class _HubVerifier:
         self.external_hub_signoff: dict[str, Any] = {}
         self.external_hub_verification_report: dict[str, Any] = {}
         self.external_incident_verification_report: dict[str, Any] = {}
+        self.external_incident_knowledge_verification_report: dict[str, Any] = {}
 
     def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
@@ -523,30 +536,58 @@ class _HubVerifier:
             self._add_exact_check("external", "toh_hub_verification_source_hash", report.get("source_hash"), self.report.get("integrity_hash"), "Hub verification source hash")
 
     def _verify_external_incidents(self) -> None:
-        if not (self.require_incident_closeout or self.incident_board_package_path or self.incident_board_verification_report_path):
+        if not (self.require_incident_closeout or self.require_incident_regression_guards or self.incident_board_package_path or self.incident_board_verification_report_path or self.incident_knowledge_package_path or self.incident_knowledge_verification_report_path):
             return
-        if not self.incident_board_package_path:
+        if (self.require_incident_closeout or self.incident_board_package_path or self.incident_board_verification_report_path) and not self.incident_board_package_path:
             self._add_check("external", "toh_incident_board_package_required", "failed", "blocking", "Incident closeout requires an external Incident Board ZIP.")
-            return
-        if not self.incident_board_verification_report_path:
+            if self.require_incident_closeout:
+                return
+        if (self.require_incident_closeout or self.incident_board_package_path or self.incident_board_verification_report_path) and not self.incident_board_verification_report_path:
             self._add_check("external", "toh_incident_board_verification_required", "failed", "blocking", "Incident closeout requires an external Incident Board verification report.")
+            if self.require_incident_closeout:
+                return
+        if self.incident_board_package_path and self.incident_board_verification_report_path:
+            report = _read_json_file(self.incident_board_verification_report_path)
+            self.external_incident_verification_report = report
+            zip_path = self.incident_board_package_path
+            zip_sha256 = _sha256_file(zip_path) if zip_path.exists() else None
+            zip_size = os.stat(_fs_path(zip_path)).st_size if zip_path.exists() else None
+            self._add_exact_check("external", "toh_incident_verification_status", report.get("status"), "passed", "Incident verification status")
+            self._add_exact_check("external", "toh_incident_verification_zip_sha256", report.get("zip_sha256"), zip_sha256, "Incident verification ZIP sha256")
+            self._add_exact_check("external", "toh_incident_verification_zip_size_bytes", report.get("zip_size_bytes"), zip_size, "Incident verification ZIP size")
+            self._add_exact_check("external", "toh_incident_verification_hub_report_hash", report.get("hub_report_hash"), self.report.get("integrity_hash"), "Incident package Hub report hash")
+            hub_report_hash = None
+            if self.external_hub_verification_report:
+                hub_report_hash = verification_hash(self.external_hub_verification_report)
+            self._add_exact_check("external", "toh_incident_verification_hub_verification_hash", report.get("hub_verification_report_hash"), hub_report_hash, "Incident package Hub verification hash")
+            summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+            self._add_check("external", "toh_incident_verification_no_open_blocking", "passed" if int(summary.get("blocking_open_count") or 0) == 0 else "failed", "blocking", "Incident package has no open blocking incidents." if int(summary.get("blocking_open_count") or 0) == 0 else "Incident package has open blocking incidents.")
+            self._add_check("external", "toh_incident_verification_no_stale", "passed" if int(summary.get("stale_count") or 0) == 0 else "failed", "blocking", "Incident package has no stale incidents." if int(summary.get("stale_count") or 0) == 0 else "Incident package has stale incidents.")
+        if not (self.require_incident_regression_guards or self.incident_knowledge_package_path or self.incident_knowledge_verification_report_path):
             return
-        report = _read_json_file(self.incident_board_verification_report_path)
-        self.external_incident_verification_report = report
-        zip_path = self.incident_board_package_path
-        zip_sha256 = _sha256_file(zip_path) if zip_path.exists() else None
-        zip_size = os.stat(_fs_path(zip_path)).st_size if zip_path.exists() else None
-        self._add_exact_check("external", "toh_incident_verification_status", report.get("status"), "passed", "Incident verification status")
-        self._add_exact_check("external", "toh_incident_verification_zip_sha256", report.get("zip_sha256"), zip_sha256, "Incident verification ZIP sha256")
-        self._add_exact_check("external", "toh_incident_verification_zip_size_bytes", report.get("zip_size_bytes"), zip_size, "Incident verification ZIP size")
-        self._add_exact_check("external", "toh_incident_verification_hub_report_hash", report.get("hub_report_hash"), self.report.get("integrity_hash"), "Incident package Hub report hash")
-        hub_report_hash = None
+        if not self.incident_knowledge_package_path:
+            self._add_check("external", "toh_incident_knowledge_package_required", "failed", "blocking", "Incident regression guards require an external Knowledge ZIP.")
+            return
+        if not self.incident_knowledge_verification_report_path:
+            self._add_check("external", "toh_incident_knowledge_verification_required", "failed", "blocking", "Incident regression guards require an external Knowledge verification report.")
+            return
+        knowledge_report = _read_json_file(self.incident_knowledge_verification_report_path)
+        self.external_incident_knowledge_verification_report = knowledge_report
+        knowledge_zip = self.incident_knowledge_package_path
+        knowledge_zip_sha256 = _sha256_file(knowledge_zip) if knowledge_zip.exists() else None
+        knowledge_zip_size = os.stat(_fs_path(knowledge_zip)).st_size if knowledge_zip.exists() else None
+        self._add_exact_check("external", "toh_incident_knowledge_verification_status", knowledge_report.get("status"), "passed", "Knowledge verification status")
+        self._add_exact_check("external", "toh_incident_knowledge_zip_sha256", knowledge_report.get("zip_sha256"), knowledge_zip_sha256, "Knowledge ZIP sha256")
+        self._add_exact_check("external", "toh_incident_knowledge_zip_size_bytes", knowledge_report.get("zip_size_bytes"), knowledge_zip_size, "Knowledge ZIP size")
+        if self.external_incident_verification_report:
+            self._add_exact_check("external", "toh_incident_knowledge_incident_verification_hash", knowledge_report.get("incident_verification_report_hash"), verification_hash(self.external_incident_verification_report), "Knowledge Incident verification report hash")
+        elif self.require_incident_regression_guards:
+            self._add_check("external", "toh_incident_knowledge_incident_verification_required", "failed", "blocking", "Knowledge gate requires the current Incident verification report.")
         if self.external_hub_verification_report:
-            hub_report_hash = verification_hash(self.external_hub_verification_report)
-        self._add_exact_check("external", "toh_incident_verification_hub_verification_hash", report.get("hub_verification_report_hash"), hub_report_hash, "Incident package Hub verification hash")
-        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-        self._add_check("external", "toh_incident_verification_no_open_blocking", "passed" if int(summary.get("blocking_open_count") or 0) == 0 else "failed", "blocking", "Incident package has no open blocking incidents." if int(summary.get("blocking_open_count") or 0) == 0 else "Incident package has open blocking incidents.")
-        self._add_check("external", "toh_incident_verification_no_stale", "passed" if int(summary.get("stale_count") or 0) == 0 else "failed", "blocking", "Incident package has no stale incidents." if int(summary.get("stale_count") or 0) == 0 else "Incident package has stale incidents.")
+            self._add_exact_check("external", "toh_incident_knowledge_hub_verification_hash", knowledge_report.get("hub_verification_report_hash"), verification_hash(self.external_hub_verification_report), "Knowledge Hub verification report hash")
+        summary = knowledge_report.get("summary") if isinstance(knowledge_report.get("summary"), dict) else {}
+        self._add_check("external", "toh_incident_knowledge_guards_passed", "passed" if int(summary.get("guard_failed_count") or 0) == 0 and int(summary.get("guards_passed_count") or 0) > 0 else "failed", "blocking", "Knowledge regression guards passed." if int(summary.get("guard_failed_count") or 0) == 0 and int(summary.get("guards_passed_count") or 0) > 0 else "Knowledge regression guards are missing or failed.")
+        self._add_check("external", "toh_incident_knowledge_no_recurrence", "passed" if int(summary.get("recurrence_count") or 0) == 0 else "failed", "blocking", "Knowledge recurrence report has no open recurrence." if int(summary.get("recurrence_count") or 0) == 0 else "Knowledge recurrence report has open recurrence.")
 
     def _verify_requirements(self) -> None:
         report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
@@ -567,6 +608,9 @@ class _HubVerifier:
         self._add_check("requirements", "toh_require_delivery_ready", "passed" if delivery_ready or not self.require_delivery_ready else "failed", "blocking", "Delivery evidence is ready." if delivery_ready else "Delivery evidence is not ready.")
         incident_ready = self.external_incident_verification_report.get("status") == "passed"
         self._add_check("requirements", "toh_require_incident_closeout", "passed" if incident_ready or not self.require_incident_closeout else "failed", "blocking", "Incident closeout evidence is passed." if incident_ready else "Incident closeout evidence is missing or failed.")
+        knowledge_summary = self.external_incident_knowledge_verification_report.get("summary") if isinstance(self.external_incident_knowledge_verification_report.get("summary"), dict) else {}
+        knowledge_ready = self.external_incident_knowledge_verification_report.get("status") == "passed" and int(knowledge_summary.get("guards_passed_count") or 0) > 0 and int(knowledge_summary.get("guard_failed_count") or 0) == 0 and int(knowledge_summary.get("recurrence_count") or 0) == 0
+        self._add_check("requirements", "toh_require_incident_regression_guards", "passed" if knowledge_ready or not self.require_incident_regression_guards else "failed", "blocking", "Incident regression guards are passed." if knowledge_ready else "Incident regression guard evidence is missing or failed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         findings: list[dict[str, Any]] = []

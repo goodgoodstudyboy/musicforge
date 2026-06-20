@@ -133,6 +133,12 @@ from song_agent.trust_operations_hub_incidents import (
     TrustOperationsIncidentStore,
 )
 from song_agent.trust_operations_hub_incident_verifier import write_trust_operations_hub_incident_verification_report
+from song_agent.trust_operations_incident_knowledge import (
+    TrustOperationsIncidentKnowledgeStore,
+    TrustOperationsKnowledgeNotFoundError,
+    TrustOperationsKnowledgeStateError,
+)
+from song_agent.trust_operations_incident_knowledge_verifier import write_trust_operations_incident_knowledge_verification_report
 from song_agent.release_operations_archive_verifier import (
     release_operations_archive_verification_summary,
     verify_release_operations_archive_package,
@@ -2834,6 +2840,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def trust_operations_incident_store(self) -> TrustOperationsIncidentStore:
         return self.server.trust_operations_incident_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_incident_knowledge_store(self) -> TrustOperationsIncidentKnowledgeStore:
+        return self.server.trust_operations_incident_knowledge_store  # type: ignore[attr-defined]
 
     @property
     def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
@@ -5586,10 +5596,136 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             self._send_file(self.trust_operations_incident_store.zip_path(unquote(hub_id)), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-incidents.zip")
             return
+        if rest == "/knowledge.zip":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self._send_file(self.trust_operations_incident_knowledge_store.zip_path(unquote(hub_id)), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-knowledge.zip")
+            return
         if rest == "/incidents" or rest.startswith("/incidents/"):
             self._handle_trust_operations_incidents(method, unquote(hub_id), rest.removeprefix("/incidents"))
             return
+        if rest == "/knowledge" or rest.startswith("/knowledge/"):
+            self._handle_trust_operations_knowledge(method, unquote(hub_id), rest.removeprefix("/knowledge"))
+            return
         self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Hub route not found.")
+
+    def _handle_trust_operations_knowledge(self, method: str, hub_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                base = {}
+                try:
+                    base = self.trust_operations_incident_knowledge_store.read_base(hub_id)
+                except TrustOperationsKnowledgeNotFoundError:
+                    pass
+                self._send_json(
+                    {
+                        "ok": True,
+                        "hub_id": hub_id,
+                        "knowledge_base": base,
+                        "entries": self.trust_operations_incident_knowledge_store.list_entries(hub_id),
+                        "guards": self.trust_operations_incident_knowledge_store.list_guards(hub_id),
+                    }
+                )
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.trust_operations_incident_knowledge_store.refresh(hub_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/recurrence/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.trust_operations_incident_knowledge_store.refresh_recurrence(hub_id, now=_utc_now())
+                self._send_json({"ok": report.get("status") == "passed", "hub_id": hub_id, "recurrence": report})
+                return
+            if tail == "/guards/run-all":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.trust_operations_incident_knowledge_store.run_all_guards(hub_id, now=_utc_now())
+                self._send_json({"ok": True, **result})
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.trust_operations_incident_knowledge_store.export_knowledge(hub_id, now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.trust_operations_incident_knowledge_store.build_zip(hub_id, now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, "zip": zip_info})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.trust_operations_incident_knowledge_store.verify_zip(hub_id, self._optional_json_body())
+                write_trust_operations_incident_knowledge_verification_report(report, self.trust_operations_incident_knowledge_store.verification_report_path(hub_id))
+                self._send_json({"ok": report.get("status") != "failed", "hub_id": hub_id, "verification": report, "summary": report.get("summary", {})})
+                return
+            parts = [part for part in tail.split("/") if part]
+            if len(parts) >= 2 and parts[0] == "entries":
+                entry_id = unquote(parts[1])
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    entry = self.trust_operations_incident_knowledge_store.read_entry(hub_id, entry_id)
+                    self._send_json({"ok": True, "hub_id": hub_id, "entry": entry})
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                action = parts[2]
+                if action == "hide":
+                    entry = self.trust_operations_incident_knowledge_store.hide_entry(hub_id, entry_id, now=_utc_now())
+                    self._send_json({"ok": True, "hub_id": hub_id, "entry": entry})
+                    return
+                if action == "unhide":
+                    entry = self.trust_operations_incident_knowledge_store.unhide_entry(hub_id, entry_id, now=_utc_now())
+                    self._send_json({"ok": True, "hub_id": hub_id, "entry": entry})
+                    return
+                if action == "guards":
+                    guard = self.trust_operations_incident_knowledge_store.create_guard(hub_id, entry_id, payload, now=_utc_now())
+                    self._send_json({"ok": True, "hub_id": hub_id, "guard": guard}, status=HTTPStatus.CREATED)
+                    return
+            if len(parts) >= 2 and parts[0] == "guards":
+                guard_id = unquote(parts[1])
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    guard = self.trust_operations_incident_knowledge_store.read_guard(hub_id, guard_id)
+                    self._send_json({"ok": True, "hub_id": hub_id, "guard": guard})
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if parts[2] == "run":
+                    run = self.trust_operations_incident_knowledge_store.run_guard(hub_id, guard_id, now=_utc_now())
+                    self._send_json({"ok": run.get("status") == "passed", "hub_id": hub_id, "guard_run": run})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Knowledge route not found.")
+        except TrustOperationsKnowledgeNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except TrustOperationsKnowledgeStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_trust_operations_incidents(self, method: str, hub_id: str, tail: str) -> None:
         try:
@@ -16809,6 +16945,11 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.trust_operations_incident_store = TrustOperationsIncidentStore(
             self.release_store.root.parent / "trust-operations-incidents",
             hub_store=self.trust_operations_hub_store,
+        )
+        self.trust_operations_incident_knowledge_store = TrustOperationsIncidentKnowledgeStore(
+            self.release_store.root.parent / "trust-operations-knowledge",
+            hub_store=self.trust_operations_hub_store,
+            incident_store=self.trust_operations_incident_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

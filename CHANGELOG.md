@@ -1,5 +1,18 @@
 # Changelog
 
+## v9.3.0 - 2026-06-20
+
+### Added
+- Trust Operations Incident Knowledge Base for turning closed, verified Hub incidents into reusable Knowledge Entries.
+- Regression Guard generation, guard runs, recurrence reports, fixed-structure Knowledge ZIP export, and offline verifier.
+- `trust-operations-incident-knowledge` and `verify-trust-operations-incident-knowledge-package` CLIs.
+- `verify-trust-operations-hub-package --require-incident-regression-guards` for binding Hub readiness to current Knowledge ZIP and verification evidence.
+- Studio Trust Operations Knowledge controls and release-check `v93.trust_operations_incident_knowledge_smoke`.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_incident_knowledge.py tests\test_cli_trust_operations_incident_knowledge.py tests\test_server_trust_operations_incident_knowledge.py tests\test_release_check.py::test_v93_trust_operations_incident_knowledge_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.2.1 - 2026-06-20
 
 ### Fixed

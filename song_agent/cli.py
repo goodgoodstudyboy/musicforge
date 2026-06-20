@@ -1082,6 +1082,7 @@ def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-publication-monitoring-clean", action="store_true", help="Require clean publication monitoring evidence.")
     verify_parser.add_argument("--require-delivery-ready", action="store_true", help="Require full delivery-chain verification evidence.")
     verify_parser.add_argument("--require-incident-closeout", action="store_true", help="Require external Trust Operations Incident closeout evidence.")
+    verify_parser.add_argument("--require-incident-regression-guards", action="store_true", help="Require external Trust Operations Incident Knowledge regression guard evidence.")
     verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for current/revoke checks.")
     verify_parser.add_argument("--public-trust-center-verification", type=Path, default=None, help="External Public Trust Center verification report.")
     verify_parser.add_argument("--publication-monitoring-verification", type=Path, default=None, help="External Publication Monitoring verification report.")
@@ -1094,6 +1095,8 @@ def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report used for signoff.")
     verify_parser.add_argument("--incident-board-package", type=Path, default=None, help="External Trust Operations Incident Board ZIP.")
     verify_parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
+    verify_parser.add_argument("--incident-knowledge-package", type=Path, default=None, help="External Trust Operations Incident Knowledge ZIP.")
+    verify_parser.add_argument("--incident-knowledge-verification-report", type=Path, default=None, help="External Trust Operations Incident Knowledge verification report.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=256, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
@@ -1123,6 +1126,22 @@ def build_verify_trust_operations_hub_incident_parser() -> argparse.ArgumentPars
     verify_parser.add_argument("--require-no-open-critical", action="store_true", help="Require no open critical incidents.")
     verify_parser.add_argument("--require-no-open-blocking", action="store_true", help="Require no open blocking incidents.")
     verify_parser.add_argument("--require-current-hub", action="store_true", help="Require external current Hub verification evidence.")
+    verify_parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_trust_operations_incident_knowledge_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Trust Operations Incident Knowledge ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Trust Operations Incident Knowledge ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict package checks as failures.")
+    verify_parser.add_argument("--require-guards-passed", action="store_true", help="Require regression guards to have passed runs.")
+    verify_parser.add_argument("--require-no-open-recurrence", action="store_true", help="Require no open incident recurrence.")
+    verify_parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
     verify_parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
@@ -1225,6 +1244,8 @@ def build_trust_operations_hub_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report used for signoff.")
     parser.add_argument("--incident-board-package", type=Path, default=None, help="External Trust Operations Incident Board ZIP.")
     parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
+    parser.add_argument("--incident-knowledge-package", type=Path, default=None, help="External Trust Operations Incident Knowledge ZIP.")
+    parser.add_argument("--incident-knowledge-verification-report", type=Path, default=None, help="External Trust Operations Incident Knowledge verification report.")
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-ready", action="store_true", help="Verifier requires ready Hub.")
     parser.add_argument("--require-signed", action="store_true", help="Verifier requires Hub signoff summary.")
@@ -1233,6 +1254,7 @@ def build_trust_operations_hub_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-publication-monitoring-clean", action="store_true", help="Verifier requires clean publication monitoring evidence.")
     parser.add_argument("--require-delivery-ready", action="store_true", help="Verifier requires full delivery-chain verification evidence.")
     parser.add_argument("--require-incident-closeout", action="store_true", help="Verifier requires Trust Operations Incident closeout evidence.")
+    parser.add_argument("--require-incident-regression-guards", action="store_true", help="Verifier requires Trust Operations Incident Knowledge regression guard evidence.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -1286,6 +1308,33 @@ def build_trust_operations_hub_incidents_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-no-open-critical", action="store_true", help="Verifier requires no open critical incidents.")
     parser.add_argument("--require-no-open-blocking", action="store_true", help="Verifier requires no open blocking incidents.")
     parser.add_argument("--require-current-hub", action="store_true", help="Verifier requires current Hub verification evidence.")
+    parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_trust_operations_incident_knowledge_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Create, run, export, and verify Trust Operations Incident Knowledge regression guards.")
+    parser.add_argument("--hub-id", default="hub", help="Trust Operations Hub id.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh Knowledge entries from closed incidents.")
+    parser.add_argument("--list-entries", action="store_true", help="List Knowledge entries.")
+    parser.add_argument("--entry-id", default=None, help="Knowledge entry id.")
+    parser.add_argument("--hide-entry", action="store_true", help="Hide a Knowledge entry.")
+    parser.add_argument("--unhide-entry", action="store_true", help="Unhide a Knowledge entry.")
+    parser.add_argument("--create-guard", action="store_true", help="Create a regression guard for a Knowledge entry.")
+    parser.add_argument("--guard-id", default=None, help="Regression guard id.")
+    parser.add_argument("--guard-type", default=None, help="Regression guard type.")
+    parser.add_argument("--run-guard", action="store_true", help="Run a single regression guard.")
+    parser.add_argument("--run-all-guards", action="store_true", help="Run all regression guards.")
+    parser.add_argument("--refresh-recurrence", action="store_true", help="Refresh incident recurrence report.")
+    parser.add_argument("--export", action="store_true", help="Export the Knowledge package directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Knowledge ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Knowledge ZIP.")
+    parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--require-guards-passed", action="store_true", help="Verifier requires passed guard runs.")
+    parser.add_argument("--require-no-open-recurrence", action="store_true", help="Verifier requires no open recurrence.")
+    parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
     parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
@@ -2887,6 +2936,7 @@ def _main() -> None:
             require_publication_monitoring_clean=args.require_publication_monitoring_clean,
             require_delivery_ready=args.require_delivery_ready,
             require_incident_closeout=args.require_incident_closeout,
+            require_incident_regression_guards=args.require_incident_regression_guards,
             publication_channel_state_path=args.publication_channel_state,
             public_trust_center_verification_path=args.public_trust_center_verification,
             publication_monitoring_verification_path=args.publication_monitoring_verification,
@@ -2899,6 +2949,8 @@ def _main() -> None:
             hub_verification_report_path=args.hub_verification_report,
             incident_board_package_path=args.incident_board_package,
             incident_board_verification_report_path=args.incident_board_verification_report,
+            incident_knowledge_package_path=args.incident_knowledge_package,
+            incident_knowledge_verification_report_path=args.incident_knowledge_verification_report,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -2910,6 +2962,34 @@ def _main() -> None:
         else:
             print_trust_operations_hub_verification_report(report)
         raise SystemExit(trust_operations_hub_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-trust-operations-incident-knowledge-package":
+        from song_agent.trust_operations_incident_knowledge_verifier import (
+            print_trust_operations_incident_knowledge_verification_report,
+            trust_operations_incident_knowledge_verification_exit_code,
+            verify_trust_operations_incident_knowledge_package,
+            write_trust_operations_incident_knowledge_verification_report,
+        )
+
+        parser = build_verify_trust_operations_incident_knowledge_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_trust_operations_incident_knowledge_package(
+            args.zip_path,
+            strict=args.strict,
+            require_guards_passed=args.require_guards_passed,
+            require_no_open_recurrence=args.require_no_open_recurrence,
+            incident_board_verification_report_path=args.incident_board_verification_report,
+            hub_verification_report_path=args.hub_verification_report,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_trust_operations_incident_knowledge_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_trust_operations_incident_knowledge_verification_report(report)
+        raise SystemExit(trust_operations_incident_knowledge_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-trust-operations-hub-incident-package":
         from song_agent.trust_operations_hub_incident_verifier import (
             print_trust_operations_hub_incident_verification_report,
@@ -4526,6 +4606,7 @@ def _main() -> None:
                     "require_publication_monitoring_clean": args.require_publication_monitoring_clean,
                     "require_delivery_ready": args.require_delivery_ready,
                     "require_incident_closeout": args.require_incident_closeout,
+                    "require_incident_regression_guards": args.require_incident_regression_guards,
                     "publication_channel_state_path": args.publication_channel_state,
                     "public_trust_center_verification_path": args.public_trust_center_verification,
                     "publication_monitoring_verification_path": args.publication_monitoring_verification,
@@ -4538,6 +4619,8 @@ def _main() -> None:
                     "hub_verification_report_path": args.hub_verification_report,
                     "incident_board_package_path": args.incident_board_package,
                     "incident_board_verification_report_path": args.incident_board_verification_report,
+                    "incident_knowledge_package_path": args.incident_knowledge_package,
+                    "incident_knowledge_verification_report_path": args.incident_knowledge_verification_report,
                 },
             )
             result["verification"] = verification
@@ -4672,6 +4755,72 @@ def _main() -> None:
                 print_trust_operations_hub_incident_verification_report(result["verification"])
             else:
                 print(json.dumps(result.get("summary") or {"status": "ok", "hub_id": args.hub_id, "incident_id": incident_id}, ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "trust-operations-incident-knowledge":
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStore
+        from song_agent.trust_operations_incident_knowledge import TrustOperationsIncidentKnowledgeStore
+        from song_agent.trust_operations_incident_knowledge_verifier import print_trust_operations_incident_knowledge_verification_report
+
+        parser = build_trust_operations_incident_knowledge_parser()
+        args = parser.parse_args(raw_args[1:])
+        hub_store = TrustOperationsHubStore()
+        incident_store = TrustOperationsIncidentStore(hub_store=hub_store)
+        store = TrustOperationsIncidentKnowledgeStore(hub_store=hub_store, incident_store=incident_store)
+        result: dict[str, Any] = {"ok": True, "hub_id": args.hub_id}
+        if args.refresh:
+            result.update(store.refresh(args.hub_id, {"incident_board_verification_report_path": args.incident_board_verification_report, "hub_verification_report_path": args.hub_verification_report}))
+        if args.list_entries:
+            result["entries"] = store.list_entries(args.hub_id)
+        if any([args.hide_entry, args.unhide_entry, args.create_guard]) and not args.entry_id:
+            entries = store.list_entries(args.hub_id)
+            if not entries:
+                raise ValueError("--entry-id is required when no entries exist.")
+            args.entry_id = str(entries[0].get("entry_id") or "")
+        if args.hide_entry:
+            result["entry"] = store.hide_entry(args.hub_id, str(args.entry_id))
+        if args.unhide_entry:
+            result["entry"] = store.unhide_entry(args.hub_id, str(args.entry_id))
+        if args.create_guard:
+            result["guard"] = store.create_guard(args.hub_id, str(args.entry_id), {"guard_id": args.guard_id, "guard_type": args.guard_type})
+            args.guard_id = str(result["guard"].get("guard_id") or args.guard_id or "")
+        if args.run_guard:
+            if not args.guard_id:
+                guards = store.list_guards(args.hub_id)
+                if not guards:
+                    raise ValueError("--guard-id is required when no guards exist.")
+                args.guard_id = str(guards[0].get("guard_id") or "")
+            result["guard_run"] = store.run_guard(args.hub_id, str(args.guard_id))
+        if args.run_all_guards:
+            result["guard_runs"] = store.run_all_guards(args.hub_id)
+        if args.refresh_recurrence:
+            result["recurrence"] = store.refresh_recurrence(args.hub_id)
+        if args.export:
+            result["manifest"] = store.export_knowledge(args.hub_id)
+        if args.zip:
+            result["zip"] = store.build_zip(args.hub_id)
+        if args.verify:
+            verification = store.verify_zip(
+                args.hub_id,
+                {
+                    "strict": args.strict,
+                    "require_guards_passed": args.require_guards_passed,
+                    "require_no_open_recurrence": args.require_no_open_recurrence,
+                    "incident_board_verification_report_path": args.incident_board_verification_report,
+                    "hub_verification_report_path": args.hub_verification_report,
+                },
+            )
+            result["verification"] = verification
+            result["verification_summary"] = verification.get("summary", {})
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            if "verification" in result:
+                print_trust_operations_incident_knowledge_verification_report(result["verification"])
+            else:
+                print(json.dumps(result.get("summary") or {"status": "ok", "hub_id": args.hub_id}, ensure_ascii=False, indent=2))
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "public-trust-center":
         from song_agent.public_trust_center import public_trust_center_summary

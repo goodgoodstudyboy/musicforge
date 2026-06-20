@@ -67,6 +67,7 @@ from song_agent.release_checks import (
     _v90_trust_operations_hub_smoke,
     _v91_trust_operations_hub_delivery_runbook_smoke,
     _v92_trust_operations_hub_incident_response_smoke,
+    _v93_trust_operations_incident_knowledge_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -952,6 +953,22 @@ def test_v92_trust_operations_hub_incident_response_smoke(tmp_path: Path) -> Non
     assert "redaction=failed" in detail
     assert "missing_current=failed" in detail
     assert "stale_hub=failed" in detail
+
+
+def test_v93_trust_operations_incident_knowledge_smoke(tmp_path: Path) -> None:
+    ok, detail = _v93_trust_operations_incident_knowledge_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "closeout=passed" in detail
+    assert "incident_verify=passed" in detail
+    assert "entries=1" in detail
+    assert "guard_run=passed" in detail
+    assert "recurrence=passed" in detail
+    assert "knowledge_verify=passed" in detail
+    assert "hub_gate_missing=failed" in detail
+    assert "hub_gate=passed" in detail
+    assert "no_guard=failed" in detail
+    assert "extra=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

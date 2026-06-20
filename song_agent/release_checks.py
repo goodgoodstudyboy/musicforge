@@ -14194,6 +14194,147 @@ def _v92_incident_state_blocked(fn) -> bool:
     return False
 
 
+def _v93_trust_operations_incident_knowledge_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v93-trust-operations-knowledge-")).resolve()
+    try:
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStore
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+        from song_agent.trust_operations_incident_knowledge import TrustOperationsIncidentKnowledgeStore
+        from song_agent.trust_operations_incident_knowledge_verifier import verify_trust_operations_incident_knowledge_package
+
+        fixture = _v90_fixture(base)
+        delivery = _v91_delivery_fixture(base)
+        second_distribution = _v91_copy_delivery_report(delivery["distribution_verification_path"], base / "target-002-verification.json", "target-002", "8" * 64)
+        hub_store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        hub_store.create_hub({"hub_id": "hub"})
+        payload = {**fixture["payload"], **delivery["payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        report_id = str(hub_store.refresh_report("hub", payload)["hub_report"]["report_id"])
+        hub_store.export_report("hub", report_id)
+        hub_store.build_zip("hub", report_id)
+        hub_zip = hub_store.zip_path("hub", report_id)
+        hub_store.verify_zip("hub", report_id, {**fixture["verify_payload"], **delivery["verify_payload"], "strict": True, "require_delivery_ready": True, "require_current": True})
+        incident_store = TrustOperationsIncidentStore(base / ".musicforge" / "trust-operations-incidents", hub_store=hub_store)
+        incident_store.refresh_board("hub")
+        incident = incident_store.list_incidents("hub")[0]
+        incident_id = str(incident.get("incident_id") or "")
+        incident_store.add_evidence("hub", incident_id, {"component_type": incident.get("detected_from", {}).get("component_type"), "component_id": incident.get("detected_from", {}).get("component_id"), "report": read_json(second_distribution)})
+        closeout = incident_store.close_incident("hub", incident_id, {"closed_by": "release-check", "reason": "Second distribution target verification report supplied."})
+        incident_store.export_board("hub")
+        incident_store.build_zip("hub")
+        incident_verification = incident_store.verify_zip("hub", {"strict": True, "require_no_open_blocking": True, "require_current_hub": True, "hub_verification_report_path": hub_store.verification_report_path("hub", report_id)})
+
+        knowledge_store = TrustOperationsIncidentKnowledgeStore(base / ".musicforge" / "trust-operations-knowledge", hub_store=hub_store, incident_store=incident_store)
+        refreshed = knowledge_store.refresh("hub")
+        entry = refreshed["entries"][0]
+        guard = knowledge_store.create_guard("hub", str(entry.get("entry_id") or ""))
+        guard_run = knowledge_store.run_guard("hub", str(guard.get("guard_id") or ""))
+        recurrence = knowledge_store.refresh_recurrence("hub")
+        knowledge_store.export_knowledge("hub")
+        knowledge_store.build_zip("hub")
+        knowledge_verification = knowledge_store.verify_zip(
+            "hub",
+            {
+                "strict": True,
+                "require_guards_passed": True,
+                "require_no_open_recurrence": True,
+                "incident_board_verification_report_path": incident_store.verification_report_path("hub"),
+                "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+            },
+        )
+        full_delivery_verify_payload = {**delivery["verify_payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify_payload.pop("distribution_verification_path", None)
+        hub_gate_missing = verify_trust_operations_hub_package(
+            hub_zip,
+            strict=True,
+            require_incident_closeout=True,
+            require_incident_regression_guards=True,
+            incident_board_package_path=incident_store.zip_path("hub"),
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            **fixture["verify_payload"],
+            **full_delivery_verify_payload,
+        )
+        hub_gate = verify_trust_operations_hub_package(
+            hub_zip,
+            strict=True,
+            require_incident_closeout=True,
+            require_incident_regression_guards=True,
+            incident_board_package_path=incident_store.zip_path("hub"),
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            incident_knowledge_package_path=knowledge_store.zip_path("hub"),
+            incident_knowledge_verification_report_path=knowledge_store.verification_report_path("hub"),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            **fixture["verify_payload"],
+            **full_delivery_verify_payload,
+        )
+        no_guard = verify_trust_operations_incident_knowledge_package(
+            _v76_rewrite_zip(knowledge_store.zip_path("hub"), base / "knowledge-no-guard.zip", _v93_tamper_remove_knowledge_guard_full_resign),
+            strict=True,
+            require_guards_passed=True,
+            require_no_open_recurrence=True,
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+        )
+        extra = verify_trust_operations_incident_knowledge_package(_v38_rewrite_zip(knowledge_store.zip_path("hub"), base / "knowledge-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
+
+        ok = (
+            closeout.get("status") == "passed"
+            and incident_verification.get("status") == "passed"
+            and refreshed.get("knowledge_base", {}).get("summary", {}).get("entry_count") == 1
+            and guard_run.get("status") == "passed"
+            and recurrence.get("status") == "passed"
+            and knowledge_verification.get("status") == "passed"
+            and _v38_check_status(hub_gate_missing, "toh_incident_knowledge_package_required") == "failed"
+            and hub_gate.get("status") == "passed"
+            and _v38_check_status(no_guard, "tohk_guards_cover_high_severity_entries") == "failed"
+            and _v38_check_status(extra, "tohk_zip_allowed_entries") == "failed"
+        )
+        return ok, (
+            f"closeout={closeout.get('status')}, incident_verify={incident_verification.get('status')}, entries={refreshed.get('knowledge_base', {}).get('summary', {}).get('entry_count')}, "
+            f"guard_run={guard_run.get('status')}, recurrence={recurrence.get('status')}, knowledge_verify={knowledge_verification.get('status')}, "
+            f"hub_gate_missing={_v38_check_status(hub_gate_missing, 'toh_incident_knowledge_package_required')}, hub_gate={hub_gate.get('status')}, "
+            f"no_guard={_v38_check_status(no_guard, 'tohk_guards_cover_high_severity_entries')}, extra={_v38_check_status(extra, 'tohk_zip_allowed_entries')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v93_tamper_remove_knowledge_guard_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_incident_knowledge import knowledge_hash, knowledge_manifest_hash
+
+    report = _v74_read_json_doc(docs, "knowledge-report.json")
+    guards = _v74_read_json_doc(docs, "regression-guards.json")
+    runs = _v74_read_json_doc(docs, "guard-run-summary.json")
+    manifest = _v74_read_json_doc(docs, "trust-operations-knowledge-manifest.json")
+    guards["guards"] = []
+    guards["summary"] = {"guard_count": 0, "active_guard_count": 0, "manual_required_guard_count": 0, "archived_guard_count": 0}
+    guards["integrity_hash"] = knowledge_hash(guards)
+    runs["runs"] = []
+    runs["summary"] = {"run_count": 0, "passed_count": 0, "failed_count": 0, "manual_required_count": 0}
+    runs["integrity_hash"] = knowledge_hash(runs)
+    report.setdefault("source", {})["guards_hash"] = guards["integrity_hash"]
+    report.setdefault("source", {})["guard_run_summary_hash"] = runs["integrity_hash"]
+    report.setdefault("summary", {})["guard_count"] = 0
+    report.setdefault("summary", {})["guards_passed_count"] = 0
+    report["status"] = "warning"
+    report["integrity_hash"] = knowledge_hash(report)
+    docs["regression-guards.json"] = _v74_json_doc(guards)
+    docs["guard-run-summary.json"] = _v74_json_doc(runs)
+    docs["knowledge-report.json"] = _v74_json_doc(report)
+    for path in ("regression-guards.json", "guard-run-summary.json", "knowledge-report.json"):
+        _v92_sync_manifest_file(manifest, path, docs[path])
+    manifest.setdefault("integrity", {})["guards_hash"] = guards["integrity_hash"]
+    manifest.setdefault("integrity", {})["guard_run_summary_hash"] = runs["integrity_hash"]
+    manifest.setdefault("integrity", {})["knowledge_report_hash"] = report["integrity_hash"]
+    manifest["integrity_hash"] = knowledge_manifest_hash(manifest)
+    docs["trust-operations-knowledge-manifest.json"] = _v74_json_doc(manifest)
+
+
 def _v92_tamper_closed_incident_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.trust_operations_hub_incidents import incident_hash, incident_manifest_hash
 
