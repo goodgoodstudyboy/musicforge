@@ -31,6 +31,8 @@ def test_trust_operations_incident_knowledge_cli_roundtrip(tmp_path: Path) -> No
             "--strict",
             "--require-guards-passed",
             "--require-no-open-recurrence",
+            "--incident-board-package",
+            str(tmp_path / ".musicforge" / "trust-operations-incidents" / "hub" / "trust-operations-incident-board.zip"),
             "--incident-board-verification-report",
             str(tmp_path / ".musicforge" / "trust-operations-incidents" / "hub" / "trust-operations-incident-verification-report.json"),
             "--hub-verification-report",
@@ -61,6 +63,8 @@ def test_trust_operations_incident_knowledge_cli_roundtrip(tmp_path: Path) -> No
             "--strict",
             "--require-guards-passed",
             "--require-no-open-recurrence",
+            "--incident-board-package",
+            str(tmp_path / ".musicforge" / "trust-operations-incidents" / "hub" / "trust-operations-incident-board.zip"),
             "--incident-board-verification-report",
             str(tmp_path / ".musicforge" / "trust-operations-incidents" / "hub" / "trust-operations-incident-verification-report.json"),
             "--hub-verification-report",
@@ -79,4 +83,3 @@ def test_trust_operations_incident_knowledge_cli_roundtrip(tmp_path: Path) -> No
     assert verify.returncode == 0, verify.stderr
     report = json.loads(verify.stdout)
     assert report["status"] == "passed", report.get("blockers")
-

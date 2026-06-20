@@ -581,6 +581,9 @@ class _HubVerifier:
         self._add_exact_check("external", "toh_incident_knowledge_zip_size_bytes", knowledge_report.get("zip_size_bytes"), knowledge_zip_size, "Knowledge ZIP size")
         if self.external_incident_verification_report:
             self._add_exact_check("external", "toh_incident_knowledge_incident_verification_hash", knowledge_report.get("incident_verification_report_hash"), verification_hash(self.external_incident_verification_report), "Knowledge Incident verification report hash")
+            self._add_exact_check("external", "toh_incident_knowledge_incident_zip_sha256", knowledge_report.get("incident_zip_sha256"), self.external_incident_verification_report.get("zip_sha256"), "Knowledge Incident ZIP sha256")
+            self._add_exact_check("external", "toh_incident_knowledge_incident_zip_size_bytes", knowledge_report.get("incident_zip_size_bytes"), self.external_incident_verification_report.get("zip_size_bytes"), "Knowledge Incident ZIP size")
+            self._add_exact_check("external", "toh_incident_knowledge_incident_manifest_hash", knowledge_report.get("incident_manifest_hash"), self.external_incident_verification_report.get("manifest_hash"), "Knowledge Incident manifest hash")
         elif self.require_incident_regression_guards:
             self._add_check("external", "toh_incident_knowledge_incident_verification_required", "failed", "blocking", "Knowledge gate requires the current Incident verification report.")
         if self.external_hub_verification_report:

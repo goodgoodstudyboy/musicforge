@@ -1,5 +1,17 @@
 # Changelog
 
+## v9.3.1 - 2026-06-20
+
+### Fixed
+- Trust Operations Incident Knowledge verification now requires the external Incident Board ZIP and checks Knowledge entries against original incident facts.
+- Knowledge verifier now blocks full-resign attempts that downgrade incident severity, root cause, failure mode, or recommended guard type inside the Knowledge ZIP.
+- Hub `--require-incident-regression-guards` now requires Knowledge verification evidence bound to the current Incident ZIP sha256, ZIP size, manifest hash, Incident verification report, and Hub verification report.
+- release-check v9.3 smoke now covers `entry_full_resign=failed`.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_incident_knowledge.py tests\test_cli_trust_operations_incident_knowledge.py tests\test_server_trust_operations_incident_knowledge.py tests\test_release_check.py::test_v93_trust_operations_incident_knowledge_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.3.0 - 2026-06-20
 
 ### Added

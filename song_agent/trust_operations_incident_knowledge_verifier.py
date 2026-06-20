@@ -14,6 +14,7 @@ from song_agent.projectio import write_json
 from song_agent.public_trust_center_publication_monitoring import verification_hash
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
 from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
+from song_agent.releases import stable_hash
 from song_agent.trust_operations_incident_knowledge import (
     KNOWLEDGE_EXPORT_ENTRIES,
     TRUST_OPERATIONS_GUARD_RUN_SUMMARY_PACKAGE_TYPE,
@@ -25,9 +26,11 @@ from song_agent.trust_operations_incident_knowledge import (
     TRUST_OPERATIONS_KNOWLEDGE_SOURCE_PACKAGE_TYPE,
     TRUST_OPERATIONS_RECURRENCE_REPORT_PACKAGE_TYPE,
     TRUST_OPERATIONS_REGRESSION_GUARDS_PACKAGE_TYPE,
+    _classify_incident,
     knowledge_hash,
     knowledge_manifest_hash,
 )
+from song_agent.trust_operations_hub_incidents import incident_hash, incident_manifest_hash
 
 
 TRUST_OPERATIONS_KNOWLEDGE_VERIFICATION_PACKAGE_TYPE = "musicforge_trust_operations_incident_knowledge_verification"
@@ -44,6 +47,7 @@ def verify_trust_operations_incident_knowledge_package(
     strict: bool = False,
     require_guards_passed: bool = False,
     require_no_open_recurrence: bool = False,
+    incident_board_package_path: Path | str | None = None,
     incident_board_verification_report_path: Path | str | None = None,
     hub_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
@@ -56,6 +60,7 @@ def verify_trust_operations_incident_knowledge_package(
         strict=strict,
         require_guards_passed=require_guards_passed,
         require_no_open_recurrence=require_no_open_recurrence,
+        incident_board_package_path=Path(incident_board_package_path) if incident_board_package_path else None,
         incident_board_verification_report_path=Path(incident_board_verification_report_path) if incident_board_verification_report_path else None,
         hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
@@ -92,6 +97,7 @@ class _KnowledgeVerifier:
         strict: bool,
         require_guards_passed: bool,
         require_no_open_recurrence: bool,
+        incident_board_package_path: Path | None,
         incident_board_verification_report_path: Path | None,
         hub_verification_report_path: Path | None,
         max_zip_size_mb: int,
@@ -103,6 +109,7 @@ class _KnowledgeVerifier:
         self.strict = strict
         self.require_guards_passed = require_guards_passed
         self.require_no_open_recurrence = require_no_open_recurrence
+        self.incident_board_package_path = incident_board_package_path
         self.incident_board_verification_report_path = incident_board_verification_report_path
         self.hub_verification_report_path = hub_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
@@ -126,8 +133,13 @@ class _KnowledgeVerifier:
         self.runs_doc: dict[str, Any] = {}
         self.recurrence: dict[str, Any] = {}
         self.source_summary: dict[str, Any] = {}
+        self.external_incident_manifest: dict[str, Any] = {}
+        self.external_incidents_doc: dict[str, Any] = {}
+        self.external_closeout_summary: dict[str, Any] = {}
         self.external_incident_verification: dict[str, Any] = {}
         self.external_hub_verification: dict[str, Any] = {}
+        self.external_incident_zip_sha256: str | None = None
+        self.external_incident_zip_size_bytes: int | None = None
         self.redaction_findings: list[dict[str, Any]] = []
 
     def run(self) -> dict[str, Any]:
@@ -141,6 +153,7 @@ class _KnowledgeVerifier:
                 self._verify_documents()
                 self._verify_semantics()
                 self._verify_external_sources()
+                self._verify_external_incident_semantics()
                 self._verify_requirements()
                 self._verify_redaction(archive)
         finally:
@@ -287,12 +300,21 @@ class _KnowledgeVerifier:
 
     def _verify_external_sources(self) -> None:
         source = self.source_summary
+        external_required = self.require_guards_passed or self.require_no_open_recurrence or bool(self.incident_board_verification_report_path)
+        if self.incident_board_package_path:
+            self._read_external_incident_package()
+        elif external_required:
+            self._add_check("external", "tohk_incident_package_required", "failed", "blocking", "Knowledge verification requires external Incident Board ZIP.")
         if self.incident_board_verification_report_path:
             self.external_incident_verification = _read_json_file(self.incident_board_verification_report_path)
             self._add_exact_check("external", "tohk_incident_verification_status", self.external_incident_verification.get("status"), source.get("incident_verification_status"), "Incident verification status")
             self._add_exact_check("external", "tohk_incident_verification_hash", verification_hash(self.external_incident_verification), source.get("incident_verification_report_hash"), "Incident verification report hash")
             self._add_exact_check("external", "tohk_incident_verification_zip_sha256", self.external_incident_verification.get("zip_sha256"), source.get("incident_zip_sha256"), "Incident ZIP sha256")
             self._add_exact_check("external", "tohk_incident_verification_manifest_hash", self.external_incident_verification.get("manifest_hash"), source.get("incident_manifest_hash"), "Incident manifest hash")
+            if self.incident_board_package_path:
+                self._add_exact_check("external", "tohk_incident_package_zip_sha256", self.external_incident_verification.get("zip_sha256"), self.external_incident_zip_sha256, "Incident verification report ZIP sha256 matches Incident ZIP")
+                self._add_exact_check("external", "tohk_incident_package_zip_size_bytes", self.external_incident_verification.get("zip_size_bytes"), self.external_incident_zip_size_bytes, "Incident verification report ZIP size matches Incident ZIP")
+                self._add_exact_check("external", "tohk_incident_package_manifest_hash", self.external_incident_verification.get("manifest_hash"), self.external_incident_manifest.get("integrity_hash"), "Incident verification report manifest hash matches Incident ZIP")
         elif self.require_guards_passed or self.require_no_open_recurrence:
             self._add_check("external", "tohk_incident_verification_required", "failed", "blocking", "Knowledge verification requires external Incident Board verification report.")
         if self.hub_verification_report_path:
@@ -300,6 +322,126 @@ class _KnowledgeVerifier:
             self._add_exact_check("external", "tohk_hub_verification_status", self.external_hub_verification.get("status"), source.get("hub_verification_status"), "Hub verification status")
             self._add_exact_check("external", "tohk_hub_verification_hash", verification_hash(self.external_hub_verification), source.get("hub_verification_report_hash"), "Hub verification report hash")
             self._add_exact_check("external", "tohk_hub_verification_source_hash", self.external_hub_verification.get("source_hash"), source.get("hub_report_hash"), "Hub report hash")
+
+    def _read_external_incident_package(self) -> None:
+        assert self.incident_board_package_path is not None
+        path = self.incident_board_package_path
+        if not path.exists() or not path.is_file():
+            self._add_check("external", "tohk_incident_package_open", "failed", "blocking", "External Incident Board ZIP does not exist.")
+            return
+        self.external_incident_zip_sha256 = _sha256_file(path)
+        self.external_incident_zip_size_bytes = os.stat(_fs_path(path)).st_size
+        try:
+            with zipfile.ZipFile(_fs_path(path), "r") as archive:
+                self.external_incident_manifest = self._read_external_json_entry(archive, "trust-operations-incident-manifest.json")
+                self.external_incidents_doc = self._read_external_json_entry(archive, "incidents.json")
+                self.external_closeout_summary = self._read_external_json_entry(archive, "closeout-summary.json")
+        except (zipfile.BadZipFile, OSError) as exc:
+            self._add_check("external", "tohk_incident_package_open", "failed", "blocking", f"External Incident Board ZIP cannot be opened: {exc}")
+            return
+        self._add_check("external", "tohk_incident_package_open", "passed", "blocking", "External Incident Board ZIP can be opened.")
+        self._add_hash_check("external", "tohk_incident_package_manifest_integrity", self.external_incident_manifest.get("integrity_hash"), incident_manifest_hash(self.external_incident_manifest), "Incident package manifest integrity")
+        self._add_hash_check("external", "tohk_incident_package_incidents_integrity", self.external_incidents_doc.get("integrity_hash"), incident_hash(self.external_incidents_doc), "Incident package incidents integrity")
+        self._add_hash_check("external", "tohk_incident_package_closeouts_integrity", self.external_closeout_summary.get("integrity_hash"), incident_hash(self.external_closeout_summary), "Incident package closeout summary integrity")
+
+    def _read_external_json_entry(self, archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+        try:
+            value = json.loads(archive.read(name).decode("utf-8"))
+        except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def _verify_external_incident_semantics(self) -> None:
+        if not self.external_incidents_doc:
+            return
+        facts = self._external_incident_facts()
+        entries = self.entries_doc.get("entries") if isinstance(self.entries_doc.get("entries"), list) else []
+        guards = self.guards_doc.get("guards") if isinstance(self.guards_doc.get("guards"), list) else []
+        entry_by_incident_hash: dict[str, dict[str, Any]] = {}
+        duplicate_entries: list[str] = []
+        extra_entries: list[str] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            incident_ref = str((entry.get("source") if isinstance(entry.get("source"), dict) else {}).get("incident_hash") or "")
+            if not incident_ref:
+                extra_entries.append(str(entry.get("entry_id") or "missing-incident-hash"))
+                continue
+            if incident_ref in entry_by_incident_hash:
+                duplicate_entries.append(str(entry.get("entry_id") or incident_ref))
+            entry_by_incident_hash[incident_ref] = entry
+            if incident_ref not in facts and entry.get("status") != "hidden":
+                extra_entries.append(str(entry.get("entry_id") or incident_ref))
+        missing_entries = [
+            str(fact.get("incident_id") or incident_hash_value)
+            for incident_hash_value, fact in facts.items()
+            if incident_hash_value not in entry_by_incident_hash
+        ]
+        self._add_check("external", "tohk_entry_external_required_incidents", "failed" if missing_entries else "passed", "blocking", "Eligible external incidents missing Knowledge entries: " + ", ".join(missing_entries[:5]) if missing_entries else "All eligible external incidents have Knowledge entries.")
+        self._add_check("external", "tohk_entry_external_duplicate_incidents", "failed" if duplicate_entries else "passed", "blocking", "Duplicate Knowledge entries for incidents: " + ", ".join(duplicate_entries[:5]) if duplicate_entries else "No duplicate Knowledge incident bindings.")
+        self._add_check("external", "tohk_entry_external_no_unbound_entries", "failed" if extra_entries else "passed", "blocking", "Knowledge entries not backed by current external incidents: " + ", ".join(extra_entries[:5]) if extra_entries else "All active Knowledge entries are backed by external incidents.")
+        fact_mismatches: list[str] = []
+        for incident_hash_value, fact in facts.items():
+            entry = entry_by_incident_hash.get(incident_hash_value)
+            if not entry:
+                continue
+            if not _entry_matches_external_fact(entry, fact, self.source_summary):
+                fact_mismatches.append(str(entry.get("entry_id") or fact.get("incident_id") or incident_hash_value))
+        self._add_check("external", "tohk_entry_external_fact_binding", "failed" if fact_mismatches else "passed", "blocking", "Knowledge entries do not match external Incident facts: " + ", ".join(fact_mismatches[:5]) if fact_mismatches else "Knowledge entries match external Incident facts.")
+        guard_type_mismatches: list[str] = []
+        active_guards = [guard for guard in guards if isinstance(guard, dict) and guard.get("status") not in {"archived", "manual_required"}]
+        for guard in active_guards:
+            incident_ref = str((guard.get("source") if isinstance(guard.get("source"), dict) else {}).get("incident_hash") or "")
+            fact = facts.get(incident_ref)
+            if fact and guard.get("guard_type") != fact.get("recommended_guard", {}).get("guard_type"):
+                guard_type_mismatches.append(str(guard.get("guard_id") or incident_ref))
+        self._add_check("external", "tohk_guard_external_recommended_type_binding", "failed" if guard_type_mismatches else "passed", "blocking", "Regression guards do not match external recommended guard type: " + ", ".join(guard_type_mismatches[:5]) if guard_type_mismatches else "Regression guard types match external Incident recommendations.")
+        covered = {str((guard.get("source") if isinstance(guard.get("source"), dict) else {}).get("knowledge_entry_hash") or "") for guard in active_guards}
+        missing_external_guard: list[str] = []
+        for incident_hash_value, fact in facts.items():
+            if fact.get("severity") not in {"critical", "high"}:
+                continue
+            entry = entry_by_incident_hash.get(incident_hash_value)
+            if not entry or entry.get("status") == "hidden" or entry.get("integrity_hash") not in covered:
+                missing_external_guard.append(str(fact.get("incident_id") or incident_hash_value))
+        self._add_check("external", "tohk_external_high_severity_guard_coverage", "failed" if missing_external_guard else "passed", "blocking", "External high severity incidents missing active regression guards: " + ", ".join(missing_external_guard[:5]) if missing_external_guard else "External high severity incidents are covered by active guards.")
+
+    def _external_incident_facts(self) -> dict[str, dict[str, Any]]:
+        incidents = self.external_incidents_doc.get("incidents") if isinstance(self.external_incidents_doc.get("incidents"), list) else []
+        closeouts = self.external_closeout_summary.get("closeouts") if isinstance(self.external_closeout_summary.get("closeouts"), list) else []
+        closeout_by_id = {str(closeout.get("incident_id") or ""): closeout for closeout in closeouts if isinstance(closeout, dict)}
+        facts: dict[str, dict[str, Any]] = {}
+        for incident in incidents:
+            if not isinstance(incident, dict) or incident.get("status") != "closed" or incident.get("stale"):
+                continue
+            incident_integrity = str(incident.get("integrity_hash") or "")
+            if not incident_integrity or incident_integrity != incident_hash(incident):
+                continue
+            incident_id = str(incident.get("incident_id") or "")
+            closeout = closeout_by_id.get(incident_id) or {}
+            closeout_integrity = str(closeout.get("integrity_hash") or "")
+            if closeout.get("status") != "passed" or not closeout_integrity or closeout_integrity != incident_hash(closeout):
+                continue
+            detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+            classification = _classify_incident(incident)
+            facts[incident_integrity] = {
+                "incident_id": incident_id,
+                "severity": incident.get("severity"),
+                "category": incident.get("category"),
+                "component_type": detected.get("component_type"),
+                "component_id": detected.get("component_id"),
+                "source_fingerprint": detected.get("source_fingerprint"),
+                "closeout_hash": closeout_integrity,
+                "failure_mode": classification["failure_mode"],
+                "root_cause": classification["root_cause"],
+                "preventive_pattern": classification["preventive_pattern"],
+                "recommended_guard": {
+                    "guard_type": classification["guard_type"],
+                    "title": classification["guard_title"],
+                    "reason": classification["guard_reason"],
+                },
+            }
+        return facts
 
     def _verify_requirements(self) -> None:
         runs_summary = self.runs_doc.get("summary") if isinstance(self.runs_doc.get("summary"), dict) else {}
@@ -364,6 +506,9 @@ class _KnowledgeVerifier:
                 "manifest_hash": self.manifest.get("integrity_hash"),
                 "source_hash": self.base.get("integrity_hash"),
                 "incident_verification_report_hash": self.source_summary.get("incident_verification_report_hash"),
+                "incident_zip_sha256": self.source_summary.get("incident_zip_sha256"),
+                "incident_zip_size_bytes": self.external_incident_zip_size_bytes,
+                "incident_manifest_hash": self.source_summary.get("incident_manifest_hash"),
                 "hub_verification_report_hash": self.source_summary.get("hub_verification_report_hash"),
                 "checks": self.checks,
                 "blockers": blockers,
@@ -404,6 +549,37 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _entry_matches_external_fact(entry: dict[str, Any], fact: dict[str, Any], source_summary: dict[str, Any]) -> bool:
+    source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+    expected_source = {
+        "incident_hash": source.get("incident_hash"),
+        "closeout_hash": source.get("closeout_hash"),
+        "incident_verification_report_hash": source.get("incident_verification_report_hash"),
+        "hub_verification_report_hash": source.get("hub_verification_report_hash"),
+        "source_fingerprint": source.get("source_fingerprint"),
+    }
+    expected_source_hash = stable_hash(expected_source)
+    recommended = entry.get("recommended_guard") if isinstance(entry.get("recommended_guard"), dict) else {}
+    return (
+        entry.get("incident_id") == fact.get("incident_id")
+        and entry.get("severity") == fact.get("severity")
+        and entry.get("category") == fact.get("category")
+        and entry.get("component_type") == fact.get("component_type")
+        and entry.get("component_id") == fact.get("component_id")
+        and entry.get("failure_mode") == fact.get("failure_mode")
+        and entry.get("root_cause") == fact.get("root_cause")
+        and entry.get("preventive_pattern") == fact.get("preventive_pattern")
+        and recommended.get("guard_type") == fact.get("recommended_guard", {}).get("guard_type")
+        and recommended.get("title") == fact.get("recommended_guard", {}).get("title")
+        and recommended.get("reason") == fact.get("recommended_guard", {}).get("reason")
+        and source.get("closeout_hash") == fact.get("closeout_hash")
+        and source.get("incident_verification_report_hash") == source_summary.get("incident_verification_report_hash")
+        and source.get("hub_verification_report_hash") == source_summary.get("hub_verification_report_hash")
+        and source.get("source_fingerprint") == fact.get("source_fingerprint")
+        and entry.get("source_hash") == expected_source_hash
+    )
 
 
 def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:

@@ -411,6 +411,7 @@ class TrustOperationsIncidentKnowledgeStore:
             strict=bool(payload.get("strict", False)),
             require_guards_passed=bool(payload.get("require_guards_passed", False)),
             require_no_open_recurrence=bool(payload.get("require_no_open_recurrence", False)),
+            incident_board_package_path=payload.get("incident_board_package_path") or self.incident_store.zip_path(hub_id),
             incident_board_verification_report_path=payload.get("incident_board_verification_report_path"),
             hub_verification_report_path=payload.get("hub_verification_report_path"),
         )

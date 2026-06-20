@@ -14239,6 +14239,7 @@ def _v93_trust_operations_incident_knowledge_smoke(root: Path) -> tuple[bool, st
                 "strict": True,
                 "require_guards_passed": True,
                 "require_no_open_recurrence": True,
+                "incident_board_package_path": incident_store.zip_path("hub"),
                 "incident_board_verification_report_path": incident_store.verification_report_path("hub"),
                 "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
             },
@@ -14274,6 +14275,16 @@ def _v93_trust_operations_incident_knowledge_smoke(root: Path) -> tuple[bool, st
             strict=True,
             require_guards_passed=True,
             require_no_open_recurrence=True,
+            incident_board_package_path=incident_store.zip_path("hub"),
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+        )
+        entry_full_resign = verify_trust_operations_incident_knowledge_package(
+            _v76_rewrite_zip(knowledge_store.zip_path("hub"), base / "knowledge-entry-full-resign.zip", _v93_tamper_downgrade_knowledge_entry_full_resign),
+            strict=True,
+            require_guards_passed=True,
+            require_no_open_recurrence=True,
+            incident_board_package_path=incident_store.zip_path("hub"),
             incident_board_verification_report_path=incident_store.verification_report_path("hub"),
             hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
         )
@@ -14289,13 +14300,14 @@ def _v93_trust_operations_incident_knowledge_smoke(root: Path) -> tuple[bool, st
             and _v38_check_status(hub_gate_missing, "toh_incident_knowledge_package_required") == "failed"
             and hub_gate.get("status") == "passed"
             and _v38_check_status(no_guard, "tohk_guards_cover_high_severity_entries") == "failed"
+            and _v38_check_status(entry_full_resign, "tohk_entry_external_fact_binding") == "failed"
             and _v38_check_status(extra, "tohk_zip_allowed_entries") == "failed"
         )
         return ok, (
             f"closeout={closeout.get('status')}, incident_verify={incident_verification.get('status')}, entries={refreshed.get('knowledge_base', {}).get('summary', {}).get('entry_count')}, "
             f"guard_run={guard_run.get('status')}, recurrence={recurrence.get('status')}, knowledge_verify={knowledge_verification.get('status')}, "
             f"hub_gate_missing={_v38_check_status(hub_gate_missing, 'toh_incident_knowledge_package_required')}, hub_gate={hub_gate.get('status')}, "
-            f"no_guard={_v38_check_status(no_guard, 'tohk_guards_cover_high_severity_entries')}, extra={_v38_check_status(extra, 'tohk_zip_allowed_entries')}"
+            f"no_guard={_v38_check_status(no_guard, 'tohk_guards_cover_high_severity_entries')}, entry_full_resign={_v38_check_status(entry_full_resign, 'tohk_entry_external_fact_binding')}, extra={_v38_check_status(extra, 'tohk_zip_allowed_entries')}"
         )
     except Exception as exc:
         return False, str(exc)
@@ -14331,6 +14343,74 @@ def _v93_tamper_remove_knowledge_guard_full_resign(docs: dict[str, bytes]) -> No
     manifest.setdefault("integrity", {})["guards_hash"] = guards["integrity_hash"]
     manifest.setdefault("integrity", {})["guard_run_summary_hash"] = runs["integrity_hash"]
     manifest.setdefault("integrity", {})["knowledge_report_hash"] = report["integrity_hash"]
+    manifest["integrity_hash"] = knowledge_manifest_hash(manifest)
+    docs["trust-operations-knowledge-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v93_tamper_downgrade_knowledge_entry_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_incident_knowledge import knowledge_hash, knowledge_manifest_hash
+
+    base = _v74_read_json_doc(docs, "knowledge-base.json")
+    report = _v74_read_json_doc(docs, "knowledge-report.json")
+    entries = _v74_read_json_doc(docs, "entries.json")
+    guards = _v74_read_json_doc(docs, "regression-guards.json")
+    runs = _v74_read_json_doc(docs, "guard-run-summary.json")
+    manifest = _v74_read_json_doc(docs, "trust-operations-knowledge-manifest.json")
+    entry = entries["entries"][0]
+    entry["severity"] = "low"
+    entry["failure_mode"] = "benign_documentation_issue"
+    entry["root_cause"] = "operator_note"
+    entry["preventive_pattern"] = "document operator note"
+    entry["recommended_guard"] = {"guard_type": "manual_required", "title": "Manual note review", "reason": "Forged benign entry."}
+    entry["integrity_hash"] = knowledge_hash(entry)
+    entries.setdefault("summary", {})["high_severity_entry_count"] = 0
+    entries["integrity_hash"] = knowledge_hash(entries)
+    guard = guards["guards"][0]
+    guard["guard_type"] = "manual_required"
+    guard["status"] = "manual_required"
+    guard.setdefault("scope", {})["failure_mode"] = entry["failure_mode"]
+    guard.setdefault("source", {})["knowledge_entry_hash"] = entry["integrity_hash"]
+    guard.setdefault("source", {})["source_hash"] = entry["source_hash"]
+    guard["policy"] = {"require_passed_external_report": False, "require_no_sensitive_text": False, "manual_required": True}
+    guard["integrity_hash"] = knowledge_hash(guard)
+    run = runs["runs"][0]
+    run["status"] = "manual_required"
+    run.setdefault("source", {})["knowledge_entry_hash"] = entry["integrity_hash"]
+    run.setdefault("source", {})["guard_hash"] = guard["integrity_hash"]
+    run["checks"] = [{"check_id": "guard_manual_required", "status": "manual_required", "severity": "manual", "message": "Forged manual guard."}]
+    run["integrity_hash"] = knowledge_hash(run)
+    guard["last_run"] = {"status": "manual_required", "run_at": run.get("run_at"), "guard_run_hash": run["integrity_hash"], "guard_hash_before_run": run["source"]["guard_hash"]}
+    guard["integrity_hash"] = knowledge_hash(guard)
+    guards["guards"][0] = guard
+    guards["summary"] = {"guard_count": 1, "active_guard_count": 0, "manual_required_guard_count": 1, "archived_guard_count": 0}
+    guards["integrity_hash"] = knowledge_hash(guards)
+    runs["summary"] = {"run_count": 1, "passed_count": 0, "failed_count": 0, "manual_required_count": 1}
+    runs["integrity_hash"] = knowledge_hash(runs)
+    base.setdefault("summary", {})["high_severity_entry_count"] = 0
+    base.setdefault("summary", {})["guards_passed_count"] = 0
+    base.setdefault("summary", {})["manual_required_guard_count"] = 1
+    base["integrity_hash"] = knowledge_hash(base)
+    report["status"] = "warning"
+    report.setdefault("source", {})["knowledge_base_hash"] = base["integrity_hash"]
+    report.setdefault("source", {})["entries_hash"] = entries["integrity_hash"]
+    report.setdefault("source", {})["guards_hash"] = guards["integrity_hash"]
+    report.setdefault("source", {})["guard_run_summary_hash"] = runs["integrity_hash"]
+    report.setdefault("summary", {})["high_severity_entry_count"] = 0
+    report.setdefault("summary", {})["guards_passed_count"] = 0
+    report.setdefault("summary", {})["manual_required_guard_count"] = 1
+    report["integrity_hash"] = knowledge_hash(report)
+    docs["knowledge-base.json"] = _v74_json_doc(base)
+    docs["knowledge-report.json"] = _v74_json_doc(report)
+    docs["entries.json"] = _v74_json_doc(entries)
+    docs["regression-guards.json"] = _v74_json_doc(guards)
+    docs["guard-run-summary.json"] = _v74_json_doc(runs)
+    for path in ("knowledge-base.json", "knowledge-report.json", "entries.json", "regression-guards.json", "guard-run-summary.json"):
+        _v92_sync_manifest_file(manifest, path, docs[path])
+    manifest.setdefault("integrity", {})["knowledge_base_hash"] = base["integrity_hash"]
+    manifest.setdefault("integrity", {})["knowledge_report_hash"] = report["integrity_hash"]
+    manifest.setdefault("integrity", {})["entries_hash"] = entries["integrity_hash"]
+    manifest.setdefault("integrity", {})["guards_hash"] = guards["integrity_hash"]
+    manifest.setdefault("integrity", {})["guard_run_summary_hash"] = runs["integrity_hash"]
     manifest["integrity_hash"] = knowledge_manifest_hash(manifest)
     docs["trust-operations-knowledge-manifest.json"] = _v74_json_doc(manifest)
 

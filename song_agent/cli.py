@@ -1141,6 +1141,7 @@ def build_verify_trust_operations_incident_knowledge_parser() -> argparse.Argume
     verify_parser.add_argument("--strict", action="store_true", help="Treat strict package checks as failures.")
     verify_parser.add_argument("--require-guards-passed", action="store_true", help="Require regression guards to have passed runs.")
     verify_parser.add_argument("--require-no-open-recurrence", action="store_true", help="Require no open incident recurrence.")
+    verify_parser.add_argument("--incident-board-package", type=Path, default=None, help="External Trust Operations Incident Board ZIP.")
     verify_parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
     verify_parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
@@ -1334,6 +1335,7 @@ def build_trust_operations_incident_knowledge_parser() -> argparse.ArgumentParse
     parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
     parser.add_argument("--require-guards-passed", action="store_true", help="Verifier requires passed guard runs.")
     parser.add_argument("--require-no-open-recurrence", action="store_true", help="Verifier requires no open recurrence.")
+    parser.add_argument("--incident-board-package", type=Path, default=None, help="External Trust Operations Incident Board ZIP.")
     parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
     parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
@@ -2977,6 +2979,7 @@ def _main() -> None:
             strict=args.strict,
             require_guards_passed=args.require_guards_passed,
             require_no_open_recurrence=args.require_no_open_recurrence,
+            incident_board_package_path=args.incident_board_package,
             incident_board_verification_report_path=args.incident_board_verification_report,
             hub_verification_report_path=args.hub_verification_report,
             max_zip_size_mb=args.max_zip_size_mb,
@@ -4806,6 +4809,7 @@ def _main() -> None:
                     "strict": args.strict,
                     "require_guards_passed": args.require_guards_passed,
                     "require_no_open_recurrence": args.require_no_open_recurrence,
+                    "incident_board_package_path": args.incident_board_package,
                     "incident_board_verification_report_path": args.incident_board_verification_report,
                     "hub_verification_report_path": args.hub_verification_report,
                 },

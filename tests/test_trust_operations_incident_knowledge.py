@@ -28,6 +28,7 @@ def test_trust_operations_incident_knowledge_guard_lifecycle_and_hub_gate(tmp_pa
             "strict": True,
             "require_guards_passed": True,
             "require_no_open_recurrence": True,
+            "incident_board_package_path": incident_store.zip_path("hub"),
             "incident_board_verification_report_path": incident_store.verification_report_path("hub"),
             "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
         },
@@ -86,6 +87,7 @@ def test_trust_operations_incident_knowledge_verifier_rejects_guard_removal_full
         strict=True,
         require_guards_passed=True,
         require_no_open_recurrence=True,
+        incident_board_package_path=incident_store.zip_path("hub"),
         incident_board_verification_report_path=incident_store.verification_report_path("hub"),
         hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
     )
@@ -93,6 +95,51 @@ def test_trust_operations_incident_knowledge_verifier_rejects_guard_removal_full
 
     assert _has_blocker(forged, "tohk_guards_cover_high_severity_entries")
     assert _has_blocker(extra, "tohk_zip_allowed_entries")
+
+
+def test_trust_operations_incident_knowledge_verifier_rejects_entry_semantics_full_resign(tmp_path: Path) -> None:
+    hub_store, incident_store, fixture, delivery, second_distribution, report_id = _closed_incident_fixture(tmp_path)
+    store = TrustOperationsIncidentKnowledgeStore(tmp_path / ".musicforge" / "trust-operations-knowledge", hub_store=hub_store, incident_store=incident_store)
+    refreshed = store.refresh("hub")
+    guard = store.create_guard("hub", refreshed["entries"][0]["entry_id"])
+    store.run_guard("hub", guard["guard_id"])
+    store.refresh_recurrence("hub")
+    store.export_knowledge("hub")
+    store.build_zip("hub")
+    forged_zip = _rewrite_zip(store.zip_path("hub"), tmp_path / "knowledge-entry-forged.zip", _downgrade_entry_full_resign)
+
+    forged = verify_trust_operations_incident_knowledge_package(
+        forged_zip,
+        strict=True,
+        require_guards_passed=True,
+        require_no_open_recurrence=True,
+        incident_board_package_path=incident_store.zip_path("hub"),
+        incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+        hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+    )
+    delivery_verify_kwargs = delivery.verify_kwargs()
+    delivery_verify_kwargs["distribution_verification_paths"] = [delivery.verify_payload["distribution_verification_path"], second_distribution]
+    delivery_verify_kwargs.pop("distribution_verification_path", None)
+    # First write the forged verification report exactly as an attacker would supply to the Hub gate.
+    from song_agent.projectio import write_json
+
+    write_json(tmp_path / "forged-knowledge-verification.json", forged)
+    hub_gate = verify_trust_operations_hub_package(
+        hub_store.zip_path("hub", report_id),
+        strict=True,
+        require_incident_closeout=True,
+        require_incident_regression_guards=True,
+        incident_board_package_path=incident_store.zip_path("hub"),
+        incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+        incident_knowledge_package_path=forged_zip,
+        incident_knowledge_verification_report_path=tmp_path / "forged-knowledge-verification.json",
+        hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+        **fixture.verify_kwargs(),
+        **delivery_verify_kwargs,
+    )
+
+    assert _has_blocker(forged, "tohk_entry_external_fact_binding")
+    assert _has_blocker(hub_gate, "toh_incident_knowledge_verification_status")
 
 
 def _closed_incident_fixture(tmp_path: Path):
@@ -170,3 +217,73 @@ def _remove_guard_full_resign(docs: dict[str, bytes]) -> None:
     manifest["integrity_hash"] = knowledge_manifest_hash(manifest)
     docs["trust-operations-knowledge-manifest.json"] = _doc_bytes(manifest)
 
+
+def _downgrade_entry_full_resign(docs: dict[str, bytes]) -> None:
+    base = _read_doc(docs, "knowledge-base.json")
+    report = _read_doc(docs, "knowledge-report.json")
+    entries = _read_doc(docs, "entries.json")
+    guards = _read_doc(docs, "regression-guards.json")
+    runs = _read_doc(docs, "guard-run-summary.json")
+    manifest = _read_doc(docs, "trust-operations-knowledge-manifest.json")
+    entry = entries["entries"][0]
+    entry["severity"] = "low"
+    entry["failure_mode"] = "benign_documentation_issue"
+    entry["root_cause"] = "operator_note"
+    entry["preventive_pattern"] = "document operator note"
+    entry["recommended_guard"] = {
+        "guard_type": "manual_required",
+        "title": "Manual note review",
+        "reason": "Forged benign entry.",
+    }
+    entry["integrity_hash"] = knowledge_hash(entry)
+    entries["summary"]["high_severity_entry_count"] = 0
+    entries["integrity_hash"] = knowledge_hash(entries)
+    guard = guards["guards"][0]
+    guard["guard_type"] = "manual_required"
+    guard["status"] = "manual_required"
+    guard["scope"]["failure_mode"] = entry["failure_mode"]
+    guard["source"]["knowledge_entry_hash"] = entry["integrity_hash"]
+    guard["source"]["source_hash"] = entry["source_hash"]
+    guard["policy"] = {"require_passed_external_report": False, "require_no_sensitive_text": False, "manual_required": True}
+    guard["integrity_hash"] = knowledge_hash(guard)
+    guards["summary"] = {"guard_count": 1, "active_guard_count": 0, "manual_required_guard_count": 1, "archived_guard_count": 0}
+    guards["integrity_hash"] = knowledge_hash(guards)
+    run = runs["runs"][0]
+    run["status"] = "manual_required"
+    run["source"]["knowledge_entry_hash"] = entry["integrity_hash"]
+    run["source"]["guard_hash"] = guard["integrity_hash"]
+    run["checks"] = [{"check_id": "guard_manual_required", "status": "manual_required", "severity": "manual", "message": "Forged manual guard."}]
+    run["integrity_hash"] = knowledge_hash(run)
+    guard["last_run"] = {"status": "manual_required", "run_at": run["run_at"], "guard_run_hash": run["integrity_hash"], "guard_hash_before_run": run["source"]["guard_hash"]}
+    guard["integrity_hash"] = knowledge_hash(guard)
+    guards["guards"][0] = guard
+    guards["integrity_hash"] = knowledge_hash(guards)
+    runs["summary"] = {"run_count": 1, "passed_count": 0, "failed_count": 0, "manual_required_count": 1}
+    runs["integrity_hash"] = knowledge_hash(runs)
+    base["summary"]["high_severity_entry_count"] = 0
+    base["summary"]["guards_passed_count"] = 0
+    base["summary"]["manual_required_guard_count"] = 1
+    base["integrity_hash"] = knowledge_hash(base)
+    report["status"] = "warning"
+    report["source"]["knowledge_base_hash"] = base["integrity_hash"]
+    report["source"]["entries_hash"] = entries["integrity_hash"]
+    report["source"]["guards_hash"] = guards["integrity_hash"]
+    report["source"]["guard_run_summary_hash"] = runs["integrity_hash"]
+    report["summary"]["high_severity_entry_count"] = 0
+    report["summary"]["guards_passed_count"] = 0
+    report["summary"]["manual_required_guard_count"] = 1
+    report["integrity_hash"] = knowledge_hash(report)
+    docs["knowledge-base.json"] = _doc_bytes(base)
+    docs["knowledge-report.json"] = _doc_bytes(report)
+    docs["entries.json"] = _doc_bytes(entries)
+    docs["regression-guards.json"] = _doc_bytes(guards)
+    docs["guard-run-summary.json"] = _doc_bytes(runs)
+    for path in ("knowledge-base.json", "knowledge-report.json", "entries.json", "regression-guards.json", "guard-run-summary.json"):
+        _sync_manifest_file(manifest, path, docs[path])
+    manifest["integrity"]["knowledge_base_hash"] = base["integrity_hash"]
+    manifest["integrity"]["knowledge_report_hash"] = report["integrity_hash"]
+    manifest["integrity"]["entries_hash"] = entries["integrity_hash"]
+    manifest["integrity"]["guards_hash"] = guards["integrity_hash"]
+    manifest["integrity"]["guard_run_summary_hash"] = runs["integrity_hash"]
+    manifest["integrity_hash"] = knowledge_manifest_hash(manifest)
+    docs["trust-operations-knowledge-manifest.json"] = _doc_bytes(manifest)
