@@ -1,5 +1,17 @@
 # Changelog
 
+## v9.6.0 - 2026-06-22
+
+### Added
+- Trust Operations Continuous Assurance with policy, run, report, evidence index, external verification summary, fixed-structure Assurance Archive ZIP, and offline verifier.
+- Hub verifier `--require-continuous-assurance` gate that binds the current Assurance Archive, Assurance verification report, current Hub ZIP, Hub manifest hash, and Hub verification report.
+- CLI/API/Studio controls for Assurance refresh/export/ZIP/verify workflows.
+- release-check `v96.trust_operations_continuous_assurance_smoke` covering normal assurance, Hub gate, stale external evidence, full-resign report tamper, and fixed ZIP allow-list enforcement.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_continuous_assurance.py tests\test_cli_trust_operations_continuous_assurance.py tests\test_server_trust_operations_continuous_assurance.py tests\test_release_check.py::test_v96_trust_operations_continuous_assurance_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.5.0 - 2026-06-21
 
 ### Added

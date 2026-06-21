@@ -14652,6 +14652,188 @@ def _v95_blocked(fn) -> bool:
     return False
 
 
+def _v96_trust_operations_continuous_assurance_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v96-trust-operations-assurance-")).resolve()
+    try:
+        from song_agent.trust_operations_continuous_assurance import TrustOperationsAssuranceStore
+        from song_agent.trust_operations_continuous_assurance_verifier import verify_trust_operations_assurance_package
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+
+        fixture = _v90_fixture(base)
+        delivery = _v91_delivery_fixture(base)
+        second_distribution = _v91_copy_delivery_report(delivery["distribution_verification_path"], base / "target-002-verification.json", "target-002", "8" * 64)
+        full_delivery_payload = {**delivery["payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify = {**delivery["verify_payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify.pop("distribution_verification_path", None)
+
+        hub_store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        hub_store.create_hub({"hub_id": "hub"})
+        report_id = str(hub_store.refresh_report("hub", {**fixture["payload"], **full_delivery_payload})["hub_report"]["report_id"])
+        hub_store.export_report("hub", report_id)
+        hub_store.build_zip("hub", report_id)
+        hub_store.verify_zip("hub", report_id, {**fixture["verify_payload"], **full_delivery_verify, "strict": True, "require_ready": True, "require_current": True, "require_delivery_ready": True, "require_publication_monitoring_clean": True})
+
+        control_zip, control_report = _v96_external_assurance_evidence(base, "control", "trust-operations-controls-manifest.json", "musicforge_trust_operations_control_verification", {"status": "passed", "control_count": 3})
+        signoff_zip, signoff_report = _v96_external_assurance_evidence(
+            base,
+            "control-signoff",
+            "trust-operations-control-signoff-manifest.json",
+            "musicforge_trust_operations_control_signoff_verification",
+            {"status": "passed", "signed": True},
+            extra_files={"control-exceptions.json": {"exceptions": [], "summary": {"exception_count": 0}}},
+        )
+        incident_zip, incident_report = _v96_external_assurance_evidence(
+            base,
+            "incident",
+            "trust-operations-incident-manifest.json",
+            "musicforge_trust_operations_hub_incident_verification",
+            {"status": "passed", "open_count": 0, "blocking_open_count": 0},
+            extra_files={"incidents.json": {"incidents": [], "summary": {"open_count": 0}}},
+        )
+        knowledge_zip, knowledge_report = _v96_external_assurance_evidence(
+            base,
+            "knowledge",
+            "trust-operations-knowledge-manifest.json",
+            "musicforge_trust_operations_incident_knowledge_verification",
+            {"status": "passed", "guards_passed_count": 1, "guard_failed_count": 0, "recurrence_count": 0},
+        )
+        assurance_payload = {
+            "hub_package_path": hub_store.zip_path("hub", report_id),
+            "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+            "control_package_path": control_zip,
+            "control_verification_report_path": control_report,
+            "control_signoff_archive_path": signoff_zip,
+            "control_signoff_verification_report_path": signoff_report,
+            "incident_board_package_path": incident_zip,
+            "incident_board_verification_report_path": incident_report,
+            "incident_knowledge_package_path": knowledge_zip,
+            "incident_knowledge_verification_report_path": knowledge_report,
+            **full_delivery_verify,
+        }
+        assurance_verify_payload = {
+            **assurance_payload,
+            "release_verification_paths": [delivery["release_verification_path"]],
+            "submission_verification_paths": [delivery["submission_verification_path"]],
+            "submission_evidence_verification_paths": [delivery["submission_evidence_verification_path"]],
+            "release_operations_verification_paths": [delivery["release_operations_verification_path"]],
+        }
+        for key in ("release_verification_path", "distribution_verification_path", "submission_verification_path", "submission_evidence_verification_path", "release_operations_verification_path"):
+            assurance_verify_payload.pop(key, None)
+        assurance_store = TrustOperationsAssuranceStore(base / ".musicforge" / "trust-operations-assurance", hub_store=hub_store)
+        refreshed_assurance = assurance_store.refresh_run("hub", assurance_payload)
+        run_id = str(refreshed_assurance["run"]["run_id"])
+        assurance_store.export_archive(run_id)
+        assurance_store.build_archive_zip(run_id)
+        assurance_verification = assurance_store.verify_archive_zip(run_id, {**assurance_verify_payload, "strict": True, "require_passed": True, "require_current": True})
+        missing_gate = verify_trust_operations_hub_package(hub_store.zip_path("hub", report_id), strict=True, require_continuous_assurance=True, hub_verification_report_path=hub_store.verification_report_path("hub", report_id), **fixture["verify_payload"])
+        hub_gate = verify_trust_operations_hub_package(
+            hub_store.zip_path("hub", report_id),
+            strict=True,
+            require_continuous_assurance=True,
+            continuous_assurance_archive_path=assurance_store.archive_zip_path(run_id),
+            continuous_assurance_verification_report_path=assurance_store.verification_report_path(run_id),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            **fixture["verify_payload"],
+        )
+        full_resign = verify_trust_operations_assurance_package(_v76_rewrite_zip(assurance_store.archive_zip_path(run_id), base / "assurance-full-resign.zip", _v96_tamper_assurance_report_summary_full_resign), strict=True, require_passed=True, require_current=True, **assurance_verify_payload)
+        extra = verify_trust_operations_assurance_package(_v38_rewrite_zip(assurance_store.archive_zip_path(run_id), base / "assurance-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
+
+        stale_report = read_json(hub_store.verification_report_path("hub", report_id))
+        stale_report["zip_sha256"] = "0" * 64
+        write_json(hub_store.verification_report_path("hub", report_id), stale_report)
+        stale_export = _v96_blocked(lambda: assurance_store.export_archive(run_id))
+
+        ok = (
+            refreshed_assurance["run"].get("status") == "passed"
+            and assurance_verification.get("status") == "passed"
+            and _v38_check_status(missing_gate, "toh_continuous_assurance_archive_required") == "failed"
+            and hub_gate.get("status") == "passed"
+            and _v38_check_status(full_resign, "toa_report_summary_matches_run") == "failed"
+            and _v38_check_status(extra, "toa_zip_allowed_entries") == "failed"
+            and stale_export
+        )
+        return ok, (
+            f"assurance={refreshed_assurance['run'].get('status')}, verify={assurance_verification.get('status')}, missing_gate={_v38_check_status(missing_gate, 'toh_continuous_assurance_archive_required')}, "
+            f"hub_gate={hub_gate.get('status')}, full_resign={_v38_check_status(full_resign, 'toa_report_summary_matches_run')}, extra={_v38_check_status(extra, 'toa_zip_allowed_entries')}, stale_export={stale_export}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v96_blocked(fn) -> bool:
+    try:
+        fn()
+    except Exception:
+        return True
+    return False
+
+
+def _v96_external_assurance_evidence(
+    base: Path,
+    name: str,
+    manifest_entry: str,
+    verification_package_type: str,
+    summary: dict[str, Any],
+    *,
+    extra_files: dict[str, dict[str, Any]] | None = None,
+) -> tuple[Path, Path]:
+    root = base / "external-assurance" / name
+    root.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": 1,
+        "package_type": f"musicforge_{name.replace('-', '_')}_manifest",
+        "files": [],
+        "source": {"name": name},
+        "zip": {},
+    }
+    docs: dict[str, bytes] = {}
+    for path, payload in (extra_files or {}).items():
+        data = _v74_json_doc(payload)
+        docs[path] = data
+        manifest["files"].append({"path": path, "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    docs[manifest_entry] = _v74_json_doc(manifest)
+    zip_path = root / f"{name}.zip"
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path, data in docs.items():
+            archive.writestr(path, data)
+    report = {
+        "schema_version": 1,
+        "package_type": verification_package_type,
+        "generated_at": "2026-06-22T00:00:00+00:00",
+        "status": "passed",
+        "zip_sha256": _file_sha256(zip_path),
+        "zip_size_bytes": zip_path.stat().st_size,
+        "manifest_hash": manifest["integrity_hash"],
+        "source_hash": stable_hash({"name": name}),
+        "summary": summary,
+        "checks": [{"check_id": f"{name}_fixture", "status": "passed"}],
+        "blockers": [],
+        "warnings": [],
+    }
+    report_path = write_json(root / f"{name}-verification-report.json", report)
+    return zip_path, report_path
+
+
+def _v96_tamper_assurance_report_summary_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_continuous_assurance import assurance_hash, assurance_manifest_hash
+
+    report = _v74_read_json_doc(docs, "assurance-report.json")
+    report["summary"] = {"check_count": 0, "passed_count": 0, "blocking_failed_count": 0, "warning_count": 0, "score": 100}
+    report["integrity_hash"] = assurance_hash(report)
+    docs["assurance-report.json"] = _v74_json_doc(report)
+    manifest = _v74_read_json_doc(docs, "trust-operations-assurance-manifest.json")
+    manifest.setdefault("source", {})["report_hash"] = report["integrity_hash"]
+    _v92_sync_manifest_file(manifest, "assurance-report.json", docs["assurance-report.json"])
+    manifest["integrity_hash"] = assurance_manifest_hash(manifest)
+    docs["trust-operations-assurance-manifest.json"] = _v74_json_doc(manifest)
+
+
 def _v94_tamper_control_result_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.trust_operations_controls import control_hash
 

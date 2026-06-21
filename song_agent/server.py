@@ -139,6 +139,12 @@ from song_agent.trust_operations_control_signoff import (
 )
 from song_agent.trust_operations_control_signoff_verifier import write_trust_operations_control_signoff_verification_report
 from song_agent.trust_operations_controls_verifier import write_trust_operations_control_verification_report
+from song_agent.trust_operations_continuous_assurance import (
+    TrustOperationsAssuranceNotFoundError,
+    TrustOperationsAssuranceStateError,
+    TrustOperationsAssuranceStore,
+)
+from song_agent.trust_operations_continuous_assurance_verifier import write_trust_operations_assurance_verification_report
 from song_agent.trust_operations_hub_incidents import (
     TrustOperationsIncidentNotFoundError,
     TrustOperationsIncidentStateError,
@@ -2864,6 +2870,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def trust_operations_control_signoff_store(self) -> TrustOperationsControlSignoffStore:
         return self.server.trust_operations_control_signoff_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_assurance_store(self) -> TrustOperationsAssuranceStore:
+        return self.server.trust_operations_assurance_store  # type: ignore[attr-defined]
 
     @property
     def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
@@ -5600,6 +5610,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_trust_operations(self, method: str, path: str) -> None:
+        assurance_prefix = "/api/trust-operations/assurance"
+        if path == assurance_prefix or path.startswith(assurance_prefix + "/"):
+            self._handle_trust_operations_assurance(method, path.removeprefix(assurance_prefix))
+            return
         signoff_prefix = "/api/trust-operations/control-signoff/"
         if path.startswith(signoff_prefix):
             hub_tail = path.removeprefix(signoff_prefix)
@@ -5647,6 +5661,77 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._handle_trust_operations_knowledge(method, unquote(hub_id), rest.removeprefix("/knowledge"))
             return
         self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Hub route not found.")
+
+    def _handle_trust_operations_assurance(self, method: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "runs": self.trust_operations_assurance_store.list_runs()})
+                return
+            if tail == "/runs":
+                if method == "GET":
+                    query = parse_qs(urlparse(self.path).query)
+                    hub_id = query.get("hub_id", [None])[0]
+                    self._send_json({"ok": True, "runs": self.trust_operations_assurance_store.list_runs(hub_id=hub_id)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    hub_id = str(payload.get("hub_id") or "hub")
+                    policy_id = str(payload.get("policy_id") or "default")
+                    result = self.trust_operations_assurance_store.refresh_run(hub_id, payload, policy_id=policy_id, now=_utc_now())
+                    self._send_json({"ok": result.get("run", {}).get("status") == "passed", **result}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.split("/") if part]
+            if len(parts) >= 2 and parts[0] == "runs":
+                run_id = unquote(parts[1])
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_json({"ok": True, **self.trust_operations_assurance_store.summary(run_id)})
+                    return
+                action = parts[2]
+                if action == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.trust_operations_assurance_store.archive_zip_path(run_id), "application/zip", filename=f"musicforge-{run_id}-trust-operations-assurance.zip")
+                    return
+                if action == "export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.trust_operations_assurance_store.export_archive(run_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "run_id": run_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                    return
+                if action == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    zip_info = self.trust_operations_assurance_store.build_archive_zip(run_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "run_id": run_id, "zip": zip_info})
+                    return
+                if action == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.trust_operations_assurance_store.verify_archive_zip(run_id, self._optional_json_body())
+                    write_trust_operations_assurance_verification_report(report, self.trust_operations_assurance_store.verification_report_path(run_id))
+                    self._send_json({"ok": report.get("status") != "failed", "run_id": run_id, "verification": report, "summary": report.get("summary", {})})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Assurance route not found.")
+        except TrustOperationsAssuranceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except TrustOperationsAssuranceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_trust_operations_knowledge(self, method: str, hub_id: str, tail: str) -> None:
         try:
@@ -17201,6 +17286,10 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             hub_store=self.trust_operations_hub_store,
             incident_store=self.trust_operations_incident_store,
             knowledge_store=self.trust_operations_incident_knowledge_store,
+        )
+        self.trust_operations_assurance_store = TrustOperationsAssuranceStore(
+            self.release_store.root.parent / "trust-operations-assurance",
+            hub_store=self.trust_operations_hub_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

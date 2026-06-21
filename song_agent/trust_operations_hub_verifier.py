@@ -49,6 +49,7 @@ def verify_trust_operations_hub_package(
     require_incident_regression_guards: bool = False,
     require_trust_controls: bool = False,
     require_trust_control_signoff: bool = False,
+    require_continuous_assurance: bool = False,
     publication_channel_state_path: Path | str | None = None,
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
@@ -72,6 +73,8 @@ def verify_trust_operations_hub_package(
     trust_control_verification_report_path: Path | str | None = None,
     trust_control_signoff_archive_path: Path | str | None = None,
     trust_control_signoff_verification_report_path: Path | str | None = None,
+    continuous_assurance_archive_path: Path | str | None = None,
+    continuous_assurance_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -90,6 +93,7 @@ def verify_trust_operations_hub_package(
         require_incident_regression_guards=require_incident_regression_guards,
         require_trust_controls=require_trust_controls,
         require_trust_control_signoff=require_trust_control_signoff,
+        require_continuous_assurance=require_continuous_assurance,
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
@@ -108,6 +112,8 @@ def verify_trust_operations_hub_package(
         trust_control_verification_report_path=Path(trust_control_verification_report_path) if trust_control_verification_report_path else None,
         trust_control_signoff_archive_path=Path(trust_control_signoff_archive_path) if trust_control_signoff_archive_path else None,
         trust_control_signoff_verification_report_path=Path(trust_control_signoff_verification_report_path) if trust_control_signoff_verification_report_path else None,
+        continuous_assurance_archive_path=Path(continuous_assurance_archive_path) if continuous_assurance_archive_path else None,
+        continuous_assurance_verification_report_path=Path(continuous_assurance_verification_report_path) if continuous_assurance_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -150,6 +156,7 @@ class _HubVerifier:
         require_incident_regression_guards: bool,
         require_trust_controls: bool,
         require_trust_control_signoff: bool,
+        require_continuous_assurance: bool,
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
@@ -168,6 +175,8 @@ class _HubVerifier:
         trust_control_verification_report_path: Path | None,
         trust_control_signoff_archive_path: Path | None,
         trust_control_signoff_verification_report_path: Path | None,
+        continuous_assurance_archive_path: Path | None,
+        continuous_assurance_verification_report_path: Path | None,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -185,6 +194,7 @@ class _HubVerifier:
         self.require_incident_regression_guards = require_incident_regression_guards
         self.require_trust_controls = require_trust_controls
         self.require_trust_control_signoff = require_trust_control_signoff
+        self.require_continuous_assurance = require_continuous_assurance
         self.publication_channel_state_path = publication_channel_state_path
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
@@ -205,6 +215,8 @@ class _HubVerifier:
         self.trust_control_verification_report_path = trust_control_verification_report_path
         self.trust_control_signoff_archive_path = trust_control_signoff_archive_path
         self.trust_control_signoff_verification_report_path = trust_control_signoff_verification_report_path
+        self.continuous_assurance_archive_path = continuous_assurance_archive_path
+        self.continuous_assurance_verification_report_path = continuous_assurance_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -243,6 +255,7 @@ class _HubVerifier:
         self.external_incident_knowledge_verification_report: dict[str, Any] = {}
         self.external_trust_control_verification_report: dict[str, Any] = {}
         self.external_trust_control_signoff_verification_report: dict[str, Any] = {}
+        self.external_continuous_assurance_verification_report: dict[str, Any] = {}
 
     def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
@@ -456,7 +469,7 @@ class _HubVerifier:
         self._add_exact_check("hub_report", "toh_report_readiness_matches_matrix", {key: report_readiness.get(key) for key in ["row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count"]}, combined_summary, "Hub report readiness summary matches matrix")
 
     def _verify_external_bindings(self) -> None:
-        if self.hub_verification_report_path:
+        if self.hub_verification_report_path and not self.external_hub_verification_report:
             self.external_hub_verification_report = _read_json_file(self.hub_verification_report_path)
         elif self.require_signed or self.hub_signoff_path:
             self._add_check("external", "toh_hub_verification_report_required", "failed", "blocking", "--require-signed requires the Hub verification report used for signoff.")
@@ -506,6 +519,7 @@ class _HubVerifier:
         self._verify_external_incidents()
         self._verify_external_trust_controls()
         self._verify_external_trust_control_signoff()
+        self._verify_external_continuous_assurance()
 
     def _verify_external_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
         expected = _evidence_by_type(self.evidence, component_type)
@@ -703,6 +717,34 @@ class _HubVerifier:
         elif self.require_trust_control_signoff:
             self._add_check("external", "toh_trust_control_signoff_knowledge_verification_required", "failed", "blocking", "Trust control signoff gate requires the current Knowledge verification report.")
 
+    def _verify_external_continuous_assurance(self) -> None:
+        if not (self.require_continuous_assurance or self.continuous_assurance_archive_path or self.continuous_assurance_verification_report_path):
+            return
+        if not self.continuous_assurance_archive_path:
+            self._add_check("external", "toh_continuous_assurance_archive_required", "failed", "blocking", "Continuous Assurance gate requires an external Assurance archive ZIP.")
+            return
+        if not self.continuous_assurance_verification_report_path:
+            self._add_check("external", "toh_continuous_assurance_verification_required", "failed", "blocking", "Continuous Assurance gate requires an external Assurance verification report.")
+            return
+        report = _read_json_file(self.continuous_assurance_verification_report_path)
+        self.external_continuous_assurance_verification_report = report
+        archive_path = self.continuous_assurance_archive_path
+        archive_sha = _sha256_file(archive_path) if archive_path.exists() else None
+        archive_size = os.stat(_fs_path(archive_path)).st_size if archive_path.exists() else None
+        assurance_manifest = _read_zip_json(archive_path, "trust-operations-assurance-manifest.json") if archive_path.exists() else {}
+        self._add_exact_check("external", "toh_continuous_assurance_verification_package_type", report.get("package_type"), "musicforge_trust_operations_continuous_assurance_verification", "Continuous Assurance verification package_type")
+        self._add_exact_check("external", "toh_continuous_assurance_verification_status", report.get("status"), "passed", "Continuous Assurance verification status")
+        self._add_exact_check("external", "toh_continuous_assurance_archive_zip_sha256", report.get("zip_sha256"), archive_sha, "Continuous Assurance archive ZIP sha256")
+        self._add_exact_check("external", "toh_continuous_assurance_archive_zip_size_bytes", report.get("zip_size_bytes"), archive_size, "Continuous Assurance archive ZIP size")
+        self._add_exact_check("external", "toh_continuous_assurance_manifest_hash", report.get("manifest_hash"), assurance_manifest.get("integrity_hash"), "Continuous Assurance manifest hash")
+        self._add_exact_check("external", "toh_continuous_assurance_hub_zip_sha256", report.get("hub_zip_sha256"), self.zip_sha256, "Continuous Assurance Hub ZIP sha256")
+        self._add_exact_check("external", "toh_continuous_assurance_hub_zip_size_bytes", report.get("hub_zip_size_bytes"), self.zip_size_bytes, "Continuous Assurance Hub ZIP size")
+        self._add_exact_check("external", "toh_continuous_assurance_hub_manifest_hash", report.get("hub_manifest_hash"), self.manifest.get("integrity_hash"), "Continuous Assurance Hub manifest hash")
+        if self.external_hub_verification_report:
+            self._add_exact_check("external", "toh_continuous_assurance_hub_verification_hash", report.get("hub_verification_report_hash"), verification_hash(self.external_hub_verification_report), "Continuous Assurance Hub verification report hash")
+        elif self.require_continuous_assurance:
+            self._add_check("external", "toh_continuous_assurance_hub_verification_required", "failed", "blocking", "Continuous Assurance gate requires the current Hub verification report.")
+
     def _verify_requirements(self) -> None:
         report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
         ready = self.report.get("status") == "ready" and report_readiness.get("blocked_count") == 0 and report_readiness.get("stale_count") == 0 and report_readiness.get("missing_count") == 0
@@ -730,6 +772,8 @@ class _HubVerifier:
         self._add_check("requirements", "toh_require_trust_controls", "passed" if controls_ready or not self.require_trust_controls else "failed", "blocking", "Trust controls are passed." if controls_ready else "Trust control evidence is missing or failed.")
         control_signoff_ready = self.external_trust_control_signoff_verification_report.get("status") == "passed"
         self._add_check("requirements", "toh_require_trust_control_signoff", "passed" if control_signoff_ready or not self.require_trust_control_signoff else "failed", "blocking", "Trust control signoff is passed." if control_signoff_ready else "Trust control signoff evidence is missing or failed.")
+        assurance_ready = self.external_continuous_assurance_verification_report.get("status") == "passed"
+        self._add_check("requirements", "toh_require_continuous_assurance", "passed" if assurance_ready or not self.require_continuous_assurance else "failed", "blocking", "Continuous Assurance is passed." if assurance_ready else "Continuous Assurance evidence is missing or failed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         findings: list[dict[str, Any]] = []
@@ -1021,6 +1065,15 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+    try:
+        with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
+            value = json.loads(archive.read(entry).decode("utf-8"))
+            return value if isinstance(value, dict) else {}
+    except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
 
 
 def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:

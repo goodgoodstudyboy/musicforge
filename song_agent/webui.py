@@ -3803,6 +3803,14 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-control-signoff-verify" type="button">Verify Signoff ZIP</button>
           <a class="button-link secondary" href="/api/trust-operations/control-signoff/default/download">Download Control Signoff ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Continuous Assurance</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-assurance-refresh" type="button">Refresh Assurance</button>
+          <button class="secondary" id="trust-operations-assurance-export" type="button">Export Assurance</button>
+          <button class="secondary" id="trust-operations-assurance-zip" type="button">Build Assurance ZIP</button>
+          <button class="secondary" id="trust-operations-assurance-verify" type="button">Verify Assurance</button>
+          <a class="button-link secondary" href="/api/trust-operations/assurance/runs/toa-000001/download">Download Assurance ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
