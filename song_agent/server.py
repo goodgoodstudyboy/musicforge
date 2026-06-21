@@ -132,6 +132,12 @@ from song_agent.trust_operations_controls import (
     TrustOperationsControlStateError,
     TrustOperationsControlStore,
 )
+from song_agent.trust_operations_control_signoff import (
+    TrustOperationsControlSignoffNotFoundError,
+    TrustOperationsControlSignoffStateError,
+    TrustOperationsControlSignoffStore,
+)
+from song_agent.trust_operations_control_signoff_verifier import write_trust_operations_control_signoff_verification_report
 from song_agent.trust_operations_controls_verifier import write_trust_operations_control_verification_report
 from song_agent.trust_operations_hub_incidents import (
     TrustOperationsIncidentNotFoundError,
@@ -2854,6 +2860,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def trust_operations_control_store(self) -> TrustOperationsControlStore:
         return self.server.trust_operations_control_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_control_signoff_store(self) -> TrustOperationsControlSignoffStore:
+        return self.server.trust_operations_control_signoff_store  # type: ignore[attr-defined]
 
     @property
     def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
@@ -5590,6 +5600,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_trust_operations(self, method: str, path: str) -> None:
+        signoff_prefix = "/api/trust-operations/control-signoff/"
+        if path.startswith(signoff_prefix):
+            hub_tail = path.removeprefix(signoff_prefix)
+            hub_id, _sep, rest = hub_tail.partition("/")
+            self._handle_trust_operations_control_signoff(method, unquote(hub_id), "/" + rest if rest else "")
+            return
         prefix = "/api/trust-operations/hubs/"
         if not path.startswith(prefix):
             self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations route not found.")
@@ -5743,6 +5759,114 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except TrustOperationsKnowledgeNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except TrustOperationsKnowledgeStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_trust_operations_control_signoff(self, method: str, hub_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.trust_operations_control_signoff_store.summary(hub_id)})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.trust_operations_control_signoff_store.archive_zip_path(hub_id), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-control-signoff.zip")
+                return
+            if tail == "/sign":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                assessment_id = str(payload.get("assessment_id") or "")
+                if not assessment_id:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "assessment_id is required.")
+                    return
+                signoff = self.trust_operations_control_signoff_store.sign(hub_id, assessment_id, payload, now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, "signoff": signoff}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/exceptions":
+                if method == "GET":
+                    self._send_json({"ok": True, "hub_id": hub_id, "exceptions": self.trust_operations_control_signoff_store.list_exceptions(hub_id)})
+                    return
+                if method == "POST":
+                    exception = self.trust_operations_control_signoff_store.request_exception(hub_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "hub_id": hub_id, "exception": exception}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/change-requests":
+                if method == "GET":
+                    self._send_json({"ok": True, "hub_id": hub_id, "change_requests": self.trust_operations_control_signoff_store.list_change_requests(hub_id)})
+                    return
+                if method == "POST":
+                    cr = self.trust_operations_control_signoff_store.create_change_request(hub_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "hub_id": hub_id, "change_request": cr}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                cr_id = str(payload.get("change_request_id") or "")
+                if not cr_id:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "change_request_id is required.")
+                    return
+                result = self.trust_operations_control_signoff_store.reset_signoff(hub_id, cr_id, now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, **result})
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.trust_operations_control_signoff_store.export_archive(hub_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.trust_operations_control_signoff_store.build_archive_zip(hub_id, now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, "zip": zip_info})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.trust_operations_control_signoff_store.verify_archive_zip(hub_id, self._optional_json_body())
+                write_trust_operations_control_signoff_verification_report(report, self.trust_operations_control_signoff_store.verification_report_path(hub_id))
+                self._send_json({"ok": report.get("status") != "failed", "hub_id": hub_id, "verification": report, "summary": report.get("summary", {})})
+                return
+            parts = [part for part in tail.split("/") if part]
+            if len(parts) == 3 and parts[0] == "exceptions" and parts[2] in {"approve", "reject"}:
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if parts[2] == "approve":
+                    exception = self.trust_operations_control_signoff_store.approve_exception(hub_id, unquote(parts[1]), self._optional_json_body(), now=_utc_now())
+                else:
+                    exception = self.trust_operations_control_signoff_store.reject_exception(hub_id, unquote(parts[1]), self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, "exception": exception})
+                return
+            if len(parts) == 3 and parts[0] == "change-requests" and parts[2] == "approve":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                cr = self.trust_operations_control_signoff_store.approve_change_request(hub_id, unquote(parts[1]), self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "hub_id": hub_id, "change_request": cr})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Control Signoff route not found.")
+        except TrustOperationsControlSignoffNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except TrustOperationsControlSignoffStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -17067,6 +17191,13 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         )
         self.trust_operations_control_store = TrustOperationsControlStore(
             self.release_store.root.parent / "trust-operations-controls",
+            hub_store=self.trust_operations_hub_store,
+            incident_store=self.trust_operations_incident_store,
+            knowledge_store=self.trust_operations_incident_knowledge_store,
+        )
+        self.trust_operations_control_signoff_store = TrustOperationsControlSignoffStore(
+            self.release_store.root.parent / "trust-operations-control-signoffs",
+            control_store=self.trust_operations_control_store,
             hub_store=self.trust_operations_hub_store,
             incident_store=self.trust_operations_incident_store,
             knowledge_store=self.trust_operations_incident_knowledge_store,

@@ -3792,6 +3792,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-controls-verify" type="button">Verify Controls ZIP</button>
           <a class="button-link secondary" href="/api/trust-operations/hubs/default/controls/toc-assess-000001.zip">Download Controls ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Trust Control Signoff</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-control-signoff-sign" type="button">Sign Controls</button>
+          <button class="secondary" id="trust-operations-control-signoff-exception" type="button">Request Exception</button>
+          <button class="secondary" id="trust-operations-control-signoff-cr" type="button">Create Change Request</button>
+          <button class="secondary" id="trust-operations-control-signoff-reset" type="button">Reset Control Signoff</button>
+          <button class="secondary" id="trust-operations-control-signoff-export" type="button">Export Signoff Archive</button>
+          <button class="secondary" id="trust-operations-control-signoff-zip" type="button">Build Signoff ZIP</button>
+          <button class="secondary" id="trust-operations-control-signoff-verify" type="button">Verify Signoff ZIP</button>
+          <a class="button-link secondary" href="/api/trust-operations/control-signoff/default/download">Download Control Signoff ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);

@@ -1,5 +1,17 @@
 # Changelog
 
+## v9.5.0 - 2026-06-21
+
+### Added
+- Trust Operations Control Signoff with signed control evidence, control exceptions, approved Change Request reset, immutable archive export, and offline archive verifier.
+- Hub verifier `--require-trust-control-signoff` gate that binds the current Control Signoff Archive, Control Signoff verification report, Control ZIP, Hub ZIP, Incident Board ZIP, and Incident Knowledge ZIP evidence.
+- Studio/API/CLI controls for Control Signoff sign/export/ZIP/verify/reset workflows.
+- release-check `v95.trust_operations_control_signoff_smoke` covering signoff, Hub gate, stale Control verification, signed-by/source/history full-resign tamper, critical exception forgery, extra ZIP entries, deleted signoff file bypass, and Change Request reuse.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_control_signoff.py tests\test_cli_trust_operations_control_signoff.py tests\test_server_trust_operations_control_signoff.py tests\test_release_check.py::test_v95_trust_operations_control_signoff_smoke tests\test_webui.py::test_webui_contains_encoded_audio_acceptance_controls -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.4.0 - 2026-06-21
 
 ### Added

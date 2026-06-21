@@ -14463,6 +14463,195 @@ def _v94_trust_operations_control_catalog_smoke(root: Path) -> tuple[bool, str]:
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v95_trust_operations_control_signoff_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v95-trust-operations-control-signoff-")).resolve()
+    try:
+        from song_agent.trust_operations_control_signoff import TrustOperationsControlSignoffStateError, TrustOperationsControlSignoffStore
+        from song_agent.trust_operations_control_signoff_verifier import verify_trust_operations_control_signoff_archive_package
+        from song_agent.trust_operations_controls import TrustOperationsControlStore
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStore
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+        from song_agent.trust_operations_incident_knowledge import TrustOperationsIncidentKnowledgeStore
+
+        fixture = _v90_fixture(base)
+        delivery = _v91_delivery_fixture(base)
+        second_distribution = _v91_copy_delivery_report(delivery["distribution_verification_path"], base / "target-002-verification.json", "target-002", "8" * 64)
+        hub_store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        hub_store.create_hub({"hub_id": "hub"})
+        payload = {**fixture["payload"], **delivery["payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        report_id = str(hub_store.refresh_report("hub", payload)["hub_report"]["report_id"])
+        hub_store.export_report("hub", report_id)
+        hub_store.build_zip("hub", report_id)
+        hub_store.verify_zip("hub", report_id, {**fixture["verify_payload"], **delivery["verify_payload"], "strict": True, "require_delivery_ready": True})
+
+        incident_store = TrustOperationsIncidentStore(base / ".musicforge" / "trust-operations-incidents", hub_store=hub_store)
+        incident_store.refresh_board("hub")
+        incident = incident_store.list_incidents("hub")[0]
+        incident_store.add_evidence("hub", str(incident.get("incident_id") or ""), {"component_type": incident.get("detected_from", {}).get("component_type"), "component_id": incident.get("detected_from", {}).get("component_id"), "report": read_json(second_distribution)})
+        closeout = incident_store.close_incident("hub", str(incident.get("incident_id") or ""), {"closed_by": "release-check", "reason": "Second distribution target verification report supplied."})
+        incident_store.export_board("hub")
+        incident_store.build_zip("hub")
+        incident_verification = incident_store.verify_zip("hub", {"strict": True, "require_no_open_blocking": True, "require_current_hub": True, "hub_verification_report_path": hub_store.verification_report_path("hub", report_id)})
+
+        knowledge_store = TrustOperationsIncidentKnowledgeStore(base / ".musicforge" / "trust-operations-knowledge", hub_store=hub_store, incident_store=incident_store)
+        refreshed = knowledge_store.refresh("hub")
+        guard = knowledge_store.create_guard("hub", str(refreshed["entries"][0].get("entry_id") or ""))
+        guard_run = knowledge_store.run_guard("hub", str(guard.get("guard_id") or ""))
+        knowledge_store.refresh_recurrence("hub")
+        knowledge_store.export_knowledge("hub")
+        knowledge_store.build_zip("hub")
+        knowledge_verification = knowledge_store.verify_zip(
+            "hub",
+            {
+                "strict": True,
+                "require_guards_passed": True,
+                "require_no_open_recurrence": True,
+                "incident_board_package_path": incident_store.zip_path("hub"),
+                "incident_board_verification_report_path": incident_store.verification_report_path("hub"),
+                "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+            },
+        )
+
+        control_store = TrustOperationsControlStore(base / ".musicforge" / "trust-operations-controls", hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
+        control_payload = {
+            "hub_package_path": hub_store.zip_path("hub", report_id),
+            "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+            "incident_board_package_path": incident_store.zip_path("hub"),
+            "incident_board_verification_report_path": incident_store.verification_report_path("hub"),
+            "incident_knowledge_package_path": knowledge_store.zip_path("hub"),
+            "incident_knowledge_verification_report_path": knowledge_store.verification_report_path("hub"),
+        }
+        control_store.refresh_catalog("hub", control_payload)
+        policy = control_store.create_policy_bundle("hub", {"policy_id": "toc-policy-000001"})
+        assessment = control_store.assess_policy("hub", str(policy.get("policy_id") or ""), control_payload)
+        assessment_id = str(assessment.get("assessment", {}).get("assessment_id") or "")
+        control_store.export_controls("hub", assessment_id)
+        control_store.build_zip("hub", assessment_id)
+        control_verification = control_store.verify_zip("hub", assessment_id, {**control_payload, "strict": True, "require_policy_passed": True})
+
+        signoff_store = TrustOperationsControlSignoffStore(base / ".musicforge" / "trust-operations-control-signoffs", control_store=control_store, hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
+        signoff = signoff_store.sign("hub", assessment_id, {**control_payload, "signed_by": "release-check", "reason": "Trust Operations Control Signoff v9.5 smoke accepted."})
+        archive = signoff_store.export_archive("hub", control_payload)
+        zip_info = signoff_store.build_archive_zip("hub")
+        signoff_verification = signoff_store.verify_archive_zip("hub", {**control_payload, "strict": True, "require_signed": True, "require_current": True})
+
+        full_delivery_verify_payload = {**delivery["verify_payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify_payload.pop("distribution_verification_path", None)
+        hub_gate_missing = verify_trust_operations_hub_package(
+            hub_store.zip_path("hub", report_id),
+            strict=True,
+            require_trust_control_signoff=True,
+            trust_control_package_path=control_store.zip_path("hub", assessment_id),
+            trust_control_verification_report_path=control_store.verification_report_path("hub", assessment_id),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            incident_board_package_path=incident_store.zip_path("hub"),
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            incident_knowledge_package_path=knowledge_store.zip_path("hub"),
+            incident_knowledge_verification_report_path=knowledge_store.verification_report_path("hub"),
+            **fixture["verify_payload"],
+            **full_delivery_verify_payload,
+        )
+        hub_gate = verify_trust_operations_hub_package(
+            hub_store.zip_path("hub", report_id),
+            strict=True,
+            require_trust_controls=True,
+            require_trust_control_signoff=True,
+            trust_control_package_path=control_store.zip_path("hub", assessment_id),
+            trust_control_verification_report_path=control_store.verification_report_path("hub", assessment_id),
+            trust_control_signoff_archive_path=signoff_store.archive_zip_path("hub"),
+            trust_control_signoff_verification_report_path=signoff_store.verification_report_path("hub"),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            incident_board_package_path=incident_store.zip_path("hub"),
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            incident_knowledge_package_path=knowledge_store.zip_path("hub"),
+            incident_knowledge_verification_report_path=knowledge_store.verification_report_path("hub"),
+            **fixture["verify_payload"],
+            **full_delivery_verify_payload,
+        )
+
+        old_control_report = read_json(control_store.verification_report_path("hub", assessment_id))
+        old_control_report["zip_sha256"] = "0" * 64
+        old_control_report_path = write_json(base / "old-control-verification.json", old_control_report)
+        old_control = verify_trust_operations_control_signoff_archive_package(
+            signoff_store.archive_zip_path("hub"),
+            strict=True,
+            require_signed=True,
+            require_current=True,
+            control_package_path=control_store.zip_path("hub", assessment_id),
+            control_verification_report_path=old_control_report_path,
+            **control_payload,
+        )
+        signed_by = verify_trust_operations_control_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path("hub"), base / "signed-by.zip", _v95_tamper_control_signoff_signed_by_full_resign), strict=True, require_signed=True, require_current=True, control_package_path=control_store.zip_path("hub", assessment_id), control_verification_report_path=control_store.verification_report_path("hub", assessment_id), **control_payload)
+        source = verify_trust_operations_control_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path("hub"), base / "source.zip", _v95_tamper_control_signoff_source_full_resign), strict=True, require_signed=True, require_current=True, control_package_path=control_store.zip_path("hub", assessment_id), control_verification_report_path=control_store.verification_report_path("hub", assessment_id), **control_payload)
+        history = verify_trust_operations_control_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path("hub"), base / "history.zip", _v95_tamper_control_signoff_history_full_resign), strict=True, require_signed=True, require_current=True, control_package_path=control_store.zip_path("hub", assessment_id), control_verification_report_path=control_store.verification_report_path("hub", assessment_id), **control_payload)
+        critical_exception = verify_trust_operations_control_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path("hub"), base / "critical-exception.zip", _v95_tamper_control_signoff_critical_exception_full_resign), strict=True, require_signed=True)
+        extra = verify_trust_operations_control_signoff_archive_package(_v38_rewrite_zip(signoff_store.archive_zip_path("hub"), base / "control-signoff-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
+
+        no_cr_reset = _v95_blocked(lambda: signoff_store.reset_signoff("hub", "missing"))
+        draft_cr = signoff_store.create_change_request("hub", {"reason": "Refresh Control Signoff after source changes."})
+        draft_reset = _v95_blocked(lambda: signoff_store.reset_signoff("hub", str(draft_cr.get("change_request_id") or "")))
+        approved_cr = signoff_store.approve_change_request("hub", str(draft_cr.get("change_request_id") or ""))
+        delete_guard = False
+        signoff_store.signoff_path("hub").unlink(missing_ok=True)
+        try:
+            signoff_store.export_archive("hub", control_payload)
+        except TrustOperationsControlSignoffStateError:
+            delete_guard = True
+        reset = signoff_store.reset_signoff("hub", str(approved_cr.get("change_request_id") or ""))
+        cr_reuse = _v95_blocked(lambda: signoff_store.reset_signoff("hub", str(approved_cr.get("change_request_id") or "")))
+
+        ok = (
+            closeout.get("status") == "passed"
+            and incident_verification.get("status") == "passed"
+            and guard_run.get("status") == "passed"
+            and knowledge_verification.get("status") == "passed"
+            and control_verification.get("status") == "passed"
+            and signoff.get("status") == "signed"
+            and archive.get("package_type") == "musicforge_trust_operations_control_signoff_manifest"
+            and bool(zip_info.get("sha256"))
+            and signoff_verification.get("status") == "passed"
+            and _v38_check_status(hub_gate_missing, "toh_trust_control_signoff_archive_required") == "failed"
+            and hub_gate.get("status") == "passed"
+            and _v38_check_status(old_control, "tocs_control_verification_report_hash") == "failed"
+            and (_v38_check_status(signed_by, "tocs_report_signoff_hash") == "failed" or _v38_check_status(signed_by, "tocs_manifest_signoff_hash") == "failed")
+            and (_v38_check_status(source, "tocs_source_matches_signoff") == "failed" or _v38_check_status(source, "tocs_control_package_zip_sha256") == "failed")
+            and (_v38_check_status(history, "tocs_history_signed_event") == "failed" or _v38_check_status(history, "tocs_manifest_history_hash") == "failed")
+            and _v38_check_status(critical_exception, "tocs_exception_no_forbidden_approvals") == "failed"
+            and _v38_check_status(extra, "tocs_zip_allowed_entries") == "failed"
+            and no_cr_reset
+            and draft_reset
+            and delete_guard
+            and reset.get("status") == "reset"
+            and cr_reuse
+        )
+        return ok, (
+            f"control_verify={control_verification.get('status')}, signoff={signoff.get('status')}, archive_zip={bool(zip_info.get('sha256'))}, "
+            f"signoff_verify={signoff_verification.get('status')}, hub_gate={hub_gate.get('status')}, "
+            f"missing_gate={_v38_check_status(hub_gate_missing, 'toh_trust_control_signoff_archive_required')}, "
+            f"old_control={_v38_check_status(old_control, 'tocs_control_verification_report_hash')}, "
+            f"signed_by={_v38_check_status(signed_by, 'tocs_report_signoff_hash') or _v38_check_status(signed_by, 'tocs_manifest_signoff_hash')}, "
+            f"source={_v38_check_status(source, 'tocs_source_matches_signoff') or _v38_check_status(source, 'tocs_control_package_zip_sha256')}, "
+            f"history={_v38_check_status(history, 'tocs_history_signed_event') or _v38_check_status(history, 'tocs_manifest_history_hash')}, "
+            f"critical_exception={_v38_check_status(critical_exception, 'tocs_exception_no_forbidden_approvals')}, extra={_v38_check_status(extra, 'tocs_zip_allowed_entries')}, "
+            f"reset={no_cr_reset}/{draft_reset}/{delete_guard}/{reset.get('status')}/{cr_reuse}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v95_blocked(fn) -> bool:
+    try:
+        fn()
+    except Exception:
+        return True
+    return False
+
+
 def _v94_tamper_control_result_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.trust_operations_controls import control_hash
 
@@ -14476,6 +14665,85 @@ def _v94_tamper_control_result_full_resign(docs: dict[str, bytes]) -> None:
     results["summary"]["required_failed_count"] = sum(1 for row in results["results"] if row.get("required") and row.get("status") != "passed")
     docs["control-results.json"] = _v74_json_doc(results)
     _v94_resign_control_docs(docs)
+
+
+def _v95_tamper_control_signoff_signed_by_full_resign(docs: dict[str, bytes]) -> None:
+    signoff = _v74_read_json_doc(docs, "control-signoff.json")
+    signoff["signed_by"] = "tampered-reviewer"
+    docs["control-signoff.json"] = _v74_json_doc(signoff)
+    _v95_resign_control_signoff_docs(docs)
+
+
+def _v95_tamper_control_signoff_source_full_resign(docs: dict[str, bytes]) -> None:
+    source = _v74_read_json_doc(docs, "source-verification-summary.json")
+    source["source"]["control_zip_sha256"] = "0" * 64
+    docs["source-verification-summary.json"] = _v74_json_doc(source)
+    _v95_resign_control_signoff_docs(docs)
+
+
+def _v95_tamper_control_signoff_history_full_resign(docs: dict[str, bytes]) -> None:
+    docs["control-signoff-history.jsonl"] = b""
+    manifest = _v74_read_json_doc(docs, "trust-operations-control-signoff-manifest.json")
+    manifest["source"]["history_hash"] = "0" * 64
+    docs["trust-operations-control-signoff-manifest.json"] = _v74_json_doc(manifest)
+    _v95_resign_control_signoff_docs(docs)
+
+
+def _v95_tamper_control_signoff_critical_exception_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_control_signoff import control_signoff_hash
+
+    exceptions = _v74_read_json_doc(docs, "control-exceptions.json")
+    exception = {
+        "schema_version": 1,
+        "package_type": "musicforge_trust_operations_control_exception",
+        "exception_id": "tocs-exc-forged",
+        "hub_id": "hub",
+        "control_id": "toc-baseline-redaction-clean",
+        "status": "approved",
+        "risk": {"severity": "critical", "required": True},
+        "source": {},
+        "approval": {"decision": "approved"},
+    }
+    exception["integrity_hash"] = control_signoff_hash(exception)
+    exceptions.setdefault("exceptions", []).append(exception)
+    exceptions["summary"] = {
+        "exception_count": len(exceptions.get("exceptions", [])),
+        "approved_count": sum(1 for item in exceptions.get("exceptions", []) if item.get("status") == "approved"),
+    }
+    docs["control-exceptions.json"] = _v74_json_doc(exceptions)
+    _v95_resign_control_signoff_docs(docs)
+
+
+def _v95_resign_control_signoff_docs(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_control_signoff import control_signoff_hash, control_signoff_manifest_hash
+
+    signoff = _v74_read_json_doc(docs, "control-signoff.json")
+    exceptions = _v74_read_json_doc(docs, "control-exceptions.json")
+    change_requests = _v74_read_json_doc(docs, "control-change-requests.json")
+    report = _v74_read_json_doc(docs, "control-signoff-report.json")
+    source = _v74_read_json_doc(docs, "source-verification-summary.json")
+    manifest = _v74_read_json_doc(docs, "trust-operations-control-signoff-manifest.json")
+    for name, doc in {
+        "control-signoff.json": signoff,
+        "control-exceptions.json": exceptions,
+        "control-change-requests.json": change_requests,
+        "control-signoff-report.json": report,
+        "source-verification-summary.json": source,
+    }.items():
+        doc["integrity_hash"] = control_signoff_hash(doc)
+        docs[name] = _v74_json_doc(doc)
+        _v92_sync_manifest_file(manifest, name, docs[name])
+    _v92_sync_manifest_file(manifest, "control-signoff-history.jsonl", docs["control-signoff-history.jsonl"])
+    manifest["source"] = {
+        "signoff_hash": signoff.get("integrity_hash"),
+        "history_hash": manifest.get("source", {}).get("history_hash"),
+        "exceptions_hash": exceptions.get("integrity_hash"),
+        "change_requests_hash": change_requests.get("integrity_hash"),
+        "report_hash": report.get("integrity_hash"),
+        "source_verification_summary_hash": source.get("integrity_hash"),
+    }
+    manifest["integrity_hash"] = control_signoff_manifest_hash(manifest)
+    docs["trust-operations-control-signoff-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v94_tamper_control_derived_downgrade_full_resign(docs: dict[str, bytes]) -> None:

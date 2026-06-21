@@ -1084,6 +1084,7 @@ def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-incident-closeout", action="store_true", help="Require external Trust Operations Incident closeout evidence.")
     verify_parser.add_argument("--require-incident-regression-guards", action="store_true", help="Require external Trust Operations Incident Knowledge regression guard evidence.")
     verify_parser.add_argument("--require-trust-controls", action="store_true", help="Require Trust Operations Control Catalog policy evidence.")
+    verify_parser.add_argument("--require-trust-control-signoff", action="store_true", help="Require Trust Operations Control Signoff archive evidence.")
     verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for current/revoke checks.")
     verify_parser.add_argument("--public-trust-center-verification", type=Path, default=None, help="External Public Trust Center verification report.")
     verify_parser.add_argument("--publication-monitoring-verification", type=Path, default=None, help="External Publication Monitoring verification report.")
@@ -1100,6 +1101,8 @@ def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--incident-knowledge-verification-report", type=Path, default=None, help="External Trust Operations Incident Knowledge verification report.")
     verify_parser.add_argument("--trust-control-package", type=Path, default=None, help="External Trust Operations Control ZIP.")
     verify_parser.add_argument("--trust-control-verification-report", type=Path, default=None, help="External Trust Operations Control verification report.")
+    verify_parser.add_argument("--trust-control-signoff-archive", type=Path, default=None, help="External Trust Operations Control Signoff Archive ZIP.")
+    verify_parser.add_argument("--trust-control-signoff-verification-report", type=Path, default=None, help="External Trust Operations Control Signoff verification report.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=256, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
@@ -1168,6 +1171,28 @@ def build_verify_trust_operations_control_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--incident-knowledge-verification-report", type=Path, default=None, help="External Trust Operations Incident Knowledge verification report.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=128, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_trust_operations_control_signoff_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Trust Operations Control Signoff Archive ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Trust Operations Control Signoff archive ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict package checks as failures.")
+    verify_parser.add_argument("--require-signed", action="store_true", help="Require signed Control Signoff evidence.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require current external Control/Hub/Incident/Knowledge evidence.")
+    verify_parser.add_argument("--control-package", type=Path, default=None, help="External Trust Operations Control ZIP.")
+    verify_parser.add_argument("--control-verification-report", type=Path, default=None, help="External Trust Operations Control verification report.")
+    verify_parser.add_argument("--hub-package", type=Path, default=None, help="External Trust Operations Hub ZIP.")
+    verify_parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
+    verify_parser.add_argument("--incident-board-package", type=Path, default=None, help="External Trust Operations Incident Board ZIP.")
+    verify_parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
+    verify_parser.add_argument("--incident-knowledge-package", type=Path, default=None, help="External Trust Operations Incident Knowledge ZIP.")
+    verify_parser.add_argument("--incident-knowledge-verification-report", type=Path, default=None, help="External Trust Operations Incident Knowledge verification report.")
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=32, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=64, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
     return verify_parser
 
@@ -1281,6 +1306,50 @@ def build_trust_operations_hub_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-trust-controls", action="store_true", help="Verifier requires Trust Operations Control policy evidence.")
     parser.add_argument("--trust-control-package", type=Path, default=None, help="External Trust Operations Control ZIP.")
     parser.add_argument("--trust-control-verification-report", type=Path, default=None, help="External Trust Operations Control verification report.")
+    parser.add_argument("--require-trust-control-signoff", action="store_true", help="Verifier requires Trust Operations Control Signoff archive evidence.")
+    parser.add_argument("--trust-control-signoff-archive", type=Path, default=None, help="External Trust Operations Control Signoff Archive ZIP.")
+    parser.add_argument("--trust-control-signoff-verification-report", type=Path, default=None, help="External Trust Operations Control Signoff verification report.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_trust_operations_control_signoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Sign, archive, and verify Trust Operations Controls.")
+    parser.add_argument("--hub-id", default="hub", help="Trust Operations Hub id.")
+    parser.add_argument("--assessment-id", default=None, help="Control assessment id.")
+    parser.add_argument("--sign", action="store_true", help="Sign the current Control verification evidence.")
+    parser.add_argument("--signed-by", default="local-reviewer", help="Signer name.")
+    parser.add_argument("--reason", default="Trust Operations control signoff operation.", help="Reason for signoff/change request/exception.")
+    parser.add_argument("--request-exception", action="store_true", help="Request a Control exception.")
+    parser.add_argument("--approve-exception", action="store_true", help="Approve a Control exception.")
+    parser.add_argument("--reject-exception", action="store_true", help="Reject a Control exception.")
+    parser.add_argument("--exception-id", default=None, help="Control exception id.")
+    parser.add_argument("--control-id", default=None, help="Control id for an exception.")
+    parser.add_argument("--requested-by", default="local-operator", help="Exception requester.")
+    parser.add_argument("--approved-by", default="local-reviewer", help="Exception or CR approver.")
+    parser.add_argument("--expires-at", default=None, help="Exception expiry timestamp.")
+    parser.add_argument("--mitigation", default="", help="Exception mitigation note.")
+    parser.add_argument("--create-change-request", action="store_true", help="Create a Control Signoff change request.")
+    parser.add_argument("--approve-change-request", action="store_true", help="Approve a Control Signoff change request.")
+    parser.add_argument("--change-request-id", default=None, help="Change request id.")
+    parser.add_argument("--reset", action="store_true", help="Reset Control Signoff with an approved change request.")
+    parser.add_argument("--export", action="store_true", help="Export the Control Signoff archive directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Control Signoff archive ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Control Signoff archive ZIP.")
+    parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--require-signed", action="store_true", default=True, help="Verifier requires signed evidence.")
+    parser.add_argument("--no-require-signed", dest="require_signed", action="store_false", help="Do not require signed evidence.")
+    parser.add_argument("--require-current", action="store_true", default=True, help="Verifier requires current external evidence.")
+    parser.add_argument("--no-require-current", dest="require_current", action="store_false", help="Do not require current external evidence.")
+    parser.add_argument("--control-package", type=Path, default=None, help="External Trust Operations Control ZIP.")
+    parser.add_argument("--control-verification-report", type=Path, default=None, help="External Trust Operations Control verification report.")
+    parser.add_argument("--hub-package", type=Path, default=None, help="External Trust Operations Hub ZIP.")
+    parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
+    parser.add_argument("--incident-board-package", type=Path, default=None, help="External Trust Operations Incident Board ZIP.")
+    parser.add_argument("--incident-board-verification-report", type=Path, default=None, help="External Trust Operations Incident Board verification report.")
+    parser.add_argument("--incident-knowledge-package", type=Path, default=None, help="External Trust Operations Incident Knowledge ZIP.")
+    parser.add_argument("--incident-knowledge-verification-report", type=Path, default=None, help="External Trust Operations Incident Knowledge verification report.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2990,6 +3059,7 @@ def _main() -> None:
             require_incident_closeout=args.require_incident_closeout,
             require_incident_regression_guards=args.require_incident_regression_guards,
             require_trust_controls=args.require_trust_controls,
+            require_trust_control_signoff=args.require_trust_control_signoff,
             publication_channel_state_path=args.publication_channel_state,
             public_trust_center_verification_path=args.public_trust_center_verification,
             publication_monitoring_verification_path=args.publication_monitoring_verification,
@@ -3006,6 +3076,8 @@ def _main() -> None:
             incident_knowledge_verification_report_path=args.incident_knowledge_verification_report,
             trust_control_package_path=args.trust_control_package,
             trust_control_verification_report_path=args.trust_control_verification_report,
+            trust_control_signoff_archive_path=args.trust_control_signoff_archive,
+            trust_control_signoff_verification_report_path=args.trust_control_signoff_verification_report,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -3048,6 +3120,40 @@ def _main() -> None:
         else:
             print_trust_operations_control_verification_report(report)
         raise SystemExit(trust_operations_control_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-trust-operations-control-signoff-archive-package":
+        from song_agent.trust_operations_control_signoff_verifier import (
+            print_trust_operations_control_signoff_verification_report,
+            trust_operations_control_signoff_verification_exit_code,
+            verify_trust_operations_control_signoff_archive_package,
+            write_trust_operations_control_signoff_verification_report,
+        )
+
+        parser = build_verify_trust_operations_control_signoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_trust_operations_control_signoff_archive_package(
+            args.zip_path,
+            strict=args.strict,
+            require_signed=args.require_signed,
+            require_current=args.require_current,
+            control_package_path=args.control_package,
+            control_verification_report_path=args.control_verification_report,
+            hub_package_path=args.hub_package,
+            hub_verification_report_path=args.hub_verification_report,
+            incident_board_package_path=args.incident_board_package,
+            incident_board_verification_report_path=args.incident_board_verification_report,
+            incident_knowledge_package_path=args.incident_knowledge_package,
+            incident_knowledge_verification_report_path=args.incident_knowledge_verification_report,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_trust_operations_control_signoff_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_trust_operations_control_signoff_verification_report(report)
+        raise SystemExit(trust_operations_control_signoff_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-trust-operations-incident-knowledge-package":
         from song_agent.trust_operations_incident_knowledge_verifier import (
             print_trust_operations_incident_knowledge_verification_report,
@@ -4695,6 +4801,7 @@ def _main() -> None:
                     "require_incident_closeout": args.require_incident_closeout,
                     "require_incident_regression_guards": args.require_incident_regression_guards,
                     "require_trust_controls": args.require_trust_controls,
+                    "require_trust_control_signoff": args.require_trust_control_signoff,
                     "publication_channel_state_path": args.publication_channel_state,
                     "public_trust_center_verification_path": args.public_trust_center_verification,
                     "publication_monitoring_verification_path": args.publication_monitoring_verification,
@@ -4711,6 +4818,8 @@ def _main() -> None:
                     "incident_knowledge_verification_report_path": args.incident_knowledge_verification_report,
                     "trust_control_package_path": args.trust_control_package,
                     "trust_control_verification_report_path": args.trust_control_verification_report,
+                    "trust_control_signoff_archive_path": args.trust_control_signoff_archive,
+                    "trust_control_signoff_verification_report_path": args.trust_control_signoff_verification_report,
                 },
             )
             result["verification"] = verification
@@ -4793,6 +4902,78 @@ def _main() -> None:
                 print_trust_operations_control_verification_report(result["verification"])
             else:
                 print(json.dumps(result.get("summary") or {"status": "ok", "hub_id": args.hub_id, "assessment_id": args.assessment_id}, ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "trust-operations-control-signoff":
+        from song_agent.trust_operations_control_signoff import TrustOperationsControlSignoffStore
+        from song_agent.trust_operations_control_signoff_verifier import print_trust_operations_control_signoff_verification_report
+        from song_agent.trust_operations_controls import TrustOperationsControlStore
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStore
+        from song_agent.trust_operations_incident_knowledge import TrustOperationsIncidentKnowledgeStore
+
+        parser = build_trust_operations_control_signoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        hub_store = TrustOperationsHubStore()
+        incident_store = TrustOperationsIncidentStore(hub_store=hub_store)
+        knowledge_store = TrustOperationsIncidentKnowledgeStore(hub_store=hub_store, incident_store=incident_store)
+        control_store = TrustOperationsControlStore(hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
+        store = TrustOperationsControlSignoffStore(control_store=control_store, hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
+        result: dict[str, Any] = {"ok": True, "hub_id": args.hub_id}
+        source_payload = {
+            "control_package_path": args.control_package,
+            "control_verification_report_path": args.control_verification_report,
+            "hub_package_path": args.hub_package,
+            "hub_verification_report_path": args.hub_verification_report,
+            "incident_board_package_path": args.incident_board_package,
+            "incident_board_verification_report_path": args.incident_board_verification_report,
+            "incident_knowledge_package_path": args.incident_knowledge_package,
+            "incident_knowledge_verification_report_path": args.incident_knowledge_verification_report,
+        }
+        if args.sign:
+            if not args.assessment_id:
+                raise ValueError("--assessment-id is required for --sign.")
+            result["signoff"] = store.sign(args.hub_id, str(args.assessment_id), {**source_payload, "signed_by": args.signed_by, "reason": args.reason})
+        if args.request_exception:
+            if not args.assessment_id or not args.control_id:
+                raise ValueError("--assessment-id and --control-id are required for --request-exception.")
+            result["exception"] = store.request_exception(args.hub_id, {"assessment_id": args.assessment_id, "control_id": args.control_id, "requested_by": args.requested_by, "reason": args.reason, "expires_at": args.expires_at, "mitigation": args.mitigation})
+        if args.approve_exception:
+            if not args.exception_id:
+                raise ValueError("--exception-id is required for --approve-exception.")
+            result["exception"] = store.approve_exception(args.hub_id, args.exception_id, {"approved_by": args.approved_by, "reason": args.reason})
+        if args.reject_exception:
+            if not args.exception_id:
+                raise ValueError("--exception-id is required for --reject-exception.")
+            result["exception"] = store.reject_exception(args.hub_id, args.exception_id, {"approved_by": args.approved_by, "reason": args.reason})
+        if args.create_change_request:
+            result["change_request"] = store.create_change_request(args.hub_id, {"reason": args.reason, "created_by": args.requested_by, "change_request_id": args.change_request_id})
+        if args.approve_change_request:
+            if not args.change_request_id:
+                raise ValueError("--change-request-id is required for --approve-change-request.")
+            result["change_request"] = store.approve_change_request(args.hub_id, args.change_request_id, {"approved_by": args.approved_by, "reason": args.reason})
+        if args.reset:
+            if not args.change_request_id:
+                raise ValueError("--change-request-id is required for --reset.")
+            result["reset"] = store.reset_signoff(args.hub_id, args.change_request_id)
+        if args.export:
+            result["manifest"] = store.export_archive(args.hub_id, source_payload)
+        if args.zip:
+            result["zip"] = store.build_archive_zip(args.hub_id)
+        if args.verify:
+            verification = store.verify_archive_zip(args.hub_id, {**source_payload, "strict": args.strict, "require_signed": args.require_signed, "require_current": args.require_current})
+            result["verification"] = verification
+            result["verification_summary"] = verification.get("summary", {})
+        if not any([args.sign, args.request_exception, args.approve_exception, args.reject_exception, args.create_change_request, args.approve_change_request, args.reset, args.export, args.zip, args.verify]):
+            result["summary"] = store.summary(args.hub_id)
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            if "verification" in result:
+                print_trust_operations_control_signoff_verification_report(result["verification"])
+            else:
+                print(json.dumps(result.get("summary") or {"status": "ok", "hub_id": args.hub_id}, ensure_ascii=False, indent=2))
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "trust-operations-hub-runbook":
         from song_agent.trust_operations_hub import TrustOperationsHubStore
