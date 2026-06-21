@@ -406,11 +406,31 @@ class TrustOperationsAssuranceStore:
             checks.append(_check(f"toa_{evidence_type}_verification_current", status, "blocking" if required else "warning", f"{evidence_type} external verification is current.", evidence_ref=evidence_type, details=_fingerprint_projection(row)))
             if required:
                 checks.append(_check(f"toa_{evidence_type}_package_fingerprint", "passed" if row.get("zip_sha256") and row.get("manifest_hash") else "failed", "blocking", f"{evidence_type} package fingerprint is present.", evidence_ref=evidence_type))
+        checks.extend(self._delivery_checks(policy, rows))
         checks.extend(self._control_exception_checks(rows, now))
         checks.extend(self._incident_open_checks(rows))
         checks.extend(self._knowledge_guard_checks(rows))
         # Source hash rows make full-resign attacks visible to the archive verifier.
         checks.append(_check("toa_source_external_summary_integrity", "passed" if external_summary.get("integrity_hash") == assurance_hash(external_summary) else "failed", "blocking", "External verification summary integrity is valid."))
+        return checks
+
+    def _delivery_checks(self, policy: dict[str, Any], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        requirements = policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}
+        require_delivery = bool(requirements.get("require_delivery_ready", False))
+        checks: list[dict[str, Any]] = []
+        for spec in DELIVERY_VERIFICATION_COMPONENTS:
+            component_type = str(spec["component_type"])
+            component_rows = [row for row in rows if isinstance(row, dict) and row.get("evidence_type") == component_type]
+            if not component_rows and require_delivery:
+                check_id = f"toa_delivery_{_safe_id(component_type)}_present"
+                checks.append(_check(check_id, "failed", "blocking", f"{component_type} verification report is required by the assurance policy.", evidence_ref=component_type))
+                continue
+            for row in component_rows:
+                component_id = str(row.get("component_id") or component_type)
+                check_id = f"toa_delivery_{_safe_id(component_id)}_verification_passed"
+                status = "passed" if row.get("status") == "passed" else "failed"
+                message = f"{component_id} delivery verification passed." if status == "passed" else f"{component_id} delivery verification is {row.get('status') or 'missing'}."
+                checks.append(_check(check_id, status, "blocking", message, evidence_ref=f"{component_type}:{component_id}", details=_fingerprint_projection(row)))
         return checks
 
     def _control_exception_checks(self, rows: list[Any], now: str) -> list[dict[str, Any]]:

@@ -87,6 +87,60 @@ def test_assurance_export_rejects_stale_external_report(tmp_path: Path) -> None:
         store.export_archive(run_id)
 
 
+def test_assurance_blocks_failed_delivery_verification(tmp_path: Path) -> None:
+    fixture = _assurance_fixture(tmp_path)
+    report = read_json(fixture.assurance_verifier_payload["release_verification_paths"][0])
+    report["status"] = "failed"
+    write_json(fixture.assurance_verifier_payload["release_verification_paths"][0], report)
+
+    run = fixture.assurance_store.refresh_run("hub", fixture.payload)["run"]
+
+    assert run["status"] == "failed"
+    assert run["summary"]["blocking_failed_count"] >= 1
+    assert _check_failed(run, "toa_delivery_release")
+
+
+def test_assurance_blocks_failed_second_distribution_verification(tmp_path: Path) -> None:
+    fixture = _assurance_fixture(tmp_path)
+    second_distribution = fixture.assurance_verifier_payload["distribution_verification_paths"][1]
+    report = read_json(second_distribution)
+    report["status"] = "failed"
+    write_json(second_distribution, report)
+
+    run = fixture.assurance_store.refresh_run("hub", fixture.payload)["run"]
+
+    assert run["status"] == "failed"
+    assert _check_failed(run, "toa_delivery_distribution")
+
+
+def test_assurance_policy_can_require_missing_delivery_verification(tmp_path: Path) -> None:
+    fixture = _assurance_fixture(tmp_path)
+    policy = fixture.assurance_store.write_policy({"policy_id": "delivery-required", "requirements": {"require_delivery_ready": True}})
+    payload = {
+        key: value
+        for key, value in fixture.payload.items()
+        if key
+        not in {
+            "release_verification_path",
+            "release_verification_paths",
+            "distribution_verification_path",
+            "distribution_verification_paths",
+            "submission_verification_path",
+            "submission_verification_paths",
+            "submission_evidence_verification_path",
+            "submission_evidence_verification_paths",
+            "release_operations_verification_path",
+            "release_operations_verification_paths",
+        }
+    }
+
+    run = fixture.assurance_store.refresh_run("hub", payload, policy_id=policy["policy_id"])["run"]
+
+    assert run["status"] == "failed"
+    assert _check_failed(run, "toa_delivery_release_verification_present")
+    assert _check_failed(run, "toa_delivery_distribution_verification_present")
+
+
 def test_assurance_verifier_rejects_zip_edges(tmp_path: Path) -> None:
     fixture = _assurance_fixture(tmp_path)
     store = fixture.assurance_store
@@ -223,6 +277,13 @@ def _sync_manifest_file(manifest: dict, path: str, payload: bytes) -> None:
             row["size_bytes"] = len(payload)
             row["sha256"] = hashlib.sha256(payload).hexdigest()
             return
+
+
+def _check_failed(run: dict, check_id_prefix: str) -> bool:
+    return any(
+        isinstance(check, dict) and str(check.get("check_id") or "").startswith(check_id_prefix) and check.get("status") == "failed"
+        for check in run.get("checks", [])
+    )
 
 
 def _tamper_report_summary_full_resign(docs: dict[str, bytes]) -> None:

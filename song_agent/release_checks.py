@@ -14740,6 +14740,23 @@ def _v96_trust_operations_continuous_assurance_smoke(root: Path) -> tuple[bool, 
         full_resign = verify_trust_operations_assurance_package(_v76_rewrite_zip(assurance_store.archive_zip_path(run_id), base / "assurance-full-resign.zip", _v96_tamper_assurance_report_summary_full_resign), strict=True, require_passed=True, require_current=True, **assurance_verify_payload)
         extra = verify_trust_operations_assurance_package(_v38_rewrite_zip(assurance_store.archive_zip_path(run_id), base / "assurance-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
 
+        failed_release_report = read_json(delivery["release_verification_path"])
+        failed_release_report["status"] = "failed"
+        failed_release_path = base / "failed-release-verification.json"
+        write_json(failed_release_path, failed_release_report)
+        failed_delivery_payload = {**assurance_payload, "release_verification_paths": [failed_release_path]}
+        failed_delivery_run = assurance_store.refresh_run("hub", failed_delivery_payload, policy_id="default",)["run"]
+        failed_delivery_check = next(
+            (
+                check
+                for check in failed_delivery_run.get("checks", [])
+                if isinstance(check, dict)
+                and str(check.get("check_id") or "").startswith("toa_delivery_release")
+                and check.get("status") == "failed"
+            ),
+            {},
+        )
+
         stale_report = read_json(hub_store.verification_report_path("hub", report_id))
         stale_report["zip_sha256"] = "0" * 64
         write_json(hub_store.verification_report_path("hub", report_id), stale_report)
@@ -14752,11 +14769,14 @@ def _v96_trust_operations_continuous_assurance_smoke(root: Path) -> tuple[bool, 
             and hub_gate.get("status") == "passed"
             and _v38_check_status(full_resign, "toa_report_summary_matches_run") == "failed"
             and _v38_check_status(extra, "toa_zip_allowed_entries") == "failed"
+            and failed_delivery_run.get("status") == "failed"
+            and failed_delivery_check.get("status") == "failed"
             and stale_export
         )
         return ok, (
             f"assurance={refreshed_assurance['run'].get('status')}, verify={assurance_verification.get('status')}, missing_gate={_v38_check_status(missing_gate, 'toh_continuous_assurance_archive_required')}, "
-            f"hub_gate={hub_gate.get('status')}, full_resign={_v38_check_status(full_resign, 'toa_report_summary_matches_run')}, extra={_v38_check_status(extra, 'toa_zip_allowed_entries')}, stale_export={stale_export}"
+            f"hub_gate={hub_gate.get('status')}, full_resign={_v38_check_status(full_resign, 'toa_report_summary_matches_run')}, extra={_v38_check_status(extra, 'toa_zip_allowed_entries')}, "
+            f"failed_delivery={failed_delivery_check.get('status')}, stale_export={stale_export}"
         )
     except Exception as exc:
         return False, str(exc)

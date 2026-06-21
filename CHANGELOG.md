@@ -1,5 +1,16 @@
 # Changelog
 
+## v9.6.1 - 2026-06-22
+
+### Fixed
+- Continuous Assurance now blocks explicitly supplied delivery verification reports when any report status is not `passed`.
+- Assurance policies with `require_delivery_ready=true` now fail missing delivery verification report types instead of silently passing.
+- release-check `v96.trust_operations_continuous_assurance_smoke` now covers `failed_delivery=failed`.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_continuous_assurance.py tests\test_release_check.py::test_v96_trust_operations_continuous_assurance_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.6.0 - 2026-06-22
 
 ### Added

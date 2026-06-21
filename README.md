@@ -843,7 +843,9 @@ Trust Operations Continuous Assurance checks whether signed Hub, delivery,
 Control, Incident, Knowledge, and Regression Guard evidence is still current
 after signoff. The Assurance Archive binds external verification reports and
 package fingerprints, rejects stale sources before export/ZIP, and can be
-required by the Hub verifier with `--require-continuous-assurance`.
+required by the Hub verifier with `--require-continuous-assurance`. Explicitly
+provided delivery verification reports must pass; failed delivery evidence or
+policy-required missing delivery evidence blocks the Assurance run.
 
 ```powershell
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create --refresh --export --zip --verify --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
