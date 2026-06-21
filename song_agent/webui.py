@@ -3782,6 +3782,16 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-knowledge-verify" type="button">Verify Knowledge ZIP</button>
           <a class="button-link secondary" href="/api/trust-operations/hubs/default/knowledge.zip">Download Knowledge ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Trust Operations Controls</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-controls-refresh" type="button">Refresh Control Catalog</button>
+          <button class="secondary" id="trust-operations-controls-policy" type="button">Create Control Policy</button>
+          <button class="secondary" id="trust-operations-controls-assess" type="button">Assess Controls</button>
+          <button class="secondary" id="trust-operations-controls-export" type="button">Export Controls</button>
+          <button class="secondary" id="trust-operations-controls-zip" type="button">Build Controls ZIP</button>
+          <button class="secondary" id="trust-operations-controls-verify" type="button">Verify Controls ZIP</button>
+          <a class="button-link secondary" href="/api/trust-operations/hubs/default/controls/toc-assess-000001.zip">Download Controls ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);

@@ -310,6 +310,13 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="trust-operations-knowledge-run-guards"' in html
     assert 'id="trust-operations-knowledge-export"' in html
     assert 'id="trust-operations-knowledge-verify"' in html
+    assert "Trust Operations Controls" in html
+    assert 'id="trust-operations-controls-refresh"' in html
+    assert 'id="trust-operations-controls-policy"' in html
+    assert 'id="trust-operations-controls-assess"' in html
+    assert 'id="trust-operations-controls-export"' in html
+    assert 'id="trust-operations-controls-zip"' in html
+    assert 'id="trust-operations-controls-verify"' in html
     assert 'id="trust-operations-incidents-refresh"' in html
     assert 'id="trust-operations-incidents-triage"' in html
     assert 'id="trust-operations-incidents-plan"' in html

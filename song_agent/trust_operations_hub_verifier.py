@@ -47,6 +47,7 @@ def verify_trust_operations_hub_package(
     require_delivery_ready: bool = False,
     require_incident_closeout: bool = False,
     require_incident_regression_guards: bool = False,
+    require_trust_controls: bool = False,
     publication_channel_state_path: Path | str | None = None,
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
@@ -66,6 +67,8 @@ def verify_trust_operations_hub_package(
     incident_board_verification_report_path: Path | str | None = None,
     incident_knowledge_package_path: Path | str | None = None,
     incident_knowledge_verification_report_path: Path | str | None = None,
+    trust_control_package_path: Path | str | None = None,
+    trust_control_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -82,6 +85,7 @@ def verify_trust_operations_hub_package(
         require_delivery_ready=require_delivery_ready,
         require_incident_closeout=require_incident_closeout,
         require_incident_regression_guards=require_incident_regression_guards,
+        require_trust_controls=require_trust_controls,
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
@@ -96,6 +100,8 @@ def verify_trust_operations_hub_package(
         incident_board_verification_report_path=Path(incident_board_verification_report_path) if incident_board_verification_report_path else None,
         incident_knowledge_package_path=Path(incident_knowledge_package_path) if incident_knowledge_package_path else None,
         incident_knowledge_verification_report_path=Path(incident_knowledge_verification_report_path) if incident_knowledge_verification_report_path else None,
+        trust_control_package_path=Path(trust_control_package_path) if trust_control_package_path else None,
+        trust_control_verification_report_path=Path(trust_control_verification_report_path) if trust_control_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -136,6 +142,7 @@ class _HubVerifier:
         require_delivery_ready: bool,
         require_incident_closeout: bool,
         require_incident_regression_guards: bool,
+        require_trust_controls: bool,
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
@@ -150,6 +157,8 @@ class _HubVerifier:
         incident_board_verification_report_path: Path | None,
         incident_knowledge_package_path: Path | None,
         incident_knowledge_verification_report_path: Path | None,
+        trust_control_package_path: Path | None,
+        trust_control_verification_report_path: Path | None,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -165,6 +174,7 @@ class _HubVerifier:
         self.require_delivery_ready = require_delivery_ready
         self.require_incident_closeout = require_incident_closeout
         self.require_incident_regression_guards = require_incident_regression_guards
+        self.require_trust_controls = require_trust_controls
         self.publication_channel_state_path = publication_channel_state_path
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
@@ -181,6 +191,8 @@ class _HubVerifier:
         self.incident_board_verification_report_path = incident_board_verification_report_path
         self.incident_knowledge_package_path = incident_knowledge_package_path
         self.incident_knowledge_verification_report_path = incident_knowledge_verification_report_path
+        self.trust_control_package_path = trust_control_package_path
+        self.trust_control_verification_report_path = trust_control_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -217,6 +229,7 @@ class _HubVerifier:
         self.external_hub_verification_report: dict[str, Any] = {}
         self.external_incident_verification_report: dict[str, Any] = {}
         self.external_incident_knowledge_verification_report: dict[str, Any] = {}
+        self.external_trust_control_verification_report: dict[str, Any] = {}
 
     def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
@@ -478,6 +491,7 @@ class _HubVerifier:
             elif self.require_delivery_ready or (self.require_current and expected_rows):
                 self._add_check("external", "toh_external_" + component_type + "_required", "failed", "blocking", f"Current delivery verification requires external {component_type} report.")
         self._verify_external_incidents()
+        self._verify_external_trust_controls()
 
     def _verify_external_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
         expected = _evidence_by_type(self.evidence, component_type)
@@ -592,6 +606,46 @@ class _HubVerifier:
         self._add_check("external", "toh_incident_knowledge_guards_passed", "passed" if int(summary.get("guard_failed_count") or 0) == 0 and int(summary.get("guards_passed_count") or 0) > 0 else "failed", "blocking", "Knowledge regression guards passed." if int(summary.get("guard_failed_count") or 0) == 0 and int(summary.get("guards_passed_count") or 0) > 0 else "Knowledge regression guards are missing or failed.")
         self._add_check("external", "toh_incident_knowledge_no_recurrence", "passed" if int(summary.get("recurrence_count") or 0) == 0 else "failed", "blocking", "Knowledge recurrence report has no open recurrence." if int(summary.get("recurrence_count") or 0) == 0 else "Knowledge recurrence report has open recurrence.")
 
+    def _verify_external_trust_controls(self) -> None:
+        if not (self.require_trust_controls or self.trust_control_package_path or self.trust_control_verification_report_path):
+            return
+        if not self.trust_control_package_path:
+            self._add_check("external", "toh_trust_control_package_required", "failed", "blocking", "Trust control gate requires an external Control ZIP.")
+            return
+        if not self.trust_control_verification_report_path:
+            self._add_check("external", "toh_trust_control_verification_required", "failed", "blocking", "Trust control gate requires an external Control verification report.")
+            return
+        report = _read_json_file(self.trust_control_verification_report_path)
+        self.external_trust_control_verification_report = report
+        zip_path = self.trust_control_package_path
+        zip_sha256 = _sha256_file(zip_path) if zip_path.exists() else None
+        zip_size = os.stat(_fs_path(zip_path)).st_size if zip_path.exists() else None
+        self._add_exact_check("external", "toh_trust_control_verification_package_type", report.get("package_type"), "musicforge_trust_operations_control_verification", "Control verification package_type")
+        self._add_exact_check("external", "toh_trust_control_verification_status", report.get("status"), "passed", "Control verification status")
+        self._add_exact_check("external", "toh_trust_control_zip_sha256", report.get("zip_sha256"), zip_sha256, "Control ZIP sha256")
+        self._add_exact_check("external", "toh_trust_control_zip_size_bytes", report.get("zip_size_bytes"), zip_size, "Control ZIP size")
+        self._add_exact_check("external", "toh_trust_control_hub_zip_sha256", report.get("hub_zip_sha256"), self.zip_sha256, "Control Hub ZIP sha256")
+        self._add_exact_check("external", "toh_trust_control_hub_zip_size_bytes", report.get("hub_zip_size_bytes"), self.zip_size_bytes, "Control Hub ZIP size")
+        self._add_exact_check("external", "toh_trust_control_hub_manifest_hash", report.get("hub_manifest_hash"), self.manifest.get("integrity_hash"), "Control Hub manifest hash")
+        if self.external_hub_verification_report:
+            self._add_exact_check("external", "toh_trust_control_hub_verification_hash", report.get("hub_verification_report_hash"), verification_hash(self.external_hub_verification_report), "Control Hub verification report hash")
+        elif self.require_trust_controls:
+            self._add_check("external", "toh_trust_control_hub_verification_required", "failed", "blocking", "Trust control gate requires the current Hub verification report.")
+        if self.external_incident_verification_report:
+            self._add_exact_check("external", "toh_trust_control_incident_verification_hash", report.get("incident_verification_report_hash"), verification_hash(self.external_incident_verification_report), "Control Incident verification report hash")
+            self._add_exact_check("external", "toh_trust_control_incident_zip_sha256", report.get("incident_zip_sha256"), self.external_incident_verification_report.get("zip_sha256"), "Control Incident ZIP sha256")
+            self._add_exact_check("external", "toh_trust_control_incident_manifest_hash", report.get("incident_manifest_hash"), self.external_incident_verification_report.get("manifest_hash"), "Control Incident manifest hash")
+        elif self.require_trust_controls:
+            self._add_check("external", "toh_trust_control_incident_verification_required", "failed", "blocking", "Trust control gate requires the current Incident verification report.")
+        if self.external_incident_knowledge_verification_report:
+            self._add_exact_check("external", "toh_trust_control_knowledge_verification_hash", report.get("knowledge_verification_report_hash"), verification_hash(self.external_incident_knowledge_verification_report), "Control Knowledge verification report hash")
+            self._add_exact_check("external", "toh_trust_control_knowledge_zip_sha256", report.get("knowledge_zip_sha256"), self.external_incident_knowledge_verification_report.get("zip_sha256"), "Control Knowledge ZIP sha256")
+            self._add_exact_check("external", "toh_trust_control_knowledge_manifest_hash", report.get("knowledge_manifest_hash"), self.external_incident_knowledge_verification_report.get("manifest_hash"), "Control Knowledge manifest hash")
+        elif self.require_trust_controls:
+            self._add_check("external", "toh_trust_control_knowledge_verification_required", "failed", "blocking", "Trust control gate requires the current Knowledge verification report.")
+        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        self._add_check("external", "toh_trust_control_required_controls_passed", "passed" if int(summary.get("required_failed_count") or 0) == 0 else "failed", "blocking", "Trust control policy passed." if int(summary.get("required_failed_count") or 0) == 0 else "Trust control policy has failed required controls.")
+
     def _verify_requirements(self) -> None:
         report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
         ready = self.report.get("status") == "ready" and report_readiness.get("blocked_count") == 0 and report_readiness.get("stale_count") == 0 and report_readiness.get("missing_count") == 0
@@ -614,6 +668,9 @@ class _HubVerifier:
         knowledge_summary = self.external_incident_knowledge_verification_report.get("summary") if isinstance(self.external_incident_knowledge_verification_report.get("summary"), dict) else {}
         knowledge_ready = self.external_incident_knowledge_verification_report.get("status") == "passed" and int(knowledge_summary.get("guards_passed_count") or 0) > 0 and int(knowledge_summary.get("guard_failed_count") or 0) == 0 and int(knowledge_summary.get("recurrence_count") or 0) == 0
         self._add_check("requirements", "toh_require_incident_regression_guards", "passed" if knowledge_ready or not self.require_incident_regression_guards else "failed", "blocking", "Incident regression guards are passed." if knowledge_ready else "Incident regression guard evidence is missing or failed.")
+        controls_summary = self.external_trust_control_verification_report.get("summary") if isinstance(self.external_trust_control_verification_report.get("summary"), dict) else {}
+        controls_ready = self.external_trust_control_verification_report.get("status") == "passed" and int(controls_summary.get("required_failed_count") or 0) == 0
+        self._add_check("requirements", "toh_require_trust_controls", "passed" if controls_ready or not self.require_trust_controls else "failed", "blocking", "Trust controls are passed." if controls_ready else "Trust control evidence is missing or failed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         findings: list[dict[str, Any]] = []

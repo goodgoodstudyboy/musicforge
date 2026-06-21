@@ -1,5 +1,17 @@
 # Changelog
 
+## v9.4.0 - 2026-06-21
+
+### Added
+- Trust Operations Control Catalog for baseline preventive controls and Knowledge-derived controls.
+- Control Policy Bundle, Control Assessment, fixed-structure Control ZIP export, offline verifier, CLI, API, and Studio controls.
+- Hub verifier `--require-trust-controls` gate that binds the current Hub ZIP, Hub verification report, Incident Board ZIP, Incident verification report, Incident Knowledge ZIP, Knowledge verification report, and passed Control assessment evidence.
+- release-check `v94.trust_operations_control_catalog_smoke` covering normal Control assessment, Hub gate, result full-resign, derived-control downgrade, evidence binding swap, extra ZIP entry, and stale Knowledge verification.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_controls.py tests\test_cli_trust_operations_controls.py tests\test_server_trust_operations_controls.py tests\test_release_check.py::test_v94_trust_operations_control_catalog_smoke tests\test_cli_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.3.1 - 2026-06-20
 
 ### Fixed

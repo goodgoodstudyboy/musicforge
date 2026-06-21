@@ -14316,6 +14316,249 @@ def _v93_trust_operations_incident_knowledge_smoke(root: Path) -> tuple[bool, st
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v94_trust_operations_control_catalog_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v94-trust-operations-controls-")).resolve()
+    try:
+        from song_agent.trust_operations_controls import TrustOperationsControlStore
+        from song_agent.trust_operations_controls_verifier import verify_trust_operations_control_package
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStore
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+        from song_agent.trust_operations_incident_knowledge import TrustOperationsIncidentKnowledgeStore
+
+        fixture = _v90_fixture(base)
+        delivery = _v91_delivery_fixture(base)
+        second_distribution = _v91_copy_delivery_report(delivery["distribution_verification_path"], base / "target-002-verification.json", "target-002", "8" * 64)
+        hub_store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        hub_store.create_hub({"hub_id": "hub"})
+        payload = {**fixture["payload"], **delivery["payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        report_id = str(hub_store.refresh_report("hub", payload)["hub_report"]["report_id"])
+        hub_store.export_report("hub", report_id)
+        hub_store.build_zip("hub", report_id)
+        hub_store.verify_zip("hub", report_id, {**fixture["verify_payload"], **delivery["verify_payload"], "strict": True, "require_delivery_ready": True})
+
+        incident_store = TrustOperationsIncidentStore(base / ".musicforge" / "trust-operations-incidents", hub_store=hub_store)
+        incident_store.refresh_board("hub")
+        incident = incident_store.list_incidents("hub")[0]
+        incident_store.add_evidence("hub", str(incident.get("incident_id") or ""), {"component_type": incident.get("detected_from", {}).get("component_type"), "component_id": incident.get("detected_from", {}).get("component_id"), "report": read_json(second_distribution)})
+        closeout = incident_store.close_incident("hub", str(incident.get("incident_id") or ""), {"closed_by": "release-check", "reason": "Second distribution target verification report supplied."})
+        incident_store.export_board("hub")
+        incident_store.build_zip("hub")
+        incident_verification = incident_store.verify_zip("hub", {"strict": True, "require_no_open_blocking": True, "require_current_hub": True, "hub_verification_report_path": hub_store.verification_report_path("hub", report_id)})
+
+        knowledge_store = TrustOperationsIncidentKnowledgeStore(base / ".musicforge" / "trust-operations-knowledge", hub_store=hub_store, incident_store=incident_store)
+        refreshed = knowledge_store.refresh("hub")
+        guard = knowledge_store.create_guard("hub", str(refreshed["entries"][0].get("entry_id") or ""))
+        guard_run = knowledge_store.run_guard("hub", str(guard.get("guard_id") or ""))
+        recurrence = knowledge_store.refresh_recurrence("hub")
+        knowledge_store.export_knowledge("hub")
+        knowledge_store.build_zip("hub")
+        knowledge_verification = knowledge_store.verify_zip(
+            "hub",
+            {
+                "strict": True,
+                "require_guards_passed": True,
+                "require_no_open_recurrence": True,
+                "incident_board_package_path": incident_store.zip_path("hub"),
+                "incident_board_verification_report_path": incident_store.verification_report_path("hub"),
+                "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+            },
+        )
+
+        control_store = TrustOperationsControlStore(base / ".musicforge" / "trust-operations-controls", hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
+        control_payload = {
+            "hub_package_path": hub_store.zip_path("hub", report_id),
+            "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+            "incident_board_package_path": incident_store.zip_path("hub"),
+            "incident_board_verification_report_path": incident_store.verification_report_path("hub"),
+            "incident_knowledge_package_path": knowledge_store.zip_path("hub"),
+            "incident_knowledge_verification_report_path": knowledge_store.verification_report_path("hub"),
+        }
+        catalog = control_store.refresh_catalog("hub", control_payload)
+        policy = control_store.create_policy_bundle("hub", {"policy_id": "toc-policy-000001"})
+        assessment = control_store.assess_policy("hub", str(policy.get("policy_id") or ""), control_payload)
+        assessment_id = str(assessment.get("assessment", {}).get("assessment_id") or "")
+        control_store.export_controls("hub", assessment_id)
+        control_store.build_zip("hub", assessment_id)
+        control_verification = control_store.verify_zip("hub", assessment_id, {**control_payload, "strict": True, "require_policy_passed": True})
+
+        full_delivery_verify_payload = {**delivery["verify_payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify_payload.pop("distribution_verification_path", None)
+        hub_gate_missing = verify_trust_operations_hub_package(
+            hub_store.zip_path("hub", report_id),
+            strict=True,
+            require_incident_closeout=True,
+            require_incident_regression_guards=True,
+            require_trust_controls=True,
+            incident_board_package_path=incident_store.zip_path("hub"),
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            incident_knowledge_package_path=knowledge_store.zip_path("hub"),
+            incident_knowledge_verification_report_path=knowledge_store.verification_report_path("hub"),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            **fixture["verify_payload"],
+            **full_delivery_verify_payload,
+        )
+        hub_gate = verify_trust_operations_hub_package(
+            hub_store.zip_path("hub", report_id),
+            strict=True,
+            require_incident_closeout=True,
+            require_incident_regression_guards=True,
+            require_trust_controls=True,
+            incident_board_package_path=incident_store.zip_path("hub"),
+            incident_board_verification_report_path=incident_store.verification_report_path("hub"),
+            incident_knowledge_package_path=knowledge_store.zip_path("hub"),
+            incident_knowledge_verification_report_path=knowledge_store.verification_report_path("hub"),
+            trust_control_package_path=control_store.zip_path("hub", assessment_id),
+            trust_control_verification_report_path=control_store.verification_report_path("hub", assessment_id),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            **fixture["verify_payload"],
+            **full_delivery_verify_payload,
+        )
+
+        control_zip = control_store.zip_path("hub", assessment_id)
+        result_full_resign = verify_trust_operations_control_package(_v76_rewrite_zip(control_zip, base / "control-result-full-resign.zip", _v94_tamper_control_result_full_resign), strict=True, require_policy_passed=True, **control_payload)
+        derived_downgrade = verify_trust_operations_control_package(_v76_rewrite_zip(control_zip, base / "control-derived-downgrade.zip", _v94_tamper_control_derived_downgrade_full_resign), strict=True, require_policy_passed=True, **control_payload)
+        binding_swap = verify_trust_operations_control_package(_v76_rewrite_zip(control_zip, base / "control-binding-swap.zip", _v94_tamper_control_binding_swap_full_resign), strict=True, require_policy_passed=True, **control_payload)
+        extra = verify_trust_operations_control_package(_v38_rewrite_zip(control_zip, base / "control-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
+        stale_knowledge_report = read_json(knowledge_store.verification_report_path("hub"))
+        stale_knowledge_report["zip_sha256"] = "0" * 64
+        stale_knowledge_path = write_json(base / "stale-knowledge-verification.json", stale_knowledge_report)
+        stale_knowledge = verify_trust_operations_control_package(control_zip, strict=True, require_policy_passed=True, **{**control_payload, "incident_knowledge_verification_report_path": stale_knowledge_path})
+
+        ok = (
+            closeout.get("status") == "passed"
+            and incident_verification.get("status") == "passed"
+            and guard_run.get("status") == "passed"
+            and recurrence.get("status") == "passed"
+            and knowledge_verification.get("status") == "passed"
+            and catalog.get("summary", {}).get("baseline_count") == 10
+            and catalog.get("summary", {}).get("derived_count") == 1
+            and assessment.get("assessment", {}).get("status") == "passed"
+            and control_verification.get("status") == "passed"
+            and _v38_check_status(hub_gate_missing, "toh_trust_control_package_required") == "failed"
+            and hub_gate.get("status") == "passed"
+            and _v38_check_status(result_full_resign, "tohc_control_results_semantics_match") == "failed"
+            and _v38_check_status(derived_downgrade, "tohc_knowledge_derived_control_fact_binding") == "failed"
+            and (
+                _v38_check_status(binding_swap, "tohc_hub_binding_report_hash") == "failed"
+                or _v38_check_status(binding_swap, "tohc_hub_binding_zip_sha256") == "failed"
+            )
+            and _v38_check_status(extra, "tohc_zip_allowed_entries") == "failed"
+            and _v38_check_status(stale_knowledge, "tohc_knowledge_package_zip_sha256") == "failed"
+        )
+        return ok, (
+            f"closeout={closeout.get('status')}, incident_verify={incident_verification.get('status')}, knowledge_verify={knowledge_verification.get('status')}, "
+            f"catalog={catalog.get('summary', {}).get('control_count')}, baseline={catalog.get('summary', {}).get('baseline_count')}, derived={catalog.get('summary', {}).get('derived_count')}, "
+            f"assessment={assessment.get('assessment', {}).get('status')}, control_verify={control_verification.get('status')}, "
+            f"hub_gate_missing={_v38_check_status(hub_gate_missing, 'toh_trust_control_package_required')}, hub_gate={hub_gate.get('status')}, "
+            f"result_full_resign={_v38_check_status(result_full_resign, 'tohc_control_results_semantics_match')}, derived_downgrade={_v38_check_status(derived_downgrade, 'tohc_knowledge_derived_control_fact_binding')}, "
+            f"binding_swap={_v38_check_status(binding_swap, 'tohc_hub_binding_report_hash') or _v38_check_status(binding_swap, 'tohc_hub_binding_zip_sha256')}, "
+            f"extra={_v38_check_status(extra, 'tohc_zip_allowed_entries')}, stale_knowledge={_v38_check_status(stale_knowledge, 'tohc_knowledge_package_zip_sha256')}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def _v94_tamper_control_result_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_controls import control_hash
+
+    results = _v74_read_json_doc(docs, "control-results.json")
+    result = results["results"][0]
+    result["status"] = "failed" if result.get("status") == "passed" else "passed"
+    result["message"] = "Forged result status."
+    result["integrity_hash"] = control_hash(result)
+    results["summary"]["passed_count"] = sum(1 for row in results["results"] if row.get("status") == "passed")
+    results["summary"]["failed_count"] = sum(1 for row in results["results"] if row.get("status") == "failed")
+    results["summary"]["required_failed_count"] = sum(1 for row in results["results"] if row.get("required") and row.get("status") != "passed")
+    docs["control-results.json"] = _v74_json_doc(results)
+    _v94_resign_control_docs(docs)
+
+
+def _v94_tamper_control_derived_downgrade_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_controls import control_hash
+
+    catalog = _v74_read_json_doc(docs, "control-catalog.json")
+    policy = _v74_read_json_doc(docs, "policy-bundle.json")
+    results = _v74_read_json_doc(docs, "control-results.json")
+    for control in catalog["controls"]:
+        if control.get("source", {}).get("source_type") == "knowledge_entry":
+            control["severity"] = "low"
+            control["category"] = "benign_documentation_issue"
+            control.setdefault("scope", {})["failure_mode"] = "operator_note"
+            control["integrity_hash"] = control_hash(control)
+            for result in results["results"]:
+                if result.get("control_id") == control.get("control_id"):
+                    result["severity"] = "low"
+                    result["control_hash"] = control["integrity_hash"]
+                    result["integrity_hash"] = control_hash(result)
+            break
+    catalog.setdefault("summary", {})["high_count"] = sum(1 for row in catalog["controls"] if row.get("severity") == "high")
+    catalog.setdefault("summary", {})["critical_count"] = sum(1 for row in catalog["controls"] if row.get("severity") == "critical")
+    policy.setdefault("source", {})["catalog_hash"] = control_hash(catalog)
+    docs["control-catalog.json"] = _v74_json_doc(catalog)
+    docs["policy-bundle.json"] = _v74_json_doc(policy)
+    docs["control-results.json"] = _v74_json_doc(results)
+    _v94_resign_control_docs(docs)
+
+
+def _v94_tamper_control_binding_swap_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_controls import control_hash
+
+    bindings = _v74_read_json_doc(docs, "evidence-bindings.json")
+    assessment = _v74_read_json_doc(docs, "control-assessment-report.json")
+    for row in bindings.get("bindings", []) if isinstance(bindings.get("bindings"), list) else []:
+        if row.get("evidence_type") == "hub_verification":
+            row["verification_report_hash"] = "0" * 64
+            row["zip_sha256"] = "1" * 64
+            row["manifest_hash"] = "2" * 64
+            break
+    bindings["integrity_hash"] = control_hash(bindings)
+    assessment.setdefault("source", {})["evidence_bindings_hash"] = bindings["integrity_hash"]
+    docs["evidence-bindings.json"] = _v74_json_doc(bindings)
+    docs["control-assessment-report.json"] = _v74_json_doc(assessment)
+    _v94_resign_control_docs(docs)
+
+
+def _v94_resign_control_docs(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_controls import control_hash, control_manifest_hash
+
+    catalog = _v74_read_json_doc(docs, "control-catalog.json")
+    policy = _v74_read_json_doc(docs, "policy-bundle.json")
+    assessment = _v74_read_json_doc(docs, "control-assessment-report.json")
+    results = _v74_read_json_doc(docs, "control-results.json")
+    bindings = _v74_read_json_doc(docs, "evidence-bindings.json")
+    blockers = _v74_read_json_doc(docs, "blocker-summary.json")
+    actions = _v74_read_json_doc(docs, "manual-actions.json")
+    manifest = _v74_read_json_doc(docs, "trust-operations-controls-manifest.json")
+    for name, doc in {
+        "control-catalog.json": catalog,
+        "policy-bundle.json": policy,
+        "control-assessment-report.json": assessment,
+        "control-results.json": results,
+        "evidence-bindings.json": bindings,
+        "blocker-summary.json": blockers,
+        "manual-actions.json": actions,
+    }.items():
+        doc["integrity_hash"] = control_hash(doc)
+        docs[name] = _v74_json_doc(doc)
+        _v92_sync_manifest_file(manifest, name, docs[name])
+    manifest["source"] = {
+        "catalog_hash": catalog["integrity_hash"],
+        "policy_hash": policy["integrity_hash"],
+        "assessment_hash": assessment["integrity_hash"],
+        "control_results_hash": results["integrity_hash"],
+        "evidence_bindings_hash": bindings["integrity_hash"],
+        "blocker_summary_hash": blockers["integrity_hash"],
+        "manual_actions_hash": actions["integrity_hash"],
+    }
+    manifest["integrity_hash"] = control_manifest_hash(manifest)
+    docs["trust-operations-controls-manifest.json"] = _v74_json_doc(manifest)
+
+
 def _v93_tamper_remove_knowledge_guard_full_resign(docs: dict[str, bytes]) -> None:
     from song_agent.trust_operations_incident_knowledge import knowledge_hash, knowledge_manifest_hash
 
