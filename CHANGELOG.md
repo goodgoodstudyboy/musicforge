@@ -1,5 +1,16 @@
 # Changelog
 
+## v9.8.0 - 2026-06-23
+
+### Added
+- Trust Operations Assurance Watch Signoff closeout, signed evidence, Change Request reset, immutable archive export/ZIP, and offline verifier.
+- Hub verifier `--require-assurance-watch-signoff` gate that requires current Watch, Watch Signoff, Continuous Assurance, and Hub verification evidence.
+- API, CLI, Studio controls, and release-check `v98.trust_operations_assurance_watch_signoff_smoke` covering archive-only downgrade, stale Watch verification, signed payload tamper, history tamper, delete-bypass guard, CR reuse, ZIP allow-list, and redaction.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_assurance_watch_signoff.py tests\test_cli_trust_operations_assurance_watch_signoff.py tests\test_server_trust_operations_assurance_watch_signoff.py tests\test_release_check.py::test_v98_trust_operations_assurance_watch_signoff_smoke tests\test_cli_release_check_matrix.py::test_release_check_cli_v9_profile_lists_trust_operations_hub tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.7.0 - 2026-06-22
 
 ### Added

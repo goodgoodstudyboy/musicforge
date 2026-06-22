@@ -151,6 +151,12 @@ from song_agent.trust_operations_assurance_watch import (
     TrustOperationsAssuranceWatchStore,
 )
 from song_agent.trust_operations_assurance_watch_verifier import write_trust_operations_assurance_watch_verification_report
+from song_agent.trust_operations_assurance_watch_signoff import (
+    TrustOperationsAssuranceWatchSignoffNotFoundError,
+    TrustOperationsAssuranceWatchSignoffStateError,
+    TrustOperationsAssuranceWatchSignoffStore,
+)
+from song_agent.trust_operations_assurance_watch_signoff_verifier import write_trust_operations_assurance_watch_signoff_verification_report
 from song_agent.trust_operations_hub_incidents import (
     TrustOperationsIncidentNotFoundError,
     TrustOperationsIncidentStateError,
@@ -2884,6 +2890,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def trust_operations_assurance_watch_store(self) -> TrustOperationsAssuranceWatchStore:
         return self.server.trust_operations_assurance_watch_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_assurance_watch_signoff_store(self) -> TrustOperationsAssuranceWatchSignoffStore:
+        return self.server.trust_operations_assurance_watch_signoff_store  # type: ignore[attr-defined]
 
     @property
     def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
@@ -5749,6 +5759,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
     def _handle_trust_operations_assurance_watch(self, method: str, tail: str) -> None:
         try:
+            if tail == "/signoffs" or tail.startswith("/signoffs/"):
+                self._handle_trust_operations_assurance_watch_signoff(method, tail.removeprefix("/signoffs"))
+                return
             if tail in {"", "/"}:
                 if method != "GET":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -5821,6 +5834,101 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except TrustOperationsAssuranceWatchNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except TrustOperationsAssuranceWatchStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_trust_operations_assurance_watch_signoff(self, method: str, tail: str) -> None:
+        try:
+            parts = [part for part in tail.split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Assurance Watch Signoff route not found.")
+                return
+            queue_id = unquote(parts[0])
+            if len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.trust_operations_assurance_watch_signoff_store.summary(queue_id)})
+                return
+            action = parts[1]
+            if action == "download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.trust_operations_assurance_watch_signoff_store.archive_zip_path(queue_id), "application/zip", filename=f"musicforge-{queue_id}-trust-operations-assurance-watch-signoff.zip")
+                return
+            if action == "closeout":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                closeout = self.trust_operations_assurance_watch_signoff_store.refresh_closeout(queue_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": closeout.get("status") == "passed", "queue_id": queue_id, "closeout": closeout, "summary": closeout.get("summary", {})}, status=HTTPStatus.CREATED)
+                return
+            if action == "sign":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                signoff = self.trust_operations_assurance_watch_signoff_store.sign(queue_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "queue_id": queue_id, "signoff": signoff}, status=HTTPStatus.CREATED)
+                return
+            if action == "change-requests":
+                if len(parts) == 2:
+                    if method == "GET":
+                        self._send_json({"ok": True, "queue_id": queue_id, "change_requests": self.trust_operations_assurance_watch_signoff_store.list_change_requests(queue_id)})
+                        return
+                    if method == "POST":
+                        change = self.trust_operations_assurance_watch_signoff_store.create_change_request(queue_id, self._optional_json_body(), now=_utc_now())
+                        self._send_json({"ok": True, "queue_id": queue_id, "change_request": change}, status=HTTPStatus.CREATED)
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if len(parts) == 4 and parts[3] == "approve":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    change = self.trust_operations_assurance_watch_signoff_store.approve_change_request(queue_id, unquote(parts[2]), self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "queue_id": queue_id, "change_request": change})
+                    return
+            if action == "reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                change_request_id = str(payload.get("change_request_id") or "")
+                if not change_request_id:
+                    raise ValueError("change_request_id is required.")
+                reset = self.trust_operations_assurance_watch_signoff_store.reset_signoff(queue_id, change_request_id, now=_utc_now())
+                self._send_json({"ok": True, "queue_id": queue_id, "reset": reset})
+                return
+            if action == "export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.trust_operations_assurance_watch_signoff_store.export_archive(queue_id, self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "queue_id": queue_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                return
+            if action == "zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.trust_operations_assurance_watch_signoff_store.build_archive_zip(queue_id, now=_utc_now())
+                self._send_json({"ok": True, "queue_id": queue_id, "zip": zip_info})
+                return
+            if action == "verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.trust_operations_assurance_watch_signoff_store.verify_archive_zip(queue_id, self._optional_json_body())
+                write_trust_operations_assurance_watch_signoff_verification_report(report, self.trust_operations_assurance_watch_signoff_store.verification_report_path(queue_id))
+                self._send_json({"ok": report.get("status") != "failed", "queue_id": queue_id, "verification": report, "summary": report.get("summary", {})})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Assurance Watch Signoff route not found.")
+        except TrustOperationsAssuranceWatchSignoffNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except TrustOperationsAssuranceWatchSignoffStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -17387,6 +17495,12 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         )
         self.trust_operations_assurance_watch_store = TrustOperationsAssuranceWatchStore(
             self.release_store.root.parent / "trust-operations-assurance-watch",
+            assurance_store=self.trust_operations_assurance_store,
+            hub_store=self.trust_operations_hub_store,
+        )
+        self.trust_operations_assurance_watch_signoff_store = TrustOperationsAssuranceWatchSignoffStore(
+            self.release_store.root.parent / "trust-operations-assurance-watch-signoffs",
+            watch_store=self.trust_operations_assurance_watch_store,
             assurance_store=self.trust_operations_assurance_store,
             hub_store=self.trust_operations_hub_store,
         )

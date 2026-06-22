@@ -3820,6 +3820,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-assurance-watch-verify" type="button">Verify Watch ZIP</button>
           <a class="button-link secondary" href="/api/trust-operations/assurance-watch/queues/toawq-000001/download">Download Watch ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Assurance Watch Signoff</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-assurance-watch-signoff-closeout" type="button">Refresh Watch Closeout</button>
+          <button class="secondary" id="trust-operations-assurance-watch-signoff-sign" type="button">Sign Watch Closeout</button>
+          <button class="secondary" id="trust-operations-assurance-watch-signoff-cr" type="button">Create Watch Change Request</button>
+          <button class="secondary" id="trust-operations-assurance-watch-signoff-reset" type="button">Reset Watch Signoff</button>
+          <button class="secondary" id="trust-operations-assurance-watch-signoff-export" type="button">Export Watch Signoff Archive</button>
+          <button class="secondary" id="trust-operations-assurance-watch-signoff-zip" type="button">Build Watch Signoff ZIP</button>
+          <button class="secondary" id="trust-operations-assurance-watch-signoff-verify" type="button">Verify Watch Signoff ZIP</button>
+          <a class="button-link secondary" href="/api/trust-operations/assurance-watch/signoffs/toawq-000001/download">Download Watch Signoff ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);
