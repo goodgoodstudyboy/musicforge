@@ -26,6 +26,7 @@ def test_release_check_cli_list_json() -> None:
     assert "v90.trust_operations_hub_smoke" in ids
     assert "v91.trust_operations_hub_delivery_runbook_smoke" in ids
     assert "v94.trust_operations_control_catalog_smoke" in ids
+    assert "v97.trust_operations_assurance_watch_smoke" in ids
 
 
 def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
@@ -91,6 +92,9 @@ def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
         "v92.trust_operations_hub_incident_response_smoke",
         "v93.trust_operations_incident_knowledge_smoke",
         "v94.trust_operations_control_catalog_smoke",
+        "v95.trust_operations_control_signoff_smoke",
+        "v96.trust_operations_continuous_assurance_smoke",
+        "v97.trust_operations_assurance_watch_smoke",
     ]
 
 

@@ -71,6 +71,7 @@ from song_agent.release_checks import (
     _v94_trust_operations_control_catalog_smoke,
     _v95_trust_operations_control_signoff_smoke,
     _v96_trust_operations_continuous_assurance_smoke,
+    _v97_trust_operations_assurance_watch_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1020,6 +1021,21 @@ def test_v96_trust_operations_continuous_assurance_smoke(tmp_path: Path) -> None
     assert "full_resign=failed" in detail
     assert "stale_export=True" in detail
     assert "extra=failed" in detail
+
+
+def test_v97_trust_operations_assurance_watch_smoke(tmp_path: Path) -> None:
+    ok, detail = _v97_trust_operations_assurance_watch_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "assurance=passed" in detail
+    assert "watch=clear" in detail
+    assert "verify=passed" in detail
+    assert "missing_gate=failed" in detail
+    assert "hub_gate=passed" in detail
+    assert "full_resign=failed/failed" in detail
+    assert "extra=failed" in detail
+    assert "redaction=failed" in detail
+    assert "stale_export=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

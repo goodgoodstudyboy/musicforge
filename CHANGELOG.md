@@ -1,5 +1,17 @@
 # Changelog
 
+## v9.7.0 - 2026-06-22
+
+### Added
+- Trust Operations Assurance Watch schedules local Continuous Assurance review cadence, builds Watch Queues, and emits Drift Action Packs without executing repairs.
+- Fixed-structure Assurance Watch ZIP export plus offline verifier with source-derived queue/action semantics, ZIP safety checks, redaction scan, and external Assurance/Hub current binding.
+- Hub verifier `--require-assurance-watch-clear` gate that requires a clear Watch queue, current Watch verification report, current Hub verification report, and matching external Hub evidence.
+- API, CLI, Studio controls, and release-check `v97.trust_operations_assurance_watch_smoke` covering clear queue, Hub gate, full-resign queue/action forgery, stale export, extra ZIP entries, and redaction.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_assurance_watch.py tests\test_server_trust_operations_assurance_watch.py tests\test_cli_trust_operations_assurance_watch.py tests\test_release_check.py::test_v97_trust_operations_assurance_watch_smoke tests\test_cli_release_check_matrix.py::test_release_check_cli_v9_profile_lists_trust_operations_hub tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.6.1 - 2026-06-22
 
 ### Fixed

@@ -14785,6 +14785,164 @@ def _v96_trust_operations_continuous_assurance_smoke(root: Path) -> tuple[bool, 
             shutil.rmtree(base, ignore_errors=True)
 
 
+def _v97_trust_operations_assurance_watch_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    base = Path(tempfile.mkdtemp(prefix="mf-v97-trust-operations-assurance-watch-")).resolve()
+    try:
+        from song_agent.trust_operations_assurance_watch import TrustOperationsAssuranceWatchStore
+        from song_agent.trust_operations_assurance_watch_verifier import verify_trust_operations_assurance_watch_package
+        from song_agent.trust_operations_continuous_assurance import TrustOperationsAssuranceStore
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+        from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
+
+        fixture = _v90_fixture(base)
+        delivery = _v91_delivery_fixture(base)
+        second_distribution = _v91_copy_delivery_report(delivery["distribution_verification_path"], base / "target-002-verification.json", "target-002", "8" * 64)
+        full_delivery_payload = {**delivery["payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify = {**delivery["verify_payload"], "distribution_verification_paths": [delivery["distribution_verification_path"], second_distribution]}
+        full_delivery_verify.pop("distribution_verification_path", None)
+
+        hub_store = TrustOperationsHubStore(base / ".musicforge" / "trust-operations")
+        hub_store.create_hub({"hub_id": "hub"})
+        report_id = str(hub_store.refresh_report("hub", {**fixture["payload"], **full_delivery_payload})["hub_report"]["report_id"])
+        hub_store.export_report("hub", report_id)
+        hub_store.build_zip("hub", report_id)
+        hub_store.verify_zip("hub", report_id, {**fixture["verify_payload"], **full_delivery_verify, "strict": True, "require_ready": True, "require_current": True, "require_delivery_ready": True, "require_publication_monitoring_clean": True})
+
+        control_zip, control_report = _v96_external_assurance_evidence(base, "control", "trust-operations-controls-manifest.json", "musicforge_trust_operations_control_verification", {"status": "passed", "control_count": 3})
+        signoff_zip, signoff_report = _v96_external_assurance_evidence(
+            base,
+            "control-signoff",
+            "trust-operations-control-signoff-manifest.json",
+            "musicforge_trust_operations_control_signoff_verification",
+            {"status": "passed", "signed": True},
+            extra_files={"control-exceptions.json": {"exceptions": [], "summary": {"exception_count": 0}}},
+        )
+        incident_zip, incident_report = _v96_external_assurance_evidence(
+            base,
+            "incident",
+            "trust-operations-incident-manifest.json",
+            "musicforge_trust_operations_hub_incident_verification",
+            {"status": "passed", "open_count": 0, "blocking_open_count": 0},
+            extra_files={"incidents.json": {"incidents": [], "summary": {"open_count": 0}}},
+        )
+        knowledge_zip, knowledge_report = _v96_external_assurance_evidence(
+            base,
+            "knowledge",
+            "trust-operations-knowledge-manifest.json",
+            "musicforge_trust_operations_incident_knowledge_verification",
+            {"status": "passed", "guards_passed_count": 1, "guard_failed_count": 0, "recurrence_count": 0},
+        )
+        assurance_payload = {
+            "hub_package_path": hub_store.zip_path("hub", report_id),
+            "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+            "control_package_path": control_zip,
+            "control_verification_report_path": control_report,
+            "control_signoff_archive_path": signoff_zip,
+            "control_signoff_verification_report_path": signoff_report,
+            "incident_board_package_path": incident_zip,
+            "incident_board_verification_report_path": incident_report,
+            "incident_knowledge_package_path": knowledge_zip,
+            "incident_knowledge_verification_report_path": knowledge_report,
+            **full_delivery_verify,
+        }
+        assurance_verify_payload = {
+            **assurance_payload,
+            "release_verification_paths": [delivery["release_verification_path"]],
+            "submission_verification_paths": [delivery["submission_verification_path"]],
+            "submission_evidence_verification_paths": [delivery["submission_evidence_verification_path"]],
+            "release_operations_verification_paths": [delivery["release_operations_verification_path"]],
+        }
+        for key in ("release_verification_path", "distribution_verification_path", "submission_verification_path", "submission_evidence_verification_path", "release_operations_verification_path"):
+            assurance_verify_payload.pop(key, None)
+        assurance_store = TrustOperationsAssuranceStore(base / ".musicforge" / "trust-operations-assurance", hub_store=hub_store)
+        refreshed_assurance = assurance_store.refresh_run("hub", assurance_payload)
+        run_id = str(refreshed_assurance["run"]["run_id"])
+        assurance_store.export_archive(run_id)
+        assurance_store.build_archive_zip(run_id)
+        assurance_verification = assurance_store.verify_archive_zip(run_id, {**assurance_verify_payload, "strict": True, "require_passed": True, "require_current": True})
+
+        watch_payload = {
+            "hub_id": "hub",
+            "assurance_archive_path": assurance_store.archive_zip_path(run_id),
+            "assurance_verification_report_path": assurance_store.verification_report_path(run_id),
+            "hub_package_path": hub_store.zip_path("hub", report_id),
+            "hub_verification_report_path": hub_store.verification_report_path("hub", report_id),
+        }
+        watch_store = TrustOperationsAssuranceWatchStore(base / ".musicforge" / "trust-operations-assurance-watch", assurance_store=assurance_store, hub_store=hub_store)
+        refreshed_watch = watch_store.refresh_queue(watch_payload)
+        queue_id = str(refreshed_watch["queue"]["queue_id"])
+        watch_store.export_watch(queue_id)
+        watch_store.build_watch_zip(queue_id)
+        watch_verification = watch_store.verify_watch_zip(queue_id, {"strict": True, "require_clear": True, "require_current": True, **watch_payload})
+        missing_gate = verify_trust_operations_hub_package(hub_store.zip_path("hub", report_id), strict=True, require_assurance_watch_clear=True, hub_verification_report_path=hub_store.verification_report_path("hub", report_id), **fixture["verify_payload"])
+        hub_gate = verify_trust_operations_hub_package(
+            hub_store.zip_path("hub", report_id),
+            strict=True,
+            require_assurance_watch_clear=True,
+            assurance_watch_package_path=watch_store.watch_zip_path(queue_id),
+            assurance_watch_verification_report_path=watch_store.verification_report_path(queue_id),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+            **fixture["verify_payload"],
+        )
+
+        failed_report = read_json(assurance_store.verification_report_path(run_id))
+        failed_report["status"] = "failed"
+        failed_report_path = write_json(base / "failed-assurance-verification-report.json", failed_report)
+        failed_watch_payload = {**watch_payload, "assurance_verification_report_path": failed_report_path}
+        blocked_watch = watch_store.refresh_queue({**failed_watch_payload, "queue_id": "toawq-blocked"})
+        blocked_queue_id = str(blocked_watch["queue"]["queue_id"])
+        watch_store.export_watch(blocked_queue_id)
+        watch_store.build_watch_zip(blocked_queue_id)
+        full_resign = verify_trust_operations_assurance_watch_package(
+            _v76_rewrite_zip(watch_store.watch_zip_path(blocked_queue_id), base / "watch-full-resign.zip", _v97_clear_watch_queue_full_resign),
+            strict=True,
+            require_clear=True,
+            require_current=True,
+            assurance_archive_path=assurance_store.archive_zip_path(run_id),
+            assurance_verification_report_path=failed_report_path,
+            hub_package_path=hub_store.zip_path("hub", report_id),
+            hub_verification_report_path=hub_store.verification_report_path("hub", report_id),
+        )
+        extra = verify_trust_operations_assurance_watch_package(_v38_rewrite_zip(watch_store.watch_zip_path(queue_id), base / "watch-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
+        redaction = verify_trust_operations_assurance_watch_package(_v38_rewrite_zip(watch_store.watch_zip_path(queue_id), base / "watch-redaction.zip", transforms={"README.txt": lambda data: data + b"\napi_key=\"sk-secret-value\" C:\\Users\\demo\\githubkey.txt\n"}), strict=True)
+
+        stale_report = read_json(assurance_store.verification_report_path(run_id))
+        stale_report["status"] = "failed"
+        write_json(assurance_store.verification_report_path(run_id), stale_report)
+        stale_export = _v96_blocked(lambda: watch_store.export_watch(queue_id))
+
+        serialized = json.dumps({"queue": refreshed_watch["queue"], "verify": watch_verification}, ensure_ascii=False)
+        ok = (
+            refreshed_assurance["run"].get("status") == "passed"
+            and assurance_verification.get("status") == "passed"
+            and refreshed_watch["queue"].get("status") == "clear"
+            and watch_verification.get("status") == "passed"
+            and _v38_check_status(missing_gate, "toh_assurance_watch_package_required") == "failed"
+            and hub_gate.get("status") == "passed"
+            and _v38_check_status(full_resign, "toaw_watch_queue_rows_match_sources") == "failed"
+            and _v38_check_status(full_resign, "toaw_action_pack_semantics_match") == "failed"
+            and _v38_check_status(extra, "toaw_zip_allowed_entries") == "failed"
+            and _v38_check_status(redaction, "toaw_redaction_scan") == "failed"
+            and stale_export
+            and str(base) not in serialized
+            and "sk-secret-value" not in serialized
+            and "api_key" not in serialized
+            and "C:\\Users" not in serialized
+        )
+        return ok, (
+            f"assurance={refreshed_assurance['run'].get('status')}, watch={refreshed_watch['queue'].get('status')}, verify={watch_verification.get('status')}, "
+            f"missing_gate={_v38_check_status(missing_gate, 'toh_assurance_watch_package_required')}, hub_gate={hub_gate.get('status')}, "
+            f"full_resign={_v38_check_status(full_resign, 'toaw_watch_queue_rows_match_sources')}/{_v38_check_status(full_resign, 'toaw_action_pack_semantics_match')}, "
+            f"extra={_v38_check_status(extra, 'toaw_zip_allowed_entries')}, redaction={_v38_check_status(redaction, 'toaw_redaction_scan')}, stale_export={stale_export}"
+        )
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+
+
 def _v96_blocked(fn) -> bool:
     try:
         fn()
@@ -14852,6 +15010,51 @@ def _v96_tamper_assurance_report_summary_full_resign(docs: dict[str, bytes]) -> 
     _v92_sync_manifest_file(manifest, "assurance-report.json", docs["assurance-report.json"])
     manifest["integrity_hash"] = assurance_manifest_hash(manifest)
     docs["trust-operations-assurance-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v97_clear_watch_queue_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_assurance_watch import watch_hash, watch_manifest_hash
+
+    queue = _v74_read_json_doc(docs, "watch-queue.json")
+    action_pack = _v74_read_json_doc(docs, "drift-action-pack.json")
+    manifest = _v74_read_json_doc(docs, "trust-operations-assurance-watch-manifest.json")
+    for row in queue.get("rows", []) if isinstance(queue.get("rows"), list) else []:
+        row["latest_assurance_verified"] = True
+        row["due_status"] = "not_due"
+        row["drift_status"] = "clear"
+        row["readiness"] = "clear"
+        row["reasons"] = []
+        row["action_ids"] = []
+        row["integrity_hash"] = watch_hash(row)
+    action_pack["actions"] = []
+    action_pack["summary"] = {"action_count": 0, "blocking_count": 0, "manual_required_count": 0, "safe_auto_count": 0}
+    action_pack["status"] = "clear"
+    action_pack["integrity_hash"] = watch_hash(action_pack)
+    queue["summary"] = {
+        "hub_count": len(queue.get("rows", [])),
+        "clear_count": len(queue.get("rows", [])),
+        "due_count": 0,
+        "overdue_count": 0,
+        "stale_count": 0,
+        "failed_count": 0,
+        "blocking_action_count": 0,
+        "manual_action_count": 0,
+    }
+    queue["status"] = "clear"
+    queue["readiness"] = "clear"
+    queue.setdefault("source", {})["drift_action_pack_hash"] = action_pack["integrity_hash"]
+    queue["source_hash"] = stable_hash(queue["source"])
+    queue["integrity_hash"] = watch_hash(queue)
+    docs["watch-queue.json"] = _v74_json_doc(queue)
+    docs["drift-action-pack.json"] = _v74_json_doc(action_pack)
+    manifest["status"] = queue["status"]
+    manifest["source_hash"] = queue["source_hash"]
+    manifest.setdefault("source", {})["watch_queue_hash"] = queue["integrity_hash"]
+    manifest.setdefault("source", {})["drift_action_pack_hash"] = action_pack["integrity_hash"]
+    _v92_sync_manifest_file(manifest, "watch-queue.json", docs["watch-queue.json"])
+    _v92_sync_manifest_file(manifest, "drift-action-pack.json", docs["drift-action-pack.json"])
+    manifest["integrity_hash"] = watch_manifest_hash(manifest)
+    docs["trust-operations-assurance-watch-manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v94_tamper_control_result_full_resign(docs: dict[str, bytes]) -> None:

@@ -332,6 +332,13 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="trust-operations-assurance-zip"' in html
     assert 'id="trust-operations-assurance-verify"' in html
     assert "/api/trust-operations/assurance/runs/toa-000001/download" in html
+    assert "Assurance Watch" in html
+    assert 'id="trust-operations-assurance-watch-schedule"' in html
+    assert 'id="trust-operations-assurance-watch-refresh"' in html
+    assert 'id="trust-operations-assurance-watch-export"' in html
+    assert 'id="trust-operations-assurance-watch-zip"' in html
+    assert 'id="trust-operations-assurance-watch-verify"' in html
+    assert "/api/trust-operations/assurance-watch/queues/toawq-000001/download" in html
     assert 'id="trust-operations-incidents-refresh"' in html
     assert 'id="trust-operations-incidents-triage"' in html
     assert 'id="trust-operations-incidents-plan"' in html

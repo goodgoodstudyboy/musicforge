@@ -3811,6 +3811,15 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-assurance-verify" type="button">Verify Assurance</button>
           <a class="button-link secondary" href="/api/trust-operations/assurance/runs/toa-000001/download">Download Assurance ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Assurance Watch</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-assurance-watch-schedule" type="button">Update Schedule</button>
+          <button class="secondary" id="trust-operations-assurance-watch-refresh" type="button">Refresh Watch Queue</button>
+          <button class="secondary" id="trust-operations-assurance-watch-export" type="button">Export Watch Archive</button>
+          <button class="secondary" id="trust-operations-assurance-watch-zip" type="button">Build Watch ZIP</button>
+          <button class="secondary" id="trust-operations-assurance-watch-verify" type="button">Verify Watch ZIP</button>
+          <a class="button-link secondary" href="/api/trust-operations/assurance-watch/queues/toawq-000001/download">Download Watch ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);

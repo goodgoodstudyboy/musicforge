@@ -145,6 +145,12 @@ from song_agent.trust_operations_continuous_assurance import (
     TrustOperationsAssuranceStore,
 )
 from song_agent.trust_operations_continuous_assurance_verifier import write_trust_operations_assurance_verification_report
+from song_agent.trust_operations_assurance_watch import (
+    TrustOperationsAssuranceWatchNotFoundError,
+    TrustOperationsAssuranceWatchStateError,
+    TrustOperationsAssuranceWatchStore,
+)
+from song_agent.trust_operations_assurance_watch_verifier import write_trust_operations_assurance_watch_verification_report
 from song_agent.trust_operations_hub_incidents import (
     TrustOperationsIncidentNotFoundError,
     TrustOperationsIncidentStateError,
@@ -2874,6 +2880,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def trust_operations_assurance_store(self) -> TrustOperationsAssuranceStore:
         return self.server.trust_operations_assurance_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_assurance_watch_store(self) -> TrustOperationsAssuranceWatchStore:
+        return self.server.trust_operations_assurance_watch_store  # type: ignore[attr-defined]
 
     @property
     def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
@@ -5610,6 +5620,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_trust_operations(self, method: str, path: str) -> None:
+        watch_prefix = "/api/trust-operations/assurance-watch"
+        if path == watch_prefix or path.startswith(watch_prefix + "/"):
+            self._handle_trust_operations_assurance_watch(method, path.removeprefix(watch_prefix))
+            return
         assurance_prefix = "/api/trust-operations/assurance"
         if path == assurance_prefix or path.startswith(assurance_prefix + "/"):
             self._handle_trust_operations_assurance(method, path.removeprefix(assurance_prefix))
@@ -5727,6 +5741,86 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except TrustOperationsAssuranceNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except TrustOperationsAssuranceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_trust_operations_assurance_watch(self, method: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "queues": self.trust_operations_assurance_watch_store.list_queues()})
+                return
+            if tail == "/schedule":
+                if method == "GET":
+                    self._send_json({"ok": True, "schedule": self.trust_operations_assurance_watch_store.read_schedule("default")})
+                    return
+                if method == "POST":
+                    schedule = self.trust_operations_assurance_watch_store.write_schedule(self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "schedule": schedule}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/queues":
+                if method == "GET":
+                    query = parse_qs(urlparse(self.path).query)
+                    schedule_id = query.get("schedule_id", [None])[0]
+                    self._send_json({"ok": True, "queues": self.trust_operations_assurance_watch_store.list_queues(schedule_id)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    schedule_id = str(payload.get("schedule_id") or "default")
+                    result = self.trust_operations_assurance_watch_store.refresh_queue(payload, schedule_id=schedule_id, now=_utc_now())
+                    self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.split("/") if part]
+            if len(parts) >= 2 and parts[0] == "queues":
+                queue_id = unquote(parts[1])
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_json({"ok": True, **self.trust_operations_assurance_watch_store.summary(queue_id)})
+                    return
+                action = parts[2]
+                if action == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.trust_operations_assurance_watch_store.watch_zip_path(queue_id), "application/zip", filename=f"musicforge-{queue_id}-trust-operations-assurance-watch.zip")
+                    return
+                if action == "export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.trust_operations_assurance_watch_store.export_watch(queue_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "queue_id": queue_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                    return
+                if action == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    zip_info = self.trust_operations_assurance_watch_store.build_watch_zip(queue_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "queue_id": queue_id, "zip": zip_info})
+                    return
+                if action == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.trust_operations_assurance_watch_store.verify_watch_zip(queue_id, self._optional_json_body())
+                    write_trust_operations_assurance_watch_verification_report(report, self.trust_operations_assurance_watch_store.verification_report_path(queue_id))
+                    self._send_json({"ok": report.get("status") != "failed", "queue_id": queue_id, "verification": report, "summary": report.get("summary", {})})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Assurance Watch route not found.")
+        except TrustOperationsAssuranceWatchNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except TrustOperationsAssuranceWatchStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -17289,6 +17383,11 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         )
         self.trust_operations_assurance_store = TrustOperationsAssuranceStore(
             self.release_store.root.parent / "trust-operations-assurance",
+            hub_store=self.trust_operations_hub_store,
+        )
+        self.trust_operations_assurance_watch_store = TrustOperationsAssuranceWatchStore(
+            self.release_store.root.parent / "trust-operations-assurance-watch",
+            assurance_store=self.trust_operations_assurance_store,
             hub_store=self.trust_operations_hub_store,
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")

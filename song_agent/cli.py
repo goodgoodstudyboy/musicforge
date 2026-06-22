@@ -1086,6 +1086,7 @@ def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--require-trust-controls", action="store_true", help="Require Trust Operations Control Catalog policy evidence.")
     verify_parser.add_argument("--require-trust-control-signoff", action="store_true", help="Require Trust Operations Control Signoff archive evidence.")
     verify_parser.add_argument("--require-continuous-assurance", action="store_true", help="Require Trust Operations Continuous Assurance evidence.")
+    verify_parser.add_argument("--require-assurance-watch-clear", action="store_true", help="Require Trust Operations Assurance Watch queue to be clear.")
     verify_parser.add_argument("--publication-channel-state", type=Path, default=None, help="External publication-channel-state.json used for current/revoke checks.")
     verify_parser.add_argument("--public-trust-center-verification", type=Path, default=None, help="External Public Trust Center verification report.")
     verify_parser.add_argument("--publication-monitoring-verification", type=Path, default=None, help="External Publication Monitoring verification report.")
@@ -1106,8 +1107,25 @@ def build_verify_trust_operations_hub_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--trust-control-signoff-verification-report", type=Path, default=None, help="External Trust Operations Control Signoff verification report.")
     verify_parser.add_argument("--continuous-assurance-archive", type=Path, default=None, help="External Trust Operations Continuous Assurance Archive ZIP.")
     verify_parser.add_argument("--continuous-assurance-verification-report", type=Path, default=None, help="External Trust Operations Continuous Assurance verification report.")
+    verify_parser.add_argument("--assurance-watch-package", type=Path, default=None, help="External Trust Operations Assurance Watch ZIP.")
+    verify_parser.add_argument("--assurance-watch-verification-report", type=Path, default=None, help="External Trust Operations Assurance Watch verification report.")
     verify_parser.add_argument("--max-zip-size-mb", type=int, default=64, help="Maximum compressed ZIP size in MiB.")
     verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=256, help="Maximum total uncompressed entry size in MiB.")
+    verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
+    return verify_parser
+
+
+def build_verify_trust_operations_assurance_watch_parser() -> argparse.ArgumentParser:
+    verify_parser = argparse.ArgumentParser(description="Verify a MusicForge Trust Operations Assurance Watch ZIP.")
+    verify_parser.add_argument("zip_path", type=Path, help="Path to the Trust Operations Assurance Watch ZIP to verify.")
+    verify_parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    verify_parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    verify_parser.add_argument("--strict", action="store_true", help="Treat strict package checks as failures.")
+    verify_parser.add_argument("--require-clear", action="store_true", help="Require the Watch queue to be clear.")
+    verify_parser.add_argument("--require-current", action="store_true", help="Require current external Assurance and Hub evidence.")
+    _add_trust_operations_assurance_watch_source_args(verify_parser)
+    verify_parser.add_argument("--max-zip-size-mb", type=int, default=32, help="Maximum compressed ZIP size in MiB.")
+    verify_parser.add_argument("--max-uncompressed-size-mb", type=int, default=64, help="Maximum total uncompressed entry size in MiB.")
     verify_parser.add_argument("--max-entry-count", type=int, default=64, help="Maximum number of ZIP entries.")
     return verify_parser
 
@@ -1348,6 +1366,33 @@ def build_trust_operations_hub_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-continuous-assurance", action="store_true", help="Verifier requires Trust Operations Continuous Assurance evidence.")
     parser.add_argument("--continuous-assurance-archive", type=Path, default=None, help="External Trust Operations Continuous Assurance Archive ZIP.")
     parser.add_argument("--continuous-assurance-verification-report", type=Path, default=None, help="External Trust Operations Continuous Assurance verification report.")
+    parser.add_argument("--require-assurance-watch-clear", action="store_true", help="Verifier requires Trust Operations Assurance Watch clear evidence.")
+    parser.add_argument("--assurance-watch-package", type=Path, default=None, help="External Trust Operations Assurance Watch ZIP.")
+    parser.add_argument("--assurance-watch-verification-report", type=Path, default=None, help="External Trust Operations Assurance Watch verification report.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
+    return parser
+
+
+def build_trust_operations_assurance_watch_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build and verify Trust Operations Assurance Watch queues.")
+    parser.add_argument("--schedule-id", default="default", help="Assurance Watch schedule id.")
+    parser.add_argument("--queue-id", default=None, help="Assurance Watch queue id.")
+    parser.add_argument("--hub-id", default=None, help="Trust Operations Hub id.")
+    parser.add_argument("--write-schedule", action="store_true", help="Create or update the Assurance Watch schedule.")
+    parser.add_argument("--interval-days", type=int, default=None, help="Schedule interval in days.")
+    parser.add_argument("--grace-days", type=int, default=None, help="Schedule grace window in days.")
+    parser.add_argument("--refresh", action="store_true", help="Refresh the Watch queue.")
+    parser.add_argument("--list", action="store_true", help="List Watch queues.")
+    parser.add_argument("--export", action="store_true", help="Export the Watch archive directory.")
+    parser.add_argument("--zip", action="store_true", help="Build the Watch ZIP.")
+    parser.add_argument("--verify", action="store_true", help="Verify the Watch ZIP.")
+    parser.add_argument("--strict", action="store_true", help="Use strict verifier mode.")
+    parser.add_argument("--require-clear", action="store_true", default=True, help="Verifier requires the Watch queue to be clear.")
+    parser.add_argument("--no-require-clear", dest="require_clear", action="store_false", help="Do not require the Watch queue to be clear.")
+    parser.add_argument("--require-current", action="store_true", default=True, help="Verifier requires current external evidence.")
+    parser.add_argument("--no-require-current", dest="require_current", action="store_false", help="Do not require current external evidence.")
+    _add_trust_operations_assurance_watch_source_args(parser)
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write command result to this JSON file.")
     return parser
@@ -2063,6 +2108,22 @@ def _trust_operations_assurance_source_payload(args: argparse.Namespace) -> dict
         "submission_verification_paths": getattr(args, "submission_verification", []),
         "submission_evidence_verification_paths": getattr(args, "submission_evidence_verification", []),
         "release_operations_verification_paths": getattr(args, "release_operations_verification", []),
+    }
+
+
+def _add_trust_operations_assurance_watch_source_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--assurance-archive", type=Path, default=None, help="External Trust Operations Continuous Assurance Archive ZIP.")
+    parser.add_argument("--assurance-verification-report", type=Path, default=None, help="External Trust Operations Continuous Assurance verification report.")
+    parser.add_argument("--hub-package", type=Path, default=None, help="External Trust Operations Hub ZIP.")
+    parser.add_argument("--hub-verification-report", type=Path, default=None, help="External Trust Operations Hub verification report.")
+
+
+def _trust_operations_assurance_watch_source_payload(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "assurance_archive_path": getattr(args, "assurance_archive", None),
+        "assurance_verification_report_path": getattr(args, "assurance_verification_report", None),
+        "hub_package_path": getattr(args, "hub_package", None),
+        "hub_verification_report_path": getattr(args, "hub_verification_report", None),
     }
 
 
@@ -3161,6 +3222,9 @@ def _main() -> None:
             trust_control_signoff_verification_report_path=args.trust_control_signoff_verification_report,
             continuous_assurance_archive_path=args.continuous_assurance_archive,
             continuous_assurance_verification_report_path=args.continuous_assurance_verification_report,
+            require_assurance_watch_clear=args.require_assurance_watch_clear,
+            assurance_watch_package_path=args.assurance_watch_package,
+            assurance_watch_verification_report_path=args.assurance_watch_verification_report,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,
@@ -3172,6 +3236,33 @@ def _main() -> None:
         else:
             print_trust_operations_hub_verification_report(report)
         raise SystemExit(trust_operations_hub_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-trust-operations-assurance-watch-package":
+        from song_agent.trust_operations_assurance_watch_verifier import (
+            print_trust_operations_assurance_watch_verification_report,
+            trust_operations_assurance_watch_verification_exit_code,
+            verify_trust_operations_assurance_watch_package,
+            write_trust_operations_assurance_watch_verification_report,
+        )
+
+        parser = build_verify_trust_operations_assurance_watch_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_trust_operations_assurance_watch_package(
+            args.zip_path,
+            strict=args.strict,
+            require_clear=args.require_clear,
+            require_current=args.require_current,
+            **_trust_operations_assurance_watch_source_payload(args),
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_trust_operations_assurance_watch_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_trust_operations_assurance_watch_verification_report(report)
+        raise SystemExit(trust_operations_assurance_watch_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-trust-operations-assurance-package":
         from song_agent.trust_operations_continuous_assurance_verifier import (
             print_trust_operations_assurance_verification_report,
@@ -4933,6 +5024,9 @@ def _main() -> None:
                     "trust_control_signoff_verification_report_path": args.trust_control_signoff_verification_report,
                     "continuous_assurance_archive_path": args.continuous_assurance_archive,
                     "continuous_assurance_verification_report_path": args.continuous_assurance_verification_report,
+                    "require_assurance_watch_clear": args.require_assurance_watch_clear,
+                    "assurance_watch_package_path": args.assurance_watch_package,
+                    "assurance_watch_verification_report_path": args.assurance_watch_verification_report,
                 },
             )
             result["verification"] = verification
@@ -4950,6 +5044,67 @@ def _main() -> None:
                 print_trust_operations_hub_verification_report(result["verification"])
             else:
                 print(json.dumps(result.get("summary") or {"status": "ok", "hub_id": hub_id, "report_id": report_id}, ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+    elif raw_args and raw_args[0] == "trust-operations-assurance-watch":
+        from song_agent.trust_operations_assurance_watch import TrustOperationsAssuranceWatchStore
+        from song_agent.trust_operations_assurance_watch_verifier import print_trust_operations_assurance_watch_verification_report
+        from song_agent.trust_operations_continuous_assurance import TrustOperationsAssuranceStore
+        from song_agent.trust_operations_hub import TrustOperationsHubStore
+
+        parser = build_trust_operations_assurance_watch_parser()
+        args = parser.parse_args(raw_args[1:])
+        hub_store = TrustOperationsHubStore()
+        assurance_store = TrustOperationsAssuranceStore(hub_store=hub_store)
+        store = TrustOperationsAssuranceWatchStore(assurance_store=assurance_store, hub_store=hub_store)
+        result: dict[str, Any] = {"ok": True, "schedule_id": args.schedule_id}
+        source_payload = _trust_operations_assurance_watch_source_payload(args)
+        schedule_patch: dict[str, Any] = {}
+        if args.hub_id:
+            schedule_patch.setdefault("scope", {})["hub_ids"] = [args.hub_id]
+        if args.interval_days is not None or args.grace_days is not None:
+            schedule_patch.setdefault("cadence", {})
+            if args.interval_days is not None:
+                schedule_patch["cadence"]["interval_days"] = args.interval_days
+            if args.grace_days is not None:
+                schedule_patch["cadence"]["grace_days"] = args.grace_days
+        if args.write_schedule:
+            result["schedule"] = store.write_schedule({"schedule_id": args.schedule_id, **schedule_patch})
+        if args.list:
+            result["queues"] = store.list_queues(args.schedule_id)
+        if args.refresh:
+            refresh_payload: dict[str, Any] = {**source_payload}
+            if args.queue_id:
+                refresh_payload["queue_id"] = args.queue_id
+            if args.hub_id:
+                refresh_payload["hub_id"] = args.hub_id
+            refreshed = store.refresh_queue(refresh_payload, schedule_id=args.schedule_id)
+            result.update(refreshed)
+            args.queue_id = str((refreshed.get("queue") or {}).get("queue_id") or args.queue_id or "")
+        if args.export:
+            if not args.queue_id:
+                raise ValueError("--queue-id is required for --export unless --refresh was used.")
+            result["manifest"] = store.export_watch(args.queue_id, source_payload)
+        if args.zip:
+            if not args.queue_id:
+                raise ValueError("--queue-id is required for --zip unless --refresh was used.")
+            result["zip"] = store.build_watch_zip(args.queue_id, source_payload)
+        if args.verify:
+            if not args.queue_id:
+                raise ValueError("--queue-id is required for --verify unless --refresh was used.")
+            verification = store.verify_watch_zip(args.queue_id, {**source_payload, "strict": args.strict, "require_clear": args.require_clear, "require_current": args.require_current})
+            result["verification"] = verification
+            result["verification_summary"] = verification.get("summary", {})
+        if not any([args.write_schedule, args.list, args.refresh, args.export, args.zip, args.verify]):
+            result["summary"] = store.summary(args.queue_id) if args.queue_id else {"schedule": store.read_schedule(args.schedule_id), "queues": store.list_queues(args.schedule_id)}
+        if args.report_out is not None:
+            write_json(args.report_out, result)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            if "verification" in result:
+                print_trust_operations_assurance_watch_verification_report(result["verification"])
+            else:
+                print(json.dumps(result.get("summary") or {"status": "ok", "queue_id": args.queue_id}, ensure_ascii=False, indent=2))
         raise SystemExit(0)
     elif raw_args and raw_args[0] == "trust-operations-controls":
         from song_agent.trust_operations_controls import TrustOperationsControlStore
