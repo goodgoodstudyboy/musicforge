@@ -65,7 +65,7 @@ def build_doctor_parser() -> argparse.ArgumentParser:
 
 def build_release_check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
-    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "ga", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "v10", "ga", "publish"], help="Release-check profile to run.")
     parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
     parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
     parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")
@@ -108,6 +108,78 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-final-readiness", action="store_true", help="Require external final readiness evidence.")
     parser.add_argument("--final-handoff-package", type=Path, default=None, help="External Trust Operations Final Handoff ZIP.")
     parser.add_argument("--final-handoff-verification-report", type=Path, default=None, help="External Trust Operations Final Handoff verification report JSON.")
+    return parser
+
+
+def build_maintenance_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage local MusicForge LTS maintenance, backups, upgrades, and checks.")
+    subparsers = parser.add_subparsers(dest="section", required=True)
+
+    status = subparsers.add_parser("status", help="Show local LTS maintenance status.")
+    status.add_argument("--json", action="store_true", help="Print JSON output.")
+
+    backup = subparsers.add_parser("backup", help="Create, verify, and restore maintenance backups.")
+    backup_sub = backup.add_subparsers(dest="backup_action", required=True)
+    create = backup_sub.add_parser("create", help="Create a maintenance backup.")
+    create.add_argument("--mode", choices=["metadata", "workspace", "workspace_with_artifacts"], default="workspace")
+    create.add_argument("--json", action="store_true")
+    listing = backup_sub.add_parser("list", help="List maintenance backups.")
+    listing.add_argument("--json", action="store_true")
+    verify = backup_sub.add_parser("verify", help="Verify a maintenance backup by id.")
+    verify.add_argument("--backup-id", required=True)
+    verify.add_argument("--json", action="store_true")
+    restore_plan = backup_sub.add_parser("restore-plan", help="Create a restore plan from a backup.")
+    restore_plan.add_argument("--backup-id", default=None)
+    restore_plan.add_argument("--zip", dest="zip_path", type=Path, default=None)
+    restore_plan.add_argument("--target", type=Path, required=True)
+    restore_plan.add_argument("--json", action="store_true")
+    restore = backup_sub.add_parser("restore", help="Restore a backup into a target directory.")
+    restore.add_argument("--backup-id", default=None)
+    restore.add_argument("--zip", dest="zip_path", type=Path, default=None)
+    restore.add_argument("--target", type=Path, required=True)
+    restore.add_argument("--confirm", action="store_true")
+    restore.add_argument("--overwrite", action="store_true")
+    restore.add_argument("--allow-current-workspace", action="store_true")
+    restore.add_argument("--json", action="store_true")
+
+    upgrade = subparsers.add_parser("upgrade", help="Run upgrade preflight checks.")
+    upgrade_sub = upgrade.add_subparsers(dest="upgrade_action", required=True)
+    preflight = upgrade_sub.add_parser("preflight", help="Run upgrade preflight checks.")
+    preflight.add_argument("--target-version", required=True)
+    preflight.add_argument("--require-verified-backup", action="store_true")
+    preflight.add_argument("--allow-dirty", action="store_true")
+    preflight.add_argument("--json", action="store_true")
+
+    migration = subparsers.add_parser("migration", help="Manage local LTS migrations.")
+    migration_sub = migration.add_subparsers(dest="migration_action", required=True)
+    migration_sub.add_parser("status", help="Show migration status.").add_argument("--json", action="store_true")
+    migration_sub.add_parser("plan", help="Show pending migrations.").add_argument("--json", action="store_true")
+    migration_run = migration_sub.add_parser("run", help="Run pending migrations.")
+    migration_run.add_argument("--require-backup", action="store_true")
+    migration_run.add_argument("--json", action="store_true")
+
+    check = subparsers.add_parser("check", help="Run periodic maintenance checks.")
+    check_sub = check.add_subparsers(dest="check_action", required=True)
+    check_list = check_sub.add_parser("list", help="List maintenance check profiles and prior runs.")
+    check_list.add_argument("--json", action="store_true")
+    check_run = check_sub.add_parser("run", help="Run a maintenance check profile.")
+    check_run.add_argument("--profile", choices=["daily", "weekly", "release", "emergency"], default="daily")
+    check_run.add_argument("--json", action="store_true")
+    check_show = check_sub.add_parser("show", help="Show a maintenance check report.")
+    check_show.add_argument("--check-id", required=True)
+    check_show.add_argument("--json", action="store_true")
+    return parser
+
+
+def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge LTS maintenance backup ZIP.")
+    parser.add_argument("zip_path", type=Path, help="Path to musicforge-maintenance-backup.zip.")
+    parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    parser.add_argument("--strict", action="store_true", help="Run strict verification.")
+    parser.add_argument("--max-zip-size-mb", type=int, default=512)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048)
+    parser.add_argument("--max-entry-count", type=int, default=20000)
     return parser
 
 
@@ -2289,6 +2361,82 @@ def main() -> None:
         raise SystemExit(1) from exc
 
 
+def _run_maintenance_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.lts_maintenance import LTSMaintenanceStore, MAINTENANCE_PROFILES
+
+    store = LTSMaintenanceStore()
+    if args.section == "status":
+        return store.status()
+    if args.section == "backup":
+        if args.backup_action == "create":
+            return {"status": "passed", **store.backups.create_backup(mode=args.mode)}
+        if args.backup_action == "list":
+            return {"status": "passed", "backups": store.backups.list_backups()}
+        if args.backup_action == "verify":
+            verification = store.backups.verify_backup(args.backup_id)
+            return {"status": verification.get("status"), "backup_id": args.backup_id, "verification": verification}
+        if args.backup_action == "restore-plan":
+            plan = store.backups.restore_plan(backup_id=args.backup_id, zip_path=args.zip_path, target=args.target)
+            return {"status": plan.get("status"), "restore_plan": plan}
+        if args.backup_action == "restore":
+            result = store.backups.restore(
+                backup_id=args.backup_id,
+                zip_path=args.zip_path,
+                target=args.target,
+                confirm=args.confirm,
+                overwrite=args.overwrite,
+                allow_current_workspace=args.allow_current_workspace,
+            )
+            return {"status": result.get("status"), **result}
+    if args.section == "upgrade" and args.upgrade_action == "preflight":
+        report = store.run_upgrade_preflight(target_version=args.target_version, require_verified_backup=args.require_verified_backup, allow_dirty=args.allow_dirty)
+        return {"status": report.get("status"), "preflight": report}
+    if args.section == "migration":
+        if args.migration_action == "status":
+            return {"status": "passed", "migration": store.migration_status()}
+        if args.migration_action == "plan":
+            return {"status": "passed", "migration_plan": store.migration_plan()}
+        if args.migration_action == "run":
+            result = store.run_migrations(require_backup=args.require_backup)
+            return {"status": "passed", **result}
+    if args.section == "check":
+        if args.check_action == "list":
+            return {"status": "passed", "profiles": sorted(MAINTENANCE_PROFILES), "runs": store.list_check_runs()}
+        if args.check_action == "run":
+            report = store.run_check(profile=args.profile)
+            return {"status": report.get("status"), "report": report}
+        if args.check_action == "show":
+            path = store.check_runs_dir / args.check_id / "maintenance-check-report.json"
+            return {"status": "passed", "report": read_json(path)}
+    raise ValueError("Unsupported maintenance command.")
+
+
+def _print_maintenance_result(result: dict[str, Any], *, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    status = result.get("status") or result.get("report", {}).get("status") or result.get("verification", {}).get("status") or "unknown"
+    print(f"MusicForge LTS Maintenance: {status}")
+    if "backup" in result:
+        backup = result.get("backup") or {}
+        print(f"backup: {backup.get('backup_id')} {backup.get('verification_status') or backup.get('status')}")
+    if "verification" in result:
+        verification = result.get("verification") or {}
+        print(f"verification: {verification.get('status')} blockers={(verification.get('summary') or {}).get('blocker_count')}")
+    if "restore_plan" in result:
+        plan = result.get("restore_plan") or {}
+        print(f"restore plan: {plan.get('status')} actions={len(plan.get('actions') or [])}")
+    if "preflight" in result:
+        preflight = result.get("preflight") or {}
+        print(f"preflight: {preflight.get('preflight_id')} {preflight.get('status')}")
+    if "migration" in result:
+        migration = result.get("migration") or {}
+        print(f"migration: {migration.get('status')} applied={len(migration.get('applied') or [])}")
+    if "report" in result:
+        report = result.get("report") or {}
+        print(f"report: {report.get('check_id')} {report.get('profile')} {report.get('status')}")
+
+
 def _main() -> None:
     raw_args = sys.argv[1:]
     if raw_args and raw_args[0] == "serve":
@@ -2361,6 +2509,39 @@ def _main() -> None:
         if report.get("status") == "failed":
             raise SystemExit(1)
         return
+    elif raw_args and raw_args[0] == "maintenance":
+        parser = build_maintenance_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_maintenance_command(args)
+        _print_maintenance_result(result, json_output=bool(getattr(args, "json", False)))
+        status = str(result.get("status") or result.get("report", {}).get("status") or result.get("verification", {}).get("status") or "")
+        if status in {"blocked", "failed"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "verify-maintenance-backup":
+        from song_agent.lts_backup_verifier import (
+            maintenance_backup_verification_exit_code,
+            print_maintenance_backup_verification_report,
+            verify_maintenance_backup_zip,
+            write_maintenance_backup_verification_report,
+        )
+
+        parser = build_verify_maintenance_backup_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_maintenance_backup_zip(
+            args.zip_path,
+            strict=args.strict,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_maintenance_backup_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_maintenance_backup_verification_report(report)
+        raise SystemExit(maintenance_backup_verification_exit_code(report))
     elif raw_args and raw_args[0] == "release-check":
         from song_agent.release_check_matrix import release_check_definitions_as_dicts, select_check_definitions
         from song_agent.release_check_runner import print_release_check_report, run_release_check_matrix, write_json_report, write_timing_report

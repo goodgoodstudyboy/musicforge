@@ -677,6 +677,31 @@ def panel_html() -> str:
           <pre id="ga-check-result">No GA check has been run in this session.</pre>
         </div>
       </section>
+      <section id="maintenance-panel">
+        <div class="panel-title">
+          <span>Maintenance</span>
+          <span id="maintenance-status" class="status">unknown</span>
+        </div>
+        <div class="panel-body">
+          <div id="maintenance-summary" class="summary-grid">
+            <div class="metric"><span>LTS</span>unknown</div>
+            <div class="metric"><span>Backup</span>unknown</div>
+            <div class="metric"><span>Migration</span>unknown</div>
+            <div class="metric"><span>Check</span>unknown</div>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="maintenance-refresh" type="button">Refresh Status</button>
+            <button class="secondary" id="maintenance-create-backup" type="button">Create Backup</button>
+            <button class="secondary" id="maintenance-run-preflight" type="button">Run Preflight</button>
+            <button class="secondary" id="maintenance-run-weekly" type="button">Run Weekly</button>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="maintenance-run-migration" type="button">Run Migration</button>
+            <button class="secondary" id="maintenance-backup-list" type="button">List Backups</button>
+          </div>
+          <pre id="maintenance-result">No maintenance check has been run in this session.</pre>
+        </div>
+      </section>
       <section>
         <div class="panel-title">
           <span>Provider Settings</span>
@@ -1530,6 +1555,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       fillForm(template.defaults);
       await loadProvider();
       await loadGaHealth();
+      await loadMaintenanceStatus();
       await loadPromptTemplates();
       await loadEditorTemplates();
       await loadRenderer();
@@ -1598,6 +1624,38 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         status,
         summary,
         next_actions: actions.slice(0, 8),
+      }, null, 2);
+    }
+
+    async function loadMaintenanceStatus() {
+      try {
+        const data = await api("/api/maintenance/status");
+        renderMaintenanceStatus(data.status || {});
+      } catch (err) {
+        $("maintenance-status").textContent = "failed";
+        $("maintenance-status").className = "status failed";
+        $("maintenance-result").textContent = err.message;
+      }
+    }
+
+    function renderMaintenanceStatus(statusDoc) {
+      const status = statusDoc.status || "unknown";
+      $("maintenance-status").textContent = status;
+      $("maintenance-status").className = `status ${status === "ready" ? "completed" : status === "blocked" ? "failed" : "running"}`;
+      const backups = statusDoc.backups || {};
+      const migration = statusDoc.migration || {};
+      const checks = statusDoc.checks || {};
+      $("maintenance-summary").innerHTML = `
+        ${metric("LTS", status)}
+        ${metric("Backup", (backups.latest || {}).verification_status || (backups.latest || {}).status || "missing")}
+        ${metric("Migration", migration.status || "unknown")}
+        ${metric("Check", (checks.latest || {}).status || "missing")}
+      `;
+      $("maintenance-result").textContent = JSON.stringify({
+        status,
+        version: statusDoc.version,
+        warnings: (statusDoc.warnings || []).slice(0, 8),
+        blockers: (statusDoc.blockers || []).slice(0, 8),
       }, null, 2);
     }
 
@@ -11942,6 +12000,55 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     bindAction("ga-docs-index", async () => {
       const data = await api("/api/docs/index");
       $("ga-check-result").textContent = JSON.stringify(data, null, 2);
+    });
+
+    bindAction("maintenance-refresh", async () => {
+      await loadMaintenanceStatus();
+    });
+
+    bindAction("maintenance-create-backup", async () => {
+      const data = await api("/api/maintenance/backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "workspace" }),
+      });
+      $("maintenance-result").textContent = JSON.stringify(data, null, 2);
+      await loadMaintenanceStatus();
+    });
+
+    bindAction("maintenance-backup-list", async () => {
+      const data = await api("/api/maintenance/backups");
+      $("maintenance-result").textContent = JSON.stringify(data, null, 2);
+    });
+
+    bindAction("maintenance-run-preflight", async () => {
+      const data = await api("/api/maintenance/upgrade/preflight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_version: "10.1.0", require_verified_backup: true, allow_dirty: true }),
+      });
+      $("maintenance-result").textContent = JSON.stringify(data, null, 2);
+      await loadMaintenanceStatus();
+    });
+
+    bindAction("maintenance-run-weekly", async () => {
+      const data = await api("/api/maintenance/checks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: "weekly" }),
+      });
+      $("maintenance-result").textContent = JSON.stringify(data, null, 2);
+      await loadMaintenanceStatus();
+    });
+
+    bindAction("maintenance-run-migration", async () => {
+      const data = await api("/api/maintenance/migrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ require_backup: false }),
+      });
+      $("maintenance-result").textContent = JSON.stringify(data, null, 2);
+      await loadMaintenanceStatus();
     });
 
     function escapeHtml(value) {

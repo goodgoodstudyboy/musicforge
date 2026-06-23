@@ -75,6 +75,7 @@ from song_agent.release_checks import (
     _v98_trust_operations_assurance_watch_signoff_smoke,
     _v99_trust_operations_final_readiness_smoke,
     _v100_ga_lts_readiness_smoke,
+    _v101_lts_maintenance_backup_restore_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1074,6 +1075,21 @@ def test_v100_ga_lts_readiness_smoke(tmp_path: Path) -> None:
     assert "manual_required=blocked/True" in detail
     assert "final_required=blocked/True" in detail
     assert "redaction=blocked/True/True" in detail
+
+
+def test_v101_lts_maintenance_backup_restore_smoke(tmp_path: Path) -> None:
+    ok, detail = _v101_lts_maintenance_backup_restore_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "backup=passed" in detail
+    assert "tamper=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "backslash=failed" in detail
+    assert "traversal=failed" in detail
+    assert "redaction=failed" in detail
+    assert "provider_excluded=True" in detail
+    assert "restore_plan=ready" in detail
+    assert "migration=applied/noop" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

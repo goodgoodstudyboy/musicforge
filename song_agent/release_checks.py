@@ -15441,6 +15441,132 @@ def _v100_ga_lts_readiness_smoke(root: Path) -> tuple[bool, str]:
         return False, f"v10.0 GA smoke failed: {exc}"
 
 
+def _v101_lts_maintenance_backup_restore_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.lts_backup import LTSBackupStore
+    from song_agent.lts_backup_verifier import verify_maintenance_backup_zip
+    from song_agent.lts_maintenance import LTSMaintenanceStore, maintenance_report_integrity_ok
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v101-lts-maintenance-") as temp:
+            base = Path(temp)
+            repo = base / "repo"
+            repo.mkdir()
+            (repo / ".musicforge" / "projects" / "project-001").mkdir(parents=True)
+            (repo / ".musicforge" / "projects" / "project-001" / "project.json").write_text('{"project_id":"project-001"}\n', encoding="utf-8")
+            (repo / ".musicforge" / "provider.json").write_text('{"api_key":"sk-test-should-not-ship"}\n', encoding="utf-8")
+            (repo / ".musicforge" / "renderer.json").write_text('{"soundfont_path":"C:\\\\Users\\\\bad\\\\soundfont.sf2"}\n', encoding="utf-8")
+            (repo / ".gitignore").write_text(".musicforge/\n", encoding="utf-8")
+            subprocess.run(["git", "init"], cwd=repo, capture_output=True, text=True, timeout=20)
+            subprocess.run(["git", "config", "user.email", "release-check@example.com"], cwd=repo, capture_output=True, text=True, timeout=20)
+            subprocess.run(["git", "config", "user.name", "Release Check"], cwd=repo, capture_output=True, text=True, timeout=20)
+            (repo / "README.md").write_text("# MusicForge\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md", ".gitignore"], cwd=repo, capture_output=True, text=True, timeout=20)
+            subprocess.run(["git", "commit", "-m", "fixture"], cwd=repo, capture_output=True, text=True, timeout=20)
+
+            maintenance = LTSMaintenanceStore(repo)
+            status = maintenance.status()
+            backup = maintenance.backups.create_backup(mode="workspace")
+            backup_id = str(backup["backup"]["backup_id"])
+            verify = maintenance.backups.verify_backup(backup_id)
+            zip_path = maintenance.backups.backup_zip_path(backup_id)
+            restore_plan = maintenance.backups.restore_plan(backup_id=backup_id, target=base / "restore")
+            dry_restore = maintenance.backups.restore(backup_id=backup_id, target=base / "restore", confirm=False)
+            preflight = maintenance.run_upgrade_preflight(target_version=__version__, require_verified_backup=True)
+            migration_first = maintenance.run_migrations()
+            migration_second = maintenance.run_migrations()
+            daily = maintenance.run_check(profile="daily")
+            weekly = maintenance.run_check(profile="weekly")
+
+            tampered_zip = _v101_rewrite_zip(zip_path, base / "tampered.zip", _v101_tamper_backup_file)
+            duplicate_zip = _v101_duplicate_entry_zip(zip_path, base / "duplicate.zip")
+            backslash_zip = _v101_add_backslash_entry(zip_path, base / "backslash.zip")
+            traversal_zip = _v101_add_raw_entry(zip_path, base / "traversal.zip", "../outside.txt", b"evil")
+            token_zip = _v101_add_raw_entry(zip_path, base / "token.zip", "data/musicforge/projects/token.txt", b"api_key=sk-release-check-secret-token")
+            tampered = verify_maintenance_backup_zip(tampered_zip, strict=True)
+            duplicate = verify_maintenance_backup_zip(duplicate_zip, strict=True)
+            backslash = verify_maintenance_backup_zip(backslash_zip, strict=True)
+            traversal = verify_maintenance_backup_zip(traversal_zip, strict=True)
+            token = verify_maintenance_backup_zip(token_zip, strict=True)
+
+            with zipfile.ZipFile(zip_path) as archive:
+                names = set(archive.namelist())
+            provider_excluded = "data/musicforge/provider.json" not in names and "data/musicforge/renderer.json" not in names
+            dry_no_write = not (base / "restore" / ".musicforge").exists()
+            ok = (
+                status.get("package_type") == "musicforge_lts_maintenance_status"
+                and backup.get("verification", {}).get("status") == "passed"
+                and verify.get("status") == "passed"
+                and _v38_check_status(tampered, "lts_backup_file_hashes_match") == "failed"
+                and _v38_check_status(duplicate, "lts_backup_zip_no_duplicate_entries") == "failed"
+                and _v38_check_status(backslash, "lts_backup_zip_no_backslash_entries") == "failed"
+                and _v38_check_status(traversal, "lts_backup_zip_path_safe") == "failed"
+                and _v38_check_status(token, "lts_backup_redaction_scan") == "failed"
+                and provider_excluded
+                and restore_plan.get("status") == "ready"
+                and dry_restore.get("status") == "planned"
+                and dry_no_write
+                and preflight.get("status") in {"ready", "warning"}
+                and migration_first.get("status") == "applied"
+                and migration_second.get("status") == "noop"
+                and daily.get("status") in {"passed", "warning"}
+                and weekly.get("status") in {"passed", "warning"}
+                and maintenance_report_integrity_ok(daily)
+            )
+            return ok, (
+                f"status={status.get('status')}, backup={backup.get('verification', {}).get('status')}, verify={verify.get('status')}, "
+                f"tamper={_v38_check_status(tampered, 'lts_backup_file_hashes_match')}, duplicate={_v38_check_status(duplicate, 'lts_backup_zip_no_duplicate_entries')}, "
+                f"backslash={_v38_check_status(backslash, 'lts_backup_zip_no_backslash_entries')}, traversal={_v38_check_status(traversal, 'lts_backup_zip_path_safe')}, "
+                f"redaction={_v38_check_status(token, 'lts_backup_redaction_scan')}, provider_excluded={provider_excluded}, "
+                f"restore_plan={restore_plan.get('status')}, dry_restore={dry_restore.get('status')}/{dry_no_write}, preflight={preflight.get('status')}, "
+                f"migration={migration_first.get('status')}/{migration_second.get('status')}, daily={daily.get('status')}, weekly={weekly.get('status')}"
+            )
+    except Exception as exc:
+        return False, f"v10.1 LTS maintenance smoke failed: {exc}"
+
+
+def _v101_rewrite_zip(source_zip: Path, target_zip: Path, mutate) -> Path:
+    docs: dict[str, bytes] = {}
+    with zipfile.ZipFile(source_zip) as archive:
+        for name in archive.namelist():
+            docs[name] = archive.read(name)
+    mutate(docs)
+    with zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, data in docs.items():
+            archive.writestr(name, data)
+    return target_zip
+
+
+def _v101_tamper_backup_file(docs: dict[str, bytes]) -> None:
+    for name in list(docs):
+        if name.startswith("data/musicforge/") and name.endswith(".json"):
+            docs[name] = docs[name] + b"\n"
+            return
+
+
+def _v101_duplicate_entry_zip(source_zip: Path, target_zip: Path) -> Path:
+    with zipfile.ZipFile(source_zip) as source, zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as target:
+        for name in source.namelist():
+            data = source.read(name)
+            target.writestr(name, data)
+            if name == "manifest.json":
+                target.writestr(name, data)
+    return target_zip
+
+
+def _v101_add_raw_entry(source_zip: Path, target_zip: Path, entry_name: str, data: bytes) -> Path:
+    with zipfile.ZipFile(source_zip) as source, zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as target:
+        for name in source.namelist():
+            target.writestr(name, source.read(name))
+        target.writestr(entry_name, data)
+    return target_zip
+
+
+def _v101_add_backslash_entry(source_zip: Path, target_zip: Path) -> Path:
+    _v101_add_raw_entry(source_zip, target_zip, "data/evil.txt", b"evil")
+    target_zip.write_bytes(target_zip.read_bytes().replace(b"data/evil.txt", b"data\\evil.txt"))
+    return target_zip
+
+
 def _ga_check_status(report: dict[str, Any], check_id: str) -> str:
     for check in report.get("checks") or []:
         if isinstance(check, dict) and check.get("check_id") == check_id:

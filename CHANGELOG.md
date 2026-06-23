@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.1.0 - 2026-06-24
+
+### Added
+- LTS Maintenance Center with CLI/API/Studio status, backup list, upgrade preflight, migration, and periodic maintenance checks.
+- Maintenance Backup ZIP creation and offline verifier with fixed sidecars, `data/musicforge/` payloads, manifest/hash checks, raw ZIP path checks, duplicate detection, forbidden local config checks, and redaction scan.
+- Safe restore planning and confirm-only restore flow that refuses unsafe paths and treats provider/renderer local config as manual reconfiguration.
+- `maintenance check` profiles for daily, weekly, release, and emergency operations plus release-check `v101.lts_maintenance_backup_restore_smoke`.
+- Backup/restore and upgrade runbooks for GA/LTS handoff.
+
+### Verified
+- `python -m pytest tests\test_lts_maintenance.py tests\test_lts_backup_verifier.py tests\test_cli_lts_maintenance.py tests\test_server_lts_maintenance.py tests\test_release_check_matrix.py tests\test_release_check.py::test_v101_lts_maintenance_backup_restore_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+
 ## v10.0.1 - 2026-06-24
 
 ### Fixed

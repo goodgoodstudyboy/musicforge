@@ -51,6 +51,11 @@ The System Health panel shows GA readiness, doctor status, manual acceptance
 status, and final readiness status. It can run `ga-check` through `/api/ga/check`
 and show the required GA documentation index.
 
+The Maintenance panel shows LTS status, backups, migration state, and periodic
+maintenance checks. It can create a verified local workspace backup, run upgrade
+preflight, run migrations, and launch weekly maintenance checks through
+`/api/maintenance/*`.
+
 ## Generate / Edit / Review / Release
 
 MusicForge covers the full local workflow: generate Project versions, edit and
@@ -71,12 +76,30 @@ python -m song_agent.cli ga-check --json
 `--auto-review` is synthetic smoke evidence only. Manual music acceptance means
 a person played the MIDI or WAV and recorded a manual review.
 
+## LTS Maintenance
+
+Create and verify local backups before upgrades or machine migration:
+
+```powershell
+python -m song_agent.cli maintenance status --json
+python -m song_agent.cli maintenance backup create --mode workspace --json
+python -m song_agent.cli maintenance backup verify --backup-id mb-000001 --json
+python -m song_agent.cli verify-maintenance-backup .musicforge\maintenance\backups\mb-000001\musicforge-maintenance-backup.zip --json
+python -m song_agent.cli maintenance backup restore-plan --backup-id mb-000001 --target C:\tmp\musicforge-restore --json
+python -m song_agent.cli maintenance upgrade preflight --target-version 10.1.0 --require-verified-backup --json
+```
+
+Maintenance backups exclude provider and renderer local config. Recreate those
+settings manually after restoring onto a new machine.
+
 ## Documentation Index
 
 - `docs/GETTING_STARTED.md`
 - `docs/LOCAL_ACCEPTANCE_RUNBOOK.md`
 - `docs/MUSIC_REVIEW_GUIDE.md`
 - `docs/RELEASE_RUNBOOK.md`
+- `docs/BACKUP_RESTORE_RUNBOOK.md`
+- `docs/UPGRADE_RUNBOOK.md`
 - `docs/TROUBLESHOOTING.md`
 - `docs/MAINTENANCE_POLICY.md`
 - `docs/SECURITY_AND_SECRETS.md`

@@ -29,3 +29,23 @@ python -m song_agent.cli ga-check --json
 python -m song_agent.cli release-check --profile ga --skip-tests --json
 ```
 
+## LTS Maintenance Center
+
+Use the Maintenance Center for local backup, upgrade, migration, and periodic
+review:
+
+```powershell
+python -m song_agent.cli maintenance status --json
+python -m song_agent.cli maintenance check run --profile daily --json
+python -m song_agent.cli maintenance check run --profile weekly --json
+```
+
+Profiles:
+
+- `daily`: status, Git, ignored config, and backup freshness.
+- `weekly`: daily checks plus a verified workspace backup.
+- `release`: weekly checks plus upgrade preflight with a verified backup.
+- `emergency`: doctor-grade smoke for hotfix triage.
+
+Never commit `.musicforge/provider.json`, `.musicforge/renderer.json`, generated
+maintenance backups, or restore targets.

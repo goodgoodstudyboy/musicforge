@@ -824,6 +824,13 @@ def test_webui_contains_release_workspace_controls():
     html = panel_html()
 
     assert "System Health" in html
+    assert "Maintenance" in html
+    assert 'id="maintenance-create-backup"' in html
+    assert 'id="maintenance-run-preflight"' in html
+    assert 'id="maintenance-run-weekly"' in html
+    assert "/api/maintenance/status" in html
+    assert "/api/maintenance/backups" in html
+    assert "/api/maintenance/upgrade/preflight" in html
     assert 'id="ga-check-run"' in html
     assert 'id="ga-docs-index"' in html
     assert "/api/ga/check" in html

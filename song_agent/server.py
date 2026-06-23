@@ -3155,6 +3155,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if path == "/api/docs/index":
                 self._handle_docs_index_route(method)
                 return
+            if path == "/api/maintenance/status" or path.startswith("/api/maintenance/"):
+                self._handle_maintenance_route(method, path)
+                return
             if path == "/api/provider":
                 self._handle_provider_route(method)
                 return
@@ -3643,6 +3646,94 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 }
             )
         self._send_json({"ok": True, "docs": docs, "summary": {"required_count": len(REQUIRED_DOCS), "present_count": sum(1 for item in docs if item["exists"])}})
+
+    def _handle_maintenance_route(self, method: str, path: str) -> None:
+        from song_agent.lts_maintenance import LTSMaintenanceStore
+
+        store = LTSMaintenanceStore(repo_root=Path.cwd())
+        if path == "/api/maintenance/status":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            status = store.status()
+            self._send_json({"ok": status.get("status") != "blocked", "status": status, "summary": {"status": status.get("status"), "backup_count": status.get("backups", {}).get("count")}})
+            return
+        if path == "/api/maintenance/backups":
+            if method == "GET":
+                backups = store.backups.list_backups()
+                self._send_json({"ok": True, "backups": backups, "summary": {"count": len(backups)}})
+                return
+            if method == "POST":
+                payload = self._optional_json_body()
+                result = store.backups.create_backup(mode=str(payload.get("mode") or "workspace"))
+                self._send_json({"ok": result.get("verification", {}).get("status") == "passed", **result}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        parts = [part for part in path.split("/") if part]
+        if len(parts) >= 3 and parts[0] == "api" and parts[1] == "maintenance" and parts[2] == "backups":
+            if len(parts) < 4:
+                self._send_error(HTTPStatus.NOT_FOUND, "Backup id required.")
+                return
+            backup_id = parts[3]
+            tail = "/".join(parts[4:])
+            if not tail and method == "GET":
+                self._send_json({"ok": True, **store.backups.read_backup(backup_id)})
+                return
+            if tail == "verify" and method == "POST":
+                report = store.backups.verify_backup(backup_id)
+                self._send_json({"ok": report.get("status") == "passed", "backup_id": backup_id, "verification": report, "summary": report.get("summary", {})})
+                return
+            if tail == "download" and method == "GET":
+                self._send_file(store.backups.backup_zip_path(backup_id), "application/zip")
+                return
+            if tail == "restore-plan" and method == "POST":
+                payload = self._read_json_body()
+                plan = store.backups.restore_plan(backup_id=backup_id, target=Path(str(payload.get("target") or "")))
+                self._send_json({"ok": plan.get("status") == "ready", "restore_plan": plan})
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        if path == "/api/maintenance/upgrade/preflight":
+            if method != "POST":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            payload = self._optional_json_body()
+            report = store.run_upgrade_preflight(
+                target_version=str(payload.get("target_version") or "10.1.0"),
+                require_verified_backup=bool(payload.get("require_verified_backup", False)),
+                allow_dirty=bool(payload.get("allow_dirty", False)),
+            )
+            self._send_json({"ok": report.get("status") != "blocked", "preflight": report, "summary": report.get("summary", {})}, status=HTTPStatus.CREATED)
+            return
+        if path == "/api/maintenance/migrations":
+            if method == "GET":
+                self._send_json({"ok": True, "migration": store.migration_status(), "plan": store.migration_plan()})
+                return
+            if method == "POST":
+                payload = self._optional_json_body()
+                result = store.run_migrations(require_backup=bool(payload.get("require_backup", False)))
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        if path == "/api/maintenance/checks":
+            if method == "GET":
+                runs = store.list_check_runs()
+                self._send_json({"ok": True, "runs": runs, "profiles": ["daily", "emergency", "release", "weekly"], "summary": {"count": len(runs)}})
+                return
+            if method == "POST":
+                payload = self._optional_json_body()
+                report = store.run_check(profile=str(payload.get("profile") or "daily"))
+                self._send_json({"ok": report.get("status") == "passed", "report": report, "summary": {"status": report.get("status")}}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        if len(parts) == 4 and parts[:3] == ["api", "maintenance", "checks"] and method == "GET":
+            report = read_json(store.check_runs_dir / parts[3] / "maintenance-check-report.json")
+            self._send_json({"ok": True, "report": report})
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Maintenance route not found.")
 
     def _handle_provider_route(self, method: str) -> None:
         if method == "GET":

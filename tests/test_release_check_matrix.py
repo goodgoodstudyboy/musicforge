@@ -26,6 +26,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in definitions}
     assert "v80.public_trust_center_smoke" in {definition.check_id for definition in definitions}
     assert "v81.public_trust_center_delivery_smoke" in {definition.check_id for definition in definitions}
+    assert "v101.lts_maintenance_backup_restore_smoke" in {definition.check_id for definition in definitions}
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
 
@@ -33,6 +34,7 @@ def test_release_check_profile_and_filters() -> None:
     latest = select_check_definitions(profile="latest")
     v7 = select_check_definitions(profile="v7")
     v8 = select_check_definitions(profile="v8")
+    v10 = select_check_definitions(profile="v10")
     ga = select_check_definitions(profile="ga", run_tests=False)
     portal = select_check_definitions(profile="latest", groups=["portal"])
     since = select_check_definitions(profile="v7", since="7.2")
@@ -65,6 +67,11 @@ def test_release_check_profile_and_filters() -> None:
     assert "v75.release_check_matrix_smoke" in {definition.check_id for definition in ga}
     assert "v99.trust_operations_final_readiness_smoke" in {definition.check_id for definition in ga}
     assert "v100.ga_lts_readiness_smoke" in {definition.check_id for definition in ga}
+    assert "v101.lts_maintenance_backup_restore_smoke" in {definition.check_id for definition in ga}
+    assert [definition.check_id for definition in v10] == [
+        "v100.ga_lts_readiness_smoke",
+        "v101.lts_maintenance_backup_restore_smoke",
+    ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
         "v76.attestation_portal_review_response_smoke",

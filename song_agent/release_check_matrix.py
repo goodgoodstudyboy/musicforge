@@ -202,6 +202,7 @@ BASE_PROFILES = ("full", "quick", "latest", "ga")
 LATEST_PROFILES = ("full", "quick", "latest")
 V7_PROFILES = ("full", "v7")
 GA_PROFILES = ("full", "quick", "latest", "ga")
+V10_PROFILES = ("full", "quick", "latest", "ga", "v10")
 
 CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000),
@@ -308,7 +309,8 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v97.trust_operations_assurance_watch_smoke", "v9.7 trust operations assurance watch smoke", "_v97_trust_operations_assurance_watch_smoke", group="trust", version="9.7", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "assurance", "watch"), profiles=("full", "quick", "latest", "v9"), expected_warnings=("Duplicate name:",)),
     _callable("v98.trust_operations_assurance_watch_signoff_smoke", "v9.8 trust operations assurance watch signoff smoke", "_v98_trust_operations_assurance_watch_signoff_smoke", group="trust", version="9.8", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "assurance", "watch", "signoff"), profiles=("full", "quick", "latest", "v9"), expected_warnings=("Duplicate name:",)),
     _callable("v99.trust_operations_final_readiness_smoke", "v9.9 trust operations final readiness handoff smoke", "_v99_trust_operations_final_readiness_smoke", group="trust", version="9.9", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "final-readiness", "handoff"), profiles=("full", "quick", "latest", "v9", "ga"), expected_warnings=("Duplicate name:",)),
-    _callable("v100.ga_lts_readiness_smoke", "v10.0 GA/LTS readiness smoke", "_v100_ga_lts_readiness_smoke", group="ga", version="10.0", risk="critical", timeout_seconds=300, tags=("v10", "ga", "lts", "readiness"), profiles=GA_PROFILES),
+    _callable("v100.ga_lts_readiness_smoke", "v10.0 GA/LTS readiness smoke", "_v100_ga_lts_readiness_smoke", group="ga", version="10.0", risk="critical", timeout_seconds=300, tags=("v10", "ga", "lts", "readiness"), profiles=V10_PROFILES),
+    _callable("v101.lts_maintenance_backup_restore_smoke", "v10.1 LTS maintenance backup and restore smoke", "_v101_lts_maintenance_backup_restore_smoke", group="maintenance", version="10.1", risk="critical", timeout_seconds=300, tags=("v10", "ga", "lts", "maintenance"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
 )
 
-KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "ga", "publish"}
+KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "ga", "publish"}
