@@ -23,6 +23,16 @@ git diff --check
 git status --short --branch
 ```
 
+When using GA verifier as release evidence, pass the external evidence explicitly:
+
+```powershell
+python -m song_agent.cli verify-ga-readiness-report runs\ga-readiness\ga-readiness-report.json --strict --require-ready --require-manual-acceptance --manual-acceptance-report .musicforge\acceptance\<suite-id>\music-acceptance-report.json --require-final-readiness --final-handoff-package path\to\trust-operations-final-handoff.zip --final-handoff-verification-report path\to\final-handoff-verification-report.json --json
+```
+
+The manual acceptance report must be the current AcceptanceStore report so the
+verifier can recompute its source/content binding. A copied JSON report is not
+enough for GA evidence.
+
 Use full `pytest -q` when time allows. If full tests exceed the local time
 budget, record the targeted tests and release-check profiles that were run.
 
@@ -30,10 +40,10 @@ budget, record the targeted tests and release-check profiles that were run.
 
 ```powershell
 git add .
-git commit -m "Release v10.0.0 GA readiness"
+git commit -m "Release vX.Y.Z"
 git push origin master
-git tag -a v10.0.0 -m "v10.0.0"
-git push origin v10.0.0
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
 ```
 
 If DNS resolves GitHub to an unreachable front-end, use a one-time Git

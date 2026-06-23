@@ -15353,7 +15353,7 @@ def _v96_blocked(fn) -> bool:
 
 
 def _v100_ga_lts_readiness_smoke(root: Path) -> tuple[bool, str]:
-    from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, ga_readiness_integrity_ok
+    from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, ga_readiness_integrity_hash, ga_readiness_integrity_ok
     from song_agent.ga_readiness_verifier import verify_ga_readiness_report
     from song_agent.projectio import write_json
 
@@ -15388,6 +15388,34 @@ def _v100_ga_lts_readiness_smoke(root: Path) -> tuple[bool, str]:
             write_json(report_path, report)
             verification = verify_ga_readiness_report(report_path)
             strict_verification = verify_ga_readiness_report(report_path, strict=True)
+            forged = dict(report)
+            forged["status"] = "ready"
+            forged["summary"] = dict(forged.get("summary") or {})
+            forged["summary"]["acceptance_status"] = "passed"
+            forged["summary"]["trust_final_readiness_status"] = "passed"
+            forged_checks = []
+            for check in forged.get("checks") or []:
+                row = dict(check)
+                if row.get("check_id") == "ga.acceptance_manual":
+                    row["status"] = "passed"
+                    row["severity"] = "info"
+                    row["detail"] = {"status": "passed", "manual_ready_count": 1, "latest": {"suite_id": "suite-forged", "status": "passed", "manual_accepted_count": 1}}
+                if row.get("check_id") == "ga.trust_final_readiness":
+                    row["status"] = "passed"
+                    row["severity"] = "info"
+                    row["detail"] = {"status": "passed", "package_type": "musicforge_trust_operations_final_handoff_verification", "zip_sha256": "forged", "manifest_hash": "forged"}
+                forged_checks.append(row)
+            forged["checks"] = forged_checks
+            forged["integrity_hash"] = ga_readiness_integrity_hash(forged)
+            forged_path = base / "repo" / "runs" / "ga-readiness" / "forged-ga-readiness-report.json"
+            write_json(forged_path, forged)
+            forged_required = verify_ga_readiness_report(
+                forged_path,
+                strict=True,
+                require_ready=True,
+                require_manual_acceptance=True,
+                require_final_readiness=True,
+            )
 
             report_ok = report.get("package_type") == "musicforge_ga_readiness_report" and ga_readiness_integrity_ok(report)
             verify_ok = verification.get("status") == "warning" and strict_verification.get("status") == "failed"
@@ -15395,12 +15423,18 @@ def _v100_ga_lts_readiness_smoke(root: Path) -> tuple[bool, str]:
             manual_failed = _ga_check_status(manual_required, "ga.acceptance_manual") == "failed"
             final_failed = _ga_check_status(final_required, "ga.trust_final_readiness") == "failed"
             redaction_failed = _ga_check_status(redaction, "ga.secret_scan") == "failed"
+            forged_blocked = (
+                forged_required.get("status") == "failed"
+                and _ga_check_status(forged_required, "ga_readiness_manual_acceptance_report_required") == "failed"
+                and _ga_check_status(forged_required, "ga_readiness_final_handoff_package_required") == "failed"
+            )
             no_secret_echo = "githubkey.txt" not in json.dumps(redaction, ensure_ascii=False).lower()
-            ok = report_ok and verify_ok and docs_failed and manual_failed and final_failed and redaction_failed and no_secret_echo
+            ok = report_ok and verify_ok and docs_failed and manual_failed and final_failed and redaction_failed and forged_blocked and no_secret_echo
             return ok, (
                 f"report={report.get('status')}/{report_ok}, verify={verification.get('status')}/{strict_verification.get('status')}, "
                 f"docs_missing={missing_docs.get('status')}/{docs_failed}, "
                 f"manual_required={manual_required.get('status')}/{manual_failed}, final_required={final_required.get('status')}/{final_failed}, "
+                f"forged_required={forged_required.get('status')}/{forged_blocked}, "
                 f"redaction={redaction.get('status')}/{redaction_failed}/{no_secret_echo}"
             )
     except Exception as exc:

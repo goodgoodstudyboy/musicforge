@@ -103,8 +103,11 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
     parser.add_argument("--strict", action="store_true", help="Require GA status ready, not warning.")
     parser.add_argument("--require-ready", action="store_true", help="Require GA readiness status ready.")
-    parser.add_argument("--require-manual-acceptance", action="store_true", help="Require manual acceptance readiness.")
-    parser.add_argument("--require-final-readiness", action="store_true", help="Require final readiness evidence.")
+    parser.add_argument("--require-manual-acceptance", action="store_true", help="Require external manual acceptance evidence.")
+    parser.add_argument("--manual-acceptance-report", type=Path, default=None, help="External music acceptance report JSON to bind manual readiness.")
+    parser.add_argument("--require-final-readiness", action="store_true", help="Require external final readiness evidence.")
+    parser.add_argument("--final-handoff-package", type=Path, default=None, help="External Trust Operations Final Handoff ZIP.")
+    parser.add_argument("--final-handoff-verification-report", type=Path, default=None, help="External Trust Operations Final Handoff verification report JSON.")
     return parser
 
 
@@ -2342,6 +2345,9 @@ def _main() -> None:
             require_ready=args.require_ready,
             require_manual_acceptance=args.require_manual_acceptance,
             require_final_readiness=args.require_final_readiness,
+            manual_acceptance_report_path=args.manual_acceptance_report,
+            final_handoff_package_path=args.final_handoff_package,
+            final_handoff_verification_report_path=args.final_handoff_verification_report,
         )
         if args.report_out is not None:
             write_ga_readiness_verification_report(report, args.report_out)

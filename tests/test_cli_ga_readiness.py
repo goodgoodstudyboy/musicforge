@@ -84,3 +84,30 @@ def test_verify_ga_readiness_report_cli_json(tmp_path: Path) -> None:
     saved = json.loads(verify_out.read_text(encoding="utf-8"))
     assert report["package_type"] == "musicforge_ga_readiness_verification_report"
     assert saved["integrity_hash"] == report["integrity_hash"]
+
+
+def test_verify_ga_readiness_report_cli_requires_external_manual_report(tmp_path: Path) -> None:
+    _write_repo(tmp_path)
+    out = tmp_path / "ga-report.json"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1]) + os.pathsep + os.environ.get("PYTHONPATH", "")}
+    subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "ga-check", "--json", "--report-out", str(out)],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        env=env,
+        check=True,
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "verify-ga-readiness-report", str(out), "--require-manual-acceptance", "--json"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    statuses = {check["check_id"]: check["status"] for check in report["checks"]}
+    assert statuses["ga_readiness_manual_acceptance_report_required"] == "failed"

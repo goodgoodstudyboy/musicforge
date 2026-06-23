@@ -1,5 +1,15 @@
 # Changelog
 
+## v10.0.1 - 2026-06-24
+
+### Fixed
+- `verify-ga-readiness-report --require-manual-acceptance` now requires an external Music Acceptance report and verifies manual human review evidence instead of trusting the GA report check row.
+- `verify-ga-readiness-report --require-final-readiness` now requires the external Final Handoff ZIP plus its verification report and binds ZIP sha256, size, manifest hash, status, and GA summary fields.
+- release-check `v100.ga_lts_readiness_smoke` now covers full-resigned GA readiness reports that forge manual and final readiness rows.
+
+### Verified
+- `python -m pytest tests\test_ga_readiness.py tests\test_cli_ga_readiness.py tests\test_release_check.py::test_v100_ga_lts_readiness_smoke -q`
+
 ## v10.0.0 - 2026-06-23
 
 ### Added
