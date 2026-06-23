@@ -3831,6 +3831,18 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
           <button class="secondary" id="trust-operations-assurance-watch-signoff-verify" type="button">Verify Watch Signoff ZIP</button>
           <a class="button-link secondary" href="/api/trust-operations/assurance-watch/signoffs/toawq-000001/download">Download Watch Signoff ZIP</a>
         </div>
+        <div class="panel-title subhead"><span>Final Readiness Handoff</span></div>
+        <div class="actions">
+          <button class="secondary" id="trust-operations-final-readiness-refresh" type="button">Refresh Final Readiness</button>
+          <button class="secondary" id="trust-operations-final-readiness-certificate" type="button">Create Certificate</button>
+          <button class="secondary" id="trust-operations-final-readiness-sign" type="button">Sign Final Handoff</button>
+          <button class="secondary" id="trust-operations-final-readiness-cr" type="button">Create Final Change Request</button>
+          <button class="secondary" id="trust-operations-final-readiness-reset" type="button">Reset Final Handoff</button>
+          <button class="secondary" id="trust-operations-final-readiness-export" type="button">Export Final Handoff</button>
+          <button class="secondary" id="trust-operations-final-readiness-zip" type="button">Build Final Handoff ZIP</button>
+          <button class="secondary" id="trust-operations-final-readiness-verify" type="button">Verify Final Handoff ZIP</button>
+          <a class="button-link secondary" href="/api/trust-operations/final-readiness/download">Download Final Handoff ZIP</a>
+        </div>
       `;
       wirePortfolioAuditActions(portfolio.portfolio_id);
       wirePortfolioGovernanceActions(portfolio.portfolio_id);

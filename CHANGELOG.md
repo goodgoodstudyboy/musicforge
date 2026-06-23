@@ -1,5 +1,16 @@
 # Changelog
 
+## v9.9.0 - 2026-06-23
+
+### Added
+- Trust Operations Final Readiness Certificate and Handoff Pack for final v9 readiness evidence across Hub, delivery, incidents, Knowledge, Controls, Continuous Assurance, Assurance Watch, and Watch Signoff.
+- Fixed-structure Final Handoff ZIP, offline verifier, signed handoff history, Change Request reset, immutable export/ZIP guards, and Hub `--require-final-readiness` gate.
+- API, CLI, Studio controls, and release-check `v99.trust_operations_final_readiness_smoke` covering current external evidence binding, full-resign signed-by tamper, ZIP allow-list, redaction, signed delete-bypass guard, reset, and Hub final gate.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_final_readiness.py tests\test_server_trust_operations_final_readiness.py tests\test_cli_trust_operations_final_readiness.py tests\test_release_check.py::test_v99_trust_operations_final_readiness_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.8.1 - 2026-06-23
 
 ### Fixed

@@ -73,6 +73,7 @@ from song_agent.release_checks import (
     _v96_trust_operations_continuous_assurance_smoke,
     _v97_trust_operations_assurance_watch_smoke,
     _v98_trust_operations_assurance_watch_signoff_smoke,
+    _v99_trust_operations_final_readiness_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1042,6 +1043,20 @@ def test_v98_trust_operations_assurance_watch_signoff_smoke(tmp_path: Path) -> N
     assert "archive_only=failed" in detail
     assert "old_watch=failed" in detail
     assert "signed_by=failed" in detail
+    assert "full_resign_signed_by=failed" in detail
+    assert "extra=failed" in detail
+    assert "redaction=failed" in detail
+    assert "reset=True/True/reset/True" in detail
+
+
+def test_v99_trust_operations_final_readiness_smoke(tmp_path: Path) -> None:
+    ok, detail = _v99_trust_operations_final_readiness_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "final=ready/signed" in detail
+    assert "verify=passed" in detail
+    assert "hub_gate=passed" in detail
+    assert "missing_gate=failed" in detail
     assert "full_resign_signed_by=failed" in detail
     assert "extra=failed" in detail
     assert "redaction=failed" in detail

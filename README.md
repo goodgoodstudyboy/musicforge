@@ -857,6 +857,12 @@ Trust Operations Assurance Watch Signoff turns a clear, verified Watch Queue
 into signed closeout evidence. Its archive is immutable after signing, reset
 requires an approved unused Change Request, and the Hub verifier can require the
 current signoff archive with `--require-assurance-watch-signoff`.
+Trust Operations Final Readiness Certificate turns the signed Hub, delivery,
+Incident, Knowledge, Control, Continuous Assurance, Assurance Watch, and Watch
+Signoff evidence into the final handoff certificate and fixed-structure Handoff
+Pack. The handoff is signed with hash-chained history, reset requires an
+approved unused Change Request, and the Hub verifier can require the current
+Final Handoff package with `--require-final-readiness`.
 
 ```powershell
 python -m song_agent.cli trust-operations-hub --hub-id hub-default --create --refresh --export --zip --verify --strict --require-ready --require-current --require-publication-monitoring-clean --publication-channel-state path\to\publication-channel-state.json --public-trust-center-verification path\to\public-trust-center-verification.json --publication-monitoring-verification path\to\monitoring-verification-report.json --json
@@ -868,6 +874,8 @@ python -m song_agent.cli trust-operations-hub-runbook --hub-id hub-default --rep
 python -m song_agent.cli verify-trust-operations-hub-runbook-package path\to\trust-operations-hub-runbook.zip --strict --require-completed --require-no-blocked --json
 python -m song_agent.cli trust-operations-assurance-watch-signoff --queue-id toawq-000001 --refresh-closeout --sign --signed-by reviewer --reason "Assurance Watch queue accepted." --export --zip --verify --strict --require-current --watch-package path\to\trust-operations-assurance-watch.zip --watch-verification-report path\to\watch-verification-report.json --hub-package path\to\trust-operations-hub.zip --hub-verification-report path\to\hub-verification-report.json --continuous-assurance-report path\to\assurance-verification-report.json --json
 python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-assurance-watch-signoff --assurance-watch-package path\to\trust-operations-assurance-watch.zip --assurance-watch-verification-report path\to\watch-verification-report.json --assurance-watch-signoff-archive path\to\trust-operations-assurance-watch-signoff.zip --assurance-watch-signoff-verification-report path\to\watch-signoff-verification-report.json --continuous-assurance-verification-report path\to\assurance-verification-report.json --hub-verification-report path\to\hub-verification-report.json --json
+python -m song_agent.cli trust-operations-final-readiness --hub-id hub-default --refresh-report --create-certificate --sign --signed-by reviewer --reason "Final readiness accepted." --export --zip --verify --strict --require-current --require-signed --hub-package path\to\trust-operations-hub.zip --hub-verification-report path\to\hub-verification-report.json --assurance-watch-signoff-archive path\to\trust-operations-assurance-watch-signoff.zip --assurance-watch-signoff-verification-report path\to\watch-signoff-verification-report.json --json
+python -m song_agent.cli verify-trust-operations-hub-package path\to\trust-operations-hub.zip --strict --require-final-readiness --final-handoff-package path\to\trust-operations-final-handoff.zip --final-handoff-verification-report path\to\final-handoff-verification-report.json --hub-verification-report path\to\hub-verification-report.json --json
 python -m song_agent.cli trust-operations-hub-incidents --hub-id hub-default --refresh --list --json
 python -m song_agent.cli trust-operations-hub-incidents --hub-id hub-default --incident-id inc-000001 --triage --create-plan --evidence-file path\to\verification-report.json --verify-fix --close --export --zip --verify --strict --require-no-open-blocking --hub-verification-report path\to\hub-verification-report.json --json
 python -m song_agent.cli verify-trust-operations-hub-incident-package path\to\trust-operations-incident-board.zip --strict --require-no-open-blocking --require-current-hub --hub-verification-report path\to\hub-verification-report.json --json

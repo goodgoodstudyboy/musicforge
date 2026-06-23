@@ -52,6 +52,7 @@ def verify_trust_operations_hub_package(
     require_continuous_assurance: bool = False,
     require_assurance_watch_clear: bool = False,
     require_assurance_watch_signoff: bool = False,
+    require_final_readiness: bool = False,
     publication_channel_state_path: Path | str | None = None,
     public_trust_center_verification_path: Path | str | None = None,
     publication_monitoring_verification_path: Path | str | None = None,
@@ -81,6 +82,8 @@ def verify_trust_operations_hub_package(
     assurance_watch_verification_report_path: Path | str | None = None,
     assurance_watch_signoff_archive_path: Path | str | None = None,
     assurance_watch_signoff_verification_report_path: Path | str | None = None,
+    final_handoff_package_path: Path | str | None = None,
+    final_handoff_verification_report_path: Path | str | None = None,
     max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
@@ -102,6 +105,7 @@ def verify_trust_operations_hub_package(
         require_continuous_assurance=require_continuous_assurance,
         require_assurance_watch_clear=require_assurance_watch_clear,
         require_assurance_watch_signoff=require_assurance_watch_signoff,
+        require_final_readiness=require_final_readiness,
         publication_channel_state_path=Path(publication_channel_state_path) if publication_channel_state_path else None,
         public_trust_center_verification_path=Path(public_trust_center_verification_path) if public_trust_center_verification_path else None,
         publication_monitoring_verification_path=Path(publication_monitoring_verification_path) if publication_monitoring_verification_path else None,
@@ -126,6 +130,8 @@ def verify_trust_operations_hub_package(
         assurance_watch_verification_report_path=Path(assurance_watch_verification_report_path) if assurance_watch_verification_report_path else None,
         assurance_watch_signoff_archive_path=Path(assurance_watch_signoff_archive_path) if assurance_watch_signoff_archive_path else None,
         assurance_watch_signoff_verification_report_path=Path(assurance_watch_signoff_verification_report_path) if assurance_watch_signoff_verification_report_path else None,
+        final_handoff_package_path=Path(final_handoff_package_path) if final_handoff_package_path else None,
+        final_handoff_verification_report_path=Path(final_handoff_verification_report_path) if final_handoff_verification_report_path else None,
         max_zip_size_mb=max_zip_size_mb,
         max_uncompressed_size_mb=max_uncompressed_size_mb,
         max_entry_count=max_entry_count,
@@ -171,6 +177,7 @@ class _HubVerifier:
         require_continuous_assurance: bool,
         require_assurance_watch_clear: bool,
         require_assurance_watch_signoff: bool,
+        require_final_readiness: bool,
         publication_channel_state_path: Path | None,
         public_trust_center_verification_path: Path | None,
         publication_monitoring_verification_path: Path | None,
@@ -195,6 +202,8 @@ class _HubVerifier:
         assurance_watch_verification_report_path: Path | None,
         assurance_watch_signoff_archive_path: Path | None,
         assurance_watch_signoff_verification_report_path: Path | None,
+        final_handoff_package_path: Path | None,
+        final_handoff_verification_report_path: Path | None,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -215,6 +224,7 @@ class _HubVerifier:
         self.require_continuous_assurance = require_continuous_assurance
         self.require_assurance_watch_clear = require_assurance_watch_clear
         self.require_assurance_watch_signoff = require_assurance_watch_signoff
+        self.require_final_readiness = require_final_readiness
         self.publication_channel_state_path = publication_channel_state_path
         self.public_trust_center_verification_path = public_trust_center_verification_path
         self.publication_monitoring_verification_path = publication_monitoring_verification_path
@@ -241,6 +251,8 @@ class _HubVerifier:
         self.assurance_watch_verification_report_path = assurance_watch_verification_report_path
         self.assurance_watch_signoff_archive_path = assurance_watch_signoff_archive_path
         self.assurance_watch_signoff_verification_report_path = assurance_watch_signoff_verification_report_path
+        self.final_handoff_package_path = final_handoff_package_path
+        self.final_handoff_verification_report_path = final_handoff_verification_report_path
         self.max_zip_size_mb = max(1, int(max_zip_size_mb))
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
@@ -282,6 +294,7 @@ class _HubVerifier:
         self.external_continuous_assurance_verification_report: dict[str, Any] = {}
         self.external_assurance_watch_verification_report: dict[str, Any] = {}
         self.external_assurance_watch_signoff_verification_report: dict[str, Any] = {}
+        self.external_final_handoff_verification_report: dict[str, Any] = {}
 
     def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
@@ -548,6 +561,7 @@ class _HubVerifier:
         self._verify_external_continuous_assurance()
         self._verify_external_assurance_watch()
         self._verify_external_assurance_watch_signoff()
+        self._verify_external_final_readiness()
 
     def _verify_external_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
         expected = _evidence_by_type(self.evidence, component_type)
@@ -839,6 +853,37 @@ class _HubVerifier:
         elif self.require_assurance_watch_signoff:
             self._add_check("external", "toh_assurance_watch_signoff_continuous_assurance_required", "failed", "blocking", "Assurance Watch Signoff gate requires the current Continuous Assurance verification report.")
 
+    def _verify_external_final_readiness(self) -> None:
+        if not (self.require_final_readiness or self.final_handoff_package_path or self.final_handoff_verification_report_path):
+            return
+        if not self.final_handoff_package_path:
+            self._add_check("external", "toh_final_readiness_package_required", "failed", "blocking", "Final Readiness gate requires an external Final Handoff ZIP.")
+            return
+        if not self.final_handoff_verification_report_path:
+            self._add_check("external", "toh_final_readiness_verification_required", "failed", "blocking", "Final Readiness gate requires an external Final Handoff verification report.")
+            return
+        report = _read_json_file(self.final_handoff_verification_report_path)
+        self.external_final_handoff_verification_report = report
+        package_path = self.final_handoff_package_path
+        package_sha = _sha256_file(package_path) if package_path.exists() else None
+        package_size = os.stat(_fs_path(package_path)).st_size if package_path.exists() else None
+        package_manifest = _read_zip_json(package_path, "trust-operations-final-readiness-manifest.json") if package_path.exists() else {}
+        self._add_exact_check("external", "toh_final_readiness_verification_package_type", report.get("package_type"), "musicforge_trust_operations_final_handoff_verification", "Final Handoff verification package_type")
+        self._add_exact_check("external", "toh_final_readiness_verification_status", report.get("status"), "passed", "Final Handoff verification status")
+        self._add_exact_check("external", "toh_final_readiness_zip_sha256", report.get("zip_sha256"), package_sha, "Final Handoff ZIP sha256")
+        self._add_exact_check("external", "toh_final_readiness_zip_size_bytes", report.get("zip_size_bytes"), package_size, "Final Handoff ZIP size")
+        self._add_exact_check("external", "toh_final_readiness_manifest_hash", report.get("manifest_hash"), package_manifest.get("integrity_hash"), "Final Handoff manifest hash")
+        self._add_exact_check("external", "toh_final_readiness_hub_zip_sha256", report.get("hub_zip_sha256"), self.zip_sha256, "Final Handoff Hub ZIP sha256")
+        self._add_exact_check("external", "toh_final_readiness_hub_manifest_hash", report.get("hub_manifest_hash"), self.manifest.get("integrity_hash"), "Final Handoff Hub manifest hash")
+        if self.external_hub_verification_report:
+            self._add_exact_check("external", "toh_final_readiness_hub_verification_hash", report.get("hub_verification_report_hash"), verification_hash(self.external_hub_verification_report), "Final Handoff Hub verification report hash")
+        elif self.require_final_readiness:
+            self._add_check("external", "toh_final_readiness_hub_verification_required", "failed", "blocking", "Final Readiness gate requires the current Hub verification report.")
+        if self.external_assurance_watch_signoff_verification_report:
+            self._add_exact_check("external", "toh_final_readiness_watch_signoff_hash", report.get("assurance_watch_signoff_verification_report_hash"), verification_hash(self.external_assurance_watch_signoff_verification_report), "Final Handoff Assurance Watch Signoff verification report hash")
+        elif self.require_final_readiness:
+            self._add_check("external", "toh_final_readiness_watch_signoff_required", "failed", "blocking", "Final Readiness gate requires the current Assurance Watch Signoff verification report.")
+
     def _verify_requirements(self) -> None:
         report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
         ready = self.report.get("status") == "ready" and report_readiness.get("blocked_count") == 0 and report_readiness.get("stale_count") == 0 and report_readiness.get("missing_count") == 0
@@ -872,6 +917,8 @@ class _HubVerifier:
         self._add_check("requirements", "toh_require_assurance_watch_clear", "passed" if watch_ready or not self.require_assurance_watch_clear else "failed", "blocking", "Assurance Watch is clear." if watch_ready else "Assurance Watch evidence is missing, stale, or blocked.")
         watch_signoff_ready = self.external_assurance_watch_signoff_verification_report.get("status") == "passed"
         self._add_check("requirements", "toh_require_assurance_watch_signoff", "passed" if watch_signoff_ready or not self.require_assurance_watch_signoff else "failed", "blocking", "Assurance Watch signoff is passed." if watch_signoff_ready else "Assurance Watch signoff evidence is missing, stale, or failed.")
+        final_ready = self.external_final_handoff_verification_report.get("status") == "passed"
+        self._add_check("requirements", "toh_require_final_readiness", "passed" if final_ready or not self.require_final_readiness else "failed", "blocking", "Final Readiness handoff is passed." if final_ready else "Final Readiness handoff evidence is missing, stale, or failed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
         findings: list[dict[str, Any]] = []

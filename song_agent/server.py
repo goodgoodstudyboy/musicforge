@@ -157,6 +157,12 @@ from song_agent.trust_operations_assurance_watch_signoff import (
     TrustOperationsAssuranceWatchSignoffStore,
 )
 from song_agent.trust_operations_assurance_watch_signoff_verifier import write_trust_operations_assurance_watch_signoff_verification_report
+from song_agent.trust_operations_final_readiness import (
+    TrustOperationsFinalReadinessNotFoundError,
+    TrustOperationsFinalReadinessStateError,
+    TrustOperationsFinalReadinessStore,
+)
+from song_agent.trust_operations_final_readiness_verifier import write_trust_operations_final_handoff_verification_report
 from song_agent.trust_operations_hub_incidents import (
     TrustOperationsIncidentNotFoundError,
     TrustOperationsIncidentStateError,
@@ -2896,6 +2902,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.trust_operations_assurance_watch_signoff_store  # type: ignore[attr-defined]
 
     @property
+    def trust_operations_final_readiness_store(self) -> TrustOperationsFinalReadinessStore:
+        return self.server.trust_operations_final_readiness_store  # type: ignore[attr-defined]
+
+    @property
     def release_operations_signoff_store(self) -> ReleaseOperationsSignoffStore:
         return self.server.release_operations_signoff_store  # type: ignore[attr-defined]
 
@@ -5630,6 +5640,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
 
     def _handle_trust_operations(self, method: str, path: str) -> None:
+        final_prefix = "/api/trust-operations/final-readiness"
+        if path == final_prefix or path.startswith(final_prefix + "/"):
+            self._handle_trust_operations_final_readiness(method, path.removeprefix(final_prefix))
+            return
         watch_prefix = "/api/trust-operations/assurance-watch"
         if path == watch_prefix or path.startswith(watch_prefix + "/"):
             self._handle_trust_operations_assurance_watch(method, path.removeprefix(watch_prefix))
@@ -5929,6 +5943,102 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except TrustOperationsAssuranceWatchSignoffNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except TrustOperationsAssuranceWatchSignoffStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+
+    def _handle_trust_operations_final_readiness(self, method: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.trust_operations_final_readiness_store.summary()})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.trust_operations_final_readiness_store.handoff_zip_path(), "application/zip", filename="musicforge-trust-operations-final-handoff.zip")
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.trust_operations_final_readiness_store.refresh_report(self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": result.get("report", {}).get("status") == "ready", **result}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/certificate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                certificate = self.trust_operations_final_readiness_store.create_certificate(self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "certificate": certificate}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/sign":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                signoff = self.trust_operations_final_readiness_store.sign(self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "signoff": signoff}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/change-requests":
+                if method == "GET":
+                    self._send_json({"ok": True, "change_requests": self.trust_operations_final_readiness_store.list_change_requests()})
+                    return
+                if method == "POST":
+                    change = self.trust_operations_final_readiness_store.create_change_request(self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "change_request": change}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.split("/") if part]
+            if len(parts) == 3 and parts[0] == "change-requests" and parts[2] == "approve":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                change = self.trust_operations_final_readiness_store.approve_change_request(unquote(parts[1]), self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "change_request": change})
+                return
+            if tail == "/reset":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                change_request_id = str(payload.get("change_request_id") or "")
+                if not change_request_id:
+                    raise ValueError("change_request_id is required.")
+                reset = self.trust_operations_final_readiness_store.reset_signoff(change_request_id, now=_utc_now())
+                self._send_json({"ok": True, "reset": reset})
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.trust_operations_final_readiness_store.export_handoff(self._optional_json_body(), now=_utc_now())
+                self._send_json({"ok": True, "manifest": manifest}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                zip_info = self.trust_operations_final_readiness_store.build_handoff_zip(now=_utc_now())
+                self._send_json({"ok": True, "zip": zip_info})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.trust_operations_final_readiness_store.verify_handoff_zip(self._optional_json_body())
+                write_trust_operations_final_handoff_verification_report(report, self.trust_operations_final_readiness_store.verification_report_path())
+                self._send_json({"ok": report.get("status") != "failed", "verification": report, "summary": report.get("summary", {})})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Final Readiness route not found.")
+        except TrustOperationsFinalReadinessNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except TrustOperationsFinalReadinessStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -17503,6 +17613,9 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
             watch_store=self.trust_operations_assurance_watch_store,
             assurance_store=self.trust_operations_assurance_store,
             hub_store=self.trust_operations_hub_store,
+        )
+        self.trust_operations_final_readiness_store = TrustOperationsFinalReadinessStore(
+            self.release_store.root.parent / "trust-operations-final-readiness",
         )
         self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
         self.edit_preset_store = EditPresetStore()

@@ -348,6 +348,16 @@ def test_webui_contains_encoded_audio_acceptance_controls():
     assert 'id="trust-operations-assurance-watch-signoff-zip"' in html
     assert 'id="trust-operations-assurance-watch-signoff-verify"' in html
     assert "/api/trust-operations/assurance-watch/signoffs/toawq-000001/download" in html
+    assert "Final Readiness Handoff" in html
+    assert 'id="trust-operations-final-readiness-refresh"' in html
+    assert 'id="trust-operations-final-readiness-certificate"' in html
+    assert 'id="trust-operations-final-readiness-sign"' in html
+    assert 'id="trust-operations-final-readiness-cr"' in html
+    assert 'id="trust-operations-final-readiness-reset"' in html
+    assert 'id="trust-operations-final-readiness-export"' in html
+    assert 'id="trust-operations-final-readiness-zip"' in html
+    assert 'id="trust-operations-final-readiness-verify"' in html
+    assert "/api/trust-operations/final-readiness/download" in html
     assert 'id="trust-operations-incidents-refresh"' in html
     assert 'id="trust-operations-incidents-triage"' in html
     assert 'id="trust-operations-incidents-plan"' in html
