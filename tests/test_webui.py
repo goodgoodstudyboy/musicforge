@@ -823,6 +823,11 @@ def test_webui_calls_project_apis():
 def test_webui_contains_release_workspace_controls():
     html = panel_html()
 
+    assert "System Health" in html
+    assert 'id="ga-check-run"' in html
+    assert 'id="ga-docs-index"' in html
+    assert "/api/ga/check" in html
+    assert "/api/docs/index" in html
     assert "Release Workspace" in html
     assert "Release QA" in html
     assert "Release Export" in html

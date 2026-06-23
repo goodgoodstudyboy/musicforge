@@ -1,5 +1,16 @@
 # Changelog
 
+## v10.0.0 - 2026-06-23
+
+### Added
+- GA/LTS readiness report, `ga-check` and `verify-ga-readiness-report` CLI, `/api/ga` and `/api/ga/check` endpoints, and Studio System Health panel.
+- GA release-check profile with v10 readiness smoke covering docs, manual acceptance requirement, final readiness requirement, and secret redaction.
+- Productization docs for getting started, local acceptance, manual music review, release, troubleshooting, maintenance, and secrets handling.
+
+### Verified
+- `python -m pytest tests\test_ga_readiness.py tests\test_cli_ga_readiness.py tests\test_server_ga_readiness.py tests\test_release_check.py::test_v100_ga_lts_readiness_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile ga --skip-tests --json`
+
 ## v9.9.0 - 2026-06-23
 
 ### Added

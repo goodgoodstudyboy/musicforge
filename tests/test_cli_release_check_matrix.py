@@ -97,7 +97,22 @@ def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
         "v96.trust_operations_continuous_assurance_smoke",
         "v97.trust_operations_assurance_watch_smoke",
         "v98.trust_operations_assurance_watch_signoff_smoke",
+        "v99.trust_operations_final_readiness_smoke",
     ]
+
+
+def test_release_check_cli_ga_profile_lists_readiness_checks() -> None:
+    completed = _run_cli(["release-check", "--profile", "ga", "--skip-tests", "--list", "--json"])
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    ids = [item["check_id"] for item in payload["checks"]]
+    assert "git.diff_check" in ids
+    assert "meta.version_consistency" in ids
+    assert "security.secret_scan" in ids
+    assert "v75.release_check_matrix_smoke" in ids
+    assert "v99.trust_operations_final_readiness_smoke" in ids
+    assert "v100.ga_lts_readiness_smoke" in ids
 
 
 def test_release_check_cli_empty_selection_fails() -> None:
@@ -111,7 +126,7 @@ def test_release_check_cli_empty_selection_fails() -> None:
 
 
 def test_release_check_cli_empty_since_fails() -> None:
-    completed = _run_cli(["release-check", "--profile", "latest", "--since", "10.0", "--json"])
+    completed = _run_cli(["release-check", "--profile", "latest", "--since", "11.0", "--json"])
 
     assert completed.returncode == 1
     payload = json.loads(completed.stdout)

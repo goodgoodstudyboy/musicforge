@@ -660,6 +660,25 @@ def panel_html() -> str:
     <div class="stack">
       <section>
         <div class="panel-title">
+          <span>System Health</span>
+          <span id="ga-status" class="status">unknown</span>
+        </div>
+        <div class="panel-body">
+          <div id="ga-summary" class="summary-grid">
+            <div class="metric"><span>GA</span>unknown</div>
+            <div class="metric"><span>Doctor</span>unknown</div>
+            <div class="metric"><span>Manual Review</span>unknown</div>
+            <div class="metric"><span>Final Readiness</span>unknown</div>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="ga-check-run" type="button">Run GA Check</button>
+            <button class="secondary" id="ga-docs-index" type="button">Docs Index</button>
+          </div>
+          <pre id="ga-check-result">No GA check has been run in this session.</pre>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
           <span>Provider Settings</span>
           <span id="provider-status" class="status">not configured</span>
         </div>
@@ -1510,6 +1529,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       fillPresets();
       fillForm(template.defaults);
       await loadProvider();
+      await loadGaHealth();
       await loadPromptTemplates();
       await loadEditorTemplates();
       await loadRenderer();
@@ -1549,6 +1569,36 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         loadBatches();
       }, 2000);
       $("poll").textContent = "polling 2s";
+    }
+
+    async function loadGaHealth() {
+      try {
+        const data = await api("/api/ga");
+        renderGaHealth(data.report || {});
+      } catch (err) {
+        $("ga-status").textContent = "failed";
+        $("ga-status").className = "status failed";
+        $("ga-check-result").textContent = err.message;
+      }
+    }
+
+    function renderGaHealth(report) {
+      const status = report.status || "unknown";
+      $("ga-status").textContent = status;
+      $("ga-status").className = `status ${status === "ready" ? "completed" : status === "blocked" ? "failed" : "running"}`;
+      const summary = report.summary || {};
+      $("ga-summary").innerHTML = `
+        ${metric("GA", status)}
+        ${metric("Doctor", summary.doctor_status || "unknown")}
+        ${metric("Manual Review", summary.acceptance_status || "unknown")}
+        ${metric("Final Readiness", summary.trust_final_readiness_status || "unknown")}
+      `;
+      const actions = report.next_actions || [];
+      $("ga-check-result").textContent = JSON.stringify({
+        status,
+        summary,
+        next_actions: actions.slice(0, 8),
+      }, null, 2);
     }
 
     $("auth-form").addEventListener("submit", async (event) => {
@@ -11879,6 +11929,20 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         catch (err) { alert(err.message); }
       });
     }
+
+    bindAction("ga-check-run", async () => {
+      const data = await api("/api/ga/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ require_manual_acceptance: false, require_final_readiness: false }),
+      });
+      renderGaHealth(data.report || {});
+    });
+
+    bindAction("ga-docs-index", async () => {
+      const data = await api("/api/docs/index");
+      $("ga-check-result").textContent = JSON.stringify(data, null, 2);
+    });
 
     function escapeHtml(value) {
       return String(value)

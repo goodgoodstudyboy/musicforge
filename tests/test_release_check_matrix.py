@@ -33,6 +33,7 @@ def test_release_check_profile_and_filters() -> None:
     latest = select_check_definitions(profile="latest")
     v7 = select_check_definitions(profile="v7")
     v8 = select_check_definitions(profile="v8")
+    ga = select_check_definitions(profile="ga", run_tests=False)
     portal = select_check_definitions(profile="latest", groups=["portal"])
     since = select_check_definitions(profile="v7", since="7.2")
     only = select_check_definitions(profile="full", only=["v75.release_check_matrix_smoke"])
@@ -58,6 +59,12 @@ def test_release_check_profile_and_filters() -> None:
         "v88.public_trust_center_publication_channels_smoke",
         "v89.public_trust_center_publication_monitoring_smoke",
     ]
+    assert "git.diff_check" in {definition.check_id for definition in ga}
+    assert "meta.version_consistency" in {definition.check_id for definition in ga}
+    assert "security.secret_scan" in {definition.check_id for definition in ga}
+    assert "v75.release_check_matrix_smoke" in {definition.check_id for definition in ga}
+    assert "v99.trust_operations_final_readiness_smoke" in {definition.check_id for definition in ga}
+    assert "v100.ga_lts_readiness_smoke" in {definition.check_id for definition in ga}
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
         "v76.attestation_portal_review_response_smoke",

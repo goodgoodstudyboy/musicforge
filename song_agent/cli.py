@@ -65,7 +65,7 @@ def build_doctor_parser() -> argparse.ArgumentParser:
 
 def build_release_check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
-    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "ga", "publish"], help="Release-check profile to run.")
     parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
     parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
     parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")
@@ -76,6 +76,35 @@ def build_release_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fail-fast", action="store_true", help="Stop after the first failed check.")
     parser.add_argument("--timeout-seconds", type=int, default=None, help="Override per-command timeout. Minimum is 10 seconds.")
     parser.add_argument("--skip-tests", action="store_true", help="Skip the full pytest check when selected.")
+    return parser
+
+
+def build_ga_check_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run MusicForge GA/LTS readiness checks.")
+    parser.add_argument("--json", action="store_true", help="Print the full GA readiness report as JSON.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write the GA readiness report to this JSON file.")
+    parser.add_argument("--strict", action="store_true", help="Treat a dirty working tree and missing required evidence as blocking.")
+    parser.add_argument("--allow-dirty", action="store_true", help="Allow dirty working tree as a warning even with --strict.")
+    parser.add_argument("--require-manual-acceptance", action="store_true", help="Require manual listening acceptance evidence.")
+    parser.add_argument("--require-audio", action="store_true", help="Require renderer/audio acceptance readiness.")
+    parser.add_argument("--require-final-readiness", action="store_true", help="Require a passed Final Handoff verification report.")
+    parser.add_argument("--final-handoff-verification-report", type=Path, default=None, help="Path to Final Handoff verification report JSON.")
+    parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
+    parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
+    parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
+    parser.add_argument("--skip-tests", action="store_true", help="Skip full pytest if --run-release-checks selects it.")
+    return parser
+
+
+def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge GA readiness report.")
+    parser.add_argument("report_path", type=Path, help="Path to ga-readiness-report.json.")
+    parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
+    parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
+    parser.add_argument("--strict", action="store_true", help="Require GA status ready, not warning.")
+    parser.add_argument("--require-ready", action="store_true", help="Require GA readiness status ready.")
+    parser.add_argument("--require-manual-acceptance", action="store_true", help="Require manual acceptance readiness.")
+    parser.add_argument("--require-final-readiness", action="store_true", help="Require final readiness evidence.")
     return parser
 
 
@@ -2275,6 +2304,56 @@ def _main() -> None:
         parser = build_doctor_parser()
         args = parser.parse_args(raw_args[1:])
         run_doctor(provider_test=args.provider_test)
+        return
+    elif raw_args and raw_args[0] == "ga-check":
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+
+        parser = build_ga_check_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = build_ga_readiness_report(
+            strict=args.strict,
+            allow_dirty=args.allow_dirty,
+            require_manual_acceptance=args.require_manual_acceptance,
+            require_audio=args.require_audio,
+            require_final_readiness=args.require_final_readiness,
+            final_handoff_verification_report_path=args.final_handoff_verification_report,
+            release_check_latest_report_path=args.release_check_latest_report,
+            release_check_ga_report_path=args.release_check_ga_report,
+            run_release_checks=args.run_release_checks,
+            skip_tests=args.skip_tests,
+        )
+        if args.report_out is not None:
+            write_ga_readiness_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print_ga_readiness_report(report)
+        if report.get("status") == "blocked":
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "verify-ga-readiness-report":
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report, write_ga_readiness_verification_report
+
+        parser = build_verify_ga_readiness_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_ga_readiness_report(
+            args.report_path,
+            strict=args.strict,
+            require_ready=args.require_ready,
+            require_manual_acceptance=args.require_manual_acceptance,
+            require_final_readiness=args.require_final_readiness,
+        )
+        if args.report_out is not None:
+            write_ga_readiness_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge GA readiness verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        if report.get("status") == "failed":
+            raise SystemExit(1)
         return
     elif raw_args and raw_args[0] == "release-check":
         from song_agent.release_check_matrix import release_check_definitions_as_dicts, select_check_definitions
@@ -6634,6 +6713,34 @@ def run_doctor(*, provider_test: bool = False) -> None:
         if provider_test:
             print(f"provider test: failed ({exc})")
     print("local deterministic mode: ok")
+
+
+def print_ga_readiness_report(report: dict[str, Any]) -> None:
+    print("MusicForge GA readiness")
+    print(f"status: {report.get('status')}")
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    for key in (
+        "doctor_status",
+        "release_check_latest_status",
+        "release_check_ga_status",
+        "acceptance_status",
+        "renderer_status",
+        "provider_status",
+        "trust_final_readiness_status",
+        "git_status",
+    ):
+        print(f"{key}: {summary.get(key, 'unknown')}")
+    for check in report.get("checks") or []:
+        if not isinstance(check, dict):
+            continue
+        print(f"{check.get('check_id')}: {check.get('status')} ({check.get('severity')})")
+        if check.get("message"):
+            print(f"  {check.get('message')}")
+    actions = [item for item in report.get("next_actions") or [] if isinstance(item, dict)]
+    if actions:
+        print("next actions:")
+        for item in actions[:10]:
+            print(f"- {item.get('check_id')}: {item.get('action')}")
 
 
 def run_acceptance_check(

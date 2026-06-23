@@ -3146,6 +3146,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/api/template":
                 self._send_json(api_template())
                 return
+            if path == "/api/ga":
+                self._handle_ga_route(method)
+                return
+            if path == "/api/ga/check":
+                self._handle_ga_check_route(method)
+                return
+            if path == "/api/docs/index":
+                self._handle_docs_index_route(method)
+                return
             if path == "/api/provider":
                 self._handle_provider_route(method)
                 return
@@ -3584,6 +3593,56 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except Exception as exc:
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
+
+    def _handle_ga_route(self, method: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        from song_agent.ga_readiness import build_ga_readiness_report
+
+        report = build_ga_readiness_report(repo_root=Path.cwd())
+        self._send_json({"ok": report.get("status") != "blocked", "report": report, "summary": report.get("summary", {})})
+
+    def _handle_ga_check_route(self, method: str) -> None:
+        if method != "POST":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+
+        payload = self._optional_json_body()
+        report = build_ga_readiness_report(
+            repo_root=Path.cwd(),
+            strict=bool(payload.get("strict", False)),
+            allow_dirty=bool(payload.get("allow_dirty", False)),
+            require_manual_acceptance=bool(payload.get("require_manual_acceptance", False)),
+            require_audio=bool(payload.get("require_audio", False)),
+            require_final_readiness=bool(payload.get("require_final_readiness", False)),
+            final_handoff_verification_report_path=payload.get("final_handoff_verification_report_path"),
+            release_check_latest_report_path=payload.get("release_check_latest_report_path"),
+            release_check_ga_report_path=payload.get("release_check_ga_report_path"),
+            run_release_checks=bool(payload.get("run_release_checks", False)),
+            skip_tests=bool(payload.get("skip_tests", True)),
+        )
+        write_ga_readiness_report(report)
+        self._send_json({"ok": report.get("status") != "blocked", "report": report, "summary": report.get("summary", {})})
+
+    def _handle_docs_index_route(self, method: str) -> None:
+        if method != "GET":
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            return
+        from song_agent.ga_readiness import REQUIRED_DOCS
+
+        docs = []
+        for rel in REQUIRED_DOCS:
+            path = Path(rel)
+            docs.append(
+                {
+                    "path": rel,
+                    "exists": path.exists(),
+                    "title": path.stem.replace("_", " ").replace("-", " ").title(),
+                }
+            )
+        self._send_json({"ok": True, "docs": docs, "summary": {"required_count": len(REQUIRED_DOCS), "present_count": sum(1 for item in docs if item["exists"])}})
 
     def _handle_provider_route(self, method: str) -> None:
         if method == "GET":

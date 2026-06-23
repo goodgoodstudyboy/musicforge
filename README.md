@@ -1,59 +1,40 @@
-# Song Agent
+# MusicForge
 
-An open, model-provider-agnostic songwriting agent.
+MusicForge is a local-first songwriting, review, release, and trust-operations
+workbench. It does not wrap a closed music generator. The core path is:
 
-The goal is not to wrap Suno, Udio, Mureka, ElevenLabs Music, or any other
-closed music generator. The core idea is:
+1. Plan lyrics, structure, harmony, melody, arrangement, and review work.
+2. Emit open musical artifacts such as JSON, MIDI, MusicXML, ABC, and package
+   manifests.
+3. Render and verify locally controlled audio and evidence packages.
+4. Keep release, distribution, submission, operations, and public trust evidence
+   auditable through deterministic local verifiers.
 
-1. Use a frontier/world model API for reasoning, lyrics, composition, and
-   arrangement planning.
-2. Emit open musical formats such as JSON, MIDI, MusicXML, ABC, or Strudel code.
-3. Render with open or locally controlled tools such as FluidSynth, MuseScore,
-   REAPER, Ableton, LMMS, Strudel, or Tone.js.
-
-## MVP
-
-The first working version generates an instrumental song demo:
-
-```text
-song brief
-  -> lyrics and structure
-  -> chords
-  -> melody
-  -> bass and drums
-  -> MIDI
-  -> WAV/MP3 render
-```
-
-Human vocals are intentionally deferred. Singing synthesis is a separate
-problem and needs a dedicated open backend.
-
-Current local MVP:
+## Quick Start
 
 ```powershell
-python -m song_agent.cli examples\song_request.json --dry-run
-python -m song_agent.cli examples\song_request.json --out runs\demo
-python -m song_agent.cli generate examples\song_request.json --out runs\demo
-python -m song_agent.cli generate examples\song_request.json --out runs\demo-nodes --pipeline-mode multinode
+git clone https://github.com/goodgoodstudyboy/musicforge.git
+cd musicforge
+python -m pip install -e .[dev]
+python -m song_agent.cli doctor
 python -m song_agent.cli serve --host 127.0.0.1 --port 8787
 ```
 
-The full run writes:
+Open `http://127.0.0.1:8787` and use Studio to create a song, inspect projects,
+run acceptance checks, assemble releases, and review system health.
 
-```text
-runs/demo/data/request.json
-runs/demo/data/run-options.json
-runs/demo/data/nodes/*.json
-runs/demo/data/song-plan.json
-runs/demo/data/run-summary.json
-runs/demo/logs/events.jsonl
-runs/demo/renders/song.mid
+Generate a local deterministic MIDI demo:
+
+```powershell
+python -m song_agent.cli examples\song_request.json --out runs\quickstart --force
 ```
 
-The default generation path is model-optional: it uses a deterministic composer
-so the JSON-to-MIDI loop can be tested without network access.
+The default generation path is model-optional and can run without network
+provider access. Real WAV output requires a local renderer profile and
+SoundFont. Provider-assisted review and generation require a local provider
+configuration.
 
-## Local Studio
+## Studio Panel
 
 The browser panel runs locally and uses the same deterministic pipeline as the
 CLI:
@@ -65,6 +46,48 @@ python -m song_agent.cli serve --host 127.0.0.1 --port 8787
 Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
+
+The System Health panel shows GA readiness, doctor status, manual acceptance
+status, and final readiness status. It can run `ga-check` through `/api/ga/check`
+and show the required GA documentation index.
+
+## Generate / Edit / Review / Release
+
+MusicForge covers the full local workflow: generate Project versions, edit and
+compare versions, create review tasks, run Acceptance and Human Review flows,
+assemble Release and Distribution packages, track Submission evidence, and
+build Trust Operations evidence through final handoff.
+
+## GA Validation
+
+Use these commands before treating a branch as releasable:
+
+```powershell
+python -m song_agent.cli doctor
+python -m song_agent.cli release-check --profile ga --skip-tests --json
+python -m song_agent.cli ga-check --json
+```
+
+`--auto-review` is synthetic smoke evidence only. Manual music acceptance means
+a person played the MIDI or WAV and recorded a manual review.
+
+## Documentation Index
+
+- `docs/GETTING_STARTED.md`
+- `docs/LOCAL_ACCEPTANCE_RUNBOOK.md`
+- `docs/MUSIC_REVIEW_GUIDE.md`
+- `docs/RELEASE_RUNBOOK.md`
+- `docs/TROUBLESHOOTING.md`
+- `docs/MAINTENANCE_POLICY.md`
+- `docs/SECURITY_AND_SECRETS.md`
+
+## Safety Notes
+
+Do not put tokens in Git remotes. Do not commit `.musicforge/provider.json` or
+`.musicforge/renderer.json`. Keep local absolute paths out of public evidence
+packages and documentation.
+
+## Historical Notes
 
 v4.7.0 includes a local Release Workspace for assembling multiple Project Delivery
 Signoff-approved Final Exports into an EP, album, or demo pack. Release QA checks

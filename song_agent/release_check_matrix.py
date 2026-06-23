@@ -198,17 +198,18 @@ def _command(
     )
 
 
-BASE_PROFILES = ("full", "quick", "latest")
+BASE_PROFILES = ("full", "quick", "latest", "ga")
 LATEST_PROFILES = ("full", "quick", "latest")
 V7_PROFILES = ("full", "v7")
+GA_PROFILES = ("full", "quick", "latest", "ga")
 
 CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000),
     _command("git.diff_check", "git diff --check", ("git", "diff", "--check"), group="git", kind="git", risk="high", timeout_seconds=60, profiles=BASE_PROFILES),
-    _callable("git.status", "git status", "_git_status_check", group="git", risk="high", timeout_seconds=60),
-    _callable("git.remote_url_token", "remote url token check", "_remote_url_token_check", group="git", risk="high", timeout_seconds=60),
-    _callable("git.musicforge_configs_untracked", ".musicforge configs untracked", "_musicforge_configs_untracked_check", group="git", risk="normal", timeout_seconds=60),
-    _callable("git.musicforge_configs_ignored", ".musicforge configs ignored", "_musicforge_configs_ignored_check", group="git", risk="normal", timeout_seconds=60),
+    _callable("git.status", "git status", "_git_status_check", group="git", risk="high", timeout_seconds=60, profiles=("full", "ga")),
+    _callable("git.remote_url_token", "remote url token check", "_remote_url_token_check", group="git", risk="high", timeout_seconds=60, profiles=("full", "ga")),
+    _callable("git.musicforge_configs_untracked", ".musicforge configs untracked", "_musicforge_configs_untracked_check", group="git", risk="normal", timeout_seconds=60, profiles=("full", "ga")),
+    _callable("git.musicforge_configs_ignored", ".musicforge configs ignored", "_musicforge_configs_ignored_check", group="git", risk="normal", timeout_seconds=60, profiles=("full", "ga")),
     _callable("meta.version_consistency", "version consistency", "_version_consistency", group="meta", risk="critical", timeout_seconds=60, profiles=BASE_PROFILES),
     _callable("security.secret_scan", "secret scan", "_secret_scan", group="security", risk="critical", timeout_seconds=60, profiles=BASE_PROFILES),
     _callable("core.final_export_smoke", "final export smoke", "_final_export_smoke", group="core", risk="high", timeout_seconds=300, profiles=("full", "quick")),
@@ -282,7 +283,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v72.release_portfolio_governance_attestation_smoke", "v7.2 release portfolio governance public attestation smoke", "_v72_release_portfolio_governance_attestation_smoke", group="attestation", version="7.2", risk="high", timeout_seconds=600, tags=("v7", "governance"), profiles=V7_PROFILES),
     _callable("v73.release_portfolio_governance_attestation_registry_smoke", "v7.3 release portfolio governance attestation registry smoke", "_v73_release_portfolio_governance_attestation_registry_smoke", group="attestation", version="7.3", risk="high", timeout_seconds=600, tags=("v7", "governance", "registry"), profiles=V7_PROFILES),
     _callable("v74.attestation_portal_smoke", "v7.4 release portfolio governance attestation portal smoke", "_v74_release_portfolio_governance_attestation_portal_smoke", group="portal", version="7.4", risk="critical", timeout_seconds=600, tags=("v7", "governance", "attestation"), profiles=("full", "v7", "quick", "latest"), expected_warnings=("Duplicate name:",)),
-    _callable("v75.release_check_matrix_smoke", "v7.5 release check verification matrix smoke", "_v75_release_check_matrix_smoke", group="meta", version="7.5", risk="critical", timeout_seconds=300, tags=("v7", "release_check"), profiles=("full", "v7", "quick", "latest")),
+    _callable("v75.release_check_matrix_smoke", "v7.5 release check verification matrix smoke", "_v75_release_check_matrix_smoke", group="meta", version="7.5", risk="critical", timeout_seconds=300, tags=("v7", "release_check"), profiles=("full", "v7", "quick", "latest", "ga")),
     _callable("v76.attestation_portal_review_response_smoke", "v7.6 release portfolio governance attestation portal review response smoke", "_v76_attestation_portal_review_response_smoke", group="portal", version="7.6", risk="critical", timeout_seconds=600, tags=("v7", "governance", "attestation", "review"), profiles=("full", "v7", "quick", "latest"), expected_warnings=("Duplicate name:",)),
     _callable("v77.attestation_accepted_evidence_smoke", "v7.7 release portfolio governance attestation accepted evidence smoke", "_v77_attestation_accepted_evidence_smoke", group="portal", version="7.7", risk="critical", timeout_seconds=600, tags=("v7", "governance", "attestation", "review"), profiles=("full", "v7", "quick", "latest"), expected_warnings=("Duplicate name:",)),
     _callable("v78.attestation_transparency_feed_smoke", "v7.8 release portfolio governance attestation transparency feed smoke", "_v78_attestation_transparency_feed_smoke", group="portal", version="7.8", risk="critical", timeout_seconds=600, tags=("v7", "governance", "attestation", "transparency"), profiles=("full", "v7", "quick", "latest"), expected_warnings=("Duplicate name:",)),
@@ -306,7 +307,8 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v96.trust_operations_continuous_assurance_smoke", "v9.6 trust operations continuous assurance smoke", "_v96_trust_operations_continuous_assurance_smoke", group="trust", version="9.6", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "assurance"), profiles=("full", "quick", "latest", "v9"), expected_warnings=("Duplicate name:",)),
     _callable("v97.trust_operations_assurance_watch_smoke", "v9.7 trust operations assurance watch smoke", "_v97_trust_operations_assurance_watch_smoke", group="trust", version="9.7", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "assurance", "watch"), profiles=("full", "quick", "latest", "v9"), expected_warnings=("Duplicate name:",)),
     _callable("v98.trust_operations_assurance_watch_signoff_smoke", "v9.8 trust operations assurance watch signoff smoke", "_v98_trust_operations_assurance_watch_signoff_smoke", group="trust", version="9.8", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "assurance", "watch", "signoff"), profiles=("full", "quick", "latest", "v9"), expected_warnings=("Duplicate name:",)),
-    _callable("v99.trust_operations_final_readiness_smoke", "v9.9 trust operations final readiness handoff smoke", "_v99_trust_operations_final_readiness_smoke", group="trust", version="9.9", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "final-readiness", "handoff"), profiles=("full", "quick", "latest", "v9"), expected_warnings=("Duplicate name:",)),
+    _callable("v99.trust_operations_final_readiness_smoke", "v9.9 trust operations final readiness handoff smoke", "_v99_trust_operations_final_readiness_smoke", group="trust", version="9.9", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "final-readiness", "handoff"), profiles=("full", "quick", "latest", "v9", "ga"), expected_warnings=("Duplicate name:",)),
+    _callable("v100.ga_lts_readiness_smoke", "v10.0 GA/LTS readiness smoke", "_v100_ga_lts_readiness_smoke", group="ga", version="10.0", risk="critical", timeout_seconds=300, tags=("v10", "ga", "lts", "readiness"), profiles=GA_PROFILES),
 )
 
-KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "publish"}
+KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "ga", "publish"}

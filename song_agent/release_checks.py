@@ -11507,7 +11507,7 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
         portal = select_check_definitions(profile="latest", groups=["portal"])
         empty_group = select_check_definitions(profile="latest", groups=["audio"])
         since = select_check_definitions(profile="v7", since="7.2")
-        empty_since = select_check_definitions(profile="latest", since="10.0")
+        empty_since = select_check_definitions(profile="latest", since="11.0")
         only = select_check_definitions(profile="full", only=["v74.attestation_portal_smoke"])
         base = Path(tempfile.mkdtemp(prefix="release-check-v75-"))
         fake_script = base / "v75_timeout_fake.py"
@@ -15350,6 +15350,68 @@ def _v96_blocked(fn) -> bool:
     except Exception:
         return True
     return False
+
+
+def _v100_ga_lts_readiness_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, ga_readiness_integrity_ok
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.projectio import write_json
+
+    def _write_minimal_repo(target: Path, *, docs: bool = True, token_text: bool = False) -> None:
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "pyproject.toml").write_text(f'[project]\nversion = "{__version__}"\n', encoding="utf-8")
+        (target / "README.md").write_text("# MusicForge\n\nGA readiness fixture.\n", encoding="utf-8")
+        (target / "CHANGELOG.md").write_text(f"# Changelog\n\n## v{__version__}\n", encoding="utf-8")
+        if docs:
+            for rel in REQUIRED_DOCS:
+                doc = target / rel
+                doc.parent.mkdir(parents=True, exist_ok=True)
+                text = f"# {Path(rel).stem}\n\nGA fixture document.\n"
+                if token_text and rel.endswith("SECURITY_AND_SECRETS.md"):
+                    text += "Never commit githubkey.txt or token files.\n"
+                doc.write_text(text, encoding="utf-8")
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v100-ga-readiness-") as temp:
+            base = Path(temp)
+            _write_minimal_repo(base / "repo")
+            report = build_ga_readiness_report(repo_root=base / "repo", strict=False)
+            _write_minimal_repo(base / "missing-docs", docs=False)
+            missing_docs = build_ga_readiness_report(repo_root=base / "missing-docs", strict=False)
+            _write_minimal_repo(base / "manual-required")
+            manual_required = build_ga_readiness_report(repo_root=base / "manual-required", require_manual_acceptance=True)
+            _write_minimal_repo(base / "final-required")
+            final_required = build_ga_readiness_report(repo_root=base / "final-required", require_final_readiness=True)
+            _write_minimal_repo(base / "redaction", token_text=True)
+            redaction = build_ga_readiness_report(repo_root=base / "redaction", strict=False)
+            report_path = base / "repo" / "runs" / "ga-readiness" / "ga-readiness-report.json"
+            write_json(report_path, report)
+            verification = verify_ga_readiness_report(report_path)
+            strict_verification = verify_ga_readiness_report(report_path, strict=True)
+
+            report_ok = report.get("package_type") == "musicforge_ga_readiness_report" and ga_readiness_integrity_ok(report)
+            verify_ok = verification.get("status") == "warning" and strict_verification.get("status") == "failed"
+            docs_failed = _ga_check_status(missing_docs, "ga.docs_present") == "failed"
+            manual_failed = _ga_check_status(manual_required, "ga.acceptance_manual") == "failed"
+            final_failed = _ga_check_status(final_required, "ga.trust_final_readiness") == "failed"
+            redaction_failed = _ga_check_status(redaction, "ga.secret_scan") == "failed"
+            no_secret_echo = "githubkey.txt" not in json.dumps(redaction, ensure_ascii=False).lower()
+            ok = report_ok and verify_ok and docs_failed and manual_failed and final_failed and redaction_failed and no_secret_echo
+            return ok, (
+                f"report={report.get('status')}/{report_ok}, verify={verification.get('status')}/{strict_verification.get('status')}, "
+                f"docs_missing={missing_docs.get('status')}/{docs_failed}, "
+                f"manual_required={manual_required.get('status')}/{manual_failed}, final_required={final_required.get('status')}/{final_failed}, "
+                f"redaction={redaction.get('status')}/{redaction_failed}/{no_secret_echo}"
+            )
+    except Exception as exc:
+        return False, f"v10.0 GA smoke failed: {exc}"
+
+
+def _ga_check_status(report: dict[str, Any], check_id: str) -> str:
+    for check in report.get("checks") or []:
+        if isinstance(check, dict) and check.get("check_id") == check_id:
+            return str(check.get("status") or "")
+    return ""
 
 
 def _v98_resign_watch_signoff_docs(docs: dict[str, bytes]) -> None:
