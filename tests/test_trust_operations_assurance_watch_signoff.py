@@ -11,9 +11,12 @@ import pytest
 from song_agent.trust_operations_assurance_watch_signoff import (
     TrustOperationsAssuranceWatchSignoffStateError,
     TrustOperationsAssuranceWatchSignoffStore,
+    watch_signoff_history_event_hash,
+    watch_signoff_history_event_payload_hash,
     watch_signoff_hash,
     watch_signoff_manifest_hash,
 )
+from song_agent.releases import stable_hash
 from song_agent.trust_operations_assurance_watch_signoff_verifier import verify_trust_operations_assurance_watch_signoff_archive_package
 from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package
 from tests.test_trust_operations_assurance_watch import _watch_fixture
@@ -112,10 +115,18 @@ def test_assurance_watch_signoff_verifier_rejects_tampering(tmp_path: Path) -> N
         _rewrite_zip(signoff_store.archive_zip_path(queue_id), tmp_path / "redaction.zip", lambda docs: docs.__setitem__("README.txt", docs["README.txt"] + b'\napi_key="sk-test-secret" C:\\Users\\demo\\githubkey.txt\n')),
         strict=True,
     )
+    full_resign = verify_trust_operations_assurance_watch_signoff_archive_package(
+        _rewrite_zip(signoff_store.archive_zip_path(queue_id), tmp_path / "full-resign.zip", _tamper_signed_by_full_resign),
+        strict=True,
+        require_signed=True,
+        require_current=True,
+        **verify_payload,
+    )
 
     assert _has_blocker(signed_by, "toaws_signoff_payload_hash")
     assert _has_blocker(closeout, "toaws_closeout_integrity") or _has_blocker(closeout, "toaws_signoff_closeout_hash")
     assert _has_blocker(history, "toaws_history_signed_event") or _has_blocker(history, "toaws_manifest_history_hash")
+    assert _has_blocker(full_resign, "toaws_history_signoff_payload_binding")
     assert _has_blocker(extra, "toaws_zip_allowed_entries")
     assert _has_blocker(redaction, "toaws_redaction_scan")
 
@@ -182,7 +193,9 @@ def _resign_archive_docs(docs: dict[str, bytes]) -> None:
         docs[name] = _doc_bytes(doc)
         _sync_manifest_file(manifest, name, docs[name])
     history = docs["watch-signoff-history.jsonl"]
+    history_events = _history_events_from_bytes(history)
     _sync_manifest_file(manifest, "watch-signoff-history.jsonl", history)
+    manifest["source"]["history_hash"] = stable_hash({"events": history_events})
     manifest["source"]["closeout_hash"] = closeout.get("integrity_hash")
     manifest["source"]["signoff_hash"] = signoff.get("integrity_hash")
     manifest["source"]["queue_summary_hash"] = queue_summary.get("integrity_hash")
@@ -200,6 +213,31 @@ def _tamper_signed_by(docs: dict[str, bytes]) -> None:
     _resign_archive_docs(docs)
 
 
+def _tamper_signed_by_full_resign(docs: dict[str, bytes]) -> None:
+    signoff = _read_doc(docs, "watch-signoff.json")
+    signoff["signed_by"] = "tampered-reviewer"
+    signoff["payload_hash"] = stable_hash(
+        {
+            "queue_id": signoff.get("queue_id"),
+            "closeout_id": signoff.get("closeout_id"),
+            "signed_by": signoff.get("signed_by"),
+            "role": signoff.get("role"),
+            "reason": signoff.get("reason"),
+            "source": signoff.get("source"),
+            "decision": signoff.get("decision"),
+        }
+    )
+    signoff["integrity_hash"] = watch_signoff_hash(signoff)
+    docs["watch-signoff.json"] = _doc_bytes(signoff)
+
+    events = _history_events_from_bytes(docs["watch-signoff-history.jsonl"])
+    for event in events:
+        if event.get("event_type") == "watch_signoff_created":
+            event["signoff_hash"] = signoff["integrity_hash"]
+    docs["watch-signoff-history.jsonl"] = _history_bytes(_rehash_history_events(events))
+    _resign_archive_docs(docs)
+
+
 def _tamper_closeout_clear(docs: dict[str, bytes]) -> None:
     closeout = _read_doc(docs, "watch-closeout.json")
     closeout["summary"]["watch_clear"] = False
@@ -213,3 +251,31 @@ def _tamper_history_remove_signed(docs: dict[str, bytes]) -> None:
     manifest["source"]["history_hash"] = "0" * 64
     docs["trust-operations-assurance-watch-signoff-manifest.json"] = _doc_bytes(manifest)
     _resign_archive_docs(docs)
+
+
+def _history_events_from_bytes(data: bytes) -> list[dict]:
+    rows: list[dict] = []
+    for line in data.decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
+def _rehash_history_events(events: list[dict]) -> list[dict]:
+    previous_hash = None
+    rows: list[dict] = []
+    for event in events:
+        row = dict(event)
+        row["previous_event_hash"] = previous_hash
+        row["payload_hash"] = watch_signoff_history_event_payload_hash(row)
+        row["event_hash"] = watch_signoff_history_event_hash(row)
+        previous_hash = row["event_hash"]
+        rows.append(row)
+    return rows
+
+
+def _history_bytes(events: list[dict]) -> bytes:
+    return ("\n".join(json.dumps(event, ensure_ascii=False, sort_keys=True) for event in events) + ("\n" if events else "")).encode("utf-8")

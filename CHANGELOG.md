@@ -1,5 +1,16 @@
 # Changelog
 
+## v9.8.1 - 2026-06-23
+
+### Fixed
+- Assurance Watch Signoff history now records hash-chained events and binds the signoff creation event to the signed reviewer, role, reason, payload hash, signoff hash, and closeout hash.
+- Assurance Watch Signoff Archive verifier now rebuilds the history chain and rejects full-resign attempts that modify `watch-signoff.json` public signoff fields while only updating hashes.
+- release-check `v98.trust_operations_assurance_watch_signoff_smoke` now covers `full_resign_signed_by=failed`.
+
+### Verified
+- `python -m pytest tests\test_trust_operations_assurance_watch_signoff.py tests\test_release_check.py::test_v98_trust_operations_assurance_watch_signoff_smoke -q`
+- `python -m song_agent.cli release-check --profile v9 --skip-tests --json`
+
 ## v9.8.0 - 2026-06-23
 
 ### Added

@@ -25,6 +25,8 @@ from song_agent.trust_operations_assurance_watch_signoff import (
     TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_REPORT_PACKAGE_TYPE,
     TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
     TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SOURCE_PACKAGE_TYPE,
+    watch_signoff_history_event_hash,
+    watch_signoff_history_event_payload_hash,
     watch_signoff_hash,
     watch_signoff_manifest_hash,
 )
@@ -294,9 +296,54 @@ class _WatchSignoffVerifier:
         self._add_exact_check("manifest", "toaws_manifest_external_summary_hash", manifest_source.get("external_verification_summary_hash"), self.external_summary.get("integrity_hash"), "Manifest external summary hash")
 
     def _verify_history(self) -> None:
+        previous_hash: str | None = None
+        chain_errors: list[str] = []
+        payload_errors: list[str] = []
+        for index, event in enumerate(self.history_events):
+            event_id = str(event.get("event_type") or f"event-{index}")
+            expected_previous = previous_hash
+            if event.get("previous_event_hash") != expected_previous:
+                chain_errors.append(event_id)
+            if event.get("payload_hash") != watch_signoff_history_event_payload_hash(event):
+                payload_errors.append(event_id)
+            expected_event_hash = watch_signoff_history_event_hash(event)
+            if event.get("event_hash") != expected_event_hash:
+                chain_errors.append(event_id)
+            previous_hash = str(event.get("event_hash") or "")
+        self._add_check(
+            "history",
+            "toaws_history_event_payload_hashes",
+            "failed" if payload_errors else "passed",
+            "blocking",
+            "History event payload hash failed: " + ", ".join(payload_errors[:5]) if payload_errors else "History event payload hashes are valid.",
+        )
+        self._add_check(
+            "history",
+            "toaws_history_event_chain",
+            "failed" if chain_errors else "passed",
+            "blocking",
+            "History event chain failed: " + ", ".join(chain_errors[:5]) if chain_errors else "History event hash chain is valid.",
+        )
         signoff_hash = str(self.signoff.get("integrity_hash") or "")
         signed_events = [item for item in self.history_events if item.get("event_type") == "watch_signoff_created" and item.get("signoff_hash") == signoff_hash]
         self._add_check("history", "toaws_history_signed_event", "passed" if signed_events else "failed", "blocking", "Signed history contains the current signoff hash." if signed_events else "Signed history is missing the current signoff hash.")
+        signoff_event = signed_events[-1] if signed_events else {}
+        expected_event_fields = {
+            "signoff_id": self.signoff.get("signoff_id"),
+            "closeout_hash": self.closeout.get("integrity_hash"),
+            "signed_by": self.signoff.get("signed_by"),
+            "role": self.signoff.get("role"),
+            "reason": self.signoff.get("reason"),
+            "signoff_payload_hash": self.signoff.get("payload_hash"),
+        }
+        mismatched_event_fields = [key for key, expected in expected_event_fields.items() if signoff_event.get(key) != expected]
+        self._add_check(
+            "history",
+            "toaws_history_signoff_payload_binding",
+            "failed" if mismatched_event_fields else "passed",
+            "blocking",
+            "Signoff history payload does not match current signoff: " + ", ".join(mismatched_event_fields) if mismatched_event_fields else "Signoff history payload matches current signoff.",
+        )
         reset_events = [item for item in self.history_events if item.get("event_type") == "watch_signoff_reset"]
         change_requests = self.change_requests_doc.get("change_requests") if isinstance(self.change_requests_doc.get("change_requests"), list) else []
         by_id = {str(item.get("change_request_id") or ""): item for item in change_requests if isinstance(item, dict)}

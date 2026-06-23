@@ -15069,6 +15069,7 @@ def _v98_trust_operations_assurance_watch_signoff_smoke(root: Path) -> tuple[boo
         old_watch_report_path = write_json(base / "old-watch-verification-report.json", old_watch_report)
         old_watch = verify_trust_operations_assurance_watch_signoff_archive_package(signoff_store.archive_zip_path(queue_id), strict=True, require_signed=True, require_current=True, **{**signoff_payload, "watch_verification_report_path": old_watch_report_path})
         signed_by = verify_trust_operations_assurance_watch_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path(queue_id), base / "watch-signoff-signed-by.zip", _v98_tamper_watch_signoff_signed_by), strict=True, require_signed=True, require_current=True, **signoff_payload)
+        full_resign_signed_by = verify_trust_operations_assurance_watch_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path(queue_id), base / "watch-signoff-full-resign-signed-by.zip", _v98_tamper_watch_signoff_signed_by_full_resign), strict=True, require_signed=True, require_current=True, **signoff_payload)
         closeout_tamper = verify_trust_operations_assurance_watch_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path(queue_id), base / "watch-signoff-closeout.zip", _v98_tamper_watch_signoff_closeout), strict=True, require_signed=True, require_current=True, **signoff_payload)
         history = verify_trust_operations_assurance_watch_signoff_archive_package(_v76_rewrite_zip(signoff_store.archive_zip_path(queue_id), base / "watch-signoff-history.zip", _v98_tamper_watch_signoff_history), strict=True, require_signed=True, require_current=True, **signoff_payload)
         extra = verify_trust_operations_assurance_watch_signoff_archive_package(_v38_rewrite_zip(signoff_store.archive_zip_path(queue_id), base / "watch-signoff-extra.zip", additions={"docs/extra.txt": b"x"}), strict=True)
@@ -15108,6 +15109,7 @@ def _v98_trust_operations_assurance_watch_signoff_smoke(root: Path) -> tuple[boo
             and hub_gate.get("status") == "passed"
             and _v38_check_status(old_watch, "toaws_watch_zip_sha256") == "failed"
             and _v38_check_status(signed_by, "toaws_signoff_payload_hash") == "failed"
+            and _v38_check_status(full_resign_signed_by, "toaws_history_signoff_payload_binding") == "failed"
             and closeout_tamper_status == "failed"
             and history_tamper_status == "failed"
             and _v38_check_status(extra, "toaws_zip_allowed_entries") == "failed"
@@ -15126,6 +15128,7 @@ def _v98_trust_operations_assurance_watch_signoff_smoke(root: Path) -> tuple[boo
             f"signoff={signoff.get('status')}, verify={signoff_verification.get('status')}, hub_gate={hub_gate.get('status')}, "
             f"missing_gate={_v38_check_status(missing_gate, 'toh_assurance_watch_signoff_archive_required')}, archive_only={_v38_check_status(archive_only_gate, 'toh_assurance_watch_signoff_watch_verification_required')}, "
             f"old_watch={_v38_check_status(old_watch, 'toaws_watch_zip_sha256')}, signed_by={_v38_check_status(signed_by, 'toaws_signoff_payload_hash')}, "
+            f"full_resign_signed_by={_v38_check_status(full_resign_signed_by, 'toaws_history_signoff_payload_binding')}, "
             f"closeout={closeout_tamper_status}, "
             f"history={history_tamper_status}, extra={_v38_check_status(extra, 'toaws_zip_allowed_entries')}, "
             f"redaction={_v38_check_status(redaction, 'toaws_redaction_scan')}, reset={delete_guard}/{draft_reset}/{reset.get('status')}/{cr_reuse}"
@@ -15164,6 +15167,7 @@ def _v98_resign_watch_signoff_docs(docs: dict[str, bytes]) -> None:
         _v74_sync_manifest_file(manifest, name, docs[name])
         manifest.setdefault("source", {})[source_key] = doc["integrity_hash"]
     _v74_sync_manifest_file(manifest, "watch-signoff-history.jsonl", docs.get("watch-signoff-history.jsonl", b""))
+    manifest.setdefault("source", {})["history_hash"] = stable_hash({"events": _v98_history_events_from_bytes(docs.get("watch-signoff-history.jsonl", b""))})
     manifest["integrity_hash"] = watch_signoff_manifest_hash(manifest)
     docs["trust-operations-assurance-watch-signoff-manifest.json"] = _v74_json_doc(manifest)
 
@@ -15172,6 +15176,33 @@ def _v98_tamper_watch_signoff_signed_by(docs: dict[str, bytes]) -> None:
     signoff = _v74_read_json_doc(docs, "watch-signoff.json")
     signoff["signed_by"] = "tampered-reviewer"
     docs["watch-signoff.json"] = _v74_json_doc(signoff)
+    _v98_resign_watch_signoff_docs(docs)
+
+
+def _v98_tamper_watch_signoff_signed_by_full_resign(docs: dict[str, bytes]) -> None:
+    from song_agent.trust_operations_assurance_watch_signoff import watch_signoff_hash
+
+    signoff = _v74_read_json_doc(docs, "watch-signoff.json")
+    signoff["signed_by"] = "tampered-reviewer"
+    signoff["payload_hash"] = stable_hash(
+        {
+            "queue_id": signoff.get("queue_id"),
+            "closeout_id": signoff.get("closeout_id"),
+            "signed_by": signoff.get("signed_by"),
+            "role": signoff.get("role"),
+            "reason": signoff.get("reason"),
+            "source": signoff.get("source"),
+            "decision": signoff.get("decision"),
+        }
+    )
+    signoff["integrity_hash"] = watch_signoff_hash(signoff)
+    docs["watch-signoff.json"] = _v74_json_doc(signoff)
+
+    events = _v98_history_events_from_bytes(docs.get("watch-signoff-history.jsonl", b""))
+    for event in events:
+        if event.get("event_type") == "watch_signoff_created":
+            event["signoff_hash"] = signoff["integrity_hash"]
+    docs["watch-signoff-history.jsonl"] = _v98_history_bytes(_v98_rehash_watch_signoff_history(events))
     _v98_resign_watch_signoff_docs(docs)
 
 
@@ -15185,6 +15216,39 @@ def _v98_tamper_watch_signoff_closeout(docs: dict[str, bytes]) -> None:
 def _v98_tamper_watch_signoff_history(docs: dict[str, bytes]) -> None:
     docs["watch-signoff-history.jsonl"] = b""
     _v98_resign_watch_signoff_docs(docs)
+
+
+def _v98_history_events_from_bytes(data: bytes) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for line in data.decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            events.append(item)
+    return events
+
+
+def _v98_rehash_watch_signoff_history(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from song_agent.trust_operations_assurance_watch_signoff import watch_signoff_history_event_hash, watch_signoff_history_event_payload_hash
+
+    previous_hash: str | None = None
+    rows: list[dict[str, Any]] = []
+    for event in events:
+        row = dict(event)
+        row["previous_event_hash"] = previous_hash
+        row["payload_hash"] = watch_signoff_history_event_payload_hash(row)
+        row["event_hash"] = watch_signoff_history_event_hash(row)
+        previous_hash = row["event_hash"]
+        rows.append(row)
+    return rows
+
+
+def _v98_history_bytes(events: list[dict[str, Any]]) -> bytes:
+    return ("\n".join(json.dumps(event, ensure_ascii=False, sort_keys=True) for event in events) + ("\n" if events else "")).encode("utf-8")
 
 
 def _v96_external_assurance_evidence(

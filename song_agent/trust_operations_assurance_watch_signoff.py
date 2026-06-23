@@ -214,7 +214,21 @@ class TrustOperationsAssuranceWatchSignoffStore:
             }
             signoff["integrity_hash"] = watch_signoff_hash(signoff)
             _write_json(self.signoff_path(queue_id), signoff)
-            self._append_history(queue_id, {"event_type": "watch_signoff_created", "created_at": now, "queue_id": queue_id, "signoff_id": signoff_id, "signoff_hash": signoff["integrity_hash"], "closeout_hash": closeout.get("integrity_hash")})
+            self._append_history(
+                queue_id,
+                {
+                    "event_type": "watch_signoff_created",
+                    "created_at": now,
+                    "queue_id": queue_id,
+                    "signoff_id": signoff_id,
+                    "signoff_hash": signoff["integrity_hash"],
+                    "closeout_hash": closeout.get("integrity_hash"),
+                    "signed_by": signed_by,
+                    "role": role,
+                    "reason": reason,
+                    "signoff_payload_hash": signoff.get("payload_hash"),
+                },
+            )
             return _sanitize(signoff)
 
     def create_change_request(self, queue_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
@@ -589,7 +603,12 @@ class TrustOperationsAssuranceWatchSignoffStore:
             raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch signoff archive ZIP was already built for this signoff. Reset before rebuilding archive ZIP.")
 
     def _append_history(self, queue_id: str, payload: dict[str, Any]) -> None:
-        _append_jsonl(self.history_path(queue_id), payload)
+        events = self._history_events(queue_id)
+        event = _sanitize(payload)
+        event["previous_event_hash"] = events[-1].get("event_hash") if events else None
+        event["payload_hash"] = watch_signoff_history_event_payload_hash(event)
+        event["event_hash"] = watch_signoff_history_event_hash(event)
+        _append_jsonl(self.history_path(queue_id), event)
 
 
 def watch_signoff_hash(doc: dict[str, Any]) -> str:
@@ -598,6 +617,14 @@ def watch_signoff_hash(doc: dict[str, Any]) -> str:
 
 def watch_signoff_manifest_hash(doc: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in {"integrity_hash", "generated_at", "zip"}})
+
+
+def watch_signoff_history_event_payload_hash(event: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
+
+
+def watch_signoff_history_event_hash(event: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in event.items() if key != "event_hash"})
 
 
 def _history_hash(events: list[dict[str, Any]]) -> str:

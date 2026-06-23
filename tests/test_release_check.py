@@ -1042,6 +1042,7 @@ def test_v98_trust_operations_assurance_watch_signoff_smoke(tmp_path: Path) -> N
     assert "archive_only=failed" in detail
     assert "old_watch=failed" in detail
     assert "signed_by=failed" in detail
+    assert "full_resign_signed_by=failed" in detail
     assert "extra=failed" in detail
     assert "redaction=failed" in detail
     assert "reset=True/True/reset/True" in detail
