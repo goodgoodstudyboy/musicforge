@@ -1,5 +1,15 @@
 # Changelog
 
+## v10.2.1 - 2026-06-24
+
+### Fixed
+- Audio Lab session closeout now records `closed_needs_fix` when any manual review is `needs_fix`; only fully accepted sessions close as plain `closed`.
+- Audio Lab session reports now surface `test_fake_count`, `real_audio_count`, `release_ready_audio_count`, and `test_fake_audio_not_release_ready` so test WAV evidence cannot be mistaken for real renderer acceptance.
+- release-check `v102.audio_lab_real_listening_smoke` now covers `needs_fix` closeout, accepted-only closeout, and session-level test-fake audio evidence.
+
+### Verified
+- `python -m pytest tests\test_audio_lab.py tests\test_cli_audio_lab.py tests\test_server_audio_lab.py tests\test_release_check.py::test_v102_audio_lab_real_listening_smoke -q`
+
 ## v10.2.0 - 2026-06-24
 
 ### Added

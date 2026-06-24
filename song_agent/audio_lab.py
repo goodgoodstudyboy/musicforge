@@ -253,6 +253,7 @@ class AudioLabStore:
                     "artifact_relpaths": dict(smoke_item.get("artifact_relpaths") or {}),
                     "artifact_hashes": dict(smoke_item.get("artifact_hashes") or {}),
                     "audio_status": smoke_item.get("audio_status"),
+                    "renderer": dict(smoke_item.get("renderer") or {}),
                     "audio_health_summary": smoke_item.get("audio_health_summary") or {},
                     "music_health_summary": smoke_item.get("music_health_summary") or {},
                     "source_hash": smoke_item.get("source_hash"),
@@ -415,7 +416,12 @@ class AudioLabStore:
                 raise AudioLabStateError("Cannot close a stale Audio Lab session.")
             if summary["manual_review_count"] < len(session.get("items", [])):
                 raise AudioLabStateError("All Audio Lab session items require manual review before close.")
-            session["status"] = "closed" if summary["rejected_count"] == 0 else "closed_with_rejections"
+            if summary["rejected_count"]:
+                session["status"] = "closed_with_rejections"
+            elif summary["needs_fix_count"]:
+                session["status"] = "closed_needs_fix"
+            else:
+                session["status"] = "closed"
             session["closed_at"] = now_iso()
             session["closeout"] = sanitize_metadata({"status": session["status"], "closed_by": _bounded(payload.get("closed_by"), 120) or "audio-lab", "summary": summary})
             session["summary"] = _session_summary(session.get("items", []), session["status"])
@@ -830,7 +836,12 @@ def _artifact_source(artifact: dict[str, Any]) -> dict[str, Any]:
 
 
 def _item_source(item: dict[str, Any]) -> dict[str, Any]:
-    return {"source_hash": item.get("source_hash"), "artifact_hashes": item.get("artifact_hashes"), "audio_status": item.get("audio_status")}
+    return {
+        "source_hash": item.get("source_hash"),
+        "artifact_hashes": item.get("artifact_hashes"),
+        "audio_status": item.get("audio_status"),
+        "renderer": item.get("renderer"),
+    }
 
 
 def _review_core(review: dict[str, Any]) -> dict[str, Any]:
@@ -879,6 +890,16 @@ def _session_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]
         "marker_count": sum(len(item.get("markers") or []) for item in items),
         "stale_count": sum(1 for item in items if item.get("stale")),
         "rendered_wav_count": sum(1 for item in items if item.get("audio_status") == "rendered"),
+        "real_audio_count": sum(
+            1
+            for item in items
+            if item.get("audio_status") == "rendered"
+            and item.get("renderer", {}).get("runner_kind") == "real"
+            and item.get("renderer", {}).get("release_ready") is True
+        ),
+        "test_fake_count": sum(1 for item in items if item.get("renderer", {}).get("runner_kind") == "test_fake"),
+        "release_ready_audio_count": sum(1 for item in items if item.get("renderer", {}).get("release_ready") is True),
+        "test_fake_audio_not_release_ready": any(item.get("renderer", {}).get("runner_kind") == "test_fake" for item in items),
     }
 
 

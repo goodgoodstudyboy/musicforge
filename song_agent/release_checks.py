@@ -15625,6 +15625,11 @@ def _v102_audio_lab_real_listening_smoke(root: Path) -> tuple[bool, str]:
                 marker = store.add_marker(session["session_id"], item_id, {"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "Low end masks hook."})
                 draft = store.create_marker_draft(session["session_id"], marker["marker"]["marker_id"], "review_task", {})
                 report = store.session_report(session["session_id"])
+                needs_fix_close = store.close_session(session["session_id"], {"closed_by": "QA"})
+                accepted_session = store.create_session({"from_smoke": wav_smoke["smoke_run_id"]})
+                accepted_item_id = accepted_session["items"][0]["item_id"]
+                store.write_item_review(accepted_session["session_id"], accepted_item_id, {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                accepted_close = store.close_session(accepted_session["session_id"], {"closed_by": "QA"})
                 wav_rel = wav_smoke["items"][0]["artifact_relpaths"]["wav"]
                 wav_path = Path(".musicforge") / "audio-lab" / wav_rel
                 right = wav_path.parent / "song-copy.wav"
@@ -15645,9 +15650,14 @@ def _v102_audio_lab_real_listening_smoke(root: Path) -> tuple[bool, str]:
                 and wav_smoke.get("summary", {}).get("wav_count") == 1
                 and wav_smoke.get("summary", {}).get("test_fake_count") == 1
                 and wav_smoke["items"][0].get("renderer", {}).get("release_ready") is False
+                and report.get("summary", {}).get("test_fake_count") == 1
+                and report.get("summary", {}).get("release_ready_audio_count") == 0
+                and report.get("summary", {}).get("test_fake_audio_not_release_ready") is True
                 and playback_guard
                 and synthetic_guard
                 and reviewed.get("review", {}).get("audio_evidence", {}).get("wav_sha256")
+                and needs_fix_close.get("session", {}).get("status") == "closed_needs_fix"
+                and accepted_close.get("session", {}).get("status") == "closed"
                 and draft.get("draft", {}).get("status") == "draft"
                 and draft.get("draft", {}).get("auto_apply") is False
                 and comparison.get("review", {}).get("preferred") == "same"
@@ -15659,6 +15669,7 @@ def _v102_audio_lab_real_listening_smoke(root: Path) -> tuple[bool, str]:
                 f"env={env.get('status')}, midi_only={midi_only.get('status')}/{midi_only.get('summary', {}).get('wav_count')}, "
                 f"required={required.get('status')}, wav={wav_smoke.get('status')}/{wav_smoke.get('summary', {}).get('test_fake_count')}, "
                 f"guards={playback_guard}/{synthetic_guard}, marker={marker.get('marker', {}).get('category')}, "
+                f"close={needs_fix_close.get('session', {}).get('status')}/{accepted_close.get('session', {}).get('status')}, "
                 f"draft={draft.get('draft', {}).get('status')}, compare={comparison.get('review', {}).get('preferred')}, "
                 f"stale={stale['items'][0].get('stale')}, redacted={redacted}"
             )

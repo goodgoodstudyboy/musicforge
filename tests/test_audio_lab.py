@@ -54,6 +54,7 @@ def test_audio_lab_session_review_marker_and_stale_guard(tmp_path: Path, monkeyp
     marker = store.add_marker(reviewed["session"]["session_id"], item_id, {"time_seconds": 2.0, "category": "mix_balance", "severity": "high", "message": "Bass masks hook."})
     draft = store.create_marker_draft(reviewed["session"]["session_id"], marker["marker"]["marker_id"], "review_task", {})
     report = store.session_report(reviewed["session"]["session_id"])
+    closed = store.close_session(reviewed["session"]["session_id"], {"closed_by": "QA"})
 
     assert reviewed["review"]["review_mode"] == "manual"
     assert reviewed["review"]["audio_evidence"]["wav_sha256"] == smoke["items"][0]["artifact_hashes"]["wav_sha256"]
@@ -61,6 +62,11 @@ def test_audio_lab_session_review_marker_and_stale_guard(tmp_path: Path, monkeyp
     assert draft["draft"]["status"] == "draft"
     assert draft["draft"]["auto_apply"] is False
     assert report["summary"]["needs_fix_count"] == 1
+    assert report["summary"]["test_fake_count"] == 1
+    assert report["summary"]["release_ready_audio_count"] == 0
+    assert report["summary"]["test_fake_audio_not_release_ready"] is True
+    assert closed["session"]["status"] == "closed_needs_fix"
+    assert closed["summary"]["status"] == "closed_needs_fix"
 
     wav_rel = smoke["items"][0]["artifact_relpaths"]["wav"]
     wav_path = Path(".musicforge") / "audio-lab" / wav_rel
@@ -68,6 +74,26 @@ def test_audio_lab_session_review_marker_and_stale_guard(tmp_path: Path, monkeyp
     stale = store.read_session(reviewed["session"]["session_id"])
     assert stale["items"][0]["stale"] is True
     assert "wav_changed" in stale["items"][0]["stale_reasons"]
+
+
+def test_audio_lab_accepted_only_session_closes_normally(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = AudioLabStore(wav_writer=write_lab_test_wav)
+    smoke = store.run_smoke({"cases": 1, "render_audio": "auto"})
+    session = store.create_session({"from_smoke": smoke["smoke_run_id"]})
+    item_id = session["items"][0]["item_id"]
+
+    store.write_item_review(
+        session["session_id"],
+        item_id,
+        {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True},
+    )
+    closed = store.close_session(session["session_id"], {"closed_by": "QA"})
+
+    assert closed["session"]["status"] == "closed"
+    assert closed["summary"]["accepted_count"] == 1
+    assert closed["summary"]["needs_fix_count"] == 0
+    assert closed["summary"]["test_fake_count"] == 1
 
 
 def test_audio_lab_ab_comparison_binds_artifact_hashes(tmp_path: Path, monkeypatch) -> None:
