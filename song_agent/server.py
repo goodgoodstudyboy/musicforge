@@ -494,6 +494,13 @@ from song_agent.audio_lab import (
     AudioLabStore,
     AudioLabValidationError,
 )
+from song_agent.audio_fix_sprints import (
+    AudioFixSprintError,
+    AudioFixSprintNotFoundError,
+    AudioFixSprintStateError,
+    AudioFixSprintStore,
+    AudioFixSprintValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3017,6 +3024,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.audio_lab_store  # type: ignore[attr-defined]
 
     @property
+    def audio_fix_sprint_store(self) -> AudioFixSprintStore:
+        return self.server.audio_fix_sprint_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3192,6 +3203,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/audio-lab" or path.startswith("/api/audio-lab/"):
                 self._handle_audio_lab_route(method, path)
+                return
+            if path == "/api/audio-fix-sprints" or path.startswith("/api/audio-fix-sprints/"):
+                self._handle_audio_fix_sprint_route(method, path)
                 return
             if path == "/api/mastering/profiles" or path.startswith("/api/mastering/profiles/"):
                 self._handle_mastering_profiles_route(method, path)
@@ -9802,6 +9816,103 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AudioLabValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except AudioLabError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_audio_fix_sprint_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/audio-fix-sprints":
+                if method == "GET":
+                    sprints = self.audio_fix_sprint_store.list_sprints()
+                    self._send_json({"ok": True, "sprints": sprints, "summary": {"sprint_count": len(sprints)}})
+                    return
+                if method == "POST":
+                    sprint = self.audio_fix_sprint_store.create_sprint(self._read_json_body())
+                    self._send_json({"ok": True, "sprint": sprint, "summary": sprint.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if path.startswith("/api/audio-fix-sprints/"):
+                parts = path.removeprefix("/api/audio-fix-sprints/").strip("/").split("/")
+                sprint_id = parts[0]
+                if len(parts) == 1:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    sprint = self.audio_fix_sprint_store.read_sprint(sprint_id)
+                    self._send_json({"ok": True, "sprint": sprint, "summary": sprint.get("summary", {})})
+                    return
+                action = parts[1]
+                if len(parts) == 2 and action == "refresh":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    sprint = self.audio_fix_sprint_store.refresh_sprint(sprint_id)
+                    self._send_json({"ok": True, "sprint": sprint, "summary": sprint.get("summary", {})})
+                    return
+                if len(parts) == 2 and action == "drafts":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_fix_sprint_store.create_drafts(sprint_id, self._optional_json_body())
+                    self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                    return
+                if len(parts) == 2 and action == "candidates":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_fix_sprint_store.generate_candidates(sprint_id, self._optional_json_body())
+                    self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                    return
+                if len(parts) == 2 and action == "recheck-session":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_fix_sprint_store.create_recheck_session(sprint_id, self._optional_json_body())
+                    self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                    return
+                if len(parts) == 2 and action == "closeout":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.audio_fix_sprint_store.closeout_report(sprint_id)
+                    self._send_json({"ok": report.get("status") == "passed", "closeout": report, "summary": report.get("summary", {})})
+                    return
+                if len(parts) == 2 and action == "close":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_fix_sprint_store.close_sprint(sprint_id, self._optional_json_body())
+                    self._send_json({"ok": True, **result})
+                    return
+                if len(parts) == 6 and parts[1] == "items" and parts[3] == "candidates" and parts[5] == "review":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_fix_sprint_store.review_candidate(sprint_id, parts[2], parts[4], self._read_json_body())
+                    self._send_json({"ok": True, **result})
+                    return
+                if len(parts) == 6 and parts[1] == "items" and parts[3] == "candidates" and parts[5] == "select":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_fix_sprint_store.select_candidate(sprint_id, parts[2], parts[4], self._optional_json_body())
+                    self._send_json({"ok": True, **result})
+                    return
+                if len(parts) == 4 and parts[1] == "recheck-items" and parts[3] == "review":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_fix_sprint_store.review_recheck_item(sprint_id, parts[2], self._read_json_body())
+                    self._send_json({"ok": True, **result})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio Fix Sprint route not found.")
+        except AudioFixSprintNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioFixSprintStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AudioFixSprintValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except AudioFixSprintError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
@@ -17734,6 +17845,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_review_store = AudioReviewEvidenceStore(self.release_store, self.project_store)
         self.audio_revision_store = AudioRevisionStore(self.release_store, project_store=self.project_store, job_store=self.job_store, audio_review_store=self.audio_review_store)
         self.audio_lab_store = AudioLabStore()
+        self.audio_fix_sprint_store = AudioFixSprintStore(audio_lab_store=self.audio_lab_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

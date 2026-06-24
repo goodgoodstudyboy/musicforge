@@ -15679,6 +15679,110 @@ def _v102_audio_lab_real_listening_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
 
 
+def _v103_audio_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.audio_fix_sprints import AudioFixSprintStateError, AudioFixSprintStore
+    from song_agent.audio_lab import AudioLabStore, write_lab_test_wav
+    from song_agent.projectio import read_json
+
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v103-audio-fix-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                lab = AudioLabStore(wav_writer=write_lab_test_wav)
+
+                def make_session(*, release_ready_source: bool) -> tuple[str, str]:
+                    smoke = lab.run_smoke({"cases": 1, "render_audio": "auto"})
+                    session = lab.create_session({"from_smoke": smoke["smoke_run_id"]})
+                    session_id = session["session_id"]
+                    item_id = session["items"][0]["item_id"]
+                    if release_ready_source:
+                        raw = read_json(lab.session_path(session_id))
+                        raw["items"][0]["renderer"] = {"runner_kind": "real", "profile_id": "test-real", "release_ready": True}
+                        raw["items"][0]["source_hash"] = f"release-ready-source-{session_id}"
+                        lab._write_session(raw)  # type: ignore[attr-defined]
+                    lab.write_item_review(session_id, item_id, {"result": "needs_fix", "rating": 2, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                    lab.add_marker(session_id, item_id, {"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "Masking."})
+                    return session_id, item_id
+
+                fake_session_id, _ = make_session(release_ready_source=False)
+                fake_store = AudioFixSprintStore(audio_lab_store=lab, wav_writer=write_lab_test_wav)
+                fake_sprint = fake_store.create_sprint({"from_session": fake_session_id, "include_test_audio": True})
+                fake_item_id = fake_sprint["items"][0]["fix_item_id"]
+                duplicate_guard = False
+                try:
+                    fake_store.create_sprint({"from_session": fake_session_id, "include_test_audio": True})
+                except AudioFixSprintStateError:
+                    duplicate_guard = True
+                fake_candidate = fake_store.generate_candidates(fake_sprint["fix_sprint_id"])["candidates"][0]
+                select_guard = False
+                try:
+                    fake_store.select_candidate(fake_sprint["fix_sprint_id"], fake_item_id, fake_candidate["candidate_id"])
+                except AudioFixSprintStateError:
+                    select_guard = True
+                fake_store.review_candidate(fake_sprint["fix_sprint_id"], fake_item_id, fake_candidate["candidate_id"], {"preferred": "right", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                fake_store.select_candidate(fake_sprint["fix_sprint_id"], fake_item_id, fake_candidate["candidate_id"])
+                fake_recheck = fake_store.create_recheck_session(fake_sprint["fix_sprint_id"])["recheck_session"]
+                fake_store.review_recheck_item(fake_sprint["fix_sprint_id"], fake_recheck["items"][0]["item_id"], {"result": "accepted", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                fake_closeout = fake_store.closeout_report(fake_sprint["fix_sprint_id"])
+                fake_close_guard = False
+                try:
+                    fake_store.close_sprint(fake_sprint["fix_sprint_id"])
+                except AudioFixSprintStateError:
+                    fake_close_guard = True
+
+                real_session_id, real_item_source_id = make_session(release_ready_source=True)
+                real_store = AudioFixSprintStore(audio_lab_store=lab)
+                real_sprint = real_store.create_sprint({"from_session": real_session_id})
+                real_item_id = real_sprint["items"][0]["fix_item_id"]
+                real_candidate = real_store.generate_candidates(real_sprint["fix_sprint_id"])["candidates"][0]
+                real_store.review_candidate(real_sprint["fix_sprint_id"], real_item_id, real_candidate["candidate_id"], {"preferred": "right", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                real_store.select_candidate(real_sprint["fix_sprint_id"], real_item_id, real_candidate["candidate_id"])
+                real_recheck = real_store.create_recheck_session(real_sprint["fix_sprint_id"])["recheck_session"]
+                real_store.review_recheck_item(real_sprint["fix_sprint_id"], real_recheck["items"][0]["item_id"], {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                real_closeout = real_store.closeout_report(real_sprint["fix_sprint_id"])
+                real_closed = real_store.close_sprint(real_sprint["fix_sprint_id"], {"closed_by": "QA"})
+
+                stale_session_id, stale_item_id = make_session(release_ready_source=True)
+                stale_store = AudioFixSprintStore(audio_lab_store=lab)
+                stale_sprint = stale_store.create_sprint({"from_session": stale_session_id})
+                lab.add_marker(stale_session_id, stale_item_id, {"time_seconds": 2.0, "category": "timing", "severity": "high", "message": "Late snare."})
+                stale_refresh = stale_store.refresh_sprint(stale_sprint["fix_sprint_id"])
+                stale_guard = False
+                try:
+                    stale_store.generate_candidates(stale_sprint["fix_sprint_id"])
+                except AudioFixSprintStateError:
+                    stale_guard = True
+            finally:
+                os.chdir(old_cwd)
+
+            ok = (
+                duplicate_guard
+                and select_guard
+                and fake_closeout.get("status") == "failed"
+                and "test_fake_audio_not_release_ready" in fake_closeout.get("blockers", [])
+                and "audio_recheck_not_release_ready" in fake_closeout.get("blockers", [])
+                and fake_close_guard
+                and real_closeout.get("status") == "passed"
+                and real_closeout.get("summary", {}).get("release_ready_audio_count") == 1
+                and real_closed.get("sprint", {}).get("status") == "closed"
+                and stale_refresh.get("stale") is True
+                and "source_session_changed" in stale_refresh.get("stale_reasons", [])
+                and stale_guard
+            )
+            return ok, (
+                f"duplicate_guard={duplicate_guard}, select_guard={select_guard}, "
+                f"fake_closeout={fake_closeout.get('status')}/{fake_closeout.get('blockers')}, fake_close_guard={fake_close_guard}, "
+                f"real_closeout={real_closeout.get('status')}/{real_closeout.get('summary', {}).get('release_ready_audio_count')}, "
+                f"real_closed={real_closed.get('sprint', {}).get('status')}, stale={stale_refresh.get('stale')}/{stale_guard}"
+            )
+    except Exception as exc:
+        return False, f"v10.3 Audio Fix Sprint smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
 def _ga_check_status(report: dict[str, Any], check_id: str) -> str:
     for check in report.get("checks") or []:
         if isinstance(check, dict) and check.get("check_id") == check_id:

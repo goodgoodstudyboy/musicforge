@@ -73,6 +73,7 @@ def test_release_check_profile_and_filters() -> None:
         "v100.ga_lts_readiness_smoke",
         "v101.lts_maintenance_backup_restore_smoke",
         "v102.audio_lab_real_listening_smoke",
+        "v103.audio_fix_sprint_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

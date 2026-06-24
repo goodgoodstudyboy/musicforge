@@ -97,6 +97,28 @@ audio acceptance. Automated tests may use a `test_fake` WAV writer, and reports
 mark that runner as not release-ready. Manual Audio Lab reviews require a current
 WAV hash, `playback_confirmed=true`, and reviewer name/role.
 
+## Audio Fix Sprints
+
+Audio Fix Sprints turn Audio Lab `needs_fix` or `rejected` markers into a
+manual repair loop:
+
+```powershell
+python -m song_agent.cli audio-fix-sprint create --from-session als-000001 --json
+python -m song_agent.cli audio-fix-sprint create-drafts afs-000001 --draft-type mix_patch --json
+python -m song_agent.cli audio-fix-sprint generate-candidates afs-000001 --json
+python -m song_agent.cli audio-fix-sprint review-candidate afs-000001 afi-000001 afc-000001 --preferred right --rating 4 --reviewer "Developer" --role developer --playback-confirmed --json
+python -m song_agent.cli audio-fix-sprint select-candidate afs-000001 afi-000001 afc-000001 --json
+python -m song_agent.cli audio-fix-sprint create-recheck-session afs-000001 --json
+python -m song_agent.cli audio-fix-sprint review-recheck afs-000001 item-001 --result accepted --rating 4 --reviewer "Developer" --role developer --playback-confirmed --json
+python -m song_agent.cli audio-fix-sprint closeout afs-000001 --json
+python -m song_agent.cli audio-fix-sprint close afs-000001 --closed-by "Developer" --json
+```
+
+The sprint never auto-applies a candidate. A candidate must have manual A/B
+review, be selected explicitly, and then pass a manual recheck before close.
+Stale Audio Lab sources or stale candidate artifacts block progress. Test fake
+or copied test WAV evidence cannot close a sprint as release-ready.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

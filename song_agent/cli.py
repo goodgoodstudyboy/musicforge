@@ -277,6 +277,84 @@ def build_audio_lab_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_audio_fix_sprint_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Audio Fix Sprints from Audio Lab needs_fix markers.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    create = subparsers.add_parser("create", help="Create a sprint from one or more Audio Lab sessions.")
+    create.add_argument("--from-session", "--session-id", dest="session_ids", action="append", required=True)
+    create.add_argument("--name", default="")
+    create.add_argument("--include-test-audio", action="store_true")
+    create.add_argument("--json", action="store_true")
+
+    listing = subparsers.add_parser("list", help="List Audio Fix Sprints.")
+    listing.add_argument("--json", action="store_true")
+
+    detail = subparsers.add_parser("detail", help="Show one Audio Fix Sprint.")
+    detail.add_argument("sprint_id")
+    detail.add_argument("--json", action="store_true")
+
+    refresh = subparsers.add_parser("refresh", help="Refresh stale status for an Audio Fix Sprint.")
+    refresh.add_argument("sprint_id")
+    refresh.add_argument("--json", action="store_true")
+
+    drafts = subparsers.add_parser("create-drafts", help="Create deterministic fix drafts for sprint items.")
+    drafts.add_argument("sprint_id")
+    drafts.add_argument("--draft-type", choices=["review_task", "audio_revision", "mix_patch"], default="review_task")
+    drafts.add_argument("--item-id", dest="item_ids", action="append")
+    drafts.add_argument("--json", action="store_true")
+
+    candidates = subparsers.add_parser("generate-candidates", help="Generate local deterministic fix candidates.")
+    candidates.add_argument("sprint_id")
+    candidates.add_argument("--item-id", dest="item_ids", action="append")
+    candidates.add_argument("--json", action="store_true")
+
+    review = subparsers.add_parser("review-candidate", help="Write a manual A/B review for a candidate.")
+    review.add_argument("sprint_id")
+    review.add_argument("item_id")
+    review.add_argument("candidate_id")
+    review.add_argument("--preferred", choices=["left", "right", "same"], required=True)
+    review.add_argument("--rating", type=int, default=4)
+    review.add_argument("--rating-delta", type=int, default=0)
+    review.add_argument("--reviewer", default="developer")
+    review.add_argument("--role", default="developer")
+    review.add_argument("--notes", default="")
+    review.add_argument("--playback-confirmed", action="store_true")
+    review.add_argument("--json", action="store_true")
+
+    select = subparsers.add_parser("select-candidate", help="Select a manually reviewed candidate.")
+    select.add_argument("sprint_id")
+    select.add_argument("item_id")
+    select.add_argument("candidate_id")
+    select.add_argument("--selected-by", default="audio-fix-sprint")
+    select.add_argument("--json", action="store_true")
+
+    recheck = subparsers.add_parser("create-recheck-session", help="Create the manual recheck session from selected candidates.")
+    recheck.add_argument("sprint_id")
+    recheck.add_argument("--json", action="store_true")
+
+    recheck_review = subparsers.add_parser("review-recheck", help="Review one recheck session item.")
+    recheck_review.add_argument("sprint_id")
+    recheck_review.add_argument("item_id")
+    recheck_review.add_argument("--result", choices=["accepted", "needs_fix", "rejected"], required=True)
+    recheck_review.add_argument("--rating", type=int, default=4)
+    recheck_review.add_argument("--reviewer", default="developer")
+    recheck_review.add_argument("--role", default="developer")
+    recheck_review.add_argument("--notes", default="")
+    recheck_review.add_argument("--playback-confirmed", action="store_true")
+    recheck_review.add_argument("--json", action="store_true")
+
+    closeout = subparsers.add_parser("closeout", help="Build and show the Audio Fix Sprint closeout report.")
+    closeout.add_argument("sprint_id")
+    closeout.add_argument("--json", action="store_true")
+
+    close = subparsers.add_parser("close", help="Close a sprint after manual A/B and accepted recheck.")
+    close.add_argument("sprint_id")
+    close.add_argument("--closed-by", default="audio-fix-sprint")
+    close.add_argument("--json", action="store_true")
+    return parser
+
+
 def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Verify a MusicForge LTS maintenance backup ZIP.")
     parser.add_argument("zip_path", type=Path, help="Path to musicforge-maintenance-backup.zip.")
@@ -2631,6 +2709,71 @@ def _run_audio_lab_command(args: argparse.Namespace) -> dict[str, Any]:
     raise ValueError("Unsupported audio-lab command.")
 
 
+def _run_audio_fix_sprint_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.audio_fix_sprints import AudioFixSprintStore
+
+    store = AudioFixSprintStore()
+    if args.action == "create":
+        sprint = store.create_sprint({"session_ids": args.session_ids, "name": args.name, "include_test_audio": args.include_test_audio})
+        return {"ok": True, "sprint": sprint, "summary": sprint.get("summary", {}), "status": sprint.get("status")}
+    if args.action == "list":
+        sprints = store.list_sprints()
+        return {"ok": True, "sprints": sprints, "summary": {"sprint_count": len(sprints)}, "status": "passed"}
+    if args.action == "detail":
+        sprint = store.read_sprint(args.sprint_id)
+        return {"ok": True, "sprint": sprint, "summary": sprint.get("summary", {}), "status": sprint.get("status")}
+    if args.action == "refresh":
+        sprint = store.refresh_sprint(args.sprint_id)
+        return {"ok": True, "sprint": sprint, "summary": sprint.get("summary", {}), "status": sprint.get("status")}
+    if args.action == "create-drafts":
+        result = store.create_drafts(args.sprint_id, {"draft_type": args.draft_type, "item_ids": args.item_ids or []})
+        return {"ok": True, **result, "summary": result.get("sprint", {}).get("summary", {}), "status": result.get("sprint", {}).get("status")}
+    if args.action == "generate-candidates":
+        result = store.generate_candidates(args.sprint_id, {"item_ids": args.item_ids or []})
+        return {"ok": True, **result, "summary": result.get("sprint", {}).get("summary", {}), "status": result.get("sprint", {}).get("status")}
+    if args.action == "review-candidate":
+        result = store.review_candidate(
+            args.sprint_id,
+            args.item_id,
+            args.candidate_id,
+            {
+                "preferred": args.preferred,
+                "rating": args.rating,
+                "rating_delta": args.rating_delta,
+                "reviewer": {"name": args.reviewer, "role": args.role},
+                "notes": args.notes,
+                "playback_confirmed": args.playback_confirmed,
+            },
+        )
+        return {"ok": True, **result, "summary": result.get("sprint", {}).get("summary", {}), "status": result.get("candidate", {}).get("status")}
+    if args.action == "select-candidate":
+        result = store.select_candidate(args.sprint_id, args.item_id, args.candidate_id, {"selected_by": args.selected_by})
+        return {"ok": True, **result, "summary": result.get("sprint", {}).get("summary", {}), "status": result.get("sprint", {}).get("status")}
+    if args.action == "create-recheck-session":
+        result = store.create_recheck_session(args.sprint_id)
+        return {"ok": True, **result, "summary": result.get("recheck_session", {}).get("summary", {}), "status": result.get("recheck_session", {}).get("status")}
+    if args.action == "review-recheck":
+        result = store.review_recheck_item(
+            args.sprint_id,
+            args.item_id,
+            {
+                "result": args.result,
+                "rating": args.rating,
+                "reviewer": {"name": args.reviewer, "role": args.role},
+                "notes": args.notes,
+                "playback_confirmed": args.playback_confirmed,
+            },
+        )
+        return {"ok": True, **result, "summary": result.get("recheck_session", {}).get("summary", {}), "status": result.get("recheck_session", {}).get("status")}
+    if args.action == "closeout":
+        report = store.closeout_report(args.sprint_id)
+        return {"ok": report.get("status") == "passed", "closeout": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "close":
+        result = store.close_sprint(args.sprint_id, {"closed_by": args.closed_by})
+        return {"ok": True, **result, "summary": result.get("sprint", {}).get("summary", {}), "status": result.get("sprint", {}).get("status")}
+    raise ValueError("Unsupported audio-fix-sprint command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -2651,6 +2794,30 @@ def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> Non
     if "comparison" in result:
         comparison = result["comparison"]
         print(f"comparison: {comparison.get('comparison_id')}")
+
+
+def _print_audio_fix_sprint_result(result: dict[str, Any], *, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
+    print("MusicForge Audio Fix Sprint")
+    print(f"status: {status}")
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    if summary:
+        details = []
+        for key in ("issue_count", "candidate_count", "selected_count", "resolved_count", "manual_recheck_count", "test_fake_count"):
+            if key in summary:
+                details.append(f"{key}={summary.get(key)}")
+        if details:
+            print("summary: " + " ".join(details))
+    if "sprint" in result:
+        sprint = result["sprint"]
+        print(f"sprint: {sprint.get('fix_sprint_id')} stale={sprint.get('stale', False)}")
+    if "closeout" in result:
+        closeout = result["closeout"]
+        blockers = closeout.get("blockers") or []
+        print(f"closeout: {closeout.get('status')} blockers={','.join(blockers) if blockers else '-'}")
 
 
 def _main() -> None:
@@ -2742,6 +2909,16 @@ def _main() -> None:
         _print_audio_lab_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
         if result.get("ok") is False or status in {"failed", "blocked"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "audio-fix-sprint":
+        parser = build_audio_fix_sprint_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_audio_fix_sprint_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_audio_fix_sprint_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
             raise SystemExit(1)
         return
     elif raw_args and raw_args[0] == "verify-maintenance-backup":

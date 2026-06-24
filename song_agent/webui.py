@@ -847,6 +847,20 @@ def panel_html() -> str:
           <pre id="audio-lab-summary" class="json-preview"></pre>
         </div>
       </section>
+      <section id="audio-fix-sprints">
+        <div class="panel-title">
+          <span>Audio Fix Sprints</span>
+          <span id="audio-fix-sprint-status" class="status">Manual recheck required</span>
+        </div>
+        <div class="panel-body">
+          <div class="toolbar">
+            <input id="audio-fix-sprint-session-id" placeholder="als-000001">
+            <button class="secondary" id="audio-fix-sprint-list" type="button">List</button>
+            <button class="secondary" id="audio-fix-sprint-create" type="button">Create From Session</button>
+          </div>
+          <pre id="audio-fix-sprint-summary" class="json-preview"></pre>
+        </div>
+      </section>
     <section>
       <div class="panel-title">
         <span>Song Request</span>
@@ -2224,6 +2238,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     $("audio-lab-compare-create").addEventListener("click", async () => {
       $("audio-lab-summary").textContent = "Create A/B comparisons via /api/audio-lab/comparisons.";
     });
+    $("audio-fix-sprint-list").addEventListener("click", async () => {
+      await showAudioFixSprintResult("/api/audio-fix-sprints", { method: "GET" });
+    });
+    $("audio-fix-sprint-create").addEventListener("click", async () => {
+      const sessionId = $("audio-fix-sprint-session-id").value.trim();
+      if (!sessionId) {
+        $("audio-fix-sprint-status").textContent = "missing session";
+        return;
+      }
+      await showAudioFixSprintResult("/api/audio-fix-sprints", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from_session: sessionId }) });
+    });
 
     async function showAudioLabResult(path, options) {
       try {
@@ -2233,6 +2258,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } catch (err) {
         $("audio-lab-status").textContent = "error";
         $("audio-lab-summary").textContent = err.message;
+      }
+    }
+
+    async function showAudioFixSprintResult(path, options) {
+      try {
+        const data = await api(path, options);
+        $("audio-fix-sprint-status").textContent = (data.summary && data.summary.status) || (data.sprint && data.sprint.status) || "ok";
+        $("audio-fix-sprint-summary").textContent = JSON.stringify(data.summary || data.sprint || data, null, 2);
+      } catch (err) {
+        $("audio-fix-sprint-status").textContent = "error";
+        $("audio-fix-sprint-summary").textContent = err.message;
       }
     }
 

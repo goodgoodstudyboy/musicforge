@@ -1,5 +1,19 @@
 # Changelog
 
+## v10.3.0 - 2026-06-24
+
+### Added
+- Audio Fix Sprint store for turning Audio Lab `needs_fix` and `rejected` markers into prioritized repair issues, drafts, local candidates, selected candidates, recheck sessions, and closeout reports.
+- `audio-fix-sprint` CLI commands, `/api/audio-fix-sprints/*` endpoints, and Studio Audio Fix Sprint controls.
+- release-check `v103.audio_fix_sprint_smoke` covering duplicate open sprint guard, manual A/B selection guard, test-fake audio closeout blocking, real release-ready recheck closeout, and stale source blocking.
+
+### Fixed
+- Audio Fix Sprint closeout requires every recheck item to be release-ready audio; test fake or copied test WAV evidence cannot close as fixed.
+
+### Verified
+- `python -m pytest tests\test_audio_fix_sprints.py tests\test_cli_audio_fix_sprints.py tests\test_server_audio_fix_sprints.py tests\test_release_check.py::test_v103_audio_fix_sprint_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.2.1 - 2026-06-24
 
 ### Fixed
