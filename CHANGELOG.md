@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.2.0 - 2026-06-24
+
+### Added
+- Audio Lab environment checks for local renderer/profile readiness with redacted renderer summaries.
+- Audio Lab smoke runs that generate deterministic SongPlan/MIDI artifacts and optionally render WAV through a real renderer profile; tests can inject a `test_fake` WAV writer that is explicitly not release-ready.
+- Manual listening sessions with playback confirmation, reviewer name/role requirements, WAV hash binding, stale guards, issue markers, and draft ReviewTask/Audio Revision/Mix Patch repair entry points.
+- Audio Lab A/B comparisons that bind left/right artifact hashes and require manual playback confirmation before recording preference.
+- `/api/audio-lab/*`, `audio-lab` CLI commands, Studio Audio Lab controls, and release-check `v102.audio_lab_real_listening_smoke`.
+
+### Verified
+- `python -m pytest tests\test_audio_lab.py tests\test_cli_audio_lab.py tests\test_server_audio_lab.py tests\test_release_check_matrix.py tests\test_release_check.py::test_v102_audio_lab_real_listening_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+
 ## v10.1.1 - 2026-06-24
 
 ### Fixed

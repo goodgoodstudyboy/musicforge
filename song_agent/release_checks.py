@@ -11505,7 +11505,6 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
         latest = select_check_definitions(profile="latest")
         v7 = select_check_definitions(profile="v7")
         portal = select_check_definitions(profile="latest", groups=["portal"])
-        empty_group = select_check_definitions(profile="latest", groups=["audio"])
         since = select_check_definitions(profile="v7", since="7.2")
         empty_since = select_check_definitions(profile="latest", since="11.0")
         only = select_check_definitions(profile="full", only=["v74.attestation_portal_smoke"])
@@ -11560,7 +11559,7 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             ),
         ]
         fake_report = run_release_check_matrix(repo_root=root, profile="latest", definitions=fake_definitions)
-        empty_report = run_release_check_matrix(repo_root=root, profile="latest", groups=["audio"])
+        empty_report = run_release_check_matrix(repo_root=root, profile="latest", since="11.0")
         report_json = fake_report.to_json_report()
         empty_json = empty_report.to_json_report()
         serialized = json.dumps(report_json, ensure_ascii=False)
@@ -11580,7 +11579,6 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             and "v80.public_trust_center_smoke" in {definition.check_id for definition in latest}
             and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
             and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke", "v78.attestation_transparency_feed_smoke", "v79.attestation_transparency_acknowledgement_smoke", "v80.public_trust_center_smoke"}
-            and empty_group == []
             and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
             and empty_since == []
             and [definition.check_id for definition in only] == ["v74.attestation_portal_smoke"]
@@ -15593,6 +15591,81 @@ def _v101_add_backslash_entry(source_zip: Path, target_zip: Path) -> Path:
     _v101_add_raw_entry(source_zip, target_zip, "data/evil.txt", b"evil")
     target_zip.write_bytes(target_zip.read_bytes().replace(b"data/evil.txt", b"data\\evil.txt"))
     return target_zip
+
+
+def _v102_audio_lab_real_listening_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.audio_lab import AudioLabStore, write_lab_test_wav
+
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v102-audio-lab-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                public_store = AudioLabStore()
+                env = public_store.environment_status()
+                midi_only = public_store.run_smoke({"cases": 1, "render_audio": "never"})
+                required = public_store.run_smoke({"cases": 1, "render_audio": "required"})
+
+                store = AudioLabStore(wav_writer=write_lab_test_wav)
+                wav_smoke = store.run_smoke({"cases": 1, "render_audio": "auto"})
+                session = store.create_session({"from_smoke": wav_smoke["smoke_run_id"]})
+                item_id = session["items"][0]["item_id"]
+                playback_guard = False
+                synthetic_guard = False
+                try:
+                    store.write_item_review(session["session_id"], item_id, {"result": "accepted", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}})
+                except Exception as exc:
+                    playback_guard = "playback_confirmed" in str(exc)
+                try:
+                    store.write_item_review(session["session_id"], item_id, {"result": "accepted", "rating": 4, "review_mode": "synthetic", "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                except Exception as exc:
+                    synthetic_guard = "manual" in str(exc)
+                reviewed = store.write_item_review(session["session_id"], item_id, {"result": "needs_fix", "rating": 2, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True, "notes": "Low end masks hook."})
+                marker = store.add_marker(session["session_id"], item_id, {"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "Low end masks hook."})
+                draft = store.create_marker_draft(session["session_id"], marker["marker"]["marker_id"], "review_task", {})
+                report = store.session_report(session["session_id"])
+                wav_rel = wav_smoke["items"][0]["artifact_relpaths"]["wav"]
+                wav_path = Path(".musicforge") / "audio-lab" / wav_rel
+                right = wav_path.parent / "song-copy.wav"
+                right.write_bytes(wav_path.read_bytes())
+                comparison = store.create_comparison({"left": str(wav_path), "right": str(right)})
+                comparison = store.review_comparison(comparison["comparison_id"], {"preferred": "same", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                wav_path.write_bytes(wav_path.read_bytes() + b"tamper")
+                stale = store.read_session(session["session_id"])
+                redacted = "C:\\Users\\" not in json.dumps(report, ensure_ascii=False) and "soundfont_path" not in json.dumps(env, ensure_ascii=False)
+            finally:
+                os.chdir(old_cwd)
+
+            ok = (
+                env.get("status") == "missing"
+                and midi_only.get("summary", {}).get("midi_count") == 1
+                and midi_only.get("summary", {}).get("wav_count") == 0
+                and required.get("status") == "failed"
+                and wav_smoke.get("summary", {}).get("wav_count") == 1
+                and wav_smoke.get("summary", {}).get("test_fake_count") == 1
+                and wav_smoke["items"][0].get("renderer", {}).get("release_ready") is False
+                and playback_guard
+                and synthetic_guard
+                and reviewed.get("review", {}).get("audio_evidence", {}).get("wav_sha256")
+                and draft.get("draft", {}).get("status") == "draft"
+                and draft.get("draft", {}).get("auto_apply") is False
+                and comparison.get("review", {}).get("preferred") == "same"
+                and stale["items"][0].get("stale") is True
+                and "wav_changed" in stale["items"][0].get("stale_reasons", [])
+                and redacted
+            )
+            return ok, (
+                f"env={env.get('status')}, midi_only={midi_only.get('status')}/{midi_only.get('summary', {}).get('wav_count')}, "
+                f"required={required.get('status')}, wav={wav_smoke.get('status')}/{wav_smoke.get('summary', {}).get('test_fake_count')}, "
+                f"guards={playback_guard}/{synthetic_guard}, marker={marker.get('marker', {}).get('category')}, "
+                f"draft={draft.get('draft', {}).get('status')}, compare={comparison.get('review', {}).get('preferred')}, "
+                f"stale={stale['items'][0].get('stale')}, redacted={redacted}"
+            )
+    except Exception as exc:
+        return False, f"v10.2 Audio Lab smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
 
 
 def _ga_check_status(report: dict[str, Any], check_id: str) -> str:

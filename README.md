@@ -76,6 +76,27 @@ python -m song_agent.cli ga-check --json
 `--auto-review` is synthetic smoke evidence only. Manual music acceptance means
 a person played the MIDI or WAV and recorded a manual review.
 
+## Audio Lab
+
+Use Audio Lab when you need to prove the generated music can be rendered,
+played, reviewed, and routed into repair work:
+
+```powershell
+python -m song_agent.cli audio-lab status --json
+python -m song_agent.cli audio-lab detect --json
+python -m song_agent.cli audio-lab test-profile --profile default --json
+python -m song_agent.cli audio-lab smoke --cases 1 --render-audio never --json
+python -m song_agent.cli audio-lab session create --from-smoke alsm-000001 --json
+python -m song_agent.cli audio-lab session review als-000001 item-001 --result accepted --rating 4 --reviewer "Developer" --role "developer" --playback-confirmed --json
+```
+
+Real WAV checks require a local renderer profile and SoundFont. SoundFont files
+and renderer paths stay in local `.musicforge/` configuration and must not be
+committed. `--render-audio never` is MIDI-only smoke evidence; it is not real
+audio acceptance. Automated tests may use a `test_fake` WAV writer, and reports
+mark that runner as not release-ready. Manual Audio Lab reviews require a current
+WAV hash, `playback_confirmed=true`, and reviewer name/role.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

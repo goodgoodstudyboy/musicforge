@@ -48,3 +48,18 @@ If WAV rendering is unavailable, do not claim audio release readiness. Release
 and Distribution audio gates must remain blocked until current WAV evidence and
 manual listening review exist.
 
+## Audio Lab Listening Loop
+
+Audio Lab is the local workflow for rendering, listening, marking issues, and
+creating repair drafts:
+
+```powershell
+python -m song_agent.cli audio-lab status --json
+python -m song_agent.cli audio-lab smoke --cases 1 --render-audio required --json
+python -m song_agent.cli audio-lab session create --from-smoke alsm-000001 --json
+python -m song_agent.cli audio-lab session review als-000001 item-001 --result accepted --rating 4 --reviewer "Developer" --role "developer" --playback-confirmed --json
+```
+
+`--render-audio never` remains MIDI-only. A manual Audio Lab review only counts
+as real audio evidence when it binds to a current WAV hash and records
+`playback_confirmed=true`.

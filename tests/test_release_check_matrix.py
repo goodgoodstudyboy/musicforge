@@ -27,6 +27,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v80.public_trust_center_smoke" in {definition.check_id for definition in definitions}
     assert "v81.public_trust_center_delivery_smoke" in {definition.check_id for definition in definitions}
     assert "v101.lts_maintenance_backup_restore_smoke" in {definition.check_id for definition in definitions}
+    assert "v102.audio_lab_real_listening_smoke" in {definition.check_id for definition in definitions}
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
 
@@ -71,6 +72,7 @@ def test_release_check_profile_and_filters() -> None:
     assert [definition.check_id for definition in v10] == [
         "v100.ga_lts_readiness_smoke",
         "v101.lts_maintenance_backup_restore_smoke",
+        "v102.audio_lab_real_listening_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
@@ -115,7 +117,7 @@ def test_release_check_runner_json_and_timing(tmp_path: Path) -> None:
 
 
 def test_release_check_runner_empty_selection_fails() -> None:
-    report = run_release_check_matrix(profile="latest", groups=["audio"])
+    report = run_release_check_matrix(profile="latest", since="11.0")
     payload = report.to_json_report()
 
     assert report.ok is False

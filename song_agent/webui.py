@@ -826,18 +826,25 @@ def panel_html() -> str:
       <section id="audio-lab">
         <div class="panel-title">
           <span>Audio Lab</span>
-          <span class="status">Real Audio Baseline</span>
+          <span id="audio-lab-status" class="status">Real Audio Baseline</span>
         </div>
         <div class="panel-body">
           <div class="grid3">
-            <div>${metric("Renderer Profile", "local")}</div>
-            <div>${metric("WAV Health", "available")}</div>
-            <div>${metric("Manual Audio Review", "required when gated")}</div>
+            <div>${metric("Environment", "detectable")}</div>
+            <div>${metric("Smoke Runs", "MIDI/WAV")}</div>
+            <div>${metric("Manual Listening", "playback required")}</div>
           </div>
           <div class="actions">
+            <button class="secondary" id="audio-lab-detect" type="button">Detect</button>
+            <button class="secondary" id="audio-lab-test-profile" type="button">Test Profile</button>
+            <button class="secondary" id="audio-lab-smoke" type="button">Create Smoke Run</button>
+            <button class="secondary" id="audio-lab-session-create" type="button">Create Session</button>
+            <button class="secondary" id="audio-lab-compare-create" type="button">A/B Compare</button>
             <button class="secondary" id="audio-health-run" type="button">Run Audio Health</button>
             <button class="secondary" id="release-refresh-audio-qa" type="button">Refresh Release Audio QA</button>
           </div>
+          <div class="hint">Manual reviews require WAV playback confirmation; synthetic or MIDI-only checks do not count as real audio acceptance.</div>
+          <pre id="audio-lab-summary" class="json-preview"></pre>
         </div>
       </section>
     <section>
@@ -2202,6 +2209,32 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         $("renderer-message").textContent = err.message;
       }
     });
+    $("audio-lab-detect").addEventListener("click", async () => {
+      await showAudioLabResult("/api/audio-lab/environment/detect", { method: "POST" });
+    });
+    $("audio-lab-test-profile").addEventListener("click", async () => {
+      await showAudioLabResult("/api/audio-lab/environment/test-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile_id: "default" }) });
+    });
+    $("audio-lab-smoke").addEventListener("click", async () => {
+      await showAudioLabResult("/api/audio-lab/smoke-runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cases: 1, render_audio: "auto" }) });
+    });
+    $("audio-lab-session-create").addEventListener("click", async () => {
+      $("audio-lab-summary").textContent = "Create a session from a smoke run via /api/audio-lab/listening-sessions.";
+    });
+    $("audio-lab-compare-create").addEventListener("click", async () => {
+      $("audio-lab-summary").textContent = "Create A/B comparisons via /api/audio-lab/comparisons.";
+    });
+
+    async function showAudioLabResult(path, options) {
+      try {
+        const data = await api(path, options);
+        $("audio-lab-status").textContent = (data.summary && data.summary.status) || (data.environment && data.environment.status) || (data.smoke_run && data.smoke_run.status) || "ok";
+        $("audio-lab-summary").textContent = JSON.stringify(data.summary || data.environment || data, null, 2);
+      } catch (err) {
+        $("audio-lab-status").textContent = "error";
+        $("audio-lab-summary").textContent = err.message;
+      }
+    }
 
     async function loadProvider() {
       const data = await api("/api/provider");

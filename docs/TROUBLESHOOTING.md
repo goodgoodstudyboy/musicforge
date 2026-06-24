@@ -27,6 +27,16 @@ MIDI generation can still work without a renderer. Real WAV checks require a
 renderer profile and SoundFont. Do not mark audio release readiness until WAV
 rendering and audio health are current.
 
+For Audio Lab, use MIDI-only smoke when the machine has no renderer:
+
+```powershell
+python -m song_agent.cli audio-lab smoke --cases 1 --render-audio never --json
+```
+
+Use `--render-audio required` only after a real renderer profile and SoundFont
+are configured. If the command reports `test_fake`, that is automated test
+coverage, not real listening evidence.
+
 ## Provider Missing
 
 Provider features are optional. The deterministic local path should still work.
@@ -36,4 +46,3 @@ Use mock provider configuration only for tests and smoke checks.
 
 Use PowerShell paths in commands and avoid copying local absolute paths into
 docs, manifests, or public evidence packages.
-

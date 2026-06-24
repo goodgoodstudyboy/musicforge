@@ -840,6 +840,15 @@ def test_webui_contains_release_workspace_controls():
     assert "Release Export" in html
     assert "Release Signoff" in html
     assert "Audio Lab" in html
+    assert 'id="audio-lab-detect"' in html
+    assert 'id="audio-lab-test-profile"' in html
+    assert 'id="audio-lab-smoke"' in html
+    assert 'id="audio-lab-session-create"' in html
+    assert 'id="audio-lab-compare-create"' in html
+    assert "/api/audio-lab/environment/detect" in html
+    assert "/api/audio-lab/smoke-runs" in html
+    assert "/api/audio-lab/listening-sessions" in html
+    assert "/api/audio-lab/comparisons" in html
     assert "Release Audio QA" in html
     assert "Audio Review Board" in html
     assert "Tracklist" in html

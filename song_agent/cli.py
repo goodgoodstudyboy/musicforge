@@ -171,6 +171,112 @@ def build_maintenance_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_audio_lab_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run MusicForge Audio Lab environment, smoke, listening, and A/B checks.")
+    subparsers = parser.add_subparsers(dest="section", required=True)
+
+    status = subparsers.add_parser("status", help="Show Audio Lab environment status.")
+    status.add_argument("--json", action="store_true")
+
+    detect = subparsers.add_parser("detect", help="Detect local Audio Lab renderer readiness.")
+    detect.add_argument("--json", action="store_true")
+
+    test_profile = subparsers.add_parser("test-profile", help="Test the configured renderer profile.")
+    test_profile.add_argument("--profile", "--profile-id", dest="profile_id", default=None)
+    test_profile.add_argument("--json", action="store_true")
+
+    setup_report = subparsers.add_parser("setup-report", help="Write and show the Audio Lab setup report.")
+    setup_report.add_argument("--json", action="store_true")
+    setup_report.add_argument("--report-out", type=Path, default=None)
+
+    smoke = subparsers.add_parser("smoke", help="Create an Audio Lab smoke run.")
+    smoke.add_argument("--cases", type=int, default=1)
+    smoke.add_argument("--render-audio", choices=["auto", "required", "require", "never"], default="auto")
+    smoke.add_argument("--profile", "--profile-id", dest="profile_id", default=None)
+    smoke.add_argument("--json", action="store_true")
+    smoke.add_argument("--report-out", type=Path, default=None)
+
+    smoke_report = subparsers.add_parser("smoke-report", help="Show an Audio Lab smoke run report.")
+    smoke_report.add_argument("smoke_run_id")
+    smoke_report.add_argument("--json", action="store_true")
+    smoke_report.add_argument("--report-out", type=Path, default=None)
+
+    session = subparsers.add_parser("session", help="Manage Audio Lab listening sessions.")
+    session_sub = session.add_subparsers(dest="session_action", required=True)
+    session_create = session_sub.add_parser("create", help="Create a listening session from a smoke run.")
+    session_create.add_argument("--from-smoke", required=True)
+    session_create.add_argument("--json", action="store_true")
+    session_list = session_sub.add_parser("list", help="List listening sessions.")
+    session_list.add_argument("--json", action="store_true")
+    session_detail = session_sub.add_parser("detail", help="Show a listening session.")
+    session_detail.add_argument("session_id")
+    session_detail.add_argument("--json", action="store_true")
+    session_review = session_sub.add_parser("review", help="Write a manual listening review.")
+    session_review.add_argument("session_id")
+    session_review.add_argument("item_id")
+    session_review.add_argument("--result", choices=["accepted", "needs_fix", "rejected"], required=True)
+    session_review.add_argument("--rating", type=int, required=True)
+    session_review.add_argument("--reviewer", default="developer")
+    session_review.add_argument("--role", default="developer")
+    session_review.add_argument("--notes", default="")
+    session_review.add_argument("--playback-confirmed", action="store_true")
+    session_review.add_argument("--json", action="store_true")
+    session_marker = session_sub.add_parser("marker", help="Add an issue marker to a listening item.")
+    session_marker.add_argument("session_id")
+    session_marker.add_argument("item_id")
+    session_marker.add_argument("--time-seconds", type=float, default=0.0)
+    session_marker.add_argument("--category", default="other")
+    session_marker.add_argument("--severity", default="medium")
+    session_marker.add_argument("--message", default="")
+    session_marker.add_argument("--json", action="store_true")
+    session_task = session_sub.add_parser("create-review-task", help="Create a draft ReviewTask from a marker.")
+    session_task.add_argument("session_id")
+    session_task.add_argument("marker_id")
+    session_task.add_argument("--title", default="")
+    session_task.add_argument("--instruction", default="")
+    session_task.add_argument("--json", action="store_true")
+    session_revision = session_sub.add_parser("create-audio-revision-draft", help="Create an Audio Revision draft from a marker.")
+    session_revision.add_argument("session_id")
+    session_revision.add_argument("marker_id")
+    session_revision.add_argument("--title", default="")
+    session_revision.add_argument("--instruction", default="")
+    session_revision.add_argument("--json", action="store_true")
+    session_mix = session_sub.add_parser("create-mix-patch-draft", help="Create a Mix Patch draft from a marker.")
+    session_mix.add_argument("session_id")
+    session_mix.add_argument("marker_id")
+    session_mix.add_argument("--title", default="")
+    session_mix.add_argument("--instruction", default="")
+    session_mix.add_argument("--json", action="store_true")
+    session_report = session_sub.add_parser("report", help="Write and show a listening session report.")
+    session_report.add_argument("session_id")
+    session_report.add_argument("--json", action="store_true")
+    session_close = session_sub.add_parser("close", help="Close a reviewed listening session.")
+    session_close.add_argument("session_id")
+    session_close.add_argument("--closed-by", default="audio-lab")
+    session_close.add_argument("--json", action="store_true")
+
+    compare = subparsers.add_parser("compare", help="Manage Audio Lab A/B comparisons.")
+    compare_sub = compare.add_subparsers(dest="compare_action", required=True)
+    compare_create = compare_sub.add_parser("create", help="Create an A/B comparison.")
+    compare_create.add_argument("--left", required=True)
+    compare_create.add_argument("--right", required=True)
+    compare_create.add_argument("--json", action="store_true")
+    compare_review = compare_sub.add_parser("review", help="Review an A/B comparison.")
+    compare_review.add_argument("comparison_id")
+    compare_review.add_argument("--preferred", choices=["left", "right", "same"], required=True)
+    compare_review.add_argument("--rating", type=int, default=4)
+    compare_review.add_argument("--rating-delta", type=int, default=0)
+    compare_review.add_argument("--reviewer", default="developer")
+    compare_review.add_argument("--role", default="developer")
+    compare_review.add_argument("--notes", default="")
+    compare_review.add_argument("--playback-confirmed", action="store_true")
+    compare_review.add_argument("--json", action="store_true")
+    compare_report = compare_sub.add_parser("report", help="Write and show an A/B comparison report.")
+    compare_report.add_argument("comparison_id")
+    compare_report.add_argument("--json", action="store_true")
+    return parser
+
+
 def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Verify a MusicForge LTS maintenance backup ZIP.")
     parser.add_argument("zip_path", type=Path, help="Path to musicforge-maintenance-backup.zip.")
@@ -2438,6 +2544,115 @@ def _print_maintenance_result(result: dict[str, Any], *, json_output: bool) -> N
         print(f"report: {report.get('check_id')} {report.get('profile')} {report.get('status')}")
 
 
+def _run_audio_lab_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.audio_lab import AudioLabStore
+
+    store = AudioLabStore()
+    if args.section == "status":
+        return {"ok": True, "environment": store.environment_status()}
+    if args.section == "detect":
+        return {"ok": True, "environment": store.detect_environment()}
+    if args.section == "test-profile":
+        result = store.test_profile(args.profile_id)
+        return {"ok": result.get("status") != "failed", "profile_test": result, "status": result.get("status")}
+    if args.section == "setup-report":
+        report = store.setup_report()
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        return {"ok": True, "setup_report": report, "status": report.get("status")}
+    if args.section == "smoke":
+        report = store.run_smoke({"cases": args.cases, "render_audio": args.render_audio, "profile_id": args.profile_id})
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        return {"ok": report.get("status") != "failed", "smoke_run": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.section == "smoke-report":
+        report = store.read_smoke_report(args.smoke_run_id)
+        if args.report_out is not None:
+            write_json(args.report_out, report)
+        return {"ok": True, "smoke_run": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.section == "session":
+        if args.session_action == "create":
+            session = store.create_session({"from_smoke": args.from_smoke})
+            return {"ok": True, "session": session, "summary": session.get("summary", {}), "status": session.get("status")}
+        if args.session_action == "list":
+            sessions = store.list_sessions()
+            return {"ok": True, "sessions": sessions, "summary": {"session_count": len(sessions)}, "status": "passed"}
+        if args.session_action == "detail":
+            session = store.read_session(args.session_id)
+            return {"ok": True, "session": session, "summary": session.get("summary", {}), "status": session.get("status")}
+        if args.session_action == "review":
+            result = store.write_item_review(
+                args.session_id,
+                args.item_id,
+                {
+                    "result": args.result,
+                    "rating": args.rating,
+                    "reviewer": {"name": args.reviewer, "role": args.role},
+                    "notes": args.notes,
+                    "playback_confirmed": args.playback_confirmed,
+                },
+            )
+            return {"ok": True, **result, "status": result.get("session", {}).get("status")}
+        if args.session_action == "marker":
+            result = store.add_marker(args.session_id, args.item_id, {"time_seconds": args.time_seconds, "category": args.category, "severity": args.severity, "message": args.message})
+            return {"ok": True, **result, "status": result.get("session", {}).get("status")}
+        if args.session_action == "create-review-task":
+            return {"ok": True, **store.create_marker_draft(args.session_id, args.marker_id, "review_task", {"title": args.title, "instruction": args.instruction}), "status": "draft"}
+        if args.session_action == "create-audio-revision-draft":
+            return {"ok": True, **store.create_marker_draft(args.session_id, args.marker_id, "audio_revision", {"title": args.title, "instruction": args.instruction}), "status": "draft"}
+        if args.session_action == "create-mix-patch-draft":
+            return {"ok": True, **store.create_marker_draft(args.session_id, args.marker_id, "mix_patch", {"title": args.title, "instruction": args.instruction}), "status": "draft"}
+        if args.session_action == "report":
+            report = store.session_report(args.session_id)
+            return {"ok": report.get("status") != "failed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+        if args.session_action == "close":
+            result = store.close_session(args.session_id, {"closed_by": args.closed_by})
+            return {"ok": True, **result, "status": result.get("session", {}).get("status")}
+    if args.section == "compare":
+        if args.compare_action == "create":
+            comparison = store.create_comparison({"left": args.left, "right": args.right})
+            return {"ok": True, "comparison": comparison, "status": "created"}
+        if args.compare_action == "review":
+            comparison = store.review_comparison(
+                args.comparison_id,
+                {
+                    "preferred": args.preferred,
+                    "rating": args.rating,
+                    "rating_delta": args.rating_delta,
+                    "reviewer": {"name": args.reviewer, "role": args.role},
+                    "notes": args.notes,
+                    "playback_confirmed": args.playback_confirmed,
+                },
+            )
+            return {"ok": True, "comparison": comparison, "status": "reviewed"}
+        if args.compare_action == "report":
+            report = store.comparison_report(args.comparison_id)
+            return {"ok": report.get("status") != "failed", "report": report, "status": report.get("status")}
+    raise ValueError("Unsupported audio-lab command.")
+
+
+def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    status = result.get("status") or result.get("environment", {}).get("status") or result.get("summary", {}).get("status") or "unknown"
+    print("MusicForge Audio Lab")
+    print(f"status: {status}")
+    if "environment" in result:
+        summary = result["environment"].get("summary", {})
+        print(f"renderer: {summary.get('renderer_status')}")
+        print(f"real_audio_ready: {summary.get('real_audio_ready')}")
+    if "smoke_run" in result:
+        smoke = result["smoke_run"]
+        print(f"smoke_run: {smoke.get('smoke_run_id')}")
+    if "session" in result:
+        session = result["session"]
+        print(f"session: {session.get('session_id')}")
+    if "comparison" in result:
+        comparison = result["comparison"]
+        print(f"comparison: {comparison.get('comparison_id')}")
+
+
 def _main() -> None:
     raw_args = sys.argv[1:]
     if raw_args and raw_args[0] == "serve":
@@ -2517,6 +2732,16 @@ def _main() -> None:
         _print_maintenance_result(result, json_output=bool(getattr(args, "json", False)))
         status = str(result.get("status") or result.get("report", {}).get("status") or result.get("verification", {}).get("status") or "")
         if status in {"blocked", "failed"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "audio-lab":
+        parser = build_audio_lab_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_audio_lab_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_audio_lab_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked"}:
             raise SystemExit(1)
         return
     elif raw_args and raw_args[0] == "verify-maintenance-backup":

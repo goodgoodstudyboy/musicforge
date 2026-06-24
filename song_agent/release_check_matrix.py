@@ -311,6 +311,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v99.trust_operations_final_readiness_smoke", "v9.9 trust operations final readiness handoff smoke", "_v99_trust_operations_final_readiness_smoke", group="trust", version="9.9", risk="critical", timeout_seconds=600, tags=("v9", "trust", "hub", "final-readiness", "handoff"), profiles=("full", "quick", "latest", "v9", "ga"), expected_warnings=("Duplicate name:",)),
     _callable("v100.ga_lts_readiness_smoke", "v10.0 GA/LTS readiness smoke", "_v100_ga_lts_readiness_smoke", group="ga", version="10.0", risk="critical", timeout_seconds=300, tags=("v10", "ga", "lts", "readiness"), profiles=V10_PROFILES),
     _callable("v101.lts_maintenance_backup_restore_smoke", "v10.1 LTS maintenance backup and restore smoke", "_v101_lts_maintenance_backup_restore_smoke", group="maintenance", version="10.1", risk="critical", timeout_seconds=300, tags=("v10", "ga", "lts", "maintenance"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
+    _callable("v102.audio_lab_real_listening_smoke", "v10.2 Audio Lab real listening workflow smoke", "_v102_audio_lab_real_listening_smoke", group="audio", version="10.2", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "listening"), profiles=V10_PROFILES),
 )
 
 KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "ga", "publish"}
