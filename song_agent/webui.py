@@ -12025,7 +12025,7 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const data = await api("/api/maintenance/upgrade/preflight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target_version: "10.1.0", require_verified_backup: true, allow_dirty: true }),
+        body: JSON.stringify({ require_verified_backup: true, allow_dirty: true }),
       });
       $("maintenance-result").textContent = JSON.stringify(data, null, 2);
       await loadMaintenanceStatus();

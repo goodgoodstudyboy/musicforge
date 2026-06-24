@@ -38,6 +38,12 @@ class LTSBackupStore:
         self.backups_dir = self.root / "backups"
 
     def create_backup(self, *, mode: str = "workspace") -> dict[str, Any]:
+        return self._create_backup_from_root(self.repo_root, mode=mode, backup_kind="manual", source_label=".")
+
+    def create_target_before_restore_backup(self, target: Path | str, *, mode: str = "workspace") -> dict[str, Any]:
+        return self._create_backup_from_root(Path(target).resolve(), mode=mode, backup_kind="target-before-restore", source_label="restore-target")
+
+    def _create_backup_from_root(self, source_root: Path, *, mode: str = "workspace", backup_kind: str = "manual", source_label: str = ".") -> dict[str, Any]:
         mode = str(mode or "workspace")
         if mode not in BACKUP_MODES:
             raise LTSBackupError(f"Unsupported maintenance backup mode: {mode}")
@@ -45,14 +51,15 @@ class LTSBackupStore:
         backup_dir = self.backups_dir / backup_id
         backup_dir.mkdir(parents=True, exist_ok=False)
         zip_path = backup_dir / BACKUP_ZIP_NAME
-        files = self._collect_files(mode)
-        excluded = self._excluded_summary(mode)
+        files = self._collect_files(mode, source_root=source_root)
+        excluded = self._excluded_summary(mode, source_root=source_root)
         manifest_files: list[dict[str, Any]] = []
         workspace_index = {
             "schema_version": 1,
             "backup_id": backup_id,
             "mode": mode,
-            "source_root": ".",
+            "backup_kind": backup_kind,
+            "source_root": source_label,
             "file_count": len(files),
             "files": [],
             "excluded": excluded,
@@ -80,7 +87,8 @@ class LTSBackupStore:
                 "created_at": _now(),
                 "app_version": __version__,
                 "mode": mode,
-                "source": {"git_head": _git_head(self.repo_root), "git_status": _git_status_state(self.repo_root), "workspace_root": "."},
+                "backup_kind": backup_kind,
+                "source": {"git_head": _git_head(source_root), "git_status": _git_status_state(source_root), "workspace_root": source_label},
                 "files": sorted(manifest_files, key=lambda item: item["path"]),
                 "excluded": excluded,
                 "redaction": {"status": redaction_report["status"], "finding_count": len(redaction_report.get("findings", []))},
@@ -92,6 +100,7 @@ class LTSBackupStore:
         metadata = {
             "backup_id": backup_id,
             "mode": mode,
+            "backup_kind": backup_kind,
             "created_at": manifest["created_at"],
             "zip_path": str(zip_path),
             "manifest_hash": manifest["integrity_hash"],
@@ -198,8 +207,14 @@ class LTSBackupStore:
             raise LTSBackupError("Restore plan is blocked.")
         if target_path == self.repo_root and not allow_current_workspace:
             raise LTSBackupError("Restore to current workspace requires allow_current_workspace.")
-        if target_path.exists() and any(target_path.iterdir()) and not overwrite:
-            raise LTSBackupError("Restore target exists and is not empty.")
+        target_is_non_empty = target_path.exists() and any(target_path.iterdir())
+        pre_restore_backup: dict[str, Any] | None = None
+        if target_is_non_empty:
+            if not overwrite:
+                raise LTSBackupError("Restore target exists and is not empty.")
+            pre_restore_backup = self.create_target_before_restore_backup(target_path, mode="workspace")
+            if pre_restore_backup.get("verification", {}).get("status") == "failed":
+                raise LTSBackupError("Pre-restore backup verification failed. Restore was not executed.")
         target_path.mkdir(parents=True, exist_ok=True)
         source_zip = self.backup_zip_path(backup_id) if backup_id else Path(zip_path or "")
         with zipfile.ZipFile(source_zip) as archive:
@@ -211,10 +226,14 @@ class LTSBackupStore:
                     raise LTSBackupError(f"Unsafe restore path: {package_path}")
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(archive.read(package_path))
-        return {"ok": True, "status": "restored", "restore_plan": plan, "target": str(target_path)}
+        result = {"ok": True, "status": "restored", "restore_plan": plan, "target": str(target_path)}
+        if pre_restore_backup is not None:
+            result["pre_restore_backup_id"] = pre_restore_backup.get("backup", {}).get("backup_id")
+            result["pre_restore_backup"] = pre_restore_backup.get("backup")
+        return result
 
-    def _collect_files(self, mode: str) -> list[tuple[Path, PurePosixPath]]:
-        musicforge = self.repo_root / ".musicforge"
+    def _collect_files(self, mode: str, *, source_root: Path | None = None) -> list[tuple[Path, PurePosixPath]]:
+        musicforge = (source_root or self.repo_root) / ".musicforge"
         if not musicforge.exists():
             return []
         files: list[tuple[Path, PurePosixPath]] = []
@@ -227,8 +246,8 @@ class LTSBackupStore:
             files.append((path, rel))
         return files
 
-    def _excluded_summary(self, mode: str) -> list[dict[str, str]]:
-        musicforge = self.repo_root / ".musicforge"
+    def _excluded_summary(self, mode: str, *, source_root: Path | None = None) -> list[dict[str, str]]:
+        musicforge = (source_root or self.repo_root) / ".musicforge"
         excluded: list[dict[str, str]] = []
         if not musicforge.exists():
             return excluded

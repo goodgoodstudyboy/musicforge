@@ -6,7 +6,7 @@ Use this runbook before pulling code, switching tags, or running migrations.
 
 ```powershell
 python -m song_agent.cli maintenance backup create --mode workspace --json
-python -m song_agent.cli maintenance upgrade preflight --target-version 10.1.0 --require-verified-backup --json
+python -m song_agent.cli maintenance upgrade preflight --target-version 10.1.1 --require-verified-backup --json
 ```
 
 Preflight checks version order, Git cleanliness, local config tracking,

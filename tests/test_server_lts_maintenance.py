@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from song_agent import __version__
 from tests.test_server_edits import request_json, start_test_server, stop_test_server
 
 
 def _workspace(root: Path) -> None:
     (root / ".musicforge" / "projects" / "project-001").mkdir(parents=True)
     (root / ".musicforge" / "projects" / "project-001" / "project.json").write_text('{"project_id":"project-001"}\n', encoding="utf-8")
+
+
+def _workspace_with_secret(root: Path) -> None:
+    (root / ".musicforge" / "projects" / "project-001").mkdir(parents=True)
+    (root / ".musicforge" / "projects" / "project-001" / "project.json").write_text('{"note":"Bearer sk-server-secret"}\n', encoding="utf-8")
 
 
 def test_server_lts_maintenance_routes(tmp_path: Path, monkeypatch) -> None:
@@ -35,7 +41,7 @@ def test_server_lts_maintenance_routes(tmp_path: Path, monkeypatch) -> None:
         assert plan_code == 200
         assert plan["restore_plan"]["status"] == "ready"
 
-        preflight_code, preflight = request_json(server, "POST", "/api/maintenance/upgrade/preflight", {"target_version": "10.1.0", "require_verified_backup": True, "allow_dirty": True})
+        preflight_code, preflight = request_json(server, "POST", "/api/maintenance/upgrade/preflight", {"target_version": __version__, "require_verified_backup": True, "allow_dirty": True})
         assert preflight_code == 201
         assert preflight["preflight"]["status"] in {"ready", "warning"}
 
@@ -46,5 +52,20 @@ def test_server_lts_maintenance_routes(tmp_path: Path, monkeypatch) -> None:
         check_code, check = request_json(server, "POST", "/api/maintenance/checks", {"profile": "daily"})
         assert check_code == 201
         assert check["report"]["status"] in {"passed", "warning"}
+    finally:
+        stop_test_server(server)
+
+
+def test_server_lts_backup_create_failed_verification_returns_conflict(tmp_path: Path, monkeypatch) -> None:
+    _workspace_with_secret(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        create_code, created = request_json(server, "POST", "/api/maintenance/backups", {"mode": "workspace"})
+
+        assert create_code == 409
+        assert created["ok"] is False
+        assert created["verification"]["status"] == "failed"
+        assert created["backup"]["verification_status"] == "failed"
     finally:
         stop_test_server(server)

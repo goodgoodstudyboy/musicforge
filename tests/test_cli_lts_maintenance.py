@@ -16,6 +16,11 @@ def _repo(root: Path) -> None:
     (root / ".musicforge" / "projects" / "project-001" / "project.json").write_text('{"project_id":"project-001"}\n', encoding="utf-8")
 
 
+def _repo_with_secret(root: Path) -> None:
+    (root / ".musicforge" / "projects" / "project-001").mkdir(parents=True)
+    (root / ".musicforge" / "projects" / "project-001" / "project.json").write_text('{"note":"Bearer sk-cli-secret"}\n', encoding="utf-8")
+
+
 def test_maintenance_cli_status_backup_verify_restore_plan(tmp_path: Path) -> None:
     _repo(tmp_path)
 
@@ -49,3 +54,15 @@ def test_maintenance_cli_migration_and_check(tmp_path: Path) -> None:
     assert check.returncode == 0, check.stderr
     assert json.loads(migration.stdout)["status"] == "applied"
     assert json.loads(check.stdout)["report"]["status"] in {"passed", "warning"}
+
+
+def test_maintenance_cli_backup_create_failed_verification_exits_nonzero(tmp_path: Path) -> None:
+    _repo_with_secret(tmp_path)
+
+    create = subprocess.run([sys.executable, "-m", "song_agent.cli", "maintenance", "backup", "create", "--mode", "workspace", "--json"], cwd=tmp_path, env=_env(), text=True, capture_output=True)
+    payload = json.loads(create.stdout)
+
+    assert create.returncode == 1
+    assert payload["status"] == "failed"
+    assert payload["verification"]["status"] == "failed"
+    assert payload["backup"]["verification_status"] == "failed"

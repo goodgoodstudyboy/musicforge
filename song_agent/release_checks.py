@@ -15471,11 +15471,30 @@ def _v101_lts_maintenance_backup_restore_smoke(root: Path) -> tuple[bool, str]:
             zip_path = maintenance.backups.backup_zip_path(backup_id)
             restore_plan = maintenance.backups.restore_plan(backup_id=backup_id, target=base / "restore")
             dry_restore = maintenance.backups.restore(backup_id=backup_id, target=base / "restore", confirm=False)
+            overwrite_target = base / "overwrite-restore"
+            (overwrite_target / ".musicforge" / "projects" / "existing").mkdir(parents=True)
+            (overwrite_target / ".musicforge" / "projects" / "existing" / "project.json").write_text('{"project_id":"existing"}\n', encoding="utf-8")
+            overwrite_restore = maintenance.backups.restore(backup_id=backup_id, target=overwrite_target, confirm=True, overwrite=True)
+            pre_restore_backup_id = str(overwrite_restore.get("pre_restore_backup_id") or "")
+            pre_restore_backup = maintenance.backups.read_backup(pre_restore_backup_id) if pre_restore_backup_id else {}
+            secret_repo = base / "secret-repo"
+            (secret_repo / ".musicforge" / "projects" / "project-001").mkdir(parents=True)
+            (secret_repo / ".musicforge" / "projects" / "project-001" / "project.json").write_text('{"note":"Bearer sk-create-secret"}\n', encoding="utf-8")
+            secret_backup = LTSMaintenanceStore(secret_repo).backups.create_backup(mode="workspace")
             preflight = maintenance.run_upgrade_preflight(target_version=__version__, require_verified_backup=True)
             migration_first = maintenance.run_migrations()
             migration_second = maintenance.run_migrations()
             daily = maintenance.run_check(profile="daily")
             weekly = maintenance.run_check(profile="weekly")
+            blocked_target = base / "blocked-restore"
+            (blocked_target / ".musicforge" / "projects" / "existing").mkdir(parents=True)
+            (blocked_target / ".musicforge" / "projects" / "existing" / "project.json").write_text('{"note":"Bearer sk-pre-restore-secret"}\n', encoding="utf-8")
+            try:
+                maintenance.backups.restore(backup_id=backup_id, target=blocked_target, confirm=True, overwrite=True)
+                pre_restore_failure_blocked = False
+            except Exception as exc:
+                pre_restore_failure_blocked = "Pre-restore backup verification failed" in str(exc)
+            blocked_restore_no_write = not (blocked_target / ".musicforge" / "projects" / "project-001" / "project.json").exists()
 
             tampered_zip = _v101_rewrite_zip(zip_path, base / "tampered.zip", _v101_tamper_backup_file)
             duplicate_zip = _v101_duplicate_entry_zip(zip_path, base / "duplicate.zip")
@@ -15505,6 +15524,12 @@ def _v101_lts_maintenance_backup_restore_smoke(root: Path) -> tuple[bool, str]:
                 and restore_plan.get("status") == "ready"
                 and dry_restore.get("status") == "planned"
                 and dry_no_write
+                and overwrite_restore.get("status") == "restored"
+                and pre_restore_backup.get("backup", {}).get("backup_kind") == "target-before-restore"
+                and pre_restore_backup.get("verification", {}).get("status") == "passed"
+                and pre_restore_failure_blocked
+                and blocked_restore_no_write
+                and secret_backup.get("verification", {}).get("status") == "failed"
                 and preflight.get("status") in {"ready", "warning"}
                 and migration_first.get("status") == "applied"
                 and migration_second.get("status") == "noop"
@@ -15517,7 +15542,10 @@ def _v101_lts_maintenance_backup_restore_smoke(root: Path) -> tuple[bool, str]:
                 f"tamper={_v38_check_status(tampered, 'lts_backup_file_hashes_match')}, duplicate={_v38_check_status(duplicate, 'lts_backup_zip_no_duplicate_entries')}, "
                 f"backslash={_v38_check_status(backslash, 'lts_backup_zip_no_backslash_entries')}, traversal={_v38_check_status(traversal, 'lts_backup_zip_path_safe')}, "
                 f"redaction={_v38_check_status(token, 'lts_backup_redaction_scan')}, provider_excluded={provider_excluded}, "
-                f"restore_plan={restore_plan.get('status')}, dry_restore={dry_restore.get('status')}/{dry_no_write}, preflight={preflight.get('status')}, "
+                f"restore_plan={restore_plan.get('status')}, dry_restore={dry_restore.get('status')}/{dry_no_write}, "
+                f"overwrite_prebackup={pre_restore_backup.get('backup', {}).get('backup_kind')}/{pre_restore_backup.get('verification', {}).get('status')}, "
+                f"prebackup_failure={pre_restore_failure_blocked}/{blocked_restore_no_write}, create_secret={secret_backup.get('verification', {}).get('status')}, "
+                f"preflight={preflight.get('status')}, "
                 f"migration={migration_first.get('status')}/{migration_second.get('status')}, daily={daily.get('status')}, weekly={weekly.get('status')}"
             )
     except Exception as exc:

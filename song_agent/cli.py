@@ -2369,7 +2369,8 @@ def _run_maintenance_command(args: argparse.Namespace) -> dict[str, Any]:
         return store.status()
     if args.section == "backup":
         if args.backup_action == "create":
-            return {"status": "passed", **store.backups.create_backup(mode=args.mode)}
+            result = store.backups.create_backup(mode=args.mode)
+            return {"status": result.get("verification", {}).get("status") or "unknown", **result}
         if args.backup_action == "list":
             return {"status": "passed", "backups": store.backups.list_backups()}
         if args.backup_action == "verify":

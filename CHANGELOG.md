@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.1.1 - 2026-06-24
+
+### Fixed
+- `maintenance backup restore --overwrite` now creates and verifies a `target-before-restore` backup before writing into a non-empty restore target.
+- Restore aborts before writing if the pre-restore backup fails verification.
+- `maintenance backup create` now returns failed status and non-zero CLI exit when backup verification fails.
+- `POST /api/maintenance/backups` now returns conflict when backup creation produces a failed verification report.
+- release-check `v101.lts_maintenance_backup_restore_smoke` now covers overwrite pre-restore backup, pre-restore verification failure, and redaction-polluted backup creation.
+
+### Verified
+- `python -m pytest tests\test_lts_maintenance.py tests\test_lts_backup_verifier.py tests\test_cli_lts_maintenance.py tests\test_server_lts_maintenance.py tests\test_release_check.py::test_v101_lts_maintenance_backup_restore_smoke -q`
+
 ## v10.1.0 - 2026-06-24
 
 ### Added

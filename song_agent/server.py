@@ -3666,7 +3666,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if method == "POST":
                 payload = self._optional_json_body()
                 result = store.backups.create_backup(mode=str(payload.get("mode") or "workspace"))
-                self._send_json({"ok": result.get("verification", {}).get("status") == "passed", **result}, status=HTTPStatus.CREATED)
+                ok = result.get("verification", {}).get("status") == "passed"
+                self._send_json({"ok": ok, **result}, status=HTTPStatus.CREATED if ok else HTTPStatus.CONFLICT)
                 return
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
@@ -3700,7 +3701,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             payload = self._optional_json_body()
             report = store.run_upgrade_preflight(
-                target_version=str(payload.get("target_version") or "10.1.0"),
+                target_version=str(payload.get("target_version") or __version__),
                 require_verified_backup=bool(payload.get("require_verified_backup", False)),
                 allow_dirty=bool(payload.get("allow_dirty", False)),
             )

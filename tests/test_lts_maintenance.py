@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from song_agent import __version__
+from song_agent.lts_backup import LTSBackupError
 from song_agent.lts_maintenance import LTSMaintenanceStore, maintenance_report_integrity_ok
 
 
@@ -73,3 +74,48 @@ def test_restore_plan_is_dry_run_until_confirm(tmp_path: Path) -> None:
     assert plan["status"] == "ready"
     assert result["status"] == "planned"
     assert not (target / ".musicforge").exists()
+
+
+def test_restore_overwrite_creates_pre_restore_backup(tmp_path: Path) -> None:
+    _git_repo(tmp_path)
+    _workspace(tmp_path)
+    store = LTSMaintenanceStore(tmp_path)
+    created = store.backups.create_backup(mode="workspace")
+    backup_id = created["backup"]["backup_id"]
+    target = tmp_path / "restore-target"
+    (target / ".musicforge" / "projects" / "existing").mkdir(parents=True)
+    (target / ".musicforge" / "projects" / "existing" / "project.json").write_text('{"project_id":"existing"}\n', encoding="utf-8")
+
+    result = store.backups.restore(backup_id=backup_id, target=target, confirm=True, overwrite=True)
+    backups = store.backups.list_backups()
+
+    assert result["status"] == "restored"
+    assert result["pre_restore_backup_id"]
+    assert len(backups) == 2
+    pre_restore = store.backups.read_backup(result["pre_restore_backup_id"])
+    assert pre_restore["backup"]["backup_kind"] == "target-before-restore"
+    assert pre_restore["verification"]["status"] == "passed"
+    assert (target / ".musicforge" / "projects" / "existing" / "project.json").exists()
+    assert (target / ".musicforge" / "projects" / "project-001" / "project.json").exists()
+
+
+def test_restore_overwrite_stops_when_pre_restore_backup_fails(tmp_path: Path) -> None:
+    _git_repo(tmp_path)
+    _workspace(tmp_path)
+    store = LTSMaintenanceStore(tmp_path)
+    created = store.backups.create_backup(mode="workspace")
+    backup_id = created["backup"]["backup_id"]
+    target = tmp_path / "restore-target"
+    (target / ".musicforge" / "projects" / "existing").mkdir(parents=True)
+    existing = target / ".musicforge" / "projects" / "existing" / "project.json"
+    existing.write_text('{"note":"Bearer sk-pre-restore-secret"}\n', encoding="utf-8")
+
+    try:
+        store.backups.restore(backup_id=backup_id, target=target, confirm=True, overwrite=True)
+    except LTSBackupError as exc:
+        assert "Pre-restore backup verification failed" in str(exc)
+    else:
+        raise AssertionError("restore should fail when pre-restore backup verification fails")
+
+    assert not (target / ".musicforge" / "projects" / "project-001" / "project.json").exists()
+    assert "sk-pre-restore-secret" in existing.read_text(encoding="utf-8")
