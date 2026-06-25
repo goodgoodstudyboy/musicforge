@@ -1,5 +1,15 @@
 # Changelog
 
+## v10.3.1 - 2026-06-25
+
+### Fixed
+- Audio Fix Sprint now redacts sensitive manual input before persisting sprint names, reviewer fields, candidate/recheck notes, selector names, and closeout owner fields.
+- release-check `v103.audio_fix_sprint_smoke` now injects token-like strings, `api_key=...`, and local Windows paths to verify sprint JSON does not preserve the raw sensitive text.
+
+### Verified
+- `python -m pytest tests\test_audio_fix_sprints.py tests\test_cli_audio_fix_sprints.py tests\test_server_audio_fix_sprints.py tests\test_release_check.py::test_v103_audio_fix_sprint_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.3.0 - 2026-06-24
 
 ### Added

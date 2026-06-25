@@ -9,6 +9,7 @@ from typing import Any, Callable
 from song_agent.audio_lab import AudioLabStore
 from song_agent.music_health import analyze_music_health
 from song_agent.projectio import read_json, write_json
+from song_agent.redaction import sanitize_sensitive_text
 from song_agent.projects import now_iso
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
@@ -902,7 +903,7 @@ def _rel_to_sprint(path: Path, sprint_dir: Path) -> str:
 
 
 def _bounded(value: Any, limit: int = 240) -> str:
-    text = str(value or "").strip()
+    text = sanitize_sensitive_text(str(value or "")).strip()
     return text[:limit]
 
 

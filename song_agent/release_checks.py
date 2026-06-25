@@ -15734,15 +15734,46 @@ def _v103_audio_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
 
                 real_session_id, real_item_source_id = make_session(release_ready_source=True)
                 real_store = AudioFixSprintStore(audio_lab_store=lab)
-                real_sprint = real_store.create_sprint({"from_session": real_session_id})
+                sensitive_text = r"sk-secret-value api_key=secret-value C:\Users\demo\secret.wav"
+                real_sprint = real_store.create_sprint({"from_session": real_session_id, "name": f"real sprint {sensitive_text}"})
                 real_item_id = real_sprint["items"][0]["fix_item_id"]
                 real_candidate = real_store.generate_candidates(real_sprint["fix_sprint_id"])["candidates"][0]
-                real_store.review_candidate(real_sprint["fix_sprint_id"], real_item_id, real_candidate["candidate_id"], {"preferred": "right", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
-                real_store.select_candidate(real_sprint["fix_sprint_id"], real_item_id, real_candidate["candidate_id"])
+                real_store.review_candidate(
+                    real_sprint["fix_sprint_id"],
+                    real_item_id,
+                    real_candidate["candidate_id"],
+                    {
+                        "preferred": "right",
+                        "rating": 5,
+                        "reviewer": {"name": f"QA {sensitive_text}", "role": f"developer {sensitive_text}"},
+                        "notes": f"candidate notes {sensitive_text}",
+                        "playback_confirmed": True,
+                    },
+                )
+                real_store.select_candidate(real_sprint["fix_sprint_id"], real_item_id, real_candidate["candidate_id"], {"selected_by": f"selector {sensitive_text}"})
                 real_recheck = real_store.create_recheck_session(real_sprint["fix_sprint_id"])["recheck_session"]
-                real_store.review_recheck_item(real_sprint["fix_sprint_id"], real_recheck["items"][0]["item_id"], {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                real_store.review_recheck_item(
+                    real_sprint["fix_sprint_id"],
+                    real_recheck["items"][0]["item_id"],
+                    {
+                        "result": "accepted",
+                        "rating": 5,
+                        "reviewer": {"name": f"Recheck {sensitive_text}", "role": f"reviewer {sensitive_text}"},
+                        "notes": f"recheck notes {sensitive_text}",
+                        "playback_confirmed": True,
+                    },
+                )
                 real_closeout = real_store.closeout_report(real_sprint["fix_sprint_id"])
-                real_closed = real_store.close_sprint(real_sprint["fix_sprint_id"], {"closed_by": "QA"})
+                real_closed = real_store.close_sprint(real_sprint["fix_sprint_id"], {"closed_by": f"QA {sensitive_text}"})
+                real_serialized = json.dumps(read_json(real_store.sprint_dir(real_sprint["fix_sprint_id"]) / "sprint.json"), ensure_ascii=False)
+                redacted = (
+                    "sk-secret-value" not in real_serialized
+                    and "api_key=secret-value" not in real_serialized
+                    and "secret.wav" not in real_serialized
+                    and "sk-[REDACTED]" in real_serialized
+                    and "[REDACTED]" in real_serialized
+                    and "[REDACTED_LOCAL_PATH]" in real_serialized
+                )
 
                 stale_session_id, stale_item_id = make_session(release_ready_source=True)
                 stale_store = AudioFixSprintStore(audio_lab_store=lab)
@@ -15767,6 +15798,7 @@ def _v103_audio_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
                 and real_closeout.get("status") == "passed"
                 and real_closeout.get("summary", {}).get("release_ready_audio_count") == 1
                 and real_closed.get("sprint", {}).get("status") == "closed"
+                and redacted
                 and stale_refresh.get("stale") is True
                 and "source_session_changed" in stale_refresh.get("stale_reasons", [])
                 and stale_guard
@@ -15775,7 +15807,7 @@ def _v103_audio_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
                 f"duplicate_guard={duplicate_guard}, select_guard={select_guard}, "
                 f"fake_closeout={fake_closeout.get('status')}/{fake_closeout.get('blockers')}, fake_close_guard={fake_close_guard}, "
                 f"real_closeout={real_closeout.get('status')}/{real_closeout.get('summary', {}).get('release_ready_audio_count')}, "
-                f"real_closed={real_closed.get('sprint', {}).get('status')}, stale={stale_refresh.get('stale')}/{stale_guard}"
+                f"real_closed={real_closed.get('sprint', {}).get('status')}, redacted={redacted}, stale={stale_refresh.get('stale')}/{stale_guard}"
             )
     except Exception as exc:
         return False, f"v10.3 Audio Fix Sprint smoke failed: {exc}"

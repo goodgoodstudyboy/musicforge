@@ -93,3 +93,51 @@ def test_audio_fix_sprint_detects_source_stale(tmp_path, monkeypatch):
     assert "source_session_changed" in refreshed["stale_reasons"]
     with pytest.raises(AudioFixSprintStateError):
         store.generate_candidates(sprint["fix_sprint_id"])
+
+
+def test_audio_fix_sprint_sanitizes_manual_text_fields(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    lab = AudioLabStore(wav_writer=write_lab_test_wav)
+    session_id, _ = _needs_fix_session(lab, release_ready_source=True)
+    store = AudioFixSprintStore(audio_lab_store=lab)
+    secret_text = r"sk-secret-value api_key=secret-value C:\Users\demo\secret.wav"
+
+    sprint = store.create_sprint({"from_session": session_id, "name": f"Sprint {secret_text}"})
+    sprint_id = sprint["fix_sprint_id"]
+    item_id = sprint["items"][0]["fix_item_id"]
+    candidate = store.generate_candidates(sprint_id)["candidates"][0]
+    store.review_candidate(
+        sprint_id,
+        item_id,
+        candidate["candidate_id"],
+        {
+            "preferred": "right",
+            "rating": 4,
+            "reviewer": {"name": f"QA {secret_text}", "role": f"developer {secret_text}"},
+            "notes": f"Candidate note {secret_text}",
+            "playback_confirmed": True,
+        },
+    )
+    store.select_candidate(sprint_id, item_id, candidate["candidate_id"], {"selected_by": f"selector {secret_text}"})
+    recheck = store.create_recheck_session(sprint_id)["recheck_session"]
+    store.review_recheck_item(
+        sprint_id,
+        recheck["items"][0]["item_id"],
+        {
+            "result": "accepted",
+            "rating": 4,
+            "reviewer": {"name": f"Recheck {secret_text}", "role": f"reviewer {secret_text}"},
+            "notes": f"Recheck note {secret_text}",
+            "playback_confirmed": True,
+        },
+    )
+    store.close_sprint(sprint_id, {"closed_by": f"closer {secret_text}"})
+
+    raw = read_json(store.sprint_dir(sprint_id) / "sprint.json")
+    serialized = str(raw)
+    assert "sk-secret-value" not in serialized
+    assert "api_key=secret-value" not in serialized
+    assert r"C:\Users\demo\secret.wav" not in serialized
+    assert "sk-[REDACTED]" in serialized
+    assert "[REDACTED]" in serialized
+    assert "[REDACTED_LOCAL_PATH]" in serialized
