@@ -108,11 +108,18 @@ class AudioCampaignStore:
         path = self.campaign_path(campaign_id)
         if not path.exists():
             raise AudioCampaignNotFoundError(f"Audio Campaign not found: {campaign_id}.")
-        campaign = self._refresh_case_snapshots(read_json(path), write=False)
+        raw = read_json(path)
+        if self._is_signed_campaign(raw, campaign_id):
+            self._assert_signed_snapshot_valid(campaign_id, raw)
+            return sanitize_metadata(raw)
+        campaign = self._refresh_case_snapshots(raw, write=False)
         return sanitize_metadata(campaign)
 
     def refresh_campaign(self, campaign_id: str) -> dict[str, Any]:
         with self.lock:
+            campaign = self._read_raw_campaign(campaign_id)
+            if self._is_signed_campaign(campaign, campaign_id):
+                raise AudioCampaignStateError("Signed Audio Campaign cannot be refreshed. Reset signoff before refreshing.")
             campaign = self._refresh_case_snapshots(self._read_raw_campaign(campaign_id), write=True)
             self.refresh_report(campaign_id)
             return self.read_campaign(campaign_id)
@@ -192,6 +199,13 @@ class AudioCampaignStore:
 
     def refresh_report(self, campaign_id: str) -> dict[str, Any]:
         with self.lock:
+            raw_campaign = self._read_raw_campaign(campaign_id)
+            if self._is_signed_campaign(raw_campaign, campaign_id):
+                self._assert_signed_snapshot_valid(campaign_id, raw_campaign)
+                report_path = self.campaign_dir(campaign_id) / "campaign-report.json"
+                if not report_path.exists():
+                    raise AudioCampaignStateError("Signed Audio Campaign report is missing.")
+                return read_json(report_path)
             campaign = self._refresh_case_snapshots(self._read_raw_campaign(campaign_id), write=True)
             report = _build_campaign_report(campaign, self.audio_fix_sprint_store)
             write_json(self.campaign_dir(campaign_id) / "campaign-report.json", report)
@@ -214,6 +228,7 @@ class AudioCampaignStore:
             report = self.refresh_report(campaign_id)
             if report.get("status") != "passed":
                 raise AudioCampaignStateError("Audio Campaign report has blockers.")
+            campaign = self._read_raw_campaign(campaign_id)
             signed_by = _bounded(payload.get("signed_by") or payload.get("reviewer") or payload.get("name"), 120)
             if not signed_by:
                 raise AudioCampaignValidationError("signed_by is required.")
@@ -247,13 +262,18 @@ class AudioCampaignStore:
 
     def export_campaign(self, campaign_id: str) -> dict[str, Any]:
         with self.lock:
+            raw_campaign = self._read_raw_campaign(campaign_id)
+            signed = self._is_signed_campaign(raw_campaign, campaign_id)
             signoff_path = self.signoff_path(campaign_id)
-            campaign = sanitize_metadata(self._read_raw_campaign(campaign_id) if signoff_path.exists() else self.read_campaign(campaign_id))
-            if signoff_path.exists() and (self.campaign_dir(campaign_id) / "campaign-report.json").exists():
-                report = read_json(self.campaign_dir(campaign_id) / "campaign-report.json")
+            if signed:
+                snapshot = self._assert_signed_snapshot_valid(campaign_id, raw_campaign)
+                campaign = sanitize_metadata(snapshot["campaign"])
+                report = snapshot["report"]
+                case_index = snapshot["case_index"]
             else:
                 report = self.refresh_report(campaign_id)
-            case_index = read_json(self.case_index_path(campaign_id))
+                campaign = sanitize_metadata(self._read_raw_campaign(campaign_id))
+                case_index = read_json(self.case_index_path(campaign_id))
             export_dir = self.export_dir(campaign_id)
             export_dir.mkdir(parents=True, exist_ok=True)
             files: list[dict[str, Any]] = []
@@ -294,6 +314,9 @@ class AudioCampaignStore:
             return {"campaign": campaign, "manifest": manifest, "export_dir": str(export_dir), "status": report.get("status")}
 
     def build_zip(self, campaign_id: str) -> dict[str, Any]:
+        raw_campaign = self._read_raw_campaign(campaign_id)
+        if self._is_signed_campaign(raw_campaign, campaign_id):
+            self._assert_signed_snapshot_valid(campaign_id, raw_campaign)
         exported = self.export_campaign(campaign_id)
         export_dir = self.export_dir(campaign_id)
         zip_path = self.zip_path(campaign_id)
@@ -362,6 +385,43 @@ class AudioCampaignStore:
         if not path.exists():
             raise AudioCampaignNotFoundError(f"Audio Campaign not found: {campaign_id}.")
         return read_json(path)
+
+    def _is_signed_campaign(self, campaign: dict[str, Any], campaign_id: str) -> bool:
+        return campaign.get("status") == "signed" or bool(campaign.get("signoff_hash")) or self.signoff_path(campaign_id).exists()
+
+    def _assert_signed_snapshot_valid(self, campaign_id: str, campaign: dict[str, Any] | None = None) -> dict[str, Any]:
+        campaign = campaign or self._read_raw_campaign(campaign_id)
+        if campaign.get("status") != "signed":
+            raise AudioCampaignStateError("Audio Campaign signoff state is inconsistent.")
+        signoff_path = self.signoff_path(campaign_id)
+        report_path = self.campaign_dir(campaign_id) / "campaign-report.json"
+        case_index_path = self.case_index_path(campaign_id)
+        if not signoff_path.exists():
+            raise AudioCampaignStateError("Signed Audio Campaign signoff is missing.")
+        if not report_path.exists():
+            raise AudioCampaignStateError("Signed Audio Campaign report is missing.")
+        if not case_index_path.exists():
+            raise AudioCampaignStateError("Signed Audio Campaign case index is missing.")
+        signoff = read_json(signoff_path)
+        report = read_json(report_path)
+        case_index = read_json(case_index_path)
+        if not _integrity_ok(signoff):
+            raise AudioCampaignStateError("Signed Audio Campaign signoff integrity failed.")
+        if not _integrity_ok(report):
+            raise AudioCampaignStateError("Signed Audio Campaign report integrity failed.")
+        if not _integrity_ok(case_index):
+            raise AudioCampaignStateError("Signed Audio Campaign case index integrity failed.")
+        if signoff.get("status") != "signed":
+            raise AudioCampaignStateError("Signed Audio Campaign signoff status is invalid.")
+        if campaign.get("signoff_hash") and campaign.get("signoff_hash") != signoff.get("integrity_hash"):
+            raise AudioCampaignStateError("Signed Audio Campaign signoff hash does not match campaign state.")
+        if signoff.get("campaign_report_hash") != report.get("integrity_hash"):
+            raise AudioCampaignStateError("Signed Audio Campaign report no longer matches signoff.")
+        if signoff.get("case_index_hash") != case_index.get("integrity_hash"):
+            raise AudioCampaignStateError("Signed Audio Campaign case index no longer matches signoff.")
+        if signoff.get("source_hash") != campaign.get("source_hash"):
+            raise AudioCampaignStateError("Signed Audio Campaign source no longer matches signoff.")
+        return {"campaign": campaign, "signoff": signoff, "report": report, "case_index": case_index}
 
     def _write_campaign(self, campaign: dict[str, Any]) -> None:
         write_json(self.campaign_path(str(campaign.get("campaign_id"))), sanitize_metadata(campaign))
@@ -777,6 +837,10 @@ def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
 
 def _integrity_hash(payload: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
+
+
+def _integrity_ok(payload: dict[str, Any]) -> bool:
+    return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
 def _bounded(value: Any, limit: int) -> str:

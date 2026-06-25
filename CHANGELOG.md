@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.4.1 - 2026-06-25
+
+### Fixed
+- Signed Audio Campaign reports are now frozen read snapshots; `refresh_report()` and report API/CLI reads no longer rewrite signed campaign evidence.
+- Explicit Audio Campaign refresh is blocked after signoff until the signoff is reset.
+- Audio Campaign export and ZIP builds now validate signed report, case-index, source, and signoff hash bindings before writing package evidence.
+- release-check `v104.audio_campaign_smoke` now covers signed refresh guard, frozen report reads, and signed export integrity failure.
+
+### Verified
+- `python -m pytest tests\test_audio_campaigns.py tests\test_cli_audio_campaigns.py tests\test_server_audio_campaigns.py tests\test_release_check.py::test_v104_audio_campaign_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.4.0 - 2026-06-25
 
 ### Added

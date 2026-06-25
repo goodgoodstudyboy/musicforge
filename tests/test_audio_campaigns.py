@@ -149,3 +149,68 @@ def test_audio_campaign_sanitizes_manual_fields(tmp_path: Path, monkeypatch) -> 
     assert "sk-[REDACTED]" in serialized
     assert "[REDACTED]" in serialized
     assert "[REDACTED_LOCAL_PATH]" in serialized
+
+
+def test_signed_audio_campaign_report_is_frozen_and_refresh_is_blocked(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    lab = AudioLabStore(wav_writer=write_lab_test_wav)
+    session_id = _session(lab, release_ready=True)
+    store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=AudioFixSprintStore(audio_lab_store=lab))
+    campaign = store.create_campaign({"from_session": session_id})
+    campaign_id = campaign["campaign_id"]
+    before = store.refresh_report(campaign_id)
+    store.signoff(campaign_id, {"signed_by": "QA"})
+    signed_report_on_disk = read_json(store.campaign_dir(campaign_id) / "campaign-report.json")
+
+    session = lab.read_session(session_id)
+    item_id = session["items"][0]["item_id"]
+    lab.write_item_review(
+        session_id,
+        item_id,
+        {"result": "needs_fix", "rating": 1, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True},
+    )
+    report_after_source_change = store.refresh_report(campaign_id)
+    zip_result = store.build_zip(campaign_id)
+    verification = verify_audio_campaign_package(zip_result["zip_path"], require_real_audio=True, require_manual_review=True, require_signed=True)
+
+    assert before["status"] == "passed"
+    assert report_after_source_change == signed_report_on_disk
+    assert read_json(store.campaign_dir(campaign_id) / "campaign-report.json") == signed_report_on_disk
+    assert verification["status"] == "passed", verification["blockers"]
+    with pytest.raises(AudioCampaignStateError):
+        store.refresh_campaign(campaign_id)
+
+
+def test_signed_audio_campaign_export_rejects_mutated_snapshot(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    lab = AudioLabStore(wav_writer=write_lab_test_wav)
+    session_id = _session(lab, release_ready=True)
+    store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=AudioFixSprintStore(audio_lab_store=lab))
+    campaign = store.create_campaign({"from_session": session_id})
+    campaign_id = campaign["campaign_id"]
+    store.signoff(campaign_id, {"signed_by": "QA"})
+
+    report_path = store.campaign_dir(campaign_id) / "campaign-report.json"
+    report = read_json(report_path)
+    report["status"] = "failed"
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    write_json(report_path, report)
+
+    with pytest.raises(AudioCampaignStateError, match="report no longer matches signoff"):
+        store.export_campaign(campaign_id)
+    with pytest.raises(AudioCampaignStateError, match="report no longer matches signoff"):
+        store.build_zip(campaign_id)
+
+
+def test_signed_audio_campaign_missing_signoff_blocks_export(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    lab = AudioLabStore(wav_writer=write_lab_test_wav)
+    session_id = _session(lab, release_ready=True)
+    store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=AudioFixSprintStore(audio_lab_store=lab))
+    campaign = store.create_campaign({"from_session": session_id})
+    campaign_id = campaign["campaign_id"]
+    store.signoff(campaign_id, {"signed_by": "QA"})
+    store.signoff_path(campaign_id).unlink()
+
+    with pytest.raises(AudioCampaignStateError, match="signoff is missing"):
+        store.export_campaign(campaign_id)

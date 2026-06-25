@@ -137,7 +137,9 @@ python -m song_agent.cli verify-audio-campaign-package .musicforge\audio-campaig
 
 `test_fake` WAVs and synthetic reviews are blocked by default. Use this as the
 batch music-readiness gate after Audio Lab listening and Audio Fix Sprint
-rechecks are complete.
+rechecks are complete. After signoff, the campaign report, case index, and
+source hash are treated as immutable evidence; refresh/export/ZIP paths refuse
+to rewrite or package a signed campaign if those bindings no longer match.
 
 ## LTS Maintenance
 

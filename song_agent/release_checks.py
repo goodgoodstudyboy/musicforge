@@ -15864,6 +15864,32 @@ def _v104_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
                 real_campaign = campaign_store.create_campaign({"from_session": real_session, "name": r"RC sk-secret-value C:\Users\demo\secret.wav"})
                 real_report = campaign_store.refresh_report(real_campaign["campaign_id"])
                 signoff = campaign_store.signoff(real_campaign["campaign_id"], {"signed_by": r"QA sk-secret-value", "role": "developer"})["signoff"]
+                signed_report_before = read_json(campaign_store.campaign_dir(real_campaign["campaign_id"]) / "campaign-report.json")
+                real_session_raw = lab.read_session(real_session)
+                real_item_id = real_session_raw["items"][0]["item_id"]
+                lab.write_item_review(
+                    real_session,
+                    real_item_id,
+                    {"result": "needs_fix", "rating": 1, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True},
+                )
+                signed_report_after = campaign_store.refresh_report(real_campaign["campaign_id"])
+                signed_report_frozen = signed_report_after == signed_report_before
+                signed_refresh_guard = False
+                try:
+                    campaign_store.refresh_campaign(real_campaign["campaign_id"])
+                except AudioCampaignStateError:
+                    signed_refresh_guard = True
+                signed_export_integrity = False
+                signed_report_path = campaign_store.campaign_dir(real_campaign["campaign_id"]) / "campaign-report.json"
+                signed_report_tampered = dict(read_json(signed_report_path))
+                signed_report_tampered["status"] = "failed"
+                signed_report_tampered["integrity_hash"] = stable_hash({key: value for key, value in signed_report_tampered.items() if key != "integrity_hash"})
+                write_json(signed_report_path, signed_report_tampered)
+                try:
+                    campaign_store.export_campaign(real_campaign["campaign_id"])
+                except AudioCampaignStateError:
+                    signed_export_integrity = True
+                write_json(signed_report_path, signed_report_before)
                 zip_result = campaign_store.build_zip(real_campaign["campaign_id"])
                 verification = verify_audio_campaign_package(zip_result["zip_path"], require_real_audio=True, require_manual_review=True, require_signed=True)
                 redaction_report = verify_audio_campaign_package(_v38_rewrite_zip(Path(zip_result["zip_path"]), base / "redaction-v104.zip", transforms={"README.md": lambda data: data + b"\nsk-secret-value C:\\Users\\demo\\secret.wav\n"}))
@@ -15896,6 +15922,9 @@ def _v104_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
                 and fake_signoff_guard
                 and real_report.get("status") == "passed"
                 and signoff.get("status") == "signed"
+                and signed_report_frozen
+                and signed_refresh_guard
+                and signed_export_integrity
                 and verification.get("status") == "passed"
                 and _v38_check_status(redaction_report, "audio_campaign_redaction_scan") == "failed"
                 and before_fix.get("status") == "failed"
@@ -15905,6 +15934,9 @@ def _v104_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
             return ok, (
                 f"fake={fake_report.get('status')}/{fake_signoff_guard}, "
                 f"real={real_report.get('status')}/{verification.get('status')}, "
+                f"signed_refresh_guard={signed_refresh_guard}, "
+                f"signed_report_frozen={signed_report_frozen}, "
+                f"signed_export_integrity={signed_export_integrity}, "
                 f"redaction={_v38_check_status(redaction_report, 'audio_campaign_redaction_scan')}, "
                 f"fix={before_fix.get('status')}->{after_fix.get('status')}/{fix_verification.get('status')}"
             )
