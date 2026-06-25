@@ -861,6 +861,20 @@ def panel_html() -> str:
           <pre id="audio-fix-sprint-summary" class="json-preview"></pre>
         </div>
       </section>
+      <section id="audio-campaigns">
+        <div class="panel-title">
+          <span>Audio Campaigns</span>
+          <span id="audio-campaign-status" class="status">Release candidate gate</span>
+        </div>
+        <div class="panel-body">
+          <div class="toolbar">
+            <input id="audio-campaign-session-id" placeholder="als-000001">
+            <button class="secondary" id="audio-campaign-list" type="button">List</button>
+            <button class="secondary" id="audio-campaign-create" type="button">Create From Session</button>
+          </div>
+          <pre id="audio-campaign-summary" class="json-preview"></pre>
+        </div>
+      </section>
     <section>
       <div class="panel-title">
         <span>Song Request</span>
@@ -2249,6 +2263,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       }
       await showAudioFixSprintResult("/api/audio-fix-sprints", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from_session: sessionId }) });
     });
+    $("audio-campaign-list").addEventListener("click", async () => {
+      await showAudioCampaignResult("/api/audio-campaigns", { method: "GET" });
+    });
+    $("audio-campaign-create").addEventListener("click", async () => {
+      const sessionId = $("audio-campaign-session-id").value.trim();
+      if (!sessionId) {
+        $("audio-campaign-status").textContent = "missing session";
+        return;
+      }
+      await showAudioCampaignResult("/api/audio-campaigns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from_session: sessionId }) });
+    });
 
     async function showAudioLabResult(path, options) {
       try {
@@ -2269,6 +2294,17 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       } catch (err) {
         $("audio-fix-sprint-status").textContent = "error";
         $("audio-fix-sprint-summary").textContent = err.message;
+      }
+    }
+
+    async function showAudioCampaignResult(path, options) {
+      try {
+        const data = await api(path, options);
+        $("audio-campaign-status").textContent = (data.summary && data.summary.status) || (data.campaign && data.campaign.status) || "ok";
+        $("audio-campaign-summary").textContent = JSON.stringify(data.summary || data.campaign || data, null, 2);
+      } catch (err) {
+        $("audio-campaign-status").textContent = "error";
+        $("audio-campaign-summary").textContent = err.message;
       }
     }
 

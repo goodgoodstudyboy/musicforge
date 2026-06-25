@@ -849,11 +849,16 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="audio-fix-sprint-list"' in html
     assert 'id="audio-fix-sprint-create"' in html
     assert 'id="audio-fix-sprint-session-id"' in html
+    assert "Audio Campaigns" in html
+    assert 'id="audio-campaign-list"' in html
+    assert 'id="audio-campaign-create"' in html
+    assert 'id="audio-campaign-session-id"' in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html
     assert "/api/audio-lab/listening-sessions" in html
     assert "/api/audio-lab/comparisons" in html
     assert "/api/audio-fix-sprints" in html
+    assert "/api/audio-campaigns" in html
     assert "Release Audio QA" in html
     assert "Audio Review Board" in html
     assert "Tracklist" in html

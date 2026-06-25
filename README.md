@@ -119,6 +119,26 @@ review, be selected explicitly, and then pass a manual recheck before close.
 Stale Audio Lab sources or stale candidate artifacts block progress. Test fake
 or copied test WAV evidence cannot close a sprint as release-ready.
 
+## Audio Campaigns
+
+Audio Campaigns batch Audio Lab sessions into a release-candidate listening
+gate. They require current release-ready WAV evidence, manual playback-confirmed
+reviews, closed Audio Fix Sprints for `needs_fix` or high markers, and explicit
+signoff before the package verifies as ready:
+
+```powershell
+python -m song_agent.cli audio-campaign create --from-session als-000001 --json
+python -m song_agent.cli audio-campaign create-fix-sprints acmp-000001 --json
+python -m song_agent.cli audio-campaign report acmp-000001 --json
+python -m song_agent.cli audio-campaign signoff acmp-000001 --signed-by "Developer" --role developer --json
+python -m song_agent.cli audio-campaign zip acmp-000001 --json
+python -m song_agent.cli verify-audio-campaign-package .musicforge\audio-campaigns\acmp-000001\audio-campaign.zip --require-real-audio --require-manual-review --require-fix-sprints-closed --require-signed --json
+```
+
+`test_fake` WAVs and synthetic reviews are blocked by default. Use this as the
+batch music-readiness gate after Audio Lab listening and Audio Fix Sprint
+rechecks are complete.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

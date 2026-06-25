@@ -501,6 +501,13 @@ from song_agent.audio_fix_sprints import (
     AudioFixSprintStore,
     AudioFixSprintValidationError,
 )
+from song_agent.audio_campaigns import (
+    AudioCampaignError,
+    AudioCampaignNotFoundError,
+    AudioCampaignStateError,
+    AudioCampaignStore,
+    AudioCampaignValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3028,6 +3035,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.audio_fix_sprint_store  # type: ignore[attr-defined]
 
     @property
+    def audio_campaign_store(self) -> AudioCampaignStore:
+        return self.server.audio_campaign_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3206,6 +3217,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/audio-fix-sprints" or path.startswith("/api/audio-fix-sprints/"):
                 self._handle_audio_fix_sprint_route(method, path)
+                return
+            if path == "/api/audio-campaigns" or path.startswith("/api/audio-campaigns/"):
+                self._handle_audio_campaign_route(method, path)
                 return
             if path == "/api/mastering/profiles" or path.startswith("/api/mastering/profiles/"):
                 self._handle_mastering_profiles_route(method, path)
@@ -9913,6 +9927,106 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AudioFixSprintValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except AudioFixSprintError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_audio_campaign_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/audio-campaigns":
+                if method == "GET":
+                    campaigns = self.audio_campaign_store.list_campaigns()
+                    self._send_json({"ok": True, "campaigns": campaigns, "summary": {"campaign_count": len(campaigns)}})
+                    return
+                if method == "POST":
+                    campaign = self.audio_campaign_store.create_campaign(self._read_json_body())
+                    self._send_json({"ok": True, "campaign": campaign, "summary": campaign.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if path.startswith("/api/audio-campaigns/"):
+                parts = path.removeprefix("/api/audio-campaigns/").strip("/").split("/")
+                campaign_id = parts[0]
+                if len(parts) == 1:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    campaign = self.audio_campaign_store.read_campaign(campaign_id)
+                    self._send_json({"ok": True, "campaign": campaign, "summary": campaign.get("summary", {})})
+                    return
+                action = parts[1]
+                if len(parts) == 2 and action == "refresh":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    campaign = self.audio_campaign_store.refresh_campaign(campaign_id)
+                    self._send_json({"ok": True, "campaign": campaign, "summary": campaign.get("summary", {})})
+                    return
+                if len(parts) == 2 and action == "link-listening-session":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._read_json_body()
+                    session_id = str(payload.get("session_id") or payload.get("from_session") or "")
+                    campaign = self.audio_campaign_store.link_listening_session(campaign_id, session_id)
+                    self._send_json({"ok": True, "campaign": campaign, "summary": campaign.get("summary", {})})
+                    return
+                if len(parts) == 2 and action == "fix-sprints":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_campaign_store.create_fix_sprints(campaign_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "passed", **result}, status=HTTPStatus.CREATED)
+                    return
+                if len(parts) == 2 and action == "report":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.audio_campaign_store.refresh_report(campaign_id)
+                    self._send_json({"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {})})
+                    return
+                if len(parts) == 2 and action == "signoff":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_campaign_store.signoff(campaign_id, self._read_json_body())
+                    self._send_json({"ok": True, **result})
+                    return
+                if len(parts) == 2 and action == "export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_campaign_store.export_campaign(campaign_id)
+                    self._send_json({"ok": result.get("status") == "passed", **result})
+                    return
+                if len(parts) == 2 and action == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_campaign_store.build_zip(campaign_id)
+                    self._send_json({"ok": result.get("status") == "passed", **result})
+                    return
+                if len(parts) == 2 and action == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    report = self.audio_campaign_store.verify_zip(
+                        campaign_id,
+                        strict=bool(payload.get("strict")),
+                        require_real_audio=bool(payload.get("require_real_audio")),
+                        require_manual_review=bool(payload.get("require_manual_review")),
+                        require_fix_sprints_closed=bool(payload.get("require_fix_sprints_closed")),
+                        require_signed=bool(payload.get("require_signed")),
+                    )
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {})})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio Campaign route not found.")
+        except AudioCampaignNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioCampaignStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AudioCampaignValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except AudioCampaignError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
@@ -17846,6 +17960,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_revision_store = AudioRevisionStore(self.release_store, project_store=self.project_store, job_store=self.job_store, audio_review_store=self.audio_review_store)
         self.audio_lab_store = AudioLabStore()
         self.audio_fix_sprint_store = AudioFixSprintStore(audio_lab_store=self.audio_lab_store)
+        self.audio_campaign_store = AudioCampaignStore(audio_lab_store=self.audio_lab_store, audio_fix_sprint_store=self.audio_fix_sprint_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

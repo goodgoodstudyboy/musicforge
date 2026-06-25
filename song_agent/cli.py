@@ -355,6 +355,88 @@ def build_audio_fix_sprint_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_audio_campaign_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage release candidate Audio Campaigns from Audio Lab sessions.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    create = subparsers.add_parser("create", help="Create an Audio Campaign from one or more Audio Lab sessions.")
+    create.add_argument("--from-session", "--session-id", dest="session_ids", action="append", required=True)
+    create.add_argument("--name", default="")
+    create.add_argument("--profile", default="release_candidate")
+    create.add_argument("--allow-test-audio", action="store_true")
+    create.add_argument("--allow-synthetic-review", action="store_true")
+    create.add_argument("--minimum-rating", type=int, default=4)
+    create.add_argument("--json", action="store_true")
+
+    listing = subparsers.add_parser("list", help="List Audio Campaigns.")
+    listing.add_argument("--json", action="store_true")
+
+    detail = subparsers.add_parser("detail", help="Show one Audio Campaign.")
+    detail.add_argument("campaign_id")
+    detail.add_argument("--json", action="store_true")
+
+    refresh = subparsers.add_parser("refresh", help="Refresh Audio Campaign source snapshots.")
+    refresh.add_argument("campaign_id")
+    refresh.add_argument("--json", action="store_true")
+
+    link_session = subparsers.add_parser("link-session", help="Add another Audio Lab listening session to a campaign.")
+    link_session.add_argument("campaign_id")
+    link_session.add_argument("--session-id", required=True)
+    link_session.add_argument("--json", action="store_true")
+
+    fix_sprints = subparsers.add_parser("create-fix-sprints", help="Create Audio Fix Sprints for campaign issues.")
+    fix_sprints.add_argument("campaign_id")
+    fix_sprints.add_argument("--json", action="store_true")
+
+    report = subparsers.add_parser("report", help="Build and show the Audio Campaign report.")
+    report.add_argument("campaign_id")
+    report.add_argument("--json", action="store_true")
+
+    signoff = subparsers.add_parser("signoff", help="Sign off a passed Audio Campaign.")
+    signoff.add_argument("campaign_id")
+    signoff.add_argument("--signed-by", required=True)
+    signoff.add_argument("--role", default="audio-reviewer")
+    signoff.add_argument("--reason", default="")
+    signoff.add_argument("--json", action="store_true")
+
+    export = subparsers.add_parser("export", help="Export the Audio Campaign evidence package directory.")
+    export.add_argument("campaign_id")
+    export.add_argument("--json", action="store_true")
+
+    zip_cmd = subparsers.add_parser("zip", help="Build the Audio Campaign ZIP.")
+    zip_cmd.add_argument("campaign_id")
+    zip_cmd.add_argument("--json", action="store_true")
+
+    verify = subparsers.add_parser("verify", help="Verify the Audio Campaign ZIP.")
+    verify.add_argument("campaign_id")
+    verify.add_argument("--strict", action="store_true")
+    verify.add_argument("--require-real-audio", action="store_true")
+    verify.add_argument("--require-manual-review", action="store_true")
+    verify.add_argument("--require-fix-sprints-closed", action="store_true")
+    verify.add_argument("--require-signed", action="store_true")
+    verify.add_argument("--json", action="store_true")
+    verify.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_audio_campaign_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Audio Campaign ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-real-audio", action="store_true")
+    parser.add_argument("--require-manual-review", action="store_true")
+    parser.add_argument("--require-fix-sprints-closed", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-no-open-high", action="store_true")
+    parser.add_argument("--require-no-open-critical", action="store_true")
+    parser.add_argument("--max-zip-size-mb", type=int, default=256)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=5000)
+    return parser
+
+
 def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Verify a MusicForge LTS maintenance backup ZIP.")
     parser.add_argument("zip_path", type=Path, help="Path to musicforge-maintenance-backup.zip.")
@@ -2774,6 +2856,65 @@ def _run_audio_fix_sprint_command(args: argparse.Namespace) -> dict[str, Any]:
     raise ValueError("Unsupported audio-fix-sprint command.")
 
 
+def _run_audio_campaign_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.audio_campaigns import AudioCampaignStore
+    from song_agent.audio_campaign_verifier import write_audio_campaign_verification_report
+
+    store = AudioCampaignStore()
+    if args.action == "create":
+        campaign = store.create_campaign(
+            {
+                "session_ids": args.session_ids,
+                "name": args.name,
+                "profile": args.profile,
+                "allow_test_audio": args.allow_test_audio,
+                "allow_synthetic_review": args.allow_synthetic_review,
+                "minimum_rating": args.minimum_rating,
+            }
+        )
+        return {"ok": True, "campaign": campaign, "summary": campaign.get("summary", {}), "status": campaign.get("status")}
+    if args.action == "list":
+        campaigns = store.list_campaigns()
+        return {"ok": True, "campaigns": campaigns, "summary": {"campaign_count": len(campaigns)}, "status": "passed"}
+    if args.action == "detail":
+        campaign = store.read_campaign(args.campaign_id)
+        return {"ok": True, "campaign": campaign, "summary": campaign.get("summary", {}), "status": campaign.get("status")}
+    if args.action == "refresh":
+        campaign = store.refresh_campaign(args.campaign_id)
+        return {"ok": True, "campaign": campaign, "summary": campaign.get("summary", {}), "status": campaign.get("status")}
+    if args.action == "link-session":
+        campaign = store.link_listening_session(args.campaign_id, args.session_id)
+        return {"ok": True, "campaign": campaign, "summary": campaign.get("summary", {}), "status": campaign.get("status")}
+    if args.action == "create-fix-sprints":
+        result = store.create_fix_sprints(args.campaign_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": result.get("report", {}).get("summary", {})}
+    if args.action == "report":
+        report = store.refresh_report(args.campaign_id)
+        return {"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "signoff":
+        result = store.signoff(args.campaign_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": True, **result, "summary": result.get("report", {}).get("summary", {})}
+    if args.action == "export":
+        result = store.export_campaign(args.campaign_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": result.get("manifest", {})}
+    if args.action == "zip":
+        result = store.build_zip(args.campaign_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_zip(
+            args.campaign_id,
+            strict=args.strict,
+            require_real_audio=args.require_real_audio,
+            require_manual_review=args.require_manual_review,
+            require_fix_sprints_closed=args.require_fix_sprints_closed,
+            require_signed=args.require_signed,
+        )
+        if args.report_out is not None:
+            write_audio_campaign_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported audio-campaign command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -2818,6 +2959,28 @@ def _print_audio_fix_sprint_result(result: dict[str, Any], *, json_output: bool)
         closeout = result["closeout"]
         blockers = closeout.get("blockers") or []
         print(f"closeout: {closeout.get('status')} blockers={','.join(blockers) if blockers else '-'}")
+
+
+def _print_audio_campaign_result(result: dict[str, Any], *, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
+    print("MusicForge Audio Campaign")
+    print(f"status: {status}")
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    details = []
+    for key in ("case_count", "manual_review_count", "real_audio_count", "test_fake_count", "open_fix_sprint_count"):
+        if key in summary:
+            details.append(f"{key}={summary.get(key)}")
+    if details:
+        print("summary: " + " ".join(details))
+    if "campaign" in result:
+        campaign = result["campaign"]
+        print(f"campaign: {campaign.get('campaign_id')} {campaign.get('name')}")
+    if "verification" in result:
+        verification = result["verification"]
+        print(f"verification: {verification.get('status')} blockers={verification.get('blockers') or []}")
 
 
 def _main() -> None:
@@ -2921,6 +3084,44 @@ def _main() -> None:
         if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
             raise SystemExit(1)
         return
+    elif raw_args and raw_args[0] == "audio-campaign":
+        parser = build_audio_campaign_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_audio_campaign_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_audio_campaign_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "verify-audio-campaign-package":
+        from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
+
+        parser = build_verify_audio_campaign_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_audio_campaign_package(
+            args.zip_path,
+            strict=args.strict,
+            require_real_audio=args.require_real_audio,
+            require_manual_review=args.require_manual_review,
+            require_fix_sprints_closed=args.require_fix_sprints_closed,
+            require_signed=args.require_signed,
+            require_no_open_high=args.require_no_open_high,
+            require_no_open_critical=args.require_no_open_critical,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_audio_campaign_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Audio Campaign verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(audio_campaign_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-maintenance-backup":
         from song_agent.lts_backup_verifier import (
             maintenance_backup_verification_exit_code,

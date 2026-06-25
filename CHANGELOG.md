@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.4.0 - 2026-06-25
+
+### Added
+- Release Candidate Audio Campaign store for batching Audio Lab sessions into case reports, campaign reports, signoff, export, ZIP, and offline verification.
+- `audio-campaign` CLI commands, `/api/audio-campaigns/*` endpoints, and Studio Audio Campaign controls.
+- `verify-audio-campaign-package` CLI verifier with real WAV, manual review, closed fix sprint, signoff, marker, ZIP safety, tamper, and redaction checks.
+- release-check `v104.audio_campaign_smoke` covering fake WAV blocking, real manual campaign signoff, needs_fix to Audio Fix Sprint closeout, package verification, and redaction failure.
+
+### Verified
+- `python -m pytest tests\test_audio_campaigns.py tests\test_server_audio_campaigns.py tests\test_release_check.py::test_v104_audio_campaign_smoke tests\test_release_check_matrix.py tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.3.1 - 2026-06-25
 
 ### Fixed

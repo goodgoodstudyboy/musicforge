@@ -15815,6 +15815,105 @@ def _v103_audio_fix_sprint_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
 
 
+def _v104_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.audio_campaign_verifier import verify_audio_campaign_package
+    from song_agent.audio_campaigns import AudioCampaignStateError, AudioCampaignStore
+    from song_agent.audio_fix_sprints import AudioFixSprintStore
+    from song_agent.audio_lab import AudioLabStore, write_lab_test_wav
+    from song_agent.projectio import read_json
+
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v104-audio-campaign-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                lab = AudioLabStore(wav_writer=write_lab_test_wav)
+
+                def make_session(*, result: str, release_ready_source: bool, marker: bool = False) -> str:
+                    smoke = lab.run_smoke({"cases": 1, "render_audio": "auto"})
+                    session = lab.create_session({"from_smoke": smoke["smoke_run_id"]})
+                    session_id = session["session_id"]
+                    item_id = session["items"][0]["item_id"]
+                    if release_ready_source:
+                        raw = read_json(lab.session_path(session_id))
+                        raw["items"][0]["renderer"] = {"runner_kind": "real", "profile_id": "test-real", "release_ready": True}
+                        raw["items"][0]["source_hash"] = f"release-ready-campaign-{session_id}"
+                        lab._write_session(raw)  # type: ignore[attr-defined]
+                    lab.write_item_review(
+                        session_id,
+                        item_id,
+                        {"result": result, "rating": 5 if result == "accepted" else 2, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True},
+                    )
+                    if marker:
+                        lab.add_marker(session_id, item_id, {"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "Hook is masked."})
+                    return session_id
+
+                fake_session = make_session(result="accepted", release_ready_source=False)
+                fake_store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=AudioFixSprintStore(audio_lab_store=lab))
+                fake_campaign = fake_store.create_campaign({"from_session": fake_session})
+                fake_report = fake_store.refresh_report(fake_campaign["campaign_id"])
+                fake_signoff_guard = False
+                try:
+                    fake_store.signoff(fake_campaign["campaign_id"], {"signed_by": "QA"})
+                except AudioCampaignStateError:
+                    fake_signoff_guard = True
+
+                real_session = make_session(result="accepted", release_ready_source=True)
+                campaign_store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=AudioFixSprintStore(audio_lab_store=lab))
+                real_campaign = campaign_store.create_campaign({"from_session": real_session, "name": r"RC sk-secret-value C:\Users\demo\secret.wav"})
+                real_report = campaign_store.refresh_report(real_campaign["campaign_id"])
+                signoff = campaign_store.signoff(real_campaign["campaign_id"], {"signed_by": r"QA sk-secret-value", "role": "developer"})["signoff"]
+                zip_result = campaign_store.build_zip(real_campaign["campaign_id"])
+                verification = verify_audio_campaign_package(zip_result["zip_path"], require_real_audio=True, require_manual_review=True, require_signed=True)
+                redaction_report = verify_audio_campaign_package(_v38_rewrite_zip(Path(zip_result["zip_path"]), base / "redaction-v104.zip", transforms={"README.md": lambda data: data + b"\nsk-secret-value C:\\Users\\demo\\secret.wav\n"}))
+
+                fix_session = make_session(result="needs_fix", release_ready_source=True, marker=True)
+                fix_store = AudioFixSprintStore(audio_lab_store=lab)
+                fix_campaign_store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=fix_store)
+                fix_campaign = fix_campaign_store.create_campaign({"from_session": fix_session})
+                before_fix = fix_campaign_store.refresh_report(fix_campaign["campaign_id"])
+                created = fix_campaign_store.create_fix_sprints(fix_campaign["campaign_id"])
+                sprint_id = created["fix_sprints"][0]["fix_sprint_id"]
+                sprint = fix_store.read_sprint(sprint_id)
+                item_id = sprint["items"][0]["fix_item_id"]
+                candidate = fix_store.generate_candidates(sprint_id)["candidates"][0]
+                fix_store.review_candidate(sprint_id, item_id, candidate["candidate_id"], {"preferred": "right", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                fix_store.select_candidate(sprint_id, item_id, candidate["candidate_id"])
+                recheck = fix_store.create_recheck_session(sprint_id)["recheck_session"]
+                fix_store.review_recheck_item(sprint_id, recheck["items"][0]["item_id"], {"result": "accepted", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                fix_store.close_sprint(sprint_id, {"closed_by": "QA"})
+                after_fix = fix_campaign_store.refresh_report(fix_campaign["campaign_id"])
+                fix_campaign_store.signoff(fix_campaign["campaign_id"], {"signed_by": "QA"})
+                fix_zip = fix_campaign_store.build_zip(fix_campaign["campaign_id"])
+                fix_verification = verify_audio_campaign_package(fix_zip["zip_path"], require_real_audio=True, require_manual_review=True, require_fix_sprints_closed=True, require_signed=True, require_no_open_high=True)
+            finally:
+                os.chdir(old_cwd)
+
+            ok = (
+                fake_report.get("status") == "failed"
+                and "test_fake_audio_not_release_ready" in {row.get("check_id") for row in fake_report.get("blockers", [])}
+                and fake_signoff_guard
+                and real_report.get("status") == "passed"
+                and signoff.get("status") == "signed"
+                and verification.get("status") == "passed"
+                and _v38_check_status(redaction_report, "audio_campaign_redaction_scan") == "failed"
+                and before_fix.get("status") == "failed"
+                and after_fix.get("status") == "passed"
+                and fix_verification.get("status") == "passed"
+            )
+            return ok, (
+                f"fake={fake_report.get('status')}/{fake_signoff_guard}, "
+                f"real={real_report.get('status')}/{verification.get('status')}, "
+                f"redaction={_v38_check_status(redaction_report, 'audio_campaign_redaction_scan')}, "
+                f"fix={before_fix.get('status')}->{after_fix.get('status')}/{fix_verification.get('status')}"
+            )
+    except Exception as exc:
+        return False, f"v10.4 Audio Campaign smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
 def _ga_check_status(report: dict[str, Any], check_id: str) -> str:
     for check in report.get("checks") or []:
         if isinstance(check, dict) and check.get("check_id") == check_id:

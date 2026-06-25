@@ -78,6 +78,7 @@ from song_agent.release_checks import (
     _v101_lts_maintenance_backup_restore_smoke,
     _v102_audio_lab_real_listening_smoke,
     _v103_audio_fix_sprint_smoke,
+    _v104_audio_campaign_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1117,6 +1118,16 @@ def test_v103_audio_fix_sprint_smoke(tmp_path: Path) -> None:
     assert "real_closeout=passed/1" in detail
     assert "real_closed=closed" in detail
     assert "stale=True/True" in detail
+
+
+def test_v104_audio_campaign_smoke(tmp_path: Path) -> None:
+    ok, detail = _v104_audio_campaign_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "fake=failed/True" in detail
+    assert "real=passed/passed" in detail
+    assert "redaction=failed" in detail
+    assert "fix=failed->passed/passed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:
