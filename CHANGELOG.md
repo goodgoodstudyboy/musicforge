@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.5.0 - 2026-06-25
+
+### Added
+- Audio Campaign Governance reports, analytics summaries, immutable signed archive ZIPs, and offline archive verification.
+- `audio-campaign governance`, `audio-campaign analytics`, `audio-campaign archive-zip`, `audio-campaign verify-archive`, Change Request reset commands, and `verify-audio-campaign-archive-package`.
+- GA readiness `ga.audio_campaign` gate with external Audio Campaign Archive verification binding.
+- Release signoff `require_audio_campaign=true` gate for signed campaign governance evidence.
+- Studio Audio Campaign governance/archive controls and release-check `v105.audio_campaign_governance_smoke`.
+
+### Verified
+- `python -m pytest tests\test_audio_campaign_governance.py tests\test_cli_audio_campaigns.py tests\test_server_audio_campaigns.py tests\test_release_check.py::test_v105_audio_campaign_governance_smoke tests\test_release_check_matrix.py -q`
+
 ## v10.4.1 - 2026-06-25
 
 ### Fixed

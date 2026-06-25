@@ -89,6 +89,9 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-audio", action="store_true", help="Require renderer/audio acceptance readiness.")
     parser.add_argument("--require-final-readiness", action="store_true", help="Require a passed Final Handoff verification report.")
     parser.add_argument("--final-handoff-verification-report", type=Path, default=None, help="Path to Final Handoff verification report JSON.")
+    parser.add_argument("--require-audio-campaign", dest="audio_campaign_id", default=None, help="Require a signed Audio Campaign id.")
+    parser.add_argument("--audio-campaign-archive", type=Path, default=None, help="Path to Audio Campaign Archive ZIP.")
+    parser.add_argument("--audio-campaign-archive-verification-report", type=Path, default=None, help="Path to Audio Campaign Archive verification report JSON.")
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
     parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
@@ -108,6 +111,9 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-final-readiness", action="store_true", help="Require external final readiness evidence.")
     parser.add_argument("--final-handoff-package", type=Path, default=None, help="External Trust Operations Final Handoff ZIP.")
     parser.add_argument("--final-handoff-verification-report", type=Path, default=None, help="External Trust Operations Final Handoff verification report JSON.")
+    parser.add_argument("--require-audio-campaign", action="store_true", help="Require external Audio Campaign governance evidence.")
+    parser.add_argument("--audio-campaign-archive", type=Path, default=None, help="External Audio Campaign Archive ZIP.")
+    parser.add_argument("--audio-campaign-archive-verification-report", type=Path, default=None, help="External Audio Campaign Archive verification report JSON.")
     return parser
 
 
@@ -416,6 +422,48 @@ def build_audio_campaign_parser() -> argparse.ArgumentParser:
     verify.add_argument("--require-signed", action="store_true")
     verify.add_argument("--json", action="store_true")
     verify.add_argument("--report-out", type=Path, default=None)
+
+    governance = subparsers.add_parser("governance", help="Refresh the Audio Campaign governance report.")
+    governance.add_argument("campaign_id")
+    governance.add_argument("--json", action="store_true")
+
+    analytics = subparsers.add_parser("analytics", help="Refresh the Audio Campaign analytics summary.")
+    analytics.add_argument("campaign_id")
+    analytics.add_argument("--json", action="store_true")
+
+    archive = subparsers.add_parser("archive", help="Export signed Audio Campaign governance archive files.")
+    archive.add_argument("campaign_id")
+    archive.add_argument("--json", action="store_true")
+
+    archive_zip = subparsers.add_parser("archive-zip", help="Build the signed Audio Campaign governance archive ZIP.")
+    archive_zip.add_argument("campaign_id")
+    archive_zip.add_argument("--json", action="store_true")
+
+    verify_archive = subparsers.add_parser("verify-archive", help="Verify the signed Audio Campaign governance archive ZIP.")
+    verify_archive.add_argument("campaign_id")
+    verify_archive.add_argument("--strict", action="store_true")
+    verify_archive.add_argument("--json", action="store_true")
+    verify_archive.add_argument("--report-out", type=Path, default=None)
+
+    cr_create = subparsers.add_parser("change-request-create", help="Create an Audio Campaign signoff reset Change Request.")
+    cr_create.add_argument("campaign_id")
+    cr_create.add_argument("--created-by", default="developer")
+    cr_create.add_argument("--reason", required=True)
+    cr_create.add_argument("--risk", default="medium")
+    cr_create.add_argument("--json", action="store_true")
+
+    cr_approve = subparsers.add_parser("change-request-approve", help="Approve an Audio Campaign signoff reset Change Request.")
+    cr_approve.add_argument("campaign_id")
+    cr_approve.add_argument("change_request_id")
+    cr_approve.add_argument("--approved-by", default="reviewer")
+    cr_approve.add_argument("--reason", default="")
+    cr_approve.add_argument("--json", action="store_true")
+
+    reset = subparsers.add_parser("signoff-reset", help="Reset Audio Campaign signoff with an approved Change Request.")
+    reset.add_argument("campaign_id")
+    reset.add_argument("--change-request-id", required=True)
+    reset.add_argument("--reason", required=True)
+    reset.add_argument("--json", action="store_true")
     return parser
 
 
@@ -431,6 +479,20 @@ def build_verify_audio_campaign_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-signed", action="store_true")
     parser.add_argument("--require-no-open-high", action="store_true")
     parser.add_argument("--require-no-open-critical", action="store_true")
+    parser.add_argument("--max-zip-size-mb", type=int, default=256)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=5000)
+    return parser
+
+
+def build_verify_audio_campaign_archive_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Audio Campaign Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-verification-passed", action="store_true")
     parser.add_argument("--max-zip-size-mb", type=int, default=256)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=5000)
@@ -2859,8 +2921,11 @@ def _run_audio_fix_sprint_command(args: argparse.Namespace) -> dict[str, Any]:
 def _run_audio_campaign_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.audio_campaigns import AudioCampaignStore
     from song_agent.audio_campaign_verifier import write_audio_campaign_verification_report
+    from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
+    from song_agent.audio_campaign_archive_verifier import write_audio_campaign_archive_verification_report
 
     store = AudioCampaignStore()
+    governance_store = AudioCampaignGovernanceStore(campaign_store=store)
     if args.action == "create":
         campaign = store.create_campaign(
             {
@@ -2912,6 +2977,32 @@ def _run_audio_campaign_command(args: argparse.Namespace) -> dict[str, Any]:
         if args.report_out is not None:
             write_audio_campaign_verification_report(report, args.report_out)
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "governance":
+        report = governance_store.refresh_governance_report(args.campaign_id)
+        return {"ok": report.get("status") == "signed", "governance": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "analytics":
+        analytics = governance_store.refresh_analytics(args.campaign_id)
+        return {"ok": True, "analytics": analytics, "summary": analytics.get("summary", {}), "status": analytics.get("status")}
+    if args.action == "archive":
+        manifest = governance_store.export_archive(args.campaign_id)
+        return {"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"}
+    if args.action == "archive-zip":
+        result = governance_store.build_archive_zip(args.campaign_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify-archive":
+        report = governance_store.verify_archive(args.campaign_id, {"strict": args.strict, "require_signed": True, "require_verification_passed": True})
+        if args.report_out is not None:
+            write_audio_campaign_archive_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "change-request-create":
+        cr = governance_store.create_change_request(args.campaign_id, {"created_by": args.created_by, "reason": args.reason, "risk": args.risk})
+        return {"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}, "status": cr.get("status")}
+    if args.action == "change-request-approve":
+        cr = governance_store.approve_change_request(args.campaign_id, args.change_request_id, {"approved_by": args.approved_by, "reason": args.reason})
+        return {"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}, "status": cr.get("status")}
+    if args.action == "signoff-reset":
+        result = governance_store.reset_signoff(args.campaign_id, args.change_request_id, {"reason": args.reason})
+        return {"ok": True, **result, "summary": {"change_request_id": result.get("change_request", {}).get("change_request_id")}, "status": result.get("status")}
     raise ValueError("Unsupported audio-campaign command.")
 
 
@@ -3012,6 +3103,10 @@ def _main() -> None:
             allow_dirty=args.allow_dirty,
             require_manual_acceptance=args.require_manual_acceptance,
             require_audio=args.require_audio,
+            require_audio_campaign=bool(args.audio_campaign_id),
+            audio_campaign_id=args.audio_campaign_id,
+            audio_campaign_archive_zip_path=args.audio_campaign_archive,
+            audio_campaign_archive_verification_report_path=args.audio_campaign_archive_verification_report,
             require_final_readiness=args.require_final_readiness,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
             release_check_latest_report_path=args.release_check_latest_report,
@@ -3038,8 +3133,11 @@ def _main() -> None:
             strict=args.strict,
             require_ready=args.require_ready,
             require_manual_acceptance=args.require_manual_acceptance,
+            require_audio_campaign=args.require_audio_campaign,
             require_final_readiness=args.require_final_readiness,
             manual_acceptance_report_path=args.manual_acceptance_report,
+            audio_campaign_archive_path=args.audio_campaign_archive,
+            audio_campaign_archive_verification_report_path=args.audio_campaign_archive_verification_report,
             final_handoff_package_path=args.final_handoff_package,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
         )
@@ -3122,6 +3220,34 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(audio_campaign_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-audio-campaign-archive-package":
+        from song_agent.audio_campaign_archive_verifier import (
+            audio_campaign_archive_verification_exit_code,
+            verify_audio_campaign_archive_package,
+            write_audio_campaign_archive_verification_report,
+        )
+
+        parser = build_verify_audio_campaign_archive_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_audio_campaign_archive_package(
+            args.zip_path,
+            strict=args.strict,
+            require_signed=args.require_signed,
+            require_verification_passed=args.require_verification_passed,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_audio_campaign_archive_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Audio Campaign Archive verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(audio_campaign_archive_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-maintenance-backup":
         from song_agent.lts_backup_verifier import (
             maintenance_backup_verification_exit_code,

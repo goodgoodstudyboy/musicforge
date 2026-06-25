@@ -869,8 +869,12 @@ def panel_html() -> str:
         <div class="panel-body">
           <div class="toolbar">
             <input id="audio-campaign-session-id" placeholder="als-000001">
+            <input id="audio-campaign-id" placeholder="acmp-000001">
             <button class="secondary" id="audio-campaign-list" type="button">List</button>
             <button class="secondary" id="audio-campaign-create" type="button">Create From Session</button>
+            <button class="secondary" id="audio-campaign-governance" type="button">Governance</button>
+            <button class="secondary" id="audio-campaign-archive-zip" type="button">Archive ZIP</button>
+            <button class="secondary" id="audio-campaign-verify-archive" type="button">Verify Archive</button>
           </div>
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
@@ -2273,6 +2277,30 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         return;
       }
       await showAudioCampaignResult("/api/audio-campaigns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from_session: sessionId }) });
+    });
+    $("audio-campaign-governance").addEventListener("click", async () => {
+      const campaignId = $("audio-campaign-id").value.trim();
+      if (!campaignId) {
+        $("audio-campaign-status").textContent = "missing campaign";
+        return;
+      }
+      await showAudioCampaignResult(`/api/audio-campaigns/${encodeURIComponent(campaignId)}/governance`, { method: "POST" });
+    });
+    $("audio-campaign-archive-zip").addEventListener("click", async () => {
+      const campaignId = $("audio-campaign-id").value.trim();
+      if (!campaignId) {
+        $("audio-campaign-status").textContent = "missing campaign";
+        return;
+      }
+      await showAudioCampaignResult(`/api/audio-campaigns/${encodeURIComponent(campaignId)}/archive/zip`, { method: "POST" });
+    });
+    $("audio-campaign-verify-archive").addEventListener("click", async () => {
+      const campaignId = $("audio-campaign-id").value.trim();
+      if (!campaignId) {
+        $("audio-campaign-status").textContent = "missing campaign";
+        return;
+      }
+      await showAudioCampaignResult(`/api/audio-campaigns/${encodeURIComponent(campaignId)}/archive/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true }) });
     });
 
     async function showAudioLabResult(path, options) {

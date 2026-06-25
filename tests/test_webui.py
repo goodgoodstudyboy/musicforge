@@ -853,6 +853,9 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="audio-campaign-list"' in html
     assert 'id="audio-campaign-create"' in html
     assert 'id="audio-campaign-session-id"' in html
+    assert 'id="audio-campaign-governance"' in html
+    assert 'id="audio-campaign-archive-zip"' in html
+    assert 'id="audio-campaign-verify-archive"' in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html
     assert "/api/audio-lab/listening-sessions" in html

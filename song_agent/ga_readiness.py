@@ -14,6 +14,7 @@ import tomllib
 
 from song_agent import __version__
 from song_agent.audio_profiles import AudioProfileStore, AudioProfileNotFoundError
+from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
 from song_agent.music_acceptance import AcceptanceStore, acceptance_report_summary, stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.provider import ProviderError, load_provider_config, provider_configured
@@ -53,6 +54,10 @@ def build_ga_readiness_report(
     allow_dirty: bool = False,
     require_manual_acceptance: bool = False,
     require_audio: bool = False,
+    require_audio_campaign: bool = False,
+    audio_campaign_id: str | None = None,
+    audio_campaign_archive_zip_path: Path | str | None = None,
+    audio_campaign_archive_verification_report_path: Path | str | None = None,
     require_final_readiness: bool = False,
     final_handoff_verification_report_path: Path | str | None = None,
     release_check_latest_report_path: Path | str | None = None,
@@ -67,6 +72,8 @@ def build_ga_readiness_report(
         "strict": strict,
         "require_manual_acceptance": require_manual_acceptance,
         "require_audio": require_audio,
+        "require_audio_campaign": require_audio_campaign,
+        "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
     }
 
@@ -156,6 +163,21 @@ def build_ga_readiness_report(
         acceptance_summary,
     )
 
+    audio_campaign_summary = _audio_campaign_summary(
+        audio_campaign_id,
+        required=require_audio_campaign,
+        archive_zip_path=audio_campaign_archive_zip_path,
+        archive_verification_report_path=audio_campaign_archive_verification_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.audio_campaign",
+        "passed" if audio_campaign_summary.get("status") == "passed" else "failed" if require_audio_campaign else "warning",
+        "blocking" if require_audio_campaign else "warning",
+        "Audio Campaign governance evidence is passed." if audio_campaign_summary.get("status") == "passed" else "Audio Campaign governance evidence is missing or not passed.",
+        audio_campaign_summary,
+    )
+
     latest_summary = _release_check_summary(
         root,
         report_path=release_check_latest_report_path,
@@ -212,6 +234,7 @@ def build_ga_readiness_report(
             "release_check_latest_status": latest_summary.get("status", "unknown"),
             "release_check_ga_status": ga_summary.get("status", "unknown"),
             "acceptance_status": acceptance_summary.get("status", "missing"),
+            "audio_campaign_status": audio_campaign_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -424,6 +447,35 @@ def _acceptance_summary(root: Path) -> dict[str, Any]:
         "synthetic_only_count": len(synthetic_only),
         "latest": candidates[-1] if candidates else {},
     }
+
+
+def _audio_campaign_summary(
+    campaign_id: str | None,
+    *,
+    required: bool,
+    archive_zip_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if not campaign_id:
+        return {"status": "missing", "campaign_id": None, "message": "Audio Campaign governance evidence was not provided."}
+    try:
+        gate = AudioCampaignGovernanceStore().gate(
+            str(campaign_id),
+            required=required,
+            archive_zip_path=archive_zip_path,
+            archive_verification_report_path=archive_verification_report_path,
+        )
+        return {
+            "status": gate.get("status") or "failed",
+            "campaign_id": campaign_id,
+            "gate": gate,
+            "archive_zip_sha256": gate.get("archive_zip_sha256"),
+            "archive_verification_hash": gate.get("archive_verification_hash"),
+            "case_count": (gate.get("summary") or {}).get("case_count") if isinstance(gate.get("summary"), dict) else None,
+            "message": gate.get("message"),
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "campaign_id": campaign_id, "error": str(exc)}
 
 
 def _acceptance_check_status(summary: dict[str, Any], *, require_manual_acceptance: bool, require_audio: bool) -> dict[str, str]:

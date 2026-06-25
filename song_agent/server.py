@@ -508,6 +508,12 @@ from song_agent.audio_campaigns import (
     AudioCampaignStore,
     AudioCampaignValidationError,
 )
+from song_agent.audio_campaign_governance import (
+    AudioCampaignGovernanceError,
+    AudioCampaignGovernanceNotFoundError,
+    AudioCampaignGovernanceStateError,
+    AudioCampaignGovernanceStore,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3039,6 +3045,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.audio_campaign_store  # type: ignore[attr-defined]
 
     @property
+    def audio_campaign_governance_store(self) -> AudioCampaignGovernanceStore:
+        return self.server.audio_campaign_governance_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3661,6 +3671,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             allow_dirty=bool(payload.get("allow_dirty", False)),
             require_manual_acceptance=bool(payload.get("require_manual_acceptance", False)),
             require_audio=bool(payload.get("require_audio", False)),
+            require_audio_campaign=bool(payload.get("require_audio_campaign", False) or payload.get("audio_campaign_id")),
+            audio_campaign_id=payload.get("audio_campaign_id"),
+            audio_campaign_archive_zip_path=payload.get("audio_campaign_archive_zip_path") or payload.get("audio_campaign_archive"),
+            audio_campaign_archive_verification_report_path=payload.get("audio_campaign_archive_verification_report_path") or payload.get("audio_campaign_archive_verification_report"),
             require_final_readiness=bool(payload.get("require_final_readiness", False)),
             final_handoff_verification_report_path=payload.get("final_handoff_verification_report_path"),
             release_check_latest_report_path=payload.get("release_check_latest_report_path"),
@@ -9931,6 +9945,8 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
     def _handle_audio_campaign_route(self, method: str, path: str) -> None:
         try:
+            self.audio_campaign_governance_store.campaign_store = self.audio_campaign_store
+            self.audio_campaign_governance_store.analytics_store.campaign_store = self.audio_campaign_store
             if path == "/api/audio-campaigns":
                 if method == "GET":
                     campaigns = self.audio_campaign_store.list_campaigns()
@@ -10019,14 +10035,95 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     )
                     self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {})})
                     return
+                if len(parts) == 2 and action == "governance":
+                    if method == "GET":
+                        report = self.audio_campaign_governance_store.read_governance_report(campaign_id, default={})
+                        self._send_json({"ok": True, "governance": report, "summary": report.get("summary", {}) if isinstance(report, dict) else {}})
+                        return
+                    if method == "POST":
+                        report = self.audio_campaign_governance_store.refresh_governance_report(campaign_id)
+                        self._send_json({"ok": report.get("status") == "signed", "governance": report, "summary": report.get("summary", {})})
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if len(parts) == 2 and action == "analytics":
+                    if method == "GET":
+                        analytics = self.audio_campaign_governance_store.analytics_store.read(campaign_id, default={})
+                        self._send_json({"ok": True, "analytics": analytics, "summary": analytics.get("summary", {}) if isinstance(analytics, dict) else {}})
+                        return
+                    if method == "POST":
+                        analytics = self.audio_campaign_governance_store.refresh_analytics(campaign_id)
+                        self._send_json({"ok": True, "analytics": analytics, "summary": analytics.get("summary", {})})
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if len(parts) == 2 and action == "archive":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.audio_campaign_governance_store.export_archive(campaign_id)
+                    self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {})})
+                    return
+                if len(parts) == 3 and parts[1] == "archive" and parts[2] == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.audio_campaign_governance_store.build_archive_zip(campaign_id)
+                    self._send_json({"ok": result.get("status") == "passed", **result})
+                    return
+                if len(parts) == 3 and parts[1] == "archive" and parts[2] == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.audio_campaign_governance_store.verify_archive(campaign_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {})})
+                    return
+                if len(parts) == 3 and parts[1] == "archive" and parts[2] == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.audio_campaign_governance_store.archive_zip_path(campaign_id), "application/zip", filename="audio-campaign-archive.zip")
+                    return
+                if len(parts) == 2 and action == "change-requests":
+                    if method == "GET":
+                        rows = self.audio_campaign_governance_store.list_change_requests(campaign_id)
+                        self._send_json({"ok": True, "change_requests": rows, "summary": {"count": len(rows)}})
+                        return
+                    if method == "POST":
+                        cr = self.audio_campaign_governance_store.create_change_request(campaign_id, self._read_json_body())
+                        self._send_json({"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}}, status=HTTPStatus.CREATED)
+                        return
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if len(parts) == 4 and parts[1] == "change-requests" and parts[3] == "approve":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    cr = self.audio_campaign_governance_store.approve_change_request(campaign_id, parts[2], self._optional_json_body())
+                    self._send_json({"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}})
+                    return
+                if len(parts) == 3 and parts[1] == "signoff" and parts[2] == "reset":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._read_json_body()
+                    result = self.audio_campaign_governance_store.reset_signoff(campaign_id, str(payload.get("change_request_id") or ""), payload)
+                    self._send_json({"ok": True, **result})
+                    return
             self._send_error(HTTPStatus.NOT_FOUND, "Audio Campaign route not found.")
         except AudioCampaignNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioCampaignGovernanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except AudioCampaignStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AudioCampaignGovernanceStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except AudioCampaignValidationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except AudioCampaignError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except AudioCampaignGovernanceError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
@@ -10462,6 +10559,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if rights_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(rights_gate.get("message") or "Rights clearance gate failed.")
+        require_audio_campaign = bool(payload.get("require_audio_campaign", False))
+        audio_campaign_gate = self._release_audio_campaign_gate(release_id, payload, required=require_audio_campaign)
+        if audio_campaign_gate and require_audio_campaign:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["audio_campaign"] = audio_campaign_gate
+            if audio_campaign_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(audio_campaign_gate.get("message") or "Audio Campaign gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -10511,6 +10616,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(rights_gate.get("message") or "Rights clearance gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if audio_campaign_gate.get("hard_block") and audio_campaign_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(audio_campaign_gate.get("message") or "Audio Campaign gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -11095,6 +11209,34 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if planning_impact_evidence.get("status") == "failed":
                 gate["status"] = "failed"
                 gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
+        return gate
+
+    def _release_audio_campaign_gate(self, release_id: str, payload: dict[str, Any], *, required: bool) -> dict[str, Any]:
+        campaign_id = str(payload.get("audio_campaign_id") or payload.get("campaign_id") or "").strip()
+        if not campaign_id:
+            return {"status": "failed" if required else "missing", "hard_block": bool(required), "message": "Audio Campaign id is required.", "release_id": release_id}
+        gate = self.audio_campaign_governance_store.gate(
+            campaign_id,
+            required=required,
+            archive_zip_path=payload.get("audio_campaign_archive_zip_path") or payload.get("audio_campaign_archive"),
+            archive_verification_report_path=payload.get("audio_campaign_archive_verification_report_path") or payload.get("audio_campaign_archive_verification_report"),
+        )
+        try:
+            release = self.release_store.get_release(release_id)
+            track_count = len(release.tracks)
+        except Exception:
+            track_count = 0
+        summary = gate.get("summary") if isinstance(gate.get("summary"), dict) else {}
+        case_count = int(summary.get("case_count") or 0)
+        gate = {**gate, "release_id": release_id, "track_count": track_count, "case_count": case_count}
+        if required and gate.get("status") == "passed" and track_count > 0 and case_count < track_count:
+            gate.update(
+                {
+                    "status": "failed",
+                    "hard_block": True,
+                    "message": "Audio Campaign does not cover all release tracks.",
+                }
+            )
         return gate
 
     def _release_audio_gate(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -17961,6 +18103,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_lab_store = AudioLabStore()
         self.audio_fix_sprint_store = AudioFixSprintStore(audio_lab_store=self.audio_lab_store)
         self.audio_campaign_store = AudioCampaignStore(audio_lab_store=self.audio_lab_store, audio_fix_sprint_store=self.audio_fix_sprint_store)
+        self.audio_campaign_governance_store = AudioCampaignGovernanceStore(campaign_store=self.audio_campaign_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

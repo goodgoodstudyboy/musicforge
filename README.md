@@ -141,6 +141,20 @@ rechecks are complete. After signoff, the campaign report, case index, and
 source hash are treated as immutable evidence; refresh/export/ZIP paths refuse
 to rewrite or package a signed campaign if those bindings no longer match.
 
+Audio Campaign Governance binds signed campaign evidence into GA and Release
+readiness. A signed campaign can generate governance, analytics, immutable
+archive, and offline verification evidence. Rebuilding an archive for the same
+signoff is blocked; reset requires an approved single-use Change Request:
+
+```powershell
+python -m song_agent.cli audio-campaign governance acmp-000001 --json
+python -m song_agent.cli audio-campaign analytics acmp-000001 --json
+python -m song_agent.cli audio-campaign archive-zip acmp-000001 --json
+python -m song_agent.cli audio-campaign verify-archive acmp-000001 --json
+python -m song_agent.cli verify-audio-campaign-archive-package .musicforge\audio-campaigns\acmp-000001\archive\audio-campaign-archive.zip --require-signed --require-verification-passed --json
+python -m song_agent.cli ga-check --require-audio-campaign acmp-000001 --audio-campaign-archive .musicforge\audio-campaigns\acmp-000001\archive\audio-campaign-archive.zip --audio-campaign-archive-verification-report .musicforge\audio-campaigns\acmp-000001\archive\audio-campaign-archive-verification-report.json --json
+```
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

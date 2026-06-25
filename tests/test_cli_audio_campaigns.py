@@ -65,3 +65,28 @@ def test_cli_audio_campaign_signoff_zip_and_verify(tmp_path: Path, monkeypatch, 
     assert zip_code == 0
     assert verify_code == 0
     assert json.loads(verify_out.out)["status"] == "passed"
+
+
+def test_cli_audio_campaign_governance_archive_and_reset(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    session_id = _real_session()
+
+    _, create_out = _run_cli(["audio-campaign", "create", "--from-session", session_id, "--json"], monkeypatch, capsys)
+    campaign_id = json.loads(create_out.out)["campaign"]["campaign_id"]
+    _run_cli(["audio-campaign", "report", campaign_id, "--json"], monkeypatch, capsys)
+    _run_cli(["audio-campaign", "signoff", campaign_id, "--signed-by", "QA", "--role", "developer", "--json"], monkeypatch, capsys)
+    archive_code, archive_out = _run_cli(["audio-campaign", "archive-zip", campaign_id, "--json"], monkeypatch, capsys)
+    verify_code, verify_out = _run_cli(["audio-campaign", "verify-archive", campaign_id, "--json"], monkeypatch, capsys)
+    cr_code, cr_out = _run_cli(["audio-campaign", "change-request-create", campaign_id, "--reason", "Need new pass", "--json"], monkeypatch, capsys)
+    cr_id = json.loads(cr_out.out)["change_request"]["change_request_id"]
+    approve_code, _ = _run_cli(["audio-campaign", "change-request-approve", campaign_id, cr_id, "--json"], monkeypatch, capsys)
+    reset_code, reset_out = _run_cli(["audio-campaign", "signoff-reset", campaign_id, "--change-request-id", cr_id, "--reason", "Approved reset", "--json"], monkeypatch, capsys)
+
+    assert archive_code == 0
+    assert json.loads(archive_out.out)["zip_sha256"]
+    assert verify_code == 0
+    assert json.loads(verify_out.out)["verification"]["status"] == "passed"
+    assert cr_code == 0
+    assert approve_code == 0
+    assert reset_code == 0
+    assert json.loads(reset_out.out)["status"] == "reset"

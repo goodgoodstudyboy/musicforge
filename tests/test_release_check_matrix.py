@@ -29,6 +29,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v101.lts_maintenance_backup_restore_smoke" in {definition.check_id for definition in definitions}
     assert "v102.audio_lab_real_listening_smoke" in {definition.check_id for definition in definitions}
     assert "v104.audio_campaign_smoke" in {definition.check_id for definition in definitions}
+    assert "v105.audio_campaign_governance_smoke" in {definition.check_id for definition in definitions}
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
 
@@ -76,6 +77,7 @@ def test_release_check_profile_and_filters() -> None:
         "v102.audio_lab_real_listening_smoke",
         "v103.audio_fix_sprint_smoke",
         "v104.audio_campaign_smoke",
+        "v105.audio_campaign_governance_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

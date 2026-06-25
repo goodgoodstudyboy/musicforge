@@ -15946,6 +15946,104 @@ def _v104_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
 
 
+def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.audio_campaign_archive_verifier import verify_audio_campaign_archive_package
+    from song_agent.audio_campaign_governance import AudioCampaignGovernanceStateError, AudioCampaignGovernanceStore
+    from song_agent.audio_campaigns import AudioCampaignStore
+    from song_agent.audio_fix_sprints import AudioFixSprintStore
+    from song_agent.audio_lab import AudioLabStore, write_lab_test_wav
+    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.projectio import read_json
+
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v105-audio-campaign-governance-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                lab = AudioLabStore(wav_writer=write_lab_test_wav)
+                smoke = lab.run_smoke({"cases": 1, "render_audio": "auto"})
+                session = lab.create_session({"from_smoke": smoke["smoke_run_id"]})
+                session_id = session["session_id"]
+                item_id = session["items"][0]["item_id"]
+                raw = read_json(lab.session_path(session_id))
+                raw["items"][0]["renderer"] = {"runner_kind": "real", "profile_id": "test-real", "release_ready": True}
+                raw["items"][0]["source_hash"] = f"release-ready-v105-{session_id}"
+                lab._write_session(raw)  # type: ignore[attr-defined]
+                lab.write_item_review(
+                    session_id,
+                    item_id,
+                    {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True},
+                )
+                campaign_store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=AudioFixSprintStore(audio_lab_store=lab))
+                campaign = campaign_store.create_campaign({"from_session": session_id, "name": r"Governance sk-secret-value C:\Users\demo\secret.wav"})
+                campaign_id = campaign["campaign_id"]
+                campaign_store.signoff(campaign_id, {"signed_by": "QA", "role": "developer"})
+                governance_store = AudioCampaignGovernanceStore(campaign_store=campaign_store)
+                governance = governance_store.refresh_governance_report(campaign_id)
+                analytics = governance_store.refresh_analytics(campaign_id)
+                archive_zip = governance_store.build_archive_zip(campaign_id)
+                archive_verification = governance_store.verify_archive(campaign_id, {"strict": True})
+                gate = governance_store.gate(campaign_id)
+                immutable_guard = False
+                try:
+                    governance_store.build_archive_zip(campaign_id)
+                except AudioCampaignGovernanceStateError:
+                    immutable_guard = True
+
+                ga_report = build_ga_readiness_report(
+                    repo_root=base,
+                    require_audio_campaign=True,
+                    audio_campaign_id=campaign_id,
+                    audio_campaign_archive_zip_path=archive_zip["zip_path"],
+                    audio_campaign_archive_verification_report_path=governance_store.archive_verification_report_path(campaign_id),
+                    allow_dirty=True,
+                )
+                ga_path = write_ga_readiness_report(ga_report, base / "ga-readiness-report.json")
+                ga_verification = verify_ga_readiness_report(
+                    ga_path,
+                    require_audio_campaign=True,
+                    audio_campaign_archive_path=archive_zip["zip_path"],
+                    audio_campaign_archive_verification_report_path=governance_store.archive_verification_report_path(campaign_id),
+                )
+                ga_missing = verify_ga_readiness_report(ga_path, require_audio_campaign=True)
+
+                redaction_report = verify_audio_campaign_archive_package(
+                    _v38_rewrite_zip(Path(archive_zip["zip_path"]), base / "redaction-v105.zip", transforms={"README.md": lambda data: data + b"\nsk-secret-value C:\\Users\\demo\\secret.wav\n"}),
+                    strict=True,
+                )
+                cr = governance_store.create_change_request(campaign_id, {"created_by": "QA", "reason": "Need reset before new campaign pass."})
+                approved = governance_store.approve_change_request(campaign_id, cr["change_request_id"], {"approved_by": "Lead"})
+                reset = governance_store.reset_signoff(campaign_id, approved["change_request_id"], {"reason": "Approved reset."})
+            finally:
+                os.chdir(old_cwd)
+
+            ok = (
+                governance.get("status") == "signed"
+                and analytics.get("status") == "passed"
+                and archive_verification.get("status") == "passed"
+                and gate.get("status") == "passed"
+                and immutable_guard
+                and _ga_check_status(ga_report, "ga.audio_campaign") == "passed"
+                and ga_verification.get("status") != "failed"
+                and _v38_check_status(ga_missing, "ga_readiness_audio_campaign_archive_required") == "failed"
+                and _v38_check_status(redaction_report, "audio_campaign_archive_redaction_scan") == "failed"
+                and reset.get("status") == "reset"
+            )
+            return ok, (
+                f"governance={governance.get('status')}, analytics={analytics.get('status')}, "
+                f"archive={archive_verification.get('status')}, gate={gate.get('status')}, immutable={immutable_guard}, "
+                f"ga_gate={_ga_check_status(ga_report, 'ga.audio_campaign')}/{ga_verification.get('status')}, "
+                f"missing_gate={_v38_check_status(ga_missing, 'ga_readiness_audio_campaign_archive_required')}, "
+                f"redaction={_v38_check_status(redaction_report, 'audio_campaign_archive_redaction_scan')}, reset={reset.get('status')}"
+            )
+    except Exception as exc:
+        return False, f"v10.5 Audio Campaign Governance smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
 def _ga_check_status(report: dict[str, Any], check_id: str) -> str:
     for check in report.get("checks") or []:
         if isinstance(check, dict) and check.get("check_id") == check_id:

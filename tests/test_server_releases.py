@@ -5,6 +5,10 @@ import zipfile
 from pathlib import Path
 
 from song_agent.auth import AuthConfig
+from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
+from song_agent.audio_campaigns import AudioCampaignStore
+from song_agent.audio_fix_sprints import AudioFixSprintStore
+from song_agent.audio_lab import AudioLabStore, write_lab_test_wav
 from song_agent.projectio import read_json, write_json
 from song_agent.releases import stable_hash
 from tests.test_server_auth import TOKEN, request_json as auth_request_json, start_test_server as start_auth_server, stop_test_server as stop_auth_server
@@ -211,6 +215,65 @@ def test_release_signoff_blocks_incomplete_manual_release_candidate_acceptance(t
     assert "sad_ballad_001" in report["summary"]["missing_song_ids"]
     assert sign_status == 409
     assert "Acceptance suite" in signed["error"]
+
+
+def test_release_signoff_requires_audio_campaign_governance(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    lab = AudioLabStore(wav_writer=write_lab_test_wav)
+    fix_store = AudioFixSprintStore(audio_lab_store=lab)
+    server.audio_lab_store = lab
+    server.audio_fix_sprint_store = fix_store
+    server.audio_campaign_store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=fix_store)
+    server.audio_campaign_governance_store = AudioCampaignGovernanceStore(campaign_store=server.audio_campaign_store)
+    try:
+        project_id = _signed_project(server, "Audio Campaign Gate Track")
+        created_status, created = request_json(server, "POST", "/api/releases", {"name": "Audio Campaign Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        release_id = created["release"]["release_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+
+        _, smoke = request_json(server, "POST", "/api/audio-lab/smoke-runs", {"cases": 1, "render_audio": "auto"})
+        _, session_payload = request_json(server, "POST", "/api/audio-lab/listening-sessions", {"from_smoke": smoke["smoke_run"]["smoke_run_id"]})
+        session = session_payload["session"]
+        raw = read_json(lab.session_path(session["session_id"]))
+        raw["items"][0]["renderer"] = {"runner_kind": "real", "release_ready": True, "profile_id": "test-real"}
+        raw["items"][0]["source_hash"] = "release-audio-campaign-gate-source"
+        lab._write_session(raw)  # type: ignore[attr-defined]
+        item_id = session["items"][0]["item_id"]
+        request_json(server, "POST", f"/api/audio-lab/listening-sessions/{session['session_id']}/items/{item_id}/review", {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+        _, campaign_payload = request_json(server, "POST", "/api/audio-campaigns", {"from_session": session["session_id"]})
+        campaign_id = campaign_payload["campaign"]["campaign_id"]
+        request_json(server, "GET", f"/api/audio-campaigns/{campaign_id}/report")
+        request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/signoff", {"signed_by": "QA", "role": "developer"})
+        missing_status, missing = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_audio_campaign": True, "audio_campaign_id": campaign_id})
+        archive_status, archive = request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/archive/zip")
+        verify_status, verify = request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/archive/verify", {"strict": True})
+        sign_status, signed = request_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/signoff",
+            {
+                "signed_by": "tester",
+                "require_audio_campaign": True,
+                "audio_campaign_id": campaign_id,
+                "audio_campaign_archive_zip_path": archive["zip_path"],
+                "audio_campaign_archive_verification_report_path": str(server.audio_campaign_governance_store.archive_verification_report_path(campaign_id)),
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    assert created_status == 201
+    assert archive_status == 200
+    assert verify_status == 200
+    assert verify["verification"]["status"] == "passed"
+    assert missing_status == 409
+    assert "Audio Campaign" in missing["error"]
+    assert sign_status == 200
+    assert signed["signoff"]["acceptance_gate"]["audio_campaign"]["status"] == "passed"
 
 
 def test_release_auth_protected(tmp_path, monkeypatch):
