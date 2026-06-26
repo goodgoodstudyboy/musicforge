@@ -16600,6 +16600,8 @@ def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
                     require_release_audio_timeline=True,
                     release_audio_timeline_zip_path=timeline_zip["zip_path"],
                     release_audio_timeline_verification_report_path=timeline_store.verification_report_path(release_id, timeline_id),
+                    release_audio_certification_zip_path=cert_store.zip_path(release_id),
+                    release_audio_certification_verification_report_path=cert_store.verification_report_path(release_id),
                 )
                 ga_path = base / "ga-readiness.json"
                 write_ga_readiness_report(ga_report, ga_path)
@@ -16608,10 +16610,75 @@ def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
                     require_release_audio_timeline=True,
                     release_audio_timeline_path=timeline_zip["zip_path"],
                     release_audio_timeline_verification_report_path=timeline_store.verification_report_path(release_id, timeline_id),
+                    release_audio_certification_path=cert_store.zip_path(release_id),
+                    release_audio_certification_verification_report_path=cert_store.verification_report_path(release_id),
                 )
                 declared_extra_zip = base / "timeline-declared-extra.zip"
                 _v76_rewrite_zip(Path(timeline_zip["zip_path"]), declared_extra_zip, _v109_add_timeline_declared_extra)
                 declared_extra_verification = verify_release_audio_timeline_package(declared_extra_zip, strict=True, require_passed=True, require_signed=True)
+
+                tamper_project_id, tamper_release_id, tamper_server = _v106_release_fixture("Timeline Tampered Certification Track")
+                del tamper_project_id
+                tamper_planner = tamper_server.audio_campaign_planner_store
+                tamper_campaign_store = tamper_server.audio_campaign_store
+                tamper_result = tamper_planner.create_campaign_from_release(tamper_release_id)
+                tamper_campaign_id = tamper_result["campaign"]["campaign_id"]
+                tamper_session_id = tamper_result["session"]["session_id"]
+                tamper_item_id = tamper_result["session"]["items"][0]["item_id"]
+                tamper_server.audio_lab_store.write_item_review(tamper_session_id, tamper_item_id, {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                tamper_campaign_store.refresh_report(tamper_campaign_id)
+                tamper_campaign_store.signoff(tamper_campaign_id, {"signed_by": "QA", "role": "developer"})
+                tamper_server.audio_campaign_governance_store.build_archive_zip(tamper_campaign_id)
+                tamper_server.audio_campaign_governance_store.verify_archive(tamper_campaign_id, {"strict": True})
+                tamper_cert_store = ReleaseAudioCertificationStore(
+                    release_store=tamper_server.release_store,
+                    project_store=tamper_server.project_store,
+                    planner_store=tamper_planner,
+                    campaign_store=tamper_campaign_store,
+                    governance_store=tamper_server.audio_campaign_governance_store,
+                    remediation_store=tamper_server.audio_campaign_remediation_store,
+                )
+                tamper_cert_store.refresh_report(tamper_release_id)
+                tamper_cert_store.signoff(tamper_release_id, {"signed_by": "QA", "role": "developer"})
+                tamper_cert_store.build_zip(tamper_release_id)
+                tamper_cert_store.verify_zip(tamper_release_id, strict=True, require_passed=True, require_signed=True, require_real_audio=True, require_manual_review=True, require_remediation_when_needed=True)
+                tamper_timeline_store = ReleaseAudioTimelineStore(
+                    release_store=tamper_server.release_store,
+                    project_store=tamper_server.project_store,
+                    planner_store=tamper_planner,
+                    campaign_store=tamper_campaign_store,
+                    governance_store=tamper_server.audio_campaign_governance_store,
+                    remediation_store=tamper_server.audio_campaign_remediation_store,
+                    certification_store=tamper_cert_store,
+                )
+                tamper_timeline_report = tamper_timeline_store.refresh_timeline(tamper_release_id)
+                tamper_timeline_id = tamper_timeline_report["timeline_id"]
+                tamper_timeline_store.signoff_timeline(tamper_release_id, tamper_timeline_id, {"signed_by": "QA", "role": "developer"})
+                tamper_timeline_zip = tamper_timeline_store.build_zip(tamper_release_id, tamper_timeline_id)
+                tamper_timeline_store.verify_zip(tamper_release_id, tamper_timeline_id, strict=True, require_passed=True, require_signed=True, require_real_audio=True, require_manual_review=True, require_current_certification=True)
+                _v109_append_unexpected_certification_zip(tamper_cert_store.zip_path(tamper_release_id))
+                cert_zip_tamper_refresh = tamper_timeline_store.refresh_timeline(tamper_release_id)
+                cert_zip_tamper_gate = tamper_timeline_store.gate(tamper_release_id, required=True, require_signed=True, require_current_certification=True)
+                tamper_ga_report = build_ga_readiness_report(
+                    repo_root=Path(__file__).resolve().parents[1],
+                    allow_dirty=True,
+                    require_release_audio_timeline=True,
+                    release_audio_timeline_zip_path=tamper_timeline_zip["zip_path"],
+                    release_audio_timeline_verification_report_path=tamper_timeline_store.verification_report_path(tamper_release_id, tamper_timeline_id),
+                    release_audio_certification_zip_path=tamper_cert_store.zip_path(tamper_release_id),
+                    release_audio_certification_verification_report_path=tamper_cert_store.verification_report_path(tamper_release_id),
+                )
+                tamper_ga_path = base / "ga-readiness-cert-tamper.json"
+                write_ga_readiness_report(tamper_ga_report, tamper_ga_path)
+                cert_zip_tamper_ga = verify_ga_readiness_report(
+                    tamper_ga_path,
+                    require_release_audio_timeline=True,
+                    release_audio_timeline_path=tamper_timeline_zip["zip_path"],
+                    release_audio_timeline_verification_report_path=tamper_timeline_store.verification_report_path(tamper_release_id, tamper_timeline_id),
+                    release_audio_certification_path=tamper_cert_store.zip_path(tamper_release_id),
+                    release_audio_certification_verification_report_path=tamper_cert_store.verification_report_path(tamper_release_id),
+                )
+                release_gate = tamper_timeline_store.gate(tamper_release_id, required=True, require_signed=True, require_current_certification=True)
 
                 track = server.release_store.get_release(release_id).tracks[0]
                 manifest_path = server.project_store.project_dir(track.project_id) / "final-export" / "manifest.json"
@@ -16653,6 +16720,11 @@ def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
                 and direct_verification.get("status") == "passed"
                 and _ga_check_status(ga_report, "ga.release_audio_timeline") == "passed"
                 and ga_verification.get("status") != "failed"
+                and cert_zip_tamper_refresh.get("status") == "failed"
+                and cert_zip_tamper_gate.get("status") == "failed"
+                and cert_zip_tamper_gate.get("hard_block") is True
+                and cert_zip_tamper_ga.get("status") == "failed"
+                and release_gate.get("status") == "failed"
                 and stale_gate.get("status") == "failed"
                 and stale_export == "409"
                 and stale_zip == "409"
@@ -16667,6 +16739,7 @@ def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
                 f"cert={cert_verification.get('status')}, timeline={timeline_report.get('status')}, "
                 f"verify={timeline_verification.get('status')}, direct={direct_verification.get('status')}, "
                 f"ga={_ga_check_status(ga_report, 'ga.release_audio_timeline')}/{ga_verification.get('status')}, "
+                f"cert_zip_tamper={cert_zip_tamper_refresh.get('status')}/{cert_zip_tamper_gate.get('status')}/{cert_zip_tamper_ga.get('status')}/{release_gate.get('status')}, "
                 f"stale={stale_gate.get('status')}/{stale_export}/{stale_zip}/{stale_verify}, "
                 f"declared_extra={declared_extra_verification.get('status')}"
             )
@@ -18108,6 +18181,11 @@ def _v109_add_timeline_declared_extra(docs: dict[str, bytes]) -> None:
     manifest.setdefault("zip", {})["entry_count"] = len(manifest["zip"]["entries"])
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     docs["manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v109_append_unexpected_certification_zip(zip_path: Path) -> None:
+    with zipfile.ZipFile(zip_path, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("unexpected.txt", b"unexpected certification payload\n")
 
 
 def _v82_tamper_anchor_signature(docs: dict[str, bytes]) -> None:

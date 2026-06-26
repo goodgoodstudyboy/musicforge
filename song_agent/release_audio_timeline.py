@@ -16,6 +16,7 @@ from song_agent.projectio import read_json, write_json
 from song_agent.projects import ProjectStore, now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.release_audio_certification import ReleaseAudioCertificationStore
+from song_agent.release_audio_certification_verifier import verify_release_audio_certification_package
 from song_agent.release_audio_timeline_verifier import (
     RELEASE_AUDIO_TIMELINE_PACKAGE_TYPE,
     RELEASE_AUDIO_TIMELINE_SCHEMA_VERSION,
@@ -376,14 +377,7 @@ class ReleaseAudioTimelineStore:
         timeline_id = timeline_id or "ratl-pending"
         certification_report = self.certification_store.read_report(release_id, default={})
         cert_zip = self.certification_store.zip_path(release_id)
-        cert_verification_path = self.certification_store.verification_report_path(release_id)
-        cert_verification = _read_optional_json(cert_verification_path)
-        if cert_zip.exists():
-            try:
-                runtime_verification = verify_release_audio_timeline_package  # keeps import visible for static tools
-                del runtime_verification
-            except Exception:
-                pass
+        cert_verification = self._current_certification_verification(release_id)
         cert_binding = {
             "zip_sha256": _sha256_path(cert_zip),
             "zip_size_bytes": cert_zip.stat().st_size if cert_zip.exists() else None,
@@ -596,6 +590,49 @@ class ReleaseAudioTimelineStore:
         ]
         source = {"track_id": getattr(track, "track_id", None), "project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash, "current_final_export_hash": current_manifest_hash, "wav_sha256": wav_sha}
         return {"track": track_row, "issues": issues, "risks": risks, "source": source}
+
+    def _current_certification_verification(self, release_id: str) -> dict[str, Any]:
+        cert_zip = self.certification_store.zip_path(release_id)
+        cert_verification_path = self.certification_store.verification_report_path(release_id)
+        external_report = _read_optional_json(cert_verification_path)
+        if not cert_zip.exists():
+            return {
+                "status": external_report.get("status") or "missing",
+                "zip_sha256": external_report.get("zip_sha256"),
+                "zip_size_bytes": external_report.get("zip_size_bytes"),
+                "manifest_hash": external_report.get("manifest_hash"),
+                "integrity_hash": external_report.get("integrity_hash"),
+                "external_verification_status": external_report.get("status") or "missing",
+                "external_verification_matches_current": False,
+            }
+        try:
+            current = verify_release_audio_certification_package(
+                cert_zip,
+                strict=True,
+                require_passed=True,
+                require_signed=True,
+                require_real_audio=True,
+                require_manual_review=True,
+                require_remediation_when_needed=True,
+            )
+        except Exception as exc:
+            current = {"status": "failed", "error": str(exc)}
+        external_integrity_ok = bool(external_report.get("integrity_hash")) and external_report.get("integrity_hash") == stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        external_matches_current = (
+            external_report.get("status") == "passed"
+            and external_integrity_ok
+            and external_report.get("zip_sha256") == current.get("zip_sha256")
+            and external_report.get("zip_size_bytes") == current.get("zip_size_bytes")
+            and external_report.get("manifest_hash") == current.get("manifest_hash")
+        )
+        if current.get("status") == "passed" and external_matches_current:
+            return dict(external_report)
+        failed = dict(current)
+        failed["status"] = "failed"
+        failed["external_verification_status"] = external_report.get("status") or "missing"
+        failed["external_verification_report_hash"] = external_report.get("integrity_hash")
+        failed["external_verification_matches_current"] = external_matches_current
+        return failed
 
     def _current_timeline_id(self, release_id: str) -> str | None:
         current = _read_optional_json(self.current_path(release_id))

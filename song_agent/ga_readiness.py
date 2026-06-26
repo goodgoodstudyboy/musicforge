@@ -225,6 +225,8 @@ def build_ga_readiness_report(
         required=require_release_audio_timeline,
         timeline_zip_path=release_audio_timeline_zip_path,
         timeline_verification_report_path=release_audio_timeline_verification_report_path,
+        certification_zip_path=release_audio_certification_zip_path,
+        certification_verification_report_path=release_audio_certification_verification_report_path,
     )
     _add_check(
         checks,
@@ -612,6 +614,8 @@ def _release_audio_timeline_summary(
     required: bool,
     timeline_zip_path: Path | str | None,
     timeline_verification_report_path: Path | str | None,
+    certification_zip_path: Path | str | None = None,
+    certification_verification_report_path: Path | str | None = None,
 ) -> dict[str, Any]:
     if timeline_zip_path is None:
         return {"status": "missing", "message": "Release Audio Timeline package was not provided."}
@@ -624,7 +628,9 @@ def _release_audio_timeline_summary(
             require_signed=required,
             require_real_audio=required,
             require_manual_review=required,
-            require_current_certification=False,
+            require_current_certification=required,
+            release_audio_certification_path=certification_zip_path,
+            release_audio_certification_verification_report_path=certification_verification_report_path,
         )
         external_report: dict[str, Any] = {}
         if timeline_verification_report_path is not None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from song_agent.projectio import read_json, write_json
-from tests.test_release_audio_timeline import _prepare_timeline_release
+from tests.test_release_audio_timeline import _append_unexpected_file_to_zip, _prepare_timeline_release
 from tests.test_server_releases import request_json, start_test_server, stop_test_server
 
 
@@ -97,3 +97,36 @@ def test_release_signoff_requires_current_release_audio_timeline_even_when_force
     assert stale_signoff_status == 409
     assert stale_signoff["acceptance_gate"]["release_audio_timeline"]["hard_block"] is True
     assert "stale" in stale_signoff["acceptance_gate"]["release_audio_timeline"]["message"].lower()
+
+
+def test_release_signoff_blocks_timeline_when_certification_zip_is_tampered(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, _campaign_id, store = _prepare_timeline_release(server, "Timeline Tampered Certification Gate Track")
+        refresh_status, refreshed = request_json(server, "POST", f"/api/releases/{release_id}/audio-timelines/refresh")
+        timeline_id = refreshed["timeline_id"]
+        request_json(server, "POST", f"/api/releases/{release_id}/audio-timelines/{timeline_id}/signoff", {"signed_by": "QA", "role": "developer"})
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        _append_unexpected_file_to_zip(store.certification_store.zip_path(release_id))
+        signoff_status, signoff = request_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/signoff",
+            {
+                "signed_by": "QA",
+                "force": True,
+                "override_reason": "force must not bypass tampered certification",
+                "require_release_audio_timeline": True,
+                "require_release_audio_timeline_signed": True,
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    assert refresh_status == 200
+    assert signoff_status == 409
+    assert signoff["acceptance_gate"]["release_audio_timeline"]["hard_block"] is True
+    assert signoff["acceptance_gate"]["release_audio_timeline"]["status"] == "failed"

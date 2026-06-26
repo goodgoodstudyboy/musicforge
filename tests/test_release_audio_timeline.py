@@ -70,6 +70,8 @@ def test_release_audio_timeline_lifecycle_ga_and_verifier(tmp_path: Path, monkey
             require_release_audio_timeline=True,
             release_audio_timeline_zip_path=zipped["zip_path"],
             release_audio_timeline_verification_report_path=store.verification_report_path(release_id, timeline_id),
+            release_audio_certification_zip_path=store.certification_store.zip_path(release_id),
+            release_audio_certification_verification_report_path=store.certification_store.verification_report_path(release_id),
         )
         ga_path = tmp_path / "ga-readiness.json"
         write_ga_readiness_report(ga_report, ga_path)
@@ -78,6 +80,8 @@ def test_release_audio_timeline_lifecycle_ga_and_verifier(tmp_path: Path, monkey
             require_release_audio_timeline=True,
             release_audio_timeline_path=zipped["zip_path"],
             release_audio_timeline_verification_report_path=store.verification_report_path(release_id, timeline_id),
+            release_audio_certification_path=store.certification_store.zip_path(release_id),
+            release_audio_certification_verification_report_path=store.certification_store.verification_report_path(release_id),
         )
     finally:
         stop_test_server(server)
@@ -88,6 +92,54 @@ def test_release_audio_timeline_lifecycle_ga_and_verifier(tmp_path: Path, monkey
     assert ga_report["summary"]["release_audio_timeline_status"] == "passed"
     assert ga_verification["status"] != "failed", ga_verification.get("blockers")
     assert _verification_check_status(ga_verification, "ga_readiness_release_audio_timeline_ga_binding") == "passed"
+
+
+def test_ga_release_audio_timeline_requires_current_certification_binding(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, _campaign_id, store = _prepare_timeline_release(server, "Timeline GA Certification Tamper Track")
+        refreshed = store.refresh_timeline(release_id)
+        timeline_id = refreshed["timeline_id"]
+        store.signoff_timeline(release_id, timeline_id, {"signed_by": "QA", "role": "developer"})
+        zipped = store.build_zip(release_id, timeline_id)
+        store.verify_zip(
+            release_id,
+            timeline_id,
+            strict=True,
+            require_passed=True,
+            require_signed=True,
+            require_real_audio=True,
+            require_manual_review=True,
+            require_current_certification=True,
+        )
+        _append_unexpected_file_to_zip(store.certification_store.zip_path(release_id))
+        repo_root = Path(__file__).resolve().parents[1]
+        ga_report = build_ga_readiness_report(
+            repo_root=repo_root,
+            allow_dirty=True,
+            require_release_audio_timeline=True,
+            release_audio_timeline_zip_path=zipped["zip_path"],
+            release_audio_timeline_verification_report_path=store.verification_report_path(release_id, timeline_id),
+            release_audio_certification_zip_path=store.certification_store.zip_path(release_id),
+            release_audio_certification_verification_report_path=store.certification_store.verification_report_path(release_id),
+        )
+        ga_path = tmp_path / "ga-readiness-tampered-cert.json"
+        write_ga_readiness_report(ga_report, ga_path)
+        ga_verification = verify_ga_readiness_report(
+            ga_path,
+            require_release_audio_timeline=True,
+            release_audio_timeline_path=zipped["zip_path"],
+            release_audio_timeline_verification_report_path=store.verification_report_path(release_id, timeline_id),
+            release_audio_certification_path=store.certification_store.zip_path(release_id),
+            release_audio_certification_verification_report_path=store.certification_store.verification_report_path(release_id),
+        )
+    finally:
+        stop_test_server(server)
+
+    assert ga_report["summary"]["release_audio_timeline_status"] == "failed"
+    assert ga_verification["status"] == "failed"
+    assert _verification_check_status(ga_verification, "ga_readiness_release_audio_timeline_verification_status") == "failed"
 
 
 def test_signed_release_audio_timeline_blocks_current_final_export_drift(tmp_path: Path, monkeypatch) -> None:
@@ -138,6 +190,25 @@ def test_release_audio_timeline_verifier_rejects_declared_extra_file(tmp_path: P
     assert "release_audio_timeline_zip_allowed_entries" in verification["blockers"]
 
 
+def test_release_audio_timeline_blocks_tampered_current_certification_zip(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, _campaign_id, store = _prepare_timeline_release(server, "Timeline Certification Tamper Track")
+        _append_unexpected_file_to_zip(store.certification_store.zip_path(release_id))
+
+        refreshed = store.refresh_timeline(release_id)
+        timeline_id = refreshed["timeline_id"]
+        gate = store.gate(release_id, required=True, require_signed=False, require_current_certification=True)
+    finally:
+        stop_test_server(server)
+
+    assert refreshed["status"] == "failed"
+    assert refreshed["report"]["certification"]["status"] == "failed"
+    assert gate["status"] == "failed"
+    assert gate["hard_block"] is True
+
+
 def _add_declared_extra_to_timeline_zip(source_zip: Path, target_zip: Path) -> None:
     with zipfile.ZipFile(source_zip, "r") as src:
         docs = {info.filename: src.read(info.filename) for info in src.infolist()}
@@ -154,6 +225,11 @@ def _add_declared_extra_to_timeline_zip(source_zip: Path, target_zip: Path) -> N
     with zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
         for name, data in docs.items():
             dst.writestr(name, data)
+
+
+def _append_unexpected_file_to_zip(zip_path: Path) -> None:
+    with zipfile.ZipFile(zip_path, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("unexpected.txt", b"unexpected certification payload\n")
 
 
 def _verification_check_status(report: dict, check_id: str) -> str:

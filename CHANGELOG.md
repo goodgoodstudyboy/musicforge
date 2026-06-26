@@ -1,5 +1,18 @@
 # Changelog
 
+## v10.9.1 - 2026-06-27
+
+### Fixed
+- Release Audio Timeline now re-verifies the current Release Audio Certification ZIP before building timeline bindings, so tampered or stale Certification packages make the timeline failed instead of reusing an old passed verification report.
+- Release signoff `require_release_audio_timeline=true` now hard-blocks a stale/tampered underlying Certification ZIP even when `force=true` is supplied.
+- GA readiness and `verify-ga-readiness-report --require-release-audio-timeline` now require current Certification ZIP/report binding for Timeline evidence.
+- release-check `v109.release_audio_timeline_smoke` now covers tampered Certification ZIP rejection across timeline refresh, timeline gate, Release signoff, and GA verification.
+
+### Verified
+- `python -m pytest tests\test_release_audio_timeline.py tests\test_server_release_audio_timeline.py tests\test_cli_release_audio_timeline.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v109_release_audio_timeline_smoke tests\test_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+- `python -m song_agent.cli doctor`
+
 ## v10.9.0 - 2026-06-26
 
 ### Added

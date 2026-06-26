@@ -101,6 +101,8 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-timeline", action="store_true", help="Require passed signed Release Audio Timeline evidence.")
     parser.add_argument("--release-audio-timeline", type=Path, default=None, help="Path to Release Audio Timeline ZIP.")
     parser.add_argument("--release-audio-timeline-verification-report", type=Path, default=None, help="Path to Release Audio Timeline verification report JSON.")
+    parser.add_argument("--release-audio-timeline-certification", type=Path, default=None, help="Path to the Release Audio Certification ZIP bound by the timeline.")
+    parser.add_argument("--release-audio-timeline-certification-verification-report", type=Path, default=None, help="Path to the Release Audio Certification verification report bound by the timeline.")
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
     parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
@@ -132,6 +134,8 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-timeline", action="store_true", help="Require external Release Audio Timeline evidence.")
     parser.add_argument("--release-audio-timeline", type=Path, default=None, help="External Release Audio Timeline ZIP.")
     parser.add_argument("--release-audio-timeline-verification-report", type=Path, default=None, help="External Release Audio Timeline verification report JSON.")
+    parser.add_argument("--release-audio-timeline-certification", type=Path, default=None, help="External Release Audio Certification ZIP bound by the timeline.")
+    parser.add_argument("--release-audio-timeline-certification-verification-report", type=Path, default=None, help="External Release Audio Certification verification report bound by the timeline.")
     return parser
 
 
@@ -3458,8 +3462,8 @@ def _main() -> None:
             audio_campaign_remediation_zip_path=args.audio_campaign_remediation,
             audio_campaign_remediation_verification_report_path=args.audio_campaign_remediation_verification_report,
             require_release_audio_certification=args.require_release_audio_certification,
-            release_audio_certification_zip_path=args.release_audio_certification,
-            release_audio_certification_verification_report_path=args.release_audio_certification_verification_report,
+            release_audio_certification_zip_path=args.release_audio_timeline_certification or args.release_audio_certification,
+            release_audio_certification_verification_report_path=args.release_audio_timeline_certification_verification_report or args.release_audio_certification_verification_report,
             require_release_audio_timeline=args.require_release_audio_timeline,
             release_audio_timeline_zip_path=args.release_audio_timeline,
             release_audio_timeline_verification_report_path=args.release_audio_timeline_verification_report,
@@ -3499,8 +3503,8 @@ def _main() -> None:
             audio_campaign_archive_verification_report_path=args.audio_campaign_archive_verification_report,
             audio_campaign_remediation_path=args.audio_campaign_remediation,
             audio_campaign_remediation_verification_report_path=args.audio_campaign_remediation_verification_report,
-            release_audio_certification_path=args.release_audio_certification,
-            release_audio_certification_verification_report_path=args.release_audio_certification_verification_report,
+            release_audio_certification_path=args.release_audio_timeline_certification or args.release_audio_certification,
+            release_audio_certification_verification_report_path=args.release_audio_timeline_certification_verification_report or args.release_audio_certification_verification_report,
             release_audio_timeline_path=args.release_audio_timeline,
             release_audio_timeline_verification_report_path=args.release_audio_timeline_verification_report,
             final_handoff_package_path=args.final_handoff_package,

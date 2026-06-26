@@ -146,6 +146,8 @@ def verify_ga_readiness_report(
                 checks_by_id.get("ga.release_audio_timeline", {}),
                 release_audio_timeline_path,
                 release_audio_timeline_verification_report_path,
+                release_audio_certification_path,
+                release_audio_certification_verification_report_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -589,6 +591,8 @@ def _verify_release_audio_timeline_evidence(
     ga_check: dict[str, Any],
     timeline_path: Path | str | None,
     verification_report_path: Path | str | None,
+    certification_path: Path | str | None,
+    certification_verification_report_path: Path | str | None,
 ) -> None:
     if not timeline_path:
         _add_check(checks, "ga_readiness_release_audio_timeline_package_required", "failed", "blocking", "Release Audio Timeline requirement needs an external timeline ZIP.")
@@ -612,7 +616,9 @@ def _verify_release_audio_timeline_evidence(
             require_signed=True,
             require_real_audio=True,
             require_manual_review=True,
-            require_current_certification=False,
+            require_current_certification=True,
+            release_audio_certification_path=certification_path,
+            release_audio_certification_verification_report_path=certification_verification_report_path,
         )
     except Exception as exc:
         current_verification = {"status": "failed", "error": str(exc), "summary": {}}
