@@ -81,6 +81,7 @@ from song_agent.release_checks import (
     _v104_audio_campaign_smoke,
     _v105_audio_campaign_governance_smoke,
     _v106_release_driven_audio_campaign_smoke,
+    _v107_release_audio_campaign_remediation_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1153,6 +1154,17 @@ def test_v106_release_driven_audio_campaign_smoke(tmp_path: Path) -> None:
     assert "signoff=passed" in detail
     assert "mismatch=409" in detail
     assert "stale_hash=failed" in detail
+
+
+def test_v107_release_audio_campaign_remediation_smoke(tmp_path: Path) -> None:
+    ok, detail = _v107_release_audio_campaign_remediation_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "plan=needs_action" in detail
+    assert "manual_before=failed" in detail
+    assert "after=passed" in detail
+    assert "verify=passed" in detail
+    assert "stale_run=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

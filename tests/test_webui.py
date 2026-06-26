@@ -862,6 +862,11 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="audio-campaign-governance"' in html
     assert 'id="audio-campaign-archive-zip"' in html
     assert 'id="audio-campaign-verify-archive"' in html
+    assert 'id="audio-campaign-remediation-plan"' in html
+    assert 'id="audio-campaign-remediation-run-safe"' in html
+    assert 'id="audio-campaign-remediation-closeout"' in html
+    assert 'id="audio-campaign-remediation-zip"' in html
+    assert 'id="audio-campaign-remediation-verify"' in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html
     assert "/api/audio-lab/listening-sessions" in html
@@ -873,6 +878,11 @@ def test_webui_contains_release_workspace_controls():
     assert "/audio-campaign-plan/create" in html
     assert "/audio-campaign-plan/status" in html
     assert "/audio-campaign-plan/link" in html
+    assert "/audio-campaign-remediation/refresh" in html
+    assert "/audio-campaign-remediation/run-safe" in html
+    assert "/audio-campaign-remediation/closeout" in html
+    assert "/audio-campaign-remediation/zip" in html
+    assert "/audio-campaign-remediation/verify" in html
     assert "Release Audio QA" in html
     assert "Audio Review Board" in html
     assert "Tracklist" in html

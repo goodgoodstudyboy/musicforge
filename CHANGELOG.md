@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.7.0 - 2026-06-26
+
+### Added
+- Release Audio Campaign Remediation store for turning release-bound Audio Campaign `needs_fix`, `rejected`, and high/critical marker cases into a remediation plan, safe action queue, Audio Fix Sprint links, closeout report, signoff, export ZIP, and offline verification.
+- `audio-campaign remediation-*` CLI commands, `/api/releases/<release-id>/audio-campaign-remediation/*` endpoints, and Studio controls for remediation plan, run-safe, closeout, ZIP, and verifier.
+- Release signoff `require_audio_campaign_remediation=true` gate that hard-blocks unresolved remediation even when `force=true`; optional `require_audio_campaign_remediation_signed=true` requires signed remediation evidence.
+- GA readiness `ga.audio_campaign_remediation` check and verifier external evidence binding for Audio Campaign Remediation ZIPs.
+- release-check `v107.release_audio_campaign_remediation_smoke` covering needs_fix issue generation, idempotent run-safe Fix Sprint creation, manual A/B and recheck gates, signed export verification, stale final-export blocking, and Release gate hard blocking.
+
+### Verified
+- `python -m pytest tests\test_audio_campaign_remediation.py tests\test_server_audio_campaign_remediation.py tests\test_release_check.py::test_v107_release_audio_campaign_remediation_smoke tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+
 ## v10.6.1 - 2026-06-26
 
 ### Fixed

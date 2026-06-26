@@ -15,6 +15,7 @@ import tomllib
 from song_agent import __version__
 from song_agent.audio_profiles import AudioProfileStore, AudioProfileNotFoundError
 from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
+from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
 from song_agent.music_acceptance import AcceptanceStore, acceptance_report_summary, stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.provider import ProviderError, load_provider_config, provider_configured
@@ -58,6 +59,9 @@ def build_ga_readiness_report(
     audio_campaign_id: str | None = None,
     audio_campaign_archive_zip_path: Path | str | None = None,
     audio_campaign_archive_verification_report_path: Path | str | None = None,
+    require_audio_campaign_remediation: bool = False,
+    audio_campaign_remediation_zip_path: Path | str | None = None,
+    audio_campaign_remediation_verification_report_path: Path | str | None = None,
     require_final_readiness: bool = False,
     final_handoff_verification_report_path: Path | str | None = None,
     release_check_latest_report_path: Path | str | None = None,
@@ -73,6 +77,7 @@ def build_ga_readiness_report(
         "require_manual_acceptance": require_manual_acceptance,
         "require_audio": require_audio,
         "require_audio_campaign": require_audio_campaign,
+        "require_audio_campaign_remediation": require_audio_campaign_remediation,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
     }
@@ -178,6 +183,20 @@ def build_ga_readiness_report(
         audio_campaign_summary,
     )
 
+    remediation_summary = _audio_campaign_remediation_summary(
+        required=require_audio_campaign_remediation,
+        remediation_zip_path=audio_campaign_remediation_zip_path,
+        remediation_verification_report_path=audio_campaign_remediation_verification_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.audio_campaign_remediation",
+        "passed" if remediation_summary.get("status") == "passed" else "failed" if require_audio_campaign_remediation else "warning",
+        "blocking" if require_audio_campaign_remediation else "warning",
+        "Audio Campaign remediation evidence is passed." if remediation_summary.get("status") == "passed" else "Audio Campaign remediation evidence is missing or not passed.",
+        remediation_summary,
+    )
+
     latest_summary = _release_check_summary(
         root,
         report_path=release_check_latest_report_path,
@@ -235,6 +254,7 @@ def build_ga_readiness_report(
             "release_check_ga_status": ga_summary.get("status", "unknown"),
             "acceptance_status": acceptance_summary.get("status", "missing"),
             "audio_campaign_status": audio_campaign_summary.get("status", "missing"),
+            "audio_campaign_remediation_status": remediation_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -476,6 +496,35 @@ def _audio_campaign_summary(
         }
     except Exception as exc:
         return {"status": "failed" if required else "missing", "campaign_id": campaign_id, "error": str(exc)}
+
+
+def _audio_campaign_remediation_summary(
+    *,
+    required: bool,
+    remediation_zip_path: Path | str | None,
+    remediation_verification_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if remediation_zip_path is None:
+        return {"status": "missing", "message": "Audio Campaign remediation package was not provided."}
+    try:
+        zip_path = Path(remediation_zip_path)
+        runtime_report = verify_audio_campaign_remediation_package(zip_path, strict=True, require_passed=required, require_signed=False)
+        external_report: dict[str, Any] = {}
+        if remediation_verification_report_path is not None:
+            external_report = read_json(Path(remediation_verification_report_path))
+        status = "passed" if runtime_report.get("status") == "passed" else "failed"
+        verification_hash = external_report.get("integrity_hash") if isinstance(external_report, dict) else None
+        return {
+            "status": status,
+            "zip_sha256": runtime_report.get("zip_sha256"),
+            "manifest_hash": runtime_report.get("manifest_hash"),
+            "verification_hash": verification_hash or runtime_report.get("integrity_hash"),
+            "runtime_verification_status": runtime_report.get("status"),
+            "external_verification_status": external_report.get("status") if isinstance(external_report, dict) else None,
+            "summary": runtime_report.get("summary", {}),
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
 
 
 def _acceptance_check_status(summary: dict[str, Any], *, require_manual_acceptance: bool, require_audio: bool) -> dict[str, str]:

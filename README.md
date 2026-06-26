@@ -169,6 +169,25 @@ python -m song_agent.cli audio-campaign release-status rel-000001 --json
 The planner refuses missing WAV/final-export evidence and rejects unrelated
 Campaigns whose cases do not cover the current Release track identities.
 
+Release Audio Campaign remediation closes the loop when a release-bound Campaign
+contains `needs_fix`, `rejected`, or high/critical marker cases. Safe actions can
+create Fix Sprints, drafts, candidates, recheck sessions, and closeout refreshes;
+manual A/B review, candidate selection, and manual recheck remain human steps:
+
+```powershell
+python -m song_agent.cli audio-campaign remediation-plan rel-000001 --json
+python -m song_agent.cli audio-campaign remediation-run-safe rel-000001 --json
+python -m song_agent.cli audio-campaign remediation-closeout rel-000001 --json
+python -m song_agent.cli audio-campaign remediation-signoff rel-000001 --signed-by "QA" --role developer --json
+python -m song_agent.cli audio-campaign remediation-zip rel-000001 --json
+python -m song_agent.cli audio-campaign remediation-verify rel-000001 --strict --require-passed --require-signed --json
+python -m song_agent.cli verify-audio-campaign-remediation-package .musicforge\releases\rel-000001\audio-campaign-remediation\audio-campaign-remediation.zip --strict --require-passed --require-signed --json
+```
+
+Release signoff can require remediation closeout with
+`require_audio_campaign_remediation=true`; this gate is a hard block and cannot be
+bypassed with `force=true` while unresolved or stale remediation remains.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

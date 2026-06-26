@@ -5,7 +5,9 @@ from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, ga
 from song_agent.ga_readiness_verifier import verify_ga_readiness_report
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.projectio import read_json, write_json
+from tests.test_audio_campaign_remediation import _complete_first_fix_sprint, _needs_fix_release_campaign
 from tests.test_trust_operations_final_readiness import _final_fixture
+from tests.test_server_releases import start_test_server, stop_test_server
 from song_agent.trust_operations_final_readiness import TrustOperationsFinalReadinessStore
 
 
@@ -160,6 +162,41 @@ def test_ga_readiness_verifier_requires_external_final_handoff_binding(tmp_path:
     assert _check_status(missing_external, "ga_readiness_final_handoff_package_required") == "failed"
     assert _check_status(with_external, "ga_readiness_final_handoff_zip_binding") == "passed"
     assert _check_status(with_external, "ga_readiness_final_handoff_ga_binding") == "passed"
+
+
+def test_ga_readiness_verifier_requires_external_audio_campaign_remediation_binding(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_repo(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, campaign_id, remediation_store = _needs_fix_release_campaign(server, "GA Remediation Track")
+        _complete_first_fix_sprint(server, campaign_id, remediation_store, release_id)
+        remediation_store.closeout_report(release_id)
+        remediation_store.signoff(release_id, {"signed_by": "QA", "role": "developer"})
+        zipped = remediation_store.build_zip(release_id)
+        verification = remediation_store.verify_zip(release_id, strict=True, require_passed=True, require_signed=True)
+        ga_report = build_ga_readiness_report(
+            repo_root=tmp_path,
+            require_audio_campaign_remediation=True,
+            audio_campaign_remediation_zip_path=zipped["zip_path"],
+            audio_campaign_remediation_verification_report_path=remediation_store.verification_report_path(release_id),
+        )
+        out = tmp_path / "ga-remediation.json"
+        write_ga_readiness_report(ga_report, out)
+        missing_external = verify_ga_readiness_report(out, require_audio_campaign_remediation=True)
+        with_external = verify_ga_readiness_report(
+            out,
+            require_audio_campaign_remediation=True,
+            audio_campaign_remediation_path=zipped["zip_path"],
+            audio_campaign_remediation_verification_report_path=remediation_store.verification_report_path(release_id),
+        )
+    finally:
+        stop_test_server(server)
+
+    assert verification["status"] == "passed"
+    assert _check_status(missing_external, "ga_readiness_audio_campaign_remediation_package_required") == "failed"
+    assert _check_status(with_external, "ga_readiness_audio_campaign_remediation_zip_binding") == "passed"
+    assert _check_status(with_external, "ga_readiness_audio_campaign_remediation_ga_binding") == "passed"
 
 
 def _check_status(report: dict, check_id: str) -> str:

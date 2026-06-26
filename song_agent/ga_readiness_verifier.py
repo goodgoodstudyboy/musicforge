@@ -13,6 +13,7 @@ from song_agent.audio_campaign_archive_verifier import (
     AUDIO_CAMPAIGN_ARCHIVE_PACKAGE_TYPE,
     verify_audio_campaign_archive_package,
 )
+from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.music_acceptance import stable_hash
 from song_agent.projectio import read_json, write_json
@@ -34,10 +35,13 @@ def verify_ga_readiness_report(
     require_ready: bool = False,
     require_manual_acceptance: bool = False,
     require_audio_campaign: bool = False,
+    require_audio_campaign_remediation: bool = False,
     require_final_readiness: bool = False,
     manual_acceptance_report_path: Path | str | None = None,
     audio_campaign_archive_path: Path | str | None = None,
     audio_campaign_archive_verification_report_path: Path | str | None = None,
+    audio_campaign_remediation_path: Path | str | None = None,
+    audio_campaign_remediation_verification_report_path: Path | str | None = None,
     final_handoff_package_path: Path | str | None = None,
     final_handoff_verification_report_path: Path | str | None = None,
 ) -> dict[str, Any]:
@@ -73,7 +77,7 @@ def verify_ga_readiness_report(
         )
         status = str(report.get("status") or "unknown")
         allowed_statuses = {"ready", "warning"} if not strict else {"ready"}
-        status_severity = "blocking" if strict or require_ready else "warning"
+        status_severity = "blocking" if status == "blocked" or strict or require_ready else "warning"
         _add_check(
             checks,
             "ga_readiness_status_allowed",
@@ -106,6 +110,13 @@ def verify_ga_readiness_report(
                 checks_by_id.get("ga.audio_campaign", {}),
                 audio_campaign_archive_path,
                 audio_campaign_archive_verification_report_path,
+            )
+        if require_audio_campaign_remediation:
+            _verify_audio_campaign_remediation_evidence(
+                checks,
+                checks_by_id.get("ga.audio_campaign_remediation", {}),
+                audio_campaign_remediation_path,
+                audio_campaign_remediation_verification_report_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -387,6 +398,78 @@ def _verify_audio_campaign_evidence(
         "blocking",
         "GA readiness Audio Campaign check matches the external archive verification." if ga_binding_ok else "GA readiness Audio Campaign check does not match the external archive verification.",
         {"ga_check_status": ga_check.get("status"), "zip_sha256": current_summary.get("zip_sha256"), "ga_zip_sha256": gate.get("archive_zip_sha256")},
+    )
+
+
+def _verify_audio_campaign_remediation_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    remediation_path: Path | str | None,
+    verification_report_path: Path | str | None,
+) -> None:
+    if not remediation_path:
+        _add_check(checks, "ga_readiness_audio_campaign_remediation_package_required", "failed", "blocking", "Audio Campaign remediation requirement needs an external remediation ZIP.")
+        return
+    if not verification_report_path:
+        _add_check(checks, "ga_readiness_audio_campaign_remediation_verification_required", "failed", "blocking", "Audio Campaign remediation requirement needs an external remediation verification report.")
+        return
+    zip_path = Path(remediation_path)
+    report_path = Path(verification_report_path)
+    try:
+        verification_report = read_json(report_path)
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_audio_campaign_remediation_verification_readable", "failed", "blocking", f"Audio Campaign remediation verification report could not be read: {exc}")
+        return
+    _add_check(checks, "ga_readiness_audio_campaign_remediation_verification_readable", "passed", "info", "Audio Campaign remediation verification report is readable.", {"source_path": report_path.name})
+    try:
+        current_verification = verify_audio_campaign_remediation_package(zip_path, strict=True, require_passed=True)
+    except Exception as exc:
+        current_verification = {"status": "failed", "error": str(exc), "summary": {}}
+    report_integrity_ok = verification_report.get("integrity_hash") == stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
+    _add_check(
+        checks,
+        "ga_readiness_audio_campaign_remediation_verification_package_type",
+        "passed" if verification_report.get("package_type") == "audio_campaign_remediation_verification" else "failed",
+        "blocking",
+        "Audio Campaign remediation verification package type is valid." if verification_report.get("package_type") == "audio_campaign_remediation_verification" else "Audio Campaign remediation verification package type is invalid.",
+    )
+    _add_check(
+        checks,
+        "ga_readiness_audio_campaign_remediation_verification_integrity",
+        "passed" if report_integrity_ok else "failed",
+        "blocking",
+        "Audio Campaign remediation verification report integrity hash matches." if report_integrity_ok else "Audio Campaign remediation verification report integrity hash mismatch.",
+    )
+    _add_check(
+        checks,
+        "ga_readiness_audio_campaign_remediation_verification_status",
+        "passed" if verification_report.get("status") == "passed" and current_verification.get("status") == "passed" else "failed",
+        "blocking",
+        "Audio Campaign remediation verification is passed." if verification_report.get("status") == "passed" and current_verification.get("status") == "passed" else "Audio Campaign remediation verification is not passed.",
+        {"external_status": verification_report.get("status"), "current_status": current_verification.get("status")},
+    )
+    _add_check(
+        checks,
+        "ga_readiness_audio_campaign_remediation_zip_binding",
+        "passed" if verification_report.get("zip_sha256") == _sha256_file(zip_path) and verification_report.get("manifest_hash") == current_verification.get("manifest_hash") else "failed",
+        "blocking",
+        "Audio Campaign remediation verification report matches the ZIP and manifest." if verification_report.get("zip_sha256") == _sha256_file(zip_path) and verification_report.get("manifest_hash") == current_verification.get("manifest_hash") else "Audio Campaign remediation verification report does not match the ZIP and manifest.",
+        {"zip_sha256": _sha256_file(zip_path), "manifest_hash": current_verification.get("manifest_hash")},
+    )
+    detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+    ga_binding_ok = (
+        ga_check.get("status") == "passed"
+        and detail.get("status") == "passed"
+        and detail.get("zip_sha256") == verification_report.get("zip_sha256")
+        and detail.get("manifest_hash") == verification_report.get("manifest_hash")
+    )
+    _add_check(
+        checks,
+        "ga_readiness_audio_campaign_remediation_ga_binding",
+        "passed" if ga_binding_ok else "failed",
+        "blocking",
+        "GA readiness Audio Campaign remediation check matches the external remediation verification." if ga_binding_ok else "GA readiness Audio Campaign remediation check does not match the external remediation verification.",
+        {"ga_check_status": ga_check.get("status"), "zip_sha256": verification_report.get("zip_sha256"), "ga_zip_sha256": detail.get("zip_sha256")},
     )
 
 

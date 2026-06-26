@@ -15952,7 +15952,7 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
     from song_agent.audio_campaigns import AudioCampaignStore
     from song_agent.audio_fix_sprints import AudioFixSprintStore
     from song_agent.audio_lab import AudioLabStore, write_lab_test_wav
-    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, write_ga_readiness_report
     from song_agent.ga_readiness_verifier import verify_ga_readiness_report
     from song_agent.projectio import read_json
     from song_agent.server import _audio_campaign_release_track_coverage
@@ -15963,6 +15963,13 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
             base = Path(temp)
             os.chdir(base)
             try:
+                (base / "pyproject.toml").write_text(f'[project]\nversion = "{__version__}"\n', encoding="utf-8")
+                (base / "README.md").write_text("# MusicForge\n\nAudio Campaign Governance smoke.\n", encoding="utf-8")
+                (base / "CHANGELOG.md").write_text(f"# Changelog\n\n## v{__version__}\n", encoding="utf-8")
+                for rel in REQUIRED_DOCS:
+                    doc = base / rel
+                    doc.parent.mkdir(parents=True, exist_ok=True)
+                    doc.write_text(f"# {Path(rel).stem}\n\nAudio Campaign Governance smoke document.\n", encoding="utf-8")
                 lab = AudioLabStore(wav_writer=write_lab_test_wav)
                 smoke = lab.run_smoke({"cases": 1, "render_audio": "auto"})
                 session = lab.create_session({"from_smoke": smoke["smoke_run_id"]})
@@ -16208,6 +16215,134 @@ def _v106_preflight_check_status(preflight: dict[str, Any], check_id: str) -> st
         if isinstance(check, dict) and check.get("check_id") == check_id:
             return str(check.get("status") or "")
     return ""
+
+
+def _v107_release_audio_campaign_remediation_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.audio_campaign_remediation import AudioCampaignRemediationStateError, AudioCampaignRemediationStore
+    from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
+    from song_agent.audio_fix_sprints import AudioFixSprintStore
+    from song_agent.projectio import read_json, write_json
+
+    del root
+    old_cwd = Path.cwd()
+    server = None
+    stale_server = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v107-audio-campaign-remediation-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                project_id, release_id, server = _v106_release_fixture("Remediation Track")
+                planner = server.audio_campaign_planner_store
+                campaign_store = server.audio_campaign_store
+                fix_store = campaign_store.audio_fix_sprint_store
+                result = planner.create_campaign_from_release(release_id)
+                campaign_id = result["campaign"]["campaign_id"]
+                session_id = result["session"]["session_id"]
+                item_id = result["session"]["items"][0]["item_id"]
+                server.audio_lab_store.write_item_review(session_id, item_id, {"result": "needs_fix", "rating": 2, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True, "notes": "Hook needs more clarity."})
+                server.audio_lab_store.add_marker(session_id, item_id, {"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "Hook is masked."})
+                campaign_store.refresh_report(campaign_id)
+
+                remediation = AudioCampaignRemediationStore(
+                    release_store=server.release_store,
+                    project_store=server.project_store,
+                    planner_store=planner,
+                    campaign_store=campaign_store,
+                    fix_sprint_store=fix_store,
+                )
+                plan = remediation.refresh_plan(release_id)
+                first_run = remediation.run_safe_actions(release_id)
+                queue_after_first = first_run["queue"]
+                first_sprint_ids = [row.get("fix", {}).get("fix_sprint_id") for row in campaign_store.read_campaign(campaign_id).get("cases", []) if row.get("fix", {}).get("fix_sprint_id")]
+                duplicate_run = remediation.run_safe_actions(release_id)
+                second_sprint_ids = [row.get("fix", {}).get("fix_sprint_id") for row in campaign_store.read_campaign(campaign_id).get("cases", []) if row.get("fix", {}).get("fix_sprint_id")]
+                before_manual = remediation.closeout_report(release_id)
+                blocked_gate = remediation.gate(release_id, required=True)
+
+                sprint_id = str(first_sprint_ids[0])
+                sprint = fix_store.read_sprint(sprint_id)
+                fix_item_id = str(sprint["items"][0]["fix_item_id"])
+                candidate_id = str(sprint["items"][0]["candidates"][0]["candidate_id"])
+                fix_store.review_candidate(sprint_id, fix_item_id, candidate_id, {"preferred": "right", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                fix_store.select_candidate(sprint_id, fix_item_id, candidate_id)
+                recheck_created = remediation.run_safe_actions(release_id)
+                recheck = fix_store._read_recheck_session(sprint_id)  # type: ignore[attr-defined]
+                fix_store.review_recheck_item(sprint_id, str(recheck["items"][0]["item_id"]), {"result": "accepted", "rating": 4, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                after_manual_run = remediation.run_safe_actions(release_id)
+                after = remediation.closeout_report(release_id)
+                signoff = remediation.signoff(release_id, {"signed_by": "QA", "role": "developer"})
+                zip_result = remediation.build_zip(release_id)
+                verification = remediation.verify_zip(release_id, strict=True, require_passed=True, require_signed=True)
+                direct_verification = verify_audio_campaign_remediation_package(zip_result["zip_path"], strict=True, require_passed=True, require_signed=True)
+
+                signoff_block = remediation.gate(release_id, required=True)
+
+                stale_project_id, stale_release_id, stale_server = _v106_release_fixture("Remediation Stale Export")
+                stale_result = stale_server.audio_campaign_planner_store.create_campaign_from_release(stale_release_id)
+                stale_session_id = stale_result["session"]["session_id"]
+                stale_item_id = stale_result["session"]["items"][0]["item_id"]
+                stale_server.audio_lab_store.write_item_review(stale_session_id, stale_item_id, {"result": "needs_fix", "rating": 2, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                stale_server.audio_lab_store.add_marker(stale_session_id, stale_item_id, {"time_seconds": 1.0, "category": "mix_balance", "severity": "high", "message": "Stale export marker."})
+                stale_manifest_path = stale_server.project_store.project_dir(stale_project_id) / "final-export" / "manifest.json"
+                stale_manifest = read_json(stale_manifest_path)
+                stale_manifest["tampered_after_release_track"] = True
+                write_json(stale_manifest_path, stale_manifest)
+                stale_remediation = AudioCampaignRemediationStore(
+                    release_store=stale_server.release_store,
+                    project_store=stale_server.project_store,
+                    planner_store=stale_server.audio_campaign_planner_store,
+                    campaign_store=stale_server.audio_campaign_store,
+                    fix_sprint_store=stale_server.audio_campaign_store.audio_fix_sprint_store,
+                )
+                stale_plan = stale_remediation.refresh_plan(stale_release_id)
+                stale_run = "allowed"
+                try:
+                    stale_remediation.run_safe_actions(stale_release_id)
+                except AudioCampaignRemediationStateError:
+                    stale_run = "409"
+            finally:
+                for candidate_server in (server, stale_server):
+                    try:
+                        stop = getattr(candidate_server, "server_close", None)
+                        if callable(stop):
+                            stop()
+                    except Exception:
+                        pass
+                os.chdir(old_cwd)
+
+            serialized = json.dumps({"plan": plan, "queue": queue_after_first, "verification": verification, "signoff": signoff}, ensure_ascii=False)
+            ok = (
+                plan.get("status") == "needs_action"
+                and plan.get("summary", {}).get("issue_count") == 1
+                and queue_after_first.get("summary", {}).get("manual_required_count", 0) > 0
+                and first_sprint_ids == second_sprint_ids
+                and before_manual.get("status") == "failed"
+                and "manual_action_required" in before_manual.get("blockers", [])
+                and blocked_gate.get("status") == "failed"
+                and blocked_gate.get("hard_block") is True
+                and recheck_created.get("closeout", {}).get("status") == "failed"
+                and after_manual_run.get("closeout", {}).get("status") == "passed"
+                and after.get("status") == "passed"
+                and signoff.get("status") == "signed"
+                and verification.get("status") == "passed"
+                and direct_verification.get("status") == "passed"
+                and signoff_block.get("status") == "passed"
+                and stale_plan.get("status") == "blocked"
+                and stale_run == "409"
+                and str(base) not in serialized
+                and "sk-secret-value" not in serialized
+                and "C:\\Users" not in serialized
+            )
+            return ok, (
+                f"plan={plan.get('status')}, first_run={first_run.get('status')}, manual_before={before_manual.get('status')}, "
+                f"after={after.get('status')}, verify={verification.get('status')}, duplicate={first_sprint_ids == second_sprint_ids}, "
+                f"pre_gate={blocked_gate.get('status')}, post_gate={signoff_block.get('status')}, stale_plan={stale_plan.get('status')}, stale_run={stale_run}"
+            )
+    except Exception as exc:
+        return False, f"v10.7 Release Audio Campaign remediation smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
 
 
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
