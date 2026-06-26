@@ -867,6 +867,10 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="audio-campaign-remediation-closeout"' in html
     assert 'id="audio-campaign-remediation-zip"' in html
     assert 'id="audio-campaign-remediation-verify"' in html
+    assert 'id="release-audio-certification-refresh"' in html
+    assert 'id="release-audio-certification-signoff"' in html
+    assert 'id="release-audio-certification-zip"' in html
+    assert 'id="release-audio-certification-verify"' in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html
     assert "/api/audio-lab/listening-sessions" in html
@@ -883,6 +887,10 @@ def test_webui_contains_release_workspace_controls():
     assert "/audio-campaign-remediation/closeout" in html
     assert "/audio-campaign-remediation/zip" in html
     assert "/audio-campaign-remediation/verify" in html
+    assert "/audio-certification/refresh" in html
+    assert "/audio-certification/signoff" in html
+    assert "/audio-certification/zip" in html
+    assert "/audio-certification/verify" in html
     assert "Release Audio QA" in html
     assert "Audio Review Board" in html
     assert "Tracklist" in html

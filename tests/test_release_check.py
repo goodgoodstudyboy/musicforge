@@ -82,6 +82,7 @@ from song_agent.release_checks import (
     _v105_audio_campaign_governance_smoke,
     _v106_release_driven_audio_campaign_smoke,
     _v107_release_audio_campaign_remediation_smoke,
+    _v108_release_audio_certification_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1166,6 +1167,18 @@ def test_v107_release_audio_campaign_remediation_smoke(tmp_path: Path) -> None:
     assert "verify=passed" in detail
     assert "stale_run=409" in detail
     assert "signed_stale_final_export=failed/409/409/409" in detail
+    assert "declared_extra=failed" in detail
+
+
+def test_v108_release_audio_certification_smoke(tmp_path: Path) -> None:
+    ok, detail = _v108_release_audio_certification_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "cert=passed" in detail
+    assert "verify=passed" in detail
+    assert "ga=passed/" in detail
+    assert "ga=passed/failed" not in detail
+    assert "stale=failed/409/409/409" in detail
     assert "declared_extra=failed" in detail
 
 

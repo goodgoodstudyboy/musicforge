@@ -188,6 +188,26 @@ Release signoff can require remediation closeout with
 `require_audio_campaign_remediation=true`; this gate is a hard block and cannot be
 bypassed with `force=true` while unresolved or stale remediation remains.
 
+Release Audio Certification is the release-level audio gate. It aggregates the
+current Release track Final Export hashes, real WAV evidence, manual accepted
+Audio Campaign reviews, Campaign Governance, and required remediation evidence
+into a signed fixed-structure ZIP that GA readiness and Release signoff can
+require:
+
+```powershell
+python -m song_agent.cli release-audio-certification refresh rel-000001 --json
+python -m song_agent.cli release-audio-certification signoff rel-000001 --signed-by "Developer" --role developer --json
+python -m song_agent.cli release-audio-certification zip rel-000001 --json
+python -m song_agent.cli release-audio-certification verify rel-000001 --strict --require-passed --require-signed --require-real-audio --require-manual-review --require-remediation-when-needed --json
+python -m song_agent.cli verify-release-audio-certification-package .musicforge\releases\rel-000001\audio-certification\release-audio-certification.zip --strict --require-passed --require-signed --require-real-audio --require-manual-review --require-remediation-when-needed --json
+python -m song_agent.cli ga-check --require-release-audio-certification --release-audio-certification .musicforge\releases\rel-000001\audio-certification\release-audio-certification.zip --release-audio-certification-verification-report .musicforge\releases\rel-000001\audio-certification\verification-report.json --json
+```
+
+Signed certification evidence is immutable. If any current Release track Final
+Export manifest, campaign case binding, manual review, governance archive, or
+remediation evidence drifts after signoff, gate/export/ZIP/verify paths hard
+block until certification is refreshed and signed again.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

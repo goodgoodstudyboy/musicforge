@@ -1,5 +1,19 @@
 # Changelog
 
+## v10.8.0 - 2026-06-26
+
+### Added
+- Release Audio Certification store, signoff, export ZIP, fixed-layout offline verifier, CLI, API, and Studio-ready release endpoints.
+- Release signoff `require_release_audio_certification=true` / `require_release_audio_certification_signed=true` gate that binds the current Release tracks, Final Export hashes, real WAV evidence, manual Audio Campaign reviews, Campaign Governance, and remediation evidence.
+- GA readiness `ga.release_audio_certification` check and `verify-ga-readiness-report --require-release-audio-certification` external ZIP/report binding.
+- release-check `v108.release_audio_certification_smoke` covering positive certification, GA binding, signed stale Final Export blocking, declared extra ZIP rejection, and redaction checks.
+
+### Verified
+- `python -m pytest tests\test_release_audio_certification.py tests\test_server_release_audio_certification.py tests\test_cli_release_audio_certification.py tests\test_release_check.py::test_v108_release_audio_certification_smoke tests\test_release_check_matrix.py -q`
+- `python -m pytest tests\test_release_audio_certification.py tests\test_server_release_audio_certification.py tests\test_cli_release_audio_certification.py tests\test_ga_readiness.py tests\test_audio_campaign_governance.py::test_ga_readiness_requires_external_audio_campaign_archive tests\test_audio_campaign_remediation.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v108_release_audio_certification_smoke tests\test_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json`
+
 ## v10.7.1 - 2026-06-26
 
 ### Fixed

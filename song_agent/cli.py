@@ -95,6 +95,9 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-audio-campaign-remediation", action="store_true", help="Require passed Release Audio Campaign remediation evidence.")
     parser.add_argument("--audio-campaign-remediation", type=Path, default=None, help="Path to Release Audio Campaign Remediation ZIP.")
     parser.add_argument("--audio-campaign-remediation-verification-report", type=Path, default=None, help="Path to Release Audio Campaign Remediation verification report JSON.")
+    parser.add_argument("--require-release-audio-certification", action="store_true", help="Require passed signed Release Audio Certification evidence.")
+    parser.add_argument("--release-audio-certification", type=Path, default=None, help="Path to Release Audio Certification ZIP.")
+    parser.add_argument("--release-audio-certification-verification-report", type=Path, default=None, help="Path to Release Audio Certification verification report JSON.")
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
     parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
@@ -120,6 +123,9 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-audio-campaign-remediation", action="store_true", help="Require external Audio Campaign remediation evidence.")
     parser.add_argument("--audio-campaign-remediation", type=Path, default=None, help="External Audio Campaign Remediation ZIP.")
     parser.add_argument("--audio-campaign-remediation-verification-report", type=Path, default=None, help="External Audio Campaign Remediation verification report JSON.")
+    parser.add_argument("--require-release-audio-certification", action="store_true", help="Require external Release Audio Certification evidence.")
+    parser.add_argument("--release-audio-certification", type=Path, default=None, help="External Release Audio Certification ZIP.")
+    parser.add_argument("--release-audio-certification-verification-report", type=Path, default=None, help="External Release Audio Certification verification report JSON.")
     return parser
 
 
@@ -577,6 +583,52 @@ def build_verify_audio_campaign_remediation_parser() -> argparse.ArgumentParser:
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--require-passed", action="store_true")
     parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def build_release_audio_certification_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Release Audio Certification evidence.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    refresh = subparsers.add_parser("refresh", help="Refresh Release Audio Certification report.")
+    refresh.add_argument("release_id")
+    status = subparsers.add_parser("status", help="Show Release Audio Certification status.")
+    status.add_argument("release_id")
+    signoff = subparsers.add_parser("signoff", help="Sign off a passed Release Audio Certification.")
+    signoff.add_argument("release_id")
+    signoff.add_argument("--signed-by", default="audio-certification")
+    signoff.add_argument("--role", default="audio-certification-reviewer")
+    signoff.add_argument("--reason", default="Release audio certification accepted.")
+    export = subparsers.add_parser("export", help="Export Release Audio Certification package files.")
+    export.add_argument("release_id")
+    zip_cmd = subparsers.add_parser("zip", help="Build Release Audio Certification ZIP.")
+    zip_cmd.add_argument("release_id")
+    verify = subparsers.add_parser("verify", help="Verify Release Audio Certification ZIP.")
+    verify.add_argument("release_id")
+    verify.add_argument("--strict", action="store_true")
+    verify.add_argument("--require-passed", action="store_true")
+    verify.add_argument("--require-signed", action="store_true")
+    verify.add_argument("--require-real-audio", action="store_true")
+    verify.add_argument("--require-manual-review", action="store_true")
+    verify.add_argument("--require-remediation-when-needed", action="store_true")
+    verify.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_release_audio_certification_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Release Audio Certification ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-passed", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-real-audio", action="store_true")
+    parser.add_argument("--require-manual-review", action="store_true")
+    parser.add_argument("--require-remediation-when-needed", action="store_true")
     parser.add_argument("--max-zip-size-mb", type=int, default=128)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
@@ -3138,6 +3190,45 @@ def _run_audio_campaign_command(args: argparse.Namespace) -> dict[str, Any]:
     raise ValueError("Unsupported audio-campaign command.")
 
 
+def _run_release_audio_certification_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.release_audio_certification import ReleaseAudioCertificationStore
+    from song_agent.release_audio_certification_verifier import write_release_audio_certification_verification_report
+
+    store = ReleaseAudioCertificationStore()
+    if args.action == "refresh":
+        report = store.refresh_report(args.release_id)
+        return {"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "status":
+        report = store.read_report(args.release_id, default={})
+        matrix = store.read_matrix(args.release_id, default={})
+        evidence = store.read_evidence_index(args.release_id, default={})
+        blockers = store.read_blocker_register(args.release_id, default={})
+        return {"ok": report.get("status") == "passed", "report": report, "matrix": matrix, "evidence_index": evidence, "blocker_register": blockers, "summary": report.get("summary", {}), "status": report.get("status") or "missing"}
+    if args.action == "signoff":
+        result = store.signoff(args.release_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": True, **result, "summary": result.get("report", {}).get("summary", {}), "status": result.get("status")}
+    if args.action == "export":
+        result = store.export_package(args.release_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": result.get("manifest", {}), "status": result.get("status")}
+    if args.action == "zip":
+        result = store.build_zip(args.release_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}, "status": result.get("status")}
+    if args.action == "verify":
+        report = store.verify_zip(
+            args.release_id,
+            strict=args.strict,
+            require_passed=args.require_passed,
+            require_signed=args.require_signed,
+            require_real_audio=args.require_real_audio,
+            require_manual_review=args.require_manual_review,
+            require_remediation_when_needed=args.require_remediation_when_needed,
+        )
+        if args.report_out is not None:
+            write_release_audio_certification_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported release-audio-certification command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -3206,6 +3297,25 @@ def _print_audio_campaign_result(result: dict[str, Any], *, json_output: bool) -
         print(f"verification: {verification.get('status')} blockers={verification.get('blockers') or []}")
 
 
+def _print_release_audio_certification_result(result: dict[str, Any], *, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
+    print("MusicForge Release Audio Certification")
+    print(f"status: {status}")
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    details = []
+    for key in ("track_count", "manual_accepted_track_count", "real_audio_track_count", "blocker_count", "remediation_status"):
+        if key in summary:
+            details.append(f"{key}={summary.get(key)}")
+    if details:
+        print("summary: " + " ".join(details))
+    if "verification" in result:
+        verification = result["verification"]
+        print(f"verification: {verification.get('status')} blockers={verification.get('blockers') or []}")
+
+
 def _main() -> None:
     raw_args = sys.argv[1:]
     if raw_args and raw_args[0] == "serve":
@@ -3242,6 +3352,9 @@ def _main() -> None:
             require_audio_campaign_remediation=args.require_audio_campaign_remediation,
             audio_campaign_remediation_zip_path=args.audio_campaign_remediation,
             audio_campaign_remediation_verification_report_path=args.audio_campaign_remediation_verification_report,
+            require_release_audio_certification=args.require_release_audio_certification,
+            release_audio_certification_zip_path=args.release_audio_certification,
+            release_audio_certification_verification_report_path=args.release_audio_certification_verification_report,
             require_final_readiness=args.require_final_readiness,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
             release_check_latest_report_path=args.release_check_latest_report,
@@ -3270,12 +3383,15 @@ def _main() -> None:
             require_manual_acceptance=args.require_manual_acceptance,
             require_audio_campaign=args.require_audio_campaign,
             require_audio_campaign_remediation=args.require_audio_campaign_remediation,
+            require_release_audio_certification=args.require_release_audio_certification,
             require_final_readiness=args.require_final_readiness,
             manual_acceptance_report_path=args.manual_acceptance_report,
             audio_campaign_archive_path=args.audio_campaign_archive,
             audio_campaign_archive_verification_report_path=args.audio_campaign_archive_verification_report,
             audio_campaign_remediation_path=args.audio_campaign_remediation,
             audio_campaign_remediation_verification_report_path=args.audio_campaign_remediation_verification_report,
+            release_audio_certification_path=args.release_audio_certification,
+            release_audio_certification_verification_report_path=args.release_audio_certification_verification_report,
             final_handoff_package_path=args.final_handoff_package,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
         )
@@ -3326,6 +3442,16 @@ def _main() -> None:
         result = _run_audio_campaign_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_audio_campaign_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "release-audio-certification":
+        parser = build_release_audio_certification_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_release_audio_certification_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
         if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
             raise SystemExit(1)
@@ -3414,6 +3540,37 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(audio_campaign_remediation_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-audio-certification-package":
+        from song_agent.release_audio_certification_verifier import (
+            release_audio_certification_verification_exit_code,
+            verify_release_audio_certification_package,
+            write_release_audio_certification_verification_report,
+        )
+
+        parser = build_verify_release_audio_certification_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_audio_certification_package(
+            args.zip_path,
+            strict=args.strict,
+            require_passed=args.require_passed,
+            require_signed=args.require_signed,
+            require_real_audio=args.require_real_audio,
+            require_manual_review=args.require_manual_review,
+            require_remediation_when_needed=args.require_remediation_when_needed,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_audio_certification_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Release Audio Certification verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(release_audio_certification_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-maintenance-backup":
         from song_agent.lts_backup_verifier import (
             maintenance_backup_verification_exit_code,

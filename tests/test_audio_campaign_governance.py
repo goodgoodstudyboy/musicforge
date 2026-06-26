@@ -118,7 +118,7 @@ def test_ga_readiness_requires_external_audio_campaign_archive(tmp_path: Path, m
     verification_path = governance.archive_verification_report_path(campaign_id)
 
     report = build_ga_readiness_report(
-        repo_root=tmp_path,
+        repo_root=Path(__file__).resolve().parents[1],
         require_audio_campaign=True,
         audio_campaign_id=campaign_id,
         audio_campaign_archive_zip_path=archive_path,

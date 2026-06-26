@@ -529,6 +529,13 @@ from song_agent.audio_campaign_remediation import (
     AudioCampaignRemediationStore,
     AudioCampaignRemediationValidationError,
 )
+from song_agent.release_audio_certification import (
+    ReleaseAudioCertificationError,
+    ReleaseAudioCertificationNotFoundError,
+    ReleaseAudioCertificationStateError,
+    ReleaseAudioCertificationStore,
+    ReleaseAudioCertificationValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3075,6 +3082,17 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         store.planner_store = self.audio_campaign_planner_store
         store.campaign_store = self.audio_campaign_store
         store.fix_sprint_store = self.audio_campaign_store.audio_fix_sprint_store
+        return store
+
+    @property
+    def release_audio_certification_store(self) -> ReleaseAudioCertificationStore:
+        store = self.server.release_audio_certification_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        store.project_store = self.project_store
+        store.planner_store = self.audio_campaign_planner_store
+        store.campaign_store = self.audio_campaign_store
+        store.governance_store = self.audio_campaign_governance_store
+        store.remediation_store = self.audio_campaign_remediation_store
         return store
 
     @property
@@ -5699,6 +5717,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if tail == "/audio-campaign-remediation" or tail.startswith("/audio-campaign-remediation/"):
                 self._handle_release_audio_campaign_remediation(method, release_id, tail.removeprefix("/audio-campaign-remediation"))
+                return
+
+            if tail == "/audio-certification" or tail.startswith("/audio-certification/"):
+                self._handle_release_audio_certification(method, release_id, tail.removeprefix("/audio-certification"))
                 return
 
             if tail == "/mastering" or tail.startswith("/mastering/"):
@@ -10317,6 +10339,87 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AudioCampaignRemediationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_audio_certification(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            self.release_audio_certification_store.release_store = self.release_store
+            self.release_audio_certification_store.project_store = self.project_store
+            self.release_audio_certification_store.planner_store = self.audio_campaign_planner_store
+            self.release_audio_certification_store.campaign_store = self.audio_campaign_store
+            self.release_audio_certification_store.governance_store = self.audio_campaign_governance_store
+            self.release_audio_certification_store.remediation_store = self.audio_campaign_remediation_store
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_audio_certification_store.read_report(release_id, default={})
+                matrix = self.release_audio_certification_store.read_matrix(release_id, default={})
+                evidence = self.release_audio_certification_store.read_evidence_index(release_id, default={})
+                blockers = self.release_audio_certification_store.read_blocker_register(release_id, default={})
+                signoff = read_json(self.release_audio_certification_store.signoff_path(release_id)) if self.release_audio_certification_store.signoff_path(release_id).exists() else {}
+                self._send_json({"ok": True, "release_id": release_id, "report": report, "matrix": matrix, "evidence_index": evidence, "blocker_register": blockers, "signoff": signoff, "summary": report.get("summary", {}) if report else {}})
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_audio_certification_store.refresh_report(release_id)
+                self._send_json({"ok": report.get("status") == "passed", "release_id": release_id, "report": report, "summary": report.get("summary", {})})
+                return
+            if tail == "/signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_certification_store.signoff(release_id, self._read_json_body())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_certification_store.export_package(release_id)
+                self._send_json({"ok": result.get("status") == "passed", **result})
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_certification_store.build_zip(release_id)
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.release_audio_certification_store.verify_zip(
+                    release_id,
+                    strict=bool(payload.get("strict", True)),
+                    require_passed=bool(payload.get("require_passed", True)),
+                    require_signed=bool(payload.get("require_signed", False)),
+                    require_real_audio=bool(payload.get("require_real_audio", True)),
+                    require_manual_review=bool(payload.get("require_manual_review", True)),
+                    require_remediation_when_needed=bool(payload.get("require_remediation_when_needed", True)),
+                )
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.release_audio_certification_store.zip_path(release_id), "application/zip", filename="release-audio-certification.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Audio Certification route not found.")
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioCertificationNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioCertificationStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseAudioCertificationValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleaseAudioCertificationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/mastering/profiles":
@@ -10766,6 +10869,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if audio_campaign_remediation_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(audio_campaign_remediation_gate.get("message") or "Audio Campaign remediation gate failed.")
+        require_release_audio_certification = bool(payload.get("require_release_audio_certification", False))
+        release_audio_certification_gate = self.release_audio_certification_store.gate(
+            release_id,
+            required=require_release_audio_certification,
+            require_signed=bool(payload.get("require_release_audio_certification_signed", require_release_audio_certification)),
+        )
+        if release_audio_certification_gate and require_release_audio_certification:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["release_audio_certification"] = release_audio_certification_gate
+            if release_audio_certification_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(release_audio_certification_gate.get("message") or "Release Audio Certification gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -10833,6 +10948,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(audio_campaign_remediation_gate.get("message") or "Audio Campaign remediation gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if release_audio_certification_gate.get("hard_block") and release_audio_certification_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(release_audio_certification_gate.get("message") or "Release Audio Certification gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -18367,6 +18491,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_campaign_governance_store = AudioCampaignGovernanceStore(campaign_store=self.audio_campaign_store)
         self.audio_campaign_planner_store = AudioCampaignPlannerStore(release_store=self.release_store, project_store=self.project_store, audio_lab_store=self.audio_lab_store, audio_campaign_store=self.audio_campaign_store)
         self.audio_campaign_remediation_store = AudioCampaignRemediationStore(release_store=self.release_store, project_store=self.project_store, planner_store=self.audio_campaign_planner_store, campaign_store=self.audio_campaign_store, fix_sprint_store=self.audio_fix_sprint_store)
+        self.release_audio_certification_store = ReleaseAudioCertificationStore(release_store=self.release_store, project_store=self.project_store, planner_store=self.audio_campaign_planner_store, campaign_store=self.audio_campaign_store, governance_store=self.audio_campaign_governance_store, remediation_store=self.audio_campaign_remediation_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

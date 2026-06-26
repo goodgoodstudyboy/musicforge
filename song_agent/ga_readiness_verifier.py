@@ -14,9 +14,14 @@ from song_agent.audio_campaign_archive_verifier import (
     verify_audio_campaign_archive_package,
 )
 from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
+from song_agent.release_audio_certification_verifier import (
+    RELEASE_AUDIO_CERTIFICATION_VERIFICATION_PACKAGE_TYPE,
+    verify_release_audio_certification_package,
+)
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.music_acceptance import stable_hash
 from song_agent.projectio import read_json, write_json
+from song_agent.releases import stable_hash as release_stable_hash
 from song_agent.trust_operations_final_readiness_verifier import (
     TRUST_OPERATIONS_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE,
     verify_trust_operations_final_handoff_package,
@@ -36,12 +41,15 @@ def verify_ga_readiness_report(
     require_manual_acceptance: bool = False,
     require_audio_campaign: bool = False,
     require_audio_campaign_remediation: bool = False,
+    require_release_audio_certification: bool = False,
     require_final_readiness: bool = False,
     manual_acceptance_report_path: Path | str | None = None,
     audio_campaign_archive_path: Path | str | None = None,
     audio_campaign_archive_verification_report_path: Path | str | None = None,
     audio_campaign_remediation_path: Path | str | None = None,
     audio_campaign_remediation_verification_report_path: Path | str | None = None,
+    release_audio_certification_path: Path | str | None = None,
+    release_audio_certification_verification_report_path: Path | str | None = None,
     final_handoff_package_path: Path | str | None = None,
     final_handoff_verification_report_path: Path | str | None = None,
 ) -> dict[str, Any]:
@@ -117,6 +125,13 @@ def verify_ga_readiness_report(
                 checks_by_id.get("ga.audio_campaign_remediation", {}),
                 audio_campaign_remediation_path,
                 audio_campaign_remediation_verification_report_path,
+            )
+        if require_release_audio_certification:
+            _verify_release_audio_certification_evidence(
+                checks,
+                checks_by_id.get("ga.release_audio_certification", {}),
+                release_audio_certification_path,
+                release_audio_certification_verification_report_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -469,6 +484,88 @@ def _verify_audio_campaign_remediation_evidence(
         "passed" if ga_binding_ok else "failed",
         "blocking",
         "GA readiness Audio Campaign remediation check matches the external remediation verification." if ga_binding_ok else "GA readiness Audio Campaign remediation check does not match the external remediation verification.",
+        {"ga_check_status": ga_check.get("status"), "zip_sha256": verification_report.get("zip_sha256"), "ga_zip_sha256": detail.get("zip_sha256")},
+    )
+
+
+def _verify_release_audio_certification_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    certification_path: Path | str | None,
+    verification_report_path: Path | str | None,
+) -> None:
+    if not certification_path:
+        _add_check(checks, "ga_readiness_release_audio_certification_package_required", "failed", "blocking", "Release Audio Certification requirement needs an external certification ZIP.")
+        return
+    if not verification_report_path:
+        _add_check(checks, "ga_readiness_release_audio_certification_verification_required", "failed", "blocking", "Release Audio Certification requirement needs an external certification verification report.")
+        return
+    zip_path = Path(certification_path)
+    report_path = Path(verification_report_path)
+    try:
+        verification_report = read_json(report_path)
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_release_audio_certification_verification_readable", "failed", "blocking", f"Release Audio Certification verification report could not be read: {exc}")
+        return
+    _add_check(checks, "ga_readiness_release_audio_certification_verification_readable", "passed", "info", "Release Audio Certification verification report is readable.", {"source_path": report_path.name})
+    try:
+        current_verification = verify_release_audio_certification_package(
+            zip_path,
+            strict=True,
+            require_passed=True,
+            require_signed=True,
+            require_real_audio=True,
+            require_manual_review=True,
+            require_remediation_when_needed=True,
+        )
+    except Exception as exc:
+        current_verification = {"status": "failed", "error": str(exc), "summary": {}}
+    report_integrity_ok = verification_report.get("integrity_hash") == release_stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
+    _add_check(
+        checks,
+        "ga_readiness_release_audio_certification_verification_package_type",
+        "passed" if verification_report.get("package_type") == RELEASE_AUDIO_CERTIFICATION_VERIFICATION_PACKAGE_TYPE else "failed",
+        "blocking",
+        "Release Audio Certification verification package type is valid." if verification_report.get("package_type") == RELEASE_AUDIO_CERTIFICATION_VERIFICATION_PACKAGE_TYPE else "Release Audio Certification verification package type is invalid.",
+    )
+    _add_check(
+        checks,
+        "ga_readiness_release_audio_certification_verification_integrity",
+        "passed" if report_integrity_ok else "failed",
+        "blocking",
+        "Release Audio Certification verification report integrity hash matches." if report_integrity_ok else "Release Audio Certification verification report integrity hash mismatch.",
+    )
+    _add_check(
+        checks,
+        "ga_readiness_release_audio_certification_verification_status",
+        "passed" if verification_report.get("status") == "passed" and current_verification.get("status") == "passed" else "failed",
+        "blocking",
+        "Release Audio Certification verification is passed." if verification_report.get("status") == "passed" and current_verification.get("status") == "passed" else "Release Audio Certification verification is not passed.",
+        {"external_status": verification_report.get("status"), "current_status": current_verification.get("status")},
+    )
+    current_summary = current_verification.get("summary") if isinstance(current_verification.get("summary"), dict) else {}
+    _add_check(
+        checks,
+        "ga_readiness_release_audio_certification_zip_binding",
+        "passed" if verification_report.get("zip_sha256") == _sha256_file(zip_path) and verification_report.get("manifest_hash") == current_verification.get("manifest_hash") else "failed",
+        "blocking",
+        "Release Audio Certification verification report matches the ZIP and manifest." if verification_report.get("zip_sha256") == _sha256_file(zip_path) and verification_report.get("manifest_hash") == current_verification.get("manifest_hash") else "Release Audio Certification verification report does not match the ZIP and manifest.",
+        {"zip_sha256": _sha256_file(zip_path), "manifest_hash": current_verification.get("manifest_hash"), "track_count": current_summary.get("track_count")},
+    )
+    detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+    ga_binding_ok = (
+        ga_check.get("status") == "passed"
+        and detail.get("status") == "passed"
+        and detail.get("zip_sha256") == verification_report.get("zip_sha256")
+        and detail.get("manifest_hash") == verification_report.get("manifest_hash")
+        and detail.get("verification_hash") == verification_report.get("integrity_hash")
+    )
+    _add_check(
+        checks,
+        "ga_readiness_release_audio_certification_ga_binding",
+        "passed" if ga_binding_ok else "failed",
+        "blocking",
+        "GA readiness Release Audio Certification check matches the external certification verification." if ga_binding_ok else "GA readiness Release Audio Certification check does not match the external certification verification.",
         {"ga_check_status": ga_check.get("status"), "zip_sha256": verification_report.get("zip_sha256"), "ga_zip_sha256": detail.get("zip_sha256")},
     )
 
