@@ -80,6 +80,7 @@ from song_agent.release_checks import (
     _v103_audio_fix_sprint_smoke,
     _v104_audio_campaign_smoke,
     _v105_audio_campaign_governance_smoke,
+    _v106_release_driven_audio_campaign_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1140,6 +1141,17 @@ def test_v105_audio_campaign_governance_smoke(tmp_path: Path) -> None:
     assert "ga_gate=passed" in detail
     assert "missing_gate=failed" in detail
     assert "reset=reset" in detail
+
+
+def test_v106_release_driven_audio_campaign_smoke(tmp_path: Path) -> None:
+    ok, detail = _v106_release_driven_audio_campaign_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "plan=planned" in detail
+    assert "preflight=passed" in detail
+    assert "coverage=1/1" in detail
+    assert "signoff=passed" in detail
+    assert "mismatch=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

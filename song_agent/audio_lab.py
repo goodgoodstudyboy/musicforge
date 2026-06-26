@@ -281,6 +281,55 @@ class AudioLabStore:
             self._write_session(session)
             return session
 
+    def create_session_from_items(self, items: list[dict[str, Any]], source: dict[str, Any], *, status: str = "needs_review") -> dict[str, Any]:
+        if not items:
+            raise AudioLabValidationError("Listening session requires at least one item.")
+        with self.lock:
+            session_id = self._next_id(self.sessions_dir, "als")
+            session_dir = self.session_dir(session_id)
+            now = now_iso()
+            prepared: list[dict[str, Any]] = []
+            for index, raw_item in enumerate(items, start=1):
+                item_id = str(raw_item.get("item_id") or f"item-{index:03d}")
+                item = sanitize_metadata(
+                    {
+                        **dict(raw_item),
+                        "item_id": item_id,
+                        "review": dict(raw_item.get("review") or {}),
+                        "markers": [dict(marker) for marker in raw_item.get("markers", []) if isinstance(marker, dict)],
+                        "stale": bool(raw_item.get("stale", False)),
+                        "created_at": str(raw_item.get("created_at") or now),
+                        "updated_at": str(raw_item.get("updated_at") or now),
+                    }
+                )
+                source_abspaths = raw_item.get("source_abspaths") if isinstance(raw_item.get("source_abspaths"), dict) else {}
+                wav_source = Path(str(source_abspaths.get("wav") or "")) if source_abspaths.get("wav") else None
+                if wav_source and wav_source.exists():
+                    target = session_dir / "items" / item_id / "song.wav"
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(wav_source.read_bytes())
+                    item.setdefault("artifact_relpaths", {})["wav"] = _rel(self.root, target)
+                    item.setdefault("artifact_hashes", {})["wav_sha256"] = _sha256_path(target)
+                item.pop("source_abspaths", None)
+                item["source_hash"] = str(item.get("source_hash") or stable_hash(_item_source(item)))
+                prepared.append(item)
+            session = sanitize_metadata(
+                {
+                    "schema_version": AUDIO_LAB_SCHEMA_VERSION,
+                    "session_id": session_id,
+                    "status": status,
+                    "created_at": now,
+                    "updated_at": now,
+                    "source": dict(source),
+                    "items": prepared,
+                    "summary": _session_summary(prepared, status),
+                }
+            )
+            session["source_hash"] = stable_hash({"source": session["source"], "items": [_item_source(item) for item in prepared]})
+            session["integrity_hash"] = _integrity_hash(session)
+            self._write_session(session)
+            return session
+
     def list_sessions(self) -> list[dict[str, Any]]:
         rows = []
         for path in self.sessions_dir.glob("als-*/session.json"):

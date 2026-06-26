@@ -464,6 +464,30 @@ def build_audio_campaign_parser() -> argparse.ArgumentParser:
     reset.add_argument("--change-request-id", required=True)
     reset.add_argument("--reason", required=True)
     reset.add_argument("--json", action="store_true")
+
+    plan_release = subparsers.add_parser("plan-release", help="Create or refresh a release-bound Audio Campaign plan.")
+    plan_release.add_argument("release_id")
+    plan_release.add_argument("--json", action="store_true")
+
+    preflight_release = subparsers.add_parser("preflight-release", help="Run Release Audio Campaign preflight.")
+    preflight_release.add_argument("release_id")
+    preflight_release.add_argument("--json", action="store_true")
+
+    create_from_release = subparsers.add_parser("create-from-release", help="Create Audio Lab session and Audio Campaign from Release tracks.")
+    create_from_release.add_argument("release_id")
+    create_from_release.add_argument("--name", default="")
+    create_from_release.add_argument("--minimum-rating", type=int, default=4)
+    create_from_release.add_argument("--allow-failed-preflight", action="store_true")
+    create_from_release.add_argument("--json", action="store_true")
+
+    release_status = subparsers.add_parser("release-status", help="Show Release Audio Campaign plan status.")
+    release_status.add_argument("release_id")
+    release_status.add_argument("--json", action="store_true")
+
+    release_link = subparsers.add_parser("release-link", help="Link an existing Audio Campaign to a Release plan.")
+    release_link.add_argument("release_id")
+    release_link.add_argument("--campaign-id", required=True)
+    release_link.add_argument("--json", action="store_true")
     return parser
 
 
@@ -2923,9 +2947,26 @@ def _run_audio_campaign_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.audio_campaign_verifier import write_audio_campaign_verification_report
     from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
     from song_agent.audio_campaign_archive_verifier import write_audio_campaign_archive_verification_report
+    from song_agent.audio_campaign_planner import AudioCampaignPlannerStore
 
     store = AudioCampaignStore()
     governance_store = AudioCampaignGovernanceStore(campaign_store=store)
+    planner_store = AudioCampaignPlannerStore(audio_lab_store=store.audio_lab_store, audio_campaign_store=store)
+    if args.action == "plan-release":
+        plan = planner_store.refresh_plan(args.release_id)
+        return {"ok": plan.get("status") != "blocked", "plan": plan, "summary": plan.get("preflight_summary", {}), "status": plan.get("status")}
+    if args.action == "preflight-release":
+        preflight = planner_store.preflight(args.release_id)
+        return {"ok": preflight.get("status") == "passed", "preflight": preflight, "summary": preflight.get("summary", {}), "status": preflight.get("status")}
+    if args.action == "create-from-release":
+        result = planner_store.create_campaign_from_release(args.release_id, {"name": args.name, "minimum_rating": args.minimum_rating, "allow_failed_preflight": args.allow_failed_preflight})
+        return {"ok": True, **result, "summary": result.get("link", {}).get("coverage", {}), "status": result.get("campaign", {}).get("status")}
+    if args.action == "release-status":
+        status = planner_store.status(args.release_id)
+        return {"ok": status.get("status") != "failed", **status}
+    if args.action == "release-link":
+        link = planner_store.link_campaign(args.release_id, args.campaign_id)
+        return {"ok": True, "link": link, "summary": link.get("coverage", {}), "status": link.get("coverage_status")}
     if args.action == "create":
         campaign = store.create_campaign(
             {

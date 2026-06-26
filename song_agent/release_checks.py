@@ -16050,6 +16050,230 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
 
 
+def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
+    from song_agent.audio_campaign_planner import AudioCampaignPlannerStateError, AudioCampaignPlannerStore
+    from song_agent.audio_campaigns import AudioCampaignStore
+    from song_agent.audio_fix_sprints import AudioFixSprintStore
+    from song_agent.audio_lab import AudioLabStore
+    from song_agent.projectio import read_json
+    from song_agent.server import _audio_campaign_release_track_coverage
+
+    del root
+    old_cwd = Path.cwd()
+    server = None
+    missing_server = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v106-release-driven-audio-campaign-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                project_id, release_id, server = _v106_release_fixture("Release Driven Track")
+                lab = server.audio_lab_store
+                campaign_store = server.audio_campaign_store
+                planner = AudioCampaignPlannerStore(release_store=server.release_store, project_store=server.project_store, audio_lab_store=lab, audio_campaign_store=campaign_store)
+                governance_store = AudioCampaignGovernanceStore(campaign_store=campaign_store)
+                plan = planner.refresh_plan(release_id)
+                preflight = planner.preflight(release_id)
+                result = planner.create_campaign_from_release(release_id)
+                campaign_id = result["campaign"]["campaign_id"]
+                session_id = result["session"]["session_id"]
+                item_id = result["session"]["items"][0]["item_id"]
+                lab.write_item_review(session_id, item_id, {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                report = campaign_store.refresh_report(campaign_id)
+                campaign_store.signoff(campaign_id, {"signed_by": "QA", "role": "developer"})
+                archive = governance_store.build_archive_zip(campaign_id)
+                verification = governance_store.verify_archive(campaign_id, {"strict": True})
+                release_gate = governance_store.gate(
+                    campaign_id,
+                    required=True,
+                    archive_zip_path=archive["zip_path"],
+                    archive_verification_report_path=str(governance_store.archive_verification_report_path(campaign_id)),
+                )
+
+                case_index = read_json(campaign_store.case_index_path(campaign_id))
+                release_track = server.release_store.get_release(release_id).tracks[0]
+                coverage = _audio_campaign_release_track_coverage([release_track], case_index)
+                if release_gate.get("status") == "passed" and coverage.get("status") == "passed":
+                    release_gate = {
+                        **release_gate,
+                        "release_id": release_id,
+                        "track_count": 1,
+                        "case_count": 1,
+                        "release_track_coverage": coverage,
+                    }
+                else:
+                    release_gate = {
+                        **release_gate,
+                        "status": "failed",
+                        "release_id": release_id,
+                        "track_count": 1,
+                        "release_track_coverage": coverage,
+                    }
+
+                wrong_lab = AudioLabStore()
+                wrong_store = AudioCampaignStore(audio_lab_store=wrong_lab, audio_fix_sprint_store=AudioFixSprintStore(audio_lab_store=wrong_lab))
+                wrong_session = wrong_lab.create_session_from_items(
+                    [
+                        {
+                            "item_id": "item-001",
+                            "song_id": "wrong",
+                            "title": "Wrong Track",
+                            "project_id": "wrong-project",
+                            "version_id": "v999",
+                            "final_export_hash": "wrong-final-export",
+                            "artifact_hashes": {"wav_sha256": "1" * 64},
+                            "audio_status": "rendered",
+                            "renderer": {"runner_kind": "real", "release_ready": True},
+                            "source_hash": "wrong-source",
+                        }
+                    ],
+                    {"source_type": "test"},
+                )
+                wrong_lab.write_item_review(wrong_session["session_id"], "item-001", {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                wrong_campaign = wrong_store.create_campaign({"from_session": wrong_session["session_id"]})
+                mismatch = "passed"
+                try:
+                    planner.audio_campaign_store = wrong_store
+                    planner.link_campaign(release_id, wrong_campaign["campaign_id"])
+                except AudioCampaignPlannerStateError:
+                    mismatch = "409"
+                finally:
+                    planner.audio_campaign_store = campaign_store
+
+                missing_project_id, missing_release_id, missing_server = _v106_release_fixture("Missing Audio Track", include_audio=False)
+                del missing_project_id
+                missing_planner = AudioCampaignPlannerStore(release_store=missing_server.release_store, project_store=missing_server.project_store, audio_lab_store=missing_server.audio_lab_store, audio_campaign_store=missing_server.audio_campaign_store)
+                missing = missing_planner.preflight(missing_release_id)
+            finally:
+                try:
+                    stop = getattr(server, "server_close", None)
+                    if callable(stop):
+                        stop()
+                except Exception:
+                    pass
+                try:
+                    stop = getattr(missing_server, "server_close", None)
+                    if callable(stop):
+                        stop()
+                except Exception:
+                    pass
+                os.chdir(old_cwd)
+
+            serialized = json.dumps({"plan": plan, "result": result, "verify": verification}, ensure_ascii=False)
+            ok = (
+                plan.get("status") == "planned"
+                and preflight.get("status") == "passed"
+                and result.get("link", {}).get("coverage_status") == "passed"
+                and report.get("status") == "passed"
+                and verification.get("status") == "passed"
+                and release_gate.get("status") == "passed"
+                and coverage.get("matched_track_count") == 1
+                and mismatch == "409"
+                and missing.get("status") == "failed"
+                and str(base) not in serialized
+                and "sk-secret-value" not in serialized
+                and "C:\\Users" not in serialized
+            )
+            return ok, (
+                f"plan={plan.get('status')}, preflight={preflight.get('status')}, session={session_id}, campaign={campaign_id}, "
+                f"coverage={coverage.get('matched_track_count')}/{coverage.get('track_count')}, signoff={release_gate.get('status')}, "
+                f"archive={verification.get('status')}, mismatch={mismatch}, missing_wav={missing.get('status')}"
+            )
+    except Exception as exc:
+        return False, f"v10.6 Release-driven Audio Campaign smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v106_release_fixture(title: str, *, include_audio: bool = True):
+    from dataclasses import dataclass
+
+    from song_agent.agent.pipeline import deterministic_compose
+    from song_agent.audio_artifacts import build_audio_artifact_manifest, write_audio_artifact_manifest
+    from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
+    from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
+    from song_agent.projects import ProjectDocument, ProjectState, ProjectStore, ProjectVersion
+    from song_agent.releases import ReleaseStore
+    from song_agent.renderers.audio import RendererConfig
+    from song_agent.renderers.midi import render_midi
+    from song_agent.schemas.song import SongRequest
+    from song_agent.server import MusicForgeHTTPServer
+
+    @dataclass
+    class _Project:
+        project_id: str
+        name: str
+
+    server = MusicForgeHTTPServer(("127.0.0.1", 0))
+    project_store = ProjectStore()
+    release_store = ReleaseStore(project_store=project_store)
+    server.project_store = project_store
+    server.release_store = release_store
+    server.audio_campaign_planner_store.release_store = release_store
+    server.audio_campaign_planner_store.project_store = project_store
+
+    suffix = "000001" if include_audio else "000002"
+    project_id = f"project-{suffix}"
+    project_dir = project_store.project_dir(project_id)
+    run_dir = Path("runs") / project_id / "job-001"
+    plan = deterministic_compose(SongRequest(title=title, language="English", style="pop", theme="release audio campaign", duration_seconds=30))
+    write_json(run_dir / "data" / "song-plan.json", plan.to_dict())
+    write_json(run_dir / "data" / "run-summary.json", {"title": title})
+    write_json(run_dir / "data" / "validator-report.json", {"status": "passed"})
+    render_midi(plan, run_dir / "renders" / "song.mid")
+    if include_audio:
+        from song_agent.audio_lab import write_lab_test_wav
+
+        write_lab_test_wav(run_dir / "renders" / "song.mid", run_dir / "renders" / "song.wav")
+        artifact = build_audio_artifact_manifest(
+            artifact_id=f"{project_id}-v001",
+            scope="project_version",
+            wav_path=run_dir / "renders" / "song.wav",
+            midi_path=run_dir / "renders" / "song.mid",
+            song_plan_path=run_dir / "data" / "song-plan.json",
+            renderer_config=RendererConfig(soundfont_path="fixture.sf2"),
+            extra_source={"project_id": project_id, "version_id": "v001"},
+        )
+        write_audio_artifact_manifest(run_dir / "renders" / "audio-artifact.json", artifact)
+    gate = evaluate_quality_gate(run_dir, QualityGateConfig(require_stems=False), now="2026-06-26T00:00:00+00:00")
+    version = ProjectVersion(
+        version_id="v001",
+        project_id=project_id,
+        index=1,
+        name="Final",
+        job_id="job-001",
+        output_dir=str(run_dir),
+        status="completed",
+        created_at="2026-06-26T00:00:00+00:00",
+        updated_at="2026-06-26T00:00:00+00:00",
+        quality_score=90,
+        has_midi=True,
+        has_audio=include_audio,
+        quality_gate_status=gate.status,
+        quality_gate_score=gate.score,
+    )
+    document = ProjectDocument(
+        state=ProjectState(project_id=project_id, name=title, final_version_id="v001", selected_version_id="v001", latest_version_id="v001", version_count=1),
+        versions=[version],
+    )
+    project_store.save_project(document)
+    build_final_export_bundle(
+        project=_Project(project_id=project_id, name=title),
+        version=version,
+        project_dir=project_dir,
+        run_dir=run_dir,
+        gate=gate,
+        options=FinalExportOptions(include_stems=False, include_stem_audio=False, include_audio=include_audio),
+        now="2026-06-26T00:00:00+00:00",
+        project_export={"project": {"project_id": project_id}},
+    )
+    build_final_export_zip(project_dir, now="2026-06-26T00:01:00+00:00")
+    release = release_store.create_release({"name": f"{title} Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+    release_store.add_track(release.release_id, {"project_id": project_id})
+    return project_id, release.release_id, server
+
+
 def _ga_check_status(report: dict[str, Any], check_id: str) -> str:
     for check in report.get("checks") or []:
         if isinstance(check, dict) and check.get("check_id") == check_id:

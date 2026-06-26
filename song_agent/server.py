@@ -514,6 +514,13 @@ from song_agent.audio_campaign_governance import (
     AudioCampaignGovernanceStateError,
     AudioCampaignGovernanceStore,
 )
+from song_agent.audio_campaign_planner import (
+    AudioCampaignPlannerError,
+    AudioCampaignPlannerNotFoundError,
+    AudioCampaignPlannerStateError,
+    AudioCampaignPlannerStore,
+    AudioCampaignPlannerValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -2887,6 +2894,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def release_store(self) -> ReleaseStore:
         return self.server.release_store  # type: ignore[attr-defined]
+
+    @property
+    def audio_campaign_planner_store(self) -> AudioCampaignPlannerStore:
+        return self.server.audio_campaign_planner_store  # type: ignore[attr-defined]
 
     @property
     def release_operations_store(self) -> ReleaseOperationsStore:
@@ -5662,6 +5673,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if tail == "/audio-revisions" or tail.startswith("/audio-revisions/"):
                 self._handle_release_audio_revisions(method, release_id, tail.removeprefix("/audio-revisions"))
+                return
+
+            if tail == "/audio-campaign-plan" or tail.startswith("/audio-campaign-plan/"):
+                self._handle_release_audio_campaign_plan(method, release_id, tail.removeprefix("/audio-campaign-plan"))
                 return
 
             if tail == "/mastering" or tail.startswith("/mastering/"):
@@ -10124,6 +10139,67 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except AudioCampaignError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except AudioCampaignGovernanceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_release_audio_campaign_plan(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            self.audio_campaign_planner_store.release_store = self.release_store
+            self.audio_campaign_planner_store.project_store = self.project_store
+            self.audio_campaign_planner_store.audio_lab_store = self.audio_lab_store
+            self.audio_campaign_planner_store.audio_campaign_store = self.audio_campaign_store
+            if tail == "":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                status = self.audio_campaign_planner_store.status(release_id)
+                self._send_json({"ok": True, **status})
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.audio_campaign_planner_store.refresh_plan(release_id, self._optional_json_body())
+                self._send_json({"ok": plan.get("status") != "blocked", "plan": plan, "summary": plan.get("preflight_summary", {})})
+                return
+            if tail == "/preflight":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                preflight = self.audio_campaign_planner_store.preflight(release_id, self._optional_json_body())
+                self._send_json({"ok": preflight.get("status") == "passed", "preflight": preflight, "summary": preflight.get("summary", {})})
+                return
+            if tail == "/create":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.audio_campaign_planner_store.create_campaign_from_release(release_id, self._optional_json_body())
+                self._send_json({"ok": True, **result, "summary": result.get("link", {}).get("coverage", {})}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/status":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                status = self.audio_campaign_planner_store.status(release_id)
+                self._send_json({"ok": status.get("status") != "failed", **status})
+                return
+            if tail == "/link":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._read_json_body()
+                link = self.audio_campaign_planner_store.link_campaign(release_id, str(payload.get("campaign_id") or ""), payload)
+                self._send_json({"ok": True, "link": link, "summary": link.get("coverage", {})}, status=HTTPStatus.CREATED)
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Audio Campaign plan route not found.")
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioCampaignPlannerNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except AudioCampaignPlannerStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except AudioCampaignPlannerValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except AudioCampaignPlannerError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
@@ -18123,6 +18199,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_fix_sprint_store = AudioFixSprintStore(audio_lab_store=self.audio_lab_store)
         self.audio_campaign_store = AudioCampaignStore(audio_lab_store=self.audio_lab_store, audio_fix_sprint_store=self.audio_fix_sprint_store)
         self.audio_campaign_governance_store = AudioCampaignGovernanceStore(campaign_store=self.audio_campaign_store)
+        self.audio_campaign_planner_store = AudioCampaignPlannerStore(release_store=self.release_store, project_store=self.project_store, audio_lab_store=self.audio_lab_store, audio_campaign_store=self.audio_campaign_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

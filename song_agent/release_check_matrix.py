@@ -315,6 +315,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v103.audio_fix_sprint_smoke", "v10.3 Audio Fix Sprint and manual recheck smoke", "_v103_audio_fix_sprint_smoke", group="audio", version="10.3", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "fix-sprint"), profiles=V10_PROFILES),
     _callable("v104.audio_campaign_smoke", "v10.4 release candidate Audio Campaign smoke", "_v104_audio_campaign_smoke", group="audio", version="10.4", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "campaign"), profiles=V10_PROFILES),
     _callable("v105.audio_campaign_governance_smoke", "v10.5 Audio Campaign Governance archive and GA gate smoke", "_v105_audio_campaign_governance_smoke", group="audio", version="10.5", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "campaign", "governance"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
+    _callable("v106.release_driven_audio_campaign_smoke", "v10.6 Release-driven Audio Campaign planner smoke", "_v106_release_driven_audio_campaign_smoke", group="audio", version="10.6", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "campaign", "release-driven"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
 )
 
 KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "ga", "publish"}

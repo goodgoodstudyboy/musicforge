@@ -870,8 +870,14 @@ def panel_html() -> str:
           <div class="toolbar">
             <input id="audio-campaign-session-id" placeholder="als-000001">
             <input id="audio-campaign-id" placeholder="acmp-000001">
+            <input id="audio-campaign-release-id" placeholder="release-000001">
             <button class="secondary" id="audio-campaign-list" type="button">List</button>
             <button class="secondary" id="audio-campaign-create" type="button">Create From Session</button>
+            <button class="secondary" id="audio-campaign-plan-release" type="button">Plan Release</button>
+            <button class="secondary" id="audio-campaign-preflight-release" type="button">Preflight Release</button>
+            <button class="secondary" id="audio-campaign-create-from-release" type="button">Create From Release</button>
+            <button class="secondary" id="audio-campaign-release-status" type="button">Release Status</button>
+            <button class="secondary" id="audio-campaign-release-link" type="button">Link Release</button>
             <button class="secondary" id="audio-campaign-governance" type="button">Governance</button>
             <button class="secondary" id="audio-campaign-archive-zip" type="button">Archive ZIP</button>
             <button class="secondary" id="audio-campaign-verify-archive" type="button">Verify Archive</button>
@@ -2277,6 +2283,47 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
         return;
       }
       await showAudioCampaignResult("/api/audio-campaigns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from_session: sessionId }) });
+    });
+    $("audio-campaign-plan-release").addEventListener("click", async () => {
+      const releaseId = $("audio-campaign-release-id").value.trim();
+      if (!releaseId) {
+        $("audio-campaign-status").textContent = "missing release";
+        return;
+      }
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-campaign-plan/refresh`, { method: "POST" });
+    });
+    $("audio-campaign-preflight-release").addEventListener("click", async () => {
+      const releaseId = $("audio-campaign-release-id").value.trim();
+      if (!releaseId) {
+        $("audio-campaign-status").textContent = "missing release";
+        return;
+      }
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-campaign-plan/preflight`, { method: "POST" });
+    });
+    $("audio-campaign-create-from-release").addEventListener("click", async () => {
+      const releaseId = $("audio-campaign-release-id").value.trim();
+      if (!releaseId) {
+        $("audio-campaign-status").textContent = "missing release";
+        return;
+      }
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-campaign-plan/create`, { method: "POST" });
+    });
+    $("audio-campaign-release-status").addEventListener("click", async () => {
+      const releaseId = $("audio-campaign-release-id").value.trim();
+      if (!releaseId) {
+        $("audio-campaign-status").textContent = "missing release";
+        return;
+      }
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-campaign-plan/status`, { method: "GET" });
+    });
+    $("audio-campaign-release-link").addEventListener("click", async () => {
+      const releaseId = $("audio-campaign-release-id").value.trim();
+      const campaignId = $("audio-campaign-id").value.trim();
+      if (!releaseId || !campaignId) {
+        $("audio-campaign-status").textContent = "missing release or campaign";
+        return;
+      }
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-campaign-plan/link`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaign_id: campaignId }) });
     });
     $("audio-campaign-governance").addEventListener("click", async () => {
       const campaignId = $("audio-campaign-id").value.trim();

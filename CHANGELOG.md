@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.6.0 - 2026-06-26
+
+### Added
+- Release-driven Audio Campaign planner that derives track identities from Release tracks, final-export hashes, and project/version bindings.
+- `audio-campaign plan-release`, `preflight-release`, `create-from-release`, `release-status`, and `release-link` CLI commands.
+- `/api/releases/<release-id>/audio-campaign-plan/*` endpoints and Studio controls for planning, preflight, campaign creation, status, and link checks.
+- Audio Lab session creation from Release track items with copied WAV artifacts so campaign reviews bind to current release-ready audio.
+- release-check `v106.release_driven_audio_campaign_smoke` covering plan/preflight/create, Release track coverage, missing WAV blocking, and unrelated Campaign mismatch rejection.
+
+### Verified
+- `python -m pytest tests\test_release_audio_campaign_planner.py tests\test_server_release_audio_campaign_planner.py tests\test_cli_release_audio_campaign_planner.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v106_release_driven_audio_campaign_smoke tests\test_release_check_matrix.py -q`
+
 ## v10.5.1 - 2026-06-26
 
 ### Fixed

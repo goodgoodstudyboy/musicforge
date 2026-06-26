@@ -155,6 +155,20 @@ python -m song_agent.cli verify-audio-campaign-archive-package .musicforge\audio
 python -m song_agent.cli ga-check --require-audio-campaign acmp-000001 --audio-campaign-archive .musicforge\audio-campaigns\acmp-000001\archive\audio-campaign-archive.zip --audio-campaign-archive-verification-report .musicforge\audio-campaigns\acmp-000001\archive\audio-campaign-archive-verification-report.json --json
 ```
 
+Release-driven Audio Campaign planning can create the correctly bound Audio Lab
+session and Campaign directly from a Release, using each track's project id,
+version id, and final-export hash:
+
+```powershell
+python -m song_agent.cli audio-campaign plan-release rel-000001 --json
+python -m song_agent.cli audio-campaign preflight-release rel-000001 --json
+python -m song_agent.cli audio-campaign create-from-release rel-000001 --name "Release RC Listening" --json
+python -m song_agent.cli audio-campaign release-status rel-000001 --json
+```
+
+The planner refuses missing WAV/final-export evidence and rejects unrelated
+Campaigns whose cases do not cover the current Release track identities.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:
