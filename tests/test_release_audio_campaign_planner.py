@@ -7,7 +7,7 @@ from song_agent.audio_campaign_planner import AudioCampaignPlannerStateError, Au
 from song_agent.audio_campaigns import AudioCampaignStore
 from song_agent.audio_fix_sprints import AudioFixSprintStore
 from song_agent.audio_lab import AudioLabStore
-from song_agent.projectio import read_json
+from song_agent.projectio import read_json, write_json
 from tests.test_release_audio import _add_final_export_audio
 from tests.test_server_releases import _signed_project, request_json, start_test_server, stop_test_server
 
@@ -94,4 +94,31 @@ def test_release_audio_campaign_planner_blocks_unrelated_campaign_link(tmp_path:
     finally:
         stop_test_server(server)
 
+    assert blocked is True
+
+
+def test_release_audio_campaign_planner_blocks_stale_final_export_hash(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, project_id = _release_with_audio_track(server, "Planner Stale Export Track")
+        manifest_path = server.project_store.project_dir(project_id) / "final-export" / "manifest.json"
+        manifest = read_json(manifest_path)
+        manifest["tampered_after_release_track"] = True
+        write_json(manifest_path, manifest)
+        planner = AudioCampaignPlannerStore(release_store=server.release_store, project_store=server.project_store, audio_lab_store=server.audio_lab_store, audio_campaign_store=server.audio_campaign_store)
+
+        plan = planner.refresh_plan(release_id)
+        preflight = planner.preflight(release_id)
+        blocked = False
+        try:
+            planner.create_campaign_from_release(release_id)
+        except AudioCampaignPlannerStateError:
+            blocked = True
+    finally:
+        stop_test_server(server)
+
+    assert plan["status"] == "blocked"
+    assert preflight["status"] == "failed"
+    assert any(check["check_id"] == "release_track_final_export_current" and check["status"] == "failed" for check in preflight["checks"])
     assert blocked is True

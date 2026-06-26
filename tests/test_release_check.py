@@ -1152,6 +1152,7 @@ def test_v106_release_driven_audio_campaign_smoke(tmp_path: Path) -> None:
     assert "coverage=1/1" in detail
     assert "signoff=passed" in detail
     assert "mismatch=409" in detail
+    assert "stale_hash=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

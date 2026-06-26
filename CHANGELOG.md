@@ -1,5 +1,15 @@
 # Changelog
 
+## v10.6.1 - 2026-06-26
+
+### Fixed
+- Release-driven Audio Campaign preflight now blocks stale Release track final-export hashes when the current `final-export/manifest.json` no longer matches the hash captured on the Release track.
+- Release signoff `require_audio_campaign=true` now hard-blocks stale Release track Final Export evidence even when `force=true` is supplied.
+- release-check `v106.release_driven_audio_campaign_smoke` now covers stale final-export hash rejection.
+
+### Verified
+- `python -m pytest tests\test_release_audio_campaign_planner.py tests\test_server_release_audio_campaign_planner.py tests\test_release_check.py::test_v106_release_driven_audio_campaign_smoke -q`
+
 ## v10.6.0 - 2026-06-26
 
 ### Added

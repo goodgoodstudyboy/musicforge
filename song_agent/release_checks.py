@@ -16056,13 +16056,14 @@ def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
     from song_agent.audio_campaigns import AudioCampaignStore
     from song_agent.audio_fix_sprints import AudioFixSprintStore
     from song_agent.audio_lab import AudioLabStore
-    from song_agent.projectio import read_json
+    from song_agent.projectio import read_json, write_json
     from song_agent.server import _audio_campaign_release_track_coverage
 
     del root
     old_cwd = Path.cwd()
     server = None
     missing_server = None
+    stale_server = None
     try:
         with tempfile.TemporaryDirectory(prefix="mf-v106-release-driven-audio-campaign-") as temp:
             base = Path(temp)
@@ -16145,6 +16146,14 @@ def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
                 del missing_project_id
                 missing_planner = AudioCampaignPlannerStore(release_store=missing_server.release_store, project_store=missing_server.project_store, audio_lab_store=missing_server.audio_lab_store, audio_campaign_store=missing_server.audio_campaign_store)
                 missing = missing_planner.preflight(missing_release_id)
+
+                stale_project_id, stale_release_id, stale_server = _v106_release_fixture("Stale Export Track")
+                stale_manifest_path = stale_server.project_store.project_dir(stale_project_id) / "final-export" / "manifest.json"
+                stale_manifest = read_json(stale_manifest_path)
+                stale_manifest["tampered_after_release_track"] = True
+                write_json(stale_manifest_path, stale_manifest)
+                stale_planner = AudioCampaignPlannerStore(release_store=stale_server.release_store, project_store=stale_server.project_store, audio_lab_store=stale_server.audio_lab_store, audio_campaign_store=stale_server.audio_campaign_store)
+                stale = stale_planner.preflight(stale_release_id)
             finally:
                 try:
                     stop = getattr(server, "server_close", None)
@@ -16154,6 +16163,12 @@ def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
                     pass
                 try:
                     stop = getattr(missing_server, "server_close", None)
+                    if callable(stop):
+                        stop()
+                except Exception:
+                    pass
+                try:
+                    stop = getattr(stale_server, "server_close", None)
                     if callable(stop):
                         stop()
                 except Exception:
@@ -16171,6 +16186,8 @@ def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
                 and coverage.get("matched_track_count") == 1
                 and mismatch == "409"
                 and missing.get("status") == "failed"
+                and stale.get("status") == "failed"
+                and _v106_preflight_check_status(stale, "release_track_final_export_current") == "failed"
                 and str(base) not in serialized
                 and "sk-secret-value" not in serialized
                 and "C:\\Users" not in serialized
@@ -16178,12 +16195,19 @@ def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
             return ok, (
                 f"plan={plan.get('status')}, preflight={preflight.get('status')}, session={session_id}, campaign={campaign_id}, "
                 f"coverage={coverage.get('matched_track_count')}/{coverage.get('track_count')}, signoff={release_gate.get('status')}, "
-                f"archive={verification.get('status')}, mismatch={mismatch}, missing_wav={missing.get('status')}"
+                f"archive={verification.get('status')}, mismatch={mismatch}, missing_wav={missing.get('status')}, stale_hash={stale.get('status')}"
             )
     except Exception as exc:
         return False, f"v10.6 Release-driven Audio Campaign smoke failed: {exc}"
     finally:
         os.chdir(old_cwd)
+
+
+def _v106_preflight_check_status(preflight: dict[str, Any], check_id: str) -> str:
+    for check in preflight.get("checks") or []:
+        if isinstance(check, dict) and check.get("check_id") == check_id:
+            return str(check.get("status") or "")
+    return ""
 
 
 def _v106_release_fixture(title: str, *, include_audio: bool = True):

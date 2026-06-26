@@ -139,6 +139,7 @@ class AudioCampaignPlannerStore:
                 [
                     _check("release_track_identity_complete", bool(row.get("identity_key")), "Release track identity is complete.", track_id=track_id),
                     _check("release_track_final_export_present", bool(row.get("final_export_hash")), "Track final export is present.", track_id=track_id),
+                    _check("release_track_final_export_current", row.get("final_export_current") is True, "Release track final export hash matches the current Final Export manifest.", track_id=track_id, expected_hash=row.get("final_export_hash"), current_hash=row.get("current_final_export_hash")),
                     _check("release_track_wav_present", row.get("audio_status") == "ready", "Track release-ready WAV is present.", track_id=track_id),
                     _check("release_track_real_renderer", _renderer_release_ready(row), "Track renderer evidence is release-ready.", track_id=track_id),
                 ]
@@ -309,9 +310,21 @@ def _track_plan_row(project_store: ProjectStore, track: Any, release_id: str) ->
     wav_path = export_dir / "song.wav"
     manifest_path = export_dir / "manifest.json"
     manifest = _read_optional_json(manifest_path)
+    current_manifest_hash = _sha256_path(manifest_path) if manifest_path.exists() else None
+    recorded_manifest_hash = str(getattr(track, "final_export_hash", "") or "").strip()
     audio_status = "ready" if wav_path.exists() and wav_path.stat().st_size > 44 else "missing"
     if not manifest:
         blockers.append({"check_id": "release_track_final_export_present", "track_id": getattr(track, "track_id", None), "message": "Final Export manifest is missing."})
+    if recorded_manifest_hash and current_manifest_hash and recorded_manifest_hash != current_manifest_hash:
+        blockers.append(
+            {
+                "check_id": "release_track_final_export_current",
+                "track_id": getattr(track, "track_id", None),
+                "message": "Release track final export hash does not match the current Final Export manifest.",
+                "expected_hash": recorded_manifest_hash,
+                "current_hash": current_manifest_hash,
+            }
+        )
     if audio_status != "ready":
         blockers.append({"check_id": "release_track_wav_present", "track_id": getattr(track, "track_id", None), "message": "Final Export song.wav is missing."})
     renderer = _renderer_summary(manifest)
@@ -340,11 +353,13 @@ def _track_plan_row(project_store: ProjectStore, track: Any, release_id: str) ->
             "project_id": getattr(track, "project_id", None),
             "version_id": getattr(track, "version_id", None),
             "final_export_hash": getattr(track, "final_export_hash", None),
+            "current_final_export_hash": current_manifest_hash,
+            "final_export_current": bool(recorded_manifest_hash and current_manifest_hash and recorded_manifest_hash == current_manifest_hash),
             "identity_key": identity_key,
             "audio_status": audio_status,
             "wav_sha256": wav_sha,
             "artifact_relpaths": {"wav": _rel(Path.cwd(), wav_path)} if wav_path.exists() else {},
-            "artifact_hashes": {"wav_sha256": wav_sha, "final_export_manifest_hash": _sha256_path(manifest_path) if manifest_path.exists() else None},
+            "artifact_hashes": {"wav_sha256": wav_sha, "final_export_manifest_hash": current_manifest_hash},
             "renderer": renderer,
             "audio_health_summary": {"status": "passed" if audio_status == "ready" else "missing"},
             "music_health_summary": {"status": "unknown"},

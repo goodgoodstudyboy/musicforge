@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import mimetypes
 import os
 import re
@@ -11325,6 +11326,16 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                         "message": "Audio Campaign does not cover the current release tracks.",
                     }
                 )
+            current_final_exports = self._release_audio_campaign_final_export_current(release)
+            gate["release_track_final_exports"] = current_final_exports
+            if current_final_exports.get("status") != "passed":
+                gate.update(
+                    {
+                        "status": "failed",
+                        "hard_block": True,
+                        "message": "Release track Final Export evidence changed after the Audio Campaign was planned.",
+                    }
+                )
         return gate
 
     def _release_audio_campaign_coverage(self, release: Any, campaign_id: str) -> dict[str, Any]:
@@ -11333,6 +11344,30 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             return {"status": "failed", "message": f"Audio Campaign case index is unavailable: {sanitize_sensitive_text(str(exc))}", "missing_tracks": []}
         return _audio_campaign_release_track_coverage(release.tracks, case_index)
+
+    def _release_audio_campaign_final_export_current(self, release: Any) -> dict[str, Any]:
+        rows = []
+        stale = []
+        for track in sorted(release.tracks, key=lambda item: (getattr(item, "disc_number", 1), getattr(item, "track_number", 1), getattr(item, "track_id", ""))):
+            project_id = str(getattr(track, "project_id", "") or "")
+            recorded_hash = str(getattr(track, "final_export_hash", "") or "")
+            manifest_path = final_export_dir(self.project_store.project_dir(project_id)) / "manifest.json"
+            current_hash = _server_file_sha256(manifest_path) if manifest_path.exists() else ""
+            current = bool(recorded_hash and current_hash and recorded_hash == current_hash)
+            row = {
+                "track_id": getattr(track, "track_id", None),
+                "track_number": getattr(track, "track_number", None),
+                "title": getattr(track, "title", None),
+                "project_id": project_id,
+                "version_id": getattr(track, "version_id", None),
+                "final_export_hash": recorded_hash,
+                "current_final_export_hash": current_hash or None,
+                "current": current,
+            }
+            rows.append(row)
+            if not current:
+                stale.append(row)
+        return {"status": "passed" if not stale else "failed", "track_count": len(rows), "current_track_count": len(rows) - len(stale), "stale_tracks": stale, "tracks": rows}
 
     def _release_audio_gate(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         require_health = bool(payload.get("require_audio_health", False))
@@ -19728,6 +19763,16 @@ def _rfc5987_quote(value: str) -> str:
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _server_file_sha256(path: Path) -> str | None:
+    if not path.exists() or not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _release_track_audio_campaign_key(track: Any) -> str:

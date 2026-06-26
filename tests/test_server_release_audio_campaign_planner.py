@@ -4,6 +4,7 @@ from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
 from song_agent.audio_campaigns import AudioCampaignStore
 from song_agent.audio_fix_sprints import AudioFixSprintStore
 from song_agent.audio_lab import AudioLabStore
+from song_agent.projectio import read_json, write_json
 from tests.test_release_audio import _add_final_export_audio
 from tests.test_server_releases import _signed_project, request_json, start_test_server, stop_test_server
 
@@ -70,3 +71,61 @@ def test_release_audio_campaign_plan_api_create_and_release_signoff(tmp_path, mo
     assert signed["signoff"]["acceptance_gate"]["audio_campaign"]["release_track_coverage"]["matched_track_count"] == 1
     assert status_status == 200
     assert status["summary"]["coverage_status"] == "passed"
+
+
+def test_release_audio_campaign_gate_blocks_stale_final_export_even_with_force(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    lab = AudioLabStore()
+    fix_store = AudioFixSprintStore(audio_lab_store=lab)
+    server.audio_lab_store = lab
+    server.audio_fix_sprint_store = fix_store
+    server.audio_campaign_store = AudioCampaignStore(audio_lab_store=lab, audio_fix_sprint_store=fix_store)
+    server.audio_campaign_governance_store = AudioCampaignGovernanceStore(campaign_store=server.audio_campaign_store)
+    try:
+        project_id = _signed_project(server, "Planner Force Stale Track")
+        _add_final_export_audio(server, project_id, duration_seconds=30)
+        created_status, created = request_json(server, "POST", "/api/releases", {"name": "Planner Force Stale Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
+        assert created_status == 201
+        release_id = created["release"]["release_id"]
+        assert request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})[0] == 200
+        create_status, created_campaign = request_json(server, "POST", f"/api/releases/{release_id}/audio-campaign-plan/create")
+        campaign_id = created_campaign["campaign"]["campaign_id"]
+        session_id = created_campaign["session"]["session_id"]
+        item_id = created_campaign["session"]["items"][0]["item_id"]
+        assert create_status == 201
+        request_json(server, "POST", f"/api/audio-lab/listening-sessions/{session_id}/items/{item_id}/review", {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+        request_json(server, "GET", f"/api/audio-campaigns/{campaign_id}/report")
+        request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/signoff", {"signed_by": "QA", "role": "developer"})
+        archive_status, archive = request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/archive/zip")
+        assert archive_status == 200, archive
+        request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/archive/verify", {"strict": True})
+
+        manifest_path = server.project_store.project_dir(project_id) / "final-export" / "manifest.json"
+        manifest = read_json(manifest_path)
+        manifest["tampered_after_campaign"] = True
+        write_json(manifest_path, manifest)
+        request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
+        request_json(server, "POST", f"/api/releases/{release_id}/export")
+        request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
+        release_sign_status, signed = request_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/signoff",
+            {
+                "signed_by": "tester",
+                "force": True,
+                "override_reason": "verify stale audio campaign final export gate",
+                "require_audio_campaign": True,
+                "audio_campaign_id": campaign_id,
+                "audio_campaign_archive_zip_path": archive["zip_path"],
+                "audio_campaign_archive_verification_report_path": str(server.audio_campaign_governance_store.archive_verification_report_path(campaign_id)),
+            },
+        )
+    finally:
+        stop_test_server(server)
+
+    assert release_sign_status == 409
+    gate = signed["acceptance_gate"]["audio_campaign"]
+    assert gate["status"] == "failed"
+    assert gate["release_track_final_exports"]["status"] == "failed"
