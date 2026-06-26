@@ -1,5 +1,18 @@
 # Changelog
 
+## v10.9.0 - 2026-06-26
+
+### Added
+- Release Audio Certification Timeline store with per-track event ledger, quality trend, issue taxonomy, risk register, evidence bindings, signoff, fixed-layout ZIP export, and offline verifier.
+- `release-audio-timeline` and `verify-release-audio-timeline-package` CLI commands plus `/api/releases/<release-id>/audio-timelines/*` API endpoints and Studio controls.
+- Release signoff `require_release_audio_timeline=true` / `require_release_audio_timeline_signed=true` gate that binds current signed Release Audio Certification evidence and blocks stale Final Export or Certification drift.
+- GA readiness `ga.release_audio_timeline` check and `verify-ga-readiness-report --require-release-audio-timeline` external ZIP/report binding.
+- release-check `v109.release_audio_timeline_smoke` covering positive timeline, GA binding, signed stale Final Export blocking, declared extra ZIP rejection, and redaction checks.
+
+### Verified
+- `python -m pytest tests\test_release_audio_timeline.py tests\test_server_release_audio_timeline.py tests\test_cli_release_audio_timeline.py tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m pytest tests\test_release_check.py::test_v109_release_audio_timeline_smoke tests\test_release_check_matrix.py::test_release_check_definitions_are_valid tests\test_release_check_matrix.py::test_release_check_profile_and_filters -q`
+
 ## v10.8.0 - 2026-06-26
 
 ### Added

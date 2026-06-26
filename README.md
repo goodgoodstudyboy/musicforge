@@ -208,6 +208,24 @@ Export manifest, campaign case binding, manual review, governance archive, or
 remediation evidence drifts after signoff, gate/export/ZIP/verify paths hard
 block until certification is refreshed and signed again.
 
+Release Audio Timeline turns the signed certification chain into a track-level
+event ledger, quality trend, issue taxonomy, risk register, and fixed-layout
+offline verification package. It does not embed audio files; it binds the
+current Release Audio Certification ZIP and verification report:
+
+```powershell
+python -m song_agent.cli release-audio-timeline refresh rel-000001 --json
+python -m song_agent.cli release-audio-timeline signoff rel-000001 --signed-by "Developer" --role developer --json
+python -m song_agent.cli release-audio-timeline zip rel-000001 --json
+python -m song_agent.cli release-audio-timeline verify rel-000001 --strict --require-passed --require-signed --require-real-audio --require-manual-review --require-current-certification --json
+python -m song_agent.cli verify-release-audio-timeline-package .musicforge\releases\rel-000001\audio-timelines\ratl-000001\release-audio-timeline.zip --strict --require-passed --require-signed --require-real-audio --require-manual-review --require-current-certification --release-audio-certification .musicforge\releases\rel-000001\audio-certification\release-audio-certification.zip --release-audio-certification-verification-report .musicforge\releases\rel-000001\audio-certification\verification-report.json --json
+python -m song_agent.cli ga-check --require-release-audio-timeline --release-audio-timeline .musicforge\releases\rel-000001\audio-timelines\ratl-000001\release-audio-timeline.zip --release-audio-timeline-verification-report .musicforge\releases\rel-000001\audio-timelines\ratl-000001\verification-report.json --json
+```
+
+Release signoff can require `require_release_audio_timeline=true` and
+`require_release_audio_timeline_signed=true`. Signed timelines are immutable;
+stale Final Export or Certification evidence blocks gate/export/ZIP/verify.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

@@ -16512,6 +16512,170 @@ def _v108_release_audio_certification_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
 
 
+def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
+    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.projectio import read_json, write_json
+    from song_agent.release_audio_certification import ReleaseAudioCertificationStore
+    from song_agent.release_audio_timeline import ReleaseAudioTimelineStateError, ReleaseAudioTimelineStore
+    from song_agent.release_audio_timeline_verifier import verify_release_audio_timeline_package
+
+    del root
+    old_cwd = Path.cwd()
+    server = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v109-release-audio-timeline-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                _project_id, release_id, server = _v106_release_fixture("Release Audio Timeline Track")
+                planner = server.audio_campaign_planner_store
+                campaign_store = server.audio_campaign_store
+                result = planner.create_campaign_from_release(release_id)
+                campaign_id = result["campaign"]["campaign_id"]
+                session_id = result["session"]["session_id"]
+                item_id = result["session"]["items"][0]["item_id"]
+                server.audio_lab_store.write_item_review(session_id, item_id, {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+                campaign_report = campaign_store.refresh_report(campaign_id)
+                campaign_store.signoff(campaign_id, {"signed_by": "QA", "role": "developer"})
+                server.audio_campaign_governance_store.build_archive_zip(campaign_id)
+                governance_verification = server.audio_campaign_governance_store.verify_archive(campaign_id, {"strict": True})
+                cert_store = ReleaseAudioCertificationStore(
+                    release_store=server.release_store,
+                    project_store=server.project_store,
+                    planner_store=planner,
+                    campaign_store=campaign_store,
+                    governance_store=server.audio_campaign_governance_store,
+                    remediation_store=server.audio_campaign_remediation_store,
+                )
+                cert_store.refresh_report(release_id)
+                cert_store.signoff(release_id, {"signed_by": "QA", "role": "developer"})
+                cert_store.build_zip(release_id)
+                cert_verification = cert_store.verify_zip(
+                    release_id,
+                    strict=True,
+                    require_passed=True,
+                    require_signed=True,
+                    require_real_audio=True,
+                    require_manual_review=True,
+                    require_remediation_when_needed=True,
+                )
+                timeline_store = ReleaseAudioTimelineStore(
+                    release_store=server.release_store,
+                    project_store=server.project_store,
+                    planner_store=planner,
+                    campaign_store=campaign_store,
+                    governance_store=server.audio_campaign_governance_store,
+                    remediation_store=server.audio_campaign_remediation_store,
+                    certification_store=cert_store,
+                )
+                timeline_report = timeline_store.refresh_timeline(release_id)
+                timeline_id = timeline_report["timeline_id"]
+                timeline_store.signoff_timeline(release_id, timeline_id, {"signed_by": "QA", "role": "developer"})
+                timeline_zip = timeline_store.build_zip(release_id, timeline_id)
+                timeline_verification = timeline_store.verify_zip(
+                    release_id,
+                    timeline_id,
+                    strict=True,
+                    require_passed=True,
+                    require_signed=True,
+                    require_real_audio=True,
+                    require_manual_review=True,
+                    require_current_certification=True,
+                )
+                direct_verification = verify_release_audio_timeline_package(
+                    timeline_zip["zip_path"],
+                    strict=True,
+                    require_passed=True,
+                    require_signed=True,
+                    require_real_audio=True,
+                    require_manual_review=True,
+                    require_current_certification=True,
+                    release_audio_certification_path=cert_store.zip_path(release_id),
+                    release_audio_certification_verification_report_path=cert_store.verification_report_path(release_id),
+                )
+                ga_report = build_ga_readiness_report(
+                    repo_root=Path(__file__).resolve().parents[1],
+                    allow_dirty=True,
+                    require_release_audio_timeline=True,
+                    release_audio_timeline_zip_path=timeline_zip["zip_path"],
+                    release_audio_timeline_verification_report_path=timeline_store.verification_report_path(release_id, timeline_id),
+                )
+                ga_path = base / "ga-readiness.json"
+                write_ga_readiness_report(ga_report, ga_path)
+                ga_verification = verify_ga_readiness_report(
+                    ga_path,
+                    require_release_audio_timeline=True,
+                    release_audio_timeline_path=timeline_zip["zip_path"],
+                    release_audio_timeline_verification_report_path=timeline_store.verification_report_path(release_id, timeline_id),
+                )
+                declared_extra_zip = base / "timeline-declared-extra.zip"
+                _v76_rewrite_zip(Path(timeline_zip["zip_path"]), declared_extra_zip, _v109_add_timeline_declared_extra)
+                declared_extra_verification = verify_release_audio_timeline_package(declared_extra_zip, strict=True, require_passed=True, require_signed=True)
+
+                track = server.release_store.get_release(release_id).tracks[0]
+                manifest_path = server.project_store.project_dir(track.project_id) / "final-export" / "manifest.json"
+                manifest = read_json(manifest_path)
+                manifest["tampered_after_timeline_signoff"] = True
+                write_json(manifest_path, manifest)
+                stale_gate = timeline_store.gate(release_id, required=True, require_signed=True)
+                stale_export = "allowed"
+                try:
+                    timeline_store.export_timeline(release_id, timeline_id)
+                except ReleaseAudioTimelineStateError:
+                    stale_export = "409"
+                stale_zip = "allowed"
+                try:
+                    timeline_store.build_zip(release_id, timeline_id)
+                except ReleaseAudioTimelineStateError:
+                    stale_zip = "409"
+                stale_verify = "allowed"
+                try:
+                    timeline_store.verify_zip(release_id, timeline_id, strict=True, require_passed=True, require_signed=True)
+                except ReleaseAudioTimelineStateError:
+                    stale_verify = "409"
+            finally:
+                try:
+                    stop = getattr(server, "server_close", None)
+                    if callable(stop):
+                        stop()
+                except Exception:
+                    pass
+                os.chdir(old_cwd)
+
+            serialized = json.dumps({"timeline": timeline_report, "verify": timeline_verification, "ga": ga_verification}, ensure_ascii=False)
+            ok = (
+                campaign_report.get("status") == "passed"
+                and governance_verification.get("status") == "passed"
+                and cert_verification.get("status") == "passed"
+                and timeline_report.get("status") == "passed"
+                and timeline_verification.get("status") == "passed"
+                and direct_verification.get("status") == "passed"
+                and _ga_check_status(ga_report, "ga.release_audio_timeline") == "passed"
+                and ga_verification.get("status") != "failed"
+                and stale_gate.get("status") == "failed"
+                and stale_export == "409"
+                and stale_zip == "409"
+                and stale_verify == "409"
+                and declared_extra_verification.get("status") == "failed"
+                and str(base) not in serialized
+                and "sk-secret-value" not in serialized
+                and "C:\\Users" not in serialized
+            )
+            return ok, (
+                f"campaign={campaign_report.get('status')}, governance={governance_verification.get('status')}, "
+                f"cert={cert_verification.get('status')}, timeline={timeline_report.get('status')}, "
+                f"verify={timeline_verification.get('status')}, direct={direct_verification.get('status')}, "
+                f"ga={_ga_check_status(ga_report, 'ga.release_audio_timeline')}/{ga_verification.get('status')}, "
+                f"stale={stale_gate.get('status')}/{stale_export}/{stale_zip}/{stale_verify}, "
+                f"declared_extra={declared_extra_verification.get('status')}"
+            )
+    except Exception as exc:
+        return False, f"v10.9 Release Audio Timeline smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
     from dataclasses import dataclass
 
@@ -17921,6 +18085,20 @@ def _v107_add_remediation_declared_extra(docs: dict[str, bytes]) -> None:
 def _v108_add_certification_declared_extra(docs: dict[str, bytes]) -> None:
     extra_path = "extra.txt"
     extra_data = b"declared but not allowed in release audio certification package\n"
+    manifest = _v74_read_json_doc(docs, "manifest.json")
+    docs[extra_path] = extra_data
+    extra_row = {"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()}
+    manifest.setdefault("files", []).append(extra_row)
+    manifest["files"] = sorted(manifest["files"], key=lambda item: str(item.get("path") or ""))
+    manifest.setdefault("zip", {})["entries"] = sorted(set(manifest.get("zip", {}).get("entries") or []) | {extra_path})
+    manifest.setdefault("zip", {})["entry_count"] = len(manifest["zip"]["entries"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    docs["manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v109_add_timeline_declared_extra(docs: dict[str, bytes]) -> None:
+    extra_path = "extra.txt"
+    extra_data = b"declared but not allowed in release audio timeline package\n"
     manifest = _v74_read_json_doc(docs, "manifest.json")
     docs[extra_path] = extra_data
     extra_row = {"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()}

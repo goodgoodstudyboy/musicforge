@@ -536,6 +536,13 @@ from song_agent.release_audio_certification import (
     ReleaseAudioCertificationStore,
     ReleaseAudioCertificationValidationError,
 )
+from song_agent.release_audio_timeline import (
+    ReleaseAudioTimelineError,
+    ReleaseAudioTimelineNotFoundError,
+    ReleaseAudioTimelineStateError,
+    ReleaseAudioTimelineStore,
+    ReleaseAudioTimelineValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3093,6 +3100,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         store.campaign_store = self.audio_campaign_store
         store.governance_store = self.audio_campaign_governance_store
         store.remediation_store = self.audio_campaign_remediation_store
+        return store
+
+    @property
+    def release_audio_timeline_store(self) -> ReleaseAudioTimelineStore:
+        store = self.server.release_audio_timeline_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        store.project_store = self.project_store
+        store.planner_store = self.audio_campaign_planner_store
+        store.campaign_store = self.audio_campaign_store
+        store.governance_store = self.audio_campaign_governance_store
+        store.remediation_store = self.audio_campaign_remediation_store
+        store.certification_store = self.release_audio_certification_store
         return store
 
     @property
@@ -5721,6 +5740,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if tail == "/audio-certification" or tail.startswith("/audio-certification/"):
                 self._handle_release_audio_certification(method, release_id, tail.removeprefix("/audio-certification"))
+                return
+
+            if tail == "/audio-timelines" or tail.startswith("/audio-timelines/"):
+                self._handle_release_audio_timeline(method, release_id, tail.removeprefix("/audio-timelines"))
                 return
 
             if tail == "/mastering" or tail.startswith("/mastering/"):
@@ -10420,6 +10443,125 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseAudioCertificationError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_audio_timeline(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.release_audio_timeline_store.list_timelines(release_id)})
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                result = self.release_audio_timeline_store.refresh_timeline(release_id, force_new=bool(payload.get("force_new", False)))
+                self._send_json({"ok": result.get("status") == "passed", **result})
+                return
+            if tail == "/current":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                timeline_id = self.release_audio_timeline_store._resolve_timeline_id(release_id, None)
+                report = self.release_audio_timeline_store.read_timeline(release_id, timeline_id)
+                signoff = read_json(self.release_audio_timeline_store.signoff_path(release_id, timeline_id)) if self.release_audio_timeline_store.signoff_path(release_id, timeline_id).exists() else {}
+                self._send_json({"ok": True, "release_id": release_id, "timeline_id": timeline_id, "report": report, "signoff": signoff, "summary": report.get("summary", {})})
+                return
+            parts = [part for part in tail.split("/") if part]
+            if not parts:
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Audio Timeline route not found.")
+                return
+            timeline_id = parts[0]
+            action = parts[1] if len(parts) > 1 else ""
+            if action == "":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_audio_timeline_store.read_timeline(release_id, timeline_id)
+                signoff = read_json(self.release_audio_timeline_store.signoff_path(release_id, timeline_id)) if self.release_audio_timeline_store.signoff_path(release_id, timeline_id).exists() else {}
+                self._send_json({"ok": True, "release_id": release_id, "timeline_id": timeline_id, "report": report, "signoff": signoff, "summary": report.get("summary", {})})
+                return
+            if action == "events":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, **self.release_audio_timeline_store.read_events(release_id, timeline_id)})
+                return
+            if action == "tracks":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "track_index": self.release_audio_timeline_store.read_track_index(release_id, timeline_id)})
+                return
+            if action == "trend":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "quality_trend": self.release_audio_timeline_store.read_quality_trend(release_id, timeline_id)})
+                return
+            if action == "risks":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "risk_register": self.release_audio_timeline_store.read_risk_register(release_id, timeline_id)})
+                return
+            if action == "signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_timeline_store.signoff_timeline(release_id, timeline_id, self._read_json_body())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            if action == "export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_timeline_store.export_timeline(release_id, timeline_id)
+                self._send_json({"ok": result.get("status") == "passed", **result})
+                return
+            if action == "zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_timeline_store.build_zip(release_id, timeline_id)
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if action == "verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.release_audio_timeline_store.verify_zip(
+                    release_id,
+                    timeline_id,
+                    strict=bool(payload.get("strict", True)),
+                    require_passed=bool(payload.get("require_passed", True)),
+                    require_signed=bool(payload.get("require_signed", False)),
+                    require_real_audio=bool(payload.get("require_real_audio", True)),
+                    require_manual_review=bool(payload.get("require_manual_review", True)),
+                    require_current_certification=bool(payload.get("require_current_certification", True)),
+                )
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if action == "download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.release_audio_timeline_store.zip_path(release_id, timeline_id), "application/zip", filename="release-audio-timeline.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Audio Timeline route not found.")
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioTimelineNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioTimelineStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseAudioTimelineValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleaseAudioTimelineError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/mastering/profiles":
@@ -10881,6 +11023,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if release_audio_certification_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(release_audio_certification_gate.get("message") or "Release Audio Certification gate failed.")
+        require_release_audio_timeline = bool(payload.get("require_release_audio_timeline", False))
+        release_audio_timeline_gate = self.release_audio_timeline_store.gate(
+            release_id,
+            required=require_release_audio_timeline,
+            require_signed=bool(payload.get("require_release_audio_timeline_signed", require_release_audio_timeline)),
+            require_current_certification=bool(payload.get("require_release_audio_timeline_current_certification", True)),
+        )
+        if release_audio_timeline_gate and require_release_audio_timeline:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["release_audio_timeline"] = release_audio_timeline_gate
+            if release_audio_timeline_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(release_audio_timeline_gate.get("message") or "Release Audio Timeline gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -10957,6 +11112,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(release_audio_certification_gate.get("message") or "Release Audio Certification gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if release_audio_timeline_gate.get("hard_block") and release_audio_timeline_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(release_audio_timeline_gate.get("message") or "Release Audio Timeline gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -18492,6 +18656,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.audio_campaign_planner_store = AudioCampaignPlannerStore(release_store=self.release_store, project_store=self.project_store, audio_lab_store=self.audio_lab_store, audio_campaign_store=self.audio_campaign_store)
         self.audio_campaign_remediation_store = AudioCampaignRemediationStore(release_store=self.release_store, project_store=self.project_store, planner_store=self.audio_campaign_planner_store, campaign_store=self.audio_campaign_store, fix_sprint_store=self.audio_fix_sprint_store)
         self.release_audio_certification_store = ReleaseAudioCertificationStore(release_store=self.release_store, project_store=self.project_store, planner_store=self.audio_campaign_planner_store, campaign_store=self.audio_campaign_store, governance_store=self.audio_campaign_governance_store, remediation_store=self.audio_campaign_remediation_store)
+        self.release_audio_timeline_store = ReleaseAudioTimelineStore(release_store=self.release_store, project_store=self.project_store, planner_store=self.audio_campaign_planner_store, campaign_store=self.audio_campaign_store, governance_store=self.audio_campaign_governance_store, remediation_store=self.audio_campaign_remediation_store, certification_store=self.release_audio_certification_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

@@ -17,6 +17,7 @@ from song_agent.audio_profiles import AudioProfileStore, AudioProfileNotFoundErr
 from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
 from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
 from song_agent.release_audio_certification_verifier import verify_release_audio_certification_package
+from song_agent.release_audio_timeline_verifier import verify_release_audio_timeline_package
 from song_agent.music_acceptance import AcceptanceStore, acceptance_report_summary, stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.provider import ProviderError, load_provider_config, provider_configured
@@ -66,6 +67,9 @@ def build_ga_readiness_report(
     require_release_audio_certification: bool = False,
     release_audio_certification_zip_path: Path | str | None = None,
     release_audio_certification_verification_report_path: Path | str | None = None,
+    require_release_audio_timeline: bool = False,
+    release_audio_timeline_zip_path: Path | str | None = None,
+    release_audio_timeline_verification_report_path: Path | str | None = None,
     require_final_readiness: bool = False,
     final_handoff_verification_report_path: Path | str | None = None,
     release_check_latest_report_path: Path | str | None = None,
@@ -83,6 +87,7 @@ def build_ga_readiness_report(
         "require_audio_campaign": require_audio_campaign,
         "require_audio_campaign_remediation": require_audio_campaign_remediation,
         "require_release_audio_certification": require_release_audio_certification,
+        "require_release_audio_timeline": require_release_audio_timeline,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
     }
@@ -216,6 +221,20 @@ def build_ga_readiness_report(
         certification_summary,
     )
 
+    timeline_summary = _release_audio_timeline_summary(
+        required=require_release_audio_timeline,
+        timeline_zip_path=release_audio_timeline_zip_path,
+        timeline_verification_report_path=release_audio_timeline_verification_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.release_audio_timeline",
+        "passed" if timeline_summary.get("status") == "passed" else "failed" if require_release_audio_timeline else "warning",
+        "blocking" if require_release_audio_timeline else "warning",
+        "Release Audio Timeline evidence is passed." if timeline_summary.get("status") == "passed" else "Release Audio Timeline evidence is missing or not passed.",
+        timeline_summary,
+    )
+
     latest_summary = _release_check_summary(
         root,
         report_path=release_check_latest_report_path,
@@ -275,6 +294,7 @@ def build_ga_readiness_report(
             "audio_campaign_status": audio_campaign_summary.get("status", "missing"),
             "audio_campaign_remediation_status": remediation_summary.get("status", "missing"),
             "release_audio_certification_status": certification_summary.get("status", "missing"),
+            "release_audio_timeline_status": timeline_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -587,6 +607,47 @@ def _release_audio_certification_summary(
         return {"status": "failed" if required else "missing", "error": str(exc)}
 
 
+def _release_audio_timeline_summary(
+    *,
+    required: bool,
+    timeline_zip_path: Path | str | None,
+    timeline_verification_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if timeline_zip_path is None:
+        return {"status": "missing", "message": "Release Audio Timeline package was not provided."}
+    try:
+        zip_path = Path(timeline_zip_path)
+        runtime_report = verify_release_audio_timeline_package(
+            zip_path,
+            strict=True,
+            require_passed=required,
+            require_signed=required,
+            require_real_audio=required,
+            require_manual_review=required,
+            require_current_certification=False,
+        )
+        external_report: dict[str, Any] = {}
+        if timeline_verification_report_path is not None:
+            external_report = read_json(Path(timeline_verification_report_path))
+        summary = runtime_report.get("summary") if isinstance(runtime_report.get("summary"), dict) else {}
+        return {
+            "status": "passed" if runtime_report.get("status") == "passed" else "failed",
+            "package_type": runtime_report.get("package_type"),
+            "zip_sha256": runtime_report.get("zip_sha256"),
+            "zip_size_bytes": runtime_report.get("zip_size_bytes"),
+            "manifest_hash": runtime_report.get("manifest_hash"),
+            "verification_hash": external_report.get("integrity_hash") if isinstance(external_report, dict) else runtime_report.get("integrity_hash"),
+            "runtime_verification_status": runtime_report.get("status"),
+            "external_verification_status": external_report.get("status") if isinstance(external_report, dict) else None,
+            "track_count": summary.get("track_count"),
+            "release_id": summary.get("release_id"),
+            "timeline_id": summary.get("timeline_id"),
+            "summary": summary,
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
 def _acceptance_check_status(summary: dict[str, Any], *, require_manual_acceptance: bool, require_audio: bool) -> dict[str, str]:
     status = str(summary.get("status") or "missing")
     if require_manual_acceptance and status != "passed":
@@ -664,6 +725,7 @@ def _action_for_check(check_id: str) -> str:
         "ga.renderer_audio": "Configure a renderer/audio profile before claiming audio readiness.",
         "ga.trust_final_readiness": "Build and verify the Trust Operations Final Handoff package.",
         "ga.release_audio_certification": "Build, sign, and verify the Release Audio Certification package.",
+        "ga.release_audio_timeline": "Build, sign, and verify the Release Audio Timeline package.",
         "ga.release_check_latest": "Run release-check --profile latest and pass the generated report to ga-check.",
         "ga.release_check_ga": "Run release-check --profile ga and pass the generated report to ga-check.",
     }.get(check_id, "Review and repair this GA readiness check.")

@@ -83,6 +83,7 @@ from song_agent.release_checks import (
     _v106_release_driven_audio_campaign_smoke,
     _v107_release_audio_campaign_remediation_smoke,
     _v108_release_audio_certification_smoke,
+    _v109_release_audio_timeline_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1172,6 +1173,12 @@ def test_v107_release_audio_campaign_remediation_smoke(tmp_path: Path) -> None:
 
 def test_v108_release_audio_certification_smoke(tmp_path: Path) -> None:
     ok, detail = _v108_release_audio_certification_smoke(tmp_path)
+
+    assert ok is True, detail
+
+
+def test_v109_release_audio_timeline_smoke(tmp_path: Path) -> None:
+    ok, detail = _v109_release_audio_timeline_smoke(tmp_path)
 
     assert ok is True, detail
     assert "cert=passed" in detail
