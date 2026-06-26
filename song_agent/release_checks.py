@@ -15955,6 +15955,7 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
     from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
     from song_agent.ga_readiness_verifier import verify_ga_readiness_report
     from song_agent.projectio import read_json
+    from song_agent.server import _audio_campaign_release_track_coverage
 
     old_cwd = Path.cwd()
     try:
@@ -15986,6 +15987,9 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
                 archive_zip = governance_store.build_archive_zip(campaign_id)
                 archive_verification = governance_store.verify_archive(campaign_id, {"strict": True})
                 gate = governance_store.gate(campaign_id)
+                case_index = read_json(campaign_store.case_index_path(campaign_id))
+                mismatch_track = type("ReleaseTrackLike", (), {"track_id": "track-001", "track_number": 1, "disc_number": 1, "title": "Unrelated Release Track", "project_id": "release-project-a", "version_id": "v001", "final_export_hash": "release-final-export-a"})()
+                mismatch_release_campaign = "409" if _audio_campaign_release_track_coverage([mismatch_track], case_index).get("status") == "failed" else "passed"
                 immutable_guard = False
                 try:
                     governance_store.build_archive_zip(campaign_id)
@@ -16024,6 +16028,7 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
                 and analytics.get("status") == "passed"
                 and archive_verification.get("status") == "passed"
                 and gate.get("status") == "passed"
+                and mismatch_release_campaign == "409"
                 and immutable_guard
                 and _ga_check_status(ga_report, "ga.audio_campaign") == "passed"
                 and ga_verification.get("status") != "failed"
@@ -16036,6 +16041,7 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
                 f"archive={archive_verification.get('status')}, gate={gate.get('status')}, immutable={immutable_guard}, "
                 f"ga_gate={_ga_check_status(ga_report, 'ga.audio_campaign')}/{ga_verification.get('status')}, "
                 f"missing_gate={_v38_check_status(ga_missing, 'ga_readiness_audio_campaign_archive_required')}, "
+                f"mismatch_release_campaign={mismatch_release_campaign}, "
                 f"redaction={_v38_check_status(redaction_report, 'audio_campaign_archive_redaction_scan')}, reset={reset.get('status')}"
             )
     except Exception as exc:

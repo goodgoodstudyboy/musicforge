@@ -146,6 +146,7 @@ def test_release_signoff_blocks_non_manual_release_candidate_acceptance(tmp_path
         created_status, created = request_json(server, "POST", "/api/releases", {"name": "Acceptance Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
         release_id = created["release"]["release_id"]
         request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        release_track = server.release_store.get_release(release_id).tracks[0]
         request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
         request_json(server, "POST", f"/api/releases/{release_id}/export")
         request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
@@ -231,6 +232,7 @@ def test_release_signoff_requires_audio_campaign_governance(tmp_path, monkeypatc
         created_status, created = request_json(server, "POST", "/api/releases", {"name": "Audio Campaign Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
         release_id = created["release"]["release_id"]
         request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
+        release_track = server.release_store.get_release(release_id).tracks[0]
         request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
         request_json(server, "POST", f"/api/releases/{release_id}/export")
         request_json(server, "POST", f"/api/releases/{release_id}/export/zip")
@@ -241,6 +243,10 @@ def test_release_signoff_requires_audio_campaign_governance(tmp_path, monkeypatc
         raw = read_json(lab.session_path(session["session_id"]))
         raw["items"][0]["renderer"] = {"runner_kind": "real", "release_ready": True, "profile_id": "test-real"}
         raw["items"][0]["source_hash"] = "release-audio-campaign-gate-source"
+        raw["items"][0]["title"] = release_track.title
+        raw["items"][0]["project_id"] = release_track.project_id
+        raw["items"][0]["version_id"] = release_track.version_id
+        raw["items"][0]["final_export_hash"] = release_track.final_export_hash
         lab._write_session(raw)  # type: ignore[attr-defined]
         item_id = session["items"][0]["item_id"]
         request_json(server, "POST", f"/api/audio-lab/listening-sessions/{session['session_id']}/items/{item_id}/review", {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
@@ -249,6 +255,37 @@ def test_release_signoff_requires_audio_campaign_governance(tmp_path, monkeypatc
         request_json(server, "GET", f"/api/audio-campaigns/{campaign_id}/report")
         request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/signoff", {"signed_by": "QA", "role": "developer"})
         missing_status, missing = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_audio_campaign": True, "audio_campaign_id": campaign_id})
+        _, wrong_smoke = request_json(server, "POST", "/api/audio-lab/smoke-runs", {"cases": 1, "render_audio": "auto"})
+        _, wrong_session_payload = request_json(server, "POST", "/api/audio-lab/listening-sessions", {"from_smoke": wrong_smoke["smoke_run"]["smoke_run_id"]})
+        wrong_session = wrong_session_payload["session"]
+        wrong_raw = read_json(lab.session_path(wrong_session["session_id"]))
+        wrong_raw["items"][0]["renderer"] = {"runner_kind": "real", "release_ready": True, "profile_id": "test-real"}
+        wrong_raw["items"][0]["title"] = "Completely Different Track B"
+        wrong_raw["items"][0]["project_id"] = "different-project"
+        wrong_raw["items"][0]["version_id"] = "v999"
+        wrong_raw["items"][0]["final_export_hash"] = "different-final-export-hash"
+        wrong_raw["items"][0]["source_hash"] = "unrelated-audio-campaign-source"
+        lab._write_session(wrong_raw)  # type: ignore[attr-defined]
+        wrong_item_id = wrong_session["items"][0]["item_id"]
+        request_json(server, "POST", f"/api/audio-lab/listening-sessions/{wrong_session['session_id']}/items/{wrong_item_id}/review", {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+        _, wrong_campaign_payload = request_json(server, "POST", "/api/audio-campaigns", {"from_session": wrong_session["session_id"]})
+        wrong_campaign_id = wrong_campaign_payload["campaign"]["campaign_id"]
+        request_json(server, "GET", f"/api/audio-campaigns/{wrong_campaign_id}/report")
+        request_json(server, "POST", f"/api/audio-campaigns/{wrong_campaign_id}/signoff", {"signed_by": "QA", "role": "developer"})
+        _, wrong_archive = request_json(server, "POST", f"/api/audio-campaigns/{wrong_campaign_id}/archive/zip")
+        request_json(server, "POST", f"/api/audio-campaigns/{wrong_campaign_id}/archive/verify", {"strict": True})
+        mismatch_status, mismatch = request_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/signoff",
+            {
+                "signed_by": "tester",
+                "require_audio_campaign": True,
+                "audio_campaign_id": wrong_campaign_id,
+                "audio_campaign_archive_zip_path": wrong_archive["zip_path"],
+                "audio_campaign_archive_verification_report_path": str(server.audio_campaign_governance_store.archive_verification_report_path(wrong_campaign_id)),
+            },
+        )
         archive_status, archive = request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/archive/zip")
         verify_status, verify = request_json(server, "POST", f"/api/audio-campaigns/{campaign_id}/archive/verify", {"strict": True})
         sign_status, signed = request_json(
@@ -272,8 +309,11 @@ def test_release_signoff_requires_audio_campaign_governance(tmp_path, monkeypatc
     assert verify["verification"]["status"] == "passed"
     assert missing_status == 409
     assert "Audio Campaign" in missing["error"]
+    assert mismatch_status == 409
+    assert "current release tracks" in mismatch["error"]
     assert sign_status == 200
     assert signed["signoff"]["acceptance_gate"]["audio_campaign"]["status"] == "passed"
+    assert signed["signoff"]["acceptance_gate"]["audio_campaign"]["release_track_coverage"]["matched_track_count"] == 1
 
 
 def test_release_auth_protected(tmp_path, monkeypatch):

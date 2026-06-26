@@ -1,5 +1,16 @@
 # Changelog
 
+## v10.5.1 - 2026-06-26
+
+### Fixed
+- Release signoff `require_audio_campaign=true` now requires Audio Campaign cases to cover the current Release tracks by project/version/final-export identity, not just by case count.
+- Audio Campaign case indexes now include release-track binding fields needed for Release gate verification.
+- release-check `v105.audio_campaign_governance_smoke` now covers mismatched Release/Campaign binding returning 409.
+
+### Verified
+- `python -m pytest tests\test_audio_campaign_governance.py tests\test_server_releases.py::test_release_signoff_requires_audio_campaign_governance tests\test_release_check.py::test_v105_audio_campaign_governance_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.5.0 - 2026-06-25
 
 ### Added

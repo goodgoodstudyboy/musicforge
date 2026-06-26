@@ -11225,6 +11225,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             release = self.release_store.get_release(release_id)
             track_count = len(release.tracks)
         except Exception:
+            release = None
             track_count = 0
         summary = gate.get("summary") if isinstance(gate.get("summary"), dict) else {}
         case_count = int(summary.get("case_count") or 0)
@@ -11237,7 +11238,25 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     "message": "Audio Campaign does not cover all release tracks.",
                 }
             )
+        if required and gate.get("status") == "passed" and release is not None and track_count > 0:
+            coverage = self._release_audio_campaign_coverage(release, campaign_id)
+            gate["release_track_coverage"] = coverage
+            if coverage.get("status") != "passed":
+                gate.update(
+                    {
+                        "status": "failed",
+                        "hard_block": True,
+                        "message": "Audio Campaign does not cover the current release tracks.",
+                    }
+                )
         return gate
+
+    def _release_audio_campaign_coverage(self, release: Any, campaign_id: str) -> dict[str, Any]:
+        try:
+            case_index = read_json(self.audio_campaign_store.case_index_path(campaign_id))
+        except Exception as exc:
+            return {"status": "failed", "message": f"Audio Campaign case index is unavailable: {sanitize_sensitive_text(str(exc))}", "missing_tracks": []}
+        return _audio_campaign_release_track_coverage(release.tracks, case_index)
 
     def _release_audio_gate(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         require_health = bool(payload.get("require_audio_health", False))
@@ -19632,6 +19651,55 @@ def _rfc5987_quote(value: str) -> str:
 
 def _dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _release_track_audio_campaign_key(track: Any) -> str:
+    project_id = str(getattr(track, "project_id", "") or "").strip()
+    version_id = str(getattr(track, "version_id", "") or "").strip()
+    final_export_hash = str(getattr(track, "final_export_hash", "") or "").strip()
+    if not (project_id and version_id and final_export_hash):
+        return ""
+    return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
+
+
+def _audio_campaign_case_release_key(case: dict[str, Any]) -> str:
+    project_id = str(case.get("project_id") or "").strip()
+    version_id = str(case.get("version_id") or "").strip()
+    final_export_hash = str(case.get("final_export_hash") or "").strip()
+    if not (project_id and version_id and final_export_hash):
+        return ""
+    return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
+
+
+def _audio_campaign_release_track_coverage(tracks: list[Any], case_index: dict[str, Any]) -> dict[str, Any]:
+    cases = [case for case in case_index.get("cases", []) if isinstance(case, dict)]
+    case_keys = {_audio_campaign_case_release_key(case) for case in cases}
+    case_keys.discard("")
+    rows = []
+    missing = []
+    for track in sorted(tracks, key=lambda item: (getattr(item, "disc_number", 1), getattr(item, "track_number", 1), getattr(item, "track_id", ""))):
+        expected = _release_track_audio_campaign_key(track)
+        matched = bool(expected and expected in case_keys)
+        row = {
+            "track_id": getattr(track, "track_id", None),
+            "track_number": getattr(track, "track_number", None),
+            "title": getattr(track, "title", None),
+            "project_id": getattr(track, "project_id", None),
+            "version_id": getattr(track, "version_id", None),
+            "final_export_hash": getattr(track, "final_export_hash", None),
+            "identity_key": expected,
+            "matched": matched,
+        }
+        rows.append(row)
+        if not matched:
+            missing.append(row)
+    return {
+        "status": "passed" if not missing else "failed",
+        "matched_track_count": len(rows) - len(missing),
+        "track_count": len(rows),
+        "case_count": len(cases),
+        "missing_tracks": missing,
+    }
 
 
 def _safe_read_release_export_manifest(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:
