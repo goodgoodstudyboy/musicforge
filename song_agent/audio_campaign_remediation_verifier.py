@@ -12,6 +12,7 @@ from song_agent.releases import stable_hash
 
 
 REQUIRED_ENTRIES = {"manifest.json", "remediation-plan.json", "action-queue.json", "closeout-report.json", "linked-fix-sprints.json", "README.txt"}
+OPTIONAL_ENTRIES = {"remediation-signoff.json"}
 SENSITIVE_PATTERNS = [
     re.compile(rb"sk-[A-Za-z0-9_-]{8,}"),
     re.compile(rb"api[_-]?key\s*[:=]\s*[^,\s\"']+", re.IGNORECASE),
@@ -50,6 +51,15 @@ def verify_audio_campaign_remediation_package(
             checks.append(_check("audio_campaign_remediation_zip_entry_paths_safe", not unsafe, "ZIP entries are safe POSIX relative paths.", {"unsafe": unsafe}))
             if any(check["status"] == "failed" for check in checks):
                 return _finish(checks, summary)
+            expected_entries = set(REQUIRED_ENTRIES)
+            if "remediation-signoff.json" in names:
+                expected_entries.add("remediation-signoff.json")
+            extra_entries = sorted(set(names) - expected_entries)
+            missing_entries = sorted(expected_entries - set(names))
+            checks.append(_check("audio_campaign_remediation_zip_allowed_entries", not extra_entries, "ZIP contains only fixed Audio Campaign remediation entries.", {"extra": extra_entries}))
+            checks.append(_check("audio_campaign_remediation_zip_expected_entries", not missing_entries, "ZIP contains all expected Audio Campaign remediation entries.", {"missing": missing_entries}))
+            if any(check["status"] == "failed" for check in checks):
+                return _finish(checks, summary)
             for required in REQUIRED_ENTRIES:
                 checks.append(_check(f"audio_campaign_remediation_required_{required.replace('/', '_').replace('.', '_')}", required in names, f"{required} exists."))
             if any(check["status"] == "failed" for check in checks):
@@ -66,7 +76,7 @@ def verify_audio_campaign_remediation_package(
             summary["campaign_id"] = manifest.get("campaign_id") or closeout.get("campaign_id")
             summary["issue_count"] = int((closeout.get("summary") or {}).get("issue_count") or 0)
 
-            checks.extend(_manifest_checks(zf, manifest, set(names), strict=strict))
+            checks.extend(_manifest_checks(zf, manifest, set(names), expected_entries=expected_entries, strict=strict))
             checks.append(_check("audio_campaign_remediation_manifest_package_type", manifest.get("package_type") == AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE, "Manifest package_type is audio_campaign_remediation."))
             checks.append(_check("audio_campaign_remediation_manifest_schema_version", int(manifest.get("schema_version") or 0) == AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION, "Manifest schema version is supported."))
             checks.append(_check("audio_campaign_remediation_manifest_integrity", _integrity_ok(manifest), "Manifest integrity hash is valid."))
@@ -97,16 +107,27 @@ def audio_campaign_remediation_verification_exit_code(report: dict[str, Any]) ->
     return 0 if report.get("status") == "passed" else 1
 
 
-def _manifest_checks(zf: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], *, strict: bool) -> list[dict[str, Any]]:
+def _manifest_checks(zf: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], *, expected_entries: set[str], strict: bool) -> list[dict[str, Any]]:
     checks = []
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
+    expected_files = expected_entries - {"manifest.json"}
     undeclared = sorted(effective_names - declared)
     extra_declared = sorted(declared - effective_names)
+    fixed_extra_declared = sorted(declared - expected_files)
+    fixed_missing_declared = sorted(expected_files - declared)
     checks.append(_check("audio_campaign_remediation_manifest_files_present", bool(files), "Manifest declares package files."))
     checks.append(_check("audio_campaign_remediation_no_undeclared_entries", not undeclared, "ZIP has no undeclared entries.", {"undeclared": undeclared}, blocking=strict or bool(undeclared)))
     checks.append(_check("audio_campaign_remediation_declared_entries_exist", not extra_declared, "All manifest file entries exist.", {"missing": extra_declared}))
+    checks.append(
+        _check(
+            "audio_campaign_remediation_manifest_fixed_files",
+            not fixed_extra_declared and not fixed_missing_declared,
+            "Manifest files match the fixed Audio Campaign remediation package layout.",
+            {"extra": fixed_extra_declared, "missing": fixed_missing_declared},
+        )
+    )
     mismatches = []
     for row in files:
         if not isinstance(row, dict):

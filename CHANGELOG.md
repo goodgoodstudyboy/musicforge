@@ -1,5 +1,15 @@
 # Changelog
 
+## v10.7.1 - 2026-06-26
+
+### Fixed
+- Signed Release Audio Campaign Remediation evidence now rechecks the current Release track Final Export source before gate, export, ZIP build, and verification; stale final-export manifests hard-block instead of reusing old closeout evidence.
+- Audio Campaign Remediation ZIP verification now enforces a fixed package allow-list and rejects manifest-declared extra files.
+- release-check `v107.release_audio_campaign_remediation_smoke` now covers signed stale final-export blocking and declared extra ZIP entries.
+
+### Verified
+- `python -m pytest tests\test_audio_campaign_remediation.py tests\test_server_audio_campaign_remediation.py tests\test_release_check.py::test_v107_release_audio_campaign_remediation_smoke -q`
+
 ## v10.7.0 - 2026-06-26
 
 ### Added

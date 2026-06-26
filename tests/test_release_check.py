@@ -1165,6 +1165,8 @@ def test_v107_release_audio_campaign_remediation_smoke(tmp_path: Path) -> None:
     assert "after=passed" in detail
     assert "verify=passed" in detail
     assert "stale_run=409" in detail
+    assert "signed_stale_final_export=failed/409/409/409" in detail
+    assert "declared_extra=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

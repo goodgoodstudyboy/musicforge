@@ -103,44 +103,76 @@ class AudioCampaignRemediationStore:
             raise AudioCampaignRemediationNotFoundError(f"Audio Campaign remediation closeout not found: {release_id}.")
         return sanitize_metadata(read_json(self.closeout_path(release_id)))
 
+    def _current_source_state(self, release_id: str, *, refresh_campaign: bool = True) -> dict[str, Any]:
+        release = self.release_store.get_release(release_id)
+        link = self.planner_store.read_link(release_id)
+        campaign_id = str(link.get("campaign_id") or "")
+        if not campaign_id:
+            raise AudioCampaignRemediationStateError("Release Audio Campaign link is missing campaign_id.")
+        campaign = self.campaign_store.read_campaign(campaign_id)
+        if refresh_campaign:
+            campaign_report = self.campaign_store.refresh_report(campaign_id)
+        else:
+            report_path = self.campaign_store.campaign_dir(campaign_id) / "campaign-report.json"
+            campaign_report = read_json(report_path) if report_path.exists() else self.campaign_store.refresh_report(campaign_id)
+        case_index = read_json(self.campaign_store.case_index_path(campaign_id))
+        track_rows = [_release_track_current_row(self.project_store, track) for track in release.tracks]
+        blockers = []
+        if link.get("coverage_status") != "passed":
+            blockers.append({"check_id": "release_campaign_link_coverage", "message": "Release Audio Campaign link coverage is not passed."})
+        stale_tracks = [row for row in track_rows if row.get("status") != "passed"]
+        for row in stale_tracks:
+            blockers.append(
+                {
+                    "check_id": "release_track_final_export_current",
+                    "track_id": row.get("track_id"),
+                    "message": "Release track Final Export is stale.",
+                    "expected_hash": row.get("expected_hash"),
+                    "current_hash": row.get("current_hash"),
+                }
+            )
+        source = {
+            "release_id": release_id,
+            "release_track_identities_hash": stable_hash([_track_identity(track) for track in release.tracks]),
+            "campaign_id": campaign_id,
+            "campaign_source_hash": campaign.get("source_hash"),
+            "campaign_report_hash": stable_hash(
+                {
+                    "status": campaign_report.get("status"),
+                    "source_hash": campaign_report.get("source_hash"),
+                    "summary": campaign_report.get("summary"),
+                    "blockers": campaign_report.get("blockers"),
+                    "cases": campaign_report.get("cases"),
+                }
+            ),
+            "case_index_hash": stable_hash({"cases": case_index.get("cases", [])}),
+            "link_hash": link.get("integrity_hash"),
+            "track_final_exports": track_rows,
+        }
+        source["source_hash"] = stable_hash(source)
+        return {
+            "release": release,
+            "link": link,
+            "campaign": campaign,
+            "campaign_id": campaign_id,
+            "campaign_report": campaign_report,
+            "case_index": case_index,
+            "track_rows": track_rows,
+            "blockers": blockers,
+            "source": source,
+        }
+
     def refresh_plan(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         del payload
         with self.lock:
-            release = self.release_store.get_release(release_id)
-            link = self.planner_store.read_link(release_id)
-            campaign_id = str(link.get("campaign_id") or "")
-            if not campaign_id:
-                raise AudioCampaignRemediationStateError("Release Audio Campaign link is missing campaign_id.")
-            campaign = self.campaign_store.read_campaign(campaign_id)
-            campaign_report = self.campaign_store.refresh_report(campaign_id)
-            case_index = read_json(self.campaign_store.case_index_path(campaign_id))
-            track_rows = [_release_track_current_row(self.project_store, track) for track in release.tracks]
+            state = self._current_source_state(release_id, refresh_campaign=True)
+            campaign_id = str(state["campaign_id"])
+            campaign = state["campaign"]
+            campaign_report = state["campaign_report"]
+            case_index = state["case_index"]
             issues = _issues_from_campaign(campaign, campaign_report, case_index)
-            blockers = []
-            if link.get("coverage_status") != "passed":
-                blockers.append({"check_id": "release_campaign_link_coverage", "message": "Release Audio Campaign link coverage is not passed."})
-            stale_tracks = [row for row in track_rows if row.get("status") != "passed"]
-            for row in stale_tracks:
-                blockers.append({"check_id": "release_track_final_export_current", "track_id": row.get("track_id"), "message": "Release track Final Export is stale.", "expected_hash": row.get("expected_hash"), "current_hash": row.get("current_hash")})
-            source = {
-                "release_id": release_id,
-                "release_track_identities_hash": stable_hash([_track_identity(track) for track in release.tracks]),
-                "campaign_id": campaign_id,
-                "campaign_source_hash": campaign.get("source_hash"),
-                "campaign_report_hash": stable_hash(
-                    {
-                        "status": campaign_report.get("status"),
-                        "source_hash": campaign_report.get("source_hash"),
-                        "summary": campaign_report.get("summary"),
-                        "blockers": campaign_report.get("blockers"),
-                        "cases": campaign_report.get("cases"),
-                    }
-                ),
-                "case_index_hash": stable_hash({"cases": case_index.get("cases", [])}),
-                "link_hash": link.get("integrity_hash"),
-                "track_final_exports": track_rows,
-            }
-            source["source_hash"] = stable_hash(source)
+            blockers = list(state["blockers"])
+            source = state["source"]
             status = "blocked" if blockers else "passed" if not issues else "needs_action"
             plan = sanitize_metadata(
                 {
@@ -162,6 +194,31 @@ class AudioCampaignRemediationStore:
             write_json(self.plan_path(release_id), plan)
             _append_event(self.events_path(release_id), "audio_campaign_remediation_plan_refreshed", {"release_id": release_id, "campaign_id": campaign_id, "status": status, "issue_count": len(issues)})
             return plan
+
+    def _assert_signed_current(self, release_id: str) -> dict[str, Any]:
+        if not self.signoff_path(release_id).exists():
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation signoff is missing.")
+        signoff = read_json(self.signoff_path(release_id))
+        closeout = self.read_closeout(release_id)
+        if signoff.get("status") != "signed":
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation signoff is not signed.")
+        if signoff.get("closeout_hash") != closeout.get("integrity_hash"):
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation closeout no longer matches signoff.")
+        if signoff.get("source_hash") != closeout.get("source_hash"):
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation signoff source no longer matches closeout.")
+        plan = self.read_plan(release_id)
+        queue = self.read_queue(release_id)
+        if closeout.get("source", {}).get("plan_source_hash") != plan.get("source_hash"):
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation closeout no longer matches remediation plan.")
+        if closeout.get("source", {}).get("queue_integrity_hash") != queue.get("integrity_hash"):
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation closeout no longer matches action queue.")
+        state = self._current_source_state(release_id, refresh_campaign=True)
+        current_source_hash = state.get("source", {}).get("source_hash")
+        if state.get("blockers"):
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation source is stale. Refresh and re-sign before using remediation evidence.")
+        if current_source_hash != closeout.get("source", {}).get("plan_source_hash"):
+            raise AudioCampaignRemediationStateError("Audio Campaign remediation source is stale. Refresh and re-sign before using remediation evidence.")
+        return {"signoff": signoff, "closeout": closeout, "plan": plan, "queue": queue, "current_source": state.get("source", {})}
 
     def build_action_queue(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         del payload
@@ -353,10 +410,8 @@ class AudioCampaignRemediationStore:
     def export_package(self, release_id: str) -> dict[str, Any]:
         with self.lock:
             if self.signoff_path(release_id).exists():
-                signoff = read_json(self.signoff_path(release_id))
-                closeout = self.read_closeout(release_id)
-                if signoff.get("closeout_hash") != closeout.get("integrity_hash"):
-                    raise AudioCampaignRemediationStateError("Audio Campaign remediation closeout no longer matches signoff.")
+                signed_snapshot = self._assert_signed_current(release_id)
+                closeout = signed_snapshot["closeout"]
             else:
                 closeout = self.closeout_report(release_id)
             plan = self.read_plan(release_id)
@@ -404,6 +459,8 @@ class AudioCampaignRemediationStore:
             return {"status": closeout.get("status"), "manifest": manifest, "export_dir": str(export_dir)}
 
     def build_zip(self, release_id: str) -> dict[str, Any]:
+        if self.signoff_path(release_id).exists():
+            self._assert_signed_current(release_id)
         exported = self.export_package(release_id)
         export_dir = self.export_dir(release_id)
         zip_path = self.zip_path(release_id)
@@ -429,6 +486,8 @@ class AudioCampaignRemediationStore:
     def verify_zip(self, release_id: str, **kwargs: Any) -> dict[str, Any]:
         from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package, write_audio_campaign_remediation_verification_report
 
+        if self.signoff_path(release_id).exists():
+            self._assert_signed_current(release_id)
         if not self.zip_path(release_id).exists():
             self.build_zip(release_id)
         report = verify_audio_campaign_remediation_package(self.zip_path(release_id), **kwargs)
@@ -440,15 +499,14 @@ class AudioCampaignRemediationStore:
             return {"status": "not_required", "hard_block": False}
         try:
             signed = self.signoff_path(release_id).exists()
-            closeout = self.read_closeout(release_id) if signed else self.closeout_report(release_id)
+            signed_snapshot = self._assert_signed_current(release_id) if signed else {}
+            closeout = signed_snapshot.get("closeout") if signed else self.closeout_report(release_id)
             result = {"status": "passed" if closeout.get("status") == "passed" else "failed", "hard_block": closeout.get("status") != "passed", "closeout": closeout, "message": "Audio Campaign remediation closeout is passed."}
             if closeout.get("status") != "passed":
                 result["message"] = "Audio Campaign remediation closeout has blockers."
             if signed:
-                signoff = read_json(self.signoff_path(release_id))
-                if signoff.get("closeout_hash") != closeout.get("integrity_hash"):
-                    result.update({"status": "failed", "hard_block": True, "message": "Audio Campaign remediation signoff is stale."})
-                elif require_signed:
+                signoff = signed_snapshot["signoff"]
+                if require_signed:
                     result["signoff"] = signoff
             elif require_signed:
                 signoff = read_json(self.signoff_path(release_id)) if self.signoff_path(release_id).exists() else {}

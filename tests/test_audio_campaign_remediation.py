@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -7,6 +10,7 @@ import pytest
 from song_agent.audio_campaign_remediation import AudioCampaignRemediationStateError, AudioCampaignRemediationStore
 from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
 from song_agent.projectio import read_json, write_json
+from song_agent.releases import stable_hash
 from tests.test_release_audio_campaign_planner import _release_with_audio_track
 from tests.test_server_releases import start_test_server, stop_test_server
 
@@ -101,3 +105,71 @@ def test_audio_campaign_remediation_blocks_stale_final_export(tmp_path: Path, mo
 
     assert plan["status"] == "blocked"
     assert any(row["check_id"] == "release_track_final_export_current" for row in plan["blockers"])
+
+
+def test_signed_audio_campaign_remediation_blocks_current_final_export_drift(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, campaign_id, store = _needs_fix_release_campaign(server, "Remediation Signed Stale Track")
+        _complete_first_fix_sprint(server, campaign_id, store, release_id)
+        closeout = store.closeout_report(release_id)
+        store.signoff(release_id, {"signed_by": "QA", "role": "developer"})
+        track = server.release_store.get_release(release_id).tracks[0]
+        manifest_path = server.project_store.project_dir(track.project_id) / "final-export" / "manifest.json"
+        manifest = read_json(manifest_path)
+        manifest["tampered_after_remediation_signoff"] = True
+        write_json(manifest_path, manifest)
+
+        gate = store.gate(release_id, required=True, require_signed=True)
+        with pytest.raises(AudioCampaignRemediationStateError):
+            store.export_package(release_id)
+        with pytest.raises(AudioCampaignRemediationStateError):
+            store.build_zip(release_id)
+        with pytest.raises(AudioCampaignRemediationStateError):
+            store.verify_zip(release_id, strict=True, require_passed=True, require_signed=True)
+    finally:
+        stop_test_server(server)
+
+    assert closeout["status"] == "passed"
+    assert gate["status"] == "failed"
+    assert gate["hard_block"] is True
+    assert "stale" in gate["message"].lower()
+
+
+def test_audio_campaign_remediation_verifier_rejects_declared_extra_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, campaign_id, store = _needs_fix_release_campaign(server, "Remediation Extra File Track")
+        _complete_first_fix_sprint(server, campaign_id, store, release_id)
+        store.closeout_report(release_id)
+        store.signoff(release_id, {"signed_by": "QA", "role": "developer"})
+        zipped = store.build_zip(release_id)
+        original_zip = Path(zipped["zip_path"])
+        tampered_zip = tmp_path / "declared-extra-remediation.zip"
+        _add_declared_extra_to_remediation_zip(original_zip, tampered_zip)
+        verification = verify_audio_campaign_remediation_package(tampered_zip, strict=True, require_passed=True, require_signed=True)
+    finally:
+        stop_test_server(server)
+
+    assert verification["status"] == "failed"
+    assert "audio_campaign_remediation_zip_allowed_entries" in verification["blockers"]
+
+
+def _add_declared_extra_to_remediation_zip(source_zip: Path, target_zip: Path) -> None:
+    with zipfile.ZipFile(source_zip, "r") as src:
+        docs = {info.filename: src.read(info.filename) for info in src.infolist()}
+    extra_path = "extra.txt"
+    extra_data = b"declared but not allowed\n"
+    docs[extra_path] = extra_data
+    manifest = json.loads(docs["manifest.json"].decode("utf-8"))
+    manifest.setdefault("files", []).append({"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()})
+    manifest["files"] = sorted(manifest["files"], key=lambda row: str(row.get("path") or ""))
+    manifest.setdefault("zip", {})["entries"] = sorted(set(manifest.get("zip", {}).get("entries") or []) | {extra_path})
+    manifest.setdefault("zip", {})["entry_count"] = len(manifest["zip"]["entries"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    docs["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    with zipfile.ZipFile(target_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name, data in docs.items():
+            dst.writestr(name, data)

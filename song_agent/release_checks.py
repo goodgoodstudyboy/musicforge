@@ -16275,8 +16275,32 @@ def _v107_release_audio_campaign_remediation_smoke(root: Path) -> tuple[bool, st
                 zip_result = remediation.build_zip(release_id)
                 verification = remediation.verify_zip(release_id, strict=True, require_passed=True, require_signed=True)
                 direct_verification = verify_audio_campaign_remediation_package(zip_result["zip_path"], strict=True, require_passed=True, require_signed=True)
+                declared_extra_zip = base / "remediation-declared-extra.zip"
+                _v76_rewrite_zip(Path(zip_result["zip_path"]), declared_extra_zip, _v107_add_remediation_declared_extra)
+                declared_extra_verification = verify_audio_campaign_remediation_package(declared_extra_zip, strict=True, require_passed=True, require_signed=True)
 
                 signoff_block = remediation.gate(release_id, required=True)
+                track = server.release_store.get_release(release_id).tracks[0]
+                signed_manifest_path = server.project_store.project_dir(track.project_id) / "final-export" / "manifest.json"
+                signed_manifest = read_json(signed_manifest_path)
+                signed_manifest["tampered_after_remediation_signoff"] = True
+                write_json(signed_manifest_path, signed_manifest)
+                signed_stale_gate = remediation.gate(release_id, required=True, require_signed=True)
+                signed_stale_export = "allowed"
+                try:
+                    remediation.export_package(release_id)
+                except AudioCampaignRemediationStateError:
+                    signed_stale_export = "409"
+                signed_stale_zip = "allowed"
+                try:
+                    remediation.build_zip(release_id)
+                except AudioCampaignRemediationStateError:
+                    signed_stale_zip = "409"
+                signed_stale_verify = "allowed"
+                try:
+                    remediation.verify_zip(release_id, strict=True, require_passed=True, require_signed=True)
+                except AudioCampaignRemediationStateError:
+                    signed_stale_verify = "409"
 
                 stale_project_id, stale_release_id, stale_server = _v106_release_fixture("Remediation Stale Export")
                 stale_result = stale_server.audio_campaign_planner_store.create_campaign_from_release(stale_release_id)
@@ -16328,6 +16352,11 @@ def _v107_release_audio_campaign_remediation_smoke(root: Path) -> tuple[bool, st
                 and verification.get("status") == "passed"
                 and direct_verification.get("status") == "passed"
                 and signoff_block.get("status") == "passed"
+                and signed_stale_gate.get("status") == "failed"
+                and signed_stale_export == "409"
+                and signed_stale_zip == "409"
+                and signed_stale_verify == "409"
+                and declared_extra_verification.get("status") == "failed"
                 and stale_plan.get("status") == "blocked"
                 and stale_run == "409"
                 and str(base) not in serialized
@@ -16337,7 +16366,9 @@ def _v107_release_audio_campaign_remediation_smoke(root: Path) -> tuple[bool, st
             return ok, (
                 f"plan={plan.get('status')}, first_run={first_run.get('status')}, manual_before={before_manual.get('status')}, "
                 f"after={after.get('status')}, verify={verification.get('status')}, duplicate={first_sprint_ids == second_sprint_ids}, "
-                f"pre_gate={blocked_gate.get('status')}, post_gate={signoff_block.get('status')}, stale_plan={stale_plan.get('status')}, stale_run={stale_run}"
+                f"pre_gate={blocked_gate.get('status')}, post_gate={signoff_block.get('status')}, "
+                f"signed_stale_final_export={signed_stale_gate.get('status')}/{signed_stale_export}/{signed_stale_zip}/{signed_stale_verify}, "
+                f"declared_extra={declared_extra_verification.get('status')}, stale_plan={stale_plan.get('status')}, stale_run={stale_run}"
             )
     except Exception as exc:
         return False, f"v10.7 Release Audio Campaign remediation smoke failed: {exc}"
@@ -17735,6 +17766,20 @@ def _v88_mark_publication_revoked(docs: dict[str, bytes]) -> None:
     _v74_sync_manifest_file(manifest, "publication-report.json", docs["publication-report.json"])
     manifest["integrity_hash"] = publication_manifest_hash(manifest)
     docs["publication-manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v107_add_remediation_declared_extra(docs: dict[str, bytes]) -> None:
+    extra_path = "extra.txt"
+    extra_data = b"declared but not allowed in remediation package\n"
+    manifest = _v74_read_json_doc(docs, "manifest.json")
+    docs[extra_path] = extra_data
+    extra_row = {"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()}
+    manifest.setdefault("files", []).append(extra_row)
+    manifest["files"] = sorted(manifest["files"], key=lambda item: str(item.get("path") or ""))
+    manifest.setdefault("zip", {})["entries"] = sorted(set(manifest.get("zip", {}).get("entries") or []) | {extra_path})
+    manifest.setdefault("zip", {})["entry_count"] = len(manifest["zip"]["entries"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    docs["manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v82_tamper_anchor_signature(docs: dict[str, bytes]) -> None:
