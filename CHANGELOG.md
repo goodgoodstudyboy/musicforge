@@ -1,5 +1,18 @@
 # Changelog
 
+## v10.10.0 - 2026-06-28
+
+### Added
+- Release Audio Regression Guard store, signoff, fixed-layout ZIP export, offline verifier, CLI, API, and Studio controls.
+- Regression reports compare a baseline signed Release Audio Timeline/Certification chain against the current signed Timeline/Certification chain and derive track matrix, issue index, quality delta, and blocker register from external evidence.
+- GA readiness and `verify-ga-readiness-report --require-release-audio-regression-guard` now bind Release Audio Regression ZIPs to current baseline/current Timeline and Certification verification reports.
+- Release signoff `require_release_audio_regression_guard=true` / `require_release_audio_regression_signed=true` gate that hard-blocks regression blockers and stale external audio evidence even when `force=true` is supplied.
+- release-check `v1010.release_audio_regression_guard_smoke` covering positive regression, GA binding, Certification ZIP tamper rejection, internal full-resign rejection, and signed history deletion guard.
+
+### Verified
+- `python -m pytest tests\test_release_audio_certification.py tests\test_release_audio_timeline.py tests\test_release_audio_regression.py tests\test_server_release_audio_regression.py tests\test_cli_release_audio_regression.py tests\test_release_check.py::test_v108_release_audio_certification_smoke tests\test_release_check.py::test_v109_release_audio_timeline_smoke tests\test_release_check.py::test_v1010_release_audio_regression_guard_smoke tests\test_release_check_matrix.py tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.9.1 - 2026-06-27
 
 ### Fixed

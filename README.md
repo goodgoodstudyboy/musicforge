@@ -226,6 +226,25 @@ Release signoff can require `require_release_audio_timeline=true` and
 `require_release_audio_timeline_signed=true`. Signed timelines are immutable;
 stale Final Export or Certification evidence blocks gate/export/ZIP/verify.
 
+Release Audio Regression Guard compares a baseline signed Timeline/Certification
+chain against the current signed Timeline/Certification chain. The verifier
+rebuilds normalized facts from those external packages; it does not trust the
+Regression ZIP's internal JSON summaries alone:
+
+```powershell
+python -m song_agent.cli release-audio-regression configure rel-000002 --baseline-release-id rel-000001 --baseline-timeline .musicforge\releases\rel-000001\audio-timelines\ratl-000001\release-audio-timeline.zip --baseline-timeline-verification-report .musicforge\releases\rel-000001\audio-timelines\ratl-000001\verification-report.json --baseline-certification .musicforge\releases\rel-000001\audio-certification\release-audio-certification.zip --baseline-certification-verification-report .musicforge\releases\rel-000001\audio-certification\verification-report.json --json
+python -m song_agent.cli release-audio-regression refresh rel-000002 --json
+python -m song_agent.cli release-audio-regression signoff rel-000002 --signed-by "Developer" --role developer --json
+python -m song_agent.cli release-audio-regression zip rel-000002 --json
+python -m song_agent.cli release-audio-regression verify rel-000002 --strict --require-passed --require-signed --require-current --require-baseline-current --json
+python -m song_agent.cli verify-release-audio-regression-package .musicforge\releases\rel-000002\audio-regression\release-audio-regression.zip --strict --require-passed --require-signed --require-current --require-baseline-current --baseline-timeline .musicforge\releases\rel-000001\audio-timelines\ratl-000001\release-audio-timeline.zip --baseline-timeline-verification-report .musicforge\releases\rel-000001\audio-timelines\ratl-000001\verification-report.json --baseline-certification .musicforge\releases\rel-000001\audio-certification\release-audio-certification.zip --baseline-certification-verification-report .musicforge\releases\rel-000001\audio-certification\verification-report.json --current-timeline .musicforge\releases\rel-000002\audio-timelines\ratl-000001\release-audio-timeline.zip --current-timeline-verification-report .musicforge\releases\rel-000002\audio-timelines\ratl-000001\verification-report.json --current-certification .musicforge\releases\rel-000002\audio-certification\release-audio-certification.zip --current-certification-verification-report .musicforge\releases\rel-000002\audio-certification\verification-report.json --json
+```
+
+Release signoff can require `require_release_audio_regression_guard=true` and
+`require_release_audio_regression_signed=true`. Internal full-resign attacks,
+stale baseline/current Timeline evidence, stale Certification ZIPs, and signed
+history deletion are hard-blocked.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

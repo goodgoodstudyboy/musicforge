@@ -319,6 +319,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v107.release_audio_campaign_remediation_smoke", "v10.7 Release Audio Campaign remediation smoke", "_v107_release_audio_campaign_remediation_smoke", group="audio", version="10.7", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "campaign", "remediation"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v108.release_audio_certification_smoke", "v10.8 Release Audio Certification gate smoke", "_v108_release_audio_certification_smoke", group="audio", version="10.8", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "certification"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v109.release_audio_timeline_smoke", "v10.9 Release Audio Certification Timeline smoke", "_v109_release_audio_timeline_smoke", group="audio", version="10.9", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "certification", "timeline"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
+    _callable("v1010.release_audio_regression_guard_smoke", "v10.10 Release Audio Regression Guard smoke", "_v1010_release_audio_regression_guard_smoke", group="audio", version="10.10", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "certification", "timeline", "regression"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
 )
 
 KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "ga", "publish"}

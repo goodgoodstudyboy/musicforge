@@ -16749,6 +16749,213 @@ def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
         os.chdir(old_cwd)
 
 
+def _v1010_release_audio_regression_guard_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.release_audio_regression import ReleaseAudioRegressionStateError, ReleaseAudioRegressionStore
+    from song_agent.release_audio_regression_verifier import verify_release_audio_regression_package
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v1010-release-audio-regression-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            servers: list[Any] = []
+            try:
+                baseline = _v1010_signed_timeline_release("Release Audio Regression Track")
+                current = _v1010_signed_timeline_release("Release Audio Regression Track")
+                servers.extend([baseline["server"], current["server"]])
+                store = ReleaseAudioRegressionStore(
+                    release_store=current["server"].release_store,
+                    certification_store=current["timeline_store"].certification_store,
+                    timeline_store=current["timeline_store"],
+                )
+                store.configure_baseline(
+                    current["release_id"],
+                    {
+                        "baseline_release_id": baseline["release_id"],
+                        "baseline_timeline": baseline["timeline_zip"],
+                        "baseline_timeline_verification_report": baseline["timeline_verification"],
+                        "baseline_certification": baseline["cert_zip"],
+                        "baseline_certification_verification_report": baseline["cert_verification"],
+                        "current_timeline": current["timeline_zip"],
+                        "current_timeline_verification_report": current["timeline_verification"],
+                        "current_certification": current["cert_zip"],
+                        "current_certification_verification_report": current["cert_verification"],
+                    },
+                )
+                report = store.refresh_report(current["release_id"])
+                store.signoff(current["release_id"], {"signed_by": "QA", "role": "developer"})
+                zipped = store.build_zip(current["release_id"])
+                verification = store.verify_zip(current["release_id"], strict=True, require_passed=True, require_signed=True, require_current=True, require_baseline_current=True)
+                ga_report = build_ga_readiness_report(
+                    repo_root=Path(__file__).resolve().parents[1],
+                    allow_dirty=True,
+                    require_release_audio_regression_guard=True,
+                    release_audio_regression_zip_path=zipped["zip_path"],
+                    release_audio_regression_verification_report_path=store.verification_report_path(current["release_id"]),
+                    release_audio_regression_baseline_timeline_path=baseline["timeline_zip"],
+                    release_audio_regression_baseline_timeline_verification_report_path=baseline["timeline_verification"],
+                    release_audio_regression_baseline_certification_path=baseline["cert_zip"],
+                    release_audio_regression_baseline_certification_verification_report_path=baseline["cert_verification"],
+                    release_audio_regression_current_timeline_path=current["timeline_zip"],
+                    release_audio_regression_current_timeline_verification_report_path=current["timeline_verification"],
+                    release_audio_regression_current_certification_path=current["cert_zip"],
+                    release_audio_regression_current_certification_verification_report_path=current["cert_verification"],
+                )
+                ga_path = base / "ga-regression.json"
+                write_ga_readiness_report(ga_report, ga_path)
+                ga_verification = verify_ga_readiness_report(
+                    ga_path,
+                    require_release_audio_regression_guard=True,
+                    release_audio_regression_path=zipped["zip_path"],
+                    release_audio_regression_verification_report_path=store.verification_report_path(current["release_id"]),
+                    release_audio_regression_baseline_timeline_path=baseline["timeline_zip"],
+                    release_audio_regression_baseline_timeline_verification_report_path=baseline["timeline_verification"],
+                    release_audio_regression_baseline_certification_path=baseline["cert_zip"],
+                    release_audio_regression_baseline_certification_verification_report_path=baseline["cert_verification"],
+                    release_audio_regression_current_timeline_path=current["timeline_zip"],
+                    release_audio_regression_current_timeline_verification_report_path=current["timeline_verification"],
+                    release_audio_regression_current_certification_path=current["cert_zip"],
+                    release_audio_regression_current_certification_verification_report_path=current["cert_verification"],
+                )
+
+                tamper = _v1010_signed_timeline_release("Release Audio Regression Track")
+                servers.append(tamper["server"])
+                tamper_store = ReleaseAudioRegressionStore(
+                    release_store=tamper["server"].release_store,
+                    certification_store=tamper["timeline_store"].certification_store,
+                    timeline_store=tamper["timeline_store"],
+                )
+                tamper_store.configure_baseline(
+                    tamper["release_id"],
+                    {
+                        "baseline_release_id": baseline["release_id"],
+                        "baseline_timeline": baseline["timeline_zip"],
+                        "baseline_timeline_verification_report": baseline["timeline_verification"],
+                        "baseline_certification": baseline["cert_zip"],
+                        "baseline_certification_verification_report": baseline["cert_verification"],
+                        "current_timeline": tamper["timeline_zip"],
+                        "current_timeline_verification_report": tamper["timeline_verification"],
+                        "current_certification": tamper["cert_zip"],
+                        "current_certification_verification_report": tamper["cert_verification"],
+                    },
+                )
+                tamper_store.signoff(tamper["release_id"], {"signed_by": "QA", "role": "developer"})
+                tamper_zip = tamper_store.build_zip(tamper["release_id"])
+                _v109_append_unexpected_certification_zip(Path(tamper["cert_zip"]))
+                cert_tamper_verification = verify_release_audio_regression_package(
+                    tamper_zip["zip_path"],
+                    strict=True,
+                    require_passed=True,
+                    require_signed=True,
+                    require_current=True,
+                    require_baseline_current=True,
+                    baseline_timeline_path=baseline["timeline_zip"],
+                    baseline_timeline_verification_report_path=baseline["timeline_verification"],
+                    baseline_certification_path=baseline["cert_zip"],
+                    baseline_certification_verification_report_path=baseline["cert_verification"],
+                    current_timeline_path=tamper["timeline_zip"],
+                    current_timeline_verification_report_path=tamper["timeline_verification"],
+                    current_certification_path=tamper["cert_zip"],
+                    current_certification_verification_report_path=tamper["cert_verification"],
+                )
+                cert_tamper_gate = tamper_store.gate(tamper["release_id"], required=True, require_signed=True)
+
+                failed_current = _v1010_signed_timeline_release("Release Audio Regression Different Track")
+                servers.append(failed_current["server"])
+                failed_store = ReleaseAudioRegressionStore(
+                    release_store=failed_current["server"].release_store,
+                    certification_store=failed_current["timeline_store"].certification_store,
+                    timeline_store=failed_current["timeline_store"],
+                )
+                failed_store.configure_baseline(
+                    failed_current["release_id"],
+                    {
+                        "baseline_release_id": baseline["release_id"],
+                        "baseline_timeline": baseline["timeline_zip"],
+                        "baseline_timeline_verification_report": baseline["timeline_verification"],
+                        "baseline_certification": baseline["cert_zip"],
+                        "baseline_certification_verification_report": baseline["cert_verification"],
+                        "current_timeline": failed_current["timeline_zip"],
+                        "current_timeline_verification_report": failed_current["timeline_verification"],
+                        "current_certification": failed_current["cert_zip"],
+                        "current_certification_verification_report": failed_current["cert_verification"],
+                    },
+                )
+                failed_report = failed_store.refresh_report(failed_current["release_id"])
+                failed_zip = failed_store.build_zip(failed_current["release_id"])
+                forged_zip = base / "regression-full-resign.zip"
+                _v76_rewrite_zip(Path(failed_zip["zip_path"]), forged_zip, _v1010_rewrite_regression_as_passed)
+                full_resign_verification = verify_release_audio_regression_package(
+                    forged_zip,
+                    strict=True,
+                    require_passed=True,
+                    require_current=True,
+                    require_baseline_current=True,
+                    baseline_timeline_path=baseline["timeline_zip"],
+                    baseline_timeline_verification_report_path=baseline["timeline_verification"],
+                    baseline_certification_path=baseline["cert_zip"],
+                    baseline_certification_verification_report_path=baseline["cert_verification"],
+                    current_timeline_path=failed_current["timeline_zip"],
+                    current_timeline_verification_report_path=failed_current["timeline_verification"],
+                    current_certification_path=failed_current["cert_zip"],
+                    current_certification_verification_report_path=failed_current["cert_verification"],
+                )
+
+                signed_report = read_json(store.report_path(current["release_id"]))
+                signed_report["summary"]["blocker_count"] = 123
+                signed_report["integrity_hash"] = stable_hash({key: value for key, value in signed_report.items() if key != "integrity_hash"})
+                write_json(store.report_path(current["release_id"]), signed_report)
+                signed_tamper_export = "allowed"
+                try:
+                    store.export_package(current["release_id"])
+                except ReleaseAudioRegressionStateError:
+                    signed_tamper_export = "409"
+                restore_docs = store._build_documents(current["release_id"])  # noqa: SLF001 - smoke restores signed fixture after tamper.
+                store._write_documents(current["release_id"], restore_docs)  # noqa: SLF001
+
+                store.signoff_path(current["release_id"]).unlink()
+                deleted_signoff_refresh = "allowed"
+                try:
+                    store.refresh_report(current["release_id"])
+                except ReleaseAudioRegressionStateError:
+                    deleted_signoff_refresh = "409"
+
+                ok = (
+                    report.get("status") == "passed"
+                    and verification.get("status") == "passed"
+                    and _ga_check_status(ga_report, "ga.release_audio_regression_guard") == "passed"
+                    and ga_verification.get("status") != "failed"
+                    and cert_tamper_verification.get("status") == "failed"
+                    and cert_tamper_gate.get("status") == "failed"
+                    and full_resign_verification.get("status") == "failed"
+                    and signed_tamper_export == "409"
+                    and deleted_signoff_refresh == "409"
+                )
+                return ok, (
+                    f"regression={report.get('status')}, verify={verification.get('status')}, "
+                    f"ga={_ga_check_status(ga_report, 'ga.release_audio_regression_guard')}/{ga_verification.get('status')}, "
+                    f"cert_tamper={cert_tamper_verification.get('status')}/{cert_tamper_gate.get('status')}, "
+                    f"full_resign_source={failed_report.get('status')}, full_resign={full_resign_verification.get('status')}, "
+                    f"signed_tamper_export={signed_tamper_export}, deleted_signoff_refresh={deleted_signoff_refresh}"
+                )
+            finally:
+                for candidate in servers:
+                    close = getattr(candidate, "server_close", None)
+                    if callable(close):
+                        close()
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v10.10 Release Audio Regression smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
     from dataclasses import dataclass
 
@@ -18186,6 +18393,141 @@ def _v109_add_timeline_declared_extra(docs: dict[str, bytes]) -> None:
 def _v109_append_unexpected_certification_zip(zip_path: Path) -> None:
     with zipfile.ZipFile(zip_path, "a", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("unexpected.txt", b"unexpected certification payload\n")
+
+
+def _v1010_signed_timeline_release(title: str) -> dict[str, Any]:
+    from song_agent.release_audio_certification import ReleaseAudioCertificationStore
+    from song_agent.release_audio_timeline import ReleaseAudioTimelineStore
+
+    _project_id, release_id, server = _v106_release_fixture(title)
+    planner = server.audio_campaign_planner_store
+    campaign_store = server.audio_campaign_store
+    result = planner.create_campaign_from_release(release_id)
+    campaign_id = result["campaign"]["campaign_id"]
+    session_id = result["session"]["session_id"]
+    item_id = result["session"]["items"][0]["item_id"]
+    server.audio_lab_store.write_item_review(session_id, item_id, {"result": "accepted", "rating": 5, "reviewer": {"name": "QA", "role": "developer"}, "playback_confirmed": True})
+    campaign_store.refresh_report(campaign_id)
+    campaign_store.signoff(campaign_id, {"signed_by": "QA", "role": "developer"})
+    server.audio_campaign_governance_store.build_archive_zip(campaign_id)
+    governance = server.audio_campaign_governance_store.verify_archive(campaign_id, {"strict": True})
+    if governance.get("status") != "passed":
+        raise RuntimeError(f"governance verification failed: {governance.get('blockers')}")
+    cert_store = ReleaseAudioCertificationStore(
+        release_store=server.release_store,
+        project_store=server.project_store,
+        planner_store=planner,
+        campaign_store=campaign_store,
+        governance_store=server.audio_campaign_governance_store,
+        remediation_store=server.audio_campaign_remediation_store,
+    )
+    cert_store.refresh_report(release_id)
+    cert_store.signoff(release_id, {"signed_by": "QA", "role": "developer"})
+    cert_store.build_zip(release_id)
+    cert_verification = cert_store.verify_zip(
+        release_id,
+        strict=True,
+        require_passed=True,
+        require_signed=True,
+        require_real_audio=True,
+        require_manual_review=True,
+        require_remediation_when_needed=True,
+    )
+    if cert_verification.get("status") != "passed":
+        raise RuntimeError(f"certification verification failed: {cert_verification.get('blockers')}")
+    timeline_store = ReleaseAudioTimelineStore(
+        release_store=server.release_store,
+        project_store=server.project_store,
+        planner_store=planner,
+        campaign_store=campaign_store,
+        governance_store=server.audio_campaign_governance_store,
+        remediation_store=server.audio_campaign_remediation_store,
+        certification_store=cert_store,
+    )
+    timeline_report = timeline_store.refresh_timeline(release_id)
+    timeline_id = timeline_report["timeline_id"]
+    timeline_store.signoff_timeline(release_id, timeline_id, {"signed_by": "QA", "role": "developer"})
+    timeline_zip = timeline_store.build_zip(release_id, timeline_id)
+    timeline_verification = timeline_store.verify_zip(
+        release_id,
+        timeline_id,
+        strict=True,
+        require_passed=True,
+        require_signed=True,
+        require_real_audio=True,
+        require_manual_review=True,
+        require_current_certification=True,
+    )
+    if timeline_verification.get("status") != "passed":
+        raise RuntimeError(f"timeline verification failed: {timeline_verification.get('blockers')}")
+    return {
+        "server": server,
+        "release_id": release_id,
+        "timeline_id": timeline_id,
+        "timeline_store": timeline_store,
+        "timeline_zip": timeline_zip["zip_path"],
+        "timeline_verification": timeline_store.verification_report_path(release_id, timeline_id),
+        "cert_zip": cert_store.zip_path(release_id),
+        "cert_verification": cert_store.verification_report_path(release_id),
+    }
+
+
+def _v1010_rewrite_regression_as_passed(docs: dict[str, bytes]) -> None:
+    report = _v74_read_json_doc(docs, "regression-report.json")
+    matrix = _v74_read_json_doc(docs, "track-regression-matrix.json")
+    issues = _v74_read_json_doc(docs, "issue-regression-index.json")
+    quality = _v74_read_json_doc(docs, "quality-delta-summary.json")
+    blockers = _v74_read_json_doc(docs, "blocker-register.json")
+    report["status"] = "passed"
+    report["readiness"] = "ready"
+    report["blockers"] = []
+    report["warnings"] = []
+    report.setdefault("summary", {})["blocker_count"] = 0
+    report.setdefault("summary", {})["failed_track_count"] = 0
+    report.setdefault("summary", {})["average_manual_rating_delta"] = 99
+    report.setdefault("summary", {})["new_high_issue_count"] = 0
+    report.setdefault("summary", {})["new_critical_issue_count"] = 0
+    for row in matrix.get("rows") or []:
+        row["status"] = "passed"
+        row["identity_status"] = "matched"
+        row["blockers"] = []
+    matrix.setdefault("summary", {})["failed_track_count"] = 0
+    matrix.setdefault("summary", {})["passed_track_count"] = len(matrix.get("rows") or [])
+    issues["issue_taxonomy"] = []
+    issues["new_issues"] = []
+    quality["decision"] = {"status": "passed", "recommendation": "audio_regression_guard_passed", "blockers": [], "warnings": []}
+    quality.setdefault("metrics", {})["average_manual_rating_delta"] = 99
+    quality.setdefault("metrics", {})["min_manual_rating_delta"] = 99
+    blockers["status"] = "passed"
+    blockers["summary"] = {"blocker_count": 0, "warning_count": 0}
+    blockers["blockers"] = []
+    blockers["warnings"] = []
+    for document in (matrix, issues, quality, blockers):
+        document["integrity_hash"] = stable_hash({key: value for key, value in document.items() if key != "integrity_hash"})
+    report.setdefault("source", {})["track_matrix_hash"] = matrix["integrity_hash"]
+    report.setdefault("source", {})["issue_index_hash"] = issues["integrity_hash"]
+    report.setdefault("source", {})["quality_delta_hash"] = quality["integrity_hash"]
+    report.setdefault("source", {})["blocker_register_hash"] = blockers["integrity_hash"]
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    manifest = _v74_read_json_doc(docs, "manifest.json")
+    manifest["report_hash"] = report["integrity_hash"]
+    manifest["track_matrix_hash"] = matrix["integrity_hash"]
+    manifest["issue_index_hash"] = issues["integrity_hash"]
+    manifest["quality_delta_hash"] = quality["integrity_hash"]
+    manifest["blocker_register_hash"] = blockers["integrity_hash"]
+    docs["regression-report.json"] = _v74_json_doc(report)
+    docs["track-regression-matrix.json"] = _v74_json_doc(matrix)
+    docs["issue-regression-index.json"] = _v74_json_doc(issues)
+    docs["quality-delta-summary.json"] = _v74_json_doc(quality)
+    docs["blocker-register.json"] = _v74_json_doc(blockers)
+    files = []
+    for name, data in sorted(docs.items()):
+        if name == "manifest.json":
+            continue
+        files.append({"path": name, "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+    manifest["files"] = files
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    docs["manifest.json"] = _v74_json_doc(manifest)
 
 
 def _v82_tamper_anchor_signature(docs: dict[str, bytes]) -> None:

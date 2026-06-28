@@ -875,6 +875,11 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-audio-timeline-signoff"' in html
     assert 'id="release-audio-timeline-zip"' in html
     assert 'id="release-audio-timeline-verify"' in html
+    assert 'id="release-audio-regression-status"' in html
+    assert 'id="release-audio-regression-refresh"' in html
+    assert 'id="release-audio-regression-signoff"' in html
+    assert 'id="release-audio-regression-zip"' in html
+    assert 'id="release-audio-regression-verify"' in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html
     assert "/api/audio-lab/listening-sessions" in html
@@ -897,6 +902,10 @@ def test_webui_contains_release_workspace_controls():
     assert "/audio-certification/verify" in html
     assert "/audio-timelines/refresh" in html
     assert "/audio-timelines/" in html
+    assert "/audio-regression/refresh" in html
+    assert "/audio-regression/signoff" in html
+    assert "/audio-regression/zip" in html
+    assert "/audio-regression/verify" in html
     assert "Release Audio QA" in html
     assert "Audio Review Board" in html
     assert "Tracklist" in html
