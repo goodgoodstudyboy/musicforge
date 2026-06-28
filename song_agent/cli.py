@@ -835,6 +835,7 @@ def build_release_audio_baseline_parser() -> argparse.ArgumentParser:
     preflight = subparsers.add_parser("preflight-release", help="Preflight a release against a baseline.")
     preflight.add_argument("release_id")
     preflight.add_argument("baseline_id")
+    _add_release_audio_baseline_external_args(preflight)
     return parser
 
 
@@ -3633,7 +3634,16 @@ def _run_release_audio_baseline_command(args: argparse.Namespace) -> dict[str, A
         rows = store.list_baselines()
         return {"ok": True, "baselines": rows, "summary": {"baseline_count": len(rows)}, "status": "passed"}
     if args.action == "preflight-release":
-        result = store.preflight_release(args.release_id, args.baseline_id)
+        result = store.preflight_release(
+            args.release_id,
+            args.baseline_id,
+            {
+                "timeline": args.timeline,
+                "timeline_verification_report": args.timeline_verification_report,
+                "certification": args.certification,
+                "certification_verification_report": args.certification_verification_report,
+            },
+        )
         return {"ok": result.get("status") == "passed", **result, "summary": {"baseline_id": args.baseline_id}, "status": result.get("status")}
     if args.action == "export":
         result = store.export_registry()

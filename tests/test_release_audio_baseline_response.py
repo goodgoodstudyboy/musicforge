@@ -55,6 +55,38 @@ def test_release_audio_baseline_governance_lifecycle_and_verifier(tmp_path: Path
     assert verification["status"] == "passed", verification.get("blockers")
 
 
+def test_release_audio_baseline_gate_rejects_unrelated_release(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        baseline_release_id, baseline_timeline_id, baseline_store, current_release_id, *_ = _prepare_regression_pair(server, "Baseline Compatible Track")
+        unrelated_release_id, _unrelated_timeline_id, _unrelated_store = _prepare_signed_timeline(server, "Completely Different Track")
+        store = ReleaseAudioBaselineGovernanceStore(release_store=server.release_store)
+        baseline = store.create_from_release(
+            baseline_release_id,
+            {
+                "timeline": baseline_store.zip_path(baseline_release_id, baseline_timeline_id),
+                "timeline_verification_report": baseline_store.verification_report_path(baseline_release_id, baseline_timeline_id),
+                "certification": baseline_store.certification_store.zip_path(baseline_release_id),
+                "certification_verification_report": baseline_store.certification_store.verification_report_path(baseline_release_id),
+            },
+        )
+        store.approve(baseline["baseline_id"], {"approved_by": "QA", "reason": "baseline approved"})
+        store.activate(baseline["baseline_id"])
+        compatible_gate = store.gate(baseline_release_id, baseline_id=baseline["baseline_id"], required=True)
+        different_version_gate = store.gate(current_release_id, baseline_id=baseline["baseline_id"], required=True)
+        unrelated_gate = store.gate(unrelated_release_id, baseline_id=baseline["baseline_id"], required=True)
+    finally:
+        stop_test_server(server)
+
+    assert compatible_gate["status"] == "passed", compatible_gate
+    assert different_version_gate["status"] == "failed"
+    assert different_version_gate["hard_block"] is True
+    assert unrelated_gate["status"] == "failed"
+    assert unrelated_gate["hard_block"] is True
+    assert "track_identity_set_mismatch" in unrelated_gate["preflight"]["reasons"]
+
+
 def test_release_audio_baseline_registry_rejects_declared_extra(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     server = start_test_server()

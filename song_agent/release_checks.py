@@ -16995,7 +16995,8 @@ def _v1011_release_audio_baseline_response_smoke(root: Path) -> tuple[bool, str]
                 baseline_store.activate(baseline_doc["baseline_id"])
                 baseline_zip = baseline_store.build_zip()
                 baseline_verification = verify_release_audio_baseline_registry_package(baseline_zip["zip_path"], strict=True, require_active=True)
-                baseline_gate = baseline_store.gate(current["release_id"], baseline_id=baseline_doc["baseline_id"], required=True)
+                baseline_gate = baseline_store.gate(baseline["release_id"], baseline_id=baseline_doc["baseline_id"], required=True)
+                baseline_current_mismatch = baseline_store.gate(current["release_id"], baseline_id=baseline_doc["baseline_id"], required=True)
                 clean_baseline_zip = base / "baseline-registry-clean.zip"
                 shutil.copy2(baseline_zip["zip_path"], clean_baseline_zip)
                 clean_baseline_verification_report = base / "baseline-registry-clean-verification.json"
@@ -17168,6 +17169,7 @@ def _v1011_release_audio_baseline_response_smoke(root: Path) -> tuple[bool, str]
                     baseline_doc.get("track_set", {}).get("track_count", 0) >= 1
                     and baseline_verification.get("status") == "passed"
                     and baseline_gate.get("status") == "passed"
+                    and baseline_current_mismatch.get("status") == "failed"
                     and declared_extra.get("status") == "failed"
                     and response_plan.get("status") == "closed"
                     and safe_actions.get("status") == "completed_with_manual_actions"
@@ -17183,6 +17185,7 @@ def _v1011_release_audio_baseline_response_smoke(root: Path) -> tuple[bool, str]
                 )
                 return ok, (
                     f"baseline={baseline_verification.get('status')}/{baseline_gate.get('status')}, "
+                    f"baseline_current_mismatch={baseline_current_mismatch.get('status')}, "
                     f"declared_extra={declared_extra.get('status')}, "
                     f"response={response_plan.get('status')}/{closeout.get('status')}/{response_verification.get('status')}/{response_gate.get('status')}, "
                     f"ga={_ga_check_status(ga_report, 'ga.release_audio_baseline_governance')}/{_ga_check_status(ga_report, 'ga.release_audio_regression_response')}/{ga_verification.get('status')} failed={','.join([str(check.get('check_id')) for check in ga_verification.get('checks', []) if check.get('status') == 'failed']) or '-'}, "

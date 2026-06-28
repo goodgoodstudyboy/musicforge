@@ -44,7 +44,7 @@ def test_release_audio_response_api_and_release_gate(tmp_path: Path, monkeypatch
         signoff_status, _ = _post_json(server, f"/api/releases/{current_release_id}/audio-regression-response/signoff", {"signed_by": "QA", "role": "developer"})
         zip_status, _ = _post_json(server, f"/api/releases/{current_release_id}/audio-regression-response/zip", {})
         verify_status, verify_body = _post_json(server, f"/api/releases/{current_release_id}/audio-regression-response/verify", {"strict": True, "require_closed": True, "require_signed": True, "require_regression_current": True})
-        baseline_gate = server.release_audio_baseline_governance_store.gate(current_release_id, baseline_id=baseline_id, required=True)
+        baseline_gate = server.release_audio_baseline_governance_store.gate(baseline_release_id, baseline_id=baseline_id, required=True)
         response_gate = server.release_audio_regression_response_store.gate(current_release_id, required=True, require_signed=True)
     finally:
         stop_test_server(server)
@@ -62,3 +62,38 @@ def test_release_audio_response_api_and_release_gate(tmp_path: Path, monkeypatch
     assert verify_body["verification"]["status"] == "passed"
     assert baseline_gate["status"] == "passed"
     assert response_gate["status"] == "passed"
+
+
+def test_release_signoff_rejects_unrelated_audio_baseline(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        baseline_release_id, baseline_timeline_id, baseline_store, current_release_id, *_ = _prepare_regression_pair(server, "Server Wrong Baseline Track")
+        status, created = _post_json(
+            server,
+            "/api/audio-baselines",
+            {
+                "release_id": baseline_release_id,
+                "timeline": str(baseline_store.zip_path(baseline_release_id, baseline_timeline_id)),
+                "timeline_verification_report": str(baseline_store.verification_report_path(baseline_release_id, baseline_timeline_id)),
+                "certification": str(baseline_store.certification_store.zip_path(baseline_release_id)),
+                "certification_verification_report": str(baseline_store.certification_store.verification_report_path(baseline_release_id)),
+            },
+        )
+        baseline_id = created["baseline"]["baseline_id"]
+        _post_json(server, f"/api/audio-baselines/{baseline_id}/approve", {"approved_by": "QA", "reason": "baseline approved"})
+        _post_json(server, f"/api/audio-baselines/{baseline_id}/activate", {})
+        signoff_status, signoff_body = _post_json(
+            server,
+            f"/api/releases/{current_release_id}/signoff",
+            {"require_release_audio_baseline_governance": True, "release_audio_baseline_id": baseline_id, "force": True, "override_reason": "must not bypass baseline mismatch"},
+        )
+    finally:
+        stop_test_server(server)
+
+    assert status == 201
+    assert signoff_status == 409
+    gate = signoff_body["acceptance_gate"]["release_audio_baseline_governance"]
+    assert gate["status"] == "failed"
+    assert gate["hard_block"] is True
+    assert "track_identity_set_mismatch" in gate["preflight"]["reasons"]

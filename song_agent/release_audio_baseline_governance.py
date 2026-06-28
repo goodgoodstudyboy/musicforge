@@ -180,7 +180,8 @@ class ReleaseAudioBaselineGovernanceStore:
             self._write_registry()
             return baseline
 
-    def preflight_release(self, release_id: str, baseline_id: str) -> dict[str, Any]:
+    def preflight_release(self, release_id: str, baseline_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = payload or {}
         baseline = self.read_baseline(baseline_id)
         compatible = baseline.get("status") in {"approved", "active"}
         reasons: list[str] = []
@@ -188,14 +189,39 @@ class ReleaseAudioBaselineGovernanceStore:
             reasons.append("baseline_not_approved_or_active")
         if baseline.get("status") == "revoked":
             reasons.append("baseline_revoked")
-        return {"status": "passed" if compatible and not reasons else "failed", "release_id": release_id, "baseline_id": baseline_id, "reasons": reasons, "baseline": baseline}
+        current_binding: dict[str, Any] = {}
+        current_tracks: list[dict[str, Any]] = []
+        current_track_set: dict[str, Any] = {}
+        try:
+            current_binding = self._current_binding_for_release(release_id, payload)
+            current_tracks = _tracks_from_binding(current_binding)
+            current_track_set = _track_set_from_tracks(current_tracks)
+            compatibility_reasons = _track_set_compatibility_reasons(baseline.get("track_set") if isinstance(baseline.get("track_set"), dict) else {}, current_track_set)
+            reasons.extend(compatibility_reasons)
+        except Exception as exc:
+            reasons.append("current_release_audio_evidence_invalid")
+            current_binding = {"status": "failed", "error": sanitize_sensitive_text(str(exc))}
+        status = "passed" if compatible and not reasons else "failed"
+        return {
+            "status": status,
+            "release_id": release_id,
+            "baseline_id": baseline_id,
+            "reasons": reasons,
+            "baseline": baseline,
+            "current_release": {
+                "release_id": release_id,
+                "track_set": current_track_set,
+                "evidence": _evidence_summary(current_binding) if current_binding and current_binding.get("status") != "failed" else {},
+                "source_hash": current_binding.get("source_hash"),
+            },
+        }
 
-    def gate(self, release_id: str, *, baseline_id: str | None = None, required: bool = True) -> dict[str, Any]:
+    def gate(self, release_id: str, *, baseline_id: str | None = None, required: bool = True, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
         try:
             baseline = self.read_baseline(baseline_id) if baseline_id else self._active_baseline_for_release(release_id)
-            preflight = self.preflight_release(release_id, str(baseline.get("baseline_id")))
+            preflight = self.preflight_release(release_id, str(baseline.get("baseline_id")), evidence)
             if preflight["status"] != "passed":
                 return {"status": "failed", "hard_block": True, "message": "Release Audio Baseline Governance gate failed.", "preflight": preflight}
             return {"status": "passed", "hard_block": False, "message": "Release Audio Baseline Governance gate passed.", "baseline": baseline}
@@ -332,6 +358,31 @@ class ReleaseAudioBaselineGovernanceStore:
             raise ReleaseAudioBaselineGovernanceStateError("Multiple active baselines are available; select baseline_id explicitly.")
         return active[0]
 
+    def _current_binding_for_release(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        release_dir = self.release_store.release_dir(release_id)
+        timeline_path = payload.get("timeline") or payload.get("timeline_zip_path")
+        timeline_report_path = payload.get("timeline_verification_report") or payload.get("timeline_verification_report_path")
+        certification_path = payload.get("certification") or payload.get("certification_zip_path")
+        certification_report_path = payload.get("certification_verification_report") or payload.get("certification_verification_report_path")
+        if not timeline_path or not timeline_report_path:
+            current_timeline = read_json(release_dir / "audio-timelines" / "current-timeline.json")
+            timeline_id = str(current_timeline.get("timeline_id") or "")
+            if not timeline_id:
+                raise ReleaseAudioBaselineGovernanceValidationError("Current Release Audio Timeline is missing.")
+            timeline_dir = release_dir / "audio-timelines" / timeline_id
+            timeline_path = timeline_path or timeline_dir / "release-audio-timeline.zip"
+            timeline_report_path = timeline_report_path or timeline_dir / "verification-report.json"
+        certification_dir = release_dir / "audio-certification"
+        certification_path = certification_path or certification_dir / "release-audio-certification.zip"
+        certification_report_path = certification_report_path or certification_dir / "verification-report.json"
+        return build_baseline_source_binding(
+            release_id=release_id,
+            timeline_path=timeline_path,
+            timeline_report_path=timeline_report_path,
+            certification_path=certification_path,
+            certification_report_path=certification_report_path,
+        )
+
 
 def _scope_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     scope = payload.get("scope") if isinstance(payload.get("scope"), dict) else {}
@@ -363,6 +414,37 @@ def _tracks_from_binding(binding: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return output
+
+
+def _track_set_from_tracks(tracks: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "track_count": len(tracks),
+        "track_identity_set_hash": stable_hash([track.get("identity_key") for track in tracks]),
+        "tracks": tracks,
+    }
+
+
+def _track_set_compatibility_reasons(baseline_track_set: dict[str, Any], current_track_set: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    if int(baseline_track_set.get("track_count") or 0) != int(current_track_set.get("track_count") or 0):
+        reasons.append("track_count_mismatch")
+    if baseline_track_set.get("track_identity_set_hash") != current_track_set.get("track_identity_set_hash"):
+        reasons.append("track_identity_set_mismatch")
+    baseline_tracks = baseline_track_set.get("tracks") if isinstance(baseline_track_set.get("tracks"), list) else []
+    current_tracks = current_track_set.get("tracks") if isinstance(current_track_set.get("tracks"), list) else []
+    baseline_by_key = {str(track.get("identity_key") or ""): track for track in baseline_tracks if isinstance(track, dict)}
+    current_by_key = {str(track.get("identity_key") or ""): track for track in current_tracks if isinstance(track, dict)}
+    if set(baseline_by_key) != set(current_by_key):
+        if "track_identity_set_mismatch" not in reasons:
+            reasons.append("track_identity_set_mismatch")
+        return reasons
+    for key, baseline_track in baseline_by_key.items():
+        current_track = current_by_key[key]
+        for field in ("project_id", "version_id", "final_export_hash"):
+            if baseline_track.get(field) != current_track.get(field):
+                reasons.append(f"track_{field}_mismatch")
+                break
+    return sorted(set(reasons))
 
 
 def _evidence_summary(binding: dict[str, Any]) -> dict[str, Any]:

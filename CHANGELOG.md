@@ -1,5 +1,16 @@
 # Changelog
 
+## v10.11.1 - 2026-06-28
+
+### Fixed
+- Release Audio Baseline Governance gate now rebuilds current Release Audio Timeline/Certification evidence and rejects incompatible baseline track sets.
+- Release signoff `require_release_audio_baseline_governance=true` now hard-blocks unrelated or stale baseline usage even when `force=true` is supplied.
+- release-check `v1011.release_audio_baseline_response_smoke` now covers baseline/current release mismatch.
+
+### Verified
+- `python -m pytest tests\test_release_audio_baseline_response.py tests\test_server_release_audio_baseline_response.py tests\test_release_check.py::test_v1011_release_audio_baseline_response_smoke tests\test_release_check_matrix.py tests\test_webui.py::test_webui_contains_release_workspace_controls -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.11.0 - 2026-06-28
 
 ### Added
