@@ -899,6 +899,11 @@ def panel_html() -> str:
             <button class="secondary" id="release-audio-regression-signoff" type="button">Sign Regression</button>
             <button class="secondary" id="release-audio-regression-zip" type="button">Regression ZIP</button>
             <button class="secondary" id="release-audio-regression-verify" type="button">Verify Regression</button>
+            <button class="secondary" id="release-audio-baseline-list" type="button">Audio Baselines</button>
+            <button class="secondary" id="release-audio-regression-response-create" type="button">Regression Response</button>
+            <button class="secondary" id="release-audio-regression-response-run-safe" type="button">Run Response</button>
+            <button class="secondary" id="release-audio-regression-response-signoff" type="button">Sign Response</button>
+            <button class="secondary" id="release-audio-regression-response-verify" type="button">Verify Response</button>
           </div>
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
@@ -2473,6 +2478,29 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const releaseId = audioCampaignReleaseId();
       if (!releaseId) return;
       await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-regression/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_passed: true, require_signed: true, require_current: true, require_baseline_current: true }) });
+    });
+    $("release-audio-baseline-list").addEventListener("click", async () => {
+      await showAudioCampaignResult(`/api/audio-baselines`);
+    });
+    $("release-audio-regression-response-create").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-regression-response/create`, { method: "POST" });
+    });
+    $("release-audio-regression-response-run-safe").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-regression-response/run-safe`, { method: "POST" });
+    });
+    $("release-audio-regression-response-signoff").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-regression-response/signoff`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signed_by: "studio-user", role: "developer" }) });
+    });
+    $("release-audio-regression-response-verify").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-regression-response/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_closed: true, require_signed: true, require_regression_current: true }) });
     });
 
     async function showAudioLabResult(path, options) {

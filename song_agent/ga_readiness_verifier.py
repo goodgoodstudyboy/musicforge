@@ -26,6 +26,14 @@ from song_agent.release_audio_regression_verifier import (
     RELEASE_AUDIO_REGRESSION_VERIFICATION_PACKAGE_TYPE,
     verify_release_audio_regression_package,
 )
+from song_agent.release_audio_baseline_governance_verifier import (
+    RELEASE_AUDIO_BASELINE_REGISTRY_VERIFICATION_PACKAGE_TYPE,
+    verify_release_audio_baseline_registry_package,
+)
+from song_agent.release_audio_regression_response_verifier import (
+    RELEASE_AUDIO_REGRESSION_RESPONSE_VERIFICATION_PACKAGE_TYPE,
+    verify_release_audio_regression_response_package,
+)
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.music_acceptance import stable_hash
 from song_agent.projectio import read_json, write_json
@@ -52,6 +60,8 @@ def verify_ga_readiness_report(
     require_release_audio_certification: bool = False,
     require_release_audio_timeline: bool = False,
     require_release_audio_regression_guard: bool = False,
+    require_release_audio_baseline_governance: bool = False,
+    require_release_audio_regression_response: bool = False,
     require_final_readiness: bool = False,
     manual_acceptance_report_path: Path | str | None = None,
     audio_campaign_archive_path: Path | str | None = None,
@@ -72,6 +82,10 @@ def verify_ga_readiness_report(
     release_audio_regression_current_timeline_verification_report_path: Path | str | None = None,
     release_audio_regression_current_certification_path: Path | str | None = None,
     release_audio_regression_current_certification_verification_report_path: Path | str | None = None,
+    release_audio_baseline_registry_path: Path | str | None = None,
+    release_audio_baseline_registry_verification_report_path: Path | str | None = None,
+    release_audio_regression_response_path: Path | str | None = None,
+    release_audio_regression_response_verification_report_path: Path | str | None = None,
     final_handoff_package_path: Path | str | None = None,
     final_handoff_verification_report_path: Path | str | None = None,
 ) -> dict[str, Any]:
@@ -168,6 +182,30 @@ def verify_ga_readiness_report(
             _verify_release_audio_regression_evidence(
                 checks,
                 checks_by_id.get("ga.release_audio_regression_guard", {}),
+                release_audio_regression_path,
+                release_audio_regression_verification_report_path,
+                release_audio_regression_baseline_timeline_path,
+                release_audio_regression_baseline_timeline_verification_report_path,
+                release_audio_regression_baseline_certification_path,
+                release_audio_regression_baseline_certification_verification_report_path,
+                release_audio_regression_current_timeline_path or release_audio_timeline_path,
+                release_audio_regression_current_timeline_verification_report_path or release_audio_timeline_verification_report_path,
+                release_audio_regression_current_certification_path or release_audio_certification_path,
+                release_audio_regression_current_certification_verification_report_path or release_audio_certification_verification_report_path,
+            )
+        if require_release_audio_baseline_governance:
+            _verify_release_audio_baseline_governance_evidence(
+                checks,
+                checks_by_id.get("ga.release_audio_baseline_governance", {}),
+                release_audio_baseline_registry_path,
+                release_audio_baseline_registry_verification_report_path,
+            )
+        if require_release_audio_regression_response:
+            _verify_release_audio_regression_response_evidence(
+                checks,
+                checks_by_id.get("ga.release_audio_regression_response", {}),
+                release_audio_regression_response_path,
+                release_audio_regression_response_verification_report_path,
                 release_audio_regression_path,
                 release_audio_regression_verification_report_path,
                 release_audio_regression_baseline_timeline_path,
@@ -799,6 +837,118 @@ def _verify_release_audio_regression_evidence(
     )
 
 
+def _verify_release_audio_baseline_governance_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    registry_path: Path | str | None,
+    verification_report_path: Path | str | None,
+) -> None:
+    if not registry_path:
+        _add_check(checks, "ga_readiness_release_audio_baseline_registry_required", "failed", "blocking", "Release Audio Baseline Governance requirement needs a registry ZIP.")
+        return
+    if not verification_report_path:
+        _add_check(checks, "ga_readiness_release_audio_baseline_verification_required", "failed", "blocking", "Release Audio Baseline Governance requirement needs a verification report.")
+        return
+    zip_path = Path(registry_path)
+    try:
+        verification_report = read_json(Path(verification_report_path))
+        runtime_report = verify_release_audio_baseline_registry_package(zip_path, strict=True, require_active=True)
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_release_audio_baseline_readable", "failed", "blocking", f"Release Audio Baseline Governance evidence could not be read: {exc}")
+        return
+    integrity_ok = verification_report.get("integrity_hash") == release_stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
+    detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+    external_fp = _verification_fingerprint(verification_report)
+    runtime_fp = _verification_fingerprint(runtime_report)
+    binding_ok = (
+        ga_check.get("status") == "passed"
+        and detail.get("zip_sha256") == external_fp.get("zip_sha256")
+        and detail.get("manifest_hash") == external_fp.get("manifest_hash")
+        and detail.get("verification_hash") == verification_report.get("integrity_hash")
+    )
+    _add_check(checks, "ga_readiness_release_audio_baseline_verification_package_type", "passed" if verification_report.get("package_type") == RELEASE_AUDIO_BASELINE_REGISTRY_VERIFICATION_PACKAGE_TYPE else "failed", "blocking", "Release Audio Baseline verification package type is valid.")
+    _add_check(checks, "ga_readiness_release_audio_baseline_verification_integrity", "passed" if integrity_ok else "failed", "blocking", "Release Audio Baseline verification integrity hash matches.")
+    _add_check(checks, "ga_readiness_release_audio_baseline_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Release Audio Baseline verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
+    _add_check(checks, "ga_readiness_release_audio_baseline_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Release Audio Baseline verification report matches ZIP and manifest.")
+    _add_check(checks, "ga_readiness_release_audio_baseline_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness Release Audio Baseline check matches external verification.")
+
+
+def _verify_release_audio_regression_response_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    response_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    regression_path: Path | str | None = None,
+    regression_verification_report_path: Path | str | None = None,
+    baseline_timeline_path: Path | str | None = None,
+    baseline_timeline_verification_report_path: Path | str | None = None,
+    baseline_certification_path: Path | str | None = None,
+    baseline_certification_verification_report_path: Path | str | None = None,
+    current_timeline_path: Path | str | None = None,
+    current_timeline_verification_report_path: Path | str | None = None,
+    current_certification_path: Path | str | None = None,
+    current_certification_verification_report_path: Path | str | None = None,
+) -> None:
+    if not response_path:
+        _add_check(checks, "ga_readiness_release_audio_regression_response_required", "failed", "blocking", "Release Audio Regression Response requirement needs a response ZIP.")
+        return
+    if not verification_report_path:
+        _add_check(checks, "ga_readiness_release_audio_regression_response_verification_required", "failed", "blocking", "Release Audio Regression Response requirement needs a verification report.")
+        return
+    zip_path = Path(response_path)
+    current_args = {
+        "release_audio_regression_path": regression_path,
+        "release_audio_regression_verification_report_path": regression_verification_report_path,
+        "baseline_timeline_path": baseline_timeline_path,
+        "baseline_timeline_verification_report_path": baseline_timeline_verification_report_path,
+        "baseline_certification_path": baseline_certification_path,
+        "baseline_certification_verification_report_path": baseline_certification_verification_report_path,
+        "current_timeline_path": current_timeline_path,
+        "current_timeline_verification_report_path": current_timeline_verification_report_path,
+        "current_certification_path": current_certification_path,
+        "current_certification_verification_report_path": current_certification_verification_report_path,
+    }
+    missing_current = [key for key, value in current_args.items() if value is None]
+    if missing_current:
+        _add_check(
+            checks,
+            "ga_readiness_release_audio_regression_response_current_evidence_required",
+            "failed",
+            "blocking",
+            "Release Audio Regression Response requirement needs current Release Audio Regression evidence.",
+            {"missing": missing_current},
+        )
+        return
+    try:
+        verification_report = read_json(Path(verification_report_path))
+        runtime_report = verify_release_audio_regression_response_package(
+            zip_path,
+            strict=True,
+            require_closed=True,
+            require_signed=True,
+            require_regression_current=True,
+            **current_args,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_release_audio_regression_response_readable", "failed", "blocking", f"Release Audio Regression Response evidence could not be read: {exc}")
+        return
+    integrity_ok = verification_report.get("integrity_hash") == release_stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
+    detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+    external_fp = _verification_fingerprint(verification_report)
+    runtime_fp = _verification_fingerprint(runtime_report)
+    binding_ok = (
+        ga_check.get("status") == "passed"
+        and detail.get("zip_sha256") == external_fp.get("zip_sha256")
+        and detail.get("manifest_hash") == external_fp.get("manifest_hash")
+        and detail.get("verification_hash") == verification_report.get("integrity_hash")
+    )
+    _add_check(checks, "ga_readiness_release_audio_regression_response_verification_package_type", "passed" if verification_report.get("package_type") == RELEASE_AUDIO_REGRESSION_RESPONSE_VERIFICATION_PACKAGE_TYPE else "failed", "blocking", "Release Audio Regression Response verification package type is valid.")
+    _add_check(checks, "ga_readiness_release_audio_regression_response_verification_integrity", "passed" if integrity_ok else "failed", "blocking", "Release Audio Regression Response verification integrity hash matches.")
+    _add_check(checks, "ga_readiness_release_audio_regression_response_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Release Audio Regression Response verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
+    _add_check(checks, "ga_readiness_release_audio_regression_response_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Release Audio Regression Response verification report matches ZIP and manifest.")
+    _add_check(checks, "ga_readiness_release_audio_regression_response_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness Release Audio Regression Response check matches external verification.")
+
+
 def _read_final_handoff_manifest(zip_path: Path) -> dict[str, Any]:
     if not zip_path.exists():
         return {}
@@ -808,6 +958,15 @@ def _read_final_handoff_manifest(zip_path: Path) -> dict[str, Any]:
                 return json.loads(file.read().decode("utf-8"))
     except Exception:
         return {}
+
+
+def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    return {
+        "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256"),
+        "zip_size_bytes": report.get("zip_size_bytes") or summary.get("zip_size_bytes"),
+        "manifest_hash": report.get("manifest_hash") or summary.get("manifest_hash"),
+    }
 
 
 def _verify_acceptance_report_from_store(report_path: Path, suite_id: str, report: dict[str, Any]) -> dict[str, Any] | None:

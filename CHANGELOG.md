@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.11.0 - 2026-06-28
+
+### Added
+- Release Audio Baseline Governance store, approval/activation flow, fixed-layout registry ZIP, offline verifier, CLI, API, and Release signoff gate.
+- Release Audio Regression Response store, draft-only safe actions, high/critical waiver guard, recheck closeout, signed fixed-layout ZIP, offline verifier, CLI, API, and Release signoff gate.
+- GA readiness checks for `ga.release_audio_baseline_governance` and `ga.release_audio_regression_response`, including external ZIP/report binding.
+- release-check `v1011.release_audio_baseline_response_smoke` covering active baseline governance, declared extra registry rejection, response closeout/signoff, GA binding, high waiver rejection, and signed response tamper blocking.
+
+### Verified
+- `python -m pytest tests\test_release_audio_baseline_response.py tests\test_server_release_audio_baseline_response.py tests\test_release_check.py::test_v1011_release_audio_baseline_response_smoke tests\test_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.10.0 - 2026-06-28
 
 ### Added

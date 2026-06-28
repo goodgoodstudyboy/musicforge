@@ -114,6 +114,12 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--release-audio-regression-current-timeline-verification-report", type=Path, default=None, help="Current Release Audio Timeline verification report.")
     parser.add_argument("--release-audio-regression-current-certification", type=Path, default=None, help="Current Release Audio Certification ZIP bound by the regression guard.")
     parser.add_argument("--release-audio-regression-current-certification-verification-report", type=Path, default=None, help="Current Release Audio Certification verification report.")
+    parser.add_argument("--require-release-audio-baseline-governance", action="store_true", help="Require approved active Release Audio Baseline Governance evidence.")
+    parser.add_argument("--release-audio-baseline-registry", type=Path, default=None, help="Release Audio Baseline Registry ZIP.")
+    parser.add_argument("--release-audio-baseline-registry-verification-report", type=Path, default=None, help="Release Audio Baseline Registry verification report.")
+    parser.add_argument("--require-release-audio-regression-response", action="store_true", help="Require closed signed Release Audio Regression Response evidence.")
+    parser.add_argument("--release-audio-regression-response", type=Path, default=None, help="Release Audio Regression Response ZIP.")
+    parser.add_argument("--release-audio-regression-response-verification-report", type=Path, default=None, help="Release Audio Regression Response verification report.")
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
     parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
@@ -158,6 +164,12 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--release-audio-regression-current-timeline-verification-report", type=Path, default=None, help="Current Release Audio Timeline verification report.")
     parser.add_argument("--release-audio-regression-current-certification", type=Path, default=None, help="Current Release Audio Certification ZIP bound by the regression guard.")
     parser.add_argument("--release-audio-regression-current-certification-verification-report", type=Path, default=None, help="Current Release Audio Certification verification report.")
+    parser.add_argument("--require-release-audio-baseline-governance", action="store_true", help="Require external Release Audio Baseline Governance evidence.")
+    parser.add_argument("--release-audio-baseline-registry", type=Path, default=None, help="Release Audio Baseline Registry ZIP.")
+    parser.add_argument("--release-audio-baseline-registry-verification-report", type=Path, default=None, help="Release Audio Baseline Registry verification report JSON.")
+    parser.add_argument("--require-release-audio-regression-response", action="store_true", help="Require external Release Audio Regression Response evidence.")
+    parser.add_argument("--release-audio-regression-response", type=Path, default=None, help="Release Audio Regression Response ZIP.")
+    parser.add_argument("--release-audio-regression-response-verification-report", type=Path, default=None, help="Release Audio Regression Response verification report JSON.")
     return parser
 
 
@@ -783,6 +795,109 @@ def build_verify_release_audio_regression_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-zip-size-mb", type=int, default=128)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def _add_release_audio_baseline_external_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--timeline", type=Path, default=None)
+    parser.add_argument("--timeline-verification-report", type=Path, default=None)
+    parser.add_argument("--certification", type=Path, default=None)
+    parser.add_argument("--certification-verification-report", type=Path, default=None)
+
+
+def build_release_audio_baseline_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Release Audio Baseline Governance.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("from-release", help="Create a baseline candidate from signed Release Audio evidence.")
+    create.add_argument("release_id")
+    _add_release_audio_baseline_external_args(create)
+    create.add_argument("--scope-type", default="release_line")
+    create.add_argument("--release-line-id", default="default")
+    approve = subparsers.add_parser("approve", help="Approve a baseline candidate.")
+    approve.add_argument("baseline_id")
+    approve.add_argument("--approved-by", default="audio-lead")
+    approve.add_argument("--role", default="audio-lead")
+    approve.add_argument("--reason", default="Release audio baseline approved.")
+    activate = subparsers.add_parser("activate", help="Activate an approved baseline.")
+    activate.add_argument("baseline_id")
+    activate.add_argument("--supersede-existing", action="store_true")
+    revoke = subparsers.add_parser("revoke", help="Revoke a baseline.")
+    revoke.add_argument("baseline_id")
+    revoke.add_argument("--reason", default="Release audio baseline revoked.")
+    subparsers.add_parser("list", help="List baselines.")
+    export = subparsers.add_parser("export", help="Export baseline registry.")
+    zip_cmd = subparsers.add_parser("zip", help="Build baseline registry ZIP.")
+    verify = subparsers.add_parser("verify", help="Verify baseline registry ZIP.")
+    verify.add_argument("--strict", action="store_true")
+    verify.add_argument("--require-active", action="store_true")
+    verify.add_argument("--report-out", type=Path, default=None)
+    preflight = subparsers.add_parser("preflight-release", help="Preflight a release against a baseline.")
+    preflight.add_argument("release_id")
+    preflight.add_argument("baseline_id")
+    return parser
+
+
+def build_verify_release_audio_baseline_registry_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Release Audio Baseline Registry ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-active", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_release_audio_regression_response_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Release Audio Regression Response evidence.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("create", help="Create a regression response plan.")
+    create.add_argument("release_id")
+    waiver = subparsers.add_parser("waive", help="Add a warning-level waiver.")
+    waiver.add_argument("release_id")
+    waiver.add_argument("--action-id", required=True)
+    waiver.add_argument("--reason", required=True)
+    waiver.add_argument("--waived-by", default="audio-lead")
+    run = subparsers.add_parser("run-safe", help="Prepare draft-only safe actions.")
+    run.add_argument("release_id")
+    closeout = subparsers.add_parser("closeout", help="Close response after passed Regression recheck.")
+    closeout.add_argument("release_id")
+    closeout.add_argument("--closed-by", default="audio-lead")
+    closeout.add_argument("--reason", default="Regression response recheck passed.")
+    signoff = subparsers.add_parser("signoff", help="Sign off closed response evidence.")
+    signoff.add_argument("release_id")
+    signoff.add_argument("--signed-by", default="audio-lead")
+    signoff.add_argument("--role", default="audio-response-reviewer")
+    signoff.add_argument("--reason", default="Release audio regression response accepted.")
+    status = subparsers.add_parser("status", help="Show response status.")
+    status.add_argument("release_id")
+    export = subparsers.add_parser("export", help="Export response package files.")
+    export.add_argument("release_id")
+    zip_cmd = subparsers.add_parser("zip", help="Build response ZIP.")
+    zip_cmd.add_argument("release_id")
+    verify = subparsers.add_parser("verify", help="Verify response ZIP.")
+    verify.add_argument("release_id")
+    verify.add_argument("--strict", action="store_true")
+    verify.add_argument("--require-closed", action="store_true")
+    verify.add_argument("--require-signed", action="store_true")
+    verify.add_argument("--require-regression-current", action="store_true")
+    verify.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_release_audio_regression_response_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Release Audio Regression Response ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-closed", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-regression-current", action="store_true")
+    parser.add_argument("--release-audio-regression", type=Path, default=None)
+    parser.add_argument("--release-audio-regression-verification-report", type=Path, default=None)
+    _add_release_audio_regression_external_args(parser)
+    parser.add_argument("--report-out", type=Path, default=None)
     return parser
 
 
@@ -3487,6 +3602,92 @@ def _run_release_audio_regression_command(args: argparse.Namespace) -> dict[str,
     raise ValueError("Unsupported release-audio-regression command.")
 
 
+def _run_release_audio_baseline_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.release_audio_baseline_governance import ReleaseAudioBaselineGovernanceStore
+    from song_agent.release_audio_baseline_governance_verifier import write_release_audio_baseline_registry_verification_report
+
+    store = ReleaseAudioBaselineGovernanceStore()
+    if args.action == "from-release":
+        baseline = store.create_from_release(
+            args.release_id,
+            {
+                "timeline": args.timeline,
+                "timeline_verification_report": args.timeline_verification_report,
+                "certification": args.certification,
+                "certification_verification_report": args.certification_verification_report,
+                "scope_type": args.scope_type,
+                "release_line_id": args.release_line_id,
+            },
+        )
+        return {"ok": True, "baseline": baseline, "summary": {"baseline_id": baseline.get("baseline_id"), "status": baseline.get("status")}, "status": baseline.get("status")}
+    if args.action == "approve":
+        baseline = store.approve(args.baseline_id, {"approved_by": args.approved_by, "role": args.role, "reason": args.reason})
+        return {"ok": True, "baseline": baseline, "summary": {"baseline_id": baseline.get("baseline_id"), "status": baseline.get("status")}, "status": baseline.get("status")}
+    if args.action == "activate":
+        baseline = store.activate(args.baseline_id, {"supersede_existing": args.supersede_existing})
+        return {"ok": True, "baseline": baseline, "summary": {"baseline_id": baseline.get("baseline_id"), "status": baseline.get("status")}, "status": baseline.get("status")}
+    if args.action == "revoke":
+        baseline = store.revoke(args.baseline_id, {"reason": args.reason})
+        return {"ok": True, "baseline": baseline, "summary": {"baseline_id": baseline.get("baseline_id"), "status": baseline.get("status")}, "status": baseline.get("status")}
+    if args.action == "list":
+        rows = store.list_baselines()
+        return {"ok": True, "baselines": rows, "summary": {"baseline_count": len(rows)}, "status": "passed"}
+    if args.action == "preflight-release":
+        result = store.preflight_release(args.release_id, args.baseline_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"baseline_id": args.baseline_id}, "status": result.get("status")}
+    if args.action == "export":
+        result = store.export_registry()
+        return {"ok": result.get("status") == "passed", **result, "summary": result.get("manifest", {}), "status": result.get("status")}
+    if args.action == "zip":
+        result = store.build_zip()
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}, "status": result.get("status")}
+    if args.action == "verify":
+        report = store.verify_zip(strict=args.strict, require_active=args.require_active)
+        if args.report_out is not None:
+            write_release_audio_baseline_registry_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported release-audio-baseline command.")
+
+
+def _run_release_audio_regression_response_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.release_audio_regression_response import ReleaseAudioRegressionResponseStore
+    from song_agent.release_audio_regression_response_verifier import write_release_audio_regression_response_verification_report
+
+    store = ReleaseAudioRegressionResponseStore()
+    if args.action == "create":
+        plan = store.create_plan(args.release_id)
+        return {"ok": True, "plan": plan, "summary": plan.get("summary", {}), "status": plan.get("status")}
+    if args.action == "waive":
+        waivers = store.add_waiver(args.release_id, {"action_id": args.action_id, "reason": args.reason, "waived_by": args.waived_by})
+        return {"ok": True, "waivers": waivers, "summary": {"waiver_count": len(waivers.get("waivers", []))}, "status": "waived"}
+    if args.action == "run-safe":
+        result = store.run_safe_actions(args.release_id)
+        return {"ok": True, **result, "summary": {"result_count": len(result.get("results", []))}, "status": result.get("status")}
+    if args.action == "closeout":
+        closeout = store.closeout(args.release_id, {"closed_by": args.closed_by, "reason": args.reason})
+        return {"ok": closeout.get("status") == "closed", "closeout": closeout, "summary": closeout, "status": closeout.get("status")}
+    if args.action == "signoff":
+        result = store.signoff(args.release_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": True, **result, "summary": result.get("closeout", {}), "status": result.get("status")}
+    if args.action == "status":
+        plan = store.read_plan(args.release_id, default={})
+        closeout = read_json(store.closeout_path(args.release_id)) if store.closeout_path(args.release_id).exists() else {}
+        signoff = read_json(store.signoff_path(args.release_id)) if store.signoff_path(args.release_id).exists() else {}
+        return {"ok": bool(plan), "plan": plan, "closeout": closeout, "signoff": signoff, "summary": plan.get("summary", {}), "status": signoff.get("status") or closeout.get("status") or plan.get("status") or "missing"}
+    if args.action == "export":
+        result = store.export_package(args.release_id)
+        return {"ok": result.get("status") in {"closed", "signed"}, **result, "summary": result.get("manifest", {}), "status": result.get("status")}
+    if args.action == "zip":
+        result = store.build_zip(args.release_id)
+        return {"ok": result.get("status") in {"closed", "signed"}, **result, "summary": {"zip_sha256": result.get("zip_sha256")}, "status": result.get("status")}
+    if args.action == "verify":
+        report = store.verify_zip(args.release_id, strict=args.strict, require_closed=args.require_closed, require_signed=args.require_signed, require_regression_current=args.require_regression_current, **store._response_verifier_kwargs(args.release_id))  # noqa: SLF001 - CLI uses store-resolved external evidence.
+        if args.report_out is not None:
+            write_release_audio_regression_response_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported release-audio-regression-response command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -3627,6 +3828,22 @@ def _main() -> None:
             release_audio_regression_current_timeline_verification_report_path=args.release_audio_regression_current_timeline_verification_report or args.release_audio_timeline_verification_report,
             release_audio_regression_current_certification_path=args.release_audio_regression_current_certification or args.release_audio_timeline_certification or args.release_audio_certification,
             release_audio_regression_current_certification_verification_report_path=args.release_audio_regression_current_certification_verification_report or args.release_audio_timeline_certification_verification_report or args.release_audio_certification_verification_report,
+            require_release_audio_baseline_governance=args.require_release_audio_baseline_governance,
+            release_audio_baseline_registry_zip_path=args.release_audio_baseline_registry,
+            release_audio_baseline_registry_verification_report_path=args.release_audio_baseline_registry_verification_report,
+            require_release_audio_regression_response=args.require_release_audio_regression_response,
+            release_audio_regression_response_zip_path=args.release_audio_regression_response,
+            release_audio_regression_response_verification_report_path=args.release_audio_regression_response_verification_report,
+            release_audio_regression_response_regression_zip_path=args.release_audio_regression,
+            release_audio_regression_response_regression_verification_report_path=args.release_audio_regression_verification_report,
+            release_audio_regression_response_baseline_timeline_path=args.release_audio_regression_baseline_timeline,
+            release_audio_regression_response_baseline_timeline_verification_report_path=args.release_audio_regression_baseline_timeline_verification_report,
+            release_audio_regression_response_baseline_certification_path=args.release_audio_regression_baseline_certification,
+            release_audio_regression_response_baseline_certification_verification_report_path=args.release_audio_regression_baseline_certification_verification_report,
+            release_audio_regression_response_current_timeline_path=args.release_audio_regression_current_timeline or args.release_audio_timeline,
+            release_audio_regression_response_current_timeline_verification_report_path=args.release_audio_regression_current_timeline_verification_report or args.release_audio_timeline_verification_report,
+            release_audio_regression_response_current_certification_path=args.release_audio_regression_current_certification or args.release_audio_timeline_certification or args.release_audio_certification,
+            release_audio_regression_response_current_certification_verification_report_path=args.release_audio_regression_current_certification_verification_report or args.release_audio_timeline_certification_verification_report or args.release_audio_certification_verification_report,
             require_final_readiness=args.require_final_readiness,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
             release_check_latest_report_path=args.release_check_latest_report,
@@ -3678,6 +3895,12 @@ def _main() -> None:
             release_audio_regression_current_timeline_verification_report_path=args.release_audio_regression_current_timeline_verification_report or args.release_audio_timeline_verification_report,
             release_audio_regression_current_certification_path=args.release_audio_regression_current_certification or args.release_audio_timeline_certification or args.release_audio_certification,
             release_audio_regression_current_certification_verification_report_path=args.release_audio_regression_current_certification_verification_report or args.release_audio_timeline_certification_verification_report or args.release_audio_certification_verification_report,
+            require_release_audio_baseline_governance=args.require_release_audio_baseline_governance,
+            release_audio_baseline_registry_path=args.release_audio_baseline_registry,
+            release_audio_baseline_registry_verification_report_path=args.release_audio_baseline_registry_verification_report,
+            require_release_audio_regression_response=args.require_release_audio_regression_response,
+            release_audio_regression_response_path=args.release_audio_regression_response,
+            release_audio_regression_response_verification_report_path=args.release_audio_regression_response_verification_report,
             final_handoff_package_path=args.final_handoff_package,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
         )
@@ -3762,6 +3985,82 @@ def _main() -> None:
         if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
             raise SystemExit(1)
         return
+    elif raw_args and raw_args[0] == "release-audio-baseline":
+        parser = build_release_audio_baseline_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_release_audio_baseline_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "release-audio-regression-response":
+        parser = build_release_audio_regression_response_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_release_audio_regression_response_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "verify-release-audio-baseline-registry-package":
+        from song_agent.release_audio_baseline_governance_verifier import (
+            release_audio_baseline_registry_verification_exit_code,
+            verify_release_audio_baseline_registry_package,
+            write_release_audio_baseline_registry_verification_report,
+        )
+
+        parser = build_verify_release_audio_baseline_registry_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_audio_baseline_registry_package(args.zip_path, strict=args.strict, require_active=args.require_active)
+        if args.report_out is not None:
+            write_release_audio_baseline_registry_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Release Audio Baseline Registry verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(release_audio_baseline_registry_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-audio-regression-response-package":
+        from song_agent.release_audio_regression_response_verifier import (
+            release_audio_regression_response_verification_exit_code,
+            verify_release_audio_regression_response_package,
+            write_release_audio_regression_response_verification_report,
+        )
+
+        parser = build_verify_release_audio_regression_response_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_audio_regression_response_package(
+            args.zip_path,
+            strict=args.strict,
+            require_closed=args.require_closed,
+            require_signed=args.require_signed,
+            require_regression_current=args.require_regression_current,
+            release_audio_regression_path=args.release_audio_regression,
+            release_audio_regression_verification_report_path=args.release_audio_regression_verification_report,
+            baseline_timeline_path=args.baseline_timeline,
+            baseline_timeline_verification_report_path=args.baseline_timeline_verification_report,
+            baseline_certification_path=args.baseline_certification,
+            baseline_certification_verification_report_path=args.baseline_certification_verification_report,
+            current_timeline_path=args.current_timeline,
+            current_timeline_verification_report_path=args.current_timeline_verification_report,
+            current_certification_path=args.current_certification,
+            current_certification_verification_report_path=args.current_certification_verification_report,
+        )
+        if args.report_out is not None:
+            write_release_audio_regression_response_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Release Audio Regression Response verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(release_audio_regression_response_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

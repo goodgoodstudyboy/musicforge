@@ -245,6 +245,28 @@ Release signoff can require `require_release_audio_regression_guard=true` and
 stale baseline/current Timeline evidence, stale Certification ZIPs, and signed
 history deletion are hard-blocked.
 
+Release Audio Baseline Governance promotes a signed Timeline/Certification
+chain into an approved active audio baseline. Regression Response turns failed
+Regression Guard evidence into draft-only response actions, blocks high/critical
+waivers, and requires a passed recheck before signoff:
+
+```powershell
+python -m song_agent.cli release-audio-baseline from-release rel-000001 --timeline .musicforge\releases\rel-000001\audio-timelines\ratl-000001\release-audio-timeline.zip --timeline-verification-report .musicforge\releases\rel-000001\audio-timelines\ratl-000001\verification-report.json --certification .musicforge\releases\rel-000001\audio-certification\release-audio-certification.zip --certification-verification-report .musicforge\releases\rel-000001\audio-certification\verification-report.json --json
+python -m song_agent.cli release-audio-baseline approve rab-000001 --approved-by "Audio Lead" --reason "Baseline accepted" --json
+python -m song_agent.cli release-audio-baseline activate rab-000001 --json
+python -m song_agent.cli release-audio-baseline zip --json
+python -m song_agent.cli release-audio-regression-response create rel-000002 --json
+python -m song_agent.cli release-audio-regression-response run-safe rel-000002 --json
+python -m song_agent.cli release-audio-regression-response closeout rel-000002 --closed-by "Audio Lead" --json
+python -m song_agent.cli release-audio-regression-response signoff rel-000002 --signed-by "Audio Lead" --json
+python -m song_agent.cli release-audio-regression-response verify rel-000002 --strict --require-closed --require-signed --require-regression-current --json
+```
+
+Release signoff can require `require_release_audio_baseline_governance=true`
+and `require_release_audio_regression_response=true`. GA readiness exposes
+`ga.release_audio_baseline_governance` and
+`ga.release_audio_regression_response` checks for these evidence chains.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

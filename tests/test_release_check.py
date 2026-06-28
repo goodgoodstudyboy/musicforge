@@ -85,6 +85,7 @@ from song_agent.release_checks import (
     _v108_release_audio_certification_smoke,
     _v109_release_audio_timeline_smoke,
     _v1010_release_audio_regression_guard_smoke,
+    _v1011_release_audio_baseline_response_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1201,6 +1202,17 @@ def test_v1010_release_audio_regression_guard_smoke(tmp_path: Path) -> None:
     assert "cert_tamper=failed/failed" in detail
     assert "full_resign=failed" in detail
     assert "deleted_signoff_refresh=409" in detail
+
+
+def test_v1011_release_audio_baseline_response_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1011_release_audio_baseline_response_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "baseline=passed/passed" in detail
+    assert "declared_extra=failed" in detail
+    assert "response=closed/closed/passed/passed" in detail
+    assert "high_waive=409" in detail
+    assert "signed_tamper=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

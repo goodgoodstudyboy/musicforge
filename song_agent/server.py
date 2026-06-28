@@ -550,6 +550,20 @@ from song_agent.release_audio_regression import (
     ReleaseAudioRegressionStore,
     ReleaseAudioRegressionValidationError,
 )
+from song_agent.release_audio_baseline_governance import (
+    ReleaseAudioBaselineGovernanceError,
+    ReleaseAudioBaselineGovernanceNotFoundError,
+    ReleaseAudioBaselineGovernanceStateError,
+    ReleaseAudioBaselineGovernanceStore,
+    ReleaseAudioBaselineGovernanceValidationError,
+)
+from song_agent.release_audio_regression_response import (
+    ReleaseAudioRegressionResponseError,
+    ReleaseAudioRegressionResponseNotFoundError,
+    ReleaseAudioRegressionResponseStateError,
+    ReleaseAudioRegressionResponseStore,
+    ReleaseAudioRegressionResponseValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3130,6 +3144,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return store
 
     @property
+    def release_audio_baseline_governance_store(self) -> ReleaseAudioBaselineGovernanceStore:
+        store = self.server.release_audio_baseline_governance_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        return store
+
+    @property
+    def release_audio_regression_response_store(self) -> ReleaseAudioRegressionResponseStore:
+        store = self.server.release_audio_regression_response_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        store.regression_store = self.release_audio_regression_store
+        return store
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3311,6 +3338,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/audio-campaigns" or path.startswith("/api/audio-campaigns/"):
                 self._handle_audio_campaign_route(method, path)
+                return
+            if path == "/api/audio-baselines" or path.startswith("/api/audio-baselines/"):
+                self._handle_audio_baselines_route(method, path)
                 return
             if path == "/api/mastering/profiles" or path.startswith("/api/mastering/profiles/"):
                 self._handle_mastering_profiles_route(method, path)
@@ -5763,6 +5793,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if tail == "/audio-regression" or tail.startswith("/audio-regression/"):
                 self._handle_release_audio_regression(method, release_id, tail.removeprefix("/audio-regression"))
+                return
+
+            if tail == "/audio-regression-response" or tail.startswith("/audio-regression-response/"):
+                self._handle_release_audio_regression_response(method, release_id, tail.removeprefix("/audio-regression-response"))
                 return
 
             if tail == "/mastering" or tail.startswith("/mastering/"):
@@ -10668,6 +10702,180 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseAudioRegressionError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_audio_regression_response(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.release_audio_regression_response_store.read_plan(release_id, default={})
+                closeout = read_json(self.release_audio_regression_response_store.closeout_path(release_id)) if self.release_audio_regression_response_store.closeout_path(release_id).exists() else {}
+                signoff = read_json(self.release_audio_regression_response_store.signoff_path(release_id)) if self.release_audio_regression_response_store.signoff_path(release_id).exists() else {}
+                self._send_json({"ok": True, "release_id": release_id, "plan": plan, "closeout": closeout, "signoff": signoff, "summary": plan.get("summary", {}) if plan else {}})
+                return
+            if tail == "/create":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.release_audio_regression_response_store.create_plan(release_id, self._optional_json_body())
+                self._send_json({"ok": True, "plan": plan, "summary": plan.get("summary", {})}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/run-safe":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_regression_response_store.run_safe_actions(release_id)
+                self._send_json({"ok": True, **result})
+                return
+            if tail == "/waive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                waivers = self.release_audio_regression_response_store.add_waiver(release_id, self._read_json_body())
+                self._send_json({"ok": True, "waivers": waivers, "summary": {"waiver_count": len(waivers.get("waivers", []))}})
+                return
+            if tail == "/closeout":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                closeout = self.release_audio_regression_response_store.closeout(release_id, self._optional_json_body())
+                self._send_json({"ok": True, "closeout": closeout, "summary": closeout})
+                return
+            if tail == "/signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_regression_response_store.signoff(release_id, self._read_json_body())
+                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_regression_response_store.export_package(release_id)
+                self._send_json({"ok": True, **result})
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_regression_response_store.build_zip(release_id)
+                self._send_json({"ok": True, **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.release_audio_regression_response_store.verify_zip(
+                    release_id,
+                    strict=bool(payload.get("strict", True)),
+                    require_closed=bool(payload.get("require_closed", False)),
+                    require_signed=bool(payload.get("require_signed", False)),
+                    require_regression_current=bool(payload.get("require_regression_current", False)),
+                    **self.release_audio_regression_response_store._response_verifier_kwargs(release_id),  # noqa: SLF001 - server resolves current release evidence.
+                )
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.release_audio_regression_response_store.zip_path(release_id), "application/zip", filename="release-audio-regression-response.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Audio Regression Response route not found.")
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioRegressionResponseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioRegressionResponseStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseAudioRegressionResponseValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleaseAudioRegressionResponseError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_audio_baselines_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/audio-baselines":
+                if method == "GET":
+                    baselines = self.release_audio_baseline_governance_store.list_baselines()
+                    self._send_json({"ok": True, "baselines": baselines, "summary": {"baseline_count": len(baselines)}})
+                    return
+                if method == "POST":
+                    payload = self._read_json_body()
+                    release_id = str(payload.get("release_id") or "")
+                    if not release_id:
+                        self._send_error(HTTPStatus.BAD_REQUEST, "release_id is required.")
+                        return
+                    baseline = self.release_audio_baseline_governance_store.create_from_release(release_id, payload)
+                    self._send_json({"ok": True, "baseline": baseline, "summary": {"baseline_id": baseline.get("baseline_id"), "status": baseline.get("status")}}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if path == "/api/audio-baselines/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_baseline_governance_store.export_registry()
+                self._send_json({"ok": result.get("status") == "passed", **result})
+                return
+            if path == "/api/audio-baselines/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_baseline_governance_store.build_zip()
+                self._send_json({"ok": result.get("status") == "passed", **result})
+                return
+            if path == "/api/audio-baselines/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.release_audio_baseline_governance_store.verify_zip(strict=bool(payload.get("strict", True)), require_active=bool(payload.get("require_active", False)))
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {})})
+                return
+            if path == "/api/audio-baselines/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.release_audio_baseline_governance_store.zip_path(), "application/zip", filename="release-audio-baseline-registry.zip")
+                return
+            rest = path.removeprefix("/api/audio-baselines/").strip("/")
+            parts = rest.split("/") if rest else []
+            if len(parts) == 1:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                baseline = self.release_audio_baseline_governance_store.read_baseline(parts[0])
+                self._send_json({"ok": True, "baseline": baseline, "summary": {"baseline_id": baseline.get("baseline_id"), "status": baseline.get("status")}})
+                return
+            if len(parts) == 2:
+                baseline_id, action = parts
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                if action == "approve":
+                    baseline = self.release_audio_baseline_governance_store.approve(baseline_id, self._read_json_body())
+                elif action == "activate":
+                    baseline = self.release_audio_baseline_governance_store.activate(baseline_id, self._optional_json_body())
+                elif action == "revoke":
+                    baseline = self.release_audio_baseline_governance_store.revoke(baseline_id, self._read_json_body())
+                else:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Audio Baseline route not found.")
+                    return
+                self._send_json({"ok": True, "baseline": baseline, "summary": {"baseline_id": baseline.get("baseline_id"), "status": baseline.get("status")}})
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio Baseline route not found.")
+        except ReleaseAudioBaselineGovernanceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioBaselineGovernanceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseAudioBaselineGovernanceValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleaseAudioBaselineGovernanceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/mastering/profiles":
@@ -11154,6 +11362,30 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if release_audio_regression_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(release_audio_regression_gate.get("message") or "Release Audio Regression gate failed.")
+        require_release_audio_baseline_governance = bool(payload.get("require_release_audio_baseline_governance", False))
+        release_audio_baseline_governance_gate = self.release_audio_baseline_governance_store.gate(
+            release_id,
+            baseline_id=payload.get("release_audio_baseline_id"),
+            required=require_release_audio_baseline_governance,
+        )
+        if release_audio_baseline_governance_gate and require_release_audio_baseline_governance:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["release_audio_baseline_governance"] = release_audio_baseline_governance_gate
+            if release_audio_baseline_governance_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(release_audio_baseline_governance_gate.get("message") or "Release Audio Baseline Governance gate failed.")
+        require_release_audio_regression_response = bool(payload.get("require_release_audio_regression_response", False))
+        release_audio_regression_response_gate = self.release_audio_regression_response_store.gate(
+            release_id,
+            required=require_release_audio_regression_response,
+            require_signed=bool(payload.get("require_release_audio_regression_response_signed", require_release_audio_regression_response)),
+        )
+        if release_audio_regression_response_gate and require_release_audio_regression_response:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["release_audio_regression_response"] = release_audio_regression_response_gate
+            if release_audio_regression_response_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(release_audio_regression_response_gate.get("message") or "Release Audio Regression Response gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -11248,6 +11480,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(release_audio_regression_gate.get("message") or "Release Audio Regression gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if release_audio_baseline_governance_gate.get("hard_block") and release_audio_baseline_governance_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(release_audio_baseline_governance_gate.get("message") or "Release Audio Baseline Governance gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if release_audio_regression_response_gate.get("hard_block") and release_audio_regression_response_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(release_audio_regression_response_gate.get("message") or "Release Audio Regression Response gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -18785,6 +19035,8 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_audio_certification_store = ReleaseAudioCertificationStore(release_store=self.release_store, project_store=self.project_store, planner_store=self.audio_campaign_planner_store, campaign_store=self.audio_campaign_store, governance_store=self.audio_campaign_governance_store, remediation_store=self.audio_campaign_remediation_store)
         self.release_audio_timeline_store = ReleaseAudioTimelineStore(release_store=self.release_store, project_store=self.project_store, planner_store=self.audio_campaign_planner_store, campaign_store=self.audio_campaign_store, governance_store=self.audio_campaign_governance_store, remediation_store=self.audio_campaign_remediation_store, certification_store=self.release_audio_certification_store)
         self.release_audio_regression_store = ReleaseAudioRegressionStore(release_store=self.release_store, certification_store=self.release_audio_certification_store, timeline_store=self.release_audio_timeline_store)
+        self.release_audio_baseline_governance_store = ReleaseAudioBaselineGovernanceStore(release_store=self.release_store)
+        self.release_audio_regression_response_store = ReleaseAudioRegressionResponseStore(release_store=self.release_store, regression_store=self.release_audio_regression_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)
