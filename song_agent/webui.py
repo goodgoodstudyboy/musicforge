@@ -904,6 +904,10 @@ def panel_html() -> str:
             <button class="secondary" id="release-audio-regression-response-run-safe" type="button">Run Response</button>
             <button class="secondary" id="release-audio-regression-response-signoff" type="button">Sign Response</button>
             <button class="secondary" id="release-audio-regression-response-verify" type="button">Verify Response</button>
+            <button class="secondary" id="release-audio-quality-observatory-list" type="button">Audio Observatory</button>
+            <button class="secondary" id="release-audio-quality-observatory-create" type="button">Create Observatory</button>
+            <button class="secondary" id="release-audio-quality-observatory-refresh" type="button">Refresh Observatory</button>
+            <button class="secondary" id="release-audio-quality-observatory-verify" type="button">Verify Observatory</button>
           </div>
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
@@ -2501,6 +2505,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const releaseId = audioCampaignReleaseId();
       if (!releaseId) return;
       await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-regression-response/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_closed: true, require_signed: true, require_regression_current: true }) });
+    });
+    $("release-audio-quality-observatory-list").addEventListener("click", async () => {
+      await showAudioCampaignResult(`/api/audio-quality-observatories`);
+    });
+    $("release-audio-quality-observatory-create").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      const body = releaseId ? { release_ids: [releaseId] } : {};
+      await showAudioCampaignResult(`/api/audio-quality-observatories`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    });
+    $("release-audio-quality-observatory-refresh").addEventListener("click", async () => {
+      const id = prompt("Observatory id", "aqo-000001");
+      if (!id) return;
+      await showAudioCampaignResult(`/api/audio-quality-observatories/${encodeURIComponent(id)}/refresh`, { method: "POST" });
+    });
+    $("release-audio-quality-observatory-verify").addEventListener("click", async () => {
+      const id = prompt("Observatory id", "aqo-000001");
+      if (!id) return;
+      await showAudioCampaignResult(`/api/audio-quality-observatories/${encodeURIComponent(id)}/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_current_evidence: true, require_no_critical_risk: true }) });
     });
 
     async function showAudioLabResult(path, options) {

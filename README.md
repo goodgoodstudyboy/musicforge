@@ -267,6 +267,26 @@ and `require_release_audio_regression_response=true`. GA readiness exposes
 `ga.release_audio_baseline_governance` and
 `ga.release_audio_regression_response` checks for these evidence chains.
 
+Release Audio Quality Observatory aggregates signed Certification, Timeline,
+Regression, and Response evidence across releases into trend, issue heatmap,
+baseline drift, remediation cost, risk, and recommendation reports. The
+Observatory verifier rebuilds facts from the external Release evidence root
+rather than trusting package-internal summaries:
+
+```powershell
+python -m song_agent.cli release-audio-quality-observatory create --release-id rel-000001 --json
+python -m song_agent.cli release-audio-quality-observatory refresh aqo-000001 --json
+python -m song_agent.cli release-audio-quality-observatory zip aqo-000001 --json
+python -m song_agent.cli release-audio-quality-observatory verify aqo-000001 --strict --require-current-evidence --require-no-critical-risk --json
+python -m song_agent.cli verify-release-audio-quality-observatory-package .musicforge\audio-quality-observatory\observatories\aqo-000001\release-audio-quality-observatory.zip --strict --require-current-evidence --evidence-root .musicforge\releases --require-no-critical-risk --json
+python -m song_agent.cli ga-check --require-release-audio-quality-observatory --release-audio-quality-observatory .musicforge\audio-quality-observatory\observatories\aqo-000001\release-audio-quality-observatory.zip --release-audio-quality-observatory-verification-report .musicforge\audio-quality-observatory\observatories\aqo-000001\verification-report.json --release-audio-quality-observatory-evidence-root .musicforge\releases --json
+```
+
+Release signoff can require `require_release_audio_quality_observatory=true`.
+Critical audio quality risks, stale Certification/Timeline evidence, internal
+full-resign package edits, declared extra ZIP entries, and missing current
+external evidence hard-block the gate.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

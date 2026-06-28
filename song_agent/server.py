@@ -564,6 +564,13 @@ from song_agent.release_audio_regression_response import (
     ReleaseAudioRegressionResponseStore,
     ReleaseAudioRegressionResponseValidationError,
 )
+from song_agent.release_audio_quality_observatory import (
+    ReleaseAudioQualityObservatoryError,
+    ReleaseAudioQualityObservatoryNotFoundError,
+    ReleaseAudioQualityObservatoryStateError,
+    ReleaseAudioQualityObservatoryStore,
+    ReleaseAudioQualityObservatoryValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3157,6 +3164,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return store
 
     @property
+    def release_audio_quality_observatory_store(self) -> ReleaseAudioQualityObservatoryStore:
+        store = self.server.release_audio_quality_observatory_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        return store
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3341,6 +3354,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/audio-baselines" or path.startswith("/api/audio-baselines/"):
                 self._handle_audio_baselines_route(method, path)
+                return
+            if path == "/api/audio-quality-observatories" or path.startswith("/api/audio-quality-observatories/"):
+                self._handle_audio_quality_observatories_route(method, path)
                 return
             if path == "/api/mastering/profiles" or path.startswith("/api/mastering/profiles/"):
                 self._handle_mastering_profiles_route(method, path)
@@ -10876,6 +10892,76 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseAudioBaselineGovernanceError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_audio_quality_observatories_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/audio-quality-observatories":
+                if method == "GET":
+                    rows = self.release_audio_quality_observatory_store.list_observatories()
+                    self._send_json({"ok": True, "observatories": rows, "summary": {"observatory_count": len(rows)}})
+                    return
+                if method == "POST":
+                    config = self.release_audio_quality_observatory_store.create(self._optional_json_body())
+                    self._send_json({"ok": True, "observatory": config, "summary": {"observatory_id": config.get("observatory_id")}}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            rest = path.removeprefix("/api/audio-quality-observatories/").strip("/")
+            parts = rest.split("/") if rest else []
+            if len(parts) == 1:
+                observatory_id = parts[0]
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                config = self.release_audio_quality_observatory_store.read_config(observatory_id)
+                summary = self.release_audio_quality_observatory_store.read_summary(observatory_id) if self.release_audio_quality_observatory_store.summary_path(observatory_id).exists() else {}
+                self._send_json({"ok": True, "observatory": config, "summary_report": summary, "summary": summary.get("summary", {}) if summary else {}})
+                return
+            if len(parts) == 2:
+                observatory_id, action = parts
+                if action == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.release_audio_quality_observatory_store.zip_path(observatory_id), "application/zip", filename="release-audio-quality-observatory.zip")
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                if action == "refresh":
+                    summary = self.release_audio_quality_observatory_store.refresh(observatory_id, payload)
+                    self._send_json({"ok": summary.get("status") == "passed", "summary_report": summary, "summary": summary.get("summary", {}), "status": summary.get("status")})
+                    return
+                if action == "export":
+                    result = self.release_audio_quality_observatory_store.export_package(observatory_id)
+                    self._send_json({"ok": result.get("status") == "passed", **result})
+                    return
+                if action == "zip":
+                    result = self.release_audio_quality_observatory_store.build_zip(observatory_id)
+                    self._send_json({"ok": result.get("status") == "passed", **result})
+                    return
+                if action == "verify":
+                    report = self.release_audio_quality_observatory_store.verify_zip(
+                        observatory_id,
+                        strict=bool(payload.get("strict", True)),
+                        require_current_evidence=bool(payload.get("require_current_evidence", False)),
+                        evidence_root=payload.get("evidence_root") or self.release_store.root,
+                        require_no_critical_risk=bool(payload.get("require_no_critical_risk", False)),
+                    )
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Audio Quality Observatory route not found.")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio Quality Observatory route not found.")
+        except ReleaseAudioQualityObservatoryNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioQualityObservatoryStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseAudioQualityObservatoryValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleaseAudioQualityObservatoryError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/mastering/profiles":
@@ -11386,6 +11472,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if release_audio_regression_response_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(release_audio_regression_response_gate.get("message") or "Release Audio Regression Response gate failed.")
+        require_release_audio_quality_observatory = bool(payload.get("require_release_audio_quality_observatory", False))
+        release_audio_quality_observatory_gate = self.release_audio_quality_observatory_store.gate(
+            release_id,
+            observatory_id=payload.get("release_audio_quality_observatory_id"),
+            required=require_release_audio_quality_observatory,
+            require_no_critical_risk=bool(payload.get("require_no_critical_audio_quality_risk", require_release_audio_quality_observatory)),
+        )
+        if release_audio_quality_observatory_gate and require_release_audio_quality_observatory:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["release_audio_quality_observatory"] = release_audio_quality_observatory_gate
+            if release_audio_quality_observatory_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(release_audio_quality_observatory_gate.get("message") or "Release Audio Quality Observatory gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -11498,6 +11597,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(release_audio_regression_response_gate.get("message") or "Release Audio Regression Response gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if release_audio_quality_observatory_gate.get("hard_block") and release_audio_quality_observatory_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(release_audio_quality_observatory_gate.get("message") or "Release Audio Quality Observatory gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -19037,6 +19145,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_audio_regression_store = ReleaseAudioRegressionStore(release_store=self.release_store, certification_store=self.release_audio_certification_store, timeline_store=self.release_audio_timeline_store)
         self.release_audio_baseline_governance_store = ReleaseAudioBaselineGovernanceStore(release_store=self.release_store)
         self.release_audio_regression_response_store = ReleaseAudioRegressionResponseStore(release_store=self.release_store, regression_store=self.release_audio_regression_store)
+        self.release_audio_quality_observatory_store = ReleaseAudioQualityObservatoryStore(release_store=self.release_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

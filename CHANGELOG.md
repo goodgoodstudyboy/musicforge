@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.12.0 - 2026-06-28
+
+### Added
+- Release Audio Quality Observatory store, fixed-layout ZIP export, offline verifier, CLI, API, and Studio controls for cross-release audio quality trend monitoring.
+- Observatory reports aggregate current Release Audio Certification and Timeline evidence into source index, evidence fingerprints, trend report, issue heatmap, baseline drift, remediation cost, risk register, recommendations, and public summary.
+- Release signoff can require `require_release_audio_quality_observatory=true`; GA readiness can require external Observatory ZIP/report evidence with current Certification/Timeline binding.
+- release-check `v1012.release_audio_quality_observatory_smoke` covers positive Observatory generation, GA binding, internal full-resign rejection, and declared extra ZIP rejection.
+
+### Verified
+- `python -m pytest tests\test_release_audio_quality_observatory.py tests\test_server_release_audio_quality_observatory.py tests\test_cli_release_audio_quality_observatory.py tests\test_release_check.py::test_v1012_release_audio_quality_observatory_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.11.1 - 2026-06-28
 
 ### Fixed

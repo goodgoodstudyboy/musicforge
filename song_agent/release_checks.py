@@ -17204,6 +17204,100 @@ def _v1011_release_audio_baseline_response_smoke(root: Path) -> tuple[bool, str]
         os.chdir(old_cwd)
 
 
+def _v1012_release_audio_quality_observatory_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
+    from song_agent.release_audio_quality_observatory_verifier import verify_release_audio_quality_observatory_package
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v1012-release-audio-quality-observatory-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            server = None
+            try:
+                current = _v1010_signed_timeline_release("Release Audio Quality Observatory Track")
+                server = current["server"]
+                store = ReleaseAudioQualityObservatoryStore(release_store=server.release_store)
+                config = store.create({"name": "Release Audio Quality Observatory", "release_ids": [current["release_id"]]})
+                observatory_id = config["observatory_id"]
+                summary = store.refresh(observatory_id)
+                zipped = store.build_zip(observatory_id)
+                verification = store.verify_zip(observatory_id, strict=True, require_current_evidence=True, require_no_critical_risk=True)
+                gate = store.gate(current["release_id"], observatory_id=observatory_id, required=True, require_no_critical_risk=True)
+
+                ga_report = build_ga_readiness_report(
+                    repo_root=Path(__file__).resolve().parents[1],
+                    allow_dirty=True,
+                    require_release_audio_quality_observatory=True,
+                    release_audio_quality_observatory_zip_path=zipped["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=store.verification_report_path(observatory_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                    require_no_critical_audio_quality_risk=True,
+                )
+                ga_path = base / "ga-quality-observatory.json"
+                write_ga_readiness_report(ga_report, ga_path)
+                ga_verification = verify_ga_readiness_report(
+                    ga_path,
+                    require_release_audio_quality_observatory=True,
+                    release_audio_quality_observatory_path=zipped["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=store.verification_report_path(observatory_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                    require_no_critical_audio_quality_risk=True,
+                )
+
+                full_resign_zip = base / "observatory-full-resign.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), full_resign_zip, _v1012_rewrite_observatory_as_ready)
+                full_resign = verify_release_audio_quality_observatory_package(
+                    full_resign_zip,
+                    strict=True,
+                    require_current_evidence=True,
+                    evidence_root=server.release_store.root,
+                    require_no_critical_risk=True,
+                )
+
+                declared_extra_zip = base / "observatory-declared-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v1012_add_observatory_declared_extra)
+                declared_extra = verify_release_audio_quality_observatory_package(
+                    declared_extra_zip,
+                    strict=True,
+                    require_current_evidence=True,
+                    evidence_root=server.release_store.root,
+                    require_no_critical_risk=True,
+                )
+
+                ok = (
+                    summary.get("status") == "passed"
+                    and verification.get("status") == "passed"
+                    and gate.get("status") == "passed"
+                    and _ga_check_status(ga_report, "ga.release_audio_quality_observatory") == "passed"
+                    and ga_verification.get("status") != "failed"
+                    and full_resign.get("status") == "failed"
+                    and declared_extra.get("status") == "failed"
+                )
+                failed_ga_checks = ",".join(str(check.get("check_id")) for check in ga_verification.get("checks", []) if check.get("status") == "failed") or "-"
+                return ok, (
+                    f"observatory={summary.get('status')}, verify={verification.get('status')}, gate={gate.get('status')}, "
+                    f"ga={_ga_check_status(ga_report, 'ga.release_audio_quality_observatory')}/{ga_verification.get('status')} failed={failed_ga_checks}, "
+                    f"full_resign={full_resign.get('status')}, declared_extra={declared_extra.get('status')}"
+                )
+            finally:
+                if server is not None:
+                    close = getattr(server, "server_close", None)
+                    if callable(close):
+                        close()
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v10.12 Release Audio Quality Observatory smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
     from dataclasses import dataclass
 
@@ -18774,6 +18868,53 @@ def _v1010_rewrite_regression_as_passed(docs: dict[str, bytes]) -> None:
             continue
         files.append({"path": name, "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
     manifest["files"] = files
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    docs["manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v1012_rewrite_observatory_as_ready(docs: dict[str, bytes]) -> None:
+    trend = _v74_read_json_doc(docs, "trend-report.json")
+    risks = _v74_read_json_doc(docs, "risk-register.json")
+    summary = _v74_read_json_doc(docs, "observatory-summary.json")
+    manifest = _v74_read_json_doc(docs, "manifest.json")
+    trend.setdefault("summary", {})["average_manual_rating"] = 5.0
+    trend.setdefault("summary", {})["minimum_manual_rating"] = 5.0
+    trend["integrity_hash"] = stable_hash({key: value for key, value in trend.items() if key != "integrity_hash"})
+    risks["status"] = "passed"
+    risks["risks"] = []
+    risks["summary"] = {"risk_count": 0, "critical_risk_count": 0, "warning_risk_count": 0}
+    risks["integrity_hash"] = stable_hash({key: value for key, value in risks.items() if key != "integrity_hash"})
+    summary["status"] = "passed"
+    summary["readiness"] = "ready"
+    summary.setdefault("summary", {})["average_manual_rating"] = 5.0
+    summary.setdefault("summary", {})["minimum_manual_rating"] = 5.0
+    summary.setdefault("summary", {})["critical_risk_count"] = 0
+    summary.setdefault("summary", {})["warning_risk_count"] = 0
+    summary.setdefault("document_hashes", {})["trend_report"] = trend["integrity_hash"]
+    summary.setdefault("document_hashes", {})["risk_register"] = risks["integrity_hash"]
+    summary["integrity_hash"] = stable_hash({key: value for key, value in summary.items() if key != "integrity_hash"})
+    docs["trend-report.json"] = _v74_json_doc(trend)
+    docs["risk-register.json"] = _v74_json_doc(risks)
+    docs["observatory-summary.json"] = _v74_json_doc(summary)
+    manifest["trend_report_hash"] = trend["integrity_hash"]
+    manifest["risk_register_hash"] = risks["integrity_hash"]
+    manifest["summary_hash"] = summary["integrity_hash"]
+    for path in ("trend-report.json", "risk-register.json", "observatory-summary.json"):
+        _v74_sync_manifest_file(manifest, path, docs[path])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    docs["manifest.json"] = _v74_json_doc(manifest)
+
+
+def _v1012_add_observatory_declared_extra(docs: dict[str, bytes]) -> None:
+    extra_path = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    extra_data = b"this declared extra file must not be accepted by the fixed observatory package verifier\n"
+    manifest = _v74_read_json_doc(docs, "manifest.json")
+    docs[extra_path] = extra_data
+    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files.append({"path": extra_path, "size_bytes": len(extra_data), "sha256": hashlib.sha256(extra_data).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: str(row.get("path") or ""))
+    manifest.setdefault("zip", {})["entries"] = sorted(set(manifest.get("zip", {}).get("entries") or []) | {extra_path})
+    manifest.setdefault("zip", {})["entry_count"] = len(manifest["zip"]["entries"])
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     docs["manifest.json"] = _v74_json_doc(manifest)
 
