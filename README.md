@@ -308,6 +308,26 @@ Release signoff can require
 bindings, package full-resign attempts, blocked auto actions, and missing
 external Observatory evidence hard-block the gate.
 
+Release Audio Quality Action Queue Closeout and Signoff turns the queue into a
+signed, immutable archive once manual actions have been completed, waived,
+rejected, or deferred:
+
+```powershell
+python -m song_agent.cli release-audio-quality-actions manual-items aqa-000001 --json
+python -m song_agent.cli release-audio-quality-actions resolve-manual aqa-000001 item-001 --status completed --resolved-by "Audio Lead" --reason "Handled" --json
+python -m song_agent.cli release-audio-quality-actions closeout aqa-000001 --json
+python -m song_agent.cli release-audio-quality-actions signoff aqa-000001 --signed-by "Audio Lead" --role audio_quality_lead --reason "Closeout accepted" --json
+python -m song_agent.cli release-audio-quality-actions archive-zip aqa-000001 --json
+python -m song_agent.cli verify-release-audio-quality-action-queue-signoff-archive-package .musicforge\audio-quality-actions\queues\aqa-000001\release-audio-quality-action-queue-signoff-archive.zip --strict --require-current-queue --require-signed --queue-zip .musicforge\audio-quality-actions\queues\aqa-000001\release-audio-quality-action-queue.zip --queue-verification-report .musicforge\audio-quality-actions\queues\aqa-000001\verification-report.json --observatory-zip .musicforge\audio-quality-observatory\observatories\aqo-000001\release-audio-quality-observatory.zip --observatory-verification-report .musicforge\audio-quality-observatory\observatories\aqo-000001\verification-report.json --evidence-root .musicforge\releases --json
+```
+
+After signoff, queue refresh/run/export/ZIP mutation returns 409 even if the
+signoff JSON is deleted, because the signoff history hash-chain is authoritative.
+The signoff archive embeds a redacted queue verification projection and binds it
+to the current external queue verification report. Release signoff can require
+`require_release_audio_quality_action_queue_signoff=true`, and GA readiness can
+require `ga.release_audio_quality_action_queue_signoff`.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

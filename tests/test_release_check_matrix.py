@@ -88,6 +88,7 @@ def test_release_check_profile_and_filters() -> None:
         "v1011.release_audio_baseline_response_smoke",
         "v1012.release_audio_quality_observatory_smoke",
         "v1013.release_audio_quality_action_queue_smoke",
+        "v1014.release_audio_quality_action_queue_signoff_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

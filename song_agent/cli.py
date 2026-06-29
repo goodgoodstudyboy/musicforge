@@ -128,6 +128,9 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-quality-action-queue", action="store_true", help="Require passed Release Audio Quality Action Queue evidence.")
     parser.add_argument("--release-audio-quality-action-queue", type=Path, default=None, help="Release Audio Quality Action Queue ZIP.")
     parser.add_argument("--release-audio-quality-action-queue-verification-report", type=Path, default=None, help="Release Audio Quality Action Queue verification report.")
+    parser.add_argument("--require-release-audio-quality-action-queue-signoff", action="store_true", help="Require signed Release Audio Quality Action Queue closeout archive evidence.")
+    parser.add_argument("--release-audio-quality-action-queue-signoff-archive", type=Path, default=None, help="Release Audio Quality Action Queue Signoff Archive ZIP.")
+    parser.add_argument("--release-audio-quality-action-queue-signoff-verification-report", type=Path, default=None, help="Release Audio Quality Action Queue Signoff Archive verification report.")
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
     parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
@@ -186,6 +189,9 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-quality-action-queue", action="store_true", help="Require external Release Audio Quality Action Queue evidence.")
     parser.add_argument("--release-audio-quality-action-queue", type=Path, default=None, help="External Release Audio Quality Action Queue ZIP.")
     parser.add_argument("--release-audio-quality-action-queue-verification-report", type=Path, default=None, help="Release Audio Quality Action Queue verification report JSON.")
+    parser.add_argument("--require-release-audio-quality-action-queue-signoff", action="store_true", help="Require external Release Audio Quality Action Queue signoff archive evidence.")
+    parser.add_argument("--release-audio-quality-action-queue-signoff-archive", type=Path, default=None, help="External Release Audio Quality Action Queue Signoff Archive ZIP.")
+    parser.add_argument("--release-audio-quality-action-queue-signoff-verification-report", type=Path, default=None, help="Release Audio Quality Action Queue Signoff Archive verification report JSON.")
     return parser
 
 
@@ -991,6 +997,37 @@ def build_release_audio_quality_actions_parser() -> argparse.ArgumentParser:
     verify.add_argument("--evidence-root", type=Path, default=None)
     verify.add_argument("--allow-blocking", action="store_true", help="Do not fail verification on blocked queue actions.")
     verify.add_argument("--report-out", type=Path, default=None)
+    manual = subparsers.add_parser("manual-items", help="List manual action items and resolutions.")
+    manual.add_argument("queue_id")
+    resolve = subparsers.add_parser("resolve-manual", help="Resolve a manual action item.")
+    resolve.add_argument("queue_id")
+    resolve.add_argument("item_id")
+    resolve.add_argument("--status", default="completed", choices=["completed", "waived", "rejected", "deferred"])
+    resolve.add_argument("--resolved-by", default="local-reviewer")
+    resolve.add_argument("--role", default="audio_quality_reviewer")
+    resolve.add_argument("--reason", default="Manual action completed.")
+    closeout = subparsers.add_parser("closeout", help="Refresh closeout report.")
+    closeout.add_argument("queue_id")
+    signoff = subparsers.add_parser("signoff", help="Sign a passed closeout.")
+    signoff.add_argument("queue_id")
+    signoff.add_argument("--signed-by", default="audio-quality-lead")
+    signoff.add_argument("--role", default="audio_quality_lead")
+    signoff.add_argument("--reason", default="Audio Quality Action Queue closeout accepted.")
+    archive = subparsers.add_parser("archive", help="Export signoff archive files.")
+    archive.add_argument("queue_id")
+    archive_zip = subparsers.add_parser("archive-zip", help="Build signoff archive ZIP.")
+    archive_zip.add_argument("queue_id")
+    verify_archive = subparsers.add_parser("verify-archive", help="Verify signoff archive ZIP.")
+    verify_archive.add_argument("queue_id")
+    verify_archive.add_argument("--strict", action="store_true")
+    verify_archive.add_argument("--no-require-current-queue", dest="require_current_queue", action="store_false", default=True)
+    verify_archive.add_argument("--no-require-signed", dest="require_signed", action="store_false", default=True)
+    verify_archive.add_argument("--queue-zip", type=Path, default=None)
+    verify_archive.add_argument("--queue-verification-report", type=Path, default=None)
+    verify_archive.add_argument("--observatory-zip", type=Path, default=None)
+    verify_archive.add_argument("--observatory-verification-report", type=Path, default=None)
+    verify_archive.add_argument("--evidence-root", type=Path, default=None)
+    verify_archive.add_argument("--report-out", type=Path, default=None)
     return parser
 
 
@@ -1005,6 +1042,26 @@ def build_verify_release_audio_quality_action_queue_parser() -> argparse.Argumen
     parser.add_argument("--observatory-verification-report", type=Path, default=None)
     parser.add_argument("--evidence-root", type=Path, default=None)
     parser.add_argument("--allow-blocking", action="store_true", help="Do not fail verification on blocked queue actions.")
+    parser.add_argument("--max-zip-size-mb", type=int, default=64)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=128)
+    parser.add_argument("--max-entry-count", type=int, default=100)
+    return parser
+
+
+def build_verify_release_audio_quality_action_queue_signoff_archive_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Release Audio Quality Action Queue Signoff Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current-queue", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--queue-zip", type=Path, default=None)
+    parser.add_argument("--queue-verification-report", type=Path, default=None)
+    parser.add_argument("--observatory-zip", type=Path, default=None)
+    parser.add_argument("--observatory-verification-report", type=Path, default=None)
+    parser.add_argument("--evidence-root", type=Path, default=None)
+    parser.add_argument("--allow-unresolved-manual", action="store_true")
     parser.add_argument("--max-zip-size-mb", type=int, default=64)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=128)
     parser.add_argument("--max-entry-count", type=int, default=100)
@@ -3847,9 +3904,12 @@ def _run_release_audio_quality_observatory_command(args: argparse.Namespace) -> 
 
 def _run_release_audio_quality_actions_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.release_audio_quality_actions import ReleaseAudioQualityActionQueueStore
+    from song_agent.release_audio_quality_action_signoff import ReleaseAudioQualityActionQueueSignoffStore
+    from song_agent.release_audio_quality_action_signoff_verifier import write_release_audio_quality_action_queue_signoff_archive_verification_report
     from song_agent.release_audio_quality_actions_verifier import write_release_audio_quality_action_queue_verification_report
 
     store = ReleaseAudioQualityActionQueueStore()
+    signoff_store = ReleaseAudioQualityActionQueueSignoffStore(queue_store=store, release_store=store.release_store)
     if args.action == "create":
         include_risks = not bool(args.recommendations_only)
         include_recommendations = not bool(args.risks_only)
@@ -3892,6 +3952,43 @@ def _run_release_audio_quality_actions_command(args: argparse.Namespace) -> dict
         )
         if args.report_out is not None:
             write_release_audio_quality_action_queue_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "manual-items":
+        result = signoff_store.list_manual_items(args.queue_id)
+        return {"ok": True, **result, "status": "passed"}
+    if args.action == "resolve-manual":
+        resolution = signoff_store.resolve_manual_item(
+            args.queue_id,
+            args.item_id,
+            {"status": args.status, "resolved_by": args.resolved_by, "role": args.role, "reason": args.reason},
+        )
+        return {"ok": True, "resolution": resolution, "status": "passed"}
+    if args.action == "closeout":
+        closeout = signoff_store.refresh_closeout(args.queue_id)
+        return {"ok": closeout.get("status") == "passed", "closeout": closeout, "summary": closeout.get("summary", {}), "status": closeout.get("status")}
+    if args.action == "signoff":
+        result = signoff_store.signoff(args.queue_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": True, **result}
+    if args.action == "archive":
+        result = signoff_store.export_archive(args.queue_id)
+        return {"ok": result.get("status") == "passed", **result}
+    if args.action == "archive-zip":
+        result = signoff_store.build_archive_zip(args.queue_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify-archive":
+        report = signoff_store.verify_archive(
+            args.queue_id,
+            strict=args.strict,
+            require_current_queue=args.require_current_queue,
+            require_signed=args.require_signed,
+            queue_zip_path=args.queue_zip,
+            queue_verification_report_path=args.queue_verification_report,
+            observatory_zip_path=args.observatory_zip,
+            observatory_verification_report_path=args.observatory_verification_report,
+            evidence_root=args.evidence_root,
+        )
+        if args.report_out is not None:
+            write_release_audio_quality_action_queue_signoff_archive_verification_report(report, args.report_out)
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
     raise ValueError("Unsupported release-audio-quality-actions command.")
 
@@ -4060,6 +4157,9 @@ def _main() -> None:
             require_release_audio_quality_action_queue=args.require_release_audio_quality_action_queue,
             release_audio_quality_action_queue_zip_path=args.release_audio_quality_action_queue,
             release_audio_quality_action_queue_verification_report_path=args.release_audio_quality_action_queue_verification_report,
+            require_release_audio_quality_action_queue_signoff=args.require_release_audio_quality_action_queue_signoff,
+            release_audio_quality_action_queue_signoff_archive_path=args.release_audio_quality_action_queue_signoff_archive,
+            release_audio_quality_action_queue_signoff_verification_report_path=args.release_audio_quality_action_queue_signoff_verification_report,
             require_final_readiness=args.require_final_readiness,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
             release_check_latest_report_path=args.release_check_latest_report,
@@ -4125,6 +4225,9 @@ def _main() -> None:
             require_release_audio_quality_action_queue=args.require_release_audio_quality_action_queue,
             release_audio_quality_action_queue_path=args.release_audio_quality_action_queue,
             release_audio_quality_action_queue_verification_report_path=args.release_audio_quality_action_queue_verification_report,
+            require_release_audio_quality_action_queue_signoff=args.require_release_audio_quality_action_queue_signoff,
+            release_audio_quality_action_queue_signoff_archive_path=args.release_audio_quality_action_queue_signoff_archive,
+            release_audio_quality_action_queue_signoff_verification_report_path=args.release_audio_quality_action_queue_signoff_verification_report,
             final_handoff_package_path=args.final_handoff_package,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
         )
@@ -4365,6 +4468,40 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(release_audio_quality_action_queue_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-audio-quality-action-queue-signoff-archive-package":
+        from song_agent.release_audio_quality_action_signoff_verifier import (
+            release_audio_quality_action_queue_signoff_archive_verification_exit_code,
+            verify_release_audio_quality_action_queue_signoff_archive_package,
+            write_release_audio_quality_action_queue_signoff_archive_verification_report,
+        )
+
+        parser = build_verify_release_audio_quality_action_queue_signoff_archive_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_release_audio_quality_action_queue_signoff_archive_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current_queue=args.require_current_queue,
+            require_signed=args.require_signed,
+            queue_zip_path=args.queue_zip,
+            queue_verification_report_path=args.queue_verification_report,
+            observatory_zip_path=args.observatory_zip,
+            observatory_verification_report_path=args.observatory_verification_report,
+            evidence_root=args.evidence_root,
+            require_no_unresolved_manual=not args.allow_unresolved_manual,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_release_audio_quality_action_queue_signoff_archive_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Release Audio Quality Action Queue Signoff Archive verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(release_audio_quality_action_queue_signoff_archive_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

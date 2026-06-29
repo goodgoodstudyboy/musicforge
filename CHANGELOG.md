@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.14.0 - 2026-06-30
+
+### Added
+- Release Audio Quality Action Queue manual resolution, closeout, signoff, immutable archive ZIP, offline verifier, CLI, API, Release signoff gate, and GA readiness gate.
+- Signed queues now block refresh/run/export/ZIP mutation through signoff-history evidence, so deleting `action-queue-signoff.json` cannot reopen the queue.
+- Signoff archive verification binds the archive to the current Action Queue ZIP, queue verification report, Observatory ZIP, and Observatory verification report while keeping embedded verification summaries redacted.
+- release-check `v1014.release_audio_quality_action_queue_signoff_smoke` covers closeout/signoff/archive verification, signed mutation blocking, signoff deletion guard, declared extra ZIP rejection, Release gate, and GA binding.
+
+### Verified
+- `python -m pytest tests\test_release_audio_quality_action_signoff.py tests\test_server_release_audio_quality_actions.py tests\test_cli_release_audio_quality_actions.py tests\test_release_check.py::test_v1014_release_audio_quality_action_queue_signoff_smoke -q`
+- `python -m song_agent.cli release-check --only v1014.release_audio_quality_action_queue_signoff_smoke --skip-tests --json`
+
 ## v10.13.1 - 2026-06-29
 
 ### Fixed

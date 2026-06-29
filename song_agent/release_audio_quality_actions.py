@@ -81,6 +81,12 @@ class ReleaseAudioQualityActionQueueStore:
     def history_path(self, queue_id: str) -> Path:
         return self.queue_dir(queue_id) / "queue-history.jsonl"
 
+    def signoff_history_path(self, queue_id: str) -> Path:
+        return self.queue_dir(queue_id) / "action-queue-signoff-history.jsonl"
+
+    def signoff_path(self, queue_id: str) -> Path:
+        return self.queue_dir(queue_id) / "action-queue-signoff.json"
+
     def export_dir(self, queue_id: str) -> Path:
         return self.queue_dir(queue_id) / "export"
 
@@ -147,6 +153,7 @@ class ReleaseAudioQualityActionQueueStore:
 
     def refresh_status(self, queue_id: str) -> dict[str, Any]:
         with self.lock:
+            self._ensure_mutable(queue_id, "refresh status")
             docs = self._read_documents(queue_id)
             stale = self._stale_reasons(docs["source_binding"])
             queue = dict(docs["queue"])
@@ -162,6 +169,7 @@ class ReleaseAudioQualityActionQueueStore:
 
     def run_safe(self, queue_id: str) -> dict[str, Any]:
         with self.lock:
+            self._ensure_mutable(queue_id, "run safe actions")
             docs = self._read_documents(queue_id)
             stale = self._stale_reasons(docs["source_binding"])
             if stale:
@@ -204,6 +212,7 @@ class ReleaseAudioQualityActionQueueStore:
 
     def export_package(self, queue_id: str) -> dict[str, Any]:
         with self.lock:
+            self._ensure_mutable(queue_id, "export queue")
             docs = self._current_docs_for_export(queue_id)
             export_dir = self.export_dir(queue_id)
             if export_dir.exists():
@@ -254,6 +263,7 @@ class ReleaseAudioQualityActionQueueStore:
 
     def build_zip(self, queue_id: str) -> dict[str, Any]:
         with self.lock:
+            self._ensure_mutable(queue_id, "build queue ZIP")
             exported = self.export_package(queue_id)
             export_dir = self.export_dir(queue_id)
             zip_path = self.zip_path(queue_id)
@@ -421,6 +431,7 @@ class ReleaseAudioQualityActionQueueStore:
         return {"queue": queue, "source_binding": binding, "items": item_doc, "results": results, "manual_actions": manual_actions, "summary": summary}
 
     def _current_docs_for_export(self, queue_id: str) -> dict[str, dict[str, Any]]:
+        self._ensure_mutable(queue_id, "export queue")
         docs = self._read_documents(queue_id)
         stale = self._stale_reasons(docs["source_binding"])
         if stale:
@@ -512,6 +523,18 @@ class ReleaseAudioQualityActionQueueStore:
         with self.history_path(queue_id).open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
         return event
+
+    def _ensure_mutable(self, queue_id: str, action: str) -> None:
+        if self._has_effective_signoff(queue_id):
+            raise ReleaseAudioQualityActionQueueStateError(f"Audio Quality Action Queue is signed. Reset signoff before attempting to {action}.")
+
+    def _has_effective_signoff(self, queue_id: str) -> bool:
+        if self.signoff_path(queue_id).exists():
+            return True
+        rows = _read_jsonl(self.signoff_history_path(queue_id)) if self.signoff_history_path(queue_id).exists() else []
+        if not rows or not _history_chain_ok(rows):
+            return False
+        return any(row.get("event_type") == "action_queue_signoff_created" for row in rows)
 
 
 def build_expected_action_documents_from_observatory(
@@ -906,6 +929,20 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         if isinstance(item, dict):
             rows.append(item)
     return rows
+
+
+def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
+    previous: str | None = None
+    for event in history:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event.get("previous_event_hash") != previous:
+            return False
+        if event.get("payload_hash") != stable_hash(payload):
+            return False
+        if event.get("event_hash") != stable_hash({key: value for key, value in event.items() if key != "event_hash"}):
+            return False
+        previous = str(event.get("event_hash") or "")
+    return bool(history)
 
 
 def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:

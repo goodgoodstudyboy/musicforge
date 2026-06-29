@@ -17518,6 +17518,163 @@ def _v1013_resign_action_queue_source_fingerprint(entries: dict[str, bytes]) -> 
     return entries
 
 
+def _v1014_release_audio_quality_action_queue_signoff_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.release_audio_quality_action_signoff import ReleaseAudioQualityActionQueueSignoffStateError, ReleaseAudioQualityActionQueueSignoffStore
+    from song_agent.release_audio_quality_action_signoff_verifier import verify_release_audio_quality_action_queue_signoff_archive_package
+    from song_agent.release_audio_quality_actions import ReleaseAudioQualityActionQueueStateError, ReleaseAudioQualityActionQueueStore
+    from song_agent.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v1014-release-audio-quality-action-signoff-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            server = None
+            try:
+                current = _v1010_signed_timeline_release("Release Audio Quality Action Signoff Track")
+                server = current["server"]
+                observatory_store = ReleaseAudioQualityObservatoryStore(release_store=server.release_store)
+                observatory_id = observatory_store.create({"name": "Release Audio Quality Observatory", "release_ids": [current["release_id"]]})["observatory_id"]
+                observatory_store.refresh(observatory_id)
+                observatory_zip = observatory_store.build_zip(observatory_id)
+                observatory_store.verify_zip(observatory_id, strict=True, require_current_evidence=True, require_no_critical_risk=True)
+
+                queue_store = ReleaseAudioQualityActionQueueStore(release_store=server.release_store, observatory_store=observatory_store)
+                queue_id = queue_store.create_from_observatory(observatory_id, name="Audio Quality Action Queue Signoff")["queue_id"]
+                run = queue_store.run_safe(queue_id)
+                queue_zip = queue_store.build_zip(queue_id)
+                queue_store.verify_zip(queue_id, strict=True, require_current_observatory=True, require_no_blocking=False)
+
+                signoff_store = ReleaseAudioQualityActionQueueSignoffStore(queue_store=queue_store, release_store=server.release_store)
+                for item in signoff_store.list_manual_items(queue_id)["manual_items"]:
+                    signoff_store.resolve_manual_item(queue_id, item["item_id"], {"status": "completed", "resolved_by": "release-check", "reason": "Manual action handled for release-check."})
+                closeout = signoff_store.refresh_closeout(queue_id)
+                signoff = signoff_store.signoff(queue_id, {"signed_by": "release-check", "role": "audio_quality_lead", "reason": "Audio Quality Action Queue closeout accepted."})
+                archive = signoff_store.build_archive_zip(queue_id)
+                archive_verification = signoff_store.verify_archive(queue_id, strict=True, require_current_queue=True, require_signed=True, require_no_unresolved_manual=True)
+                external = verify_release_audio_quality_action_queue_signoff_archive_package(
+                    archive["zip_path"],
+                    strict=True,
+                    require_current_queue=True,
+                    require_signed=True,
+                    queue_zip_path=queue_zip["zip_path"],
+                    queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                    observatory_zip_path=observatory_zip["zip_path"],
+                    observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    evidence_root=server.release_store.root,
+                    require_no_unresolved_manual=True,
+                )
+
+                signed_mutation = "allowed"
+                try:
+                    queue_store.run_safe(queue_id)
+                except ReleaseAudioQualityActionQueueStateError:
+                    signed_mutation = "409"
+                signoff_store.signoff_path(queue_id).unlink()
+                delete_guard = "allowed"
+                try:
+                    queue_store.refresh_status(queue_id)
+                except ReleaseAudioQualityActionQueueStateError:
+                    delete_guard = "409"
+                signoff_path_deleted = not signoff_store.signoff_path(queue_id).exists()
+
+                tampered_zip = base / "action-queue-signoff-extra.zip"
+                _v76_rewrite_zip(Path(archive["zip_path"]), tampered_zip, _v1014_add_declared_signoff_archive_extra)
+                extra = verify_release_audio_quality_action_queue_signoff_archive_package(
+                    tampered_zip,
+                    strict=True,
+                    require_current_queue=True,
+                    require_signed=True,
+                    queue_zip_path=queue_zip["zip_path"],
+                    queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                    observatory_zip_path=observatory_zip["zip_path"],
+                    observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    evidence_root=server.release_store.root,
+                    require_no_unresolved_manual=True,
+                )
+
+                # Restore signoff for release and GA gates after delete-guard regression.
+                write_json(signoff_store.signoff_path(queue_id), signoff["signoff"])
+                archive_verification = signoff_store.verify_archive(queue_id, strict=True, require_current_queue=True, require_signed=True, require_no_unresolved_manual=True)
+                release_gate = signoff_store.gate(current["release_id"], queue_id=queue_id, required=True)
+
+                ga_report = build_ga_readiness_report(
+                    repo_root=Path(__file__).resolve().parents[1],
+                    allow_dirty=True,
+                    require_release_audio_quality_action_queue_signoff=True,
+                    release_audio_quality_action_queue_signoff_archive_path=archive["zip_path"],
+                    release_audio_quality_action_queue_signoff_verification_report_path=signoff_store.archive_verification_report_path(queue_id),
+                    release_audio_quality_action_queue_zip_path=queue_zip["zip_path"],
+                    release_audio_quality_action_queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                    release_audio_quality_observatory_zip_path=observatory_zip["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                )
+                ga_path = base / "ga-quality-action-queue-signoff.json"
+                write_ga_readiness_report(ga_report, ga_path)
+                ga_verification = verify_ga_readiness_report(
+                    ga_path,
+                    require_release_audio_quality_action_queue_signoff=True,
+                    release_audio_quality_action_queue_signoff_archive_path=archive["zip_path"],
+                    release_audio_quality_action_queue_signoff_verification_report_path=signoff_store.archive_verification_report_path(queue_id),
+                    release_audio_quality_action_queue_path=queue_zip["zip_path"],
+                    release_audio_quality_action_queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                    release_audio_quality_observatory_path=observatory_zip["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                )
+
+                ok = (
+                    run.get("status") in {"completed", "completed_with_manual_actions"}
+                    and closeout.get("status") == "passed"
+                    and signoff.get("status") == "signed"
+                    and archive_verification.get("status") == "passed"
+                    and external.get("status") == "passed"
+                    and signed_mutation == "409"
+                    and delete_guard == "409"
+                    and signoff_path_deleted
+                    and extra.get("status") == "failed"
+                    and release_gate.get("status") == "passed"
+                    and _ga_check_status(ga_report, "ga.release_audio_quality_action_queue_signoff") == "passed"
+                    and ga_verification.get("status") != "failed"
+                )
+                failed_ga_checks = ",".join(str(check.get("check_id")) for check in ga_verification.get("checks", []) if check.get("status") == "failed") or "-"
+                return ok, (
+                    f"closeout={closeout.get('status')}, archive={archive_verification.get('status')}/{external.get('status')}, "
+                    f"signed_mutation={signed_mutation}, delete_guard={delete_guard}, extra={extra.get('status')}, "
+                    f"release=gate/{release_gate.get('status')}, "
+                    f"ga={_ga_check_status(ga_report, 'ga.release_audio_quality_action_queue_signoff')}/{ga_verification.get('status')} failed={failed_ga_checks}"
+                )
+            finally:
+                if server is not None:
+                    close = getattr(server, "server_close", None)
+                    if callable(close):
+                        close()
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v10.14 Release Audio Quality Action Queue signoff smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v1014_add_declared_signoff_archive_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path", ""))
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
     from dataclasses import dataclass
 

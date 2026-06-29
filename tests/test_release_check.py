@@ -88,6 +88,7 @@ from song_agent.release_checks import (
     _v1011_release_audio_baseline_response_smoke,
     _v1012_release_audio_quality_observatory_smoke,
     _v1013_release_audio_quality_action_queue_smoke,
+    _v1014_release_audio_quality_action_queue_signoff_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1241,6 +1242,19 @@ def test_v1013_release_audio_quality_action_queue_smoke(tmp_path: Path) -> None:
     assert "ga=passed/failed" not in detail
     assert "full_resign=failed" in detail
     assert "stale_export=409" in detail
+
+
+def test_v1014_release_audio_quality_action_queue_signoff_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1014_release_audio_quality_action_queue_signoff_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "closeout=passed" in detail
+    assert "archive=passed/passed" in detail
+    assert "signed_mutation=409" in detail
+    assert "delete_guard=409" in detail
+    assert "extra=failed" in detail
+    assert "release=gate/passed" in detail
+    assert "ga=passed/" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

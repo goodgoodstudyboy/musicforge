@@ -42,6 +42,10 @@ from song_agent.release_audio_quality_actions_verifier import (
     RELEASE_AUDIO_QUALITY_ACTION_QUEUE_VERIFICATION_PACKAGE_TYPE,
     verify_release_audio_quality_action_queue_package,
 )
+from song_agent.release_audio_quality_action_signoff_verifier import (
+    RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+    verify_release_audio_quality_action_queue_signoff_archive_package,
+)
 from song_agent.music_acceptance import AcceptanceStore
 from song_agent.music_acceptance import stable_hash
 from song_agent.projectio import read_json, write_json
@@ -101,6 +105,9 @@ def verify_ga_readiness_report(
     release_audio_quality_observatory_evidence_root: Path | str | None = None,
     release_audio_quality_action_queue_path: Path | str | None = None,
     release_audio_quality_action_queue_verification_report_path: Path | str | None = None,
+    require_release_audio_quality_action_queue_signoff: bool = False,
+    release_audio_quality_action_queue_signoff_archive_path: Path | str | None = None,
+    release_audio_quality_action_queue_signoff_verification_report_path: Path | str | None = None,
     require_no_critical_audio_quality_risk: bool = False,
     final_handoff_package_path: Path | str | None = None,
     final_handoff_verification_report_path: Path | str | None = None,
@@ -246,6 +253,18 @@ def verify_ga_readiness_report(
             _verify_release_audio_quality_action_queue_evidence(
                 checks,
                 checks_by_id.get("ga.release_audio_quality_action_queue", {}),
+                release_audio_quality_action_queue_path,
+                release_audio_quality_action_queue_verification_report_path,
+                release_audio_quality_observatory_path,
+                release_audio_quality_observatory_verification_report_path,
+                release_audio_quality_observatory_evidence_root,
+            )
+        if require_release_audio_quality_action_queue_signoff:
+            _verify_release_audio_quality_action_queue_signoff_evidence(
+                checks,
+                checks_by_id.get("ga.release_audio_quality_action_queue_signoff", {}),
+                release_audio_quality_action_queue_signoff_archive_path,
+                release_audio_quality_action_queue_signoff_verification_report_path,
                 release_audio_quality_action_queue_path,
                 release_audio_quality_action_queue_verification_report_path,
                 release_audio_quality_observatory_path,
@@ -1080,6 +1099,61 @@ def _verify_release_audio_quality_action_queue_evidence(
     _add_check(checks, "ga_readiness_release_audio_quality_action_queue_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Release Audio Quality Action Queue verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
     _add_check(checks, "ga_readiness_release_audio_quality_action_queue_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Release Audio Quality Action Queue verification report matches ZIP and manifest.")
     _add_check(checks, "ga_readiness_release_audio_quality_action_queue_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness Release Audio Quality Action Queue check matches external verification.")
+
+
+def _verify_release_audio_quality_action_queue_signoff_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    archive_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+    queue_path: Path | str | None,
+    queue_verification_report_path: Path | str | None,
+    observatory_path: Path | str | None,
+    observatory_verification_report_path: Path | str | None,
+    evidence_root: Path | str | None,
+) -> None:
+    if not archive_path:
+        _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_required", "failed", "blocking", "Release Audio Quality Action Queue signoff requirement needs an external signoff archive ZIP.")
+        return
+    if not archive_verification_report_path:
+        _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_verification_required", "failed", "blocking", "Release Audio Quality Action Queue signoff requirement needs a verification report.")
+        return
+    if not queue_path or not queue_verification_report_path or not observatory_path or not observatory_verification_report_path or not evidence_root:
+        _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_queue_required", "failed", "blocking", "Release Audio Quality Action Queue signoff requirement needs current Action Queue and Observatory evidence.")
+        return
+    zip_path = Path(archive_path)
+    try:
+        verification_report = read_json(Path(archive_verification_report_path))
+        runtime_report = verify_release_audio_quality_action_queue_signoff_archive_package(
+            zip_path,
+            strict=True,
+            require_current_queue=True,
+            require_signed=True,
+            queue_zip_path=queue_path,
+            queue_verification_report_path=queue_verification_report_path,
+            observatory_zip_path=observatory_path,
+            observatory_verification_report_path=observatory_verification_report_path,
+            evidence_root=evidence_root,
+            require_no_unresolved_manual=True,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_readable", "failed", "blocking", f"Release Audio Quality Action Queue signoff evidence could not be read: {exc}")
+        return
+    integrity_ok = verification_report.get("integrity_hash") == release_stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
+    detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+    external_fp = _verification_fingerprint(verification_report)
+    runtime_fp = _verification_fingerprint(runtime_report)
+    binding_ok = (
+        ga_check.get("status") == "passed"
+        and detail.get("zip_sha256") == external_fp.get("zip_sha256")
+        and detail.get("manifest_hash") == external_fp.get("manifest_hash")
+        and detail.get("verification_hash") == verification_report.get("integrity_hash")
+    )
+    _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_verification_package_type", "passed" if verification_report.get("package_type") == RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE else "failed", "blocking", "Release Audio Quality Action Queue signoff verification package type is valid.")
+    _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_verification_integrity", "passed" if integrity_ok else "failed", "blocking", "Release Audio Quality Action Queue signoff verification integrity hash matches.")
+    _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Release Audio Quality Action Queue signoff verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
+    _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Release Audio Quality Action Queue signoff verification report matches ZIP and manifest.")
+    _add_check(checks, "ga_readiness_release_audio_quality_action_queue_signoff_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness Release Audio Quality Action Queue signoff check matches external verification.")
 
 
 def _read_final_handoff_manifest(zip_path: Path) -> dict[str, Any]:
