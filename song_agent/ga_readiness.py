@@ -22,6 +22,7 @@ from song_agent.release_audio_regression_verifier import verify_release_audio_re
 from song_agent.release_audio_baseline_governance_verifier import verify_release_audio_baseline_registry_package
 from song_agent.release_audio_regression_response_verifier import verify_release_audio_regression_response_package
 from song_agent.release_audio_quality_observatory_verifier import verify_release_audio_quality_observatory_package
+from song_agent.release_audio_quality_actions_verifier import verify_release_audio_quality_action_queue_package
 from song_agent.music_acceptance import AcceptanceStore, acceptance_report_summary, stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.provider import ProviderError, load_provider_config, provider_configured
@@ -106,6 +107,9 @@ def build_ga_readiness_report(
     release_audio_quality_observatory_verification_report_path: Path | str | None = None,
     release_audio_quality_observatory_evidence_root: Path | str | None = None,
     require_no_critical_audio_quality_risk: bool = False,
+    require_release_audio_quality_action_queue: bool = False,
+    release_audio_quality_action_queue_zip_path: Path | str | None = None,
+    release_audio_quality_action_queue_verification_report_path: Path | str | None = None,
     require_final_readiness: bool = False,
     final_handoff_verification_report_path: Path | str | None = None,
     release_check_latest_report_path: Path | str | None = None,
@@ -128,6 +132,7 @@ def build_ga_readiness_report(
         "require_release_audio_baseline_governance": require_release_audio_baseline_governance,
         "require_release_audio_regression_response": require_release_audio_regression_response,
         "require_release_audio_quality_observatory": require_release_audio_quality_observatory,
+        "require_release_audio_quality_action_queue": require_release_audio_quality_action_queue,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -354,6 +359,23 @@ def build_ga_readiness_report(
         quality_observatory_summary,
     )
 
+    quality_action_queue_summary = _release_audio_quality_action_queue_summary(
+        required=require_release_audio_quality_action_queue,
+        queue_zip_path=release_audio_quality_action_queue_zip_path,
+        queue_verification_report_path=release_audio_quality_action_queue_verification_report_path,
+        observatory_zip_path=release_audio_quality_observatory_zip_path,
+        observatory_verification_report_path=release_audio_quality_observatory_verification_report_path,
+        evidence_root=release_audio_quality_observatory_evidence_root,
+    )
+    _add_check(
+        checks,
+        "ga.release_audio_quality_action_queue",
+        "passed" if quality_action_queue_summary.get("status") == "passed" else "failed" if require_release_audio_quality_action_queue else "warning",
+        "blocking" if require_release_audio_quality_action_queue else "warning",
+        "Release Audio Quality Action Queue evidence is passed." if quality_action_queue_summary.get("status") == "passed" else "Release Audio Quality Action Queue evidence is missing or not passed.",
+        quality_action_queue_summary,
+    )
+
     latest_summary = _release_check_summary(
         root,
         report_path=release_check_latest_report_path,
@@ -418,6 +440,7 @@ def build_ga_readiness_report(
             "release_audio_baseline_governance_status": baseline_governance_summary.get("status", "missing"),
             "release_audio_regression_response_status": regression_response_summary.get("status", "missing"),
             "release_audio_quality_observatory_status": quality_observatory_summary.get("status", "missing"),
+            "release_audio_quality_action_queue_status": quality_action_queue_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -942,6 +965,47 @@ def _release_audio_quality_observatory_summary(
         external_report: dict[str, Any] = {}
         if observatory_verification_report_path is not None:
             external_report = read_json(Path(observatory_verification_report_path))
+        status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") else "failed"
+        return {
+            "status": status,
+            "package_type": runtime_report.get("package_type"),
+            "zip_sha256": runtime_report.get("zip_sha256") or (runtime_report.get("summary") or {}).get("zip_sha256"),
+            "zip_size_bytes": runtime_report.get("zip_size_bytes") or (runtime_report.get("summary") or {}).get("zip_size_bytes"),
+            "manifest_hash": runtime_report.get("manifest_hash") or (runtime_report.get("summary") or {}).get("manifest_hash"),
+            "verification_hash": external_report.get("integrity_hash") if isinstance(external_report, dict) else runtime_report.get("integrity_hash"),
+            "runtime_verification_status": runtime_report.get("status"),
+            "external_verification_status": external_report.get("status") if isinstance(external_report, dict) else None,
+            "summary": runtime_report.get("summary", {}),
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _release_audio_quality_action_queue_summary(
+    *,
+    required: bool,
+    queue_zip_path: Path | str | None,
+    queue_verification_report_path: Path | str | None,
+    observatory_zip_path: Path | str | None,
+    observatory_verification_report_path: Path | str | None,
+    evidence_root: Path | str | None,
+) -> dict[str, Any]:
+    if queue_zip_path is None:
+        return {"status": "missing", "message": "Release Audio Quality Action Queue package was not provided."}
+    try:
+        zip_path = Path(queue_zip_path)
+        runtime_report = verify_release_audio_quality_action_queue_package(
+            zip_path,
+            strict=True,
+            require_current_observatory=required,
+            observatory_zip_path=observatory_zip_path,
+            observatory_verification_report_path=observatory_verification_report_path,
+            evidence_root=evidence_root,
+            require_no_blocking=True,
+        )
+        external_report: dict[str, Any] = {}
+        if queue_verification_report_path is not None:
+            external_report = read_json(Path(queue_verification_report_path))
         status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") else "failed"
         return {
             "status": status,

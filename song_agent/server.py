@@ -571,6 +571,13 @@ from song_agent.release_audio_quality_observatory import (
     ReleaseAudioQualityObservatoryStore,
     ReleaseAudioQualityObservatoryValidationError,
 )
+from song_agent.release_audio_quality_actions import (
+    ReleaseAudioQualityActionQueueError,
+    ReleaseAudioQualityActionQueueNotFoundError,
+    ReleaseAudioQualityActionQueueStateError,
+    ReleaseAudioQualityActionQueueStore,
+    ReleaseAudioQualityActionQueueValidationError,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3170,6 +3177,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return store
 
     @property
+    def release_audio_quality_action_queue_store(self) -> ReleaseAudioQualityActionQueueStore:
+        store = self.server.release_audio_quality_action_queue_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        store.observatory_store = self.release_audio_quality_observatory_store
+        return store
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3357,6 +3371,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/audio-quality-observatories" or path.startswith("/api/audio-quality-observatories/"):
                 self._handle_audio_quality_observatories_route(method, path)
+                return
+            if path == "/api/audio-quality-actions" or path.startswith("/api/audio-quality-actions/"):
+                self._handle_audio_quality_actions_route(method, path)
                 return
             if path == "/api/mastering/profiles" or path.startswith("/api/mastering/profiles/"):
                 self._handle_mastering_profiles_route(method, path)
@@ -10962,6 +10979,90 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseAudioQualityObservatoryError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_audio_quality_actions_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/audio-quality-actions":
+                if method == "GET":
+                    rows = self.release_audio_quality_action_queue_store.list_queues()
+                    self._send_json({"ok": True, "queues": rows, "summary": {"queue_count": len(rows)}})
+                    return
+                if method == "POST":
+                    payload = self._read_json_body()
+                    queue = self.release_audio_quality_action_queue_store.create_from_observatory(
+                        payload.get("observatory_id", ""),
+                        name=payload.get("name"),
+                        include_risks=bool(payload.get("include_risks", True)),
+                        include_recommendations=bool(payload.get("include_recommendations", True)),
+                        severity_floor=str(payload.get("severity_floor") or "warning"),
+                        policy=payload.get("policy") if isinstance(payload.get("policy"), dict) else {},
+                    )
+                    self._send_json({"ok": True, "queue": queue, "summary": queue.get("summary", {})}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            rest = path.removeprefix("/api/audio-quality-actions/").strip("/")
+            parts = rest.split("/") if rest else []
+            if len(parts) == 1:
+                queue_id = parts[0]
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                queue = self.release_audio_quality_action_queue_store.read_queue(queue_id)
+                summary = self.release_audio_quality_action_queue_store.read_summary(queue_id) if self.release_audio_quality_action_queue_store.summary_path(queue_id).exists() else {}
+                self._send_json({"ok": True, "queue": queue, "summary_report": summary, "summary": summary.get("summary", {}) if summary else {}})
+                return
+            if len(parts) == 2:
+                queue_id, action = parts
+                if action == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.release_audio_quality_action_queue_store.zip_path(queue_id), "application/zip", filename="release-audio-quality-action-queue.zip")
+                    return
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                if action == "refresh":
+                    summary = self.release_audio_quality_action_queue_store.refresh_status(queue_id)
+                    self._send_json({"ok": summary.get("status") != "stale", "summary_report": summary, "summary": summary.get("summary", {}), "status": summary.get("status")})
+                    return
+                if action == "run-safe":
+                    result = self.release_audio_quality_action_queue_store.run_safe(queue_id)
+                    self._send_json({"ok": result.get("status") not in {"failed", "stale"}, **result})
+                    return
+                if action == "export":
+                    result = self.release_audio_quality_action_queue_store.export_package(queue_id)
+                    self._send_json({"ok": result.get("status") not in {"failed", "stale"}, **result})
+                    return
+                if action == "zip":
+                    result = self.release_audio_quality_action_queue_store.build_zip(queue_id)
+                    self._send_json({"ok": result.get("status") not in {"failed", "stale"}, **result})
+                    return
+                if action == "verify":
+                    report = self.release_audio_quality_action_queue_store.verify_zip(
+                        queue_id,
+                        strict=bool(payload.get("strict", True)),
+                        require_current_observatory=bool(payload.get("require_current_observatory", False)),
+                        observatory_zip_path=payload.get("observatory_zip"),
+                        observatory_verification_report_path=payload.get("observatory_verification_report"),
+                        evidence_root=payload.get("evidence_root") or self.release_store.root,
+                        require_no_blocking=bool(payload.get("require_no_blocking", True)),
+                    )
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Audio Quality Action Queue route not found.")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Audio Quality Action Queue route not found.")
+        except ReleaseAudioQualityActionQueueNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioQualityActionQueueStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseAudioQualityActionQueueValidationError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except ReleaseAudioQualityActionQueueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_mastering_profiles_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/mastering/profiles":
@@ -11485,6 +11586,19 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if release_audio_quality_observatory_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(release_audio_quality_observatory_gate.get("message") or "Release Audio Quality Observatory gate failed.")
+        require_release_audio_quality_action_queue = bool(payload.get("require_release_audio_quality_action_queue", False))
+        release_audio_quality_action_queue_gate = self.release_audio_quality_action_queue_store.gate(
+            release_id,
+            queue_id=payload.get("release_audio_quality_action_queue_id"),
+            required=require_release_audio_quality_action_queue,
+            require_no_blocking=bool(payload.get("require_no_blocking_audio_quality_action", True)),
+        )
+        if release_audio_quality_action_queue_gate and require_release_audio_quality_action_queue:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["release_audio_quality_action_queue"] = release_audio_quality_action_queue_gate
+            if release_audio_quality_action_queue_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(release_audio_quality_action_queue_gate.get("message") or "Release Audio Quality Action Queue gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -11606,6 +11720,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(release_audio_quality_observatory_gate.get("message") or "Release Audio Quality Observatory gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if release_audio_quality_action_queue_gate.get("hard_block") and release_audio_quality_action_queue_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(release_audio_quality_action_queue_gate.get("message") or "Release Audio Quality Action Queue gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -19146,6 +19269,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_audio_baseline_governance_store = ReleaseAudioBaselineGovernanceStore(release_store=self.release_store)
         self.release_audio_regression_response_store = ReleaseAudioRegressionResponseStore(release_store=self.release_store, regression_store=self.release_audio_regression_store)
         self.release_audio_quality_observatory_store = ReleaseAudioQualityObservatoryStore(release_store=self.release_store)
+        self.release_audio_quality_action_queue_store = ReleaseAudioQualityActionQueueStore(release_store=self.release_store, observatory_store=self.release_audio_quality_observatory_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

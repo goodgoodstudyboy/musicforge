@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.13.0 - 2026-06-29
+
+### Added
+- Release Audio Quality Action Queue store, fixed-layout ZIP export, offline verifier, CLI, API, and Studio controls for turning Observatory risks/recommendations into auditable safe/manual actions.
+- Action Queue source binding to current Release Audio Quality Observatory ZIP, manifest, risk register, recommendation report, and external release evidence root.
+- Release signoff `require_release_audio_quality_action_queue=true` gate and GA readiness `ga.release_audio_quality_action_queue` evidence binding.
+- release-check `v1013.release_audio_quality_action_queue_smoke` covering safe queue execution, GA binding, stale source export blocking, and full-resign source fingerprint rejection.
+
+### Verified
+- `python -m pytest tests\test_release_audio_quality_actions.py tests\test_server_release_audio_quality_actions.py tests\test_cli_release_audio_quality_actions.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v1013_release_audio_quality_action_queue_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.12.0 - 2026-06-28
 
 ### Added

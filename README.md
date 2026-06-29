@@ -287,6 +287,27 @@ Critical audio quality risks, stale Certification/Timeline evidence, internal
 full-resign package edits, declared extra ZIP entries, and missing current
 external evidence hard-block the gate.
 
+Release Audio Quality Action Queue turns Observatory risks and recommendations
+into auditable safe/manual actions. Safe actions can refresh verification or
+create draft review/fix/response requests; they never apply music changes,
+sign off releases, reset evidence, switch baselines, call providers, or write
+manual reviews. The queue ZIP verifier rebinds every action to the current
+external Observatory ZIP and verification report:
+
+```powershell
+python -m song_agent.cli release-audio-quality-actions create aqo-000001 --json
+python -m song_agent.cli release-audio-quality-actions run-safe aqa-000001 --json
+python -m song_agent.cli release-audio-quality-actions zip aqa-000001 --json
+python -m song_agent.cli release-audio-quality-actions verify aqa-000001 --strict --require-current-observatory --json
+python -m song_agent.cli verify-release-audio-quality-action-queue-package .musicforge\audio-quality-actions\queues\aqa-000001\release-audio-quality-action-queue.zip --strict --require-current-observatory --observatory-zip .musicforge\audio-quality-observatory\observatories\aqo-000001\release-audio-quality-observatory.zip --observatory-verification-report .musicforge\audio-quality-observatory\observatories\aqo-000001\verification-report.json --evidence-root .musicforge\releases --json
+python -m song_agent.cli ga-check --require-release-audio-quality-observatory --release-audio-quality-observatory .musicforge\audio-quality-observatory\observatories\aqo-000001\release-audio-quality-observatory.zip --release-audio-quality-observatory-verification-report .musicforge\audio-quality-observatory\observatories\aqo-000001\verification-report.json --release-audio-quality-observatory-evidence-root .musicforge\releases --require-release-audio-quality-action-queue --release-audio-quality-action-queue .musicforge\audio-quality-actions\queues\aqa-000001\release-audio-quality-action-queue.zip --release-audio-quality-action-queue-verification-report .musicforge\audio-quality-actions\queues\aqa-000001\verification-report.json --json
+```
+
+Release signoff can require
+`require_release_audio_quality_action_queue=true`. Stale Observatory source
+bindings, package full-resign attempts, blocked auto actions, and missing
+external Observatory evidence hard-block the gate.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

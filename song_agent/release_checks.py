@@ -17298,6 +17298,198 @@ def _v1012_release_audio_quality_observatory_smoke(root: Path) -> tuple[bool, st
         os.chdir(old_cwd)
 
 
+def _v1013_release_audio_quality_action_queue_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.release_audio_quality_actions import ReleaseAudioQualityActionQueueStore, ReleaseAudioQualityActionQueueStateError
+    from song_agent.release_audio_quality_actions_verifier import verify_release_audio_quality_action_queue_package
+    from song_agent.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v1013-release-audio-quality-actions-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            server = None
+            try:
+                current = _v1010_signed_timeline_release("Release Audio Quality Action Queue Track")
+                server = current["server"]
+                observatory_store = ReleaseAudioQualityObservatoryStore(release_store=server.release_store)
+                config = observatory_store.create({"name": "Release Audio Quality Observatory", "release_ids": [current["release_id"]]})
+                observatory_id = config["observatory_id"]
+                observatory_store.refresh(observatory_id)
+                observatory_zip = observatory_store.build_zip(observatory_id)
+                observatory_store.verify_zip(observatory_id, strict=True, require_current_evidence=True, require_no_critical_risk=True)
+
+                queue_store = ReleaseAudioQualityActionQueueStore(release_store=server.release_store, observatory_store=observatory_store)
+                queue = queue_store.create_from_observatory(observatory_id, name="Audio Quality Action Queue")
+                queue_id = queue["queue_id"]
+                run = queue_store.run_safe(queue_id)
+                zipped = queue_store.build_zip(queue_id)
+                verification = queue_store.verify_zip(queue_id, strict=True, require_current_observatory=True, require_no_blocking=True)
+                external_verification = verify_release_audio_quality_action_queue_package(
+                    zipped["zip_path"],
+                    strict=True,
+                    require_current_observatory=True,
+                    observatory_zip_path=observatory_zip["zip_path"],
+                    observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    evidence_root=server.release_store.root,
+                    require_no_blocking=True,
+                )
+                gate = queue_store.gate(current["release_id"], queue_id=queue_id, required=True)
+
+                ga_report = build_ga_readiness_report(
+                    repo_root=Path(__file__).resolve().parents[1],
+                    allow_dirty=True,
+                    require_release_audio_quality_observatory=True,
+                    release_audio_quality_observatory_zip_path=observatory_zip["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                    require_release_audio_quality_action_queue=True,
+                    release_audio_quality_action_queue_zip_path=zipped["zip_path"],
+                    release_audio_quality_action_queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                )
+                ga_path = base / "ga-quality-action-queue.json"
+                write_ga_readiness_report(ga_report, ga_path)
+                ga_verification = verify_ga_readiness_report(
+                    ga_path,
+                    require_release_audio_quality_observatory=True,
+                    release_audio_quality_observatory_path=observatory_zip["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                    require_release_audio_quality_action_queue=True,
+                    release_audio_quality_action_queue_path=zipped["zip_path"],
+                    release_audio_quality_action_queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                )
+
+                full_resign_zip = base / "action-queue-full-resign.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), full_resign_zip, _v1013_resign_action_queue_source_fingerprint)
+                full_resign = verify_release_audio_quality_action_queue_package(
+                    full_resign_zip,
+                    strict=True,
+                    require_current_observatory=True,
+                    observatory_zip_path=observatory_zip["zip_path"],
+                    observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    evidence_root=server.release_store.root,
+                    require_no_blocking=True,
+                )
+
+                observatory_store.refresh(observatory_id, {"quality_floor": 0.99})
+                stale_export = "allowed"
+                try:
+                    queue_store.export_package(queue_id)
+                except ReleaseAudioQualityActionQueueStateError:
+                    stale_export = "409"
+
+                ok = (
+                    run.get("status") in {"completed", "completed_with_manual_actions"}
+                    and verification.get("status") == "passed"
+                    and external_verification.get("status") == "passed"
+                    and gate.get("status") == "passed"
+                    and _ga_check_status(ga_report, "ga.release_audio_quality_action_queue") == "passed"
+                    and ga_verification.get("status") != "failed"
+                    and full_resign.get("status") == "failed"
+                    and stale_export == "409"
+                )
+                failed_ga_checks = ",".join(str(check.get("check_id")) for check in ga_verification.get("checks", []) if check.get("status") == "failed") or "-"
+                return ok, (
+                    f"queue={run.get('status')}, verify={verification.get('status')}/{external_verification.get('status')}, "
+                    f"gate={gate.get('status')}, ga={_ga_check_status(ga_report, 'ga.release_audio_quality_action_queue')}/{ga_verification.get('status')} failed={failed_ga_checks}, "
+                    f"full_resign={full_resign.get('status')}, stale_export={stale_export}"
+                )
+            finally:
+                if server is not None:
+                    close = getattr(server, "server_close", None)
+                    if callable(close):
+                        close()
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v10.13 Release Audio Quality Action Queue smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v1013_resign_action_queue_source_fingerprint(entries: dict[str, bytes]) -> dict[str, bytes]:
+    docs = {name: json.loads(data.decode("utf-8")) for name, data in entries.items() if name.endswith(".json")}
+    binding = docs.get("source-binding.json", {})
+    queue = docs.get("action-queue.json", {})
+    items = docs.get("action-items.json", {})
+    results = docs.get("action-results.json", {})
+    manual_actions = docs.get("manual-actions.json", {})
+    summary = docs.get("queue-summary.json", {})
+    manifest = docs.get("manifest.json", {})
+
+    binding.setdefault("observatory", {})["zip_sha256"] = "0" * 64
+    binding["source_hash"] = stable_hash(
+        {
+            "observatory_id": binding.get("observatory_id"),
+            "observatory_zip_sha256": binding.get("observatory", {}).get("zip_sha256"),
+            "observatory_zip_size_bytes": binding.get("observatory", {}).get("zip_size_bytes"),
+            "observatory_manifest_hash": binding.get("observatory", {}).get("manifest_hash"),
+            "observatory_source_hash": binding.get("observatory", {}).get("source_hash"),
+            "risk_register_hash": binding.get("risk_register", {}).get("integrity_hash"),
+            "recommendation_report_hash": binding.get("recommendation_report", {}).get("integrity_hash"),
+        }
+    )
+    binding["integrity_hash"] = stable_hash({k: v for k, v in binding.items() if k != "integrity_hash"})
+    source_hash = binding["source_hash"]
+
+    queue["source"] = binding.get("observatory", {})
+    queue["source_hash"] = source_hash
+    queue["integrity_hash"] = stable_hash({k: v for k, v in queue.items() if k != "integrity_hash"})
+    items["source_hash"] = source_hash
+    items["integrity_hash"] = stable_hash({k: v for k, v in items.items() if k != "integrity_hash"})
+    results["source_hash"] = source_hash
+    results["integrity_hash"] = stable_hash({k: v for k, v in results.items() if k != "integrity_hash"})
+    manual_actions["source_hash"] = source_hash
+    manual_actions["integrity_hash"] = stable_hash({k: v for k, v in manual_actions.items() if k != "integrity_hash"})
+    summary["source_hash"] = source_hash
+    summary.setdefault("document_hashes", {})["action_queue"] = queue["integrity_hash"]
+    summary["document_hashes"]["source_binding"] = binding["integrity_hash"]
+    summary["document_hashes"]["action_items"] = items["integrity_hash"]
+    summary["document_hashes"]["action_results"] = results["integrity_hash"]
+    summary["document_hashes"]["manual_actions"] = manual_actions["integrity_hash"]
+    summary["integrity_hash"] = stable_hash({k: v for k, v in summary.items() if k != "integrity_hash"})
+    docs["action-queue.json"] = queue
+    docs["source-binding.json"] = binding
+    docs["action-items.json"] = items
+    docs["action-results.json"] = results
+    docs["manual-actions.json"] = manual_actions
+    docs["queue-summary.json"] = summary
+    for name, payload in docs.items():
+        if name == "manifest.json":
+            continue
+        entries[name] = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    files = []
+    for record in manifest.get("files", []):
+        if not isinstance(record, dict):
+            continue
+        rel = str(record.get("path") or "")
+        if rel in entries:
+            record = dict(record)
+            record["size_bytes"] = len(entries[rel])
+            record["sha256"] = hashlib.sha256(entries[rel]).hexdigest()
+        files.append(record)
+    manifest["files"] = files
+    for key, doc_name in {
+        "action_queue_hash": "action-queue.json",
+        "source_binding_hash": "source-binding.json",
+        "action_items_hash": "action-items.json",
+        "action_results_hash": "action-results.json",
+        "manual_actions_hash": "manual-actions.json",
+        "summary_hash": "queue-summary.json",
+    }.items():
+        manifest[key] = docs[doc_name].get("integrity_hash")
+    manifest["source_hash"] = source_hash
+    manifest["integrity_hash"] = stable_hash({k: v for k, v in manifest.items() if k != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
     from dataclasses import dataclass
 

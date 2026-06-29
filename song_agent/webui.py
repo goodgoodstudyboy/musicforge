@@ -908,6 +908,10 @@ def panel_html() -> str:
             <button class="secondary" id="release-audio-quality-observatory-create" type="button">Create Observatory</button>
             <button class="secondary" id="release-audio-quality-observatory-refresh" type="button">Refresh Observatory</button>
             <button class="secondary" id="release-audio-quality-observatory-verify" type="button">Verify Observatory</button>
+            <button class="secondary" id="release-audio-quality-action-list" type="button">Quality Actions</button>
+            <button class="secondary" id="release-audio-quality-action-create" type="button">Create Quality Queue</button>
+            <button class="secondary" id="release-audio-quality-action-run-safe" type="button">Run Quality Queue</button>
+            <button class="secondary" id="release-audio-quality-action-verify" type="button">Verify Quality Queue</button>
           </div>
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
@@ -2523,6 +2527,24 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const id = prompt("Observatory id", "aqo-000001");
       if (!id) return;
       await showAudioCampaignResult(`/api/audio-quality-observatories/${encodeURIComponent(id)}/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_current_evidence: true, require_no_critical_risk: true }) });
+    });
+    $("release-audio-quality-action-list").addEventListener("click", async () => {
+      await showAudioCampaignResult(`/api/audio-quality-actions`);
+    });
+    $("release-audio-quality-action-create").addEventListener("click", async () => {
+      const id = prompt("Observatory id", "aqo-000001");
+      if (!id) return;
+      await showAudioCampaignResult(`/api/audio-quality-actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ observatory_id: id }) });
+    });
+    $("release-audio-quality-action-run-safe").addEventListener("click", async () => {
+      const id = prompt("Action queue id", "aqa-000001");
+      if (!id) return;
+      await showAudioCampaignResult(`/api/audio-quality-actions/${encodeURIComponent(id)}/run-safe`, { method: "POST" });
+    });
+    $("release-audio-quality-action-verify").addEventListener("click", async () => {
+      const id = prompt("Action queue id", "aqa-000001");
+      if (!id) return;
+      await showAudioCampaignResult(`/api/audio-quality-actions/${encodeURIComponent(id)}/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_current_observatory: true }) });
     });
 
     async function showAudioLabResult(path, options) {
