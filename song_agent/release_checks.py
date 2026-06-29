@@ -17342,6 +17342,29 @@ def _v1013_release_audio_quality_action_queue_smoke(root: Path) -> tuple[bool, s
                 )
                 gate = queue_store.gate(current["release_id"], queue_id=queue_id, required=True)
 
+                filtered_queue = queue_store.create_from_observatory(
+                    observatory_id,
+                    name="Audio Quality Action Queue Critical Risks",
+                    include_risks=True,
+                    include_recommendations=False,
+                    severity_floor="critical",
+                )
+                filtered_queue_id = filtered_queue["queue_id"]
+                filtered_run = queue_store.run_safe(filtered_queue_id)
+                filtered_zipped = queue_store.build_zip(filtered_queue_id)
+                filtered_verification = verify_release_audio_quality_action_queue_package(
+                    filtered_zipped["zip_path"],
+                    strict=True,
+                    require_current_observatory=True,
+                    observatory_zip_path=observatory_zip["zip_path"],
+                    observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    evidence_root=server.release_store.root,
+                    require_no_blocking=True,
+                )
+                filtered_summary = queue_store.read_summary(filtered_queue_id)
+                filtered_manual_ids = {str(row.get("item_id")) for row in filtered_run.get("manual_actions", {}).get("manual_actions", []) if row.get("item_id")}
+                filtered_manual_ids.update(str(row.get("item_id")) for row in filtered_run.get("results", {}).get("results", []) if row.get("status") == "manual_required" and row.get("item_id"))
+
                 ga_report = build_ga_readiness_report(
                     repo_root=Path(__file__).resolve().parents[1],
                     allow_dirty=True,
@@ -17390,6 +17413,10 @@ def _v1013_release_audio_quality_action_queue_smoke(root: Path) -> tuple[bool, s
                     and verification.get("status") == "passed"
                     and external_verification.get("status") == "passed"
                     and gate.get("status") == "passed"
+                    and filtered_verification.get("status") == "passed"
+                    and filtered_queue.get("action_selection", {}).get("include_recommendations") is False
+                    and filtered_queue.get("action_selection", {}).get("severity_floor") == "critical"
+                    and filtered_summary.get("summary", {}).get("manual_required_count") == len(filtered_manual_ids)
                     and _ga_check_status(ga_report, "ga.release_audio_quality_action_queue") == "passed"
                     and ga_verification.get("status") != "failed"
                     and full_resign.get("status") == "failed"
@@ -17398,6 +17425,7 @@ def _v1013_release_audio_quality_action_queue_smoke(root: Path) -> tuple[bool, s
                 failed_ga_checks = ",".join(str(check.get("check_id")) for check in ga_verification.get("checks", []) if check.get("status") == "failed") or "-"
                 return ok, (
                     f"queue={run.get('status')}, verify={verification.get('status')}/{external_verification.get('status')}, "
+                    f"filtered={filtered_verification.get('status')}/{filtered_summary.get('summary', {}).get('manual_required_count')}, "
                     f"gate={gate.get('status')}, ga={_ga_check_status(ga_report, 'ga.release_audio_quality_action_queue')}/{ga_verification.get('status')} failed={failed_ga_checks}, "
                     f"full_resign={full_resign.get('status')}, stale_export={stale_export}"
                 )

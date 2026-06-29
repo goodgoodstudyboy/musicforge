@@ -102,6 +102,46 @@ def test_release_audio_quality_action_queue_verifier_rejects_full_resign_source(
     assert "release_audio_quality_action_queue_external_source_binding" in verification["blockers"]
 
 
+def test_release_audio_quality_action_queue_filter_policy_round_trips_to_verifier(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        release_id, _timeline_id, _timeline_store = _prepare_signed_timeline(server, "Quality Action Queue Filtered")
+        observatory_store = ReleaseAudioQualityObservatoryStore(release_store=server.release_store)
+        observatory_id = observatory_store.create({"release_ids": [release_id]})["observatory_id"]
+        observatory_store.refresh(observatory_id)
+        observatory_zip = observatory_store.build_zip(observatory_id)
+        observatory_store.verify_zip(observatory_id, strict=True, require_current_evidence=True)
+        queue_store = ReleaseAudioQualityActionQueueStore(release_store=server.release_store, observatory_store=observatory_store)
+        queue = queue_store.create_from_observatory(
+            observatory_id,
+            include_risks=True,
+            include_recommendations=False,
+            severity_floor="critical",
+        )
+        run = queue_store.run_safe(queue["queue_id"])
+        zipped = queue_store.build_zip(queue["queue_id"])
+        verification = verify_release_audio_quality_action_queue_package(
+            zipped["zip_path"],
+            strict=True,
+            require_current_observatory=True,
+            observatory_zip_path=observatory_zip["zip_path"],
+            observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+            evidence_root=server.release_store.root,
+        )
+        queue_doc = queue_store.read_queue(queue["queue_id"])
+        summary = queue_store.read_summary(queue["queue_id"])
+    finally:
+        stop_test_server(server)
+
+    manual_ids = {row["item_id"] for row in run["manual_actions"]["manual_actions"]}
+    manual_ids.update(row["item_id"] for row in run["results"]["results"] if row.get("status") == "manual_required")
+    assert queue_doc["action_selection"] == {"include_risks": True, "include_recommendations": False, "severity_floor": "critical"}
+    assert verification["status"] == "passed", verification.get("blockers")
+    assert "release_audio_quality_action_queue_external_action_items" not in verification.get("blockers", [])
+    assert summary["summary"]["manual_required_count"] == len(manual_ids)
+
+
 def _rewrite_action_queue_source_fingerprint(source_zip: Path, target_zip: Path) -> None:
     with zipfile.ZipFile(source_zip, "r") as source:
         docs = {info.filename: source.read(info.filename) for info in source.infolist()}

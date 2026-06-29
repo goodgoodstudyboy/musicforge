@@ -226,7 +226,9 @@ def _action_semantics_checks(items: dict[str, Any], results: dict[str, Any], man
     completed = sum(1 for row in result_rows if row.get("status") == "completed")
     blocked = sum(1 for row in result_rows if row.get("status") == "blocked")
     failed = sum(1 for row in result_rows if row.get("status") == "failed")
-    manual_count = len(manual_rows) + sum(1 for row in result_rows if row.get("status") == "manual_required")
+    manual_ids_for_count = {str(row.get("item_id")) for row in manual_rows if row.get("item_id")}
+    manual_ids_for_count.update(str(row.get("item_id")) for row in result_rows if row.get("status") == "manual_required" and row.get("item_id"))
+    manual_count = len(manual_ids_for_count)
     pending = max(0, len(item_rows) - len(result_rows))
     mutating_completed = [row.get("item_id") for row in item_rows if row.get("action_type") in {"signoff_release", "reset_signoff", "apply_audio_fix", "activate_baseline", "approve_baseline_change"} and row.get("item_id") in {result.get("item_id") for result in result_rows if result.get("status") == "completed"}]
     checks = [

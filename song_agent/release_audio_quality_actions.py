@@ -373,6 +373,8 @@ class ReleaseAudioQualityActionQueueStore:
         policy: dict[str, Any],
     ) -> dict[str, dict[str, Any]]:
         now = now_iso()
+        selection = _action_selection(include_risks=include_risks, include_recommendations=include_recommendations, severity_floor=severity_floor)
+        binding = _with_action_selection(binding, selection)
         source_hash = str(binding.get("source_hash") or "")
         effective_policy = {
             "allow_safe_actions": bool(policy.get("allow_safe_actions", True)),
@@ -382,7 +384,13 @@ class ReleaseAudioQualityActionQueueStore:
             "require_manual_for_baseline_change": True,
             "require_manual_for_music_change": True,
         }
-        items = _action_items_from_binding(queue_id, binding, include_risks=include_risks, include_recommendations=include_recommendations, severity_floor=severity_floor)
+        items = _action_items_from_binding(
+            queue_id,
+            binding,
+            include_risks=selection["include_risks"],
+            include_recommendations=selection["include_recommendations"],
+            severity_floor=selection["severity_floor"],
+        )
         queue = sanitize_metadata(
             {
                 "schema_version": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION,
@@ -392,6 +400,7 @@ class ReleaseAudioQualityActionQueueStore:
                 "status": "draft",
                 "source": binding.get("observatory", {}),
                 "source_hash": source_hash,
+                "action_selection": selection,
                 "policy": effective_policy,
                 "summary": {},
                 "created_at": now,
@@ -540,12 +549,14 @@ def build_expected_action_documents_from_observatory(
         observatory_zip=observatory_zip,
         verification=verification,
     )
+    selection = _selection_from_documents(queue, source_binding)
+    expected_binding = _with_action_selection(expected_binding, selection)
     expected_items = _action_items_from_binding(
         str(queue.get("queue_id") or ""),
         expected_binding,
-        include_risks=True,
-        include_recommendations=True,
-        severity_floor="info",
+        include_risks=selection["include_risks"],
+        include_recommendations=selection["include_recommendations"],
+        severity_floor=selection["severity_floor"],
     )
     return {"source_binding": expected_binding, "items": expected_items, "verification": verification, "runtime": runtime}
 
@@ -679,6 +690,39 @@ def _action_items_from_binding(
     return items
 
 
+def _action_selection(*, include_risks: bool, include_recommendations: bool, severity_floor: str) -> dict[str, Any]:
+    floor = str(severity_floor or "warning").strip().lower()
+    if floor not in {"info", "warning", "high", "critical", "blocking"}:
+        floor = "warning"
+    return {
+        "include_risks": bool(include_risks),
+        "include_recommendations": bool(include_recommendations),
+        "severity_floor": floor,
+    }
+
+
+def _selection_from_documents(queue: dict[str, Any], source_binding: dict[str, Any]) -> dict[str, Any]:
+    selection = source_binding.get("action_selection") if isinstance(source_binding.get("action_selection"), dict) else {}
+    if not selection and isinstance(queue.get("action_selection"), dict):
+        selection = queue.get("action_selection") or {}
+    return _action_selection(
+        include_risks=selection.get("include_risks", True),
+        include_recommendations=selection.get("include_recommendations", True),
+        severity_floor=str(selection.get("severity_floor") or "warning"),
+    )
+
+
+def _with_action_selection(binding: dict[str, Any], selection: dict[str, Any]) -> dict[str, Any]:
+    updated = dict(binding)
+    updated["action_selection"] = _action_selection(
+        include_risks=selection.get("include_risks", True),
+        include_recommendations=selection.get("include_recommendations", True),
+        severity_floor=str(selection.get("severity_floor") or "warning"),
+    )
+    updated["integrity_hash"] = _integrity_hash(updated)
+    return updated
+
+
 def _risk_action(check_id: str, severity: str) -> tuple[str, str]:
     if check_id == "audio_evidence_not_current":
         return "verify_observatory", "safe"
@@ -746,7 +790,9 @@ def _build_summary(queue: dict[str, Any], source_binding: dict[str, Any], items:
     completed = sum(1 for row in result_rows if row.get("status") == "completed")
     failed = sum(1 for row in result_rows if row.get("status") == "failed")
     blocked = sum(1 for row in result_rows if row.get("status") == "blocked")
-    manual_required = len(manual_rows) + sum(1 for row in result_rows if row.get("status") == "manual_required")
+    manual_required_ids = {str(row.get("item_id")) for row in manual_rows if row.get("item_id")}
+    manual_required_ids.update(str(row.get("item_id")) for row in result_rows if row.get("status") == "manual_required" and row.get("item_id"))
+    manual_required = len(manual_required_ids)
     pending = max(0, len(item_rows) - len(result_rows))
     critical_unhandled = sum(1 for row in item_rows if row.get("severity") in {"critical", "blocking"} and row.get("item_id") not in {result.get("item_id") for result in result_rows if result.get("status") in {"completed", "manual_required"}})
     if stale_reasons:

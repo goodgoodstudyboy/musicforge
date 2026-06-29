@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.13.1 - 2026-06-29
+
+### Fixed
+- Release Audio Quality Action Queue now persists its action selection policy (`include_risks`, `include_recommendations`, and `severity_floor`) into queue/source evidence.
+- Offline verifier now rebuilds expected Action Queue items with the same persisted selection policy, so risks-only, recommendations-only, and severity-filtered queues can verify against current Observatory evidence.
+- `manual_required_count` now counts unique manual-required `item_id` values instead of double-counting result rows and manual action rows.
+- release-check `v1013.release_audio_quality_action_queue_smoke` now covers a critical risks-only filtered queue and validates the corrected manual action count.
+
+### Verified
+- `python -m pytest tests\test_release_audio_quality_actions.py tests\test_server_release_audio_quality_actions.py tests\test_cli_release_audio_quality_actions.py tests\test_release_check.py::test_v1013_release_audio_quality_action_queue_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.13.0 - 2026-06-29
 
 ### Added
