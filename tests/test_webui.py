@@ -893,6 +893,11 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-audio-quality-action-create"' in html
     assert 'id="release-audio-quality-action-run-safe"' in html
     assert 'id="release-audio-quality-action-verify"' in html
+    assert 'id="release-audio-command-center-refresh"' in html
+    assert 'id="release-audio-command-center-runbook"' in html
+    assert 'id="release-audio-command-center-run-safe"' in html
+    assert 'id="release-audio-command-center-zip"' in html
+    assert 'id="release-audio-command-center-verify"' in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html
     assert "/api/audio-lab/listening-sessions" in html
@@ -926,6 +931,11 @@ def test_webui_contains_release_workspace_controls():
     assert "/audio-regression-response/verify" in html
     assert "/api/audio-quality-observatories" in html
     assert "/api/audio-quality-actions" in html
+    assert "/audio-command-center/refresh" in html
+    assert "/audio-command-center/runbook" in html
+    assert "/audio-command-center/run-safe" in html
+    assert "/audio-command-center/zip" in html
+    assert "/audio-command-center/verify" in html
     assert "Release Audio QA" in html
     assert "Audio Review Board" in html
     assert "Tracklist" in html

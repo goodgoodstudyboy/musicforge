@@ -328,6 +328,27 @@ to the current external queue verification report. Release signoff can require
 `require_release_audio_quality_action_queue_signoff=true`, and GA readiness can
 require `ga.release_audio_quality_action_queue_signoff`.
 
+Release Audio Command Center is the unified audio readiness surface for the
+v10.2-v10.14 evidence chain. It aggregates Certification, Timeline, Regression,
+Baseline Governance, Regression Response, Observatory, Action Queue, and Action
+Queue Signoff into one evidence inventory, readiness matrix, gap plan, safe
+runbook, fixed-layout ZIP, offline verifier, Release signoff gate, and GA gate:
+
+```powershell
+python -m song_agent.cli release-audio-command-center refresh rel-000001 --json
+python -m song_agent.cli release-audio-command-center runbook rel-000001 --json
+python -m song_agent.cli release-audio-command-center run-safe rel-000001 --json
+python -m song_agent.cli release-audio-command-center zip rel-000001 --json
+python -m song_agent.cli release-audio-command-center verify rel-000001 --strict --require-ready --json
+python -m song_agent.cli verify-release-audio-command-center-package .musicforge\releases\rel-000001\audio-command-center\release-audio-command-center.zip --strict --require-ready --json
+```
+
+Command Center verification is not based on package self-consistency alone. When
+`--require-ready` is used, the verifier rechecks the external component ZIPs and
+verification reports for every ready component. Internal full-resign attempts,
+declared extra files, stale external evidence, and blocked runbook actions fail
+the gate.
+
 ## LTS Maintenance
 
 Create and verify local backups before upgrades or machine migration:

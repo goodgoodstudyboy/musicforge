@@ -585,6 +585,12 @@ from song_agent.release_audio_quality_action_signoff import (
     ReleaseAudioQualityActionQueueSignoffStore,
     ReleaseAudioQualityActionQueueSignoffValidationError,
 )
+from song_agent.release_audio_command_center import (
+    ReleaseAudioCommandCenterError,
+    ReleaseAudioCommandCenterNotFoundError,
+    ReleaseAudioCommandCenterStateError,
+    ReleaseAudioCommandCenterStore,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3195,6 +3201,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         store = self.server.release_audio_quality_action_signoff_store  # type: ignore[attr-defined]
         store.release_store = self.release_store
         store.queue_store = self.release_audio_quality_action_queue_store
+        return store
+
+    @property
+    def release_audio_command_center_store(self) -> ReleaseAudioCommandCenterStore:
+        store = self.server.release_audio_command_center_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        store.observatory_store = self.release_audio_quality_observatory_store
+        store.action_queue_store = self.release_audio_quality_action_queue_store
+        store.action_signoff_store = self.release_audio_quality_action_signoff_store
         return store
 
     @property
@@ -5844,6 +5859,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
 
             if tail == "/audio-regression-response" or tail.startswith("/audio-regression-response/"):
                 self._handle_release_audio_regression_response(method, release_id, tail.removeprefix("/audio-regression-response"))
+                return
+
+            if tail == "/audio-command-center" or tail.startswith("/audio-command-center/"):
+                self._handle_release_audio_command_center(method, release_id, tail.removeprefix("/audio-command-center"))
                 return
 
             if tail == "/mastering" or tail.startswith("/mastering/"):
@@ -10842,6 +10861,78 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseAudioRegressionResponseError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_release_audio_command_center(self, method: str, release_id: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_audio_command_center_store.read_report(release_id) if self.release_audio_command_center_store.report_path(release_id).exists() else {}
+                inventory = self.release_audio_command_center_store.read_inventory(release_id) if self.release_audio_command_center_store.inventory_path(release_id).exists() else {}
+                readiness = read_json(self.release_audio_command_center_store.readiness_path(release_id)) if self.release_audio_command_center_store.readiness_path(release_id).exists() else {}
+                gap_plan = read_json(self.release_audio_command_center_store.gap_plan_path(release_id)) if self.release_audio_command_center_store.gap_plan_path(release_id).exists() else {}
+                runbook = read_json(self.release_audio_command_center_store.runbook_path(release_id)) if self.release_audio_command_center_store.runbook_path(release_id).exists() else {}
+                self._send_json({"ok": True, "release_id": release_id, "report": report, "inventory": inventory, "readiness": readiness, "gap_plan": gap_plan, "runbook": runbook, "summary": report.get("summary", {}) if report else {}})
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.release_audio_command_center_store.refresh(release_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "release_id": release_id, "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/runbook":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                runbook = self.release_audio_command_center_store.create_runbook(release_id, self._optional_json_body())
+                self._send_json({"ok": True, "release_id": release_id, "runbook": runbook, "summary": runbook.get("summary", {})})
+                return
+            if tail == "/run-safe":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_command_center_store.run_safe(release_id, self._optional_json_body())
+                self._send_json({"ok": result.get("summary", {}).get("failed_count") == 0, "release_id": release_id, "runbook_results": result, "summary": result.get("summary", {})})
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_command_center_store.export_package(release_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") == "passed", **result})
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.release_audio_command_center_store.build_zip(release_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.release_audio_command_center_store.verify_zip(release_id, evidence=payload, strict=bool(payload.get("strict", True)), require_ready=bool(payload.get("require_ready", False)))
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.release_audio_command_center_store.zip_path(release_id), "application/zip", filename="release-audio-command-center.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Release Audio Command Center route not found.")
+        except ReleaseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioCommandCenterNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except ReleaseAudioCommandCenterStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except ReleaseAudioCommandCenterError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_audio_baselines_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/audio-baselines":
@@ -11678,6 +11769,30 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if release_audio_quality_action_queue_signoff_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(release_audio_quality_action_queue_signoff_gate.get("message") or "Release Audio Quality Action Queue signoff gate failed.")
+        require_release_audio_command_center = bool(payload.get("require_release_audio_command_center", False))
+        release_audio_command_center_gate = self.release_audio_command_center_store.gate(
+            release_id,
+            required=require_release_audio_command_center,
+            command_center_zip_path=payload.get("release_audio_command_center_zip") or payload.get("release_audio_command_center"),
+            command_center_verification_report_path=payload.get("release_audio_command_center_verification_report"),
+            evidence={
+                "certification": {"zip": payload.get("release_audio_certification_zip"), "verification_report": payload.get("release_audio_certification_verification_report")},
+                "timeline": {"zip": payload.get("release_audio_timeline_zip"), "verification_report": payload.get("release_audio_timeline_verification_report")},
+                "regression": {"zip": payload.get("release_audio_regression_zip"), "verification_report": payload.get("release_audio_regression_verification_report")},
+                "baseline_governance": {"zip": payload.get("release_audio_baseline_registry_zip"), "verification_report": payload.get("release_audio_baseline_registry_verification_report")},
+                "regression_response": {"zip": payload.get("release_audio_regression_response_zip"), "verification_report": payload.get("release_audio_regression_response_verification_report")},
+                "observatory": {"zip": payload.get("release_audio_quality_observatory_zip"), "verification_report": payload.get("release_audio_quality_observatory_verification_report")},
+                "action_queue": {"zip": payload.get("release_audio_quality_action_queue_zip"), "verification_report": payload.get("release_audio_quality_action_queue_verification_report")},
+                "action_queue_signoff": {"zip": payload.get("release_audio_quality_action_queue_signoff_archive"), "verification_report": payload.get("release_audio_quality_action_queue_signoff_verification_report")},
+                "evidence_root": payload.get("release_audio_quality_observatory_evidence_root"),
+            },
+        )
+        if release_audio_command_center_gate and require_release_audio_command_center:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["release_audio_command_center"] = release_audio_command_center_gate
+            if release_audio_command_center_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(release_audio_command_center_gate.get("message") or "Release Audio Command Center gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -11817,6 +11932,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(release_audio_quality_action_queue_signoff_gate.get("message") or "Release Audio Quality Action Queue signoff gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if release_audio_command_center_gate.get("hard_block") and release_audio_command_center_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(release_audio_command_center_gate.get("message") or "Release Audio Command Center gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -19359,6 +19483,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_audio_quality_observatory_store = ReleaseAudioQualityObservatoryStore(release_store=self.release_store)
         self.release_audio_quality_action_queue_store = ReleaseAudioQualityActionQueueStore(release_store=self.release_store, observatory_store=self.release_audio_quality_observatory_store)
         self.release_audio_quality_action_signoff_store = ReleaseAudioQualityActionQueueSignoffStore(queue_store=self.release_audio_quality_action_queue_store, release_store=self.release_store)
+        self.release_audio_command_center_store = ReleaseAudioCommandCenterStore(release_store=self.release_store, observatory_store=self.release_audio_quality_observatory_store, action_queue_store=self.release_audio_quality_action_queue_store, action_signoff_store=self.release_audio_quality_action_signoff_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

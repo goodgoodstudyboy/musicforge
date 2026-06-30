@@ -17675,6 +17675,300 @@ def _v1014_add_declared_signoff_archive_extra(entries: dict[str, bytes]) -> dict
     return entries
 
 
+def _v1015_release_audio_command_center_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.release_audio_baseline_governance import ReleaseAudioBaselineGovernanceStore
+    from song_agent.release_audio_command_center import ReleaseAudioCommandCenterStore, evidence_to_verifier_kwargs
+    from song_agent.release_audio_command_center_verifier import verify_release_audio_command_center_package
+    from song_agent.release_audio_quality_action_signoff import ReleaseAudioQualityActionQueueSignoffStore
+    from song_agent.release_audio_quality_actions import ReleaseAudioQualityActionQueueStore
+    from song_agent.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
+    from song_agent.release_audio_regression import ReleaseAudioRegressionStore
+    from song_agent.release_audio_regression_response import ReleaseAudioRegressionResponseStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v1015-release-audio-command-center-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            servers: list[Any] = []
+            try:
+                baseline = _v1010_signed_timeline_release("Release Audio Command Center Track")
+                current = _v1010_signed_timeline_release("Release Audio Command Center Track")
+                servers.extend([baseline["server"], current["server"]])
+                server = current["server"]
+
+                baseline_store = ReleaseAudioBaselineGovernanceStore(release_store=baseline["server"].release_store)
+                baseline_doc = baseline_store.create_from_release(
+                    baseline["release_id"],
+                    {
+                        "timeline": baseline["timeline_zip"],
+                        "timeline_verification_report": baseline["timeline_verification"],
+                        "certification": baseline["cert_zip"],
+                        "certification_verification_report": baseline["cert_verification"],
+                    },
+                )
+                baseline_store.approve(baseline_doc["baseline_id"], {"approved_by": "release-check", "reason": "Command Center baseline approved."})
+                baseline_store.activate(baseline_doc["baseline_id"])
+                baseline_zip = baseline_store.build_zip()
+                baseline_store.verify_zip(strict=True, require_active=True)
+
+                regression_store = ReleaseAudioRegressionStore(
+                    release_store=server.release_store,
+                    certification_store=current["timeline_store"].certification_store,
+                    timeline_store=current["timeline_store"],
+                )
+                regression_store.configure_baseline(
+                    current["release_id"],
+                    {
+                        "baseline_release_id": baseline["release_id"],
+                        "baseline_timeline": baseline["timeline_zip"],
+                        "baseline_timeline_verification_report": baseline["timeline_verification"],
+                        "baseline_certification": baseline["cert_zip"],
+                        "baseline_certification_verification_report": baseline["cert_verification"],
+                        "current_timeline": current["timeline_zip"],
+                        "current_timeline_verification_report": current["timeline_verification"],
+                        "current_certification": current["cert_zip"],
+                        "current_certification_verification_report": current["cert_verification"],
+                    },
+                )
+                regression_store.refresh_report(current["release_id"])
+                regression_store.signoff(current["release_id"], {"signed_by": "release-check", "role": "audio_quality_lead"})
+                regression_zip = regression_store.build_zip(current["release_id"])
+                regression_store.verify_zip(current["release_id"], strict=True, require_passed=True, require_signed=True, require_current=True, require_baseline_current=True)
+
+                response_store = ReleaseAudioRegressionResponseStore(release_store=server.release_store, regression_store=regression_store)
+                response_store.create_plan(current["release_id"])
+                response_store.run_safe_actions(current["release_id"])
+                response_store.closeout(current["release_id"], {"closed_by": "release-check", "reason": "Command Center regression response closeout accepted."})
+                response_store.signoff(current["release_id"], {"signed_by": "release-check", "role": "audio_quality_lead"})
+                response_zip = response_store.build_zip(current["release_id"])
+                response_store.verify_zip(current["release_id"], strict=True, require_closed=True, require_signed=True, require_regression_current=True, **response_store._response_verifier_kwargs(current["release_id"]))  # noqa: SLF001
+
+                observatory_store = ReleaseAudioQualityObservatoryStore(release_store=server.release_store)
+                observatory_id = observatory_store.create({"name": "Release Audio Command Center Observatory", "release_ids": [current["release_id"]]})["observatory_id"]
+                observatory_store.refresh(observatory_id)
+                observatory_zip = observatory_store.build_zip(observatory_id)
+                observatory_store.verify_zip(observatory_id, strict=True, require_current_evidence=True, require_no_critical_risk=True)
+
+                queue_store = ReleaseAudioQualityActionQueueStore(release_store=server.release_store, observatory_store=observatory_store)
+                queue_id = queue_store.create_from_observatory(observatory_id, name="Release Audio Command Center Queue")["queue_id"]
+                queue_store.run_safe(queue_id)
+                queue_zip = queue_store.build_zip(queue_id)
+                queue_store.verify_zip(queue_id, strict=True, require_current_observatory=True, require_no_blocking=False)
+
+                signoff_store = ReleaseAudioQualityActionQueueSignoffStore(queue_store=queue_store, release_store=server.release_store)
+                for item in signoff_store.list_manual_items(queue_id)["manual_items"]:
+                    signoff_store.resolve_manual_item(queue_id, item["item_id"], {"status": "completed", "resolved_by": "release-check", "reason": "Manual action handled for Command Center smoke."})
+                signoff_store.refresh_closeout(queue_id)
+                signoff_store.signoff(queue_id, {"signed_by": "release-check", "role": "audio_quality_lead", "reason": "Command Center queue signoff accepted."})
+                signoff_archive = signoff_store.build_archive_zip(queue_id)
+                signoff_store.verify_archive(queue_id, strict=True, require_current_queue=True, require_signed=True, require_no_unresolved_manual=True)
+
+                evidence = {
+                    "certification": {"zip": current["cert_zip"], "verification_report": current["cert_verification"]},
+                    "timeline": {"zip": current["timeline_zip"], "verification_report": current["timeline_verification"]},
+                    "regression": {"zip": regression_zip["zip_path"], "verification_report": regression_store.verification_report_path(current["release_id"])},
+                    "baseline_governance": {"zip": baseline_zip["zip_path"], "verification_report": baseline_store.verification_report_path()},
+                    "regression_response": {"zip": response_zip["zip_path"], "verification_report": response_store.verification_report_path(current["release_id"])},
+                    "observatory": {"zip": observatory_zip["zip_path"], "verification_report": observatory_store.verification_report_path(observatory_id)},
+                    "action_queue": {"zip": queue_zip["zip_path"], "verification_report": queue_store.verification_report_path(queue_id)},
+                    "action_queue_signoff": {"zip": signoff_archive["zip_path"], "verification_report": signoff_store.archive_verification_report_path(queue_id)},
+                    "evidence_root": server.release_store.root,
+                }
+
+                store = ReleaseAudioCommandCenterStore(
+                    release_store=server.release_store,
+                    observatory_store=observatory_store,
+                    action_queue_store=queue_store,
+                    action_signoff_store=signoff_store,
+                )
+                command_report = store.refresh(current["release_id"], evidence)
+                runbook = store.create_runbook(current["release_id"], evidence)
+                run_results = store.run_safe(current["release_id"], evidence)
+                zipped = store.build_zip(current["release_id"], evidence)
+                verification = store.verify_zip(current["release_id"], evidence=evidence, strict=True, require_ready=True)
+                external = verify_release_audio_command_center_package(zipped["zip_path"], strict=True, require_ready=True, **evidence_to_verifier_kwargs(evidence))
+                release_gate = store.gate(current["release_id"], required=True, evidence=evidence)
+
+                ga_report = build_ga_readiness_report(
+                    repo_root=Path(__file__).resolve().parents[1],
+                    allow_dirty=True,
+                    require_release_audio_command_center=True,
+                    release_audio_command_center_zip_path=zipped["zip_path"],
+                    release_audio_command_center_verification_report_path=store.verification_report_path(current["release_id"]),
+                    release_audio_certification_zip_path=current["cert_zip"],
+                    release_audio_certification_verification_report_path=current["cert_verification"],
+                    release_audio_timeline_zip_path=current["timeline_zip"],
+                    release_audio_timeline_verification_report_path=current["timeline_verification"],
+                    release_audio_regression_zip_path=regression_zip["zip_path"],
+                    release_audio_regression_verification_report_path=regression_store.verification_report_path(current["release_id"]),
+                    release_audio_baseline_registry_zip_path=baseline_zip["zip_path"],
+                    release_audio_baseline_registry_verification_report_path=baseline_store.verification_report_path(),
+                    release_audio_regression_response_zip_path=response_zip["zip_path"],
+                    release_audio_regression_response_verification_report_path=response_store.verification_report_path(current["release_id"]),
+                    release_audio_quality_observatory_zip_path=observatory_zip["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    release_audio_quality_action_queue_zip_path=queue_zip["zip_path"],
+                    release_audio_quality_action_queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                    release_audio_quality_action_queue_signoff_archive_path=signoff_archive["zip_path"],
+                    release_audio_quality_action_queue_signoff_verification_report_path=signoff_store.archive_verification_report_path(queue_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                )
+                ga_path = base / "ga-command-center.json"
+                write_ga_readiness_report(ga_report, ga_path)
+                ga_verification = verify_ga_readiness_report(
+                    ga_path,
+                    require_release_audio_command_center=True,
+                    release_audio_command_center_path=zipped["zip_path"],
+                    release_audio_command_center_verification_report_path=store.verification_report_path(current["release_id"]),
+                    release_audio_certification_path=current["cert_zip"],
+                    release_audio_certification_verification_report_path=current["cert_verification"],
+                    release_audio_timeline_path=current["timeline_zip"],
+                    release_audio_timeline_verification_report_path=current["timeline_verification"],
+                    release_audio_regression_path=regression_zip["zip_path"],
+                    release_audio_regression_verification_report_path=regression_store.verification_report_path(current["release_id"]),
+                    release_audio_baseline_registry_path=baseline_zip["zip_path"],
+                    release_audio_baseline_registry_verification_report_path=baseline_store.verification_report_path(),
+                    release_audio_regression_response_path=response_zip["zip_path"],
+                    release_audio_regression_response_verification_report_path=response_store.verification_report_path(current["release_id"]),
+                    release_audio_quality_observatory_path=observatory_zip["zip_path"],
+                    release_audio_quality_observatory_verification_report_path=observatory_store.verification_report_path(observatory_id),
+                    release_audio_quality_action_queue_path=queue_zip["zip_path"],
+                    release_audio_quality_action_queue_verification_report_path=queue_store.verification_report_path(queue_id),
+                    release_audio_quality_action_queue_signoff_archive_path=signoff_archive["zip_path"],
+                    release_audio_quality_action_queue_signoff_verification_report_path=signoff_store.archive_verification_report_path(queue_id),
+                    release_audio_quality_observatory_evidence_root=server.release_store.root,
+                )
+
+                full_resign_zip = base / "command-center-full-resign.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), full_resign_zip, _v1015_resign_command_center_action_queue_fingerprint)
+                full_resign = verify_release_audio_command_center_package(full_resign_zip, strict=True, require_ready=True, **evidence_to_verifier_kwargs(evidence))
+                declared_extra_zip = base / "command-center-declared-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v1015_add_declared_command_center_extra)
+                declared_extra = verify_release_audio_command_center_package(declared_extra_zip, strict=True, require_ready=True, **evidence_to_verifier_kwargs(evidence))
+
+                ok = (
+                    command_report.get("status") == "passed"
+                    and runbook.get("summary", {}).get("safe_action_count", 0) >= 1
+                    and run_results.get("summary", {}).get("failed_count") == 0
+                    and verification.get("status") == "passed"
+                    and external.get("status") == "passed"
+                    and release_gate.get("status") == "passed"
+                    and _ga_check_status(ga_report, "ga.release_audio_command_center") == "passed"
+                    and ga_verification.get("status") != "failed"
+                    and full_resign.get("status") == "failed"
+                    and declared_extra.get("status") == "failed"
+                )
+                failed_ga_checks = ",".join(str(check.get("check_id")) for check in ga_verification.get("checks", []) if check.get("status") == "failed") or "-"
+                failed_command_checks = ",".join(str(item) for item in verification.get("blockers", [])[:8]) or "-"
+                failed_external_checks = ",".join(str(item) for item in external.get("blockers", [])[:8]) or "-"
+                return ok, (
+                    f"command={command_report.get('status')}, verify={verification.get('status')}/{external.get('status')}, "
+                    f"runbook={runbook.get('summary', {}).get('safe_action_count')}/{run_results.get('summary', {}).get('failed_count')}, "
+                    f"gate={release_gate.get('status')}, "
+                    f"ga={_ga_check_status(ga_report, 'ga.release_audio_command_center')}/{ga_verification.get('status')} failed={failed_ga_checks}, "
+                    f"full_resign={full_resign.get('status')}, declared_extra={declared_extra.get('status')}, "
+                    f"verify_failed={failed_command_checks}, external_failed={failed_external_checks}"
+                )
+            finally:
+                for candidate in servers:
+                    close = getattr(candidate, "server_close", None)
+                    if callable(close):
+                        close()
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v10.15 Release Audio Command Center smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v1015_resign_command_center_action_queue_fingerprint(entries: dict[str, bytes]) -> dict[str, bytes]:
+    docs = {name: json.loads(data.decode("utf-8")) for name, data in entries.items() if name.endswith(".json")}
+    fingerprint_name = "evidence-fingerprints/action_queue.json"
+    fingerprint = docs[fingerprint_name]
+    fingerprint["zip_sha256"] = "0" * 64
+    fingerprint["integrity_hash"] = stable_hash({key: value for key, value in fingerprint.items() if key != "integrity_hash"})
+    docs[fingerprint_name] = fingerprint
+
+    inventory = docs["evidence-inventory.json"]
+    for component in inventory.get("components", []):
+        if isinstance(component, dict) and component.get("component_key") == "action_queue":
+            component["fingerprint"] = fingerprint
+    source = docs["command-center-report.json"].get("source", {})
+    source.setdefault("component_fingerprints", {})["action_queue"] = fingerprint
+    source_hash = stable_hash(source)
+    inventory["source_hash"] = source_hash
+    readiness = docs["readiness-matrix.json"]
+    readiness["source_hash"] = source_hash
+    gap_plan = docs["gap-plan.json"]
+    gap_plan["source_hash"] = source_hash
+    runbook = docs["runbook.json"]
+    runbook["source_hash"] = source_hash
+    runbook_results = docs["runbook-results.json"]
+    if runbook_results.get("source_hash"):
+        runbook_results["source_hash"] = source_hash
+    command_center = docs["command-center.json"]
+    command_center["source_hash"] = source_hash
+    report = docs["command-center-report.json"]
+    report["source"] = source
+    report["source_hash"] = source_hash
+    for name in ("evidence-inventory.json", "readiness-matrix.json", "gap-plan.json", "runbook.json", "runbook-results.json", "command-center.json"):
+        docs[name]["integrity_hash"] = stable_hash({key: value for key, value in docs[name].items() if key != "integrity_hash"})
+    report["document_hashes"]["command_center"] = docs["command-center.json"]["integrity_hash"]
+    report["document_hashes"]["evidence_inventory"] = inventory["integrity_hash"]
+    report["document_hashes"]["readiness_matrix"] = readiness["integrity_hash"]
+    report["document_hashes"]["gap_plan"] = gap_plan["integrity_hash"]
+    report["document_hashes"]["runbook"] = runbook["integrity_hash"]
+    report["document_hashes"]["runbook_results"] = runbook_results["integrity_hash"]
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    docs["command-center-report.json"] = report
+    manifest = docs["manifest.json"]
+    manifest["source_hash"] = source_hash
+    manifest["report_hash"] = report["integrity_hash"]
+    manifest["evidence_inventory_hash"] = inventory["integrity_hash"]
+    manifest["readiness_matrix_hash"] = readiness["integrity_hash"]
+    manifest["gap_plan_hash"] = gap_plan["integrity_hash"]
+    manifest["runbook_hash"] = runbook["integrity_hash"]
+    manifest["runbook_results_hash"] = runbook_results["integrity_hash"]
+
+    for name, payload in docs.items():
+        if name == "manifest.json":
+            continue
+        entries[name] = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    files = []
+    for record in manifest.get("files", []):
+        if not isinstance(record, dict):
+            continue
+        rel = str(record.get("path") or "")
+        if rel in entries:
+            record = dict(record)
+            record["size_bytes"] = len(entries[rel])
+            record["sha256"] = hashlib.sha256(entries[rel]).hexdigest()
+        files.append(record)
+    manifest["files"] = files
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v1015_add_declared_command_center_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path", ""))
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
     from dataclasses import dataclass
 

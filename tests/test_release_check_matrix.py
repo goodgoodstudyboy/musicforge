@@ -32,6 +32,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v105.audio_campaign_governance_smoke" in {definition.check_id for definition in definitions}
     assert "v109.release_audio_timeline_smoke" in {definition.check_id for definition in definitions}
     assert "v1012.release_audio_quality_observatory_smoke" in {definition.check_id for definition in definitions}
+    assert "v1015.release_audio_command_center_smoke" in {definition.check_id for definition in definitions}
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
 
@@ -89,6 +90,7 @@ def test_release_check_profile_and_filters() -> None:
         "v1012.release_audio_quality_observatory_smoke",
         "v1013.release_audio_quality_action_queue_smoke",
         "v1014.release_audio_quality_action_queue_signoff_smoke",
+        "v1015.release_audio_command_center_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

@@ -1,5 +1,17 @@
 # Changelog
 
+## v10.15.0 - 2026-06-30
+
+### Added
+- Release Audio Command Center store, fixed-layout ZIP export, offline verifier, CLI, API, Studio controls, Release signoff gate, and GA readiness gate.
+- Command Center evidence inventory, readiness matrix, gap plan, and safe runbook aggregate Release Audio Certification, Timeline, Regression, Baseline Governance, Regression Response, Observatory, Action Queue, and Action Queue Signoff evidence.
+- Offline verifier binds every component to external ZIPs and verification reports, rejects fixed-layout ZIP expansion, and catches internal full-resign attempts against component fingerprints.
+- release-check `v1015.release_audio_command_center_smoke` covers end-to-end Command Center refresh/export/ZIP/verify, safe runbook execution, Release gate, GA binding, declared-extra rejection, and full-resign fingerprint tamper.
+
+### Verified
+- `python -m pytest tests\test_release_check.py::test_v1015_release_audio_command_center_smoke tests\test_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.14.0 - 2026-06-30
 
 ### Added

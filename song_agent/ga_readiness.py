@@ -24,6 +24,7 @@ from song_agent.release_audio_regression_response_verifier import verify_release
 from song_agent.release_audio_quality_observatory_verifier import verify_release_audio_quality_observatory_package
 from song_agent.release_audio_quality_actions_verifier import verify_release_audio_quality_action_queue_package
 from song_agent.release_audio_quality_action_signoff_verifier import verify_release_audio_quality_action_queue_signoff_archive_package
+from song_agent.release_audio_command_center_verifier import verify_release_audio_command_center_package
 from song_agent.music_acceptance import AcceptanceStore, acceptance_report_summary, stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.provider import ProviderError, load_provider_config, provider_configured
@@ -114,6 +115,9 @@ def build_ga_readiness_report(
     require_release_audio_quality_action_queue_signoff: bool = False,
     release_audio_quality_action_queue_signoff_archive_path: Path | str | None = None,
     release_audio_quality_action_queue_signoff_verification_report_path: Path | str | None = None,
+    require_release_audio_command_center: bool = False,
+    release_audio_command_center_zip_path: Path | str | None = None,
+    release_audio_command_center_verification_report_path: Path | str | None = None,
     require_final_readiness: bool = False,
     final_handoff_verification_report_path: Path | str | None = None,
     release_check_latest_report_path: Path | str | None = None,
@@ -138,6 +142,7 @@ def build_ga_readiness_report(
         "require_release_audio_quality_observatory": require_release_audio_quality_observatory,
         "require_release_audio_quality_action_queue": require_release_audio_quality_action_queue,
         "require_release_audio_quality_action_queue_signoff": require_release_audio_quality_action_queue_signoff,
+        "require_release_audio_command_center": require_release_audio_command_center,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -400,6 +405,37 @@ def build_ga_readiness_report(
         quality_action_queue_signoff_summary,
     )
 
+    command_center_summary = _release_audio_command_center_summary(
+        required=require_release_audio_command_center,
+        command_center_zip_path=release_audio_command_center_zip_path,
+        command_center_verification_report_path=release_audio_command_center_verification_report_path,
+        certification_zip_path=release_audio_certification_zip_path,
+        certification_verification_report_path=release_audio_certification_verification_report_path,
+        timeline_zip_path=release_audio_timeline_zip_path,
+        timeline_verification_report_path=release_audio_timeline_verification_report_path,
+        regression_zip_path=release_audio_regression_zip_path,
+        regression_verification_report_path=release_audio_regression_verification_report_path,
+        baseline_registry_zip_path=release_audio_baseline_registry_zip_path,
+        baseline_registry_verification_report_path=release_audio_baseline_registry_verification_report_path,
+        regression_response_zip_path=release_audio_regression_response_zip_path,
+        regression_response_verification_report_path=release_audio_regression_response_verification_report_path,
+        observatory_zip_path=release_audio_quality_observatory_zip_path,
+        observatory_verification_report_path=release_audio_quality_observatory_verification_report_path,
+        action_queue_zip_path=release_audio_quality_action_queue_zip_path,
+        action_queue_verification_report_path=release_audio_quality_action_queue_verification_report_path,
+        action_queue_signoff_archive_path=release_audio_quality_action_queue_signoff_archive_path,
+        action_queue_signoff_verification_report_path=release_audio_quality_action_queue_signoff_verification_report_path,
+        evidence_root=release_audio_quality_observatory_evidence_root,
+    )
+    _add_check(
+        checks,
+        "ga.release_audio_command_center",
+        "passed" if command_center_summary.get("status") == "passed" else "failed" if require_release_audio_command_center else "warning",
+        "blocking" if require_release_audio_command_center else "warning",
+        "Release Audio Command Center is passed." if command_center_summary.get("status") == "passed" else "Release Audio Command Center is missing or not passed.",
+        command_center_summary,
+    )
+
     latest_summary = _release_check_summary(
         root,
         report_path=release_check_latest_report_path,
@@ -466,6 +502,7 @@ def build_ga_readiness_report(
             "release_audio_quality_observatory_status": quality_observatory_summary.get("status", "missing"),
             "release_audio_quality_action_queue_status": quality_action_queue_summary.get("status", "missing"),
             "release_audio_quality_action_queue_signoff_status": quality_action_queue_signoff_summary.get("status", "missing"),
+            "release_audio_command_center_status": command_center_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -1091,6 +1128,99 @@ def _release_audio_quality_action_queue_signoff_summary(
         }
     except Exception as exc:
         return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _release_audio_command_center_summary(
+    *,
+    required: bool,
+    command_center_zip_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    certification_zip_path: Path | str | None,
+    certification_verification_report_path: Path | str | None,
+    timeline_zip_path: Path | str | None,
+    timeline_verification_report_path: Path | str | None,
+    regression_zip_path: Path | str | None,
+    regression_verification_report_path: Path | str | None,
+    baseline_registry_zip_path: Path | str | None,
+    baseline_registry_verification_report_path: Path | str | None,
+    regression_response_zip_path: Path | str | None,
+    regression_response_verification_report_path: Path | str | None,
+    observatory_zip_path: Path | str | None,
+    observatory_verification_report_path: Path | str | None,
+    action_queue_zip_path: Path | str | None,
+    action_queue_verification_report_path: Path | str | None,
+    action_queue_signoff_archive_path: Path | str | None,
+    action_queue_signoff_verification_report_path: Path | str | None,
+    evidence_root: Path | str | None,
+) -> dict[str, Any]:
+    if command_center_zip_path is None:
+        return {"status": "missing", "message": "Release Audio Command Center package was not provided."}
+    try:
+        zip_path = Path(command_center_zip_path)
+        runtime_report = verify_release_audio_command_center_package(
+            zip_path,
+            strict=True,
+            require_ready=required,
+            certification_zip_path=certification_zip_path,
+            certification_verification_report_path=certification_verification_report_path,
+            timeline_zip_path=timeline_zip_path,
+            timeline_verification_report_path=timeline_verification_report_path,
+            regression_zip_path=regression_zip_path,
+            regression_verification_report_path=regression_verification_report_path,
+            baseline_registry_zip_path=baseline_registry_zip_path,
+            baseline_registry_verification_report_path=baseline_registry_verification_report_path,
+            regression_response_zip_path=regression_response_zip_path,
+            regression_response_verification_report_path=regression_response_verification_report_path,
+            observatory_zip_path=observatory_zip_path,
+            observatory_verification_report_path=observatory_verification_report_path,
+            action_queue_zip_path=action_queue_zip_path,
+            action_queue_verification_report_path=action_queue_verification_report_path,
+            action_queue_signoff_archive_path=action_queue_signoff_archive_path,
+            action_queue_signoff_verification_report_path=action_queue_signoff_verification_report_path,
+            evidence_root=evidence_root,
+        )
+        external_report: dict[str, Any] = {}
+        if command_center_verification_report_path is not None:
+            external_report = read_json(Path(command_center_verification_report_path))
+        external_fp = _verification_fingerprint(external_report) if external_report else {}
+        runtime_fp = _verification_fingerprint(runtime_report)
+        external_integrity_ok = not external_report or external_report.get("integrity_hash") == stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        zip_binding_ok = not external_report or external_fp.get("zip_sha256") == runtime_fp.get("zip_sha256")
+        manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        status = (
+            "passed"
+            if runtime_report.get("status") == "passed"
+            and (not external_report or external_report.get("status") == "passed")
+            and external_integrity_ok
+            and zip_binding_ok
+            and manifest_binding_ok
+            else "failed"
+        )
+        return {
+            "status": status,
+            "package_type": runtime_report.get("package_type"),
+            "zip_sha256": runtime_fp.get("zip_sha256"),
+            "zip_size_bytes": runtime_fp.get("zip_size_bytes"),
+            "manifest_hash": runtime_fp.get("manifest_hash"),
+            "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"),
+            "runtime_verification_status": runtime_report.get("status"),
+            "external_verification_status": external_report.get("status") if external_report else None,
+            "external_integrity_ok": external_integrity_ok,
+            "zip_binding_ok": zip_binding_ok,
+            "manifest_binding_ok": manifest_binding_ok,
+            "summary": runtime_report.get("summary", {}),
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    return {
+        "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256"),
+        "zip_size_bytes": report.get("zip_size_bytes") or summary.get("zip_size_bytes"),
+        "manifest_hash": report.get("manifest_hash") or summary.get("manifest_hash"),
+    }
 
 
 def _acceptance_check_status(summary: dict[str, Any], *, require_manual_acceptance: bool, require_audio: bool) -> dict[str, str]:

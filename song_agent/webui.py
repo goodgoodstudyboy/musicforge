@@ -912,6 +912,11 @@ def panel_html() -> str:
             <button class="secondary" id="release-audio-quality-action-create" type="button">Create Quality Queue</button>
             <button class="secondary" id="release-audio-quality-action-run-safe" type="button">Run Quality Queue</button>
             <button class="secondary" id="release-audio-quality-action-verify" type="button">Verify Quality Queue</button>
+            <button class="secondary" id="release-audio-command-center-refresh" type="button">Audio Command Center</button>
+            <button class="secondary" id="release-audio-command-center-runbook" type="button">Command Runbook</button>
+            <button class="secondary" id="release-audio-command-center-run-safe" type="button">Run Safe Command</button>
+            <button class="secondary" id="release-audio-command-center-zip" type="button">Command ZIP</button>
+            <button class="secondary" id="release-audio-command-center-verify" type="button">Verify Command</button>
           </div>
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
@@ -2545,6 +2550,31 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       const id = prompt("Action queue id", "aqa-000001");
       if (!id) return;
       await showAudioCampaignResult(`/api/audio-quality-actions/${encodeURIComponent(id)}/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_current_observatory: true }) });
+    });
+    $("release-audio-command-center-refresh").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-command-center/refresh`, { method: "POST" });
+    });
+    $("release-audio-command-center-runbook").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-command-center/runbook`, { method: "POST" });
+    });
+    $("release-audio-command-center-run-safe").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-command-center/run-safe`, { method: "POST" });
+    });
+    $("release-audio-command-center-zip").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-command-center/zip`, { method: "POST" });
+    });
+    $("release-audio-command-center-verify").addEventListener("click", async () => {
+      const releaseId = audioCampaignReleaseId();
+      if (!releaseId) return;
+      await showAudioCampaignResult(`/api/releases/${encodeURIComponent(releaseId)}/audio-command-center/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ strict: true, require_ready: true }) });
     });
 
     async function showAudioLabResult(path, options) {

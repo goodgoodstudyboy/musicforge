@@ -131,6 +131,9 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-quality-action-queue-signoff", action="store_true", help="Require signed Release Audio Quality Action Queue closeout archive evidence.")
     parser.add_argument("--release-audio-quality-action-queue-signoff-archive", type=Path, default=None, help="Release Audio Quality Action Queue Signoff Archive ZIP.")
     parser.add_argument("--release-audio-quality-action-queue-signoff-verification-report", type=Path, default=None, help="Release Audio Quality Action Queue Signoff Archive verification report.")
+    parser.add_argument("--require-release-audio-command-center", action="store_true", help="Require Release Audio Command Center evidence.")
+    parser.add_argument("--release-audio-command-center", type=Path, default=None, help="Release Audio Command Center ZIP.")
+    parser.add_argument("--release-audio-command-center-verification-report", type=Path, default=None, help="Release Audio Command Center verification report.")
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
     parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
@@ -192,6 +195,9 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-quality-action-queue-signoff", action="store_true", help="Require external Release Audio Quality Action Queue signoff archive evidence.")
     parser.add_argument("--release-audio-quality-action-queue-signoff-archive", type=Path, default=None, help="External Release Audio Quality Action Queue Signoff Archive ZIP.")
     parser.add_argument("--release-audio-quality-action-queue-signoff-verification-report", type=Path, default=None, help="Release Audio Quality Action Queue Signoff Archive verification report JSON.")
+    parser.add_argument("--require-release-audio-command-center", action="store_true", help="Require external Release Audio Command Center evidence.")
+    parser.add_argument("--release-audio-command-center", type=Path, default=None, help="External Release Audio Command Center ZIP.")
+    parser.add_argument("--release-audio-command-center-verification-report", type=Path, default=None, help="Release Audio Command Center verification report JSON.")
     return parser
 
 
@@ -1065,6 +1071,67 @@ def build_verify_release_audio_quality_action_queue_signoff_archive_parser() -> 
     parser.add_argument("--max-zip-size-mb", type=int, default=64)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=128)
     parser.add_argument("--max-entry-count", type=int, default=100)
+    return parser
+
+
+def _add_release_audio_command_center_evidence_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--certification-zip", dest="certification_zip", type=Path, default=None)
+    parser.add_argument("--certification-verification-report", dest="certification_verification_report", type=Path, default=None)
+    parser.add_argument("--timeline-zip", dest="timeline_zip", type=Path, default=None)
+    parser.add_argument("--timeline-verification-report", dest="timeline_verification_report", type=Path, default=None)
+    parser.add_argument("--regression-zip", dest="regression_zip", type=Path, default=None)
+    parser.add_argument("--regression-verification-report", dest="regression_verification_report", type=Path, default=None)
+    parser.add_argument("--baseline-registry-zip", dest="baseline_registry_zip", type=Path, default=None)
+    parser.add_argument("--baseline-registry-verification-report", dest="baseline_registry_verification_report", type=Path, default=None)
+    parser.add_argument("--regression-response-zip", dest="regression_response_zip", type=Path, default=None)
+    parser.add_argument("--regression-response-verification-report", dest="regression_response_verification_report", type=Path, default=None)
+    parser.add_argument("--observatory-zip", dest="observatory_zip", type=Path, default=None)
+    parser.add_argument("--observatory-verification-report", dest="observatory_verification_report", type=Path, default=None)
+    parser.add_argument("--action-queue-zip", dest="action_queue_zip", type=Path, default=None)
+    parser.add_argument("--action-queue-verification-report", dest="action_queue_verification_report", type=Path, default=None)
+    parser.add_argument("--action-queue-signoff-archive", dest="action_queue_signoff_archive", type=Path, default=None)
+    parser.add_argument("--action-queue-signoff-verification-report", dest="action_queue_signoff_verification_report", type=Path, default=None)
+    parser.add_argument("--evidence-root", dest="evidence_root", type=Path, default=None)
+
+
+def build_release_audio_command_center_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Release Audio Command Center evidence.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    for action, help_text in (
+        ("refresh", "Refresh the Command Center report."),
+        ("report", "Show the current Command Center report."),
+        ("inventory", "Show the evidence inventory."),
+        ("readiness", "Show the readiness matrix."),
+        ("gap-plan", "Show the gap plan."),
+        ("runbook", "Create or show the safe runbook."),
+        ("run-safe", "Run only safe Command Center actions."),
+        ("export", "Export Command Center package files."),
+        ("zip", "Build Command Center ZIP."),
+        ("verify", "Verify Command Center ZIP."),
+    ):
+        cmd = subparsers.add_parser(action, help=help_text)
+        cmd.add_argument("release_id")
+        if action in {"refresh", "runbook", "run-safe", "export", "zip", "verify"}:
+            _add_release_audio_command_center_evidence_args(cmd)
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-ready", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_release_audio_command_center_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Release Audio Command Center ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-ready", action="store_true")
+    _add_release_audio_command_center_evidence_args(parser)
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
     return parser
 
 
@@ -3993,6 +4060,61 @@ def _run_release_audio_quality_actions_command(args: argparse.Namespace) -> dict
     raise ValueError("Unsupported release-audio-quality-actions command.")
 
 
+def _release_audio_command_center_evidence_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "certification": {"zip": getattr(args, "certification_zip", None), "verification_report": getattr(args, "certification_verification_report", None)},
+        "timeline": {"zip": getattr(args, "timeline_zip", None), "verification_report": getattr(args, "timeline_verification_report", None)},
+        "regression": {"zip": getattr(args, "regression_zip", None), "verification_report": getattr(args, "regression_verification_report", None)},
+        "baseline_governance": {"zip": getattr(args, "baseline_registry_zip", None), "verification_report": getattr(args, "baseline_registry_verification_report", None)},
+        "regression_response": {"zip": getattr(args, "regression_response_zip", None), "verification_report": getattr(args, "regression_response_verification_report", None)},
+        "observatory": {"zip": getattr(args, "observatory_zip", None), "verification_report": getattr(args, "observatory_verification_report", None)},
+        "action_queue": {"zip": getattr(args, "action_queue_zip", None), "verification_report": getattr(args, "action_queue_verification_report", None)},
+        "action_queue_signoff": {"zip": getattr(args, "action_queue_signoff_archive", None), "verification_report": getattr(args, "action_queue_signoff_verification_report", None)},
+        "evidence_root": getattr(args, "evidence_root", None),
+    }
+
+
+def _run_release_audio_command_center_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.release_audio_command_center import ReleaseAudioCommandCenterStore
+    from song_agent.release_audio_command_center_verifier import write_release_audio_command_center_verification_report
+
+    store = ReleaseAudioCommandCenterStore()
+    evidence = _release_audio_command_center_evidence_from_args(args)
+    if args.action == "refresh":
+        report = store.refresh(args.release_id, evidence)
+        return {"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "report":
+        report = store.read_report(args.release_id)
+        return {"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "inventory":
+        inventory = store.read_inventory(args.release_id)
+        return {"ok": True, "inventory": inventory, "summary": inventory.get("summary", {}), "status": "passed"}
+    if args.action == "readiness":
+        readiness = read_json(store.readiness_path(args.release_id))
+        return {"ok": readiness.get("status") == "ready", "readiness": readiness, "summary": readiness.get("summary", {}), "status": readiness.get("status")}
+    if args.action == "gap-plan":
+        gap_plan = read_json(store.gap_plan_path(args.release_id))
+        return {"ok": gap_plan.get("status") == "passed", "gap_plan": gap_plan, "summary": gap_plan.get("summary", {}), "status": gap_plan.get("status")}
+    if args.action == "runbook":
+        runbook = store.create_runbook(args.release_id, evidence)
+        return {"ok": True, "runbook": runbook, "summary": runbook.get("summary", {}), "status": "passed"}
+    if args.action == "run-safe":
+        result = store.run_safe(args.release_id, evidence)
+        return {"ok": int((result.get("summary") or {}).get("failed_count") or 0) == 0, "runbook_results": result, "summary": result.get("summary", {}), "status": "passed" if int((result.get("summary") or {}).get("failed_count") or 0) == 0 else "failed"}
+    if args.action == "export":
+        result = store.export_package(args.release_id, evidence)
+        return {"ok": result.get("status") == "passed", **result, "summary": result.get("manifest", {})}
+    if args.action == "zip":
+        result = store.build_zip(args.release_id, evidence)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_zip(args.release_id, evidence=evidence, strict=args.strict, require_ready=args.require_ready)
+        if args.report_out is not None:
+            write_release_audio_command_center_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported release-audio-command-center command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -4160,6 +4282,9 @@ def _main() -> None:
             require_release_audio_quality_action_queue_signoff=args.require_release_audio_quality_action_queue_signoff,
             release_audio_quality_action_queue_signoff_archive_path=args.release_audio_quality_action_queue_signoff_archive,
             release_audio_quality_action_queue_signoff_verification_report_path=args.release_audio_quality_action_queue_signoff_verification_report,
+            require_release_audio_command_center=args.require_release_audio_command_center,
+            release_audio_command_center_zip_path=args.release_audio_command_center,
+            release_audio_command_center_verification_report_path=args.release_audio_command_center_verification_report,
             require_final_readiness=args.require_final_readiness,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
             release_check_latest_report_path=args.release_check_latest_report,
@@ -4228,6 +4353,9 @@ def _main() -> None:
             require_release_audio_quality_action_queue_signoff=args.require_release_audio_quality_action_queue_signoff,
             release_audio_quality_action_queue_signoff_archive_path=args.release_audio_quality_action_queue_signoff_archive,
             release_audio_quality_action_queue_signoff_verification_report_path=args.release_audio_quality_action_queue_signoff_verification_report,
+            require_release_audio_command_center=args.require_release_audio_command_center,
+            release_audio_command_center_path=args.release_audio_command_center,
+            release_audio_command_center_verification_report_path=args.release_audio_command_center_verification_report,
             final_handoff_package_path=args.final_handoff_package,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
         )
@@ -4346,6 +4474,16 @@ def _main() -> None:
         parser = build_release_audio_quality_actions_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_release_audio_quality_actions_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "release-audio-command-center":
+        parser = build_release_audio_command_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_release_audio_command_center_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -4502,6 +4640,36 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(release_audio_quality_action_queue_signoff_archive_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-release-audio-command-center-package":
+        from song_agent.release_audio_command_center import evidence_to_verifier_kwargs
+        from song_agent.release_audio_command_center_verifier import (
+            release_audio_command_center_verification_exit_code,
+            verify_release_audio_command_center_package,
+            write_release_audio_command_center_verification_report,
+        )
+
+        parser = build_verify_release_audio_command_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        evidence = _release_audio_command_center_evidence_from_args(args)
+        report = verify_release_audio_command_center_package(
+            args.zip_path,
+            strict=args.strict,
+            require_ready=args.require_ready,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+            **evidence_to_verifier_kwargs(evidence),
+        )
+        if args.report_out is not None:
+            write_release_audio_command_center_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Release Audio Command Center verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(release_audio_command_center_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 
