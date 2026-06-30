@@ -115,6 +115,23 @@ def verify_ga_readiness_report(
     require_release_audio_command_center: bool = False,
     release_audio_command_center_path: Path | str | None = None,
     release_audio_command_center_verification_report_path: Path | str | None = None,
+    require_unified_command_center: bool = False,
+    unified_command_center_path: Path | str | None = None,
+    unified_command_center_verification_report_path: Path | str | None = None,
+    unified_release_path: Path | str | None = None,
+    unified_release_verification_report_path: Path | str | None = None,
+    unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_submission_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_release_operations_path: Path | str | None = None,
+    unified_release_operations_verification_report_path: Path | str | None = None,
+    unified_trust_operations_hub_path: Path | str | None = None,
+    unified_trust_operations_hub_verification_report_path: Path | str | None = None,
+    unified_public_trust_center_path: Path | str | None = None,
+    unified_public_trust_center_verification_report_path: Path | str | None = None,
+    unified_maintenance_backup_path: Path | str | None = None,
+    unified_maintenance_backup_verification_report_path: Path | str | None = None,
     require_no_critical_audio_quality_risk: bool = False,
     final_handoff_package_path: Path | str | None = None,
     final_handoff_verification_report_path: Path | str | None = None,
@@ -301,6 +318,29 @@ def verify_ga_readiness_report(
                 release_audio_quality_action_queue_signoff_archive_path,
                 release_audio_quality_action_queue_signoff_verification_report_path,
                 release_audio_quality_observatory_evidence_root,
+            )
+        if require_unified_command_center:
+            _verify_unified_command_center_evidence(
+                checks,
+                checks_by_id.get("ga.unified_command_center", {}),
+                unified_command_center_path,
+                unified_command_center_verification_report_path,
+                unified_release_path,
+                unified_release_verification_report_path,
+                release_audio_command_center_path,
+                release_audio_command_center_verification_report_path,
+                unified_distribution_paths,
+                unified_distribution_verification_report_paths,
+                unified_submission_paths,
+                unified_submission_verification_report_paths,
+                unified_release_operations_path,
+                unified_release_operations_verification_report_path,
+                unified_trust_operations_hub_path,
+                unified_trust_operations_hub_verification_report_path,
+                unified_public_trust_center_path,
+                unified_public_trust_center_verification_report_path,
+                unified_maintenance_backup_path,
+                unified_maintenance_backup_verification_report_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -1259,6 +1299,83 @@ def _verify_release_audio_command_center_evidence(
     _add_check(checks, "ga_readiness_release_audio_command_center_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Release Audio Command Center verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
     _add_check(checks, "ga_readiness_release_audio_command_center_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Release Audio Command Center verification report matches ZIP and manifest.")
     _add_check(checks, "ga_readiness_release_audio_command_center_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness Release Audio Command Center check matches external verification.")
+
+
+def _verify_unified_command_center_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    command_center_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    release_path: Path | str | None,
+    release_verification_report_path: Path | str | None,
+    release_audio_command_center_path: Path | str | None,
+    release_audio_command_center_verification_report_path: Path | str | None,
+    distribution_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    submission_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    release_operations_path: Path | str | None,
+    release_operations_verification_report_path: Path | str | None,
+    trust_operations_hub_path: Path | str | None,
+    trust_operations_hub_verification_report_path: Path | str | None,
+    public_trust_center_path: Path | str | None,
+    public_trust_center_verification_report_path: Path | str | None,
+    maintenance_backup_path: Path | str | None,
+    maintenance_backup_verification_report_path: Path | str | None,
+) -> None:
+    if not command_center_path:
+        _add_check(checks, "ga_readiness_unified_command_center_required", "failed", "blocking", "Unified Command Center requirement needs an external Unified Command Center ZIP.")
+        return
+    if not command_center_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_verification_required", "failed", "blocking", "Unified Command Center requirement needs a verification report.")
+        return
+    zip_path = Path(command_center_path)
+    try:
+        from song_agent.unified_command_center_verifier import (
+            UNIFIED_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_command_center_package,
+        )
+
+        verification_report = read_json(Path(command_center_verification_report_path))
+        runtime_report = verify_unified_command_center_package(
+            zip_path,
+            strict=True,
+            require_ready=True,
+            release_zip_path=release_path,
+            release_verification_report_path=release_verification_report_path,
+            release_audio_command_center_zip_path=release_audio_command_center_path,
+            release_audio_command_center_verification_report_path=release_audio_command_center_verification_report_path,
+            distribution_zip_paths=list(distribution_paths or []),
+            distribution_verification_report_paths=list(distribution_verification_report_paths or []),
+            submission_zip_paths=list(submission_paths or []),
+            submission_verification_report_paths=list(submission_verification_report_paths or []),
+            release_operations_zip_path=release_operations_path,
+            release_operations_verification_report_path=release_operations_verification_report_path,
+            trust_operations_hub_zip_path=trust_operations_hub_path,
+            trust_operations_hub_verification_report_path=trust_operations_hub_verification_report_path,
+            public_trust_center_zip_path=public_trust_center_path,
+            public_trust_center_verification_report_path=public_trust_center_verification_report_path,
+            maintenance_backup_zip_path=maintenance_backup_path,
+            maintenance_backup_verification_report_path=maintenance_backup_verification_report_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_command_center_readable", "failed", "blocking", f"Unified Command Center evidence could not be read: {exc}")
+        return
+    integrity_ok = verification_report.get("integrity_hash") == release_stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
+    detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+    external_fp = _verification_fingerprint(verification_report)
+    runtime_fp = _verification_fingerprint(runtime_report)
+    binding_ok = (
+        ga_check.get("status") == "passed"
+        and detail.get("zip_sha256") == external_fp.get("zip_sha256")
+        and detail.get("manifest_hash") == external_fp.get("manifest_hash")
+        and detail.get("verification_hash") == verification_report.get("integrity_hash")
+    )
+    _add_check(checks, "ga_readiness_unified_command_center_verification_package_type", "passed" if verification_report.get("package_type") == UNIFIED_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE else "failed", "blocking", "Unified Command Center verification package type is valid.")
+    _add_check(checks, "ga_readiness_unified_command_center_verification_integrity", "passed" if integrity_ok else "failed", "blocking", "Unified Command Center verification integrity hash matches.")
+    _add_check(checks, "ga_readiness_unified_command_center_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Unified Command Center verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
+    _add_check(checks, "ga_readiness_unified_command_center_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Unified Command Center verification report matches ZIP and manifest.")
+    _add_check(checks, "ga_readiness_unified_command_center_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness Unified Command Center check matches external verification.")
 
 
 def _read_final_handoff_manifest(zip_path: Path) -> dict[str, Any]:

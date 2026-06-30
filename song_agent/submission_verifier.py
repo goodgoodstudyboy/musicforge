@@ -25,6 +25,7 @@ from song_agent.submission_export import SUBMISSION_SIGNOFF_PAYLOAD_HASH_EXCLUDE
 
 
 SUBMISSION_VERIFICATION_SCHEMA_VERSION = 1
+SUBMISSION_VERIFICATION_PACKAGE_TYPE = "musicforge_submission_verification"
 DEFAULT_MAX_ZIP_SIZE_MB = 1024
 DEFAULT_MAX_UNCOMPRESSED_SIZE_MB = 4096
 DEFAULT_MAX_ENTRY_COUNT = 10000
@@ -434,6 +435,7 @@ class _SubmissionPackageVerifier:
         items = self.manifest.get("items") if isinstance(self.manifest.get("items"), list) else []
         report = {
             "schema_version": SUBMISSION_VERIFICATION_SCHEMA_VERSION,
+            "package_type": SUBMISSION_VERIFICATION_PACKAGE_TYPE,
             "generated_at": self.generated_at,
             "tool": {"name": "MusicForge Submission Package Verifier", "version": __version__},
             "input": {"filename": self.zip_path.name, "size_bytes": self.zip_size_bytes, "sha256": self.zip_sha256},

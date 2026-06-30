@@ -917,7 +917,13 @@ def panel_html() -> str:
             <button class="secondary" id="release-audio-command-center-run-safe" type="button">Run Safe Command</button>
             <button class="secondary" id="release-audio-command-center-zip" type="button">Command ZIP</button>
             <button class="secondary" id="release-audio-command-center-verify" type="button">Verify Command</button>
+            <button class="secondary" id="unified-command-center-refresh" type="button">Unified Command Center</button>
+            <button class="secondary" id="unified-command-center-runbook" type="button">Unified Runbook</button>
+            <button class="secondary" id="unified-command-center-run-safe" type="button">Run Unified Safe</button>
+            <button class="secondary" id="unified-command-center-zip" type="button">Unified ZIP</button>
+            <button class="secondary" id="unified-command-center-verify" type="button">Verify Unified</button>
           </div>
+          <span class="hidden" data-api="/api/unified-command-centers"></span>
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
       </section>

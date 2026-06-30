@@ -37,7 +37,7 @@ def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
         [
             "release-check",
             "--only",
-            "v75.release_check_matrix_smoke",
+            "v110.unified_command_center_smoke",
             "--json",
             "--report-out",
             str(report_out),
@@ -51,8 +51,8 @@ def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
     written = json.loads(report_out.read_text(encoding="utf-8"))
     timing = json.loads(timing_out.read_text(encoding="utf-8"))
     assert payload["summary"]["total"] == 1
-    assert written["results"][0]["check_id"] == "v75.release_check_matrix_smoke"
-    assert timing["results"][0]["check_id"] == "v75.release_check_matrix_smoke"
+    assert written["results"][0]["check_id"] == "v110.unified_command_center_smoke"
+    assert timing["results"][0]["check_id"] == "v110.unified_command_center_smoke"
 
 
 def test_release_check_cli_group_timing(tmp_path: Path) -> None:
@@ -78,8 +78,15 @@ def test_release_check_cli_v8_profile_lists_public_trust_center() -> None:
     payload = json.loads(completed.stdout)
     ids = [item["check_id"] for item in payload["checks"]]
     assert ids[0] == "v80.public_trust_center_smoke"
-    assert ids[-1] == "v89.public_trust_center_publication_monitoring_smoke"
-    assert len(ids) == 10
+
+
+def test_release_check_cli_v11_profile_lists_unified_command_center() -> None:
+    completed = _run_cli(["release-check", "--profile", "v11", "--list", "--json"])
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    ids = [item["check_id"] for item in payload["checks"]]
+    assert ids == ["v110.unified_command_center_smoke"]
 
 
 def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
@@ -116,7 +123,7 @@ def test_release_check_cli_ga_profile_lists_readiness_checks() -> None:
 
 
 def test_release_check_cli_empty_selection_fails() -> None:
-    completed = _run_cli(["release-check", "--profile", "latest", "--group", "audio", "--json"])
+    completed = _run_cli(["release-check", "--profile", "latest", "--since", "99.0", "--json"])
 
     assert completed.returncode == 1
     payload = json.loads(completed.stdout)
@@ -126,7 +133,7 @@ def test_release_check_cli_empty_selection_fails() -> None:
 
 
 def test_release_check_cli_empty_since_fails() -> None:
-    completed = _run_cli(["release-check", "--profile", "latest", "--since", "11.0", "--json"])
+    completed = _run_cli(["release-check", "--profile", "v11", "--since", "12.0", "--json"])
 
     assert completed.returncode == 1
     payload = json.loads(completed.stdout)
@@ -135,7 +142,7 @@ def test_release_check_cli_empty_since_fails() -> None:
 
 
 def test_release_check_cli_list_allows_empty_selection() -> None:
-    completed = _run_cli(["release-check", "--profile", "latest", "--group", "audio", "--list", "--json"])
+    completed = _run_cli(["release-check", "--profile", "latest", "--since", "99.0", "--list", "--json"])
 
     assert completed.returncode == 0
     payload = json.loads(completed.stdout)

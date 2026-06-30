@@ -898,6 +898,13 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="release-audio-command-center-run-safe"' in html
     assert 'id="release-audio-command-center-zip"' in html
     assert 'id="release-audio-command-center-verify"' in html
+    assert "Unified Command Center" in html
+    assert 'id="unified-command-center-refresh"' in html
+    assert 'id="unified-command-center-runbook"' in html
+    assert 'id="unified-command-center-run-safe"' in html
+    assert 'id="unified-command-center-zip"' in html
+    assert 'id="unified-command-center-verify"' in html
+    assert "/api/unified-command-centers" in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html
     assert "/api/audio-lab/listening-sessions" in html

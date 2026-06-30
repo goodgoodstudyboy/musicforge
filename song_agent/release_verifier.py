@@ -52,6 +52,7 @@ from song_agent.song_editor import section_id_for_index, track_id_for_index
 
 
 REPORT_SCHEMA_VERSION = 1
+RELEASE_VERIFICATION_PACKAGE_TYPE = "musicforge_release_verification"
 DEFAULT_MAX_ZIP_SIZE_MB = 512
 DEFAULT_MAX_UNCOMPRESSED_SIZE_MB = 2048
 DEFAULT_MAX_ENTRY_COUNT = 5000
@@ -1412,6 +1413,7 @@ class _ReleaseZipVerifier:
         tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
         report = {
             "schema_version": REPORT_SCHEMA_VERSION,
+            "package_type": RELEASE_VERIFICATION_PACKAGE_TYPE,
             "generated_at": self.generated_at,
             "tool": {"name": "MusicForge Release Verifier", "version": __version__},
             "input": {

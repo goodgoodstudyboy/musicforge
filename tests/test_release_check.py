@@ -90,6 +90,7 @@ from song_agent.release_checks import (
     _v1013_release_audio_quality_action_queue_smoke,
     _v1014_release_audio_quality_action_queue_signoff_smoke,
     _v1015_release_audio_command_center_smoke,
+    _v110_unified_command_center_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1268,6 +1269,17 @@ def test_v1015_release_audio_command_center_smoke(tmp_path: Path) -> None:
     assert "ga=passed/" in detail
     assert "ga=passed/failed" not in detail
     assert "full_resign=failed" in detail
+    assert "declared_extra=failed" in detail
+
+
+def test_v110_unified_command_center_smoke(tmp_path: Path) -> None:
+    ok, detail = _v110_unified_command_center_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "center=ready" in detail
+    assert "verify=passed/passed" in detail
+    assert "runtime_failed=blocked" in detail
+    assert "stale=failed" in detail
     assert "declared_extra=failed" in detail
 
 

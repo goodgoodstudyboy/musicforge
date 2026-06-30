@@ -65,7 +65,7 @@ def build_doctor_parser() -> argparse.ArgumentParser:
 
 def build_release_check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
-    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "v10", "ga", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "ga", "publish"], help="Release-check profile to run.")
     parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
     parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
     parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")
@@ -134,6 +134,10 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-command-center", action="store_true", help="Require Release Audio Command Center evidence.")
     parser.add_argument("--release-audio-command-center", type=Path, default=None, help="Release Audio Command Center ZIP.")
     parser.add_argument("--release-audio-command-center-verification-report", type=Path, default=None, help="Release Audio Command Center verification report.")
+    parser.add_argument("--require-unified-command-center", action="store_true", help="Require Unified Command Center evidence.")
+    parser.add_argument("--unified-command-center", type=Path, default=None, help="Unified Command Center ZIP.")
+    parser.add_argument("--unified-command-center-verification-report", type=Path, default=None, help="Unified Command Center verification report.")
+    _add_ga_unified_command_center_evidence_args(parser)
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
     parser.add_argument("--run-release-checks", action="store_true", help="Run latest and ga release-check profiles during ga-check.")
@@ -198,7 +202,28 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-release-audio-command-center", action="store_true", help="Require external Release Audio Command Center evidence.")
     parser.add_argument("--release-audio-command-center", type=Path, default=None, help="External Release Audio Command Center ZIP.")
     parser.add_argument("--release-audio-command-center-verification-report", type=Path, default=None, help="Release Audio Command Center verification report JSON.")
+    parser.add_argument("--require-unified-command-center", action="store_true", help="Require external Unified Command Center evidence.")
+    parser.add_argument("--unified-command-center", type=Path, default=None, help="External Unified Command Center ZIP.")
+    parser.add_argument("--unified-command-center-verification-report", type=Path, default=None, help="Unified Command Center verification report JSON.")
+    _add_ga_unified_command_center_evidence_args(parser)
     return parser
+
+
+def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--unified-release-zip", type=Path, default=None, help="Release ZIP referenced by Unified Command Center.")
+    parser.add_argument("--unified-release-verification-report", type=Path, default=None, help="Release verification report referenced by Unified Command Center.")
+    parser.add_argument("--unified-distribution-zip", action="append", default=[], type=Path, help="Distribution ZIP referenced by Unified Command Center. Repeat for multiple targets.")
+    parser.add_argument("--unified-distribution-verification-report", action="append", default=[], type=Path, help="Distribution verification report referenced by Unified Command Center.")
+    parser.add_argument("--unified-submission-zip", action="append", default=[], type=Path, help="Submission ZIP referenced by Unified Command Center. Repeat for multiple submissions.")
+    parser.add_argument("--unified-submission-verification-report", action="append", default=[], type=Path, help="Submission verification report referenced by Unified Command Center.")
+    parser.add_argument("--unified-release-operations-zip", type=Path, default=None, help="Release Operations ZIP referenced by Unified Command Center.")
+    parser.add_argument("--unified-release-operations-verification-report", type=Path, default=None, help="Release Operations verification report referenced by Unified Command Center.")
+    parser.add_argument("--unified-trust-operations-hub", type=Path, default=None, help="Trust Operations Hub ZIP referenced by Unified Command Center.")
+    parser.add_argument("--unified-trust-operations-hub-verification-report", type=Path, default=None, help="Trust Operations Hub verification report referenced by Unified Command Center.")
+    parser.add_argument("--unified-public-trust-center", type=Path, default=None, help="Public Trust Center ZIP referenced by Unified Command Center.")
+    parser.add_argument("--unified-public-trust-center-verification-report", type=Path, default=None, help="Public Trust Center verification report referenced by Unified Command Center.")
+    parser.add_argument("--unified-maintenance-backup", type=Path, default=None, help="Maintenance backup ZIP referenced by Unified Command Center.")
+    parser.add_argument("--unified-maintenance-backup-verification-report", type=Path, default=None, help="Maintenance backup verification report referenced by Unified Command Center.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -1129,6 +1154,114 @@ def build_verify_release_audio_command_center_parser() -> argparse.ArgumentParse
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--require-ready", action="store_true")
     _add_release_audio_command_center_evidence_args(parser)
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def _add_unified_command_center_evidence_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--release-zip", type=Path, default=None, help="Release ZIP.")
+    parser.add_argument("--release-verification-report", type=Path, default=None, help="Release ZIP verification report.")
+    parser.add_argument("--release-audio-command-center", type=Path, default=None, help="Release Audio Command Center ZIP.")
+    parser.add_argument("--release-audio-command-center-verification-report", type=Path, default=None, help="Release Audio Command Center verification report.")
+    parser.add_argument("--distribution-zip", action="append", default=[], type=Path, help="Distribution Package ZIP. Repeat for multiple targets.")
+    parser.add_argument("--distribution-verification-report", action="append", default=[], type=Path, help="Distribution verification report. Repeat in the same order as --distribution-zip.")
+    parser.add_argument("--submission-zip", action="append", default=[], type=Path, help="Submission Package ZIP. Repeat for multiple submissions.")
+    parser.add_argument("--submission-verification-report", action="append", default=[], type=Path, help="Submission verification report. Repeat in the same order as --submission-zip.")
+    parser.add_argument("--release-operations-zip", type=Path, default=None, help="Release Operations ZIP.")
+    parser.add_argument("--release-operations-verification-report", type=Path, default=None, help="Release Operations verification report.")
+    parser.add_argument("--trust-operations-hub", type=Path, default=None, help="Trust Operations Hub ZIP.")
+    parser.add_argument("--trust-operations-hub-verification-report", type=Path, default=None, help="Trust Operations Hub verification report.")
+    parser.add_argument("--public-trust-center", type=Path, default=None, help="Public Trust Center ZIP.")
+    parser.add_argument("--public-trust-center-verification-report", type=Path, default=None, help="Public Trust Center verification report.")
+    parser.add_argument("--maintenance-backup", type=Path, default=None, help="Maintenance backup ZIP.")
+    parser.add_argument("--maintenance-backup-verification-report", type=Path, default=None, help="Maintenance backup verification report.")
+    parser.add_argument("--ga-readiness-report", type=Path, default=None, help="GA readiness report JSON.")
+    parser.add_argument("--ga-readiness-verification-report", type=Path, default=None, help="GA readiness verification report JSON.")
+    parser.add_argument("--release-check-report", type=Path, default=None, help="Release-check JSON report.")
+
+
+def _add_unified_command_center_requirement_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--require-audio-command-center", action="store_true", help="Require Release Audio Command Center evidence.")
+    parser.add_argument("--require-trust-operations-hub", action="store_true", help="Require Trust Operations Hub evidence.")
+    parser.add_argument("--require-public-trust-center", action="store_true", help="Require Public Trust Center evidence.")
+    parser.add_argument("--require-maintenance-backup", action="store_true", help="Require Maintenance backup evidence.")
+    parser.add_argument("--require-ga-readiness", action="store_true", help="Require GA readiness evidence.")
+    parser.add_argument("--require-release-check", action="store_true", help="Require release-check evidence.")
+    parser.add_argument("--require-release-ready", action="store_true", help="Require Release ZIP verification evidence.")
+    parser.add_argument("--require-distribution-ready", action="store_true", help="Require Distribution verification evidence.")
+    parser.add_argument("--require-submission-ready", action="store_true", help="Require Submission verification evidence.")
+    parser.add_argument("--require-operations-ready", action="store_true", help="Require Release Operations verification evidence.")
+    parser.add_argument("--no-require-audio-command-center", dest="no_require_audio_command_center", action="store_true", help="Do not require Release Audio Command Center evidence.")
+    parser.add_argument("--no-require-trust-operations-hub", dest="no_require_trust_operations_hub", action="store_true", help="Do not require Trust Operations Hub evidence.")
+    parser.add_argument("--no-require-public-trust-center", dest="no_require_public_trust_center", action="store_true", help="Do not require Public Trust Center evidence.")
+    parser.add_argument("--no-require-ga-readiness", dest="no_require_ga_readiness", action="store_true", help="Do not require GA readiness evidence.")
+    parser.add_argument("--no-require-release-check", dest="no_require_release_check", action="store_true", help="Do not require release-check evidence.")
+    parser.add_argument("--no-require-release-ready", dest="no_require_release_ready", action="store_true", help="Do not require Release ZIP verification evidence.")
+    parser.add_argument("--no-require-distribution-ready", dest="no_require_distribution_ready", action="store_true", help="Do not require Distribution verification evidence.")
+    parser.add_argument("--no-require-submission-ready", dest="no_require_submission_ready", action="store_true", help="Do not require Submission verification evidence.")
+    parser.add_argument("--no-require-operations-ready", dest="no_require_operations_ready", action="store_true", help="Do not require Release Operations verification evidence.")
+
+
+def build_unified_command_center_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage MusicForge Unified Command Center evidence.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    create = subparsers.add_parser("create", help="Create a Unified Command Center.")
+    create.add_argument("--center-id", default=None)
+    create.add_argument("--name", default=None)
+    create.add_argument("--scope", default="workspace")
+    create.add_argument("--profile", default="ga")
+    create.add_argument("--primary-release-id", default="")
+    create.add_argument("--release-id", action="append", default=[])
+    _add_unified_command_center_requirement_args(create)
+
+    subparsers.add_parser("list", help="List Unified Command Centers.")
+
+    for action, help_text in (
+        ("status", "Show Unified Command Center status."),
+        ("refresh", "Refresh Unified Command Center evidence."),
+        ("report", "Show Unified Command Center report."),
+        ("inventory", "Show evidence inventory."),
+        ("readiness", "Show readiness matrix."),
+        ("gap-plan", "Show gap plan."),
+        ("runbook", "Show safe runbook."),
+        ("run-safe", "Run only safe Unified Command Center actions."),
+        ("export", "Export Unified Command Center package files."),
+        ("zip", "Build Unified Command Center ZIP."),
+        ("verify", "Verify Unified Command Center ZIP."),
+    ):
+        cmd = subparsers.add_parser(action, help=help_text)
+        cmd.add_argument("center_id")
+        if action in {"refresh", "runbook", "run-safe", "export", "zip", "verify"}:
+            _add_unified_command_center_evidence_args(cmd)
+            _add_unified_command_center_requirement_args(cmd)
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-ready", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_command_center_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Command Center ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-ready", action="store_true")
+    parser.add_argument("--require-audio-ready", action="store_true")
+    parser.add_argument("--require-trust-ready", action="store_true")
+    parser.add_argument("--require-public-trust-ready", action="store_true")
+    parser.add_argument("--require-release-ready", action="store_true")
+    parser.add_argument("--require-distribution-ready", action="store_true")
+    parser.add_argument("--require-submission-ready", action="store_true")
+    parser.add_argument("--require-operations-ready", action="store_true")
+    parser.add_argument("--require-maintenance-ready", action="store_true")
+    parser.add_argument("--require-ga-ready", action="store_true")
+    _add_unified_command_center_evidence_args(parser)
     parser.add_argument("--max-zip-size-mb", type=int, default=128)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
@@ -4115,6 +4248,147 @@ def _run_release_audio_command_center_command(args: argparse.Namespace) -> dict[
     raise ValueError("Unsupported release-audio-command-center command.")
 
 
+def _unified_command_center_requirements_from_args(args: argparse.Namespace) -> dict[str, bool]:
+    requirements: dict[str, bool] = {}
+    mapping = {
+        "require_audio_command_center": "require_audio_command_center",
+        "require_trust_operations_hub": "require_trust_operations_hub",
+        "require_public_trust_center": "require_public_trust_center",
+        "require_maintenance_backup": "require_maintenance_backup",
+        "require_ga_readiness": "require_ga_readiness",
+        "require_release_check": "require_release_check",
+        "require_release_ready": "require_release_ready",
+        "require_distribution_ready": "require_distribution_ready",
+        "require_submission_ready": "require_submission_ready",
+        "require_operations_ready": "require_operations_ready",
+    }
+    for attr, key in mapping.items():
+        if bool(getattr(args, attr, False)):
+            requirements[key] = True
+    negative = {
+        "no_require_audio_command_center": "require_audio_command_center",
+        "no_require_trust_operations_hub": "require_trust_operations_hub",
+        "no_require_public_trust_center": "require_public_trust_center",
+        "no_require_ga_readiness": "require_ga_readiness",
+        "no_require_release_check": "require_release_check",
+        "no_require_release_ready": "require_release_ready",
+        "no_require_distribution_ready": "require_distribution_ready",
+        "no_require_submission_ready": "require_submission_ready",
+        "no_require_operations_ready": "require_operations_ready",
+    }
+    for attr, key in negative.items():
+        if bool(getattr(args, attr, False)):
+            requirements[key] = False
+    return requirements
+
+
+def _unified_command_center_evidence_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "release": {
+            "zip": getattr(args, "release_zip", None),
+            "verification_report": getattr(args, "release_verification_report", None),
+        },
+        "audio-command-center": {
+            "zip": getattr(args, "release_audio_command_center", None),
+            "verification_report": getattr(args, "release_audio_command_center_verification_report", None),
+        },
+        "distribution": {
+            "zips": getattr(args, "distribution_zip", []),
+            "verification_reports": getattr(args, "distribution_verification_report", []),
+        },
+        "submission": {
+            "zips": getattr(args, "submission_zip", []),
+            "verification_reports": getattr(args, "submission_verification_report", []),
+        },
+        "operations": {
+            "zip": getattr(args, "release_operations_zip", None),
+            "verification_report": getattr(args, "release_operations_verification_report", None),
+        },
+        "trust-operations-hub": {
+            "zip": getattr(args, "trust_operations_hub", None),
+            "verification_report": getattr(args, "trust_operations_hub_verification_report", None),
+        },
+        "public-trust-center": {
+            "zip": getattr(args, "public_trust_center", None),
+            "verification_report": getattr(args, "public_trust_center_verification_report", None),
+        },
+        "maintenance": {
+            "zip": getattr(args, "maintenance_backup", None),
+            "verification_report": getattr(args, "maintenance_backup_verification_report", None),
+        },
+        "ga-readiness": {
+            "report": getattr(args, "ga_readiness_report", None),
+            "verification_report": getattr(args, "ga_readiness_verification_report", None),
+        },
+        "release-check": {"report": getattr(args, "release_check_report", None)},
+    }
+    requirements = _unified_command_center_requirements_from_args(args)
+    if requirements:
+        evidence["requirements"] = requirements
+    return evidence
+
+
+def _run_unified_command_center_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_verifier import write_unified_command_center_verification_report
+
+    store = UnifiedCommandCenterStore()
+    evidence = _unified_command_center_evidence_from_args(args)
+    if args.action == "create":
+        payload = {
+            "center_id": args.center_id,
+            "name": args.name,
+            "scope": args.scope,
+            "profile": args.profile,
+            "primary_release_id": args.primary_release_id,
+            "release_ids": args.release_id,
+            "requirements": _unified_command_center_requirements_from_args(args),
+        }
+        center = store.create(payload)
+        return {"ok": True, "center": center, "summary": {"center_id": center.get("center_id")}, "status": center.get("status")}
+    if args.action == "list":
+        centers = store.list_centers()
+        return {"ok": True, "centers": centers, "summary": {"center_count": len(centers)}, "status": "passed"}
+    if args.action == "status":
+        center = store.read_center(args.center_id)
+        report = store.read_report(args.center_id) if store.report_path(args.center_id).exists() else {}
+        return {"ok": True, "center": center, "report": report, "summary": report.get("summary", {}), "status": center.get("status")}
+    if args.action == "refresh":
+        report = store.refresh(args.center_id, evidence)
+        return {"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "report":
+        report = store.read_report(args.center_id)
+        return {"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "inventory":
+        inventory = read_json(store.inventory_path(args.center_id))
+        return {"ok": True, "inventory": inventory, "summary": inventory.get("summary", {}), "status": "passed"}
+    if args.action == "readiness":
+        readiness = read_json(store.readiness_path(args.center_id))
+        return {"ok": readiness.get("overall_status") == "ready", "readiness": readiness, "summary": {"overall_status": readiness.get("overall_status")}, "status": readiness.get("overall_status")}
+    if args.action == "gap-plan":
+        gap_plan = read_json(store.gap_plan_path(args.center_id))
+        return {"ok": int((gap_plan.get("summary") or {}).get("action_count") or 0) == 0, "gap_plan": gap_plan, "summary": gap_plan.get("summary", {}), "status": "passed" if int((gap_plan.get("summary") or {}).get("action_count") or 0) == 0 else "blocked"}
+    if args.action == "runbook":
+        runbook = store.create_runbook(args.center_id, evidence)
+        return {"ok": True, "runbook": runbook, "summary": runbook.get("summary", {}), "status": "passed"}
+    if args.action == "run-safe":
+        result = store.run_safe(args.center_id, evidence)
+        failed = int((result.get("summary") or {}).get("failed_count") or 0)
+        return {"ok": failed == 0, "runbook_result": result, "summary": result.get("summary", {}), "status": "passed" if failed == 0 else "failed"}
+    if args.action == "export":
+        result = store.export_package(args.center_id, evidence)
+        return {"ok": result.get("status") == "ready", **result, "summary": result.get("manifest", {})}
+    if args.action == "zip":
+        result = store.build_zip(args.center_id, evidence)
+        return {"ok": result.get("status") == "ready", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_zip(args.center_id, evidence=evidence, strict=args.strict, require_ready=args.require_ready)
+        if args.report_out is not None:
+            write_unified_command_center_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported unified-command-center command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -4285,6 +4559,23 @@ def _main() -> None:
             require_release_audio_command_center=args.require_release_audio_command_center,
             release_audio_command_center_zip_path=args.release_audio_command_center,
             release_audio_command_center_verification_report_path=args.release_audio_command_center_verification_report,
+            require_unified_command_center=args.require_unified_command_center,
+            unified_command_center_zip_path=args.unified_command_center,
+            unified_command_center_verification_report_path=args.unified_command_center_verification_report,
+            unified_release_zip_path=args.unified_release_zip,
+            unified_release_verification_report_path=args.unified_release_verification_report,
+            unified_distribution_zip_paths=args.unified_distribution_zip,
+            unified_distribution_verification_report_paths=args.unified_distribution_verification_report,
+            unified_submission_zip_paths=args.unified_submission_zip,
+            unified_submission_verification_report_paths=args.unified_submission_verification_report,
+            unified_release_operations_zip_path=args.unified_release_operations_zip,
+            unified_release_operations_verification_report_path=args.unified_release_operations_verification_report,
+            unified_trust_operations_hub_zip_path=args.unified_trust_operations_hub,
+            unified_trust_operations_hub_verification_report_path=args.unified_trust_operations_hub_verification_report,
+            unified_public_trust_center_zip_path=args.unified_public_trust_center,
+            unified_public_trust_center_verification_report_path=args.unified_public_trust_center_verification_report,
+            unified_maintenance_backup_zip_path=args.unified_maintenance_backup,
+            unified_maintenance_backup_verification_report_path=args.unified_maintenance_backup_verification_report,
             require_final_readiness=args.require_final_readiness,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
             release_check_latest_report_path=args.release_check_latest_report,
@@ -4356,6 +4647,23 @@ def _main() -> None:
             require_release_audio_command_center=args.require_release_audio_command_center,
             release_audio_command_center_path=args.release_audio_command_center,
             release_audio_command_center_verification_report_path=args.release_audio_command_center_verification_report,
+            require_unified_command_center=args.require_unified_command_center,
+            unified_command_center_path=args.unified_command_center,
+            unified_command_center_verification_report_path=args.unified_command_center_verification_report,
+            unified_release_path=args.unified_release_zip,
+            unified_release_verification_report_path=args.unified_release_verification_report,
+            unified_distribution_paths=args.unified_distribution_zip,
+            unified_distribution_verification_report_paths=args.unified_distribution_verification_report,
+            unified_submission_paths=args.unified_submission_zip,
+            unified_submission_verification_report_paths=args.unified_submission_verification_report,
+            unified_release_operations_path=args.unified_release_operations_zip,
+            unified_release_operations_verification_report_path=args.unified_release_operations_verification_report,
+            unified_trust_operations_hub_path=args.unified_trust_operations_hub,
+            unified_trust_operations_hub_verification_report_path=args.unified_trust_operations_hub_verification_report,
+            unified_public_trust_center_path=args.unified_public_trust_center,
+            unified_public_trust_center_verification_report_path=args.unified_public_trust_center_verification_report,
+            unified_maintenance_backup_path=args.unified_maintenance_backup,
+            unified_maintenance_backup_verification_report_path=args.unified_maintenance_backup_verification_report,
             final_handoff_package_path=args.final_handoff_package,
             final_handoff_verification_report_path=args.final_handoff_verification_report,
         )
@@ -4488,6 +4796,16 @@ def _main() -> None:
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
         if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-command-center":
+        parser = build_unified_command_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_command_center_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "runtime_failed", "verification_failed"}:
             raise SystemExit(1)
         return
     elif raw_args and raw_args[0] == "verify-release-audio-baseline-registry-package":
@@ -4668,8 +4986,47 @@ def _main() -> None:
             print(f"MusicForge Release Audio Command Center verification: {report.get('status')}")
             for check in report.get("checks", []):
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
-                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+            print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(release_audio_command_center_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-package":
+        from song_agent.unified_command_center import evidence_to_verifier_kwargs
+        from song_agent.unified_command_center_verifier import (
+            unified_command_center_verification_exit_code,
+            verify_unified_command_center_package,
+            write_unified_command_center_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        evidence = _unified_command_center_evidence_from_args(args)
+        report = verify_unified_command_center_package(
+            args.zip_path,
+            strict=args.strict,
+            require_ready=args.require_ready,
+            require_audio_ready=args.require_audio_ready,
+            require_trust_ready=args.require_trust_ready,
+            require_public_trust_ready=args.require_public_trust_ready,
+            require_release_ready=args.require_release_ready,
+            require_distribution_ready=args.require_distribution_ready,
+            require_submission_ready=args.require_submission_ready,
+            require_operations_ready=args.require_operations_ready,
+            require_maintenance_ready=args.require_maintenance_ready,
+            require_ga_ready=args.require_ga_ready,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+            **evidence_to_verifier_kwargs(evidence),
+        )
+        if args.report_out is not None:
+            write_unified_command_center_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Command Center verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

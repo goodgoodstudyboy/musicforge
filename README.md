@@ -70,11 +70,31 @@ Use these commands before treating a branch as releasable:
 ```powershell
 python -m song_agent.cli doctor
 python -m song_agent.cli release-check --profile ga --skip-tests --json
+python -m song_agent.cli release-check --profile v11 --skip-tests --json
 python -m song_agent.cli ga-check --json
 ```
 
 `--auto-review` is synthetic smoke evidence only. Manual music acceptance means
 a person played the MIDI or WAV and recorded a manual review.
+
+## Unified Command Center
+
+The Unified Command Center is the v11 top-level readiness view for MusicForge.
+It aggregates release, delivery, audio, trust operations, public trust,
+maintenance, GA readiness, and release-check evidence into a fixed-layout ZIP
+that can be verified offline:
+
+```powershell
+python -m song_agent.cli unified-command-center create --center-id ucc-000001 --json
+python -m song_agent.cli unified-command-center refresh ucc-000001 --release-check-report release-check.json --json
+python -m song_agent.cli unified-command-center zip ucc-000001 --release-check-report release-check.json --json
+python -m song_agent.cli unified-command-center verify ucc-000001 --strict --require-ready --release-check-report release-check.json --json
+python -m song_agent.cli verify-unified-command-center-package .musicforge\unified-command-centers\ucc-000001\musicforge-unified-command-center.zip --strict --require-ready --release-check-report release-check.json --json
+```
+
+The runbook only executes safe local refresh/export/ZIP/verify actions. It does
+not sign off releases, reset evidence, submit to platforms, approve external
+responses, or create synthetic manual reviews.
 
 ## Audio Lab
 

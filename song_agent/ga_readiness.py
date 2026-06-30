@@ -118,6 +118,23 @@ def build_ga_readiness_report(
     require_release_audio_command_center: bool = False,
     release_audio_command_center_zip_path: Path | str | None = None,
     release_audio_command_center_verification_report_path: Path | str | None = None,
+    require_unified_command_center: bool = False,
+    unified_command_center_zip_path: Path | str | None = None,
+    unified_command_center_verification_report_path: Path | str | None = None,
+    unified_release_zip_path: Path | str | None = None,
+    unified_release_verification_report_path: Path | str | None = None,
+    unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_submission_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_release_operations_zip_path: Path | str | None = None,
+    unified_release_operations_verification_report_path: Path | str | None = None,
+    unified_trust_operations_hub_zip_path: Path | str | None = None,
+    unified_trust_operations_hub_verification_report_path: Path | str | None = None,
+    unified_public_trust_center_zip_path: Path | str | None = None,
+    unified_public_trust_center_verification_report_path: Path | str | None = None,
+    unified_maintenance_backup_zip_path: Path | str | None = None,
+    unified_maintenance_backup_verification_report_path: Path | str | None = None,
     require_final_readiness: bool = False,
     final_handoff_verification_report_path: Path | str | None = None,
     release_check_latest_report_path: Path | str | None = None,
@@ -143,6 +160,7 @@ def build_ga_readiness_report(
         "require_release_audio_quality_action_queue": require_release_audio_quality_action_queue,
         "require_release_audio_quality_action_queue_signoff": require_release_audio_quality_action_queue_signoff,
         "require_release_audio_command_center": require_release_audio_command_center,
+        "require_unified_command_center": require_unified_command_center,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -436,6 +454,38 @@ def build_ga_readiness_report(
         command_center_summary,
     )
 
+    unified_summary = _unified_command_center_summary(
+        required=require_unified_command_center,
+        command_center_zip_path=unified_command_center_zip_path,
+        command_center_verification_report_path=unified_command_center_verification_report_path,
+        release_zip_path=unified_release_zip_path,
+        release_verification_report_path=unified_release_verification_report_path,
+        release_audio_command_center_zip_path=release_audio_command_center_zip_path,
+        release_audio_command_center_verification_report_path=release_audio_command_center_verification_report_path,
+        distribution_zip_paths=unified_distribution_zip_paths,
+        distribution_verification_report_paths=unified_distribution_verification_report_paths,
+        submission_zip_paths=unified_submission_zip_paths,
+        submission_verification_report_paths=unified_submission_verification_report_paths,
+        release_operations_zip_path=unified_release_operations_zip_path,
+        release_operations_verification_report_path=unified_release_operations_verification_report_path,
+        trust_operations_hub_zip_path=unified_trust_operations_hub_zip_path,
+        trust_operations_hub_verification_report_path=unified_trust_operations_hub_verification_report_path,
+        public_trust_center_zip_path=unified_public_trust_center_zip_path,
+        public_trust_center_verification_report_path=unified_public_trust_center_verification_report_path,
+        maintenance_backup_zip_path=unified_maintenance_backup_zip_path,
+        maintenance_backup_verification_report_path=unified_maintenance_backup_verification_report_path,
+        ga_readiness_report_path=None,
+        release_check_report_path=release_check_ga_report_path or release_check_latest_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.unified_command_center",
+        "passed" if unified_summary.get("status") == "passed" else "failed" if require_unified_command_center else "warning",
+        "blocking" if require_unified_command_center else "warning",
+        "Unified Command Center is passed." if unified_summary.get("status") == "passed" else "Unified Command Center is missing or not passed.",
+        unified_summary,
+    )
+
     latest_summary = _release_check_summary(
         root,
         report_path=release_check_latest_report_path,
@@ -503,6 +553,7 @@ def build_ga_readiness_report(
             "release_audio_quality_action_queue_status": quality_action_queue_summary.get("status", "missing"),
             "release_audio_quality_action_queue_signoff_status": quality_action_queue_signoff_summary.get("status", "missing"),
             "release_audio_command_center_status": command_center_summary.get("status", "missing"),
+            "unified_command_center_status": unified_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -1208,6 +1259,94 @@ def _release_audio_command_center_summary(
             "external_integrity_ok": external_integrity_ok,
             "zip_binding_ok": zip_binding_ok,
             "manifest_binding_ok": manifest_binding_ok,
+            "summary": runtime_report.get("summary", {}),
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_command_center_summary(
+    *,
+    required: bool,
+    command_center_zip_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    release_zip_path: Path | str | None,
+    release_verification_report_path: Path | str | None,
+    release_audio_command_center_zip_path: Path | str | None,
+    release_audio_command_center_verification_report_path: Path | str | None,
+    distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    submission_zip_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    release_operations_zip_path: Path | str | None,
+    release_operations_verification_report_path: Path | str | None,
+    trust_operations_hub_zip_path: Path | str | None,
+    trust_operations_hub_verification_report_path: Path | str | None,
+    public_trust_center_zip_path: Path | str | None,
+    public_trust_center_verification_report_path: Path | str | None,
+    maintenance_backup_zip_path: Path | str | None,
+    maintenance_backup_verification_report_path: Path | str | None,
+    ga_readiness_report_path: Path | str | None,
+    release_check_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if command_center_zip_path is None:
+        return {"status": "missing", "message": "Unified Command Center package was not provided."}
+    try:
+        from song_agent.unified_command_center import evidence_to_verifier_kwargs as unified_command_center_evidence_to_kwargs
+        from song_agent.unified_command_center_verifier import verify_unified_command_center_package
+
+        zip_path = Path(command_center_zip_path)
+        evidence: dict[str, Any] = {
+            "release": {"zip": release_zip_path, "verification_report": release_verification_report_path},
+            "audio-command-center": {
+                "zip": release_audio_command_center_zip_path,
+                "verification_report": release_audio_command_center_verification_report_path,
+            },
+            "distribution": {"zips": list(distribution_zip_paths or []), "verification_reports": list(distribution_verification_report_paths or [])},
+            "submission": {"zips": list(submission_zip_paths or []), "verification_reports": list(submission_verification_report_paths or [])},
+            "operations": {"zip": release_operations_zip_path, "verification_report": release_operations_verification_report_path},
+            "trust-operations-hub": {"zip": trust_operations_hub_zip_path, "verification_report": trust_operations_hub_verification_report_path},
+            "public-trust-center": {"zip": public_trust_center_zip_path, "verification_report": public_trust_center_verification_report_path},
+            "maintenance": {"zip": maintenance_backup_zip_path, "verification_report": maintenance_backup_verification_report_path},
+            "ga-readiness": {"report": ga_readiness_report_path},
+            "release-check": {"report": release_check_report_path},
+        }
+        runtime_report = verify_unified_command_center_package(
+            zip_path,
+            strict=True,
+            require_ready=required,
+            **unified_command_center_evidence_to_kwargs(evidence),
+        )
+        external_report: dict[str, Any] = {}
+        if command_center_verification_report_path is not None:
+            external_report = read_json(Path(command_center_verification_report_path))
+        external_fp = _verification_fingerprint(external_report) if external_report else {}
+        runtime_fp = _verification_fingerprint(runtime_report)
+        external_integrity_ok = not external_report or external_report.get("integrity_hash") == stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        zip_binding_ok = not external_report or external_fp.get("zip_sha256") == runtime_fp.get("zip_sha256")
+        manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        status = (
+            "passed"
+            if runtime_report.get("status") == "passed"
+            and (not external_report or external_report.get("status") == "passed")
+            and external_integrity_ok
+            and zip_binding_ok
+            and manifest_binding_ok
+            else "failed"
+        )
+        return {
+            "status": status,
+            "package_type": runtime_report.get("package_type"),
+            "zip_sha256": runtime_fp.get("zip_sha256"),
+            "zip_size_bytes": runtime_fp.get("zip_size_bytes"),
+            "manifest_hash": runtime_fp.get("manifest_hash"),
+            "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"),
+            "runtime_verification_status": runtime_report.get("status"),
+            "external_verification_status": external_report.get("status") if external_report else None,
+            "external_integrity_ok": external_integrity_ok,
+            "zip_binding_ok": zip_binding_ok,
+            "manifest_binding_ok": manifest_binding_ok,
+            "blockers": runtime_report.get("blockers", []),
             "summary": runtime_report.get("summary", {}),
         }
     except Exception as exc:

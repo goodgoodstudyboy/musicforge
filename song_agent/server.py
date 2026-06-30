@@ -591,6 +591,12 @@ from song_agent.release_audio_command_center import (
     ReleaseAudioCommandCenterStateError,
     ReleaseAudioCommandCenterStore,
 )
+from song_agent.unified_command_center import (
+    UnifiedCommandCenterError,
+    UnifiedCommandCenterNotFoundError,
+    UnifiedCommandCenterStateError,
+    UnifiedCommandCenterStore,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3213,6 +3219,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return store
 
     @property
+    def unified_command_center_store(self) -> UnifiedCommandCenterStore:
+        store = self.server.unified_command_center_store  # type: ignore[attr-defined]
+        store.release_store = self.release_store
+        return store
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3364,6 +3376,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/maintenance/status" or path.startswith("/api/maintenance/"):
                 self._handle_maintenance_route(method, path)
+                return
+            if path == "/api/unified-command-centers" or path.startswith("/api/unified-command-centers/"):
+                self._handle_unified_command_centers_route(method, path)
                 return
             if path == "/api/provider":
                 self._handle_provider_route(method)
@@ -10933,6 +10948,125 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseAudioCommandCenterError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_unified_command_centers_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/unified-command-centers":
+                if method == "GET":
+                    centers = self.unified_command_center_store.list_centers()
+                    self._send_json({"ok": True, "centers": centers, "summary": {"center_count": len(centers)}})
+                    return
+                if method == "POST":
+                    center = self.unified_command_center_store.create(self._optional_json_body())
+                    self._send_json({"ok": True, "center": center, "summary": {"center_id": center.get("center_id")}, "status": center.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            prefix = "/api/unified-command-centers/"
+            if not path.startswith(prefix):
+                self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center route not found.")
+                return
+            parts = path.removeprefix(prefix).strip("/").split("/")
+            center_id = parts[0]
+            tail = "/" + "/".join(parts[1:]) if len(parts) > 1 else ""
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                center = self.unified_command_center_store.read_center(center_id)
+                report = self.unified_command_center_store.read_report(center_id) if self.unified_command_center_store.report_path(center_id).exists() else {}
+                inventory = read_json(self.unified_command_center_store.inventory_path(center_id)) if self.unified_command_center_store.inventory_path(center_id).exists() else {}
+                readiness = read_json(self.unified_command_center_store.readiness_path(center_id)) if self.unified_command_center_store.readiness_path(center_id).exists() else {}
+                gap_plan = read_json(self.unified_command_center_store.gap_plan_path(center_id)) if self.unified_command_center_store.gap_plan_path(center_id).exists() else {}
+                runbook = read_json(self.unified_command_center_store.runbook_path(center_id)) if self.unified_command_center_store.runbook_path(center_id).exists() else {}
+                self._send_json({"ok": True, "center": center, "report": report, "inventory": inventory, "readiness": readiness, "gap_plan": gap_plan, "runbook": runbook, "summary": report.get("summary", {}) if report else {}})
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_command_center_store.refresh(center_id, self._unified_command_center_evidence_from_payload(self._optional_json_body()))
+                self._send_json({"ok": report.get("status") == "ready", "center_id": center_id, "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/runbook":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                runbook = self.unified_command_center_store.create_runbook(center_id, self._unified_command_center_evidence_from_payload(self._optional_json_body()))
+                self._send_json({"ok": True, "center_id": center_id, "runbook": runbook, "summary": runbook.get("summary", {})})
+                return
+            if tail == "/run-safe":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_command_center_store.run_safe(center_id, self._unified_command_center_evidence_from_payload(self._optional_json_body()))
+                self._send_json({"ok": result.get("summary", {}).get("failed_count") == 0, "center_id": center_id, "runbook_result": result, "summary": result.get("summary", {})})
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_command_center_store.export_package(center_id, self._unified_command_center_evidence_from_payload(self._optional_json_body()))
+                self._send_json({"ok": result.get("status") == "ready", **result})
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_command_center_store.build_zip(center_id, self._unified_command_center_evidence_from_payload(self._optional_json_body()))
+                self._send_json({"ok": result.get("status") == "ready", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.unified_command_center_store.verify_zip(center_id, evidence=self._unified_command_center_evidence_from_payload(payload), strict=bool(payload.get("strict", True)), require_ready=bool(payload.get("require_ready", False)))
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.unified_command_center_store.zip_path(center_id), "application/zip", filename="musicforge-unified-command-center.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center route not found.")
+        except UnifiedCommandCenterNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedCommandCenterStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedCommandCenterError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _unified_command_center_evidence_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        evidence = dict(payload or {})
+        for key, zip_key, report_key in (
+            ("release", "release_zip", "release_verification_report"),
+            ("audio-command-center", "release_audio_command_center_zip", "release_audio_command_center_verification_report"),
+            ("operations", "release_operations_zip", "release_operations_verification_report"),
+            ("trust-operations-hub", "trust_operations_hub_zip", "trust_operations_hub_verification_report"),
+            ("public-trust-center", "public_trust_center_zip", "public_trust_center_verification_report"),
+            ("maintenance", "maintenance_backup_zip", "maintenance_backup_verification_report"),
+        ):
+            if payload.get(zip_key) or payload.get(report_key):
+                evidence[key] = {"zip": payload.get(zip_key), "verification_report": payload.get(report_key)}
+        if payload.get("distribution_zips") or payload.get("distribution_zip") or payload.get("distribution_verification_reports") or payload.get("distribution_verification_report"):
+            evidence["distribution"] = {
+                "zips": payload.get("distribution_zips") or ([payload.get("distribution_zip")] if payload.get("distribution_zip") else []),
+                "verification_reports": payload.get("distribution_verification_reports") or ([payload.get("distribution_verification_report")] if payload.get("distribution_verification_report") else []),
+            }
+        if payload.get("submission_zips") or payload.get("submission_zip") or payload.get("submission_verification_reports") or payload.get("submission_verification_report"):
+            evidence["submission"] = {
+                "zips": payload.get("submission_zips") or ([payload.get("submission_zip")] if payload.get("submission_zip") else []),
+                "verification_reports": payload.get("submission_verification_reports") or ([payload.get("submission_verification_report")] if payload.get("submission_verification_report") else []),
+            }
+        if payload.get("ga_readiness_report") or payload.get("ga_readiness_verification_report"):
+            evidence["ga-readiness"] = {"report": payload.get("ga_readiness_report"), "verification_report": payload.get("ga_readiness_verification_report")}
+        if payload.get("release_check_report"):
+            evidence["release-check"] = {"report": payload.get("release_check_report")}
+        if isinstance(payload.get("requirements"), dict):
+            evidence["requirements"] = payload["requirements"]
+        return evidence
+
     def _handle_audio_baselines_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/audio-baselines":
@@ -11793,6 +11927,25 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if release_audio_command_center_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(release_audio_command_center_gate.get("message") or "Release Audio Command Center gate failed.")
+        require_unified_command_center = bool(payload.get("require_unified_command_center", False))
+        unified_command_center_gate = self.unified_command_center_store.gate(
+            str(payload.get("unified_command_center_id") or payload.get("unified_command_center_center_id") or "ucc-000001"),
+            required=require_unified_command_center,
+            command_center_zip_path=payload.get("unified_command_center_zip") or payload.get("unified_command_center"),
+            command_center_verification_report_path=payload.get("unified_command_center_verification_report"),
+            evidence={
+                "audio-command-center": {"zip": payload.get("release_audio_command_center_zip") or payload.get("release_audio_command_center"), "verification_report": payload.get("release_audio_command_center_verification_report")},
+                "ga-readiness": {"report": payload.get("ga_readiness_report")},
+                "release-check": {"report": payload.get("release_check_report")},
+                "requirements": {"require_audio_command_center": bool(payload.get("require_release_audio_command_center", False))},
+            },
+        )
+        if unified_command_center_gate and require_unified_command_center:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_command_center"] = unified_command_center_gate
+            if unified_command_center_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_command_center_gate.get("message") or "Unified Command Center gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -11941,6 +12094,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(release_audio_command_center_gate.get("message") or "Release Audio Command Center gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_command_center_gate.get("hard_block") and unified_command_center_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_command_center_gate.get("message") or "Unified Command Center gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -19484,6 +19646,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_audio_quality_action_queue_store = ReleaseAudioQualityActionQueueStore(release_store=self.release_store, observatory_store=self.release_audio_quality_observatory_store)
         self.release_audio_quality_action_signoff_store = ReleaseAudioQualityActionQueueSignoffStore(queue_store=self.release_audio_quality_action_queue_store, release_store=self.release_store)
         self.release_audio_command_center_store = ReleaseAudioCommandCenterStore(release_store=self.release_store, observatory_store=self.release_audio_quality_observatory_store, action_queue_store=self.release_audio_quality_action_queue_store, action_signoff_store=self.release_audio_quality_action_signoff_store)
+        self.unified_command_center_store = UnifiedCommandCenterStore(release_store=self.release_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

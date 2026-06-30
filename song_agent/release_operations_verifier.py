@@ -17,6 +17,7 @@ from song_agent.release_verifier import LOCAL_PATH_VALUE_PATTERNS
 
 
 OPERATIONS_VERIFICATION_SCHEMA_VERSION = 1
+OPERATIONS_VERIFICATION_PACKAGE_TYPE = "musicforge_release_operations_verification"
 DEFAULT_MAX_ZIP_SIZE_MB = 128
 DEFAULT_MAX_UNCOMPRESSED_SIZE_MB = 512
 DEFAULT_MAX_ENTRY_COUNT = 5000
@@ -350,6 +351,7 @@ class _ReleaseOperationsVerifier:
         status = "failed" if blockers else "warning" if warnings else "passed"
         report = {
             "schema_version": OPERATIONS_VERIFICATION_SCHEMA_VERSION,
+            "package_type": OPERATIONS_VERIFICATION_PACKAGE_TYPE,
             "generated_at": self.generated_at,
             "tool": {"name": "MusicForge Release Operations Package Verifier", "version": __version__},
             "input": {"filename": self.zip_path.name, "size_bytes": self.zip_size_bytes, "sha256": self.zip_sha256},

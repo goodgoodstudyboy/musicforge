@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.0.0 - 2026-06-30
+
+### Added
+- MusicForge Unified Command Center store, fixed-layout ZIP export, offline verifier, CLI, API, Studio controls, Release signoff gate, and GA readiness gate.
+- Unified evidence graph, evidence inventory, readiness matrix, gap plan, safe runbook, and component fingerprint sidecars aggregate Release, Audio Command Center, Trust Operations Hub, Public Trust Center, Distribution, Submission, Operations, Maintenance, GA readiness, and release-check evidence.
+- Offline verifier binds package documents to fixed entries and external runtime evidence, rejects stale component fingerprints, declared extra ZIP entries, backslash/path pollution, nested ZIPs, and obvious secrets.
+- release-check `v110.unified_command_center_smoke` covers ready generation, safe runbook execution, runtime-failed evidence, stale external release-check evidence, and declared-extra rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center.py tests\test_cli_unified_command_center.py tests\test_server_unified_command_center.py tests\test_webui.py::test_webui_contains_release_workspace_controls tests\test_release_check.py::test_v110_unified_command_center_smoke -q`
+- `python -m song_agent.cli release-check --profile v11 --skip-tests --json`
+
 ## v10.15.1 - 2026-06-30
 
 ### Fixed

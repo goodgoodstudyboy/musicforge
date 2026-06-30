@@ -203,6 +203,7 @@ LATEST_PROFILES = ("full", "quick", "latest")
 V7_PROFILES = ("full", "v7")
 GA_PROFILES = ("full", "quick", "latest", "ga")
 V10_PROFILES = ("full", "quick", "latest", "ga", "v10")
+V11_PROFILES = ("full", "quick", "latest", "ga", "v11")
 
 CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000),
@@ -325,6 +326,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v1013.release_audio_quality_action_queue_smoke", "v10.13 Release Audio Quality Action Queue smoke", "_v1013_release_audio_quality_action_queue_smoke", group="audio", version="10.13", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "quality", "observatory", "action-queue"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v1014.release_audio_quality_action_queue_signoff_smoke", "v10.14 Release Audio Quality Action Queue signoff archive smoke", "_v1014_release_audio_quality_action_queue_signoff_smoke", group="audio", version="10.14", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "quality", "observatory", "action-queue", "signoff"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v1015.release_audio_command_center_smoke", "v10.15 Release Audio Command Center smoke", "_v1015_release_audio_command_center_smoke", group="audio", version="10.15", risk="critical", timeout_seconds=300, tags=("v10", "ga", "audio", "command-center", "readiness"), profiles=V10_PROFILES, expected_warnings=("Duplicate name:",)),
+    _callable("v110.unified_command_center_smoke", "v11.0 Unified Command Center smoke", "_v110_unified_command_center_smoke", group="command-center", version="11.0", risk="critical", timeout_seconds=300, tags=("v11", "ga", "unified-command-center", "readiness"), profiles=V11_PROFILES, expected_warnings=("Duplicate name:",)),
 )
 
-KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "ga", "publish"}
+KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "ga", "publish"}

@@ -135,7 +135,7 @@ def test_release_check_runner_json_and_timing(tmp_path: Path) -> None:
 
 
 def test_release_check_runner_empty_selection_fails() -> None:
-    report = run_release_check_matrix(profile="latest", since="11.0")
+    report = run_release_check_matrix(profile="latest", since="99.0")
     payload = report.to_json_report()
 
     assert report.ok is False

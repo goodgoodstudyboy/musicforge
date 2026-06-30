@@ -11506,7 +11506,7 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
         v7 = select_check_definitions(profile="v7")
         portal = select_check_definitions(profile="latest", groups=["portal"])
         since = select_check_definitions(profile="v7", since="7.2")
-        empty_since = select_check_definitions(profile="latest", since="11.0")
+        empty_since = select_check_definitions(profile="latest", since="99.0")
         only = select_check_definitions(profile="full", only=["v74.attestation_portal_smoke"])
         base = Path(tempfile.mkdtemp(prefix="release-check-v75-"))
         fake_script = base / "v75_timeout_fake.py"
@@ -11559,7 +11559,7 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             ),
         ]
         fake_report = run_release_check_matrix(repo_root=root, profile="latest", definitions=fake_definitions)
-        empty_report = run_release_check_matrix(repo_root=root, profile="latest", since="11.0")
+        empty_report = run_release_check_matrix(repo_root=root, profile="latest", since="99.0")
         report_json = fake_report.to_json_report()
         empty_json = empty_report.to_json_report()
         serialized = json.dumps(report_json, ensure_ascii=False)
@@ -11577,6 +11577,7 @@ def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
             and "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in latest}
             and "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in latest}
             and "v80.public_trust_center_smoke" in {definition.check_id for definition in latest}
+            and "v110.unified_command_center_smoke" in {definition.check_id for definition in latest}
             and "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
             and {definition.check_id for definition in portal} == {"v74.attestation_portal_smoke", "v76.attestation_portal_review_response_smoke", "v77.attestation_accepted_evidence_smoke", "v78.attestation_transparency_feed_smoke", "v79.attestation_transparency_acknowledgement_smoke", "v80.public_trust_center_smoke"}
             and all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
@@ -17978,6 +17979,188 @@ def _v1015_resign_command_center_action_queue_fingerprint(entries: dict[str, byt
 
 
 def _v1015_add_declared_command_center_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path", ""))
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v110_unified_command_center_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_verifier import verify_unified_command_center_package
+    import song_agent.unified_command_center_verifier as ucc_verifier
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v110-unified-command-center-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                failed_report = _v110_release_check_report(base / "release-check-failed.json", ok=False)
+                store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
+                center = store.create(
+                    {
+                        "center_id": "ucc-release-check",
+                        "name": "Unified Command Center smoke",
+                        "requirements": {
+                            "audio-command-center": False,
+                            "trust-operations-hub": False,
+                            "public-trust-center": False,
+                            "ga-readiness": False,
+                            "release-check": True,
+                        },
+                    }
+                )
+                evidence = {"release-check": {"report": passed_report}}
+                report = store.refresh(center["center_id"], evidence)
+                runbook = store.create_runbook(center["center_id"], evidence)
+                run = store.run_safe(center["center_id"], evidence)
+                zipped = store.build_zip(center["center_id"], evidence)
+                verification = store.verify_zip(center["center_id"], evidence=evidence, strict=True, require_ready=True)
+                external = verify_unified_command_center_package(zipped["zip_path"], strict=True, require_ready=True, release_check_report_path=passed_report)
+
+                stale = verify_unified_command_center_package(zipped["zip_path"], strict=True, require_ready=True, release_check_report_path=failed_report)
+                declared_extra_zip = base / "unified-command-center-declared-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v110_add_declared_unified_command_center_extra)
+                declared_extra = verify_unified_command_center_package(declared_extra_zip, strict=True, require_ready=True, release_check_report_path=passed_report)
+
+                bad_store = UnifiedCommandCenterStore(root=base / ".musicforge" / "bad-unified-command-centers")
+                bad_center = bad_store.create({"center_id": "ucc-bad", "requirements": {"release-check": True, "audio-command-center": False, "trust-operations-hub": False, "public-trust-center": False, "ga-readiness": False}})
+                bad_report = bad_store.refresh(bad_center["center_id"], {"release-check": {"report": failed_report}})
+                skipped_store = UnifiedCommandCenterStore(root=base / ".musicforge" / "skipped-unified-command-centers")
+                skipped_center = skipped_store.create({"center_id": "ucc-skipped", "requirements": {"release": True, "release-check": True, "audio-command-center": False, "trust-operations-hub": False, "public-trust-center": False, "ga-readiness": False}})
+                skipped_run = skipped_store.run_safe(skipped_center["center_id"], evidence)
+                skipped_count = int((skipped_run.get("summary") or {}).get("skipped_unsupported_count") or 0)
+                original_distribution_verifier = ucc_verifier.verify_distribution_package
+                try:
+                    ucc_verifier.verify_distribution_package = _v110_fake_distribution_verifier
+                    dist_one = base / "target-001.zip"
+                    dist_two = base / "target-002.zip"
+                    dist_one.write_bytes(b"target-one")
+                    dist_two.write_bytes(b"target-two")
+                    dist_report_one = _v110_external_verification_report(
+                        base / "target-001-verification.json",
+                        package_type="musicforge_distribution_verification",
+                        zip_path=dist_one,
+                        target_id="target-001",
+                    )
+                    dist_report_two = _v110_external_verification_report(
+                        base / "target-002-verification.json",
+                        package_type="musicforge_distribution_verification",
+                        zip_path=dist_two,
+                        target_id="target-002",
+                    )
+                    wrong_type_report = _v110_external_verification_report(
+                        base / "target-001-wrong-type.json",
+                        package_type="musicforge_release_verification",
+                        zip_path=dist_one,
+                        target_id="target-001",
+                    )
+                    delivery_store = UnifiedCommandCenterStore(root=base / ".musicforge" / "delivery-unified-command-centers")
+                    delivery_center = delivery_store.create({"center_id": "ucc-delivery", "requirements": {"distribution": True, "release-check": True, "audio-command-center": False, "trust-operations-hub": False, "public-trust-center": False, "ga-readiness": False}})
+                    delivery_evidence = {
+                        "release-check": {"report": passed_report},
+                        "distribution": {"zips": [dist_one, dist_two], "verification_reports": [dist_report_one, dist_report_two]},
+                    }
+                    delivery_zip = delivery_store.build_zip(delivery_center["center_id"], delivery_evidence)
+                    missing_distribution = verify_unified_command_center_package(
+                        delivery_zip["zip_path"],
+                        strict=True,
+                        require_ready=True,
+                        release_check_report_path=passed_report,
+                        distribution_zip_paths=[dist_one],
+                        distribution_verification_report_paths=[dist_report_one],
+                    )
+                    wrong_type_distribution = verify_unified_command_center_package(
+                        delivery_zip["zip_path"],
+                        strict=True,
+                        require_ready=True,
+                        release_check_report_path=passed_report,
+                        distribution_zip_paths=[dist_one, dist_two],
+                        distribution_verification_report_paths=[wrong_type_report, dist_report_two],
+                    )
+                finally:
+                    ucc_verifier.verify_distribution_package = original_distribution_verifier
+
+                ok = (
+                    report.get("status") == "ready"
+                    and runbook.get("summary", {}).get("safe_action_count", 0) >= 4
+                    and run.get("summary", {}).get("failed_count") == 0
+                    and skipped_count >= 1
+                    and verification.get("status") == "passed"
+                    and external.get("status") == "passed"
+                    and stale.get("status") == "failed"
+                    and declared_extra.get("status") == "failed"
+                    and bad_report.get("status") == "blocked"
+                    and _v38_check_status(missing_distribution, "ucc_distribution_fingerprint_binding") == "failed"
+                    and _v38_check_status(wrong_type_distribution, "ucc_distribution_external_package_type") == "failed"
+                )
+                return ok, (
+                    f"center={report.get('status')}, verify={verification.get('status')}/{external.get('status')}, "
+                    f"runbook={runbook.get('summary', {}).get('safe_action_count')}/{run.get('summary', {}).get('failed_count')}, "
+                    f"unsupported={skipped_count}, runtime_failed={bad_report.get('status')}, stale={stale.get('status')}, "
+                    f"declared_extra={declared_extra.get('status')}, distribution_missing={_v38_check_status(missing_distribution, 'ucc_distribution_fingerprint_binding')}, "
+                    f"distribution_wrong_type={_v38_check_status(wrong_type_distribution, 'ucc_distribution_external_package_type')}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.0 Unified Command Center smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v110_release_check_report(path: Path, *, ok: bool) -> Path:
+    failed = [] if ok else [{"check_id": "synthetic.failed", "status": "failed", "detail": "Synthetic failed release-check evidence."}]
+    report = {
+        "ok": ok,
+        "summary": {"total": 1, "passed": 1 if ok else 0, "failed": 0 if ok else 1},
+        "results": failed or [{"check_id": "synthetic.passed", "status": "passed", "detail": "Synthetic passed release-check evidence."}],
+    }
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def _v110_external_verification_report(path: Path, *, package_type: str, zip_path: Path, target_id: str | None = None) -> Path:
+    report = {
+        "schema_version": 1,
+        "package_type": package_type,
+        "status": "passed",
+        "input": {"filename": zip_path.name, "size_bytes": zip_path.stat().st_size, "sha256": _v89_sha256(zip_path)},
+        "summary": {"target_id": target_id, "entry_count": 1, "blocker_count": 0},
+        "blockers": [],
+    }
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def _v110_fake_distribution_verifier(path: Path | str, *, strict: bool = False) -> dict[str, object]:
+    zip_path = Path(path)
+    target_id = "target-001" if "001" in zip_path.name else "target-002"
+    return {
+        "schema_version": 1,
+        "package_type": "musicforge_distribution_verification",
+        "status": "passed",
+        "strict": strict,
+        "input": {"filename": zip_path.name, "size_bytes": zip_path.stat().st_size, "sha256": _v89_sha256(zip_path)},
+        "summary": {"target_id": target_id, "entry_count": 1, "blocker_count": 0},
+        "blockers": [],
+        "checks": [],
+    }
+
+
+def _v110_add_declared_unified_command_center_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
     extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
     entries[extra_name] = b"Do not trust declared extra files.\n"
     manifest = json.loads(entries["manifest.json"].decode("utf-8"))

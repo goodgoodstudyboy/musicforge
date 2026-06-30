@@ -34,6 +34,7 @@ from song_agent.rights_clearance import verify_rights_summary_evidence
 
 
 DISTRIBUTION_VERIFICATION_SCHEMA_VERSION = 1
+DISTRIBUTION_VERIFICATION_PACKAGE_TYPE = "musicforge_distribution_verification"
 DEFAULT_MAX_ZIP_SIZE_MB = 512
 DEFAULT_MAX_UNCOMPRESSED_SIZE_MB = 2048
 DEFAULT_MAX_ENTRY_COUNT = 5000
@@ -833,6 +834,7 @@ class _DistributionPackageVerifier:
         status = "failed" if blockers else "warning" if warnings else "passed"
         report = {
             "schema_version": DISTRIBUTION_VERIFICATION_SCHEMA_VERSION,
+            "package_type": DISTRIBUTION_VERIFICATION_PACKAGE_TYPE,
             "generated_at": self.generated_at,
             "tool": {"name": "MusicForge Distribution Package Verifier", "version": __version__},
             "input": {"filename": self.zip_path.name, "size_bytes": self.zip_size_bytes, "sha256": self.zip_sha256},
