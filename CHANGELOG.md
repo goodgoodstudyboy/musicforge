@@ -1,5 +1,18 @@
 # Changelog
 
+## v10.15.1 - 2026-06-30
+
+### Fixed
+- Release Audio Command Center refresh now re-runs runtime verifiers for every component instead of trusting previously saved verification reports alone.
+- Evidence Inventory, Readiness Matrix, and Gap Plan now expose runtime verification status, runtime blockers, and prioritized stale/runtime-failed/missing follow-up actions.
+- Offline Command Center verification now binds runtime status and blockers, so changing runtime-failed evidence to passed and re-signing package JSON is rejected.
+- Added independent Store, CLI, and Server regressions for Command Center runtime evidence checks.
+- release-check `v1015.release_audio_command_center_smoke` now covers stale/runtime-failed component evidence in addition to full-resign and declared-extra tamper cases.
+
+### Verified
+- `python -m pytest tests\test_release_audio_command_center.py tests\test_cli_release_audio_command_center.py tests\test_server_release_audio_command_center.py tests\test_release_check.py::test_v1015_release_audio_command_center_smoke -q`
+- `python -m song_agent.cli release-check --profile v10 --skip-tests --json`
+
 ## v10.15.0 - 2026-06-30
 
 ### Added

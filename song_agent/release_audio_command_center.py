@@ -12,6 +12,7 @@ from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.release_audio_command_center_verifier import (
     RELEASE_AUDIO_COMMAND_CENTER_PACKAGE_TYPE,
+    verify_release_audio_command_center_component,
     verify_release_audio_command_center_package,
     write_release_audio_command_center_verification_report,
 )
@@ -313,8 +314,9 @@ class ReleaseAudioCommandCenterStore:
         release_doc = release.to_dict()
         requirements = _requirements(evidence)
         component_rows = []
+        verifier_kwargs = evidence_to_verifier_kwargs(evidence)
         for component in COMPONENTS:
-            row = _component_row(component, evidence)
+            row = _component_row(component, evidence, verifier_kwargs=verifier_kwargs)
             row["required"] = bool(requirements.get(component["key"], True))
             component_rows.append(row)
         required_rows = [row for row in component_rows if row.get("required")]
@@ -326,6 +328,7 @@ class ReleaseAudioCommandCenterStore:
             "requirements": requirements,
             "component_fingerprints": {row["component_key"]: row.get("fingerprint") for row in component_rows},
             "component_verification_hashes": {row["component_key"]: (row.get("verification_summary") or {}).get("integrity_hash") for row in component_rows},
+            "component_runtime_hashes": {row["component_key"]: (row.get("runtime_summary") or {}).get("integrity_hash") for row in component_rows},
         }
         source_hash = stable_hash(source)
         now = now_iso()
@@ -360,7 +363,10 @@ class ReleaseAudioCommandCenterStore:
             },
         }
         readiness["integrity_hash"] = _integrity_hash(readiness)
-        gaps = [_gap_row(row) for row in readiness_rows if row.get("required") and row.get("readiness") != "ready"]
+        gaps = sorted(
+            [_gap_row(row) for row in readiness_rows if row.get("required") and row.get("readiness") != "ready"],
+            key=lambda row: (int(row.get("priority") or 999), str(row.get("component_key") or "")),
+        )
         gap_plan = {
             "schema_version": RELEASE_AUDIO_COMMAND_CENTER_SCHEMA_VERSION,
             "package_type": "release_audio_command_center_gap_plan",
@@ -474,12 +480,24 @@ def _requirements(evidence: dict[str, Any]) -> dict[str, bool]:
     return {key: bool(raw.get(key, True)) for key in COMPONENT_KEYS}
 
 
-def _component_row(component: dict[str, str], evidence: dict[str, Any]) -> dict[str, Any]:
+def _component_row(component: dict[str, str], evidence: dict[str, Any], *, verifier_kwargs: dict[str, Any]) -> dict[str, Any]:
     key = component["key"]
     paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
-    zip_path = paths.get("zip") or paths.get("zip_path")
-    report_path = paths.get("verification_report") or paths.get("verification_report_path")
+    mapping = {
+        "certification": ("certification_zip_path", "certification_verification_report_path"),
+        "timeline": ("timeline_zip_path", "timeline_verification_report_path"),
+        "regression": ("regression_zip_path", "regression_verification_report_path"),
+        "baseline_governance": ("baseline_registry_zip_path", "baseline_registry_verification_report_path"),
+        "regression_response": ("regression_response_zip_path", "regression_response_verification_report_path"),
+        "observatory": ("observatory_zip_path", "observatory_verification_report_path"),
+        "action_queue": ("action_queue_zip_path", "action_queue_verification_report_path"),
+        "action_queue_signoff": ("action_queue_signoff_archive_path", "action_queue_signoff_verification_report_path"),
+    }
+    zip_arg, report_arg = mapping[key]
+    zip_path = paths.get("zip") or paths.get("zip_path") or verifier_kwargs.get(zip_arg)
+    report_path = paths.get("verification_report") or paths.get("verification_report_path") or verifier_kwargs.get(report_arg)
     status = "missing"
+    readiness = "missing"
     message = "Evidence ZIP or verification report is missing."
     fingerprint = {
         "component_key": key,
@@ -489,30 +507,35 @@ def _component_row(component: dict[str, str], evidence: dict[str, Any]) -> dict[
         "manifest_hash": None,
         "verification_report_hash": None,
         "verification_status": None,
+        "runtime_verification_status": None,
+        "runtime_manifest_hash": None,
+        "runtime_failed_count": 0,
+        "runtime_blockers": [],
     }
     verification_summary: dict[str, Any] = {"component_key": key, "status": "missing"}
-    if zip_path and report_path and Path(zip_path).exists() and Path(report_path).exists():
-        try:
-            report = read_json(Path(report_path))
-            fingerprint = {
-                "component_key": key,
-                "artifact_type": component["artifact"],
-                "zip_sha256": _sha256_path(zip_path),
-                "zip_size_bytes": Path(zip_path).stat().st_size,
-                "manifest_hash": report.get("manifest_hash"),
-                "verification_report_hash": report.get("integrity_hash"),
-                "verification_status": report.get("status"),
-            }
-            verification_summary = _public_verification_summary(key, report)
-            if report.get("status") == "passed" and report.get("zip_sha256") == fingerprint["zip_sha256"]:
-                status = "ready"
-                message = "Evidence is present and externally verified."
-            else:
-                status = "blocked"
-                message = "Evidence verification is not passed or does not match ZIP."
-        except Exception as exc:
+    runtime_summary: dict[str, Any] = {"component_key": key, "status": "missing", "blockers": []}
+    if zip_path and report_path:
+        runtime = verify_release_audio_command_center_component(key, zip_path, report_path, **verifier_kwargs)
+        fingerprint.update(runtime.get("fingerprint") or {})
+        fingerprint["artifact_type"] = component["artifact"]
+        external_report = runtime.get("external_report") if isinstance(runtime.get("external_report"), dict) else {}
+        verification_summary = _public_verification_summary(key, external_report) if external_report else verification_summary
+        runtime_summary = {
+            "component_key": key,
+            "status": runtime.get("status"),
+            "readiness": runtime.get("readiness"),
+            "blockers": runtime.get("blockers", []),
+            "runtime_report": runtime.get("runtime_report", {}),
+        }
+        runtime_summary["integrity_hash"] = _integrity_hash(runtime_summary)
+        if runtime.get("status") == "passed":
+            status = "ready"
+            readiness = "ready"
+            message = "Evidence is current and runtime verification passed."
+        else:
             status = "blocked"
-            message = sanitize_sensitive_text(str(exc))
+            readiness = str(runtime.get("readiness") or "blocked")
+            message = _message_for_readiness(readiness, component["label"])
     fingerprint["integrity_hash"] = _integrity_hash(fingerprint)
     if "integrity_hash" not in verification_summary:
         verification_summary["integrity_hash"] = _integrity_hash(verification_summary)
@@ -522,9 +545,11 @@ def _component_row(component: dict[str, str], evidence: dict[str, Any]) -> dict[
             "artifact_type": component["artifact"],
             "label": component["label"],
             "status": status,
+            "readiness": readiness,
             "message": message,
             "fingerprint": fingerprint,
             "verification_summary": verification_summary,
+            "runtime_summary": runtime_summary,
         }
     )
 
@@ -559,7 +584,7 @@ def _sync_report_document_hashes(docs: dict[str, Any]) -> None:
 
 
 def _readiness_row(row: dict[str, Any]) -> dict[str, Any]:
-    status = "ready" if row.get("status") == "ready" else "blocked" if row.get("required") else "not_required"
+    status = "ready" if row.get("status") == "ready" else str(row.get("readiness") or "blocked") if row.get("required") else "not_required"
     return {
         "component_key": row.get("component_key"),
         "artifact_type": row.get("artifact_type"),
@@ -568,20 +593,62 @@ def _readiness_row(row: dict[str, Any]) -> dict[str, Any]:
         "readiness": status,
         "message": row.get("message"),
         "verification_status": (row.get("fingerprint") or {}).get("verification_status"),
+        "runtime_verification_status": (row.get("fingerprint") or {}).get("runtime_verification_status"),
+        "runtime_blockers": (row.get("fingerprint") or {}).get("runtime_blockers", []),
         "next_action": "none" if status == "ready" else f"refresh_or_verify_{row.get('component_key')}",
     }
 
 
 def _gap_row(row: dict[str, Any]) -> dict[str, Any]:
+    priority = {
+        "runtime_failed": 10,
+        "stale": 20,
+        "verification_failed": 30,
+        "missing": 40,
+        "manual_required": 50,
+        "blocked": 60,
+    }.get(str(row.get("readiness") or ""), 90)
     gap = {
         "gap_id": f"acc-gap-{row.get('component_key')}",
         "component_key": row.get("component_key"),
         "severity": "blocking",
+        "priority": priority,
+        "readiness": row.get("readiness"),
         "reason": row.get("message") or "Required evidence is not ready.",
-        "recommended_action": row.get("next_action") or f"refresh_or_verify_{row.get('component_key')}",
+        "recommended_action": _recommended_action_for_readiness(row),
     }
     gap["integrity_hash"] = _integrity_hash(gap)
     return gap
+
+
+def _message_for_readiness(readiness: str, label: str) -> str:
+    if readiness == "missing":
+        return f"{label} ZIP or verification report is missing."
+    if readiness == "stale":
+        return f"{label} verification report does not match current evidence."
+    if readiness == "verification_failed":
+        return f"{label} verification report is failed or invalid."
+    if readiness == "runtime_failed":
+        return f"{label} runtime verification failed."
+    if readiness == "manual_required":
+        return f"{label} requires manual follow-up."
+    return f"{label} is blocked."
+
+
+def _recommended_action_for_readiness(row: dict[str, Any]) -> str:
+    readiness = str(row.get("readiness") or "")
+    key = str(row.get("component_key") or "component")
+    if readiness == "runtime_failed":
+        return f"rerun_runtime_verifier_for_{key}"
+    if readiness == "stale":
+        return f"rebuild_and_reverify_{key}"
+    if readiness == "verification_failed":
+        return f"inspect_verification_report_for_{key}"
+    if readiness == "missing":
+        return f"generate_and_verify_{key}"
+    if readiness == "manual_required":
+        return f"complete_manual_action_for_{key}"
+    return row.get("next_action") or f"refresh_or_verify_{key}"
 
 
 def _build_runbook(release_id: str, source_hash: str, gaps: list[dict[str, Any]], created_at: str) -> dict[str, Any]:

@@ -15,6 +15,7 @@ from song_agent.release_audio_quality_observatory_verifier import verify_release
 from song_agent.release_audio_regression_response_verifier import verify_release_audio_regression_response_package
 from song_agent.release_audio_regression_verifier import verify_release_audio_regression_package
 from song_agent.release_audio_timeline_verifier import verify_release_audio_timeline_package
+from song_agent.redaction import sanitize_sensitive_text
 from song_agent.releases import stable_hash
 
 
@@ -186,6 +187,109 @@ def release_audio_command_center_verification_exit_code(report: dict[str, Any]) 
     return 0 if report.get("status") == "passed" else 1
 
 
+def verify_release_audio_command_center_component(
+    key: str,
+    zip_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    *,
+    certification_zip_path: Path | str | None = None,
+    certification_verification_report_path: Path | str | None = None,
+    timeline_zip_path: Path | str | None = None,
+    timeline_verification_report_path: Path | str | None = None,
+    regression_zip_path: Path | str | None = None,
+    regression_verification_report_path: Path | str | None = None,
+    baseline_registry_zip_path: Path | str | None = None,
+    baseline_registry_verification_report_path: Path | str | None = None,
+    regression_response_zip_path: Path | str | None = None,
+    regression_response_verification_report_path: Path | str | None = None,
+    observatory_zip_path: Path | str | None = None,
+    observatory_verification_report_path: Path | str | None = None,
+    action_queue_zip_path: Path | str | None = None,
+    action_queue_verification_report_path: Path | str | None = None,
+    action_queue_signoff_archive_path: Path | str | None = None,
+    action_queue_signoff_verification_report_path: Path | str | None = None,
+    evidence_root: Path | str | None = None,
+) -> dict[str, Any]:
+    if key not in COMPONENT_KEYS:
+        raise ValueError(f"Unknown Command Center component: {key}")
+    checks: list[dict[str, Any]] = []
+    fingerprint: dict[str, Any] = {
+        "component_key": key,
+        "zip_sha256": None,
+        "zip_size_bytes": None,
+        "manifest_hash": None,
+        "verification_report_hash": None,
+        "verification_status": None,
+        "runtime_verification_status": None,
+        "runtime_manifest_hash": None,
+        "runtime_failed_count": 0,
+        "runtime_blockers": [],
+    }
+    if not zip_path or not verification_report_path:
+        checks.append(_check(f"release_audio_command_center_{key}_external_required", False, f"{key} external ZIP and verification report are required."))
+        return _component_finish(key, fingerprint, checks)
+    zip_path = Path(zip_path)
+    report_path = Path(verification_report_path)
+    checks.append(_check(f"release_audio_command_center_{key}_zip_exists", zip_path.exists() and zip_path.is_file(), f"{key} ZIP exists."))
+    checks.append(_check(f"release_audio_command_center_{key}_verification_report_exists", report_path.exists() and report_path.is_file(), f"{key} verification report exists."))
+    if any(check["status"] == "failed" for check in checks):
+        return _component_finish(key, fingerprint, checks)
+
+    external_paths = _component_external_paths(
+        certification_zip_path=certification_zip_path,
+        certification_verification_report_path=certification_verification_report_path,
+        timeline_zip_path=timeline_zip_path,
+        timeline_verification_report_path=timeline_verification_report_path,
+        regression_zip_path=regression_zip_path,
+        regression_verification_report_path=regression_verification_report_path,
+        baseline_registry_zip_path=baseline_registry_zip_path,
+        baseline_registry_verification_report_path=baseline_registry_verification_report_path,
+        regression_response_zip_path=regression_response_zip_path,
+        regression_response_verification_report_path=regression_response_verification_report_path,
+        observatory_zip_path=observatory_zip_path,
+        observatory_verification_report_path=observatory_verification_report_path,
+        action_queue_zip_path=action_queue_zip_path,
+        action_queue_verification_report_path=action_queue_verification_report_path,
+        action_queue_signoff_archive_path=action_queue_signoff_archive_path,
+        action_queue_signoff_verification_report_path=action_queue_signoff_verification_report_path,
+    )
+    external_paths[key] = (zip_path, report_path)
+    try:
+        external_report = read_json(report_path)
+    except Exception as exc:
+        checks.append(_check(f"release_audio_command_center_{key}_verification_report_readable", False, f"{key} verification report is readable.", {"error": str(exc)}))
+        return _component_finish(key, fingerprint, checks)
+    try:
+        runtime = _runtime_verify(key, zip_path, external_paths=external_paths, evidence_root=evidence_root)
+    except Exception as exc:
+        runtime = {"status": "failed", "manifest_hash": None, "blockers": [sanitize_sensitive_text(str(exc))]}
+
+    runtime_blockers = [str(item) for item in runtime.get("blockers", []) if str(item)]
+    fingerprint.update(
+        {
+            "zip_sha256": _sha256_path(zip_path),
+            "zip_size_bytes": zip_path.stat().st_size if zip_path.exists() else None,
+            "manifest_hash": runtime.get("manifest_hash"),
+            "verification_report_hash": external_report.get("integrity_hash"),
+            "verification_status": external_report.get("status"),
+            "runtime_verification_status": runtime.get("status"),
+            "runtime_manifest_hash": runtime.get("manifest_hash"),
+            "runtime_failed_count": len(runtime_blockers),
+            "runtime_blockers": runtime_blockers,
+        }
+    )
+    checks.extend(
+        [
+            _check(f"release_audio_command_center_{key}_external_report_integrity", _integrity_ok(external_report), f"{key} external verification report integrity hash is valid."),
+            _check(f"release_audio_command_center_{key}_external_status", external_report.get("status") == "passed", f"{key} external verification report status is passed.", {"external_status": external_report.get("status")}),
+            _check(f"release_audio_command_center_{key}_external_zip_binding", external_report.get("zip_sha256") == fingerprint["zip_sha256"], f"{key} external verification report matches current ZIP sha256."),
+            _check(f"release_audio_command_center_{key}_external_manifest_binding", external_report.get("manifest_hash") == runtime.get("manifest_hash"), f"{key} external verification report matches current manifest hash."),
+            _check(f"release_audio_command_center_{key}_runtime_status", runtime.get("status") == "passed", f"{key} runtime verification is passed.", {"runtime_status": runtime.get("status"), "runtime_blockers": runtime_blockers}),
+        ]
+    )
+    return _component_finish(key, fingerprint, checks, runtime=runtime, external_report=external_report)
+
+
 def _external_component_checks(
     key: str,
     fingerprint: dict[str, Any],
@@ -197,33 +301,45 @@ def _external_component_checks(
     zip_value, report_value = external_paths[key]
     if not zip_value or not report_value:
         return [_check(f"release_audio_command_center_{key}_external_required", False, f"{key} external ZIP and verification report are required.")]
-    zip_path = Path(zip_value)
-    report_path = Path(report_value)
-    try:
-        external_report = read_json(report_path)
-        runtime = _runtime_verify(key, zip_path, external_paths=external_paths, evidence_root=evidence_root)
-    except Exception as exc:
-        return [_check(f"release_audio_command_center_{key}_external_readable", False, f"{key} external evidence could not be verified: {exc}")]
-    current_fingerprint = {
-        "component_key": key,
-        "zip_sha256": _sha256_path(zip_path),
-        "zip_size_bytes": zip_path.stat().st_size if zip_path.exists() else None,
-        "manifest_hash": runtime.get("manifest_hash"),
-        "verification_report_hash": external_report.get("integrity_hash"),
-        "verification_status": external_report.get("status"),
-    }
+    runtime_component = verify_release_audio_command_center_component(
+        key,
+        zip_value,
+        report_value,
+        certification_zip_path=external_paths["certification"][0],
+        certification_verification_report_path=external_paths["certification"][1],
+        timeline_zip_path=external_paths["timeline"][0],
+        timeline_verification_report_path=external_paths["timeline"][1],
+        regression_zip_path=external_paths["regression"][0],
+        regression_verification_report_path=external_paths["regression"][1],
+        baseline_registry_zip_path=external_paths["baseline_governance"][0],
+        baseline_registry_verification_report_path=external_paths["baseline_governance"][1],
+        regression_response_zip_path=external_paths["regression_response"][0],
+        regression_response_verification_report_path=external_paths["regression_response"][1],
+        observatory_zip_path=external_paths["observatory"][0],
+        observatory_verification_report_path=external_paths["observatory"][1],
+        action_queue_zip_path=external_paths["action_queue"][0],
+        action_queue_verification_report_path=external_paths["action_queue"][1],
+        action_queue_signoff_archive_path=external_paths["action_queue_signoff"][0],
+        action_queue_signoff_verification_report_path=external_paths["action_queue_signoff"][1],
+        evidence_root=evidence_root,
+    )
+    external_report = runtime_component.get("external_report") if isinstance(runtime_component.get("external_report"), dict) else {}
+    current_fingerprint = runtime_component.get("fingerprint") if isinstance(runtime_component.get("fingerprint"), dict) else {}
     public_summary = _public_verification_summary(key, external_report)
-    return [
-        _check(f"release_audio_command_center_{key}_external_report_integrity", _integrity_ok(external_report), f"{key} external verification report integrity hash is valid."),
-        _check(f"release_audio_command_center_{key}_external_status", external_report.get("status") == "passed" and runtime.get("status") == "passed", f"{key} external verification is passed.", {"external_status": external_report.get("status"), "runtime_status": runtime.get("status")}),
-        _check(f"release_audio_command_center_{key}_external_zip_binding", external_report.get("zip_sha256") == _sha256_path(zip_path) and external_report.get("manifest_hash") == runtime.get("manifest_hash"), f"{key} external verification report matches current ZIP."),
+    return list(runtime_component.get("checks") or []) + [
         _check(
             f"release_audio_command_center_{key}_fingerprint_binding",
-            fingerprint.get("zip_sha256") == current_fingerprint["zip_sha256"]
-            and int(fingerprint.get("zip_size_bytes") or -1) == int(current_fingerprint["zip_size_bytes"] or -2)
-            and fingerprint.get("manifest_hash") == current_fingerprint["manifest_hash"]
-            and fingerprint.get("verification_report_hash") == current_fingerprint["verification_report_hash"]
-            and fingerprint.get("verification_status") == current_fingerprint["verification_status"],
+            (
+                fingerprint.get("zip_sha256") == current_fingerprint.get("zip_sha256")
+                and int(fingerprint.get("zip_size_bytes") or -1) == int(current_fingerprint.get("zip_size_bytes") or -2)
+                and fingerprint.get("manifest_hash") == current_fingerprint.get("manifest_hash")
+                and fingerprint.get("verification_report_hash") == current_fingerprint.get("verification_report_hash")
+                and fingerprint.get("verification_status") == current_fingerprint.get("verification_status")
+                and fingerprint.get("runtime_verification_status") == current_fingerprint.get("runtime_verification_status")
+                and fingerprint.get("runtime_manifest_hash") == current_fingerprint.get("runtime_manifest_hash")
+                and int(fingerprint.get("runtime_failed_count") or 0) == int(current_fingerprint.get("runtime_failed_count") or 0)
+                and sorted(str(item) for item in fingerprint.get("runtime_blockers", []) if str(item)) == sorted(str(item) for item in current_fingerprint.get("runtime_blockers", []) if str(item))
+            ),
             f"{key} Command Center fingerprint matches external evidence.",
             {"expected": current_fingerprint},
         ),
@@ -260,6 +376,93 @@ def _runtime_verify(key: str, zip_path: Path, *, external_paths: dict[str, tuple
     if key == "action_queue_signoff":
         return verify_release_audio_quality_action_queue_signoff_archive_package(zip_path, strict=True, require_signed=True, require_current_queue=True, queue_zip_path=queue_zip, queue_verification_report_path=queue_report, observatory_zip_path=observatory_zip, observatory_verification_report_path=observatory_report, evidence_root=evidence_root, require_no_unresolved_manual=True)
     raise ValueError(f"Unknown Command Center component: {key}")
+
+
+def _component_external_paths(
+    *,
+    certification_zip_path: Path | str | None = None,
+    certification_verification_report_path: Path | str | None = None,
+    timeline_zip_path: Path | str | None = None,
+    timeline_verification_report_path: Path | str | None = None,
+    regression_zip_path: Path | str | None = None,
+    regression_verification_report_path: Path | str | None = None,
+    baseline_registry_zip_path: Path | str | None = None,
+    baseline_registry_verification_report_path: Path | str | None = None,
+    regression_response_zip_path: Path | str | None = None,
+    regression_response_verification_report_path: Path | str | None = None,
+    observatory_zip_path: Path | str | None = None,
+    observatory_verification_report_path: Path | str | None = None,
+    action_queue_zip_path: Path | str | None = None,
+    action_queue_verification_report_path: Path | str | None = None,
+    action_queue_signoff_archive_path: Path | str | None = None,
+    action_queue_signoff_verification_report_path: Path | str | None = None,
+) -> dict[str, tuple[Path | str | None, Path | str | None]]:
+    return {
+        "certification": (certification_zip_path, certification_verification_report_path),
+        "timeline": (timeline_zip_path, timeline_verification_report_path),
+        "regression": (regression_zip_path, regression_verification_report_path),
+        "baseline_governance": (baseline_registry_zip_path, baseline_registry_verification_report_path),
+        "regression_response": (regression_response_zip_path, regression_response_verification_report_path),
+        "observatory": (observatory_zip_path, observatory_verification_report_path),
+        "action_queue": (action_queue_zip_path, action_queue_verification_report_path),
+        "action_queue_signoff": (action_queue_signoff_archive_path, action_queue_signoff_verification_report_path),
+    }
+
+
+def _component_finish(
+    key: str,
+    fingerprint: dict[str, Any],
+    checks: list[dict[str, Any]],
+    *,
+    runtime: dict[str, Any] | None = None,
+    external_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
+    runtime = runtime if isinstance(runtime, dict) else {}
+    external_report = external_report if isinstance(external_report, dict) else {}
+    if "integrity_hash" not in fingerprint:
+        fingerprint["integrity_hash"] = _integrity_hash(fingerprint)
+    result = {
+        "component_key": key,
+        "status": "passed" if not blockers else "failed",
+        "readiness": "ready" if not blockers else _component_readiness_from_checks(checks),
+        "fingerprint": fingerprint,
+        "checks": checks,
+        "blockers": blockers,
+        "runtime_report": _public_runtime_report(runtime),
+        "external_report": external_report,
+    }
+    result["integrity_hash"] = _integrity_hash(result)
+    return result
+
+
+def _public_runtime_report(report: dict[str, Any]) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    public_summary = {key: value for key, value in summary.items() if key not in {"zip_path"}}
+    public = {
+        "package_type": report.get("package_type"),
+        "status": report.get("status"),
+        "zip_sha256": report.get("zip_sha256"),
+        "zip_size_bytes": report.get("zip_size_bytes"),
+        "manifest_hash": report.get("manifest_hash"),
+        "blockers": report.get("blockers", []),
+        "summary": public_summary,
+    }
+    public["integrity_hash"] = _integrity_hash(public)
+    return public
+
+
+def _component_readiness_from_checks(checks: list[dict[str, Any]]) -> str:
+    failed_ids = [str(check.get("check_id") or "") for check in checks if check.get("status") == "failed"]
+    if any(check_id.endswith("_external_required") or check_id.endswith("_zip_exists") or check_id.endswith("_verification_report_exists") for check_id in failed_ids):
+        return "missing"
+    if any(check_id.endswith("_external_report_integrity") or check_id.endswith("_external_status") for check_id in failed_ids):
+        return "verification_failed"
+    if any(check_id.endswith("_external_zip_binding") or check_id.endswith("_external_manifest_binding") for check_id in failed_ids):
+        return "stale"
+    if any(check_id.endswith("_runtime_status") for check_id in failed_ids):
+        return "runtime_failed"
+    return "blocked"
 
 
 def _document_binding_checks(

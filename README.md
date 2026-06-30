@@ -347,7 +347,10 @@ Command Center verification is not based on package self-consistency alone. When
 `--require-ready` is used, the verifier rechecks the external component ZIPs and
 verification reports for every ready component. Internal full-resign attempts,
 declared extra files, stale external evidence, and blocked runbook actions fail
-the gate.
+the gate. Refresh also records each component's runtime verification status and
+runtime blockers in the Evidence Inventory, so a stale or newly failing
+underlying package cannot appear ready just because an older verification report
+still exists.
 
 ## LTS Maintenance
 

@@ -17853,6 +17853,23 @@ def _v1015_release_audio_command_center_smoke(root: Path) -> tuple[bool, str]:
                 _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v1015_add_declared_command_center_extra)
                 declared_extra = verify_release_audio_command_center_package(declared_extra_zip, strict=True, require_ready=True, **evidence_to_verifier_kwargs(evidence))
 
+                tampered_queue_zip = base / "action-queue-runtime-tamper.zip"
+                shutil.copyfile(Path(queue_zip["zip_path"]), tampered_queue_zip)
+                with zipfile.ZipFile(tampered_queue_zip, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+                    archive.writestr("unexpected-runtime.txt", b"unexpected runtime evidence\n")
+                tampered_evidence = dict(evidence)
+                tampered_evidence["action_queue"] = dict(evidence["action_queue"])
+                tampered_evidence["action_queue"]["zip"] = tampered_queue_zip
+                runtime_failed_report = store.refresh(current["release_id"], tampered_evidence)
+                runtime_failed_component = next(
+                    (
+                        row
+                        for row in store.read_inventory(current["release_id"]).get("components", [])
+                        if isinstance(row, dict) and row.get("component_key") == "action_queue"
+                    ),
+                    {},
+                )
+
                 ok = (
                     command_report.get("status") == "passed"
                     and runbook.get("summary", {}).get("safe_action_count", 0) >= 1
@@ -17864,6 +17881,8 @@ def _v1015_release_audio_command_center_smoke(root: Path) -> tuple[bool, str]:
                     and ga_verification.get("status") != "failed"
                     and full_resign.get("status") == "failed"
                     and declared_extra.get("status") == "failed"
+                    and runtime_failed_report.get("status") == "failed"
+                    and runtime_failed_component.get("readiness") in {"stale", "runtime_failed"}
                 )
                 failed_ga_checks = ",".join(str(check.get("check_id")) for check in ga_verification.get("checks", []) if check.get("status") == "failed") or "-"
                 failed_command_checks = ",".join(str(item) for item in verification.get("blockers", [])[:8]) or "-"
@@ -17874,6 +17893,7 @@ def _v1015_release_audio_command_center_smoke(root: Path) -> tuple[bool, str]:
                     f"gate={release_gate.get('status')}, "
                     f"ga={_ga_check_status(ga_report, 'ga.release_audio_command_center')}/{ga_verification.get('status')} failed={failed_ga_checks}, "
                     f"full_resign={full_resign.get('status')}, declared_extra={declared_extra.get('status')}, "
+                    f"runtime_failed={runtime_failed_report.get('status')}/{runtime_failed_component.get('readiness')}, "
                     f"verify_failed={failed_command_checks}, external_failed={failed_external_checks}"
                 )
             finally:
