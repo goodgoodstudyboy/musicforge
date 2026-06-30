@@ -1,5 +1,18 @@
 # Changelog
 
+## v11.1.0 - 2026-07-01
+
+### Added
+- Unified Command Center Signoff, Change Request reset, immutable Archive ZIP, Final Handoff Pack, offline verifiers, CLI, API, Studio controls, Release signoff gate, and GA readiness gate.
+- UCC signoff history now uses a hash chain, so deleting `signoff.json` does not reopen a signed command center.
+- UCC Archive verification binds the signed report, readiness matrix, inventory, UCC ZIP hash, manifest hash, and UCC verification report.
+- Final Handoff verification binds the handoff package to the current UCC Signoff Archive and archive verification report.
+- release-check `v111.unified_command_center_signoff_archive_smoke` covers signed mutation blocking, signoff deletion guard, archive/handoff verification, fixed ZIP allow-list rejection, and duplicate archive rebuild blocking.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center.py tests\test_unified_command_center_signoff.py tests\test_cli_unified_command_center.py tests\test_server_unified_command_center.py tests\test_release_check.py::test_v111_unified_command_center_signoff_archive_smoke -q`
+- `python -m song_agent.cli release-check --profile v11 --skip-tests --json`
+
 ## v11.0.0 - 2026-06-30
 
 ### Added

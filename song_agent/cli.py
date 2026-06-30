@@ -137,6 +137,12 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-unified-command-center", action="store_true", help="Require Unified Command Center evidence.")
     parser.add_argument("--unified-command-center", type=Path, default=None, help="Unified Command Center ZIP.")
     parser.add_argument("--unified-command-center-verification-report", type=Path, default=None, help="Unified Command Center verification report.")
+    parser.add_argument("--require-unified-command-center-archive", action="store_true", help="Require Unified Command Center Signoff Archive evidence.")
+    parser.add_argument("--unified-command-center-archive", type=Path, default=None, help="Unified Command Center Signoff Archive ZIP.")
+    parser.add_argument("--unified-command-center-archive-verification-report", type=Path, default=None, help="Unified Command Center Signoff Archive verification report.")
+    parser.add_argument("--require-unified-command-center-handoff", action="store_true", help="Require Unified Command Center Final Handoff evidence.")
+    parser.add_argument("--unified-command-center-handoff", type=Path, default=None, help="Unified Command Center Final Handoff ZIP.")
+    parser.add_argument("--unified-command-center-handoff-verification-report", type=Path, default=None, help="Unified Command Center Final Handoff verification report.")
     _add_ga_unified_command_center_evidence_args(parser)
     parser.add_argument("--release-check-latest-report", type=Path, default=None, help="Path to an existing latest release-check JSON report.")
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="Path to an existing ga release-check JSON report.")
@@ -205,6 +211,12 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-unified-command-center", action="store_true", help="Require external Unified Command Center evidence.")
     parser.add_argument("--unified-command-center", type=Path, default=None, help="External Unified Command Center ZIP.")
     parser.add_argument("--unified-command-center-verification-report", type=Path, default=None, help="Unified Command Center verification report JSON.")
+    parser.add_argument("--require-unified-command-center-archive", action="store_true", help="Require external Unified Command Center Signoff Archive evidence.")
+    parser.add_argument("--unified-command-center-archive", type=Path, default=None, help="External Unified Command Center Signoff Archive ZIP.")
+    parser.add_argument("--unified-command-center-archive-verification-report", type=Path, default=None, help="Unified Command Center Signoff Archive verification report JSON.")
+    parser.add_argument("--require-unified-command-center-handoff", action="store_true", help="Require external Unified Command Center Final Handoff evidence.")
+    parser.add_argument("--unified-command-center-handoff", type=Path, default=None, help="External Unified Command Center Final Handoff ZIP.")
+    parser.add_argument("--unified-command-center-handoff-verification-report", type=Path, default=None, help="Unified Command Center Final Handoff verification report JSON.")
     _add_ga_unified_command_center_evidence_args(parser)
     return parser
 
@@ -1232,6 +1244,13 @@ def build_unified_command_center_parser() -> argparse.ArgumentParser:
         ("export", "Export Unified Command Center package files."),
         ("zip", "Build Unified Command Center ZIP."),
         ("verify", "Verify Unified Command Center ZIP."),
+        ("signoff", "Sign off a ready Unified Command Center."),
+        ("archive", "Export signed Unified Command Center archive files."),
+        ("archive-zip", "Build signed Unified Command Center archive ZIP."),
+        ("verify-archive", "Verify signed Unified Command Center archive ZIP."),
+        ("handoff", "Export Final Handoff Pack files."),
+        ("handoff-zip", "Build Final Handoff Pack ZIP."),
+        ("verify-handoff", "Verify Final Handoff Pack ZIP."),
     ):
         cmd = subparsers.add_parser(action, help=help_text)
         cmd.add_argument("center_id")
@@ -1242,6 +1261,33 @@ def build_unified_command_center_parser() -> argparse.ArgumentParser:
             cmd.add_argument("--strict", action="store_true")
             cmd.add_argument("--require-ready", action="store_true")
             cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "signoff":
+            cmd.add_argument("--signed-by", default="release-owner")
+            cmd.add_argument("--role", default="release_owner")
+            cmd.add_argument("--reason", default="Unified Command Center approved for handoff.")
+        if action == "verify-archive":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--no-require-current-ucc", dest="require_current_ucc", action="store_false", default=True)
+            cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "verify-handoff":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--no-require-archive", dest="require_archive", action="store_false", default=True)
+            cmd.add_argument("--report-out", type=Path, default=None)
+
+    cr_create = subparsers.add_parser("change-request-create", help="Create a Unified Command Center signoff reset Change Request.")
+    cr_create.add_argument("center_id")
+    cr_create.add_argument("--created-by", default="developer")
+    cr_create.add_argument("--reason", required=True)
+    cr_create.add_argument("--risk", default="medium")
+    cr_approve = subparsers.add_parser("change-request-approve", help="Approve a Unified Command Center signoff reset Change Request.")
+    cr_approve.add_argument("center_id")
+    cr_approve.add_argument("change_request_id")
+    cr_approve.add_argument("--approved-by", default="reviewer")
+    cr_approve.add_argument("--reason", default=None)
+    reset = subparsers.add_parser("signoff-reset", help="Reset Unified Command Center signoff with an approved Change Request.")
+    reset.add_argument("center_id")
+    reset.add_argument("change_request_id")
+    reset.add_argument("--reason", default=None)
     return parser
 
 
@@ -1265,6 +1311,31 @@ def build_verify_unified_command_center_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-zip-size-mb", type=int, default=128)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def build_verify_unified_command_center_archive_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Command Center Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-current-ucc", action="store_true")
+    parser.add_argument("--command-center-zip", type=Path, default=None)
+    parser.add_argument("--command-center-verification-report", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_command_center_handoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Final Handoff Pack ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-archive", action="store_true")
+    parser.add_argument("--archive-zip", type=Path, default=None)
+    parser.add_argument("--archive-verification-report", type=Path, default=None)
     return parser
 
 
@@ -4331,8 +4402,14 @@ def _unified_command_center_evidence_from_args(args: argparse.Namespace) -> dict
 def _run_unified_command_center_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.unified_command_center import UnifiedCommandCenterStore
     from song_agent.unified_command_center_verifier import write_unified_command_center_verification_report
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_handoff_verifier import write_unified_command_center_handoff_verification_report
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+    from song_agent.unified_command_center_archive_verifier import write_unified_command_center_archive_verification_report
 
     store = UnifiedCommandCenterStore()
+    signoff_store = UnifiedCommandCenterSignoffStore(store)
+    handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
     evidence = _unified_command_center_evidence_from_args(args)
     if args.action == "create":
         payload = {
@@ -4386,6 +4463,40 @@ def _run_unified_command_center_command(args: argparse.Namespace) -> dict[str, A
         if args.report_out is not None:
             write_unified_command_center_verification_report(report, args.report_out)
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "signoff":
+        signoff = signoff_store.signoff(args.center_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": True, "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}
+    if args.action == "archive":
+        manifest = signoff_store.export_archive(args.center_id)
+        return {"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"}
+    if args.action == "archive-zip":
+        result = signoff_store.build_archive_zip(args.center_id)
+        return {"ok": True, **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify-archive":
+        report = signoff_store.verify_archive(args.center_id, {"strict": args.strict, "require_current_ucc": args.require_current_ucc})
+        if args.report_out is not None:
+            write_unified_command_center_archive_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "handoff":
+        manifest = handoff_store.export_handoff(args.center_id)
+        return {"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"}
+    if args.action == "handoff-zip":
+        result = handoff_store.build_handoff_zip(args.center_id)
+        return {"ok": True, **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify-handoff":
+        report = handoff_store.verify_handoff(args.center_id, {"strict": args.strict, "require_archive": args.require_archive})
+        if args.report_out is not None:
+            write_unified_command_center_handoff_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "change-request-create":
+        cr = signoff_store.create_change_request(args.center_id, {"created_by": args.created_by, "reason": args.reason, "risk": args.risk})
+        return {"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}, "status": cr.get("status")}
+    if args.action == "change-request-approve":
+        cr = signoff_store.approve_change_request(args.center_id, args.change_request_id, {"approved_by": args.approved_by, "reason": args.reason})
+        return {"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}, "status": cr.get("status")}
+    if args.action == "signoff-reset":
+        result = signoff_store.reset_signoff(args.center_id, args.change_request_id, {"reason": args.reason})
+        return {"ok": True, **result, "summary": {"change_request_id": args.change_request_id}}
     raise ValueError("Unsupported unified-command-center command.")
 
 
@@ -4562,6 +4673,12 @@ def _main() -> None:
             require_unified_command_center=args.require_unified_command_center,
             unified_command_center_zip_path=args.unified_command_center,
             unified_command_center_verification_report_path=args.unified_command_center_verification_report,
+            require_unified_command_center_archive=args.require_unified_command_center_archive,
+            unified_command_center_archive_zip_path=args.unified_command_center_archive,
+            unified_command_center_archive_verification_report_path=args.unified_command_center_archive_verification_report,
+            require_unified_command_center_handoff=args.require_unified_command_center_handoff,
+            unified_command_center_handoff_zip_path=args.unified_command_center_handoff,
+            unified_command_center_handoff_verification_report_path=args.unified_command_center_handoff_verification_report,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -4650,6 +4767,12 @@ def _main() -> None:
             require_unified_command_center=args.require_unified_command_center,
             unified_command_center_path=args.unified_command_center,
             unified_command_center_verification_report_path=args.unified_command_center_verification_report,
+            require_unified_command_center_archive=args.require_unified_command_center_archive,
+            unified_command_center_archive_path=args.unified_command_center_archive,
+            unified_command_center_archive_verification_report_path=args.unified_command_center_archive_verification_report,
+            require_unified_command_center_handoff=args.require_unified_command_center_handoff,
+            unified_command_center_handoff_path=args.unified_command_center_handoff,
+            unified_command_center_handoff_verification_report_path=args.unified_command_center_handoff_verification_report,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -5027,6 +5150,59 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_command_center_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-archive-package":
+        from song_agent.unified_command_center_archive_verifier import (
+            unified_command_center_archive_verification_exit_code,
+            verify_unified_command_center_archive_package,
+            write_unified_command_center_archive_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_archive_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_command_center_archive_package(
+            args.zip_path,
+            strict=args.strict,
+            require_signed=args.require_signed,
+            require_current_ucc=args.require_current_ucc,
+            command_center_zip_path=args.command_center_zip,
+            command_center_verification_report_path=args.command_center_verification_report,
+        )
+        if args.report_out is not None:
+            write_unified_command_center_archive_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Command Center Archive verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_archive_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-handoff-package":
+        from song_agent.unified_command_center_handoff_verifier import (
+            unified_command_center_handoff_verification_exit_code,
+            verify_unified_command_center_handoff_package,
+            write_unified_command_center_handoff_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_handoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_command_center_handoff_package(
+            args.zip_path,
+            strict=args.strict,
+            require_archive=args.require_archive,
+            archive_zip_path=args.archive_zip,
+            archive_verification_report_path=args.archive_verification_report,
+        )
+        if args.report_out is not None:
+            write_unified_command_center_handoff_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Final Handoff Pack verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_handoff_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

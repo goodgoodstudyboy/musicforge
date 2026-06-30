@@ -121,6 +121,12 @@ def build_ga_readiness_report(
     require_unified_command_center: bool = False,
     unified_command_center_zip_path: Path | str | None = None,
     unified_command_center_verification_report_path: Path | str | None = None,
+    require_unified_command_center_archive: bool = False,
+    unified_command_center_archive_zip_path: Path | str | None = None,
+    unified_command_center_archive_verification_report_path: Path | str | None = None,
+    require_unified_command_center_handoff: bool = False,
+    unified_command_center_handoff_zip_path: Path | str | None = None,
+    unified_command_center_handoff_verification_report_path: Path | str | None = None,
     unified_release_zip_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -161,6 +167,8 @@ def build_ga_readiness_report(
         "require_release_audio_quality_action_queue_signoff": require_release_audio_quality_action_queue_signoff,
         "require_release_audio_command_center": require_release_audio_command_center,
         "require_unified_command_center": require_unified_command_center,
+        "require_unified_command_center_archive": require_unified_command_center_archive,
+        "require_unified_command_center_handoff": require_unified_command_center_handoff,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -485,6 +493,36 @@ def build_ga_readiness_report(
         "Unified Command Center is passed." if unified_summary.get("status") == "passed" else "Unified Command Center is missing or not passed.",
         unified_summary,
     )
+    unified_archive_summary = _unified_command_center_archive_summary(
+        required=require_unified_command_center_archive,
+        archive_zip_path=unified_command_center_archive_zip_path,
+        archive_verification_report_path=unified_command_center_archive_verification_report_path,
+        command_center_zip_path=unified_command_center_zip_path,
+        command_center_verification_report_path=unified_command_center_verification_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.unified_command_center_archive",
+        "passed" if unified_archive_summary.get("status") == "passed" else "failed" if require_unified_command_center_archive else "warning",
+        "blocking" if require_unified_command_center_archive else "warning",
+        "Unified Command Center Archive is passed." if unified_archive_summary.get("status") == "passed" else "Unified Command Center Archive is missing or not passed.",
+        unified_archive_summary,
+    )
+    unified_handoff_summary = _unified_command_center_handoff_summary(
+        required=require_unified_command_center_handoff,
+        handoff_zip_path=unified_command_center_handoff_zip_path,
+        handoff_verification_report_path=unified_command_center_handoff_verification_report_path,
+        archive_zip_path=unified_command_center_archive_zip_path,
+        archive_verification_report_path=unified_command_center_archive_verification_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.unified_command_center_handoff",
+        "passed" if unified_handoff_summary.get("status") == "passed" else "failed" if require_unified_command_center_handoff else "warning",
+        "blocking" if require_unified_command_center_handoff else "warning",
+        "Unified Command Center Handoff is passed." if unified_handoff_summary.get("status") == "passed" else "Unified Command Center Handoff is missing or not passed.",
+        unified_handoff_summary,
+    )
 
     latest_summary = _release_check_summary(
         root,
@@ -554,6 +592,8 @@ def build_ga_readiness_report(
             "release_audio_quality_action_queue_signoff_status": quality_action_queue_signoff_summary.get("status", "missing"),
             "release_audio_command_center_status": command_center_summary.get("status", "missing"),
             "unified_command_center_status": unified_summary.get("status", "missing"),
+            "unified_command_center_archive_status": unified_archive_summary.get("status", "missing"),
+            "unified_command_center_handoff_status": unified_handoff_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -1349,6 +1389,79 @@ def _unified_command_center_summary(
             "blockers": runtime_report.get("blockers", []),
             "summary": runtime_report.get("summary", {}),
         }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_command_center_archive_summary(
+    *,
+    required: bool,
+    archive_zip_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+    command_center_zip_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if archive_zip_path is None:
+        return {"status": "missing", "message": "Unified Command Center Archive package was not provided."}
+    if required and (command_center_zip_path is None or command_center_verification_report_path is None):
+        return {"status": "failed", "message": "Unified Command Center Archive requires current Unified Command Center ZIP and verification report."}
+    try:
+        from song_agent.unified_command_center_archive_verifier import verify_unified_command_center_archive_package
+
+        runtime_report = verify_unified_command_center_archive_package(
+            archive_zip_path,
+            strict=True,
+            require_signed=required,
+            require_current_ucc=bool(command_center_zip_path and command_center_verification_report_path),
+            command_center_zip_path=command_center_zip_path,
+            command_center_verification_report_path=command_center_verification_report_path,
+        )
+        external_report: dict[str, Any] = {}
+        if archive_verification_report_path is not None:
+            external_report = read_json(Path(archive_verification_report_path))
+        external_fp = _verification_fingerprint(external_report) if external_report else {}
+        runtime_fp = _verification_fingerprint(runtime_report)
+        external_integrity_ok = not external_report or external_report.get("integrity_hash") == stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        zip_binding_ok = not external_report or external_fp.get("zip_sha256") == runtime_fp.get("zip_sha256")
+        manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") and external_integrity_ok and zip_binding_ok and manifest_binding_ok else "failed"
+        return {"status": status, "zip_sha256": runtime_fp.get("zip_sha256"), "manifest_hash": runtime_fp.get("manifest_hash"), "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"), "runtime_verification_status": runtime_report.get("status"), "external_verification_status": external_report.get("status") if external_report else None, "external_integrity_ok": external_integrity_ok, "zip_binding_ok": zip_binding_ok, "manifest_binding_ok": manifest_binding_ok, "blockers": runtime_report.get("blockers", []), "summary": runtime_report.get("summary", {})}
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_command_center_handoff_summary(
+    *,
+    required: bool,
+    handoff_zip_path: Path | str | None,
+    handoff_verification_report_path: Path | str | None,
+    archive_zip_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if handoff_zip_path is None:
+        return {"status": "missing", "message": "Unified Command Center Handoff package was not provided."}
+    if required and (archive_zip_path is None or archive_verification_report_path is None):
+        return {"status": "failed", "message": "Unified Command Center Handoff requires current Archive ZIP and verification report."}
+    try:
+        from song_agent.unified_command_center_handoff_verifier import verify_unified_command_center_handoff_package
+
+        runtime_report = verify_unified_command_center_handoff_package(
+            handoff_zip_path,
+            strict=True,
+            require_archive=bool(archive_zip_path and archive_verification_report_path),
+            archive_zip_path=archive_zip_path,
+            archive_verification_report_path=archive_verification_report_path,
+        )
+        external_report: dict[str, Any] = {}
+        if handoff_verification_report_path is not None:
+            external_report = read_json(Path(handoff_verification_report_path))
+        external_fp = _verification_fingerprint(external_report) if external_report else {}
+        runtime_fp = _verification_fingerprint(runtime_report)
+        external_integrity_ok = not external_report or external_report.get("integrity_hash") == stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        zip_binding_ok = not external_report or external_fp.get("zip_sha256") == runtime_fp.get("zip_sha256")
+        manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") and external_integrity_ok and zip_binding_ok and manifest_binding_ok else "failed"
+        return {"status": status, "zip_sha256": runtime_fp.get("zip_sha256"), "manifest_hash": runtime_fp.get("manifest_hash"), "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"), "runtime_verification_status": runtime_report.get("status"), "external_verification_status": external_report.get("status") if external_report else None, "external_integrity_ok": external_integrity_ok, "zip_binding_ok": zip_binding_ok, "manifest_binding_ok": manifest_binding_ok, "blockers": runtime_report.get("blockers", []), "summary": runtime_report.get("summary", {})}
     except Exception as exc:
         return {"status": "failed" if required else "missing", "error": str(exc)}
 

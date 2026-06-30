@@ -18172,6 +18172,148 @@ def _v110_add_declared_unified_command_center_extra(entries: dict[str, bytes]) -
     return entries
 
 
+def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.unified_command_center import UnifiedCommandCenterStateError, UnifiedCommandCenterStore
+    from song_agent.unified_command_center_archive_verifier import verify_unified_command_center_archive_package
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_handoff_verifier import verify_unified_command_center_handoff_package
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v111-ucc-signoff-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
+                center = store.create(
+                    {
+                        "center_id": "ucc-signoff",
+                        "name": "Unified Command Center signoff smoke",
+                        "requirements": {
+                            "audio-command-center": False,
+                            "trust-operations-hub": False,
+                            "public-trust-center": False,
+                            "ga-readiness": False,
+                            "release-check": True,
+                        },
+                    }
+                )
+                evidence = {"release-check": {"report": passed_report}}
+                store.refresh(center["center_id"], evidence)
+                store.build_zip(center["center_id"], evidence)
+                center_verify = store.verify_zip(center["center_id"], evidence=evidence, strict=True, require_ready=True)
+                signoff_store = UnifiedCommandCenterSignoffStore(store)
+                handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+                signoff = signoff_store.signoff(center["center_id"], {"signed_by": "release lead", "reason": "v11.1 smoke"})
+                signed_refresh_blocked = False
+                try:
+                    store.refresh(center["center_id"], evidence)
+                except UnifiedCommandCenterStateError:
+                    signed_refresh_blocked = True
+                signoff_store.signoff_path(center["center_id"]).unlink()
+                delete_signoff_blocked = False
+                try:
+                    store.refresh(center["center_id"], evidence)
+                except UnifiedCommandCenterStateError:
+                    delete_signoff_blocked = True
+                # Restore the signoff file from the signed history source by resetting through the original signoff object.
+                from song_agent.projectio import write_json
+
+                write_json(signoff_store.signoff_path(center["center_id"]), signoff)
+                archive_zip = signoff_store.build_archive_zip(center["center_id"])
+                archive_verify = signoff_store.verify_archive(center["center_id"])
+                handoff_zip = handoff_store.build_handoff_zip(center["center_id"])
+                handoff_verify = handoff_store.verify_handoff(center["center_id"])
+                from song_agent.ga_readiness import build_ga_readiness_report
+                from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+
+                ga_report_path = base / "ga-readiness.json"
+                ga_report = build_ga_readiness_report(
+                    repo_root=base,
+                    allow_dirty=True,
+                    require_unified_command_center_archive=True,
+                    unified_command_center_archive_zip_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    require_unified_command_center_handoff=True,
+                    unified_command_center_handoff_zip_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    unified_command_center_zip_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    skip_tests=True,
+                )
+                write_json(ga_report_path, ga_report)
+                ga_verify = verify_ga_readiness_report(
+                    ga_report_path,
+                    require_unified_command_center_archive=True,
+                    unified_command_center_archive_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    require_unified_command_center_handoff=True,
+                    unified_command_center_handoff_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    unified_command_center_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                )
+                archive_extra_zip = base / "ucc-archive-extra.zip"
+                handoff_extra_zip = base / "ucc-handoff-extra.zip"
+                _v76_rewrite_zip(Path(archive_zip["zip_path"]), archive_extra_zip, _v110_add_declared_unified_command_center_extra)
+                _v76_rewrite_zip(Path(handoff_zip["zip_path"]), handoff_extra_zip, _v110_add_declared_unified_command_center_extra)
+                archive_extra = verify_unified_command_center_archive_package(
+                    archive_extra_zip,
+                    strict=True,
+                    require_signed=True,
+                    require_current_ucc=True,
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                )
+                handoff_extra = verify_unified_command_center_handoff_package(
+                    handoff_extra_zip,
+                    strict=True,
+                    require_archive=True,
+                    archive_zip_path=signoff_store.archive_zip_path(center["center_id"]),
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                )
+                duplicate_archive_blocked = False
+                try:
+                    signoff_store.build_archive_zip(center["center_id"])
+                except Exception:
+                    duplicate_archive_blocked = True
+                ok = (
+                    center_verify.get("status") == "passed"
+                    and signoff.get("status") == "signed"
+                    and signed_refresh_blocked
+                    and delete_signoff_blocked
+                    and archive_verify.get("status") == "passed"
+                    and handoff_verify.get("status") == "passed"
+                    and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_archive_verification_status") == "passed"
+                    and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_handoff_verification_status") == "passed"
+                    and _v38_check_status(archive_extra, "ucc_archive_allowed_entries") == "failed"
+                    and _v38_check_status(handoff_extra, "ucc_handoff_allowed_entries") == "failed"
+                    and duplicate_archive_blocked
+                )
+                return ok, (
+                    f"center={center_verify.get('status')}, signoff={signoff.get('status')}, "
+                    f"signed_refresh_blocked={signed_refresh_blocked}, delete_signoff_blocked={delete_signoff_blocked}, "
+                    f"archive={archive_verify.get('status')}, handoff={handoff_verify.get('status')}, "
+                    f"ga_archive={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_archive_verification_status')}, "
+                    f"ga_handoff={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_handoff_verification_status')}, "
+                    f"archive_extra={_v38_check_status(archive_extra, 'ucc_archive_allowed_entries')}, "
+                    f"handoff_extra={_v38_check_status(handoff_extra, 'ucc_handoff_allowed_entries')}, "
+                    f"duplicate_archive_blocked={duplicate_archive_blocked}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.1 Unified Command Center signoff archive smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
 def _v106_release_fixture(title: str, *, include_audio: bool = True):
     from dataclasses import dataclass
 

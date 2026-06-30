@@ -52,3 +52,48 @@ def test_unified_command_center_api_lifecycle(tmp_path, monkeypatch) -> None:
     assert verify_body["verification"]["status"] == "passed", verify_body["verification"].get("blockers")
     assert detail_status == 200
     assert detail_body["center"]["center_id"] == "ucc-api"
+
+
+def test_unified_command_center_api_signoff_archive_handoff(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    release_check = _release_check_report(tmp_path / "release-check.json")
+    server = start_test_server()
+    try:
+        create_status, create_body = request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers",
+            {
+                "center_id": "ucc-api-signoff",
+                "requirements": {
+                    "audio-command-center": False,
+                    "trust-operations-hub": False,
+                    "public-trust-center": False,
+                    "ga-readiness": False,
+                    "release-check": True,
+                },
+            },
+        )
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/zip", {"release_check_report": str(release_check)})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/verify", {"strict": True, "require_ready": True, "release_check_report": str(release_check)})
+        signoff_status, signoff_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/signoff", {"signed_by": "release lead", "reason": "ready"})
+        archive_zip_status, archive_zip_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/archive/zip", {})
+        archive_verify_status, archive_verify_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/archive/verify", {"strict": True})
+        handoff_zip_status, handoff_zip_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/handoff/zip", {})
+        handoff_verify_status, handoff_verify_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/handoff/verify", {"strict": True})
+        refresh_status, refresh_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-signoff/refresh", {"release_check_report": str(release_check)})
+    finally:
+        stop_test_server(server)
+
+    assert create_status == 201, create_body
+    assert signoff_status == 200, signoff_body
+    assert signoff_body["signoff"]["status"] == "signed"
+    assert archive_zip_status == 200, archive_zip_body
+    assert Path(archive_zip_body["zip_path"]).exists()
+    assert archive_verify_status == 200, archive_verify_body
+    assert archive_verify_body["verification"]["status"] == "passed"
+    assert handoff_zip_status == 200, handoff_zip_body
+    assert Path(handoff_zip_body["zip_path"]).exists()
+    assert handoff_verify_status == 200, handoff_verify_body
+    assert handoff_verify_body["verification"]["status"] == "passed"
+    assert refresh_status == 409, refresh_body

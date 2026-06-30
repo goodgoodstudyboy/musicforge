@@ -91,6 +91,7 @@ from song_agent.release_checks import (
     _v1014_release_audio_quality_action_queue_signoff_smoke,
     _v1015_release_audio_command_center_smoke,
     _v110_unified_command_center_smoke,
+    _v111_unified_command_center_signoff_archive_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1281,6 +1282,17 @@ def test_v110_unified_command_center_smoke(tmp_path: Path) -> None:
     assert "runtime_failed=blocked" in detail
     assert "stale=failed" in detail
     assert "declared_extra=failed" in detail
+
+
+def test_v111_unified_command_center_signoff_archive_smoke(tmp_path: Path) -> None:
+    ok, detail = _v111_unified_command_center_signoff_archive_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "signoff=signed" in detail
+    assert "archive=passed" in detail
+    assert "handoff=passed" in detail
+    assert "archive_extra=failed" in detail
+    assert "handoff_extra=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

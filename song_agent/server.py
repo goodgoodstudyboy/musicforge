@@ -597,6 +597,17 @@ from song_agent.unified_command_center import (
     UnifiedCommandCenterStateError,
     UnifiedCommandCenterStore,
 )
+from song_agent.unified_command_center_handoff import (
+    UnifiedCommandCenterHandoffError,
+    UnifiedCommandCenterHandoffStateError,
+    UnifiedCommandCenterHandoffStore,
+)
+from song_agent.unified_command_center_signoff import (
+    UnifiedCommandCenterSignoffError,
+    UnifiedCommandCenterSignoffNotFoundError,
+    UnifiedCommandCenterSignoffStateError,
+    UnifiedCommandCenterSignoffStore,
+)
 from song_agent.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.encoded_audio_acceptance import (
     EncodedAudioAcceptanceError,
@@ -3222,6 +3233,18 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def unified_command_center_store(self) -> UnifiedCommandCenterStore:
         store = self.server.unified_command_center_store  # type: ignore[attr-defined]
         store.release_store = self.release_store
+        return store
+
+    @property
+    def unified_command_center_signoff_store(self) -> UnifiedCommandCenterSignoffStore:
+        store = self.server.unified_command_center_signoff_store  # type: ignore[attr-defined]
+        store.center_store = self.unified_command_center_store
+        return store
+
+    @property
+    def unified_command_center_handoff_store(self) -> UnifiedCommandCenterHandoffStore:
+        store = self.server.unified_command_center_handoff_store  # type: ignore[attr-defined]
+        store.signoff_store = self.unified_command_center_signoff_store
         return store
 
     @property
@@ -11023,6 +11046,100 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 report = self.unified_command_center_store.verify_zip(center_id, evidence=self._unified_command_center_evidence_from_payload(payload), strict=bool(payload.get("strict", True)), require_ready=bool(payload.get("require_ready", False)))
                 self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
                 return
+            if tail == "/signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                signoff = self.unified_command_center_signoff_store.signoff(center_id, self._optional_json_body())
+                self._send_json({"ok": True, "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")})
+                return
+            if tail == "/archive":
+                if method == "GET":
+                    manifest = read_json(self.unified_command_center_signoff_store.archive_manifest_path(center_id)) if self.unified_command_center_signoff_store.archive_manifest_path(center_id).exists() else {}
+                    self._send_json({"ok": bool(manifest), "manifest": manifest, "summary": manifest.get("summary", {}) if manifest else {}})
+                    return
+                if method == "POST":
+                    manifest = self.unified_command_center_signoff_store.export_archive(center_id)
+                    self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/archive/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_command_center_signoff_store.build_archive_zip(center_id)
+                self._send_json({"ok": True, **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/archive/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.unified_command_center_signoff_store.verify_archive(center_id, payload)
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/archive/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.unified_command_center_signoff_store.archive_zip_path(center_id), "application/zip", filename="unified-command-center-archive.zip")
+                return
+            if tail == "/handoff":
+                if method == "GET":
+                    manifest = read_json(self.unified_command_center_handoff_store.manifest_path(center_id)) if self.unified_command_center_handoff_store.manifest_path(center_id).exists() else {}
+                    self._send_json({"ok": bool(manifest), "manifest": manifest, "summary": manifest.get("summary", {}) if manifest else {}})
+                    return
+                if method == "POST":
+                    manifest = self.unified_command_center_handoff_store.export_handoff(center_id)
+                    self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/handoff/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_command_center_handoff_store.build_handoff_zip(center_id)
+                self._send_json({"ok": True, **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/handoff/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                report = self.unified_command_center_handoff_store.verify_handoff(center_id, payload)
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/handoff/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.unified_command_center_handoff_store.zip_path(center_id), "application/zip", filename="musicforge-final-handoff-pack.zip")
+                return
+            if tail == "/change-requests":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                cr = self.unified_command_center_signoff_store.create_change_request(center_id, self._optional_json_body())
+                self._send_json({"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}, "status": cr.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail.startswith("/change-requests/") and tail.endswith("/approve"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                change_request_id = tail.split("/")[2]
+                cr = self.unified_command_center_signoff_store.approve_change_request(center_id, change_request_id, self._optional_json_body())
+                self._send_json({"ok": True, "change_request": cr, "summary": {"change_request_id": cr.get("change_request_id")}, "status": cr.get("status")})
+                return
+            if tail.startswith("/signoff/reset/"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                change_request_id = tail.split("/")[-1]
+                result = self.unified_command_center_signoff_store.reset_signoff(center_id, change_request_id, self._optional_json_body())
+                self._send_json({"ok": True, **result})
+                return
             if tail == "/download":
                 if method != "GET":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11032,9 +11149,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center route not found.")
         except UnifiedCommandCenterNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except (UnifiedCommandCenterSignoffNotFoundError,) as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterHandoffStateError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedCommandCenterError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except (UnifiedCommandCenterSignoffError, UnifiedCommandCenterHandoffError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _unified_command_center_evidence_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -11946,6 +12069,32 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_command_center_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_command_center_gate.get("message") or "Unified Command Center gate failed.")
+        require_unified_command_center_archive = bool(payload.get("require_unified_command_center_archive", False))
+        unified_command_center_archive_gate = self.unified_command_center_signoff_store.gate(
+            str(payload.get("unified_command_center_id") or payload.get("unified_command_center_center_id") or "ucc-000001"),
+            required=require_unified_command_center_archive,
+            archive_zip_path=payload.get("unified_command_center_archive") or payload.get("unified_command_center_archive_zip"),
+            archive_verification_report_path=payload.get("unified_command_center_archive_verification_report"),
+        )
+        if unified_command_center_archive_gate and require_unified_command_center_archive:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_command_center_archive"] = unified_command_center_archive_gate
+            if unified_command_center_archive_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_command_center_archive_gate.get("message") or "Unified Command Center Archive gate failed.")
+        require_unified_command_center_handoff = bool(payload.get("require_unified_command_center_handoff", False))
+        unified_command_center_handoff_gate = self.unified_command_center_handoff_store.gate(
+            str(payload.get("unified_command_center_id") or payload.get("unified_command_center_center_id") or "ucc-000001"),
+            required=require_unified_command_center_handoff,
+            handoff_zip_path=payload.get("unified_command_center_handoff") or payload.get("unified_command_center_handoff_zip"),
+            handoff_verification_report_path=payload.get("unified_command_center_handoff_verification_report"),
+        )
+        if unified_command_center_handoff_gate and require_unified_command_center_handoff:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_command_center_handoff"] = unified_command_center_handoff_gate
+            if unified_command_center_handoff_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_command_center_handoff_gate.get("message") or "Unified Command Center Handoff gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -19647,6 +19796,8 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.release_audio_quality_action_signoff_store = ReleaseAudioQualityActionQueueSignoffStore(queue_store=self.release_audio_quality_action_queue_store, release_store=self.release_store)
         self.release_audio_command_center_store = ReleaseAudioCommandCenterStore(release_store=self.release_store, observatory_store=self.release_audio_quality_observatory_store, action_queue_store=self.release_audio_quality_action_queue_store, action_signoff_store=self.release_audio_quality_action_signoff_store)
         self.unified_command_center_store = UnifiedCommandCenterStore(release_store=self.release_store)
+        self.unified_command_center_signoff_store = UnifiedCommandCenterSignoffStore(self.unified_command_center_store)
+        self.unified_command_center_handoff_store = UnifiedCommandCenterHandoffStore(self.unified_command_center_signoff_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

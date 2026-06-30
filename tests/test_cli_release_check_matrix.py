@@ -86,7 +86,7 @@ def test_release_check_cli_v11_profile_lists_unified_command_center() -> None:
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
     ids = [item["check_id"] for item in payload["checks"]]
-    assert ids == ["v110.unified_command_center_smoke"]
+    assert ids == ["v110.unified_command_center_smoke", "v111.unified_command_center_signoff_archive_smoke"]
 
 
 def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:

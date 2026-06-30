@@ -41,6 +41,7 @@ def test_release_check_profile_and_filters() -> None:
     v7 = select_check_definitions(profile="v7")
     v8 = select_check_definitions(profile="v8")
     v10 = select_check_definitions(profile="v10")
+    v11 = select_check_definitions(profile="v11")
     ga = select_check_definitions(profile="ga", run_tests=False)
     portal = select_check_definitions(profile="latest", groups=["portal"])
     since = select_check_definitions(profile="v7", since="7.2")
@@ -91,6 +92,10 @@ def test_release_check_profile_and_filters() -> None:
         "v1013.release_audio_quality_action_queue_smoke",
         "v1014.release_audio_quality_action_queue_signoff_smoke",
         "v1015.release_audio_command_center_smoke",
+    ]
+    assert [definition.check_id for definition in v11] == [
+        "v110.unified_command_center_smoke",
+        "v111.unified_command_center_signoff_archive_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

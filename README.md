@@ -90,11 +90,21 @@ python -m song_agent.cli unified-command-center refresh ucc-000001 --release-che
 python -m song_agent.cli unified-command-center zip ucc-000001 --release-check-report release-check.json --json
 python -m song_agent.cli unified-command-center verify ucc-000001 --strict --require-ready --release-check-report release-check.json --json
 python -m song_agent.cli verify-unified-command-center-package .musicforge\unified-command-centers\ucc-000001\musicforge-unified-command-center.zip --strict --require-ready --release-check-report release-check.json --json
+python -m song_agent.cli unified-command-center signoff ucc-000001 --signed-by "Release Lead" --reason "Ready for handoff" --json
+python -m song_agent.cli unified-command-center archive-zip ucc-000001 --json
+python -m song_agent.cli unified-command-center verify-archive ucc-000001 --json
+python -m song_agent.cli unified-command-center handoff-zip ucc-000001 --json
+python -m song_agent.cli unified-command-center verify-handoff ucc-000001 --json
 ```
 
 The runbook only executes safe local refresh/export/ZIP/verify actions. It does
 not sign off releases, reset evidence, submit to platforms, approve external
 responses, or create synthetic manual reviews.
+
+After UCC signoff, refresh, run-safe, export, and ZIP are blocked until an
+approved UCC Change Request resets the signoff. The archive and handoff
+verifiers are intended for external review and bind back to the current UCC ZIP
+and verification report.
 
 ## Audio Lab
 

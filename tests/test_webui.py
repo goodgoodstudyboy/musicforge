@@ -904,6 +904,9 @@ def test_webui_contains_release_workspace_controls():
     assert 'id="unified-command-center-run-safe"' in html
     assert 'id="unified-command-center-zip"' in html
     assert 'id="unified-command-center-verify"' in html
+    assert 'id="unified-command-center-signoff"' in html
+    assert 'id="unified-command-center-archive"' in html
+    assert 'id="unified-command-center-handoff"' in html
     assert "/api/unified-command-centers" in html
     assert "/api/audio-lab/environment/detect" in html
     assert "/api/audio-lab/smoke-runs" in html

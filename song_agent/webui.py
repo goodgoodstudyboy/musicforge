@@ -922,6 +922,9 @@ def panel_html() -> str:
             <button class="secondary" id="unified-command-center-run-safe" type="button">Run Unified Safe</button>
             <button class="secondary" id="unified-command-center-zip" type="button">Unified ZIP</button>
             <button class="secondary" id="unified-command-center-verify" type="button">Verify Unified</button>
+            <button class="secondary" id="unified-command-center-signoff" type="button">Unified Signoff</button>
+            <button class="secondary" id="unified-command-center-archive" type="button">Unified Archive</button>
+            <button class="secondary" id="unified-command-center-handoff" type="button">Unified Handoff</button>
           </div>
           <span class="hidden" data-api="/api/unified-command-centers"></span>
           <pre id="audio-campaign-summary" class="json-preview"></pre>

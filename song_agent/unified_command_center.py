@@ -161,17 +161,20 @@ class UnifiedCommandCenterStore:
 
     def refresh(self, center_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
+            self.ensure_mutable(center_id)
             docs = self._build_documents(center_id, evidence or {})
             self._write_docs(center_id, docs)
             return docs["report"]
 
     def create_runbook(self, center_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
+            self.ensure_mutable(center_id)
             docs = self._ensure_docs(center_id, evidence or {})
             return docs["runbook"]
 
     def run_safe(self, center_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
+            self.ensure_mutable(center_id)
             docs = self._ensure_docs(center_id, evidence or {})
             current_source_hash = self._build_documents(center_id, evidence or {})["source"]["source_hash"]
             if current_source_hash != docs["source"].get("source_hash"):
@@ -209,10 +212,12 @@ class UnifiedCommandCenterStore:
 
     def export_package(self, center_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
+            self.ensure_mutable(center_id)
             docs = self._ensure_docs(center_id, evidence or {})
             current_source_hash = self._build_documents(center_id, evidence or {})["source"]["source_hash"]
             if current_source_hash != docs["source"].get("source_hash"):
                 raise UnifiedCommandCenterStateError("Unified Command Center source is stale. Refresh before export.")
+            self._write_docs(center_id, docs)
             _sync_report_hashes(docs)
             export_dir = self.export_dir(center_id)
             if export_dir.exists():
@@ -241,6 +246,7 @@ class UnifiedCommandCenterStore:
 
     def build_zip(self, center_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
+            self.ensure_mutable(center_id)
             exported = self.export_package(center_id, evidence or {})
             export_dir = Path(exported["export_dir"])
             zip_path = self.zip_path(center_id)
@@ -289,6 +295,51 @@ class UnifiedCommandCenterStore:
             return {"status": "passed", "hard_block": False, "message": "Unified Command Center gate passed.", "zip_sha256": runtime.get("zip_sha256"), "manifest_hash": runtime.get("manifest_hash"), "verification_hash": external_report.get("integrity_hash"), "summary": runtime.get("summary", {})}
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
+
+    def signoff_path(self, center_id: str) -> Path:
+        return self.center_dir(center_id) / "signoff.json"
+
+    def signoff_history_path(self, center_id: str) -> Path:
+        return self.center_dir(center_id) / "signoff-history.jsonl"
+
+    def latest_signoff_state(self, center_id: str) -> dict[str, Any]:
+        latest: dict[str, Any] | None = None
+        for event in self.read_signoff_history(center_id):
+            event_type = str(event.get("event_type") or "")
+            if event_type == "ucc_signoff_created":
+                latest = {"status": "signed", "signoff_hash": event.get("signoff_hash"), "event": event}
+            elif event_type == "ucc_signoff_reset":
+                latest = {"status": "reset", "previous_signoff_hash": event.get("previous_signoff_hash"), "event": event}
+        if latest:
+            return latest
+        if self.signoff_path(center_id).exists():
+            signoff = read_json(self.signoff_path(center_id))
+            if signoff.get("status") == "signed":
+                return {"status": "signed", "signoff_hash": signoff.get("integrity_hash"), "event": {}}
+        return {"status": "unsigned"}
+
+    def read_signoff_history(self, center_id: str) -> list[dict[str, Any]]:
+        path = self.signoff_history_path(center_id)
+        if not path.exists():
+            return []
+        rows: list[dict[str, Any]] = []
+        import json
+
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(item, dict):
+                rows.append(item)
+        return rows
+
+    def ensure_mutable(self, center_id: str) -> None:
+        state = self.latest_signoff_state(center_id)
+        if state.get("status") == "signed":
+            raise UnifiedCommandCenterStateError("Unified Command Center is signed. Reset signoff with an approved Change Request before modifying it.")
 
     def _next_center_id(self) -> str:
         self.root.mkdir(parents=True, exist_ok=True)

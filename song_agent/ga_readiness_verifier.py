@@ -118,6 +118,12 @@ def verify_ga_readiness_report(
     require_unified_command_center: bool = False,
     unified_command_center_path: Path | str | None = None,
     unified_command_center_verification_report_path: Path | str | None = None,
+    require_unified_command_center_archive: bool = False,
+    unified_command_center_archive_path: Path | str | None = None,
+    unified_command_center_archive_verification_report_path: Path | str | None = None,
+    require_unified_command_center_handoff: bool = False,
+    unified_command_center_handoff_path: Path | str | None = None,
+    unified_command_center_handoff_verification_report_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -341,6 +347,24 @@ def verify_ga_readiness_report(
                 unified_public_trust_center_verification_report_path,
                 unified_maintenance_backup_path,
                 unified_maintenance_backup_verification_report_path,
+            )
+        if require_unified_command_center_archive:
+            _verify_unified_command_center_archive_evidence(
+                checks,
+                checks_by_id.get("ga.unified_command_center_archive", {}),
+                unified_command_center_archive_path,
+                unified_command_center_archive_verification_report_path,
+                unified_command_center_path,
+                unified_command_center_verification_report_path,
+            )
+        if require_unified_command_center_handoff:
+            _verify_unified_command_center_handoff_evidence(
+                checks,
+                checks_by_id.get("ga.unified_command_center_handoff", {}),
+                unified_command_center_handoff_path,
+                unified_command_center_handoff_verification_report_path,
+                unified_command_center_archive_path,
+                unified_command_center_archive_verification_report_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -1376,6 +1400,119 @@ def _verify_unified_command_center_evidence(
     _add_check(checks, "ga_readiness_unified_command_center_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Unified Command Center verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
     _add_check(checks, "ga_readiness_unified_command_center_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Unified Command Center verification report matches ZIP and manifest.")
     _add_check(checks, "ga_readiness_unified_command_center_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness Unified Command Center check matches external verification.")
+
+
+def _verify_unified_command_center_archive_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    archive_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+    command_center_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+) -> None:
+    if not archive_path:
+        _add_check(checks, "ga_readiness_unified_command_center_archive_required", "failed", "blocking", "Unified Command Center Archive requirement needs an archive ZIP.")
+        return
+    if not archive_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_archive_verification_required", "failed", "blocking", "Unified Command Center Archive requirement needs a verification report.")
+        return
+    zip_path = Path(archive_path)
+    try:
+        from song_agent.unified_command_center_archive_verifier import (
+            UNIFIED_COMMAND_CENTER_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_command_center_archive_package,
+        )
+
+        verification_report = read_json(Path(archive_verification_report_path))
+        runtime_report = verify_unified_command_center_archive_package(
+            zip_path,
+            strict=True,
+            require_signed=True,
+            require_current_ucc=bool(command_center_path and command_center_verification_report_path),
+            command_center_zip_path=command_center_path,
+            command_center_verification_report_path=command_center_verification_report_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_command_center_archive_readable", "failed", "blocking", f"Unified Command Center Archive evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_command_center_archive",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_COMMAND_CENTER_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_command_center_handoff_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    handoff_path: Path | str | None,
+    handoff_verification_report_path: Path | str | None,
+    archive_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+) -> None:
+    if not handoff_path:
+        _add_check(checks, "ga_readiness_unified_command_center_handoff_required", "failed", "blocking", "Unified Command Center Handoff requirement needs a handoff ZIP.")
+        return
+    if not handoff_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_handoff_verification_required", "failed", "blocking", "Unified Command Center Handoff requirement needs a verification report.")
+        return
+    zip_path = Path(handoff_path)
+    try:
+        from song_agent.unified_command_center_handoff_verifier import (
+            UNIFIED_COMMAND_CENTER_HANDOFF_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_command_center_handoff_package,
+        )
+
+        verification_report = read_json(Path(handoff_verification_report_path))
+        runtime_report = verify_unified_command_center_handoff_package(
+            zip_path,
+            strict=True,
+            require_archive=bool(archive_path and archive_verification_report_path),
+            archive_zip_path=archive_path,
+            archive_verification_report_path=archive_verification_report_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_command_center_handoff_readable", "failed", "blocking", f"Unified Command Center Handoff evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_command_center_handoff",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_COMMAND_CENTER_HANDOFF_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_external_package_binding(
+    checks: list[dict[str, Any]],
+    prefix: str,
+    ga_check: dict[str, Any],
+    zip_path: Path,
+    verification_report: dict[str, Any],
+    runtime_report: dict[str, Any],
+    expected_package_type: str,
+) -> None:
+    integrity_ok = verification_report.get("integrity_hash") == release_stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
+    detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+    external_fp = _verification_fingerprint(verification_report)
+    runtime_fp = _verification_fingerprint(runtime_report)
+    binding_ok = (
+        ga_check.get("status") == "passed"
+        and detail.get("zip_sha256") == external_fp.get("zip_sha256")
+        and detail.get("manifest_hash") == external_fp.get("manifest_hash")
+        and detail.get("verification_hash") == verification_report.get("integrity_hash")
+    )
+    _add_check(checks, f"{prefix}_verification_package_type", "passed" if verification_report.get("package_type") == expected_package_type else "failed", "blocking", "Verification package type is valid.")
+    _add_check(checks, f"{prefix}_verification_integrity", "passed" if integrity_ok else "failed", "blocking", "Verification integrity hash matches.")
+    _add_check(checks, f"{prefix}_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
+    _add_check(checks, f"{prefix}_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Verification report matches ZIP and manifest.")
+    _add_check(checks, f"{prefix}_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness check matches external verification.")
 
 
 def _read_final_handoff_manifest(zip_path: Path) -> dict[str, Any]:
