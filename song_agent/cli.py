@@ -1324,6 +1324,7 @@ def build_verify_unified_command_center_archive_parser() -> argparse.ArgumentPar
     parser.add_argument("--require-current-ucc", action="store_true")
     parser.add_argument("--command-center-zip", type=Path, default=None)
     parser.add_argument("--command-center-verification-report", type=Path, default=None)
+    parser.add_argument("--signoff-binding", type=Path, default=None)
     return parser
 
 
@@ -5166,6 +5167,7 @@ def _main() -> None:
             require_current_ucc=args.require_current_ucc,
             command_center_zip_path=args.command_center_zip,
             command_center_verification_report_path=args.command_center_verification_report,
+            signoff_binding_path=args.signoff_binding,
         )
         if args.report_out is not None:
             write_unified_command_center_archive_verification_report(report, args.report_out)

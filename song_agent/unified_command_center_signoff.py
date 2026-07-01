@@ -48,6 +48,9 @@ class UnifiedCommandCenterSignoffStore:
     def history_path(self, center_id: str) -> Path:
         return self.center_store.signoff_history_path(center_id)
 
+    def signoff_binding_path(self, center_id: str) -> Path:
+        return self.center_store.center_dir(center_id) / "signoff-binding-summary.json"
+
     def change_request_dir(self, center_id: str) -> Path:
         return self.center_store.center_dir(center_id) / "change-requests"
 
@@ -106,7 +109,7 @@ class UnifiedCommandCenterSignoffStore:
             signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
             signoff["integrity_hash"] = _integrity_hash(signoff)
             write_json(self.signoff_path(center_id), signoff)
-            self._append_history(
+            signoff_event = self._append_history(
                 center_id,
                 {
                     "event_type": "ucc_signoff_created",
@@ -125,6 +128,7 @@ class UnifiedCommandCenterSignoffStore:
                     "ucc_manifest_hash": signoff.get("ucc_manifest_hash"),
                 },
             )
+            write_json(self.signoff_binding_path(center_id), self._signoff_binding_summary(center_id, signoff, signoff_event))
             center = self.center_store.read_center(center_id)
             center["status"] = "signed"
             center["signed_at"] = now
@@ -209,6 +213,7 @@ class UnifiedCommandCenterSignoffStore:
                 },
             )
             self.signoff_path(center_id).unlink(missing_ok=True)
+            self.signoff_binding_path(center_id).unlink(missing_ok=True)
             center = self.center_store.read_center(center_id)
             center["status"] = "draft"
             center.pop("signed_at", None)
@@ -247,6 +252,7 @@ class UnifiedCommandCenterSignoffStore:
             write_entry("evidence-inventory.json", source["inventory"])
             write_entry("verification-report.json", source["verification"])
             write_entry("signoff.json", source["signoff"])
+            write_entry("signoff-binding-summary.json", source["signoff_binding"])
             write_entry("signoff-history.jsonl", self.history_path(center_id).read_text(encoding="utf-8") if self.history_path(center_id).exists() else "")
             write_entry("change-requests.json", self._change_request_index(center_id))
             write_entry("README.txt", _archive_readme(source))
@@ -263,6 +269,7 @@ class UnifiedCommandCenterSignoffStore:
                         "inventory_hash": source["inventory"].get("integrity_hash"),
                         "verification_hash": source["verification"].get("integrity_hash"),
                         "signoff_hash": source["signoff"].get("integrity_hash"),
+                        "signoff_binding_hash": source["signoff_binding"].get("integrity_hash"),
                         "ucc_zip_sha256": source["ucc_zip_sha256"],
                         "ucc_manifest_hash": source["verification"].get("manifest_hash"),
                     },
@@ -322,6 +329,7 @@ class UnifiedCommandCenterSignoffStore:
             require_current_ucc=bool(payload.get("require_current_ucc", True)),
             command_center_zip_path=payload.get("command_center_zip") or payload.get("command_center_zip_path") or self.center_store.zip_path(center_id),
             command_center_verification_report_path=payload.get("command_center_verification_report") or payload.get("command_center_verification_report_path") or self.center_store.verification_report_path(center_id),
+            signoff_binding_path=payload.get("signoff_binding") or payload.get("signoff_binding_path") or self.signoff_binding_path(center_id),
         )
         write_unified_command_center_archive_verification_report(report, self.archive_verification_report_path(center_id))
         return report
@@ -337,7 +345,15 @@ class UnifiedCommandCenterSignoffStore:
             return _gate_failed("Unified Command Center Archive verification report is missing.")
         try:
             external = read_json(verification_path)
-            runtime = verify_unified_command_center_archive_package(archive_zip, strict=True, require_signed=True, require_current_ucc=True, command_center_zip_path=self.center_store.zip_path(center_id), command_center_verification_report_path=self.center_store.verification_report_path(center_id))
+            runtime = verify_unified_command_center_archive_package(
+                archive_zip,
+                strict=True,
+                require_signed=True,
+                require_current_ucc=True,
+                command_center_zip_path=self.center_store.zip_path(center_id),
+                command_center_verification_report_path=self.center_store.verification_report_path(center_id),
+                signoff_binding_path=self.signoff_binding_path(center_id),
+            )
             if external.get("integrity_hash") != _integrity_hash(external):
                 return _gate_failed("Unified Command Center Archive verification integrity failed.")
             if external.get("status") != "passed" or runtime.get("status") != "passed":
@@ -353,6 +369,9 @@ class UnifiedCommandCenterSignoffStore:
         signoff = read_json(self.signoff_path(center_id)) if self.signoff_path(center_id).exists() else {}
         if signoff.get("status") != "signed" and self.center_store.latest_signoff_state(center_id).get("status") == "signed":
             raise UnifiedCommandCenterSignoffStateError("Unified Command Center signoff file is missing but history shows a signed state.")
+        signoff_binding: dict[str, Any] = {}
+        if signoff.get("status") == "signed":
+            signoff_binding = self._read_signoff_binding(center_id, signoff)
         report = read_json(self.center_store.report_path(center_id))
         readiness = read_json(self.center_store.readiness_path(center_id))
         inventory = read_json(self.center_store.inventory_path(center_id))
@@ -370,6 +389,7 @@ class UnifiedCommandCenterSignoffStore:
         return {
             "center": center,
             "signoff": signoff,
+            "signoff_binding": signoff_binding,
             "report": report,
             "readiness": readiness,
             "inventory": inventory,
@@ -431,6 +451,49 @@ class UnifiedCommandCenterSignoffStore:
         doc = {"schema_version": UNIFIED_COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_change_request_index", "center_id": center_id, "items": rows}
         doc["integrity_hash"] = _integrity_hash(doc)
         return doc
+
+    def _read_signoff_binding(self, center_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+        path = self.signoff_binding_path(center_id)
+        if not path.exists():
+            raise UnifiedCommandCenterSignoffStateError("Unified Command Center signoff binding summary is missing.")
+        binding = read_json(path)
+        if not _integrity_ok(binding):
+            raise UnifiedCommandCenterSignoffStateError("Unified Command Center signoff binding integrity failed.")
+        if binding.get("signoff_hash") != signoff.get("integrity_hash"):
+            raise UnifiedCommandCenterSignoffStateError("Unified Command Center signoff binding does not match current signoff.")
+        return binding
+
+    def _signoff_binding_summary(self, center_id: str, signoff: dict[str, Any], signoff_event: dict[str, Any]) -> dict[str, Any]:
+        binding = sanitize_metadata(
+            {
+                "schema_version": UNIFIED_COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION,
+                "package_type": "musicforge_unified_command_center_signoff_binding",
+                "center_id": center_id,
+                "created_at": now_iso(),
+                "signed_by": signoff.get("signed_by"),
+                "role": signoff.get("role"),
+                "reason": signoff.get("reason"),
+                "signed_at": signoff.get("signed_at"),
+                "signoff_hash": signoff.get("integrity_hash"),
+                "signoff_payload_hash": signoff.get("payload_hash"),
+                "history_event_hash": signoff_event.get("event_hash"),
+                "history_event_payload_hash": signoff_event.get("payload_hash"),
+                "history_previous_event_hash": signoff_event.get("previous_event_hash") or "",
+                "source": {
+                    "source_hash": signoff.get("source_hash"),
+                    "center_hash": signoff.get("center_hash"),
+                    "report_hash": signoff.get("report_hash"),
+                    "readiness_hash": signoff.get("readiness_hash"),
+                    "inventory_hash": signoff.get("inventory_hash"),
+                    "verification_hash": signoff.get("verification_hash"),
+                    "ucc_zip_sha256": signoff.get("ucc_zip_sha256"),
+                    "ucc_zip_size_bytes": signoff.get("ucc_zip_size_bytes"),
+                    "ucc_manifest_hash": signoff.get("ucc_manifest_hash"),
+                },
+            }
+        )
+        binding["integrity_hash"] = _integrity_hash(binding)
+        return binding
 
 
 def _archive_readme(source: dict[str, Any]) -> str:

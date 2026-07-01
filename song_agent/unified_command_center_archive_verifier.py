@@ -28,6 +28,7 @@ REQUIRED_ENTRIES = {
     "evidence-inventory.json",
     "verification-report.json",
     "signoff.json",
+    "signoff-binding-summary.json",
     "signoff-history.jsonl",
     "change-requests.json",
 }
@@ -52,6 +53,7 @@ def verify_unified_command_center_archive_package(
     require_current_ucc: bool = False,
     command_center_zip_path: Path | str | None = None,
     command_center_verification_report_path: Path | str | None = None,
+    signoff_binding_path: Path | str | None = None,
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
@@ -89,6 +91,7 @@ def verify_unified_command_center_archive_package(
             inventory = _read_json_entry(archive, "evidence-inventory.json")
             verification = _read_json_entry(archive, "verification-report.json")
             signoff = _read_json_entry(archive, "signoff.json")
+            signoff_binding = _read_json_entry(archive, "signoff-binding-summary.json")
             change_requests = _read_json_entry(archive, "change-requests.json")
             history_text = archive.read("signoff-history.jsonl").decode("utf-8")
             history = _parse_jsonl(history_text)
@@ -104,10 +107,14 @@ def verify_unified_command_center_archive_package(
                 ("ucc_archive_inventory_integrity", inventory),
                 ("ucc_archive_verification_integrity", verification),
                 ("ucc_archive_signoff_integrity", signoff),
+                ("ucc_archive_signoff_binding_integrity", signoff_binding),
                 ("ucc_archive_change_requests_integrity", change_requests),
             ):
                 checks.append(_check(check_id, _integrity_ok(doc), f"{check_id} hash is valid."))
             checks.extend(_history_checks(history, signoff))
+            checks.extend(_signoff_binding_checks(signoff_binding, signoff, history, verification))
+            if signoff_binding_path:
+                checks.extend(_external_signoff_binding_checks(signoff_binding_path, signoff_binding))
             source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
             checks.extend(
                 [
@@ -117,6 +124,7 @@ def verify_unified_command_center_archive_package(
                     _check("ucc_archive_readiness_binding", source.get("readiness_hash") == readiness.get("integrity_hash") == signoff.get("readiness_hash"), "Archive binds readiness matrix hash."),
                     _check("ucc_archive_inventory_binding", source.get("inventory_hash") == inventory.get("integrity_hash") == signoff.get("inventory_hash"), "Archive binds inventory hash."),
                     _check("ucc_archive_verification_binding", source.get("verification_hash") == verification.get("integrity_hash") == signoff.get("verification_hash"), "Archive binds UCC verification report hash."),
+                    _check("ucc_archive_signoff_binding", source.get("signoff_binding_hash") == signoff_binding.get("integrity_hash"), "Archive binds signoff binding summary hash."),
                     _check("ucc_archive_ucc_zip_binding", source.get("ucc_zip_sha256") == signoff.get("ucc_zip_sha256") == verification.get("zip_sha256"), "Archive binds verified UCC ZIP sha256."),
                     _check("ucc_archive_ucc_manifest_binding", source.get("ucc_manifest_hash") == signoff.get("ucc_manifest_hash") == verification.get("manifest_hash"), "Archive binds verified UCC manifest hash."),
                     _check("ucc_archive_verification_package_type", verification.get("package_type") == UNIFIED_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE, "UCC verification package type is valid."),
@@ -198,6 +206,54 @@ def _history_checks(history: list[dict[str, Any]], signoff: dict[str, Any]) -> l
                 _check("ucc_archive_history_report_hash", created_event.get("report_hash") == signoff.get("report_hash"), "History report hash matches signoff."),
             ]
         )
+    return checks
+
+
+def _external_signoff_binding_checks(binding_path: Path | str, packaged_binding: dict[str, Any]) -> list[dict[str, Any]]:
+    path = Path(binding_path)
+    checks = [_check("ucc_archive_external_signoff_binding_exists", path.exists(), "External signoff binding summary exists.")]
+    if not path.exists():
+        return checks
+    external = _read_json_file(path)
+    checks.extend(
+        [
+            _check("ucc_archive_external_signoff_binding_integrity", _integrity_ok(external), "External signoff binding integrity is valid."),
+            _check("ucc_archive_external_signoff_binding_hash", external.get("integrity_hash") == packaged_binding.get("integrity_hash"), "Packaged signoff binding matches external signoff binding."),
+            _check("ucc_archive_external_signoff_binding_payload", stable_hash({key: value for key, value in external.items() if key != "integrity_hash"}) == packaged_binding.get("integrity_hash"), "External signoff binding payload matches packaged binding hash."),
+        ]
+    )
+    return checks
+
+
+def _signoff_binding_checks(binding: dict[str, Any], signoff: dict[str, Any], history: list[dict[str, Any]], verification: dict[str, Any]) -> list[dict[str, Any]]:
+    created_event = next((event for event in history if event.get("event_type") == "ucc_signoff_created"), None)
+    source = binding.get("source") if isinstance(binding.get("source"), dict) else {}
+    checks = [
+        _check("ucc_archive_signoff_binding_package_type", binding.get("package_type") == "musicforge_unified_command_center_signoff_binding", "Signoff binding package type is valid."),
+        _check("ucc_archive_signoff_binding_signoff_hash", binding.get("signoff_hash") == signoff.get("integrity_hash"), "Signoff binding matches signoff hash."),
+        _check("ucc_archive_signoff_binding_payload_hash", binding.get("signoff_payload_hash") == signoff.get("payload_hash"), "Signoff binding matches signoff payload hash."),
+        _check("ucc_archive_signoff_binding_signed_by", binding.get("signed_by") == signoff.get("signed_by"), "Signoff binding matches signed_by."),
+        _check("ucc_archive_signoff_binding_role", binding.get("role") == signoff.get("role"), "Signoff binding matches role."),
+        _check("ucc_archive_signoff_binding_reason", binding.get("reason") == signoff.get("reason"), "Signoff binding matches reason."),
+        _check("ucc_archive_signoff_binding_signed_at", binding.get("signed_at") == signoff.get("signed_at"), "Signoff binding matches signed_at."),
+        _check("ucc_archive_signoff_binding_source_hash", source.get("source_hash") == signoff.get("source_hash"), "Signoff binding matches source hash."),
+        _check("ucc_archive_signoff_binding_report_hash", source.get("report_hash") == signoff.get("report_hash"), "Signoff binding matches report hash."),
+        _check("ucc_archive_signoff_binding_readiness_hash", source.get("readiness_hash") == signoff.get("readiness_hash"), "Signoff binding matches readiness hash."),
+        _check("ucc_archive_signoff_binding_inventory_hash", source.get("inventory_hash") == signoff.get("inventory_hash"), "Signoff binding matches inventory hash."),
+        _check("ucc_archive_signoff_binding_verification_hash", source.get("verification_hash") == signoff.get("verification_hash") == verification.get("integrity_hash"), "Signoff binding matches verification hash."),
+        _check("ucc_archive_signoff_binding_ucc_zip_sha", source.get("ucc_zip_sha256") == signoff.get("ucc_zip_sha256") == verification.get("zip_sha256"), "Signoff binding matches UCC ZIP sha256."),
+        _check("ucc_archive_signoff_binding_ucc_manifest", source.get("ucc_manifest_hash") == signoff.get("ucc_manifest_hash") == verification.get("manifest_hash"), "Signoff binding matches UCC manifest hash."),
+    ]
+    if created_event:
+        checks.extend(
+            [
+                _check("ucc_archive_signoff_binding_history_event_hash", binding.get("history_event_hash") == created_event.get("event_hash"), "Signoff binding matches history signoff event hash."),
+                _check("ucc_archive_signoff_binding_history_payload_hash", binding.get("history_event_payload_hash") == created_event.get("payload_hash"), "Signoff binding matches history signoff event payload hash."),
+                _check("ucc_archive_signoff_binding_history_previous", str(binding.get("history_previous_event_hash") or "") == str(created_event.get("previous_event_hash") or ""), "Signoff binding matches history previous event hash."),
+            ]
+        )
+    else:
+        checks.append(_check("ucc_archive_signoff_binding_history_event_hash", False, "Signoff binding requires a history signoff event."))
     return checks
 
 

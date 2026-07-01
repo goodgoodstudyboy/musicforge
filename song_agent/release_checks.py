@@ -18263,8 +18263,18 @@ def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool
                 handoff_extra_zip = base / "ucc-handoff-extra.zip"
                 _v76_rewrite_zip(Path(archive_zip["zip_path"]), archive_extra_zip, _v110_add_declared_unified_command_center_extra)
                 _v76_rewrite_zip(Path(handoff_zip["zip_path"]), handoff_extra_zip, _v110_add_declared_unified_command_center_extra)
+                archive_full_resign_zip = base / "ucc-archive-full-resign-signer.zip"
+                _v76_rewrite_zip(Path(archive_zip["zip_path"]), archive_full_resign_zip, _v111_full_resign_archive_signer)
                 archive_extra = verify_unified_command_center_archive_package(
                     archive_extra_zip,
+                    strict=True,
+                    require_signed=True,
+                    require_current_ucc=True,
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                )
+                archive_full_resign = verify_unified_command_center_archive_package(
+                    archive_full_resign_zip,
                     strict=True,
                     require_signed=True,
                     require_current_ucc=True,
@@ -18293,6 +18303,7 @@ def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool
                     and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_archive_verification_status") == "passed"
                     and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_handoff_verification_status") == "passed"
                     and _v38_check_status(archive_extra, "ucc_archive_allowed_entries") == "failed"
+                    and _v38_check_status(archive_full_resign, "ucc_archive_signoff_binding_signed_by") == "failed"
                     and _v38_check_status(handoff_extra, "ucc_handoff_allowed_entries") == "failed"
                     and duplicate_archive_blocked
                 )
@@ -18303,6 +18314,7 @@ def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool
                     f"ga_archive={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_archive_verification_status')}, "
                     f"ga_handoff={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_handoff_verification_status')}, "
                     f"archive_extra={_v38_check_status(archive_extra, 'ucc_archive_allowed_entries')}, "
+                    f"full_resign_signed_by={_v38_check_status(archive_full_resign, 'ucc_archive_signoff_binding_signed_by')}, "
                     f"handoff_extra={_v38_check_status(handoff_extra, 'ucc_handoff_allowed_entries')}, "
                     f"duplicate_archive_blocked={duplicate_archive_blocked}"
                 )
@@ -18312,6 +18324,38 @@ def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool
         return False, f"v11.1 Unified Command Center signoff archive smoke failed: {exc}"
     finally:
         os.chdir(old_cwd)
+
+
+def _v111_full_resign_archive_signer(entries: dict[str, bytes]) -> dict[str, bytes]:
+    signoff = json.loads(entries["signoff.json"].decode("utf-8"))
+    signoff["signed_by"] = "forged signer"
+    signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
+    signoff["integrity_hash"] = stable_hash({key: value for key, value in signoff.items() if key != "integrity_hash"})
+    entries["signoff.json"] = json.dumps(signoff, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    rows = []
+    previous = ""
+    for line in entries["signoff-history.jsonl"].decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        event = json.loads(line)
+        if event.get("event_type") == "ucc_signoff_created":
+            event["signed_by"] = "forged signer"
+            event["signoff_hash"] = signoff["integrity_hash"]
+        event["previous_event_hash"] = previous
+        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
+        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        previous = event["event_hash"]
+        rows.append(event)
+    entries["signoff-history.jsonl"] = ("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n").encode("utf-8")
+
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["signoff_hash"] = signoff["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "signoff.json", entries["signoff.json"])
+    _v74_sync_manifest_file(manifest, "signoff-history.jsonl", entries["signoff-history.jsonl"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
 
 
 def _v106_release_fixture(title: str, *, include_audio: bool = True):

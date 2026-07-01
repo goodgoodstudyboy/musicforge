@@ -133,6 +133,7 @@ def test_unified_command_center_archive_and_handoff_reject_declared_extra(tmp_pa
         require_current_ucc=True,
         command_center_zip_path=store.zip_path(center_id),
         command_center_verification_report_path=store.verification_report_path(center_id),
+        signoff_binding_path=signoff_store.signoff_binding_path(center_id),
     )
     handoff_result = verify_unified_command_center_handoff_package(
         handoff_tampered,
@@ -146,6 +147,27 @@ def test_unified_command_center_archive_and_handoff_reject_declared_extra(tmp_pa
     assert "ucc_archive_allowed_entries" in archive_result["blockers"]
     assert handoff_result["status"] == "failed"
     assert "ucc_handoff_allowed_entries" in handoff_result["blockers"]
+
+
+def test_unified_command_center_archive_rejects_signoff_full_resign(tmp_path: Path) -> None:
+    store, center_id, _evidence = _ready_center(tmp_path)
+    signoff_store = UnifiedCommandCenterSignoffStore(store)
+    signoff_store.signoff(center_id, {"signed_by": "original signer"})
+    archive_zip = signoff_store.build_archive_zip(center_id)
+    tampered = tmp_path / "archive-forged-signer.zip"
+    _v76_rewrite_zip(Path(archive_zip["zip_path"]), tampered, _forge_archive_signer)
+
+    result = verify_unified_command_center_archive_package(
+        tampered,
+        strict=True,
+        require_signed=True,
+        require_current_ucc=True,
+        command_center_zip_path=store.zip_path(center_id),
+        command_center_verification_report_path=store.verification_report_path(center_id),
+    )
+
+    assert result["status"] == "failed"
+    assert "ucc_archive_signoff_binding_signed_by" in result["blockers"]
 
 
 def _add_archive_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
@@ -165,6 +187,45 @@ def _add_declared_extra(entries: dict[str, bytes], manifest_name: str, extra_nam
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     entries[manifest_name] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     return entries
+
+
+def _forge_archive_signer(entries: dict[str, bytes]) -> dict[str, bytes]:
+    signoff = json.loads(entries["signoff.json"].decode("utf-8"))
+    signoff["signed_by"] = "forged signer"
+    signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
+    signoff["integrity_hash"] = stable_hash({key: value for key, value in signoff.items() if key != "integrity_hash"})
+    entries["signoff.json"] = json.dumps(signoff, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    history_rows = []
+    previous = ""
+    for line in entries["signoff-history.jsonl"].decode("utf-8").splitlines():
+        event = json.loads(line)
+        if event.get("event_type") == "ucc_signoff_created":
+            event["signed_by"] = "forged signer"
+            event["signoff_hash"] = signoff["integrity_hash"]
+        event["previous_event_hash"] = previous
+        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
+        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        previous = event["event_hash"]
+        history_rows.append(event)
+    entries["signoff-history.jsonl"] = ("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in history_rows) + "\n").encode("utf-8")
+
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["signoff_hash"] = signoff["integrity_hash"]
+    _sync_manifest_file(manifest, "signoff.json", entries["signoff.json"])
+    _sync_manifest_file(manifest, "signoff-history.jsonl", entries["signoff-history.jsonl"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _sync_manifest_file(manifest: dict, rel: str, data: bytes) -> None:
+    for row in manifest.get("files", []):
+        if isinstance(row, dict) and row.get("path") == rel:
+            row["size_bytes"] = len(data)
+            row["sha256"] = _sha256_bytes(data)
+            return
+    raise AssertionError(f"manifest row missing: {rel}")
 
 
 def _sha256_bytes(data: bytes) -> str:

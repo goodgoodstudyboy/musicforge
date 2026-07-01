@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.1.1 - 2026-07-01
+
+### Fixed
+- Unified Command Center Archive now includes a signoff binding summary generated at signoff time, not archive build time.
+- Archive verification now cross-checks the binding summary against `signoff.json`, `signoff-history.jsonl`, UCC ZIP hash, UCC manifest hash, and the UCC verification report.
+- Full-resign tampering of archive signer fields is rejected even when `signoff.json`, signoff history, and manifest hashes are recomputed together.
+- release-check `v111.unified_command_center_signoff_archive_smoke` now covers the signer full-resign attack.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_signoff.py tests\test_release_check.py::test_v111_unified_command_center_signoff_archive_smoke -q`
+- `python -m song_agent.cli release-check --profile v11 --skip-tests --json`
+
 ## v11.1.0 - 2026-07-01
 
 ### Added

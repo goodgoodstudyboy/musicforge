@@ -104,7 +104,10 @@ responses, or create synthetic manual reviews.
 After UCC signoff, refresh, run-safe, export, and ZIP are blocked until an
 approved UCC Change Request resets the signoff. The archive and handoff
 verifiers are intended for external review and bind back to the current UCC ZIP
-and verification report.
+and verification report. The archive also carries `signoff-binding-summary.json`,
+which freezes the original signer, reason, signoff hash, history event hash, UCC
+ZIP hash, and verification hash at signoff time so archive signer fields cannot
+be rewritten by recomputing package-internal hashes.
 
 ## Audio Lab
 
