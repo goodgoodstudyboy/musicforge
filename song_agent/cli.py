@@ -239,6 +239,13 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--require-unified-command-center-continuous-review", action="store_true", help="Require Unified Command Center Continuous Review evidence.")
     parser.add_argument("--unified-command-center-continuous-review", type=Path, default=None, help="Unified Command Center Continuous Review ZIP.")
     parser.add_argument("--unified-command-center-continuous-review-verification-report", type=Path, default=None, help="Unified Command Center Continuous Review verification report.")
+    parser.add_argument("--require-unified-command-center-drift-response", action="store_true", help="Require Unified Command Center Drift Response evidence.")
+    parser.add_argument("--unified-command-center-drift-response", type=Path, default=None, help="Unified Command Center Drift Response ZIP.")
+    parser.add_argument("--unified-command-center-drift-response-verification-report", type=Path, default=None, help="Unified Command Center Drift Response verification report.")
+    parser.add_argument("--unified-command-center-drift-source-review", type=Path, default=None, help="Source failed Continuous Review ZIP for Drift Response.")
+    parser.add_argument("--unified-command-center-drift-source-review-verification-report", type=Path, default=None, help="Source failed Continuous Review verification report for Drift Response.")
+    parser.add_argument("--unified-command-center-drift-recheck-review", type=Path, default=None, help="Clear recheck Continuous Review ZIP for Drift Response.")
+    parser.add_argument("--unified-command-center-drift-recheck-review-verification-report", type=Path, default=None, help="Clear recheck Continuous Review verification report for Drift Response.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -1391,6 +1398,67 @@ def build_verify_unified_command_center_continuous_review_parser() -> argparse.A
     parser.add_argument("--require-recovery-drill", action="store_true")
     parser.add_argument("--require-current-review", action="store_true")
     _add_unified_command_center_review_evidence_args(parser)
+    return parser
+
+
+def _add_unified_command_center_drift_response_evidence_args(parser: argparse.ArgumentParser) -> None:
+    _add_unified_command_center_review_evidence_args(parser)
+    parser.add_argument("--source-review", dest="source_review_zip", type=Path, default=None, help="Source failed Continuous Review ZIP.")
+    parser.add_argument("--source-review-verification-report", type=Path, default=None, help="Source failed Continuous Review verification report.")
+    parser.add_argument("--recheck-review", dest="recheck_review_zip", type=Path, default=None, help="Clear recheck Continuous Review ZIP.")
+    parser.add_argument("--recheck-review-verification-report", type=Path, default=None, help="Clear recheck Continuous Review verification report.")
+
+
+def build_unified_command_center_drift_response_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Command Center Drift Response packages.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("create", help="Create a Drift Response from a failed Continuous Review.")
+    create.add_argument("center_id")
+    create.add_argument("source_review_id")
+    create.add_argument("--response-id", default=None)
+    create.add_argument("--created-by", default="release-owner")
+    subparsers.add_parser("list", help="List Drift Responses.").add_argument("center_id")
+    for action in ("status", "run-safe", "export", "zip", "verify", "closeout"):
+        cmd = subparsers.add_parser(action, help=f"{action} a Drift Response.")
+        cmd.add_argument("center_id")
+        cmd.add_argument("response_id")
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--no-require-closed", dest="require_closed", action="store_false", default=True)
+            cmd.add_argument("--no-require-recheck-clear", dest="require_recheck_clear", action="store_false", default=True)
+            cmd.add_argument("--no-require-current-review", dest="require_current_review", action="store_false", default=True)
+            cmd.add_argument("--report-out", type=Path, default=None)
+            _add_unified_command_center_drift_response_evidence_args(cmd)
+        if action == "closeout":
+            cmd.add_argument("--closed-by", default="release-owner")
+            cmd.add_argument("--reason", default="Drift response closed after clear recheck.")
+    bind_cr = subparsers.add_parser("bind-cr", help="Bind an approved Change Request to a manual response item.")
+    bind_cr.add_argument("center_id")
+    bind_cr.add_argument("response_id")
+    bind_cr.add_argument("item_id")
+    bind_cr.add_argument("--change-request-id", required=True)
+    bind_cr.add_argument("--approved-by", default="reviewer")
+    bind_cr.add_argument("--reason", default="Approved drift response manual action.")
+    bind_recheck = subparsers.add_parser("bind-recheck", help="Bind a clear Continuous Review recheck.")
+    bind_recheck.add_argument("center_id")
+    bind_recheck.add_argument("response_id")
+    bind_recheck.add_argument("recheck_review_id")
+    bind_recheck.add_argument("--recheck-review", dest="recheck_review_zip", type=Path, default=None)
+    bind_recheck.add_argument("--recheck-review-verification-report", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_command_center_drift_response_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Command Center Drift Response ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-closed", action="store_true")
+    parser.add_argument("--require-recheck-clear", action="store_true")
+    parser.add_argument("--require-current-review", action="store_true")
+    _add_unified_command_center_drift_response_evidence_args(parser)
     return parser
 
 
@@ -4621,6 +4689,93 @@ def _run_unified_command_center_review_command(args: argparse.Namespace) -> dict
     raise ValueError("Unsupported unified-command-center-review command.")
 
 
+def _unified_command_center_drift_response_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "response_id": getattr(args, "response_id", None),
+        "source_review_id": getattr(args, "source_review_id", None),
+        "created_by": getattr(args, "created_by", None),
+        "source_review_zip": getattr(args, "source_review_zip", None),
+        "source_review_verification_report": getattr(args, "source_review_verification_report", None),
+        "recheck_review_zip": getattr(args, "recheck_review_zip", None),
+        "recheck_review_verification_report": getattr(args, "recheck_review_verification_report", None),
+        "archive_zip": getattr(args, "archive_zip", None),
+        "archive_verification_report": getattr(args, "archive_verification_report", None),
+        "handoff_zip": getattr(args, "handoff_zip", None),
+        "handoff_verification_report": getattr(args, "handoff_verification_report", None),
+        "command_center_zip": getattr(args, "command_center_zip", None),
+        "command_center_verification_report": getattr(args, "command_center_verification_report", None),
+        "signoff_binding": getattr(args, "signoff_binding", None),
+    }
+
+
+def _run_unified_command_center_drift_response_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_drift_response import UnifiedCommandCenterDriftResponseStore
+    from song_agent.unified_command_center_drift_response_verifier import write_unified_command_center_drift_response_verification_report
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+
+    center_store = UnifiedCommandCenterStore()
+    signoff_store = UnifiedCommandCenterSignoffStore(center_store)
+    handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+    store = UnifiedCommandCenterDriftResponseStore(center_store, signoff_store=signoff_store, handoff_store=handoff_store)
+    payload = _unified_command_center_drift_response_payload_from_args(args)
+    if args.action == "create":
+        result = store.create_response(args.center_id, payload)
+        case = result.get("case", {})
+        return {"ok": True, **result, "summary": {"response_id": case.get("response_id")}, "status": case.get("status")}
+    if args.action == "list":
+        rows = store.list_responses(args.center_id)
+        return {"ok": True, "responses": rows, "summary": {"response_count": len(rows)}, "status": "passed"}
+    if args.action == "status":
+        docs = store.read_response(args.center_id, args.response_id)
+        closeout = docs.get("closeout") or {}
+        return {"ok": True, "response": docs, "summary": closeout.get("summary", {}), "status": closeout.get("status") or docs.get("case", {}).get("status")}
+    if args.action == "run-safe":
+        result = store.run_safe(args.center_id, args.response_id, payload)
+        failed = int((result.get("summary") or {}).get("failed_count") or 0)
+        return {"ok": failed == 0, "action_results": result, "summary": result.get("summary", {}), "status": "passed" if failed == 0 else "failed"}
+    if args.action == "bind-cr":
+        result = store.bind_change_request(
+            args.center_id,
+            args.response_id,
+            {"item_id": args.item_id, "change_request_id": args.change_request_id, "status": "approved", "approved_by": args.approved_by, "reason": args.reason},
+        )
+        return {"ok": True, "change_request_bindings": result, "summary": result.get("summary", {}), "status": "passed"}
+    if args.action == "bind-recheck":
+        result = store.bind_recheck(
+            args.center_id,
+            args.response_id,
+            {"recheck_review_id": args.recheck_review_id, "recheck_review_zip": args.recheck_review_zip, "recheck_review_verification_report": args.recheck_review_verification_report},
+        )
+        return {"ok": result.get("status") == "passed", "recheck": result, "summary": result.get("summary", {}), "status": result.get("status")}
+    if args.action == "closeout":
+        result = store.closeout(args.center_id, args.response_id, {"closed_by": args.closed_by, "reason": args.reason})
+        return {"ok": result.get("status") == "closed", "closeout": result, "summary": result.get("summary", {}), "status": result.get("status")}
+    if args.action == "export":
+        result = store.export_package(args.center_id, args.response_id, payload)
+        return {"ok": result.get("status") == "closed", **result, "summary": result.get("manifest", {}).get("summary", {})}
+    if args.action == "zip":
+        result = store.build_zip(args.center_id, args.response_id, payload)
+        return {"ok": result.get("status") == "closed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_package(
+            args.center_id,
+            args.response_id,
+            {
+                **payload,
+                "strict": args.strict,
+                "require_closed": args.require_closed,
+                "require_recheck_clear": args.require_recheck_clear,
+                "require_current_review": args.require_current_review,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_command_center_drift_response_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported unified-command-center-drift-response command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -4803,6 +4958,13 @@ def _main() -> None:
             require_unified_command_center_continuous_review=args.require_unified_command_center_continuous_review,
             unified_command_center_continuous_review_zip_path=args.unified_command_center_continuous_review,
             unified_command_center_continuous_review_verification_report_path=args.unified_command_center_continuous_review_verification_report,
+            require_unified_command_center_drift_response=args.require_unified_command_center_drift_response,
+            unified_command_center_drift_response_zip_path=args.unified_command_center_drift_response,
+            unified_command_center_drift_response_verification_report_path=args.unified_command_center_drift_response_verification_report,
+            unified_command_center_drift_source_review_zip_path=args.unified_command_center_drift_source_review,
+            unified_command_center_drift_source_review_verification_report_path=args.unified_command_center_drift_source_review_verification_report,
+            unified_command_center_drift_recheck_review_zip_path=args.unified_command_center_drift_recheck_review,
+            unified_command_center_drift_recheck_review_verification_report_path=args.unified_command_center_drift_recheck_review_verification_report,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -4900,6 +5062,13 @@ def _main() -> None:
             require_unified_command_center_continuous_review=args.require_unified_command_center_continuous_review,
             unified_command_center_continuous_review_path=args.unified_command_center_continuous_review,
             unified_command_center_continuous_review_verification_report_path=args.unified_command_center_continuous_review_verification_report,
+            require_unified_command_center_drift_response=args.require_unified_command_center_drift_response,
+            unified_command_center_drift_response_path=args.unified_command_center_drift_response,
+            unified_command_center_drift_response_verification_report_path=args.unified_command_center_drift_response_verification_report,
+            unified_command_center_drift_source_review_path=args.unified_command_center_drift_source_review,
+            unified_command_center_drift_source_review_verification_report_path=args.unified_command_center_drift_source_review_verification_report,
+            unified_command_center_drift_recheck_review_path=args.unified_command_center_drift_recheck_review,
+            unified_command_center_drift_recheck_review_verification_report_path=args.unified_command_center_drift_recheck_review_verification_report,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -5062,6 +5231,16 @@ def _main() -> None:
         parser = build_unified_command_center_review_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_command_center_review_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-command-center-drift-response":
+        parser = build_unified_command_center_drift_response_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_command_center_drift_response_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -5376,6 +5555,43 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_command_center_continuous_review_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-drift-response-package":
+        from song_agent.unified_command_center_drift_response_verifier import (
+            unified_command_center_drift_response_verification_exit_code,
+            verify_unified_command_center_drift_response_package,
+            write_unified_command_center_drift_response_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_drift_response_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_command_center_drift_response_package(
+            args.zip_path,
+            strict=args.strict,
+            require_closed=args.require_closed,
+            require_recheck_clear=args.require_recheck_clear,
+            require_current_review=args.require_current_review,
+            source_review_zip_path=args.source_review_zip,
+            source_review_verification_report_path=args.source_review_verification_report,
+            recheck_review_zip_path=args.recheck_review_zip,
+            recheck_review_verification_report_path=args.recheck_review_verification_report,
+            archive_zip_path=args.archive_zip,
+            archive_verification_report_path=args.archive_verification_report,
+            handoff_zip_path=args.handoff_zip,
+            handoff_verification_report_path=args.handoff_verification_report,
+            command_center_zip_path=args.command_center_zip,
+            command_center_verification_report_path=args.command_center_verification_report,
+            signoff_binding_path=args.signoff_binding,
+        )
+        if args.report_out is not None:
+            write_unified_command_center_drift_response_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Command Center Drift Response verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_drift_response_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

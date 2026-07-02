@@ -193,3 +193,97 @@ def test_unified_command_center_api_continuous_review_blocks_failed_release_chec
     assert review_run_body["ok"] is False
     assert review_run_body["status"] == "failed"
     assert review_run_body["drift_report"]["drifts"][0]["component_type"] == "release_check"
+
+
+def test_unified_command_center_api_drift_response_lifecycle(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    release_check = _release_check_report(tmp_path / "release-check.json")
+    failed_release_check = _release_check_report(tmp_path / "release-check-failed.json", ok=False)
+    server = start_test_server()
+    try:
+        request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers",
+            {
+                "center_id": "ucc-api-drift-response",
+                "requirements": {
+                    "audio-command-center": False,
+                    "trust-operations-hub": False,
+                    "public-trust-center": False,
+                    "ga-readiness": False,
+                    "release-check": True,
+                },
+            },
+        )
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/zip", {"release_check_report": str(release_check)})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/verify", {"strict": True, "require_ready": True, "release_check_report": str(release_check)})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/signoff", {"signed_by": "release lead", "reason": "ready"})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/archive/zip", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/archive/verify", {"strict": True})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/handoff/zip", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/handoff/verify", {"strict": True})
+        failed_create_status, failed_create_body = request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers/ucc-api-drift-response/continuous-reviews",
+            {"release_check_report": str(release_check)},
+        )
+        failed_review_id = failed_create_body["plan"]["review_id"]
+        failed_run_status, failed_run_body = request_json(
+            server,
+            "POST",
+            f"/api/unified-command-centers/ucc-api-drift-response/continuous-reviews/{failed_review_id}/run",
+            {"release_check_report": str(failed_release_check)},
+        )
+        request_json(
+            server,
+            "POST",
+            f"/api/unified-command-centers/ucc-api-drift-response/continuous-reviews/{failed_review_id}/zip",
+            {"release_check_report": str(failed_release_check)},
+        )
+        request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/continuous-reviews/{failed_review_id}/verify", {"strict": True})
+        response_create_status, response_create_body = request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers/ucc-api-drift-response/drift-responses",
+            {"source_review_id": failed_review_id, "created_by": "qa"},
+        )
+        response_id = response_create_body["case"]["response_id"]
+        run_status, run_body = request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/drift-responses/{response_id}/run-safe", {})
+        manual_ids = [row["item_id"] for row in response_create_body["queue"]["items"] if not row.get("safe")]
+        for index, item_id in enumerate(manual_ids, start=1):
+            cr_status, cr_body = request_json(
+                server,
+                "POST",
+                f"/api/unified-command-centers/ucc-api-drift-response/drift-responses/{response_id}/bind-cr",
+                {"item_id": item_id, "change_request_id": f"cr-{index:03d}", "status": "approved", "approved_by": "reviewer"},
+            )
+            assert cr_status == 200, cr_body
+        clear_create_status, clear_create_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-drift-response/continuous-reviews", {})
+        clear_review_id = clear_create_body["plan"]["review_id"]
+        clear_run_status, clear_run_body = request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/continuous-reviews/{clear_review_id}/run", {})
+        request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/continuous-reviews/{clear_review_id}/zip", {})
+        request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/continuous-reviews/{clear_review_id}/verify", {"strict": True})
+        bind_status, bind_body = request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/drift-responses/{response_id}/bind-recheck", {"recheck_review_id": clear_review_id})
+        close_status, close_body = request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/drift-responses/{response_id}/closeout", {"closed_by": "qa"})
+        zip_status, zip_body = request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/drift-responses/{response_id}/zip", {})
+        verify_status, verify_body = request_json(server, "POST", f"/api/unified-command-centers/ucc-api-drift-response/drift-responses/{response_id}/verify", {"strict": True})
+    finally:
+        stop_test_server(server)
+
+    assert failed_create_status == 201, failed_create_body
+    assert failed_run_status == 200, failed_run_body
+    assert failed_run_body["status"] == "failed"
+    assert response_create_status == 201, response_create_body
+    assert run_status == 200, run_body
+    assert clear_create_status == 201, clear_create_body
+    assert clear_run_status == 200, clear_run_body
+    assert clear_run_body["status"] == "passed"
+    assert bind_status == 200, bind_body
+    assert close_status == 200, close_body
+    assert close_body["status"] == "closed"
+    assert zip_status == 200, zip_body
+    assert Path(zip_body["zip_path"]).exists()
+    assert verify_status == 200, verify_body
+    assert verify_body["verification"]["status"] == "passed"

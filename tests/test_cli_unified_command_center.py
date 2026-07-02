@@ -195,6 +195,72 @@ def test_unified_command_center_review_cli_blocks_failed_release_check(tmp_path:
     assert payload["drift_report"]["drifts"][0]["component_type"] == "release_check"
 
 
+def test_unified_command_center_cli_drift_response_lifecycle(tmp_path: Path) -> None:
+    release_check = _release_check_report(tmp_path / "release-check.json")
+    failed_release_check = _release_check_report(tmp_path / "release-check-failed.json", ok=False)
+    _run_cli(
+        [
+            "unified-command-center",
+            "--json",
+            "create",
+            "--center-id",
+            "ucc-cli-drift-response",
+            "--no-require-audio-command-center",
+            "--no-require-trust-operations-hub",
+            "--no-require-public-trust-center",
+            "--no-require-ga-readiness",
+            "--require-release-check",
+        ],
+        tmp_path,
+    )
+    _run_cli(["unified-command-center", "--json", "zip", "ucc-cli-drift-response", "--release-check-report", str(release_check)], tmp_path)
+    _run_cli(["unified-command-center", "--json", "verify", "ucc-cli-drift-response", "--strict", "--require-ready", "--release-check-report", str(release_check)], tmp_path)
+    _run_cli(["unified-command-center", "--json", "signoff", "ucc-cli-drift-response", "--signed-by", "release lead", "--reason", "ready"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "archive-zip", "ucc-cli-drift-response"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "verify-archive", "ucc-cli-drift-response", "--strict"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "handoff-zip", "ucc-cli-drift-response"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "verify-handoff", "ucc-cli-drift-response", "--strict"], tmp_path)
+    failed_create = _run_cli(["unified-command-center-review", "--json", "create", "ucc-cli-drift-response", "--release-check-report", str(release_check)], tmp_path)
+    failed_review_id = json.loads(failed_create.stdout)["plan"]["review_id"]
+    failed_run = _run_cli(["unified-command-center-review", "--json", "run", "ucc-cli-drift-response", failed_review_id, "--release-check-report", str(failed_release_check)], tmp_path)
+    failed_zip = _run_cli(["unified-command-center-review", "--json", "zip", "ucc-cli-drift-response", failed_review_id, "--release-check-report", str(failed_release_check)], tmp_path)
+    failed_verify = _run_cli(["unified-command-center-review", "--json", "verify", "ucc-cli-drift-response", failed_review_id], tmp_path)
+    response_create = _run_cli(["unified-command-center-drift-response", "--json", "create", "ucc-cli-drift-response", failed_review_id], tmp_path)
+    response_id = json.loads(response_create.stdout)["case"]["response_id"]
+    run_safe = _run_cli(["unified-command-center-drift-response", "--json", "run-safe", "ucc-cli-drift-response", response_id], tmp_path)
+    status = _run_cli(["unified-command-center-drift-response", "--json", "status", "ucc-cli-drift-response", response_id], tmp_path)
+    manual_ids = [row["item_id"] for row in json.loads(status.stdout)["response"]["queue"]["items"] if not row.get("safe")]
+    for index, item_id in enumerate(manual_ids, start=1):
+        cr = _run_cli(["unified-command-center-drift-response", "--json", "bind-cr", "ucc-cli-drift-response", response_id, item_id, "--change-request-id", f"cr-{index:03d}"], tmp_path)
+        assert cr.returncode == 0, cr.stderr
+    clear_create = _run_cli(["unified-command-center-review", "--json", "create", "ucc-cli-drift-response"], tmp_path)
+    clear_review_id = json.loads(clear_create.stdout)["plan"]["review_id"]
+    clear_run = _run_cli(["unified-command-center-review", "--json", "run", "ucc-cli-drift-response", clear_review_id], tmp_path)
+    clear_zip = _run_cli(["unified-command-center-review", "--json", "zip", "ucc-cli-drift-response", clear_review_id], tmp_path)
+    clear_verify = _run_cli(["unified-command-center-review", "--json", "verify", "ucc-cli-drift-response", clear_review_id], tmp_path)
+    bind_recheck = _run_cli(["unified-command-center-drift-response", "--json", "bind-recheck", "ucc-cli-drift-response", response_id, clear_review_id], tmp_path)
+    closeout = _run_cli(["unified-command-center-drift-response", "--json", "closeout", "ucc-cli-drift-response", response_id], tmp_path)
+    zipped = _run_cli(["unified-command-center-drift-response", "--json", "zip", "ucc-cli-drift-response", response_id], tmp_path)
+    verify = _run_cli(["unified-command-center-drift-response", "--json", "verify", "ucc-cli-drift-response", response_id], tmp_path)
+
+    assert failed_run.returncode == 1
+    assert failed_zip.returncode == 1
+    assert Path(json.loads(failed_zip.stdout)["zip_path"]).exists()
+    assert failed_verify.returncode == 1
+    assert response_create.returncode == 0, response_create.stderr
+    assert run_safe.returncode == 0, run_safe.stderr
+    assert clear_run.returncode == 0, clear_run.stderr
+    assert clear_zip.returncode == 0, clear_zip.stderr
+    assert clear_verify.returncode == 0, clear_verify.stderr
+    assert bind_recheck.returncode == 0, bind_recheck.stderr
+    assert closeout.returncode == 0, closeout.stderr
+    assert json.loads(closeout.stdout)["status"] == "closed"
+    assert zipped.returncode == 0, zipped.stderr
+    assert Path(json.loads(zipped.stdout)["zip_path"]).exists()
+    assert verify.returncode == 0, verify.stderr
+    assert json.loads(verify.stdout)["status"] == "passed"
+
+
 def test_unified_command_center_cli_accepts_distribution_evidence_list(tmp_path: Path) -> None:
     import hashlib
 

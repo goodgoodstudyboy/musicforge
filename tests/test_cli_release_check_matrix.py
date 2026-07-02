@@ -90,6 +90,7 @@ def test_release_check_cli_v11_profile_lists_unified_command_center() -> None:
         "v110.unified_command_center_smoke",
         "v111.unified_command_center_signoff_archive_smoke",
         "v112.unified_command_center_continuous_review_smoke",
+        "v113.unified_command_center_drift_response_smoke",
     ]
 
 

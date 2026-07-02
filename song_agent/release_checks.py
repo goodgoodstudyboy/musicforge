@@ -18246,6 +18246,7 @@ def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool
                     unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
                     unified_command_center_zip_path=store.zip_path(center["center_id"]),
                     unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    unified_command_center_signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
                     skip_tests=True,
                 )
                 write_json(ga_report_path, ga_report)
@@ -18549,6 +18550,226 @@ def _v112_forge_review_clear(entries: dict[str, bytes]) -> dict[str, bytes]:
     _v74_sync_manifest_file(manifest, "drift-report.json", entries["drift-report.json"])
     _v74_sync_manifest_file(manifest, "incident-board.json", entries["incident-board.json"])
     _v74_sync_manifest_file(manifest, "recovery-drill-report.json", entries["recovery-drill-report.json"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.projectio import read_json, write_json
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_continuous_review import UnifiedCommandCenterContinuousReviewStore
+    from song_agent.unified_command_center_drift_response import UnifiedCommandCenterDriftResponseStateError, UnifiedCommandCenterDriftResponseStore
+    from song_agent.unified_command_center_drift_response_verifier import verify_unified_command_center_drift_response_package
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v113-ucc-drift-response-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
+                center = store.create(
+                    {
+                        "center_id": "ucc-drift-response",
+                        "name": "Unified Command Center drift response smoke",
+                        "requirements": {
+                            "audio-command-center": False,
+                            "trust-operations-hub": False,
+                            "public-trust-center": False,
+                            "ga-readiness": False,
+                            "release-check": True,
+                        },
+                    }
+                )
+                evidence = {"release-check": {"report": passed_report}}
+                store.refresh(center["center_id"], evidence)
+                store.build_zip(center["center_id"], evidence)
+                center_verify = store.verify_zip(center["center_id"], evidence=evidence, strict=True, require_ready=True)
+                signoff_store = UnifiedCommandCenterSignoffStore(store)
+                handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+                signoff_store.signoff(center["center_id"], {"signed_by": "release lead", "reason": "v11.3 smoke"})
+                archive_zip = signoff_store.build_archive_zip(center["center_id"])
+                archive_verify = signoff_store.verify_archive(center["center_id"])
+                handoff_zip = handoff_store.build_handoff_zip(center["center_id"])
+                handoff_verify = handoff_store.verify_handoff(center["center_id"])
+
+                review_store = UnifiedCommandCenterContinuousReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store)
+                response_store = UnifiedCommandCenterDriftResponseStore(store, signoff_store=signoff_store, handoff_store=handoff_store, review_store=review_store)
+                failed_plan = review_store.create_plan(
+                    center["center_id"],
+                    {"review_id": "uccrv-failed", "external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "passed"}]},
+                )
+                failed_review = review_store.run_review(
+                    center["center_id"],
+                    failed_plan["review_id"],
+                    {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "failed"}]},
+                )
+                failed_zip = review_store.build_zip(
+                    center["center_id"],
+                    failed_plan["review_id"],
+                    {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "failed"}]},
+                )
+                failed_verification = review_store.verify_package(center["center_id"], failed_plan["review_id"])
+                created = response_store.create_response(center["center_id"], {"source_review_id": failed_plan["review_id"], "created_by": "release-check"})
+                response_id = created["case"]["response_id"]
+                response_store.run_safe(center["center_id"], response_id)
+                close_without_cr_blocked = False
+                try:
+                    response_store.closeout(center["center_id"], response_id, {"closed_by": "release-check"})
+                except UnifiedCommandCenterDriftResponseStateError:
+                    close_without_cr_blocked = True
+                for index, item in enumerate([row for row in read_json(response_store.queue_path(center["center_id"], response_id))["items"] if not row.get("safe")], start=1):
+                    response_store.bind_change_request(center["center_id"], response_id, {"item_id": item["item_id"], "change_request_id": f"cr-{index:03d}", "status": "approved", "approved_by": "reviewer"})
+                clear_plan = review_store.create_plan(center["center_id"], {"review_id": "uccrv-clear"})
+                clear_review = review_store.run_review(center["center_id"], clear_plan["review_id"])
+                clear_zip = review_store.build_zip(center["center_id"], clear_plan["review_id"])
+                clear_verification = review_store.verify_package(center["center_id"], clear_plan["review_id"])
+                response_store.bind_recheck(center["center_id"], response_id, {"recheck_review_id": clear_plan["review_id"]})
+                closeout = response_store.closeout(center["center_id"], response_id, {"closed_by": "release-check", "reason": "clear recheck"})
+                response_zip = response_store.build_zip(center["center_id"], response_id)
+                response_verify = response_store.verify_package(center["center_id"], response_id)
+                response_gate = response_store.gate(center["center_id"], response_id=response_id)
+
+                ga_report_path = base / "ga-readiness.json"
+                ga_report = build_ga_readiness_report(
+                    repo_root=base,
+                    allow_dirty=True,
+                    require_unified_command_center_drift_response=True,
+                    unified_command_center_drift_response_zip_path=response_zip["zip_path"],
+                    unified_command_center_drift_response_verification_report_path=response_store.verification_report_path(center["center_id"], response_id),
+                    unified_command_center_drift_source_review_zip_path=failed_zip["zip_path"],
+                    unified_command_center_drift_source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
+                    unified_command_center_drift_recheck_review_zip_path=clear_zip["zip_path"],
+                    unified_command_center_drift_recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    unified_command_center_archive_zip_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    unified_command_center_handoff_zip_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    unified_command_center_zip_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    unified_command_center_signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    skip_tests=True,
+                )
+                write_json(ga_report_path, ga_report)
+                ga_verify = verify_ga_readiness_report(
+                    ga_report_path,
+                    require_unified_command_center_drift_response=True,
+                    unified_command_center_drift_response_path=response_zip["zip_path"],
+                    unified_command_center_drift_response_verification_report_path=response_store.verification_report_path(center["center_id"], response_id),
+                    unified_command_center_drift_source_review_path=failed_zip["zip_path"],
+                    unified_command_center_drift_source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
+                    unified_command_center_drift_recheck_review_path=clear_zip["zip_path"],
+                    unified_command_center_drift_recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    unified_command_center_archive_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    unified_command_center_handoff_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    unified_command_center_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    unified_command_center_signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                )
+
+                declared_extra_zip = base / "ucc-drift-response-extra.zip"
+                _v76_rewrite_zip(Path(response_zip["zip_path"]), declared_extra_zip, _v113_add_declared_drift_response_extra)
+                declared_extra = verify_unified_command_center_drift_response_package(declared_extra_zip, strict=True, require_closed=True)
+
+                forged_zip = base / "ucc-drift-response-forged.zip"
+                _v76_rewrite_zip(Path(response_zip["zip_path"]), forged_zip, _v113_forge_drift_response_clear_without_recheck)
+                full_resign = verify_unified_command_center_drift_response_package(
+                    forged_zip,
+                    strict=True,
+                    require_closed=True,
+                    require_recheck_clear=True,
+                    require_current_review=True,
+                    source_review_zip_path=failed_zip["zip_path"],
+                    source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
+                    recheck_review_zip_path=clear_zip["zip_path"],
+                    recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    archive_zip_path=archive_zip["zip_path"],
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                )
+
+                ok = (
+                    center_verify.get("status") == "passed"
+                    and archive_verify.get("status") == "passed"
+                    and handoff_verify.get("status") == "passed"
+                    and failed_review.get("status") == "failed"
+                    and failed_verification.get("status") == "failed"
+                    and clear_review.get("status") == "passed"
+                    and clear_verification.get("status") == "passed"
+                    and close_without_cr_blocked
+                    and closeout.get("status") == "closed"
+                    and response_verify.get("status") == "passed"
+                    and response_gate.get("status") == "passed"
+                    and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_drift_response_verification_status") == "passed"
+                    and _v38_check_status(declared_extra, "ucc_drift_response_allowed_entries") == "failed"
+                    and full_resign.get("status") == "failed"
+                )
+                return ok, (
+                    f"center={center_verify.get('status')}, archive={archive_verify.get('status')}, handoff={handoff_verify.get('status')}, "
+                    f"source={failed_review.get('status')}/{failed_verification.get('status')}, recheck={clear_review.get('status')}/{clear_verification.get('status')}, "
+                    f"close_without_cr={'409' if close_without_cr_blocked else 'allowed'}, response={closeout.get('status')}, "
+                    f"verify={response_verify.get('status')}, gate={response_gate.get('status')}, "
+                    f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_drift_response_verification_status')}/{ga_verify.get('status')}, "
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_drift_response_allowed_entries')}, full_resign={full_resign.get('status')}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.3 Unified Command Center drift response smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v113_add_declared_drift_response_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Drift Response extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"entry": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("entry") or row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v113_forge_drift_response_clear_without_recheck(entries: dict[str, bytes]) -> dict[str, bytes]:
+    recheck = json.loads(entries["recheck-summary.json"].decode("utf-8"))
+    recheck["status"] = "missing"
+    recheck["review"] = {}
+    recheck["summary"] = {"recheck_bound": False, "status": "missing"}
+    recheck["integrity_hash"] = stable_hash({key: value for key, value in recheck.items() if key != "integrity_hash"})
+    entries["recheck-summary.json"] = json.dumps(recheck, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    closeout = json.loads(entries["closeout-report.json"].decode("utf-8"))
+    closeout["status"] = "closed"
+    closeout["recheck_status"] = "passed"
+    closeout["blockers"] = []
+    closeout.setdefault("summary", {})["blocker_count"] = 0
+    closeout.setdefault("bindings", {})["recheck_summary_hash"] = recheck["integrity_hash"]
+    closeout["integrity_hash"] = stable_hash({key: value for key, value in closeout.items() if key != "integrity_hash"})
+    entries["closeout-report.json"] = json.dumps(closeout, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["recheck_summary_hash"] = recheck["integrity_hash"]
+    manifest.setdefault("source", {})["closeout_report_hash"] = closeout["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "recheck-summary.json", entries["recheck-summary.json"])
+    _v74_sync_manifest_file(manifest, "closeout-report.json", entries["closeout-report.json"])
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     return entries
@@ -20909,7 +21130,7 @@ def _v74_json_doc(payload: dict[str, Any]) -> bytes:
 
 def _v74_sync_manifest_file(manifest: dict[str, Any], path: str, data: bytes) -> None:
     for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
-        if isinstance(item, dict) and item.get("path") == path:
+        if isinstance(item, dict) and (item.get("path") == path or item.get("entry") == path):
             item["size_bytes"] = len(data)
             item["sha256"] = hashlib.sha256(data).hexdigest()
             return

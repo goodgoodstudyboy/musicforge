@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.3.0 - 2026-07-02
+
+### Added
+- Unified Command Center Drift Response cases that turn failed Continuous Review drift into a controlled response plan, safe action queue, approved Change Request bindings, clear recheck binding, and closeout report.
+- Fixed-layout Drift Response ZIP export and offline verifier with current source/recheck Continuous Review binding, UCC Archive/Handoff/UCC/signoff binding, event hash-chain checks, fixed entry allow-list, redaction scan, and full-resign regression coverage.
+- CLI and HTTP API endpoints for Drift Response create, run-safe, bind-cr, bind-recheck, closeout, export, zip, verify, and download.
+- Release signoff and GA readiness gates for `require_unified_command_center_drift_response`.
+- release-check `v113.unified_command_center_drift_response_smoke` covering blocked closeout without CR, clear recheck binding, GA gate binding, declared-extra rejection, and recheck full-resign rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_drift_response.py tests\test_cli_unified_command_center.py::test_unified_command_center_cli_drift_response_lifecycle tests\test_server_unified_command_center.py::test_unified_command_center_api_drift_response_lifecycle tests\test_release_check.py::test_v113_unified_command_center_drift_response_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v11.2.1 - 2026-07-02
 
 ### Fixed

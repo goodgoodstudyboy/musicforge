@@ -603,6 +603,12 @@ from song_agent.unified_command_center_continuous_review import (
     UnifiedCommandCenterContinuousReviewStateError,
     UnifiedCommandCenterContinuousReviewStore,
 )
+from song_agent.unified_command_center_drift_response import (
+    UnifiedCommandCenterDriftResponseError,
+    UnifiedCommandCenterDriftResponseNotFoundError,
+    UnifiedCommandCenterDriftResponseStateError,
+    UnifiedCommandCenterDriftResponseStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3259,6 +3265,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         store.center_store = self.unified_command_center_store
         store.signoff_store = self.unified_command_center_signoff_store
         store.handoff_store = self.unified_command_center_handoff_store
+        return store
+
+    @property
+    def unified_command_center_drift_response_store(self) -> UnifiedCommandCenterDriftResponseStore:
+        store = self.server.unified_command_center_drift_response_store  # type: ignore[attr-defined]
+        store.center_store = self.unified_command_center_store
+        store.signoff_store = self.unified_command_center_signoff_store
+        store.handoff_store = self.unified_command_center_handoff_store
+        store.review_store = self.unified_command_center_continuous_review_store
         return store
 
     @property
@@ -11065,6 +11080,87 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Continuous Review route not found.")
                 return
+            if tail == "/drift-responses":
+                if method == "GET":
+                    responses = self.unified_command_center_drift_response_store.list_responses(center_id)
+                    self._send_json({"ok": True, "responses": responses, "summary": {"response_count": len(responses)}})
+                    return
+                if method == "POST":
+                    result = self.unified_command_center_drift_response_store.create_response(center_id, self._optional_json_body())
+                    case = result.get("case", {})
+                    self._send_json({"ok": True, **result, "summary": {"response_id": case.get("response_id")}, "status": case.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail.startswith("/drift-responses/"):
+                response_tail = tail.removeprefix("/drift-responses/")
+                response_parts = response_tail.split("/")
+                response_id = response_parts[0]
+                response_action = "/" + "/".join(response_parts[1:]) if len(response_parts) > 1 else ""
+                if response_action in {"", "/"}:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    response = self.unified_command_center_drift_response_store.read_response(center_id, response_id)
+                    self._send_json({"ok": True, "response": response, "summary": (response.get("closeout") or {}).get("summary", {}), "status": (response.get("closeout") or response.get("case") or {}).get("status")})
+                    return
+                if response_action == "/run-safe":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_drift_response_store.run_safe(center_id, response_id, self._optional_json_body())
+                    self._send_json({"ok": int((result.get("summary") or {}).get("failed_count") or 0) == 0, "action_results": result, "summary": result.get("summary", {}), "status": "passed" if int((result.get("summary") or {}).get("failed_count") or 0) == 0 else "failed"})
+                    return
+                if response_action == "/bind-cr":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_drift_response_store.bind_change_request(center_id, response_id, self._optional_json_body())
+                    self._send_json({"ok": True, "change_request_bindings": result, "summary": result.get("summary", {}), "status": "passed"})
+                    return
+                if response_action == "/bind-recheck":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_drift_response_store.bind_recheck(center_id, response_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "passed", "recheck": result, "summary": result.get("summary", {}), "status": result.get("status")})
+                    return
+                if response_action == "/closeout":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_drift_response_store.closeout(center_id, response_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "closed", "closeout": result, "summary": result.get("summary", {}), "status": result.get("status")})
+                    return
+                if response_action == "/export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_drift_response_store.export_package(center_id, response_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "closed", **result})
+                    return
+                if response_action == "/zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_drift_response_store.build_zip(center_id, response_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "closed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                    return
+                if response_action == "/verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.unified_command_center_drift_response_store.verify_package(center_id, response_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if response_action == "/download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.unified_command_center_drift_response_store.zip_path(center_id, response_id), "application/zip", filename="musicforge-unified-command-center-drift-response.zip")
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Drift Response route not found.")
+                return
             if tail in {"", "/"}:
                 if method != "GET":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11227,13 +11323,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterContinuousReviewNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedCommandCenterDriftResponseNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except (UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterHandoffStateError, UnifiedCommandCenterContinuousReviewStateError) as exc:
+        except (UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterHandoffStateError, UnifiedCommandCenterContinuousReviewStateError, UnifiedCommandCenterDriftResponseStateError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedCommandCenterError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except (UnifiedCommandCenterSignoffError, UnifiedCommandCenterHandoffError, UnifiedCommandCenterContinuousReviewError) as exc:
+        except (UnifiedCommandCenterSignoffError, UnifiedCommandCenterHandoffError, UnifiedCommandCenterContinuousReviewError, UnifiedCommandCenterDriftResponseError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _unified_command_center_evidence_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -12192,6 +12290,31 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_command_center_continuous_review_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_command_center_continuous_review_gate.get("message") or "Unified Command Center Continuous Review gate failed.")
+        require_unified_command_center_drift_response = bool(payload.get("require_unified_command_center_drift_response", False))
+        unified_command_center_drift_response_gate = self.unified_command_center_drift_response_store.gate(
+            str(payload.get("unified_command_center_id") or payload.get("unified_command_center_center_id") or "ucc-000001"),
+            required=require_unified_command_center_drift_response,
+            response_id=payload.get("unified_command_center_drift_response_id"),
+            response_zip_path=payload.get("unified_command_center_drift_response") or payload.get("unified_command_center_drift_response_zip"),
+            response_verification_report_path=payload.get("unified_command_center_drift_response_verification_report"),
+            source_review_zip_path=payload.get("unified_command_center_drift_source_review") or payload.get("unified_command_center_drift_source_review_zip"),
+            source_review_verification_report_path=payload.get("unified_command_center_drift_source_review_verification_report"),
+            recheck_review_zip_path=payload.get("unified_command_center_drift_recheck_review") or payload.get("unified_command_center_drift_recheck_review_zip"),
+            recheck_review_verification_report_path=payload.get("unified_command_center_drift_recheck_review_verification_report"),
+            archive_zip_path=payload.get("unified_command_center_archive") or payload.get("unified_command_center_archive_zip"),
+            archive_verification_report_path=payload.get("unified_command_center_archive_verification_report"),
+            handoff_zip_path=payload.get("unified_command_center_handoff") or payload.get("unified_command_center_handoff_zip"),
+            handoff_verification_report_path=payload.get("unified_command_center_handoff_verification_report"),
+            command_center_zip_path=payload.get("unified_command_center_zip") or payload.get("unified_command_center"),
+            command_center_verification_report_path=payload.get("unified_command_center_verification_report"),
+            signoff_binding_path=payload.get("unified_command_center_signoff_binding"),
+        )
+        if unified_command_center_drift_response_gate and require_unified_command_center_drift_response:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_command_center_drift_response"] = unified_command_center_drift_response_gate
+            if unified_command_center_drift_response_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_command_center_drift_response_gate.get("message") or "Unified Command Center Drift Response gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -12349,6 +12472,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(unified_command_center_gate.get("message") or "Unified Command Center gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_command_center_continuous_review_gate.get("hard_block") and unified_command_center_continuous_review_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_command_center_continuous_review_gate.get("message") or "Unified Command Center Continuous Review gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_command_center_drift_response_gate.get("hard_block") and unified_command_center_drift_response_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_command_center_drift_response_gate.get("message") or "Unified Command Center Drift Response gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -19896,6 +20037,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_signoff_store = UnifiedCommandCenterSignoffStore(self.unified_command_center_store)
         self.unified_command_center_handoff_store = UnifiedCommandCenterHandoffStore(self.unified_command_center_signoff_store)
         self.unified_command_center_continuous_review_store = UnifiedCommandCenterContinuousReviewStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store)
+        self.unified_command_center_drift_response_store = UnifiedCommandCenterDriftResponseStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store, review_store=self.unified_command_center_continuous_review_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)
