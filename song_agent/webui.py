@@ -925,6 +925,8 @@ def panel_html() -> str:
             <button class="secondary" id="unified-command-center-signoff" type="button">Unified Signoff</button>
             <button class="secondary" id="unified-command-center-archive" type="button">Unified Archive</button>
             <button class="secondary" id="unified-command-center-handoff" type="button">Unified Handoff</button>
+            <button class="secondary" id="unified-command-center-continuous-review" type="button">Unified Review</button>
+            <button class="secondary" id="unified-command-center-continuous-review-verify" type="button">Verify Review</button>
           </div>
           <span class="hidden" data-api="/api/unified-command-centers"></span>
           <pre id="audio-campaign-summary" class="json-preview"></pre>

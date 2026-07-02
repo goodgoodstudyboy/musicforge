@@ -92,6 +92,7 @@ from song_agent.release_checks import (
     _v1015_release_audio_command_center_smoke,
     _v110_unified_command_center_smoke,
     _v111_unified_command_center_signoff_archive_smoke,
+    _v112_unified_command_center_continuous_review_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1293,6 +1294,20 @@ def test_v111_unified_command_center_signoff_archive_smoke(tmp_path: Path) -> No
     assert "handoff=passed" in detail
     assert "archive_extra=failed" in detail
     assert "handoff_extra=failed" in detail
+
+
+def test_v112_unified_command_center_continuous_review_smoke(tmp_path: Path) -> None:
+    ok, detail = _v112_unified_command_center_continuous_review_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "review=passed" in detail
+    assert "verify=passed" in detail
+    assert "gate=passed" in detail
+    assert "drift=failed" in detail
+    assert "stale_export=409" in detail
+    assert "declared_extra=failed" in detail
+    assert "full_resign=failed" in detail
+    assert "ga=passed/" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

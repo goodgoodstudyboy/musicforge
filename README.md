@@ -95,6 +95,10 @@ python -m song_agent.cli unified-command-center archive-zip ucc-000001 --json
 python -m song_agent.cli unified-command-center verify-archive ucc-000001 --json
 python -m song_agent.cli unified-command-center handoff-zip ucc-000001 --json
 python -m song_agent.cli unified-command-center verify-handoff ucc-000001 --json
+python -m song_agent.cli unified-command-center-review create ucc-000001 --created-by "QA" --json
+python -m song_agent.cli unified-command-center-review run ucc-000001 uccrv-000001 --json
+python -m song_agent.cli unified-command-center-review zip ucc-000001 uccrv-000001 --json
+python -m song_agent.cli unified-command-center-review verify ucc-000001 uccrv-000001 --json
 ```
 
 The runbook only executes safe local refresh/export/ZIP/verify actions. It does
@@ -108,6 +112,14 @@ and verification report. The archive also carries `signoff-binding-summary.json`
 which freezes the original signer, reason, signoff hash, history event hash, UCC
 ZIP hash, and verification hash at signoff time so archive signer fields cannot
 be rewritten by recomputing package-internal hashes.
+
+Unified Command Center Continuous Review watches signed UCC evidence after
+handoff. It re-verifies the current UCC Archive, Final Handoff Pack, UCC ZIP,
+and verification reports, emits drift and incident summaries, creates only draft
+change requests, and never resets or mutates the signed UCC. Its verifier must be
+run with current Archive/Handoff/UCC evidence to prevent package-internal
+full-resign attacks. GA readiness can require
+`require_unified_command_center_continuous_review=true`.
 
 ## Audio Lab
 

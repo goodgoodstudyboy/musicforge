@@ -1,5 +1,16 @@
 # Changelog
 
+## v11.2.0 - 2026-07-02
+
+### Added
+- Unified Command Center Continuous Review plans, drift reports, incident boards, recovery drill reports, draft change requests, fixed-layout ZIP export, offline verifier, CLI, API, Studio controls, Release signoff gate, and GA readiness gate.
+- Continuous Review binds signed UCC Archive, Final Handoff, UCC ZIP, signoff binding, and verification report fingerprints so signed handoff evidence can be rechecked after release without mutating the signed UCC.
+- release-check `v112.unified_command_center_continuous_review_smoke` covers passed review, GA gate binding, stale export blocking, declared-extra rejection, and full-resign clear-forgery rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_continuous_review.py tests\test_cli_unified_command_center.py tests\test_server_unified_command_center.py tests\test_release_check.py::test_v112_unified_command_center_continuous_review_smoke -q`
+- `python -m song_agent.cli release-check --profile v11 --skip-tests --json`
+
 ## v11.1.1 - 2026-07-01
 
 ### Fixed

@@ -18326,6 +18326,202 @@ def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool
         os.chdir(old_cwd)
 
 
+def _v112_unified_command_center_continuous_review_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.projectio import write_json
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_continuous_review import UnifiedCommandCenterContinuousReviewStateError, UnifiedCommandCenterContinuousReviewStore
+    from song_agent.unified_command_center_continuous_review_verifier import verify_unified_command_center_continuous_review_package
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v112-ucc-review-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
+                center = store.create(
+                    {
+                        "center_id": "ucc-review",
+                        "name": "Unified Command Center continuous review smoke",
+                        "requirements": {
+                            "audio-command-center": False,
+                            "trust-operations-hub": False,
+                            "public-trust-center": False,
+                            "ga-readiness": False,
+                            "release-check": True,
+                        },
+                    }
+                )
+                evidence = {"release-check": {"report": passed_report}}
+                store.refresh(center["center_id"], evidence)
+                store.build_zip(center["center_id"], evidence)
+                center_verify = store.verify_zip(center["center_id"], evidence=evidence, strict=True, require_ready=True)
+                signoff_store = UnifiedCommandCenterSignoffStore(store)
+                handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+                signoff_store.signoff(center["center_id"], {"signed_by": "release lead", "reason": "v11.2 smoke"})
+                archive_zip = signoff_store.build_archive_zip(center["center_id"])
+                archive_verify = signoff_store.verify_archive(center["center_id"])
+                handoff_zip = handoff_store.build_handoff_zip(center["center_id"])
+                handoff_verify = handoff_store.verify_handoff(center["center_id"])
+
+                review_store = UnifiedCommandCenterContinuousReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store)
+                plan = review_store.create_plan(center["center_id"], {"created_by": "release-check"})
+                review = review_store.run_review(center["center_id"], plan["review_id"])
+                review_zip = review_store.build_zip(center["center_id"], plan["review_id"])
+                review_verify = review_store.verify_package(center["center_id"], plan["review_id"])
+                review_gate = review_store.gate(center["center_id"], review_id=plan["review_id"])
+
+                ga_report_path = base / "ga-readiness.json"
+                ga_report = build_ga_readiness_report(
+                    repo_root=base,
+                    allow_dirty=True,
+                    require_unified_command_center_archive=True,
+                    unified_command_center_archive_zip_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    require_unified_command_center_handoff=True,
+                    unified_command_center_handoff_zip_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    require_unified_command_center_continuous_review=True,
+                    unified_command_center_continuous_review_zip_path=review_zip["zip_path"],
+                    unified_command_center_continuous_review_verification_report_path=review_store.verification_report_path(center["center_id"], plan["review_id"]),
+                    unified_command_center_zip_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    skip_tests=True,
+                )
+                write_json(ga_report_path, ga_report)
+                ga_verify = verify_ga_readiness_report(
+                    ga_report_path,
+                    require_unified_command_center_archive=True,
+                    unified_command_center_archive_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    require_unified_command_center_handoff=True,
+                    unified_command_center_handoff_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    require_unified_command_center_continuous_review=True,
+                    unified_command_center_continuous_review_path=review_zip["zip_path"],
+                    unified_command_center_continuous_review_verification_report_path=review_store.verification_report_path(center["center_id"], plan["review_id"]),
+                    unified_command_center_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                )
+
+                declared_extra_zip = base / "ucc-review-extra.zip"
+                _v76_rewrite_zip(Path(review_zip["zip_path"]), declared_extra_zip, _v110_add_declared_unified_command_center_extra)
+                declared_extra = verify_unified_command_center_continuous_review_package(
+                    declared_extra_zip,
+                    strict=True,
+                    require_clear=True,
+                    require_recovery_drill=True,
+                    require_current_review=True,
+                    archive_zip_path=archive_zip["zip_path"],
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                )
+
+                tampered_archive = base / "ucc-archive-extra.zip"
+                _v76_rewrite_zip(Path(archive_zip["zip_path"]), tampered_archive, _v110_add_declared_unified_command_center_extra)
+                drift_plan = review_store.create_plan(center["center_id"], {"review_id": "uccrv-drift"})
+                drift_review = review_store.run_review(center["center_id"], drift_plan["review_id"], {"archive_zip": tampered_archive})
+                stale_export_blocked = False
+                try:
+                    review_store.export_package(center["center_id"], drift_plan["review_id"])
+                except UnifiedCommandCenterContinuousReviewStateError:
+                    stale_export_blocked = True
+                drift_zip = review_store.build_zip(center["center_id"], drift_plan["review_id"], {"archive_zip": tampered_archive})
+                forged_review = base / "ucc-review-forged-clear.zip"
+                _v76_rewrite_zip(Path(drift_zip["zip_path"]), forged_review, _v112_forge_review_clear)
+                full_resign = verify_unified_command_center_continuous_review_package(
+                    forged_review,
+                    strict=True,
+                    require_clear=True,
+                    require_recovery_drill=True,
+                    require_current_review=True,
+                    archive_zip_path=tampered_archive,
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                )
+
+                ok = (
+                    center_verify.get("status") == "passed"
+                    and archive_verify.get("status") == "passed"
+                    and handoff_verify.get("status") == "passed"
+                    and review.get("status") == "passed"
+                    and review_verify.get("status") == "passed"
+                    and review_gate.get("status") == "passed"
+                    and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_continuous_review_verification_status") == "passed"
+                    and _v38_check_status(declared_extra, "ucc_review_allowed_entries") == "failed"
+                    and drift_review.get("status") == "failed"
+                    and stale_export_blocked
+                    and full_resign.get("status") == "failed"
+                )
+                return ok, (
+                    f"center={center_verify.get('status')}, archive={archive_verify.get('status')}, handoff={handoff_verify.get('status')}, "
+                    f"review={review.get('status')}, verify={review_verify.get('status')}, gate={review_gate.get('status')}, "
+                    f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_continuous_review_verification_status')}/{ga_verify.get('status')}, "
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_review_allowed_entries')}, drift={drift_review.get('status')}, "
+                    f"stale_export={'409' if stale_export_blocked else 'allowed'}, full_resign={full_resign.get('status')}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.2 Unified Command Center continuous review smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v112_forge_review_clear(entries: dict[str, bytes]) -> dict[str, bytes]:
+    drift = json.loads(entries["drift-report.json"].decode("utf-8"))
+    drift["status"] = "passed"
+    drift["drifts"] = []
+    drift["summary"] = {"checked_count": 6, "drift_count": 0, "blocking_drift_count": 0, "warning_count": 0}
+    drift["integrity_hash"] = stable_hash({key: value for key, value in drift.items() if key != "integrity_hash"})
+    entries["drift-report.json"] = json.dumps(drift, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    board = json.loads(entries["incident-board.json"].decode("utf-8"))
+    board["status"] = "clear"
+    board["incidents"] = []
+    board["summary"] = {"open_count": 0, "critical_count": 0, "change_request_draft_count": 0}
+    board["integrity_hash"] = stable_hash({key: value for key, value in board.items() if key != "integrity_hash"})
+    entries["incident-board.json"] = json.dumps(board, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    drill = json.loads(entries["recovery-drill-report.json"].decode("utf-8"))
+    drill["status"] = "passed"
+    for step in drill.get("steps", []):
+        if isinstance(step, dict):
+            step["status"] = "passed"
+    drill["summary"] = {"step_count": len(drill.get("steps", [])), "failed_count": 0}
+    drill["integrity_hash"] = stable_hash({key: value for key, value in drill.items() if key != "integrity_hash"})
+    entries["recovery-drill-report.json"] = json.dumps(drill, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest["status"] = "passed"
+    manifest.setdefault("source", {})["drift_report_hash"] = drift["integrity_hash"]
+    manifest.setdefault("source", {})["incident_board_hash"] = board["integrity_hash"]
+    manifest.setdefault("source", {})["recovery_drill_hash"] = drill["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "drift-report.json", entries["drift-report.json"])
+    _v74_sync_manifest_file(manifest, "incident-board.json", entries["incident-board.json"])
+    _v74_sync_manifest_file(manifest, "recovery-drill-report.json", entries["recovery-drill-report.json"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v111_full_resign_archive_signer(entries: dict[str, bytes]) -> dict[str, bytes]:
     signoff = json.loads(entries["signoff.json"].decode("utf-8"))
     signoff["signed_by"] = "forged signer"

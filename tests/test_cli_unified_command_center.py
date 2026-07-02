@@ -112,6 +112,53 @@ def test_unified_command_center_cli_signoff_archive_handoff(tmp_path: Path) -> N
     assert refresh_after_signoff.returncode != 0
 
 
+def test_unified_command_center_cli_continuous_review(tmp_path: Path) -> None:
+    release_check = _release_check_report(tmp_path / "release-check.json")
+    create = _run_cli(
+        [
+            "unified-command-center",
+            "--json",
+            "create",
+            "--center-id",
+            "ucc-cli-review",
+            "--no-require-audio-command-center",
+            "--no-require-trust-operations-hub",
+            "--no-require-public-trust-center",
+            "--no-require-ga-readiness",
+            "--require-release-check",
+        ],
+        tmp_path,
+    )
+    zipped = _run_cli(["unified-command-center", "--json", "zip", "ucc-cli-review", "--release-check-report", str(release_check)], tmp_path)
+    verified = _run_cli(["unified-command-center", "--json", "verify", "ucc-cli-review", "--strict", "--require-ready", "--release-check-report", str(release_check)], tmp_path)
+    signoff = _run_cli(["unified-command-center", "--json", "signoff", "ucc-cli-review", "--signed-by", "release lead", "--reason", "ready"], tmp_path)
+    archive_zip = _run_cli(["unified-command-center", "--json", "archive-zip", "ucc-cli-review"], tmp_path)
+    archive_verify = _run_cli(["unified-command-center", "--json", "verify-archive", "ucc-cli-review"], tmp_path)
+    handoff_zip = _run_cli(["unified-command-center", "--json", "handoff-zip", "ucc-cli-review"], tmp_path)
+    handoff_verify = _run_cli(["unified-command-center", "--json", "verify-handoff", "ucc-cli-review"], tmp_path)
+    review_create = _run_cli(["unified-command-center-review", "--json", "create", "ucc-cli-review", "--created-by", "qa"], tmp_path)
+    review_id = json.loads(review_create.stdout)["plan"]["review_id"]
+    review_run = _run_cli(["unified-command-center-review", "--json", "run", "ucc-cli-review", review_id], tmp_path)
+    review_zip = _run_cli(["unified-command-center-review", "--json", "zip", "ucc-cli-review", review_id], tmp_path)
+    review_verify = _run_cli(["unified-command-center-review", "--json", "verify", "ucc-cli-review", review_id], tmp_path)
+
+    assert create.returncode == 0, create.stderr
+    assert zipped.returncode == 0, zipped.stderr
+    assert verified.returncode == 0, verified.stderr
+    assert signoff.returncode == 0, signoff.stderr
+    assert archive_zip.returncode == 0, archive_zip.stderr
+    assert archive_verify.returncode == 0, archive_verify.stderr
+    assert handoff_zip.returncode == 0, handoff_zip.stderr
+    assert handoff_verify.returncode == 0, handoff_verify.stderr
+    assert review_create.returncode == 0, review_create.stderr
+    assert review_run.returncode == 0, review_run.stderr
+    assert json.loads(review_run.stdout)["status"] == "passed"
+    assert review_zip.returncode == 0, review_zip.stderr
+    assert Path(json.loads(review_zip.stdout)["zip_path"]).exists()
+    assert review_verify.returncode == 0, review_verify.stderr
+    assert json.loads(review_verify.stdout)["status"] == "passed"
+
+
 def test_unified_command_center_cli_accepts_distribution_evidence_list(tmp_path: Path) -> None:
     import hashlib
 

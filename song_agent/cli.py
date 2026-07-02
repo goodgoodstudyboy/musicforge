@@ -236,6 +236,9 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-public-trust-center-verification-report", type=Path, default=None, help="Public Trust Center verification report referenced by Unified Command Center.")
     parser.add_argument("--unified-maintenance-backup", type=Path, default=None, help="Maintenance backup ZIP referenced by Unified Command Center.")
     parser.add_argument("--unified-maintenance-backup-verification-report", type=Path, default=None, help="Maintenance backup verification report referenced by Unified Command Center.")
+    parser.add_argument("--require-unified-command-center-continuous-review", action="store_true", help="Require Unified Command Center Continuous Review evidence.")
+    parser.add_argument("--unified-command-center-continuous-review", type=Path, default=None, help="Unified Command Center Continuous Review ZIP.")
+    parser.add_argument("--unified-command-center-continuous-review-verification-report", type=Path, default=None, help="Unified Command Center Continuous Review verification report.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -1337,6 +1340,57 @@ def build_verify_unified_command_center_handoff_parser() -> argparse.ArgumentPar
     parser.add_argument("--require-archive", action="store_true")
     parser.add_argument("--archive-zip", type=Path, default=None)
     parser.add_argument("--archive-verification-report", type=Path, default=None)
+    return parser
+
+
+def _add_unified_command_center_review_evidence_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--archive", dest="archive_zip", type=Path, default=None, help="Unified Command Center Archive ZIP.")
+    parser.add_argument("--archive-verification-report", type=Path, default=None, help="Unified Command Center Archive verification report.")
+    parser.add_argument("--handoff", dest="handoff_zip", type=Path, default=None, help="Unified Command Center Handoff ZIP.")
+    parser.add_argument("--handoff-verification-report", type=Path, default=None, help="Unified Command Center Handoff verification report.")
+    parser.add_argument("--unified-command-center", dest="command_center_zip", type=Path, default=None, help="Unified Command Center ZIP.")
+    parser.add_argument("--unified-command-center-verification-report", dest="command_center_verification_report", type=Path, default=None, help="Unified Command Center verification report.")
+    parser.add_argument("--signoff-binding", type=Path, default=None, help="Unified Command Center signoff binding summary.")
+    parser.add_argument("--ga-readiness-report", type=Path, default=None, help="GA readiness report.")
+    parser.add_argument("--release-check-report", type=Path, default=None, help="Release-check report.")
+
+
+def build_unified_command_center_review_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Command Center Continuous Review packages.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("create", help="Create a Continuous Review plan.")
+    create.add_argument("center_id")
+    create.add_argument("--review-id", default=None)
+    create.add_argument("--created-by", default="release-owner")
+    create.add_argument("--no-handoff", dest="include_handoff", action="store_false", default=True)
+    _add_unified_command_center_review_evidence_args(create)
+    subparsers.add_parser("list", help="List Continuous Reviews.").add_argument("center_id")
+    for action in ("run", "export", "zip", "verify", "status"):
+        cmd = subparsers.add_parser(action, help=f"{action} a Continuous Review.")
+        cmd.add_argument("center_id")
+        cmd.add_argument("review_id")
+        if action in {"run", "export", "zip", "verify"}:
+            _add_unified_command_center_review_evidence_args(cmd)
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--no-require-clear", dest="require_clear", action="store_false", default=True)
+            cmd.add_argument("--no-require-recovery-drill", dest="require_recovery_drill", action="store_false", default=True)
+            cmd.add_argument("--no-require-current-review", dest="require_current_review", action="store_false", default=True)
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_command_center_continuous_review_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Command Center Continuous Review ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-clear", action="store_true")
+    parser.add_argument("--require-recovery-drill", action="store_true")
+    parser.add_argument("--require-current-review", action="store_true")
+    _add_unified_command_center_review_evidence_args(parser)
     return parser
 
 
@@ -4501,6 +4555,72 @@ def _run_unified_command_center_command(args: argparse.Namespace) -> dict[str, A
     raise ValueError("Unsupported unified-command-center command.")
 
 
+def _unified_command_center_review_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "review_id": getattr(args, "review_id", None),
+        "created_by": getattr(args, "created_by", None),
+        "include_handoff": getattr(args, "include_handoff", True),
+        "archive_zip": getattr(args, "archive_zip", None),
+        "archive_verification_report": getattr(args, "archive_verification_report", None),
+        "handoff_zip": getattr(args, "handoff_zip", None),
+        "handoff_verification_report": getattr(args, "handoff_verification_report", None),
+        "command_center_zip": getattr(args, "command_center_zip", None),
+        "command_center_verification_report": getattr(args, "command_center_verification_report", None),
+        "signoff_binding": getattr(args, "signoff_binding", None),
+        "ga_readiness_report": getattr(args, "ga_readiness_report", None),
+        "release_check_report": getattr(args, "release_check_report", None),
+    }
+
+
+def _run_unified_command_center_review_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_continuous_review import UnifiedCommandCenterContinuousReviewStore
+    from song_agent.unified_command_center_continuous_review_verifier import write_unified_command_center_continuous_review_verification_report
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+
+    center_store = UnifiedCommandCenterStore()
+    signoff_store = UnifiedCommandCenterSignoffStore(center_store)
+    handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+    store = UnifiedCommandCenterContinuousReviewStore(center_store, signoff_store=signoff_store, handoff_store=handoff_store)
+    payload = _unified_command_center_review_payload_from_args(args)
+    if args.action == "create":
+        plan = store.create_plan(args.center_id, payload)
+        return {"ok": True, "plan": plan, "summary": {"review_id": plan.get("review_id")}, "status": plan.get("status")}
+    if args.action == "list":
+        rows = store.list_reviews(args.center_id)
+        return {"ok": True, "reviews": rows, "summary": {"review_count": len(rows)}, "status": "passed"}
+    if args.action == "status":
+        docs = store.read_review(args.center_id, args.review_id)
+        drift = docs.get("drift_report") or {}
+        return {"ok": bool(docs), "review": docs, "summary": drift.get("summary", {}), "status": drift.get("status") or docs.get("plan", {}).get("status")}
+    if args.action == "run":
+        result = store.run_review(args.center_id, args.review_id, payload)
+        return {"ok": result.get("status") == "passed", **result}
+    if args.action == "export":
+        result = store.export_package(args.center_id, args.review_id, payload)
+        return {"ok": result.get("status") == "passed", **result, "summary": result.get("manifest", {}).get("summary", {})}
+    if args.action == "zip":
+        result = store.build_zip(args.center_id, args.review_id, payload)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_package(
+            args.center_id,
+            args.review_id,
+            {
+                **payload,
+                "strict": args.strict,
+                "require_clear": args.require_clear,
+                "require_recovery_drill": args.require_recovery_drill,
+                "require_current_review": args.require_current_review,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_command_center_continuous_review_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported unified-command-center-review command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -4680,6 +4800,9 @@ def _main() -> None:
             require_unified_command_center_handoff=args.require_unified_command_center_handoff,
             unified_command_center_handoff_zip_path=args.unified_command_center_handoff,
             unified_command_center_handoff_verification_report_path=args.unified_command_center_handoff_verification_report,
+            require_unified_command_center_continuous_review=args.require_unified_command_center_continuous_review,
+            unified_command_center_continuous_review_zip_path=args.unified_command_center_continuous_review,
+            unified_command_center_continuous_review_verification_report_path=args.unified_command_center_continuous_review_verification_report,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -4774,6 +4897,9 @@ def _main() -> None:
             require_unified_command_center_handoff=args.require_unified_command_center_handoff,
             unified_command_center_handoff_path=args.unified_command_center_handoff,
             unified_command_center_handoff_verification_report_path=args.unified_command_center_handoff_verification_report,
+            require_unified_command_center_continuous_review=args.require_unified_command_center_continuous_review,
+            unified_command_center_continuous_review_path=args.unified_command_center_continuous_review,
+            unified_command_center_continuous_review_verification_report_path=args.unified_command_center_continuous_review_verification_report,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -4930,6 +5056,16 @@ def _main() -> None:
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
         if result.get("ok") is False or status in {"failed", "blocked", "stale", "runtime_failed", "verification_failed"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-command-center-review":
+        parser = build_unified_command_center_review_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_command_center_review_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
             raise SystemExit(1)
         return
     elif raw_args and raw_args[0] == "verify-release-audio-baseline-registry-package":
@@ -5205,6 +5341,39 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_command_center_handoff_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-continuous-review-package":
+        from song_agent.unified_command_center_continuous_review_verifier import (
+            unified_command_center_continuous_review_verification_exit_code,
+            verify_unified_command_center_continuous_review_package,
+            write_unified_command_center_continuous_review_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_continuous_review_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_command_center_continuous_review_package(
+            args.zip_path,
+            strict=args.strict,
+            require_clear=args.require_clear,
+            require_recovery_drill=args.require_recovery_drill,
+            require_current_review=args.require_current_review,
+            archive_zip_path=args.archive_zip,
+            archive_verification_report_path=args.archive_verification_report,
+            handoff_zip_path=args.handoff_zip,
+            handoff_verification_report_path=args.handoff_verification_report,
+            command_center_zip_path=args.command_center_zip,
+            command_center_verification_report_path=args.command_center_verification_report,
+            signoff_binding_path=args.signoff_binding,
+        )
+        if args.report_out is not None:
+            write_unified_command_center_continuous_review_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Command Center Continuous Review verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_continuous_review_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

@@ -597,6 +597,12 @@ from song_agent.unified_command_center import (
     UnifiedCommandCenterStateError,
     UnifiedCommandCenterStore,
 )
+from song_agent.unified_command_center_continuous_review import (
+    UnifiedCommandCenterContinuousReviewError,
+    UnifiedCommandCenterContinuousReviewNotFoundError,
+    UnifiedCommandCenterContinuousReviewStateError,
+    UnifiedCommandCenterContinuousReviewStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3245,6 +3251,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     def unified_command_center_handoff_store(self) -> UnifiedCommandCenterHandoffStore:
         store = self.server.unified_command_center_handoff_store  # type: ignore[attr-defined]
         store.signoff_store = self.unified_command_center_signoff_store
+        return store
+
+    @property
+    def unified_command_center_continuous_review_store(self) -> UnifiedCommandCenterContinuousReviewStore:
+        store = self.server.unified_command_center_continuous_review_store  # type: ignore[attr-defined]
+        store.center_store = self.unified_command_center_store
+        store.signoff_store = self.unified_command_center_signoff_store
+        store.handoff_store = self.unified_command_center_handoff_store
         return store
 
     @property
@@ -10991,6 +11005,66 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             parts = path.removeprefix(prefix).strip("/").split("/")
             center_id = parts[0]
             tail = "/" + "/".join(parts[1:]) if len(parts) > 1 else ""
+            if tail == "/continuous-reviews":
+                if method == "GET":
+                    reviews = self.unified_command_center_continuous_review_store.list_reviews(center_id)
+                    self._send_json({"ok": True, "reviews": reviews, "summary": {"review_count": len(reviews)}})
+                    return
+                if method == "POST":
+                    plan = self.unified_command_center_continuous_review_store.create_plan(center_id, self._optional_json_body())
+                    self._send_json({"ok": True, "plan": plan, "summary": {"review_id": plan.get("review_id")}, "status": plan.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail.startswith("/continuous-reviews/"):
+                review_tail = tail.removeprefix("/continuous-reviews/")
+                review_parts = review_tail.split("/")
+                review_id = review_parts[0]
+                review_action = "/" + "/".join(review_parts[1:]) if len(review_parts) > 1 else ""
+                if review_action in {"", "/"}:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    review = self.unified_command_center_continuous_review_store.read_review(center_id, review_id)
+                    self._send_json({"ok": True, "review": review, "summary": (review.get("drift_report") or {}).get("summary", {}), "status": (review.get("drift_report") or review.get("plan") or {}).get("status")})
+                    return
+                if review_action == "/run":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_continuous_review_store.run_review(center_id, review_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "passed", **result})
+                    return
+                if review_action == "/export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_continuous_review_store.export_package(center_id, review_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "passed", **result})
+                    return
+                if review_action == "/zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_continuous_review_store.build_zip(center_id, review_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                    return
+                if review_action == "/verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    payload = self._optional_json_body()
+                    report = self.unified_command_center_continuous_review_store.verify_package(center_id, review_id, payload)
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if review_action == "/download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.unified_command_center_continuous_review_store.zip_path(center_id, review_id), "application/zip", filename="musicforge-unified-command-center-continuous-review.zip")
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Continuous Review route not found.")
+                return
             if tail in {"", "/"}:
                 if method != "GET":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11151,13 +11225,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except (UnifiedCommandCenterSignoffNotFoundError,) as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedCommandCenterContinuousReviewNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except (UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterHandoffStateError) as exc:
+        except (UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterHandoffStateError, UnifiedCommandCenterContinuousReviewStateError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedCommandCenterError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except (UnifiedCommandCenterSignoffError, UnifiedCommandCenterHandoffError) as exc:
+        except (UnifiedCommandCenterSignoffError, UnifiedCommandCenterHandoffError, UnifiedCommandCenterContinuousReviewError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _unified_command_center_evidence_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -12095,6 +12171,27 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_command_center_handoff_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_command_center_handoff_gate.get("message") or "Unified Command Center Handoff gate failed.")
+        require_unified_command_center_continuous_review = bool(payload.get("require_unified_command_center_continuous_review", False))
+        unified_command_center_continuous_review_gate = self.unified_command_center_continuous_review_store.gate(
+            str(payload.get("unified_command_center_id") or payload.get("unified_command_center_center_id") or "ucc-000001"),
+            required=require_unified_command_center_continuous_review,
+            review_id=payload.get("unified_command_center_continuous_review_id"),
+            review_zip_path=payload.get("unified_command_center_continuous_review") or payload.get("unified_command_center_continuous_review_zip"),
+            review_verification_report_path=payload.get("unified_command_center_continuous_review_verification_report"),
+            archive_zip_path=payload.get("unified_command_center_archive") or payload.get("unified_command_center_archive_zip"),
+            archive_verification_report_path=payload.get("unified_command_center_archive_verification_report"),
+            handoff_zip_path=payload.get("unified_command_center_handoff") or payload.get("unified_command_center_handoff_zip"),
+            handoff_verification_report_path=payload.get("unified_command_center_handoff_verification_report"),
+            command_center_zip_path=payload.get("unified_command_center_zip") or payload.get("unified_command_center"),
+            command_center_verification_report_path=payload.get("unified_command_center_verification_report"),
+            signoff_binding_path=payload.get("unified_command_center_signoff_binding"),
+        )
+        if unified_command_center_continuous_review_gate and require_unified_command_center_continuous_review:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_command_center_continuous_review"] = unified_command_center_continuous_review_gate
+            if unified_command_center_continuous_review_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_command_center_continuous_review_gate.get("message") or "Unified Command Center Continuous Review gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -19798,6 +19895,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_store = UnifiedCommandCenterStore(release_store=self.release_store)
         self.unified_command_center_signoff_store = UnifiedCommandCenterSignoffStore(self.unified_command_center_store)
         self.unified_command_center_handoff_store = UnifiedCommandCenterHandoffStore(self.unified_command_center_signoff_store)
+        self.unified_command_center_continuous_review_store = UnifiedCommandCenterContinuousReviewStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

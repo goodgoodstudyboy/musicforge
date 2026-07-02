@@ -54,6 +54,8 @@ from song_agent.music_acceptance import AcceptanceStore
 from song_agent.music_acceptance import stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.releases import stable_hash as release_stable_hash
+
+UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_continuous_review_verification"
 from song_agent.trust_operations_final_readiness_verifier import (
     TRUST_OPERATIONS_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE,
     verify_trust_operations_final_handoff_package,
@@ -124,6 +126,9 @@ def verify_ga_readiness_report(
     require_unified_command_center_handoff: bool = False,
     unified_command_center_handoff_path: Path | str | None = None,
     unified_command_center_handoff_verification_report_path: Path | str | None = None,
+    require_unified_command_center_continuous_review: bool = False,
+    unified_command_center_continuous_review_path: Path | str | None = None,
+    unified_command_center_continuous_review_verification_report_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -365,6 +370,19 @@ def verify_ga_readiness_report(
                 unified_command_center_handoff_verification_report_path,
                 unified_command_center_archive_path,
                 unified_command_center_archive_verification_report_path,
+            )
+        if require_unified_command_center_continuous_review:
+            _verify_unified_command_center_continuous_review_evidence(
+                checks,
+                checks_by_id.get("ga.unified_command_center_continuous_review", {}),
+                unified_command_center_continuous_review_path,
+                unified_command_center_continuous_review_verification_report_path,
+                unified_command_center_archive_path,
+                unified_command_center_archive_verification_report_path,
+                unified_command_center_handoff_path,
+                unified_command_center_handoff_verification_report_path,
+                unified_command_center_path,
+                unified_command_center_verification_report_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -1486,6 +1504,56 @@ def _verify_unified_command_center_handoff_evidence(
         verification_report,
         runtime_report,
         UNIFIED_COMMAND_CENTER_HANDOFF_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_command_center_continuous_review_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    review_path: Path | str | None,
+    review_verification_report_path: Path | str | None,
+    archive_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+    handoff_path: Path | str | None,
+    handoff_verification_report_path: Path | str | None,
+    command_center_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+) -> None:
+    if not review_path:
+        _add_check(checks, "ga_readiness_unified_command_center_continuous_review_required", "failed", "blocking", "Unified Command Center Continuous Review requirement needs a review ZIP.")
+        return
+    if not review_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_continuous_review_verification_required", "failed", "blocking", "Unified Command Center Continuous Review requirement needs a verification report.")
+        return
+    zip_path = Path(review_path)
+    try:
+        from song_agent.unified_command_center_continuous_review_verifier import verify_unified_command_center_continuous_review_package
+
+        verification_report = read_json(Path(review_verification_report_path))
+        runtime_report = verify_unified_command_center_continuous_review_package(
+            zip_path,
+            strict=True,
+            require_clear=True,
+            require_recovery_drill=True,
+            require_current_review=True,
+            archive_zip_path=archive_path,
+            archive_verification_report_path=archive_verification_report_path,
+            handoff_zip_path=handoff_path,
+            handoff_verification_report_path=handoff_verification_report_path,
+            command_center_zip_path=command_center_path,
+            command_center_verification_report_path=command_center_verification_report_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_command_center_continuous_review_readable", "failed", "blocking", f"Unified Command Center Continuous Review evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_command_center_continuous_review",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE,
     )
 
 
