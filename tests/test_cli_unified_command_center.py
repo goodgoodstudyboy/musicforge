@@ -15,11 +15,11 @@ def _run_cli(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, "-m", "song_agent.cli", *args], cwd=cwd, env=env, text=True, capture_output=True, check=False)
 
 
-def _release_check_report(path: Path) -> Path:
+def _release_check_report(path: Path, *, ok: bool = True) -> Path:
     payload = {
-        "ok": True,
-        "summary": {"total": 1, "passed": 1, "failed": 0},
-        "results": [{"check_id": "synthetic.passed", "status": "passed"}],
+        "ok": ok,
+        "summary": {"total": 1, "passed": 1 if ok else 0, "failed": 0 if ok else 1},
+        "results": [{"check_id": "synthetic.passed" if ok else "synthetic.failed", "status": "passed" if ok else "failed"}],
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     return path
@@ -157,6 +157,42 @@ def test_unified_command_center_cli_continuous_review(tmp_path: Path) -> None:
     assert Path(json.loads(review_zip.stdout)["zip_path"]).exists()
     assert review_verify.returncode == 0, review_verify.stderr
     assert json.loads(review_verify.stdout)["status"] == "passed"
+
+
+def test_unified_command_center_review_cli_blocks_failed_release_check(tmp_path: Path) -> None:
+    release_check = _release_check_report(tmp_path / "release-check.json")
+    failed_release_check = _release_check_report(tmp_path / "release-check-failed.json", ok=False)
+    create = _run_cli(
+        [
+            "unified-command-center",
+            "--json",
+            "create",
+            "--center-id",
+            "ucc-cli-review-failed",
+            "--no-require-audio-command-center",
+            "--no-require-trust-operations-hub",
+            "--no-require-public-trust-center",
+            "--no-require-ga-readiness",
+            "--require-release-check",
+        ],
+        tmp_path,
+    )
+    _run_cli(["unified-command-center", "--json", "zip", "ucc-cli-review-failed", "--release-check-report", str(release_check)], tmp_path)
+    _run_cli(["unified-command-center", "--json", "verify", "ucc-cli-review-failed", "--strict", "--require-ready", "--release-check-report", str(release_check)], tmp_path)
+    _run_cli(["unified-command-center", "--json", "signoff", "ucc-cli-review-failed", "--signed-by", "release lead", "--reason", "ready"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "archive-zip", "ucc-cli-review-failed"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "verify-archive", "ucc-cli-review-failed", "--strict"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "handoff-zip", "ucc-cli-review-failed"], tmp_path)
+    _run_cli(["unified-command-center", "--json", "verify-handoff", "ucc-cli-review-failed", "--strict"], tmp_path)
+    review_create = _run_cli(["unified-command-center-review", "--json", "create", "ucc-cli-review-failed", "--release-check-report", str(release_check)], tmp_path)
+    review_id = json.loads(review_create.stdout)["plan"]["review_id"]
+    review_run = _run_cli(["unified-command-center-review", "--json", "run", "ucc-cli-review-failed", review_id, "--release-check-report", str(failed_release_check)], tmp_path)
+
+    assert create.returncode == 0, create.stderr
+    assert review_run.returncode == 1
+    payload = json.loads(review_run.stdout)
+    assert payload["status"] == "failed"
+    assert payload["drift_report"]["drifts"][0]["component_type"] == "release_check"
 
 
 def test_unified_command_center_cli_accepts_distribution_evidence_list(tmp_path: Path) -> None:

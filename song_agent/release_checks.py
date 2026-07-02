@@ -18190,6 +18190,7 @@ def _v111_unified_command_center_signoff_archive_smoke(root: Path) -> tuple[bool
             os.chdir(base)
             try:
                 passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                failed_report = _v110_release_check_report(base / "release-check-failed.json", ok=False)
                 store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
                 center = store.create(
                     {
@@ -18347,6 +18348,7 @@ def _v112_unified_command_center_continuous_review_smoke(root: Path) -> tuple[bo
             os.chdir(base)
             try:
                 passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                failed_report = _v110_release_check_report(base / "release-check-failed.json", ok=False)
                 store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
                 center = store.create(
                     {
@@ -18456,6 +18458,31 @@ def _v112_unified_command_center_continuous_review_smoke(root: Path) -> tuple[bo
                     command_center_verification_report_path=store.verification_report_path(center["center_id"]),
                     signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
                 )
+                failed_ga_path = base / "ga-readiness-failed.json"
+                failed_ga_doc = {
+                    "package_type": "musicforge_ga_readiness_report",
+                    "status": "failed",
+                    "checks": [{"check_id": "ga.synthetic.failed", "status": "failed"}],
+                }
+                failed_ga_doc["integrity_hash"] = stable_hash({key: value for key, value in failed_ga_doc.items() if key != "integrity_hash"})
+                write_json(failed_ga_path, failed_ga_doc)
+
+                failed_ga_plan = review_store.create_plan(center["center_id"], {"review_id": "uccrv-failed-ga", "ga_readiness_report": ga_report_path})
+                failed_ga_review = review_store.run_review(center["center_id"], failed_ga_plan["review_id"], {"ga_readiness_report": failed_ga_path})
+                failed_release_check_plan = review_store.create_plan(center["center_id"], {"review_id": "uccrv-failed-release-check", "release_check_report": passed_report})
+                failed_release_check_review = review_store.run_review(center["center_id"], failed_release_check_plan["review_id"], {"release_check_report": failed_report})
+                failed_external_plan = review_store.create_plan(
+                    center["center_id"],
+                    {
+                        "review_id": "uccrv-failed-external",
+                        "external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "passed"}],
+                    },
+                )
+                failed_external_review = review_store.run_review(
+                    center["center_id"],
+                    failed_external_plan["review_id"],
+                    {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "failed"}]},
+                )
 
                 ok = (
                     center_verify.get("status") == "passed"
@@ -18469,13 +18496,18 @@ def _v112_unified_command_center_continuous_review_smoke(root: Path) -> tuple[bo
                     and drift_review.get("status") == "failed"
                     and stale_export_blocked
                     and full_resign.get("status") == "failed"
+                    and failed_ga_review.get("status") == "failed"
+                    and failed_release_check_review.get("status") == "failed"
+                    and failed_external_review.get("status") == "failed"
                 )
                 return ok, (
                     f"center={center_verify.get('status')}, archive={archive_verify.get('status')}, handoff={handoff_verify.get('status')}, "
                     f"review={review.get('status')}, verify={review_verify.get('status')}, gate={review_gate.get('status')}, "
                     f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_continuous_review_verification_status')}/{ga_verify.get('status')}, "
                     f"declared_extra={_v38_check_status(declared_extra, 'ucc_review_allowed_entries')}, drift={drift_review.get('status')}, "
-                    f"stale_export={'409' if stale_export_blocked else 'allowed'}, full_resign={full_resign.get('status')}"
+                    f"stale_export={'409' if stale_export_blocked else 'allowed'}, full_resign={full_resign.get('status')}, "
+                    f"failed_ga={failed_ga_review.get('status')}, failed_release_check={failed_release_check_review.get('status')}, "
+                    f"failed_external={failed_external_review.get('status')}"
                 )
             finally:
                 os.chdir(old_cwd)

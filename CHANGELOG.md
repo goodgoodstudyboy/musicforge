@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.2.1 - 2026-07-02
+
+### Fixed
+- Unified Command Center Continuous Review now treats failed GA readiness reports, failed release-check reports, and failed external evidence rows as blocking drift instead of only recording them in review source.
+- Continuous Review baseline plans now bind GA, release-check, and external evidence fingerprints so changed evidence is detected during later review runs.
+- Continuous Review offline verification now fails `require_clear` / current-review checks when packaged GA, release-check, or external evidence status is failed.
+- release-check `v112.unified_command_center_continuous_review_smoke` now covers failed GA, failed release-check, and failed external evidence regressions.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_continuous_review.py tests\test_cli_unified_command_center.py::test_unified_command_center_review_cli_blocks_failed_release_check tests\test_server_unified_command_center.py::test_unified_command_center_api_continuous_review_blocks_failed_release_check tests\test_release_check.py::test_v112_unified_command_center_continuous_review_smoke -q`
+- `python -m song_agent.cli release-check --profile v11 --skip-tests --json`
+
 ## v11.2.0 - 2026-07-02
 
 ### Added

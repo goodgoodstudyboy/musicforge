@@ -6,11 +6,11 @@ from pathlib import Path
 from tests.test_server_edits import request_json, start_test_server, stop_test_server
 
 
-def _release_check_report(path: Path) -> Path:
+def _release_check_report(path: Path, *, ok: bool = True) -> Path:
     payload = {
-        "ok": True,
-        "summary": {"total": 1, "passed": 1, "failed": 0},
-        "results": [{"check_id": "synthetic.passed", "status": "passed"}],
+        "ok": ok,
+        "summary": {"total": 1, "passed": 1 if ok else 0, "failed": 0 if ok else 1},
+        "results": [{"check_id": "synthetic.passed" if ok else "synthetic.failed", "status": "passed" if ok else "failed"}],
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     return path
@@ -142,3 +142,54 @@ def test_unified_command_center_api_continuous_review_lifecycle(tmp_path, monkey
     assert Path(review_zip_body["zip_path"]).exists()
     assert review_verify_status == 200, review_verify_body
     assert review_verify_body["verification"]["status"] == "passed"
+
+
+def test_unified_command_center_api_continuous_review_blocks_failed_release_check(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    release_check = _release_check_report(tmp_path / "release-check.json")
+    failed_release_check = _release_check_report(tmp_path / "release-check-failed.json", ok=False)
+    server = start_test_server()
+    try:
+        request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers",
+            {
+                "center_id": "ucc-api-review-failed",
+                "requirements": {
+                    "audio-command-center": False,
+                    "trust-operations-hub": False,
+                    "public-trust-center": False,
+                    "ga-readiness": False,
+                    "release-check": True,
+                },
+            },
+        )
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-review-failed/zip", {"release_check_report": str(release_check)})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-review-failed/verify", {"strict": True, "require_ready": True, "release_check_report": str(release_check)})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-review-failed/signoff", {"signed_by": "release lead", "reason": "ready"})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-review-failed/archive/zip", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-review-failed/archive/verify", {"strict": True})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-review-failed/handoff/zip", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-review-failed/handoff/verify", {"strict": True})
+        review_create_status, review_create_body = request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers/ucc-api-review-failed/continuous-reviews",
+            {"created_by": "qa", "release_check_report": str(release_check)},
+        )
+        review_id = review_create_body["plan"]["review_id"]
+        review_run_status, review_run_body = request_json(
+            server,
+            "POST",
+            f"/api/unified-command-centers/ucc-api-review-failed/continuous-reviews/{review_id}/run",
+            {"release_check_report": str(failed_release_check)},
+        )
+    finally:
+        stop_test_server(server)
+
+    assert review_create_status == 201, review_create_body
+    assert review_run_status == 200, review_run_body
+    assert review_run_body["ok"] is False
+    assert review_run_body["status"] == "failed"
+    assert review_run_body["drift_report"]["drifts"][0]["component_type"] == "release_check"

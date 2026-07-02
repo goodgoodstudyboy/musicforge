@@ -5304,6 +5304,8 @@ def _main() -> None:
             command_center_zip_path=args.command_center_zip,
             command_center_verification_report_path=args.command_center_verification_report,
             signoff_binding_path=args.signoff_binding,
+            ga_readiness_report_path=args.ga_readiness_report,
+            release_check_report_path=args.release_check_report,
         )
         if args.report_out is not None:
             write_unified_command_center_archive_verification_report(report, args.report_out)

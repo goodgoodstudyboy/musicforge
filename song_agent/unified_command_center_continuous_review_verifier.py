@@ -67,6 +67,8 @@ def verify_unified_command_center_continuous_review_package(
     command_center_zip_path: Path | str | None = None,
     command_center_verification_report_path: Path | str | None = None,
     signoff_binding_path: Path | str | None = None,
+    ga_readiness_report_path: Path | str | None = None,
+    release_check_report_path: Path | str | None = None,
     max_zip_size_mb: int = 64,
     max_uncompressed_size_mb: int = 256,
     max_entry_count: int = 200,
@@ -159,6 +161,8 @@ def verify_unified_command_center_continuous_review_package(
                         command_center_zip_path=command_center_zip_path,
                         command_center_verification_report_path=command_center_verification_report_path,
                         signoff_binding_path=signoff_binding_path,
+                        ga_readiness_report_path=ga_readiness_report_path,
+                        release_check_report_path=release_check_report_path,
                         require_handoff=bool((source.get("inputs") or {}).get("handoff", {}).get("required", True)),
                     )
                 )
@@ -187,6 +191,8 @@ def _current_review_checks(
     command_center_zip_path: Path | str | None,
     command_center_verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
+    ga_readiness_report_path: Path | str | None,
+    release_check_report_path: Path | str | None,
     require_handoff: bool,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
@@ -194,6 +200,8 @@ def _current_review_checks(
     archive_input = inputs.get("archive") if isinstance(inputs.get("archive"), dict) else {}
     handoff_input = inputs.get("handoff") if isinstance(inputs.get("handoff"), dict) else {}
     ucc_input = inputs.get("ucc") if isinstance(inputs.get("ucc"), dict) else {}
+    ga_input = inputs.get("ga") if isinstance(inputs.get("ga"), dict) else {}
+    release_check_input = inputs.get("release_check") if isinstance(inputs.get("release_check"), dict) else {}
     fp_items = {str(row.get("component")): row for row in fingerprints.get("items", []) if isinstance(row, dict)}
 
     if not archive_zip_path:
@@ -269,7 +277,79 @@ def _current_review_checks(
         )
         handoff_fp = fp_items.get("handoff", {})
         checks.append(_check("ucc_review_current_handoff_fingerprint", handoff_fp.get("zip_sha256") == handoff_input.get("zip_sha256") and handoff_fp.get("verification_hash") == handoff_input.get("verification_hash"), "Handoff fingerprint sidecar matches review source."))
+    checks.extend(_external_status_checks(inputs))
+    if ga_readiness_report_path:
+        ga_current = _report_binding_from_path(Path(ga_readiness_report_path))
+        checks.extend(
+            [
+                _check("ucc_review_current_ga_status", ga_current.get("status") == "passed", "Current GA readiness report is passing.", {"status": ga_current.get("status")}),
+                _check("ucc_review_current_ga_binding", ga_input.get("report_hash") == ga_current.get("report_hash") and ga_input.get("path_hash") == ga_current.get("path_hash"), "Packaged review binds current GA readiness report."),
+            ]
+        )
+    elif ga_input.get("status") not in {None, "not_configured", "not_required"}:
+        checks.append(_check("ucc_review_current_ga_report_required", False, "Current GA readiness report is required to re-check packaged GA evidence."))
+    if release_check_report_path:
+        release_check_current = _report_binding_from_path(Path(release_check_report_path))
+        checks.extend(
+            [
+                _check("ucc_review_current_release_check_status", release_check_current.get("status") == "passed", "Current release-check report is passing.", {"status": release_check_current.get("status")}),
+                _check("ucc_review_current_release_check_binding", release_check_input.get("report_hash") == release_check_current.get("report_hash") and release_check_input.get("path_hash") == release_check_current.get("path_hash"), "Packaged review binds current release-check report."),
+            ]
+        )
+    elif release_check_input.get("status") not in {None, "not_configured", "not_required"}:
+        checks.append(_check("ucc_review_current_release_check_report_required", False, "Current release-check report is required to re-check packaged release-check evidence."))
     return checks
+
+
+PASSING_EVIDENCE_STATUSES = {"passed", "ready", "clear", "signed", "accepted", "ok"}
+
+
+def _normalized_evidence_status(value: Any) -> str:
+    raw = value
+    if isinstance(value, dict):
+        raw = value.get("status")
+        if raw is None and value.get("ok") is True:
+            raw = "passed"
+    status = str(raw or "unknown").strip().lower()
+    return "passed" if status in PASSING_EVIDENCE_STATUSES else status
+
+
+def _status_is_passing_or_absent(status: Any) -> bool:
+    return _normalized_evidence_status(status) in {"passed", "not_configured", "not_required", "skipped"}
+
+
+def _external_status_checks(inputs: dict[str, Any]) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    ga = inputs.get("ga") if isinstance(inputs.get("ga"), dict) else {}
+    release_check = inputs.get("release_check") if isinstance(inputs.get("release_check"), dict) else {}
+    checks.append(_check("ucc_review_ga_status", _status_is_passing_or_absent(ga.get("status")), "Packaged GA readiness evidence is passing or absent.", {"status": ga.get("status")}))
+    checks.append(_check("ucc_review_release_check_status", _status_is_passing_or_absent(release_check.get("status")), "Packaged release-check evidence is passing or absent.", {"status": release_check.get("status")}))
+    external = inputs.get("external_evidence") if isinstance(inputs.get("external_evidence"), list) else []
+    failed = [
+        {
+            "component": row.get("component") or row.get("component_type") or row.get("evidence_type"),
+            "component_id": row.get("component_id") or row.get("evidence_id"),
+            "status": row.get("status"),
+        }
+        for row in external
+        if isinstance(row, dict) and not _status_is_passing_or_absent(row.get("status"))
+    ]
+    checks.append(_check("ucc_review_external_evidence_status", not failed, "Packaged external evidence rows are passing or absent.", {"failed": failed}))
+    return checks
+
+
+def _report_binding_from_path(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"status": "missing", "report_hash": None, "path_hash": None}
+    try:
+        payload = _read_json_file(path)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        return {"status": "failed", "report_hash": None, "path_hash": _sha256_path(path), "error": sanitize_sensitive_text(str(exc))}
+    return {
+        "status": _normalized_evidence_status(payload),
+        "report_hash": payload.get("integrity_hash") or _integrity_hash(payload),
+        "path_hash": _sha256_path(path),
+    }
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:

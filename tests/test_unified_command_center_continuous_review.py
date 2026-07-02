@@ -16,8 +16,19 @@ from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandof
 from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
 
 
-def _release_check_report(path: Path) -> Path:
-    payload = {"ok": True, "summary": {"total": 1, "passed": 1, "failed": 0}, "results": [{"check_id": "synthetic.passed", "status": "passed"}]}
+def _release_check_report(path: Path, *, ok: bool = True) -> Path:
+    payload = {"ok": ok, "summary": {"total": 1, "passed": 1 if ok else 0, "failed": 0 if ok else 1}, "results": [{"check_id": "synthetic.passed" if ok else "synthetic.failed", "status": "passed" if ok else "failed"}]}
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def _ga_report(path: Path, *, status: str = "passed") -> Path:
+    payload = {
+        "package_type": "musicforge_ga_readiness_report",
+        "status": status,
+        "checks": [{"check_id": "ga.synthetic", "status": "passed" if status in {"passed", "ready"} else "failed"}],
+    }
+    payload["integrity_hash"] = stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     return path
 
@@ -65,6 +76,89 @@ def test_unified_command_center_continuous_review_lifecycle(tmp_path: Path) -> N
     assert Path(zipped["zip_path"]).exists()
     assert verification["status"] == "passed", verification.get("blockers")
     assert gate["status"] == "passed", gate
+
+
+def test_continuous_review_blocks_failed_external_ga_and_release_check(tmp_path: Path) -> None:
+    store, signoff_store, handoff_store, center_id = _ready_signed_ucc(tmp_path)
+    review_store = UnifiedCommandCenterContinuousReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store)
+    passed_ga = _ga_report(tmp_path / "ga-passed.json", status="passed")
+    passed_release_check = _release_check_report(tmp_path / "release-check-passed.json", ok=True)
+    plan = review_store.create_plan(center_id, {"ga_readiness_report": passed_ga, "release_check_report": passed_release_check})
+
+    failed_ga = _ga_report(tmp_path / "ga-failed.json", status="failed")
+    failed_release_check = _release_check_report(tmp_path / "release-check-failed.json", ok=False)
+    result = review_store.run_review(
+        center_id,
+        plan["review_id"],
+        {"ga_readiness_report": failed_ga, "release_check_report": failed_release_check},
+    )
+    zipped = review_store.build_zip(
+        center_id,
+        plan["review_id"],
+        {"ga_readiness_report": failed_ga, "release_check_report": failed_release_check},
+    )
+    verification = verify_unified_command_center_continuous_review_package(
+        zipped["zip_path"],
+        strict=True,
+        require_clear=True,
+        require_current_review=True,
+        ga_readiness_report_path=failed_ga,
+        release_check_report_path=failed_release_check,
+        archive_zip_path=signoff_store.archive_zip_path(center_id),
+        archive_verification_report_path=signoff_store.archive_verification_report_path(center_id),
+        handoff_zip_path=handoff_store.zip_path(center_id),
+        handoff_verification_report_path=handoff_store.verification_report_path(center_id),
+        command_center_zip_path=store.zip_path(center_id),
+        command_center_verification_report_path=store.verification_report_path(center_id),
+        signoff_binding_path=signoff_store.signoff_binding_path(center_id),
+    )
+    gate = review_store.gate(center_id, review_id=plan["review_id"])
+
+    assert result["status"] == "failed"
+    assert {row["component_type"] for row in result["drift_report"]["drifts"]} >= {"ga", "release_check"}
+    assert verification["status"] == "failed"
+    assert "ucc_review_require_clear" in verification["blockers"]
+    assert "ucc_review_ga_status" in verification["blockers"]
+    assert "ucc_review_release_check_status" in verification["blockers"]
+    assert gate["status"] == "failed"
+
+
+def test_continuous_review_blocks_failed_external_evidence_rows(tmp_path: Path) -> None:
+    store, signoff_store, handoff_store, center_id = _ready_signed_ucc(tmp_path)
+    review_store = UnifiedCommandCenterContinuousReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store)
+    plan = review_store.create_plan(
+        center_id,
+        {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "passed"}]},
+    )
+
+    result = review_store.run_review(
+        center_id,
+        plan["review_id"],
+        {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "failed"}]},
+    )
+    zipped = review_store.build_zip(
+        center_id,
+        plan["review_id"],
+        {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "failed"}]},
+    )
+    verification = verify_unified_command_center_continuous_review_package(
+        zipped["zip_path"],
+        strict=True,
+        require_clear=True,
+        require_current_review=True,
+        archive_zip_path=signoff_store.archive_zip_path(center_id),
+        archive_verification_report_path=signoff_store.archive_verification_report_path(center_id),
+        handoff_zip_path=handoff_store.zip_path(center_id),
+        handoff_verification_report_path=handoff_store.verification_report_path(center_id),
+        command_center_zip_path=store.zip_path(center_id),
+        command_center_verification_report_path=store.verification_report_path(center_id),
+        signoff_binding_path=signoff_store.signoff_binding_path(center_id),
+    )
+
+    assert result["status"] == "failed"
+    assert "distribution" in {row["component_type"] for row in result["drift_report"]["drifts"]}
+    assert verification["status"] == "failed"
+    assert "ucc_review_external_evidence_status" in verification["blockers"]
 
 
 def test_continuous_review_detects_archive_tamper_and_blocks_export(tmp_path: Path) -> None:

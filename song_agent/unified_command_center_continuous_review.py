@@ -174,6 +174,13 @@ class UnifiedCommandCenterContinuousReviewStore:
                         "handoff_zip_sha256": source.get("inputs", {}).get("handoff", {}).get("zip_sha256"),
                         "handoff_manifest_hash": source.get("inputs", {}).get("handoff", {}).get("manifest_hash"),
                         "handoff_verification_hash": source.get("inputs", {}).get("handoff", {}).get("verification_hash"),
+                        "ga_status": source.get("inputs", {}).get("ga", {}).get("status"),
+                        "ga_report_hash": source.get("inputs", {}).get("ga", {}).get("report_hash"),
+                        "ga_path_hash": source.get("inputs", {}).get("ga", {}).get("path_hash"),
+                        "release_check_status": source.get("inputs", {}).get("release_check", {}).get("status"),
+                        "release_check_report_hash": source.get("inputs", {}).get("release_check", {}).get("report_hash"),
+                        "release_check_path_hash": source.get("inputs", {}).get("release_check", {}).get("path_hash"),
+                        "external_evidence_hash": _external_evidence_hash(source.get("inputs", {}).get("external_evidence", [])),
                     },
                 }
             )
@@ -259,6 +266,8 @@ class UnifiedCommandCenterContinuousReviewStore:
             command_center_zip_path=payload.get("command_center_zip") or payload.get("command_center_zip_path") or self.center_store.zip_path(center_id),
             command_center_verification_report_path=payload.get("command_center_verification_report") or payload.get("command_center_verification_report_path") or self.center_store.verification_report_path(center_id),
             signoff_binding_path=payload.get("signoff_binding") or payload.get("signoff_binding_path") or self.signoff_store.signoff_binding_path(center_id),
+            ga_readiness_report_path=payload.get("ga_report") or payload.get("ga_readiness_report") or payload.get("ga_readiness_report_path"),
+            release_check_report_path=payload.get("release_check_report") or payload.get("release_check_report_path"),
         )
         write_unified_command_center_continuous_review_verification_report(report, self.verification_report_path(center_id, review_id))
         return report
@@ -341,10 +350,14 @@ class UnifiedCommandCenterContinuousReviewStore:
 
     def _collect_source(self, center_id: str, review_id: str, *, scope: dict[str, Any], payload: dict[str, Any], write_reports: bool) -> dict[str, Any]:
         now = now_iso()
-        archive_zip = Path(payload.get("archive_zip") or payload.get("archive_zip_path") or self.signoff_store.archive_zip_path(center_id))
-        archive_report_path = Path(payload.get("archive_verification_report") or payload.get("archive_verification_report_path") or self.signoff_store.archive_verification_report_path(center_id))
-        handoff_zip = Path(payload.get("handoff_zip") or payload.get("handoff_zip_path") or self.handoff_store.zip_path(center_id))
-        handoff_report_path = Path(payload.get("handoff_verification_report") or payload.get("handoff_verification_report_path") or self.handoff_store.verification_report_path(center_id))
+        archive_zip_override = payload.get("archive_zip") or payload.get("archive_zip_path")
+        archive_report_override = payload.get("archive_verification_report") or payload.get("archive_verification_report_path")
+        handoff_zip_override = payload.get("handoff_zip") or payload.get("handoff_zip_path")
+        handoff_report_override = payload.get("handoff_verification_report") or payload.get("handoff_verification_report_path")
+        archive_zip = Path(archive_zip_override or self.signoff_store.archive_zip_path(center_id))
+        archive_report_path = Path(archive_report_override or self.signoff_store.archive_verification_report_path(center_id))
+        handoff_zip = Path(handoff_zip_override or self.handoff_store.zip_path(center_id))
+        handoff_report_path = Path(handoff_report_override or self.handoff_store.verification_report_path(center_id))
         ucc_zip = Path(payload.get("command_center_zip") or payload.get("command_center_zip_path") or payload.get("unified_command_center_zip") or self.center_store.zip_path(center_id))
         ucc_report_path = Path(payload.get("command_center_verification_report") or payload.get("command_center_verification_report_path") or payload.get("unified_command_center_verification_report") or self.center_store.verification_report_path(center_id))
         signoff_binding = Path(payload.get("signoff_binding") or payload.get("signoff_binding_path") or self.signoff_store.signoff_binding_path(center_id))
@@ -360,7 +373,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             command_center_verification_report_path=ucc_report_path,
             signoff_binding_path=signoff_binding,
         )
-        if write_reports:
+        if write_reports and (not archive_zip_override or archive_report_override):
             write_json(archive_report_path, archive_runtime)
             archive_external = archive_runtime
         ucc_external = _read_json_if_exists(ucc_report_path)
@@ -377,7 +390,7 @@ class UnifiedCommandCenterContinuousReviewStore:
                 archive_zip_path=archive_zip,
                 archive_verification_report_path=archive_report_path,
             )
-            if write_reports:
+            if write_reports and (handoff_report_override or (not handoff_zip_override and not archive_zip_override and not archive_report_override)):
                 write_json(handoff_report_path, handoff_runtime)
                 handoff_external = handoff_runtime
 
@@ -498,6 +511,24 @@ def _external_evidence_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+PASSING_EVIDENCE_STATUSES = {"passed", "ready", "clear", "signed", "accepted", "ok"}
+
+
+def _evidence_status(value: Any) -> str:
+    raw = value
+    if isinstance(value, dict):
+        raw = value.get("status")
+        if raw is None and value.get("ok") is True:
+            raw = "passed"
+    normalized = str(raw or "unknown").strip().lower()
+    return "passed" if normalized in PASSING_EVIDENCE_STATUSES else normalized
+
+
+def _evidence_is_blocking(status: Any) -> bool:
+    normalized = _evidence_status(status)
+    return normalized not in {"passed", "not_configured", "not_required", "skipped"}
+
+
 def _report_binding(path_value: Any) -> dict[str, Any]:
     if not path_value:
         return {"status": "not_configured", "report_hash": None}
@@ -506,7 +537,7 @@ def _report_binding(path_value: Any) -> dict[str, Any]:
         return {"status": "missing", "report_hash": None}
     try:
         payload = read_json(path)
-        return {"status": "passed" if payload.get("ok") is True or payload.get("status") in {"passed", "ready"} else payload.get("status") or "unknown", "report_hash": _integrity_hash(payload) if "integrity_hash" not in payload else payload.get("integrity_hash"), "path_hash": _sha256_path(path)}
+        return {"status": _evidence_status(payload), "report_hash": _integrity_hash(payload) if "integrity_hash" not in payload else payload.get("integrity_hash"), "path_hash": _sha256_path(path)}
     except Exception as exc:
         return {"status": "failed", "error": sanitize_sensitive_text(str(exc)), "report_hash": None}
 
@@ -553,6 +584,11 @@ def _drift_report(center_id: str, review_id: str, plan: dict[str, Any], source: 
         ("archive", "archive_verification_hash", inputs.get("archive", {}).get("verification_hash")),
         ("handoff", "handoff_zip_sha256", inputs.get("handoff", {}).get("zip_sha256")),
         ("handoff", "handoff_verification_hash", inputs.get("handoff", {}).get("verification_hash")),
+        ("ga", "ga_report_hash", inputs.get("ga", {}).get("report_hash")),
+        ("ga", "ga_path_hash", inputs.get("ga", {}).get("path_hash")),
+        ("release_check", "release_check_report_hash", inputs.get("release_check", {}).get("report_hash")),
+        ("release_check", "release_check_path_hash", inputs.get("release_check", {}).get("path_hash")),
+        ("external_evidence", "external_evidence_hash", _external_evidence_hash(inputs.get("external_evidence", []))),
     )
     for component, key, actual in comparisons:
         expected = baseline.get(key)
@@ -562,7 +598,21 @@ def _drift_report(center_id: str, review_id: str, plan: dict[str, Any], source: 
         item = inputs.get(component, {})
         if item.get("status") == "failed":
             drifts.append(_drift_row(len(drifts) + 1, component, "verification_failed", "status", "passed", item.get("status"), "critical" if component in {"archive", "handoff"} else "high"))
+    ga = inputs.get("ga") if isinstance(inputs.get("ga"), dict) else {}
+    if _evidence_is_blocking(ga.get("status")):
+        drifts.append(_drift_row(len(drifts) + 1, "ga", "external_evidence_failed", "status", "passed", ga.get("status"), "high"))
+    release_check = inputs.get("release_check") if isinstance(inputs.get("release_check"), dict) else {}
+    if _evidence_is_blocking(release_check.get("status")):
+        drifts.append(_drift_row(len(drifts) + 1, "release_check", "external_evidence_failed", "status", "passed", release_check.get("status"), "high"))
+    external_rows = inputs.get("external_evidence") if isinstance(inputs.get("external_evidence"), list) else []
+    for index, row in enumerate([item for item in external_rows if isinstance(item, dict)], start=1):
+        if _evidence_is_blocking(row.get("status")):
+            component = str(row.get("component") or row.get("component_type") or row.get("evidence_type") or f"external_evidence_{index}")
+            drift = _drift_row(len(drifts) + 1, component, "external_evidence_failed", "status", "passed", row.get("status"), "high")
+            drift["component_id"] = str(row.get("component_id") or row.get("evidence_id") or component)
+            drifts.append(drift)
     blocking = sum(1 for row in drifts if row.get("severity") in {"critical", "high"} and row.get("status") == "open")
+    checked_count = 6 + 2 + len(external_rows)
     doc = sanitize_metadata(
         {
             "schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION,
@@ -571,7 +621,7 @@ def _drift_report(center_id: str, review_id: str, plan: dict[str, Any], source: 
             "center_id": center_id,
             "generated_at": now_iso(),
             "status": "failed" if blocking else "passed",
-            "summary": {"checked_count": 6, "drift_count": len(drifts), "blocking_drift_count": blocking, "warning_count": 0},
+            "summary": {"checked_count": checked_count, "drift_count": len(drifts), "blocking_drift_count": blocking, "warning_count": 0},
             "drifts": drifts,
             "source_hash": source.get("source_hash"),
         }
@@ -593,6 +643,12 @@ def _drift_row(index: int, component: str, kind: str, field: str, expected: Any,
         "actual": {field: actual},
         "recommended_action": "create_change_request",
     }
+
+
+def _external_evidence_hash(rows: Any) -> str | None:
+    if not isinstance(rows, list):
+        return None
+    return stable_hash(sanitize_metadata(rows))
 
 
 def _incident_board(center_id: str, review_id: str, drift: dict[str, Any]) -> dict[str, Any]:
