@@ -365,7 +365,20 @@ class UnifiedCommandCenterEvidenceReviewStore:
         write_unified_command_center_evidence_review_acceptance_verification_report(report, self.accepted_evidence_verification_report_path(center_id, review_id, evidence_id))
         return report
 
-    def gate(self, center_id: str, *, required: bool = False, review_id: str | None = None, review_zip_path: Path | str | None = None, review_verification_report_path: Path | str | None = None, require_accepted: bool = False, acceptance_zip_path: Path | str | None = None, acceptance_verification_report_path: Path | str | None = None, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def gate(
+        self,
+        center_id: str,
+        *,
+        required: bool = False,
+        review_id: str | None = None,
+        review_zip_path: Path | str | None = None,
+        review_verification_report_path: Path | str | None = None,
+        require_accepted: bool = False,
+        acceptance_zip_path: Path | str | None = None,
+        acceptance_verification_report_path: Path | str | None = None,
+        acceptance_response_verification_report_path: Path | str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
         payload = payload or {}
@@ -381,11 +394,24 @@ class UnifiedCommandCenterEvidenceReviewStore:
             if verification.get("status") != "passed" or runtime.get("status") != "passed":
                 return {"status": "failed", "hard_block": True, "message": "Unified Command Center Evidence Review verification failed.", "verification": runtime}
             if require_accepted:
-                if not acceptance_zip_path or not acceptance_verification_report_path:
+                if not acceptance_zip_path or not acceptance_verification_report_path or not acceptance_response_verification_report_path:
                     return {"status": "failed", "hard_block": True, "message": "Evidence Review accepted response evidence is missing."}
+                runtime_accepted = verify_unified_command_center_evidence_review_acceptance_package(
+                    acceptance_zip_path,
+                    strict=True,
+                    require_accepted=True,
+                    review_pack_path=review_zip_path,
+                    review_pack_verification_report_path=review_verification_report_path,
+                    response_verification_report_path=acceptance_response_verification_report_path,
+                )
                 accepted = read_json(Path(acceptance_verification_report_path))
-                if accepted.get("status") != "passed":
-                    return {"status": "failed", "hard_block": True, "message": "Evidence Review acceptance evidence verification failed.", "verification": accepted}
+                if (
+                    accepted.get("status") != "passed"
+                    or runtime_accepted.get("status") != "passed"
+                    or accepted.get("zip_sha256") != runtime_accepted.get("zip_sha256")
+                    or accepted.get("manifest_hash") != runtime_accepted.get("manifest_hash")
+                ):
+                    return {"status": "failed", "hard_block": True, "message": "Evidence Review acceptance evidence verification failed.", "verification": runtime_accepted}
             return {"status": "passed", "hard_block": False, "message": "Unified Command Center Evidence Review gate passed."}
         except (OSError, ValueError, UnifiedCommandCenterEvidenceReviewError) as exc:
             return {"status": "failed", "hard_block": True, "message": sanitize_sensitive_text(str(exc))}

@@ -18950,13 +18950,32 @@ def _v114_unified_command_center_evidence_review_smoke(root: Path) -> tuple[bool
                 )
                 accepted = evidence_store.create_acceptance_evidence(center["center_id"], review_id, response["response_id"])
                 accepted_verify = evidence_store.verify_acceptance_evidence(center["center_id"], review_id, accepted["evidence_id"])
+                acceptance_response_verification = evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json"
                 accepted_external = verify_unified_command_center_evidence_review_acceptance_package(
                     accepted["zip_path"],
                     strict=True,
                     require_accepted=True,
                     review_pack_path=zipped["zip_path"],
                     review_pack_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
-                    response_verification_report_path=evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json",
+                    response_verification_report_path=acceptance_response_verification,
+                )
+                missing_acceptance_gate = evidence_store.gate(
+                    center["center_id"],
+                    required=True,
+                    review_id=review_id,
+                    require_accepted=True,
+                    acceptance_zip_path=base / "missing-accepted-evidence.zip",
+                    acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center["center_id"], review_id, accepted["evidence_id"]),
+                    acceptance_response_verification_report_path=acceptance_response_verification,
+                )
+                accepted_gate = evidence_store.gate(
+                    center["center_id"],
+                    required=True,
+                    review_id=review_id,
+                    require_accepted=True,
+                    acceptance_zip_path=accepted["zip_path"],
+                    acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center["center_id"], review_id, accepted["evidence_id"]),
+                    acceptance_response_verification_report_path=acceptance_response_verification,
                 )
 
                 ga_report_path = base / "ga-readiness.json"
@@ -18969,7 +18988,7 @@ def _v114_unified_command_center_evidence_review_smoke(root: Path) -> tuple[bool
                     require_unified_command_center_evidence_review_accepted=True,
                     unified_command_center_evidence_review_acceptance_zip_path=accepted["zip_path"],
                     unified_command_center_evidence_review_acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center["center_id"], review_id, accepted["evidence_id"]),
-                    unified_command_center_evidence_review_acceptance_response_verification_report_path=evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json",
+                    unified_command_center_evidence_review_acceptance_response_verification_report_path=acceptance_response_verification,
                     unified_command_center_zip_path=store.zip_path(center["center_id"]),
                     unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
                     unified_command_center_archive_zip_path=archive_zip["zip_path"],
@@ -18991,7 +19010,7 @@ def _v114_unified_command_center_evidence_review_smoke(root: Path) -> tuple[bool
                     require_unified_command_center_evidence_review_accepted=True,
                     unified_command_center_evidence_review_acceptance_path=accepted["zip_path"],
                     unified_command_center_evidence_review_acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center["center_id"], review_id, accepted["evidence_id"]),
-                    unified_command_center_evidence_review_acceptance_response_verification_report_path=evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json",
+                    unified_command_center_evidence_review_acceptance_response_verification_report_path=acceptance_response_verification,
                     unified_command_center_path=store.zip_path(center["center_id"]),
                     unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
                     unified_command_center_archive_path=archive_zip["zip_path"],
@@ -19014,6 +19033,8 @@ def _v114_unified_command_center_evidence_review_smoke(root: Path) -> tuple[bool
                     and external.get("status") == "passed"
                     and accepted_verify.get("status") == "passed"
                     and accepted_external.get("status") == "passed"
+                    and missing_acceptance_gate.get("status") == "failed"
+                    and accepted_gate.get("status") == "passed"
                     and _v38_check_status(missing_external, "ucc_review_ucc_external_binding_zip_required") == "failed"
                     and _v38_check_status(declared_extra, "ucc_review_allowed_entries") == "failed"
                     and naked_response_blocked
@@ -19024,6 +19045,7 @@ def _v114_unified_command_center_evidence_review_smoke(root: Path) -> tuple[bool
                     f"center={center_verify.get('status')}, archive={archive_verify.get('status')}, handoff={handoff_verify.get('status')}, "
                     f"continuous={continuous_verify.get('status')}, review={replay.get('status')}, verify={review_verify.get('status')}/{external.get('status')}, "
                     f"accepted={accepted_verify.get('status')}/{accepted_external.get('status')}, "
+                    f"missing_acceptance_zip={missing_acceptance_gate.get('status')}, accepted_gate={accepted_gate.get('status')}, "
                     f"missing_external={_v38_check_status(missing_external, 'ucc_review_ucc_external_binding_zip_required')}, "
                     f"declared_extra={_v38_check_status(declared_extra, 'ucc_review_allowed_entries')}, naked_response={'400' if naked_response_blocked else 'allowed'}, "
                     f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_evidence_review_verification_status')}/{_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_evidence_review_acceptance_verification_status')}/{ga_verify.get('status')}"

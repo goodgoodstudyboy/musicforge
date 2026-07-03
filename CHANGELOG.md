@@ -1,5 +1,15 @@
 # Changelog
 
+## v11.4.1 - 2026-07-03
+
+### Fixed
+- Release signoff Evidence Review accepted gate now runtime-verifies the current accepted evidence ZIP and response verification summary instead of trusting a previously passed verification report.
+- Server release signoff payloads can pass `unified_command_center_evidence_review_acceptance_response_verification_report` so accepted evidence gates use the same external response binding as GA readiness.
+- release-check `v114.unified_command_center_evidence_review_smoke` now covers stale/missing accepted evidence ZIP rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_evidence_review.py tests\test_release_check.py::test_v114_unified_command_center_evidence_review_smoke -q`
+
 ## v11.4.0 - 2026-07-03
 
 ### Added

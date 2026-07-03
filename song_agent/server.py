@@ -12453,6 +12453,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             require_accepted=bool(payload.get("require_unified_command_center_evidence_review_accepted", False)),
             acceptance_zip_path=payload.get("unified_command_center_evidence_review_acceptance") or payload.get("unified_command_center_evidence_review_acceptance_zip"),
             acceptance_verification_report_path=payload.get("unified_command_center_evidence_review_acceptance_verification_report"),
+            acceptance_response_verification_report_path=payload.get("unified_command_center_evidence_review_acceptance_response_verification_report"),
             payload=payload,
         )
         if unified_command_center_evidence_review_gate and require_unified_command_center_evidence_review:

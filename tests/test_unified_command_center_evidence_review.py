@@ -64,6 +64,29 @@ def test_unified_command_center_evidence_review_lifecycle(tmp_path: Path) -> Non
     assert accepted["status"] == "passed"
     assert accepted_verification["status"] == "passed", accepted_verification.get("blockers")
 
+    response_verification = evidence_store.accepted_evidence_dir(center_id, "uccer-review", accepted["evidence_id"]) / "response-verification-summary.json"
+    stale_gate = evidence_store.gate(
+        center_id,
+        required=True,
+        review_id="uccer-review",
+        require_accepted=True,
+        acceptance_zip_path=tmp_path / "missing-accepted-evidence.zip",
+        acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center_id, "uccer-review", accepted["evidence_id"]),
+        acceptance_response_verification_report_path=response_verification,
+    )
+    passed_gate = evidence_store.gate(
+        center_id,
+        required=True,
+        review_id="uccer-review",
+        require_accepted=True,
+        acceptance_zip_path=accepted["zip_path"],
+        acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center_id, "uccer-review", accepted["evidence_id"]),
+        acceptance_response_verification_report_path=response_verification,
+    )
+
+    assert stale_gate["status"] == "failed"
+    assert passed_gate["status"] == "passed"
+
 
 def test_evidence_review_verifier_rejects_declared_extra_and_missing_external(tmp_path: Path) -> None:
     store, signoff_store, handoff_store, center_id = _ready_signed_ucc(tmp_path)
