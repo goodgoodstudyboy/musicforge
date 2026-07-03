@@ -138,6 +138,7 @@ def build_ga_readiness_report(
     unified_command_center_drift_source_review_verification_report_path: Path | str | None = None,
     unified_command_center_drift_recheck_review_zip_path: Path | str | None = None,
     unified_command_center_drift_recheck_review_verification_report_path: Path | str | None = None,
+    unified_command_center_drift_change_request_binding_report_path: Path | str | None = None,
     unified_release_zip_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -565,6 +566,7 @@ def build_ga_readiness_report(
         source_review_verification_report_path=unified_command_center_drift_source_review_verification_report_path,
         recheck_review_zip_path=unified_command_center_drift_recheck_review_zip_path,
         recheck_review_verification_report_path=unified_command_center_drift_recheck_review_verification_report_path,
+        change_request_binding_report_path=unified_command_center_drift_change_request_binding_report_path,
         archive_zip_path=unified_command_center_archive_zip_path,
         archive_verification_report_path=unified_command_center_archive_verification_report_path,
         handoff_zip_path=unified_command_center_handoff_zip_path,
@@ -1589,6 +1591,7 @@ def _unified_command_center_drift_response_summary(
     source_review_verification_report_path: Path | str | None,
     recheck_review_zip_path: Path | str | None,
     recheck_review_verification_report_path: Path | str | None,
+    change_request_binding_report_path: Path | str | None,
     archive_zip_path: Path | str | None,
     archive_verification_report_path: Path | str | None,
     handoff_zip_path: Path | str | None,
@@ -1601,8 +1604,8 @@ def _unified_command_center_drift_response_summary(
         return {"status": "missing", "message": "Unified Command Center Drift Response package was not provided."}
     if required and response_verification_report_path is None:
         return {"status": "failed", "message": "Unified Command Center Drift Response requires a verification report."}
-    if required and (source_review_zip_path is None or source_review_verification_report_path is None or recheck_review_zip_path is None or recheck_review_verification_report_path is None):
-        return {"status": "failed", "message": "Unified Command Center Drift Response requires source and recheck Continuous Review evidence."}
+    if required and (source_review_zip_path is None or source_review_verification_report_path is None or recheck_review_zip_path is None or recheck_review_verification_report_path is None or change_request_binding_report_path is None):
+        return {"status": "failed", "message": "Unified Command Center Drift Response requires source/recheck Continuous Review evidence and external Change Request proof."}
     try:
         from song_agent.unified_command_center_drift_response_verifier import verify_unified_command_center_drift_response_package
 
@@ -1616,6 +1619,7 @@ def _unified_command_center_drift_response_summary(
             source_review_verification_report_path=source_review_verification_report_path,
             recheck_review_zip_path=recheck_review_zip_path,
             recheck_review_verification_report_path=recheck_review_verification_report_path,
+            change_request_binding_report_path=change_request_binding_report_path,
             archive_zip_path=archive_zip_path,
             archive_verification_report_path=archive_verification_report_path,
             handoff_zip_path=handoff_zip_path,

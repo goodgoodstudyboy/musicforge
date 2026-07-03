@@ -246,6 +246,7 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-command-center-drift-source-review-verification-report", type=Path, default=None, help="Source failed Continuous Review verification report for Drift Response.")
     parser.add_argument("--unified-command-center-drift-recheck-review", type=Path, default=None, help="Clear recheck Continuous Review ZIP for Drift Response.")
     parser.add_argument("--unified-command-center-drift-recheck-review-verification-report", type=Path, default=None, help="Clear recheck Continuous Review verification report for Drift Response.")
+    parser.add_argument("--unified-command-center-drift-change-request-binding-report", type=Path, default=None, help="External Change Request binding report for Drift Response.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -1407,6 +1408,7 @@ def _add_unified_command_center_drift_response_evidence_args(parser: argparse.Ar
     parser.add_argument("--source-review-verification-report", type=Path, default=None, help="Source failed Continuous Review verification report.")
     parser.add_argument("--recheck-review", dest="recheck_review_zip", type=Path, default=None, help="Clear recheck Continuous Review ZIP.")
     parser.add_argument("--recheck-review-verification-report", type=Path, default=None, help="Clear recheck Continuous Review verification report.")
+    parser.add_argument("--change-request-binding-report", type=Path, default=None, help="External Drift Response Change Request binding report.")
 
 
 def build_unified_command_center_drift_response_parser() -> argparse.ArgumentParser:
@@ -4698,6 +4700,7 @@ def _unified_command_center_drift_response_payload_from_args(args: argparse.Name
         "source_review_verification_report": getattr(args, "source_review_verification_report", None),
         "recheck_review_zip": getattr(args, "recheck_review_zip", None),
         "recheck_review_verification_report": getattr(args, "recheck_review_verification_report", None),
+        "change_request_binding_report": getattr(args, "change_request_binding_report", None),
         "archive_zip": getattr(args, "archive_zip", None),
         "archive_verification_report": getattr(args, "archive_verification_report", None),
         "handoff_zip": getattr(args, "handoff_zip", None),
@@ -4965,6 +4968,7 @@ def _main() -> None:
             unified_command_center_drift_source_review_verification_report_path=args.unified_command_center_drift_source_review_verification_report,
             unified_command_center_drift_recheck_review_zip_path=args.unified_command_center_drift_recheck_review,
             unified_command_center_drift_recheck_review_verification_report_path=args.unified_command_center_drift_recheck_review_verification_report,
+            unified_command_center_drift_change_request_binding_report_path=args.unified_command_center_drift_change_request_binding_report,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -5069,6 +5073,7 @@ def _main() -> None:
             unified_command_center_drift_source_review_verification_report_path=args.unified_command_center_drift_source_review_verification_report,
             unified_command_center_drift_recheck_review_path=args.unified_command_center_drift_recheck_review,
             unified_command_center_drift_recheck_review_verification_report_path=args.unified_command_center_drift_recheck_review_verification_report,
+            unified_command_center_drift_change_request_binding_report_path=args.unified_command_center_drift_change_request_binding_report,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -5581,6 +5586,7 @@ def _main() -> None:
             command_center_zip_path=args.command_center_zip,
             command_center_verification_report_path=args.command_center_verification_report,
             signoff_binding_path=args.signoff_binding,
+            change_request_binding_report_path=args.change_request_binding_report,
         )
         if args.report_out is not None:
             write_unified_command_center_drift_response_verification_report(report, args.report_out)

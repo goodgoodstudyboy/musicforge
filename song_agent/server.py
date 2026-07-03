@@ -12301,6 +12301,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             source_review_verification_report_path=payload.get("unified_command_center_drift_source_review_verification_report"),
             recheck_review_zip_path=payload.get("unified_command_center_drift_recheck_review") or payload.get("unified_command_center_drift_recheck_review_zip"),
             recheck_review_verification_report_path=payload.get("unified_command_center_drift_recheck_review_verification_report"),
+            change_request_binding_report_path=payload.get("unified_command_center_drift_change_request_binding_report"),
             archive_zip_path=payload.get("unified_command_center_archive") or payload.get("unified_command_center_archive_zip"),
             archive_verification_report_path=payload.get("unified_command_center_archive_verification_report"),
             handoff_zip_path=payload.get("unified_command_center_handoff") or payload.get("unified_command_center_handoff_zip"),

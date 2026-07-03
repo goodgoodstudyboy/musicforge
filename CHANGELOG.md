@@ -1,5 +1,16 @@
 # Changelog
 
+## v11.3.1 - 2026-07-03
+
+### Fixed
+- Unified Command Center Drift Response now requires an external Change Request binding report for closed response verification instead of trusting ZIP-internal CR bindings.
+- Drift Response closeout/export writes a CR binding proof report that binds manual action items, source drift IDs, approved CR payload hashes, action queue hash, and CR binding hash.
+- Release signoff and GA readiness gates now pass the same external CR proof so local gates and offline verification use one evidence model.
+- release-check `v113.unified_command_center_drift_response_smoke` now covers missing CR proof, forged CR binding, wrong-item CR proof, and reused CR proof regressions.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_drift_response.py tests\test_cli_unified_command_center.py::test_unified_command_center_cli_drift_response_lifecycle tests\test_server_unified_command_center.py::test_unified_command_center_api_drift_response_lifecycle tests\test_release_check.py::test_v113_unified_command_center_drift_response_smoke -q`
+
 ## v11.3.0 - 2026-07-02
 
 ### Added

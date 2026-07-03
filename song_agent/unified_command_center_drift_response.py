@@ -15,6 +15,7 @@ from song_agent.unified_command_center import UnifiedCommandCenterStore
 from song_agent.unified_command_center_continuous_review import UnifiedCommandCenterContinuousReviewStore
 from song_agent.unified_command_center_drift_response_verifier import (
     REQUIRED_ENTRIES,
+    UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_CR_BINDING_REPORT_PACKAGE_TYPE,
     UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_PACKAGE_TYPE,
     UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION,
     verify_unified_command_center_drift_response_package,
@@ -75,6 +76,9 @@ class UnifiedCommandCenterDriftResponseStore:
     def cr_bindings_path(self, center_id: str, response_id: str) -> Path:
         return self.response_dir(center_id, response_id) / "change-request-bindings.json"
 
+    def cr_binding_report_path(self, center_id: str, response_id: str) -> Path:
+        return self.response_dir(center_id, response_id) / "change-request-binding-report.json"
+
     def recheck_path(self, center_id: str, response_id: str) -> Path:
         return self.response_dir(center_id, response_id) / "recheck-summary.json"
 
@@ -115,6 +119,7 @@ class UnifiedCommandCenterDriftResponseStore:
             ("queue", self.queue_path),
             ("results", self.results_path),
             ("change_request_bindings", self.cr_bindings_path),
+            ("change_request_binding_report", self.cr_binding_report_path),
             ("recheck", self.recheck_path),
             ("closeout", self.closeout_path),
             ("package_fingerprints", self.fingerprints_path),
@@ -212,24 +217,40 @@ class UnifiedCommandCenterDriftResponseStore:
             existing_rows = [row for row in docs["change_request_bindings"].get("items", []) if isinstance(row, dict)]
             if any(row.get("item_id") == item_id for row in existing_rows):
                 raise UnifiedCommandCenterDriftResponseStateError("Change Request binding already exists for this item.")
+            item = next((row for row in docs["queue"].get("items", []) if isinstance(row, dict) and str(row.get("item_id")) == item_id), {})
+            change_request_id = _bounded(payload.get("change_request_id") or f"cr-{item_id}", 160)
+            if any(row.get("change_request_id") == change_request_id for row in existing_rows):
+                raise UnifiedCommandCenterDriftResponseStateError("Change Request id is already bound to this Drift Response.")
             status = str(payload.get("status") or payload.get("change_request_status") or "").strip().lower()
             if status != "approved":
                 raise UnifiedCommandCenterDriftResponseStateError("Change Request binding must be approved.")
+            approval = {
+                "change_request_id": change_request_id,
+                "status": "approved",
+                "approved_by": _bounded(payload.get("approved_by") or "reviewer", 120),
+                "approved_at": _bounded(payload.get("approved_at") or now_iso(), 80),
+                "reason": _bounded(payload.get("reason") or "Approved drift response manual action.", 1000),
+                "evidence_hash": stable_hash(sanitize_metadata(payload.get("evidence") or {})) if isinstance(payload.get("evidence"), dict) else None,
+            }
             binding = sanitize_metadata(
                 {
                     "item_id": item_id,
-                    "change_request_id": _bounded(payload.get("change_request_id") or f"cr-{item_id}", 160),
-                    "status": "approved",
-                    "approved_by": _bounded(payload.get("approved_by") or "reviewer", 120),
-                    "approved_at": _bounded(payload.get("approved_at") or now_iso(), 80),
-                    "reason": _bounded(payload.get("reason") or "Approved drift response manual action.", 1000),
-                    "evidence_hash": stable_hash(sanitize_metadata(payload.get("evidence") or {})) if isinstance(payload.get("evidence"), dict) else None,
+                    "source_drift_id": item.get("source_drift_id"),
+                    "component_type": item.get("component_type"),
+                    "component_id": item.get("component_id"),
+                    "severity": item.get("severity"),
+                    "action": item.get("action"),
+                    **approval,
+                    "approval_hash": stable_hash(approval),
                 }
             )
+            binding["binding_hash"] = stable_hash({key: value for key, value in binding.items() if key != "binding_hash"})
             existing_rows.append(binding)
             doc = _cr_bindings_document(center_id, response_id, docs["source"].get("source_hash"), existing_rows)
             write_json(self.cr_bindings_path(center_id, response_id), doc)
-            self._append_event(center_id, response_id, "change_request_bound", {"item_id": item_id, "change_request_id": binding.get("change_request_id"), "bindings_hash": doc.get("integrity_hash")})
+            proof_report = _cr_binding_report_document(center_id, response_id, docs["source"].get("source_hash"), docs["queue"], doc)
+            write_json(self.cr_binding_report_path(center_id, response_id), proof_report)
+            self._append_event(center_id, response_id, "change_request_bound", {"item_id": item_id, "change_request_id": binding.get("change_request_id"), "bindings_hash": doc.get("integrity_hash"), "proof_report_hash": proof_report.get("integrity_hash")})
             return doc
 
     def bind_recheck(self, center_id: str, response_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -260,6 +281,8 @@ class UnifiedCommandCenterDriftResponseStore:
         with self.lock:
             docs = self._required_docs(center_id, response_id)
             self._ensure_open(docs)
+            proof_report = _cr_binding_report_document(center_id, response_id, docs["source"].get("source_hash"), docs["queue"], docs["change_request_bindings"])
+            write_json(self.cr_binding_report_path(center_id, response_id), proof_report)
             closeout = _closeout_document(
                 center_id,
                 response_id,
@@ -343,6 +366,7 @@ class UnifiedCommandCenterDriftResponseStore:
             command_center_zip_path=payload.get("command_center_zip") or payload.get("command_center_zip_path") or self.center_store.zip_path(center_id),
             command_center_verification_report_path=payload.get("command_center_verification_report") or payload.get("command_center_verification_report_path") or self.center_store.verification_report_path(center_id),
             signoff_binding_path=payload.get("signoff_binding") or payload.get("signoff_binding_path") or self.signoff_store.signoff_binding_path(center_id),
+            change_request_binding_report_path=payload.get("change_request_binding_report") or payload.get("change_request_binding_report_path") or self.cr_binding_report_path(center_id, response_id),
         )
         write_unified_command_center_drift_response_verification_report(report, self.verification_report_path(center_id, response_id))
         return report
@@ -389,6 +413,7 @@ class UnifiedCommandCenterDriftResponseStore:
                 command_center_zip_path=payload.get("command_center_zip_path") or self.center_store.zip_path(center_id),
                 command_center_verification_report_path=payload.get("command_center_verification_report_path") or self.center_store.verification_report_path(center_id),
                 signoff_binding_path=payload.get("signoff_binding_path") or self.signoff_store.signoff_binding_path(center_id),
+                change_request_binding_report_path=payload.get("change_request_binding_report_path") or payload.get("change_request_binding_report") or self.cr_binding_report_path(center_id, rid),
             )
             if not _integrity_ok(external):
                 return _gate_failed("Unified Command Center Drift Response verification integrity failed.")
@@ -424,6 +449,7 @@ class UnifiedCommandCenterDriftResponseStore:
         write_json(self.queue_path(center_id, response_id), queue)
         write_json(self.results_path(center_id, response_id), results)
         write_json(self.cr_bindings_path(center_id, response_id), cr_bindings)
+        write_json(self.cr_binding_report_path(center_id, response_id), _cr_binding_report_document(center_id, response_id, source.get("source_hash"), queue, cr_bindings))
         write_json(self.recheck_path(center_id, response_id), recheck)
         write_json(self.closeout_path(center_id, response_id), closeout)
         write_json(self.fingerprints_path(center_id, response_id), fingerprints)
@@ -607,6 +633,51 @@ def _cr_bindings_document(center_id: str, response_id: str, source_hash: str | N
     return doc
 
 
+def _cr_binding_report_document(center_id: str, response_id: str, source_hash: str | None, queue: dict[str, Any], cr_bindings: dict[str, Any]) -> dict[str, Any]:
+    queue_items = {str(row.get("item_id")): row for row in queue.get("items", []) if isinstance(row, dict)}
+    rows = []
+    for binding in [row for row in cr_bindings.get("items", []) if isinstance(row, dict)]:
+        item_id = str(binding.get("item_id") or "")
+        item = queue_items.get(item_id, {})
+        proof = sanitize_metadata(
+            {
+                "item_id": item_id,
+                "source_drift_id": binding.get("source_drift_id") or item.get("source_drift_id"),
+                "component_type": binding.get("component_type") or item.get("component_type"),
+                "component_id": binding.get("component_id") or item.get("component_id"),
+                "severity": binding.get("severity") or item.get("severity"),
+                "action": binding.get("action") or item.get("action"),
+                "change_request_id": binding.get("change_request_id"),
+                "status": binding.get("status"),
+                "approved_by": binding.get("approved_by"),
+                "approved_at": binding.get("approved_at"),
+                "approval_hash": binding.get("approval_hash") or _approval_hash(binding),
+                "binding_hash": binding.get("binding_hash"),
+            }
+        )
+        proof["proof_hash"] = stable_hash({key: value for key, value in proof.items() if key != "proof_hash"})
+        rows.append(proof)
+    doc = sanitize_metadata(
+        {
+            "schema_version": UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION,
+            "package_type": UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_CR_BINDING_REPORT_PACKAGE_TYPE,
+            "center_id": center_id,
+            "response_id": response_id,
+            "source_hash": source_hash,
+            "action_queue_hash": queue.get("integrity_hash"),
+            "change_request_bindings_hash": cr_bindings.get("integrity_hash"),
+            "items": rows,
+            "summary": {
+                "binding_count": len(rows),
+                "approved_count": sum(1 for row in rows if row.get("status") == "approved"),
+                "manual_required_count": sum(1 for row in queue.get("items", []) if isinstance(row, dict) and not row.get("safe")),
+            },
+        }
+    )
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
 def _recheck_document(center_id: str, response_id: str, source_hash: str | None, binding: dict[str, Any] | None) -> dict[str, Any]:
     status = "passed" if binding and binding.get("verification_status") == "passed" and binding.get("drift_status") == "passed" else "missing"
     doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_drift_response_recheck_summary", "center_id": center_id, "response_id": response_id, "source_hash": source_hash, "status": status, "review": binding or {}, "summary": {"recheck_bound": bool(binding), "status": status}})
@@ -683,6 +754,19 @@ def _integrity_ok(payload: dict[str, Any]) -> bool:
 
 def _integrity_hash(payload: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
+
+
+def _approval_hash(binding: dict[str, Any]) -> str:
+    return stable_hash(
+        {
+            "change_request_id": binding.get("change_request_id"),
+            "status": binding.get("status"),
+            "approved_by": binding.get("approved_by"),
+            "approved_at": binding.get("approved_at"),
+            "reason": binding.get("reason"),
+            "evidence_hash": binding.get("evidence_hash"),
+        }
+    )
 
 
 def _sha256_path(path: Path | str | None) -> str | None:

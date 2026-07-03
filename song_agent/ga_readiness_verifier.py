@@ -137,6 +137,7 @@ def verify_ga_readiness_report(
     unified_command_center_drift_source_review_verification_report_path: Path | str | None = None,
     unified_command_center_drift_recheck_review_path: Path | str | None = None,
     unified_command_center_drift_recheck_review_verification_report_path: Path | str | None = None,
+    unified_command_center_drift_change_request_binding_report_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -403,6 +404,7 @@ def verify_ga_readiness_report(
                 unified_command_center_drift_source_review_verification_report_path,
                 unified_command_center_drift_recheck_review_path,
                 unified_command_center_drift_recheck_review_verification_report_path,
+                unified_command_center_drift_change_request_binding_report_path,
                 unified_command_center_signoff_binding_path,
                 unified_command_center_archive_path,
                 unified_command_center_archive_verification_report_path,
@@ -1593,6 +1595,7 @@ def _verify_unified_command_center_drift_response_evidence(
     source_review_verification_report_path: Path | str | None,
     recheck_review_path: Path | str | None,
     recheck_review_verification_report_path: Path | str | None,
+    change_request_binding_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
     archive_path: Path | str | None,
     archive_verification_report_path: Path | str | None,
@@ -1606,6 +1609,9 @@ def _verify_unified_command_center_drift_response_evidence(
         return
     if not response_verification_report_path:
         _add_check(checks, "ga_readiness_unified_command_center_drift_response_verification_required", "failed", "blocking", "Unified Command Center Drift Response requirement needs a verification report.")
+        return
+    if not change_request_binding_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_drift_response_cr_proof_required", "failed", "blocking", "Unified Command Center Drift Response requirement needs an external Change Request binding report.")
         return
     zip_path = Path(response_path)
     try:
@@ -1622,6 +1628,7 @@ def _verify_unified_command_center_drift_response_evidence(
             source_review_verification_report_path=source_review_verification_report_path,
             recheck_review_zip_path=recheck_review_path,
             recheck_review_verification_report_path=recheck_review_verification_report_path,
+            change_request_binding_report_path=change_request_binding_report_path,
             archive_zip_path=archive_path,
             archive_verification_report_path=archive_verification_report_path,
             handoff_zip_path=handoff_path,

@@ -18607,17 +18607,33 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
                 response_store = UnifiedCommandCenterDriftResponseStore(store, signoff_store=signoff_store, handoff_store=handoff_store, review_store=review_store)
                 failed_plan = review_store.create_plan(
                     center["center_id"],
-                    {"review_id": "uccrv-failed", "external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "passed"}]},
+                    {
+                        "review_id": "uccrv-failed",
+                        "external_evidence": [
+                            {"component": "distribution", "component_id": "target-001", "status": "passed"},
+                            {"component": "distribution", "component_id": "target-002", "status": "passed"},
+                        ],
+                    },
                 )
                 failed_review = review_store.run_review(
                     center["center_id"],
                     failed_plan["review_id"],
-                    {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "failed"}]},
+                    {
+                        "external_evidence": [
+                            {"component": "distribution", "component_id": "target-001", "status": "failed"},
+                            {"component": "distribution", "component_id": "target-002", "status": "failed"},
+                        ],
+                    },
                 )
                 failed_zip = review_store.build_zip(
                     center["center_id"],
                     failed_plan["review_id"],
-                    {"external_evidence": [{"component": "distribution", "component_id": "target-001", "status": "failed"}]},
+                    {
+                        "external_evidence": [
+                            {"component": "distribution", "component_id": "target-001", "status": "failed"},
+                            {"component": "distribution", "component_id": "target-002", "status": "failed"},
+                        ],
+                    },
                 )
                 failed_verification = review_store.verify_package(center["center_id"], failed_plan["review_id"])
                 created = response_store.create_response(center["center_id"], {"source_review_id": failed_plan["review_id"], "created_by": "release-check"})
@@ -18651,6 +18667,7 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
                     unified_command_center_drift_source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
                     unified_command_center_drift_recheck_review_zip_path=clear_zip["zip_path"],
                     unified_command_center_drift_recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    unified_command_center_drift_change_request_binding_report_path=response_store.cr_binding_report_path(center["center_id"], response_id),
                     unified_command_center_archive_zip_path=archive_zip["zip_path"],
                     unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
                     unified_command_center_handoff_zip_path=handoff_zip["zip_path"],
@@ -18670,6 +18687,7 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
                     unified_command_center_drift_source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
                     unified_command_center_drift_recheck_review_path=clear_zip["zip_path"],
                     unified_command_center_drift_recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    unified_command_center_drift_change_request_binding_report_path=response_store.cr_binding_report_path(center["center_id"], response_id),
                     unified_command_center_archive_path=archive_zip["zip_path"],
                     unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
                     unified_command_center_handoff_path=handoff_zip["zip_path"],
@@ -18682,6 +18700,25 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
                 declared_extra_zip = base / "ucc-drift-response-extra.zip"
                 _v76_rewrite_zip(Path(response_zip["zip_path"]), declared_extra_zip, _v113_add_declared_drift_response_extra)
                 declared_extra = verify_unified_command_center_drift_response_package(declared_extra_zip, strict=True, require_closed=True)
+
+                missing_cr_proof = verify_unified_command_center_drift_response_package(
+                    response_zip["zip_path"],
+                    strict=True,
+                    require_closed=True,
+                    require_recheck_clear=True,
+                    require_current_review=True,
+                    source_review_zip_path=failed_zip["zip_path"],
+                    source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
+                    recheck_review_zip_path=clear_zip["zip_path"],
+                    recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    archive_zip_path=archive_zip["zip_path"],
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                )
 
                 forged_zip = base / "ucc-drift-response-forged.zip"
                 _v76_rewrite_zip(Path(response_zip["zip_path"]), forged_zip, _v113_forge_drift_response_clear_without_recheck)
@@ -18702,6 +18739,71 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
                     command_center_zip_path=store.zip_path(center["center_id"]),
                     command_center_verification_report_path=store.verification_report_path(center["center_id"]),
                     signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    change_request_binding_report_path=response_store.cr_binding_report_path(center["center_id"], response_id),
+                )
+
+                forged_cr_zip = base / "ucc-drift-response-forged-cr.zip"
+                _v76_rewrite_zip(Path(response_zip["zip_path"]), forged_cr_zip, _v113_forge_drift_response_cr_binding)
+                forged_cr = verify_unified_command_center_drift_response_package(
+                    forged_cr_zip,
+                    strict=True,
+                    require_closed=True,
+                    require_recheck_clear=True,
+                    require_current_review=True,
+                    source_review_zip_path=failed_zip["zip_path"],
+                    source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
+                    recheck_review_zip_path=clear_zip["zip_path"],
+                    recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    archive_zip_path=archive_zip["zip_path"],
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    change_request_binding_report_path=response_store.cr_binding_report_path(center["center_id"], response_id),
+                )
+                wrong_item_report = base / "wrong-item-cr-report.json"
+                _v113_write_modified_cr_report(response_store.cr_binding_report_path(center["center_id"], response_id), wrong_item_report, "wrong_item")
+                wrong_item_cr = verify_unified_command_center_drift_response_package(
+                    response_zip["zip_path"],
+                    strict=True,
+                    require_closed=True,
+                    require_recheck_clear=True,
+                    require_current_review=True,
+                    source_review_zip_path=failed_zip["zip_path"],
+                    source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
+                    recheck_review_zip_path=clear_zip["zip_path"],
+                    recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    archive_zip_path=archive_zip["zip_path"],
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    change_request_binding_report_path=wrong_item_report,
+                )
+                reused_cr_report = base / "reused-cr-report.json"
+                _v113_write_modified_cr_report(response_store.cr_binding_report_path(center["center_id"], response_id), reused_cr_report, "reused_cr")
+                reused_cr = verify_unified_command_center_drift_response_package(
+                    response_zip["zip_path"],
+                    strict=True,
+                    require_closed=True,
+                    require_recheck_clear=True,
+                    require_current_review=True,
+                    source_review_zip_path=failed_zip["zip_path"],
+                    source_review_verification_report_path=review_store.verification_report_path(center["center_id"], failed_plan["review_id"]),
+                    recheck_review_zip_path=clear_zip["zip_path"],
+                    recheck_review_verification_report_path=review_store.verification_report_path(center["center_id"], clear_plan["review_id"]),
+                    archive_zip_path=archive_zip["zip_path"],
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    command_center_zip_path=store.zip_path(center["center_id"]),
+                    command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    change_request_binding_report_path=reused_cr_report,
                 )
 
                 ok = (
@@ -18719,6 +18821,10 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
                     and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_drift_response_verification_status") == "passed"
                     and _v38_check_status(declared_extra, "ucc_drift_response_allowed_entries") == "failed"
                     and full_resign.get("status") == "failed"
+                    and _v38_check_status(missing_cr_proof, "ucc_drift_response_cr_proof_required") == "failed"
+                    and _v38_check_status(forged_cr, "ucc_drift_response_cr_proof_bindings_binding") == "failed"
+                    and _v38_check_status(wrong_item_cr, "ucc_drift_response_cr_proof_item_coverage") == "failed"
+                    and _v38_check_status(reused_cr, "ucc_drift_response_cr_proof_unique_change_requests") == "failed"
                 )
                 return ok, (
                     f"center={center_verify.get('status')}, archive={archive_verify.get('status')}, handoff={handoff_verify.get('status')}, "
@@ -18726,7 +18832,11 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
                     f"close_without_cr={'409' if close_without_cr_blocked else 'allowed'}, response={closeout.get('status')}, "
                     f"verify={response_verify.get('status')}, gate={response_gate.get('status')}, "
                     f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_drift_response_verification_status')}/{ga_verify.get('status')}, "
-                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_drift_response_allowed_entries')}, full_resign={full_resign.get('status')}"
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_drift_response_allowed_entries')}, full_resign={full_resign.get('status')}, "
+                    f"missing_cr_proof={_v38_check_status(missing_cr_proof, 'ucc_drift_response_cr_proof_required')}, "
+                    f"forged_cr={_v38_check_status(forged_cr, 'ucc_drift_response_cr_proof_bindings_binding')}, "
+                    f"wrong_item_cr={_v38_check_status(wrong_item_cr, 'ucc_drift_response_cr_proof_item_coverage')}, "
+                    f"reused_cr={_v38_check_status(reused_cr, 'ucc_drift_response_cr_proof_unique_change_requests')}"
                 )
             finally:
                 os.chdir(old_cwd)
@@ -18773,6 +18883,59 @@ def _v113_forge_drift_response_clear_without_recheck(entries: dict[str, bytes]) 
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     return entries
+
+
+def _v113_forge_drift_response_cr_binding(entries: dict[str, bytes]) -> dict[str, bytes]:
+    cr_bindings = json.loads(entries["change-request-bindings.json"].decode("utf-8"))
+    if cr_bindings.get("items"):
+        cr_bindings["items"][0]["change_request_id"] = "cr-forged"
+        cr_bindings["items"][0]["approved_by"] = "forged-reviewer"
+        cr_bindings["items"][0]["approval_hash"] = stable_hash(
+            {
+                "change_request_id": cr_bindings["items"][0].get("change_request_id"),
+                "status": cr_bindings["items"][0].get("status"),
+                "approved_by": cr_bindings["items"][0].get("approved_by"),
+                "approved_at": cr_bindings["items"][0].get("approved_at"),
+                "reason": cr_bindings["items"][0].get("reason"),
+                "evidence_hash": cr_bindings["items"][0].get("evidence_hash"),
+            }
+        )
+        cr_bindings["items"][0]["binding_hash"] = stable_hash({key: value for key, value in cr_bindings["items"][0].items() if key != "binding_hash"})
+    cr_bindings.setdefault("summary", {})["approved_count"] = sum(1 for row in cr_bindings.get("items", []) if row.get("status") == "approved")
+    cr_bindings["integrity_hash"] = stable_hash({key: value for key, value in cr_bindings.items() if key != "integrity_hash"})
+    entries["change-request-bindings.json"] = json.dumps(cr_bindings, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    closeout = json.loads(entries["closeout-report.json"].decode("utf-8"))
+    closeout.setdefault("bindings", {})["change_request_bindings_hash"] = cr_bindings["integrity_hash"]
+    closeout["integrity_hash"] = stable_hash({key: value for key, value in closeout.items() if key != "integrity_hash"})
+    entries["closeout-report.json"] = json.dumps(closeout, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["change_request_bindings_hash"] = cr_bindings["integrity_hash"]
+    manifest.setdefault("source", {})["closeout_report_hash"] = closeout["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "change-request-bindings.json", entries["change-request-bindings.json"])
+    _v74_sync_manifest_file(manifest, "closeout-report.json", entries["closeout-report.json"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v113_write_modified_cr_report(source: Path, target: Path, mode: str) -> None:
+    report = read_json(source)
+    items = [row for row in report.get("items", []) if isinstance(row, dict)]
+    if mode == "wrong_item" and items:
+        items[0]["item_id"] = "item-wrong"
+    if mode == "reused_cr" and len(items) > 1:
+        reused = str(items[0].get("change_request_id") or "cr-reused")
+        for row in items:
+            row["change_request_id"] = reused
+    for row in items:
+        row["proof_hash"] = stable_hash({key: value for key, value in row.items() if key != "proof_hash"})
+    report["items"] = items
+    report.setdefault("summary", {})["binding_count"] = len(items)
+    report.setdefault("summary", {})["approved_count"] = sum(1 for row in items if row.get("status") == "approved")
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    write_json(target, report)
 
 
 def _v111_full_resign_archive_signer(entries: dict[str, bytes]) -> dict[str, bytes]:

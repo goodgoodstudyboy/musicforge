@@ -17,6 +17,7 @@ from song_agent.unified_command_center_continuous_review_verifier import (
 
 UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_PACKAGE_TYPE = "musicforge_unified_command_center_drift_response"
 UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_drift_response_verification"
+UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_CR_BINDING_REPORT_PACKAGE_TYPE = "musicforge_unified_command_center_drift_response_change_request_binding_report"
 UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION = 1
 
 REQUIRED_ENTRIES = {
@@ -57,6 +58,7 @@ def verify_unified_command_center_drift_response_package(
     source_review_verification_report_path: Path | str | None = None,
     recheck_review_zip_path: Path | str | None = None,
     recheck_review_verification_report_path: Path | str | None = None,
+    change_request_binding_report_path: Path | str | None = None,
     archive_zip_path: Path | str | None = None,
     archive_verification_report_path: Path | str | None = None,
     handoff_zip_path: Path | str | None = None,
@@ -146,6 +148,7 @@ def verify_unified_command_center_drift_response_package(
             )
             if require_closed:
                 checks.append(_check("ucc_drift_response_require_closed", closeout.get("status") == "closed" and case.get("status") == "closed", "Drift Response is closed.", {"case_status": case.get("status"), "closeout_status": closeout.get("status")}))
+                checks.extend(_change_request_proof_checks(queue, cr_bindings, change_request_binding_report_path))
             if require_recheck_clear:
                 checks.append(_check("ucc_drift_response_require_recheck_clear", recheck.get("status") == "passed" and closeout.get("recheck_status") == "passed", "Response recheck is clear.", {"recheck_status": recheck.get("status")}))
             if require_current_review or strict:
@@ -295,6 +298,79 @@ def _action_summary_ok(queue: dict[str, Any], results: dict[str, Any], cr_bindin
         and int(r_summary.get("completed_count") or 0) == sum(1 for row in result_rows if row.get("status") == "completed")
         and int(r_summary.get("manual_required_count") or 0) == sum(1 for row in result_rows if row.get("status") == "manual_required")
         and int(c_summary.get("approved_count") or 0) == sum(1 for row in cr_rows if row.get("status") == "approved")
+    )
+
+
+def _change_request_proof_checks(queue: dict[str, Any], cr_bindings: dict[str, Any], report_path: Path | str | None) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    manual_items = [row for row in queue.get("items", []) if isinstance(row, dict) and not row.get("safe")]
+    if not manual_items:
+        return checks
+    if not report_path:
+        return [_check("ucc_drift_response_cr_proof_required", False, "External Change Request binding report is required for closed Drift Response packages.")]
+    path = Path(report_path)
+    if not path.exists():
+        return [_check("ucc_drift_response_cr_proof_exists", False, "External Change Request binding report exists.", {"path": str(path)})]
+    try:
+        report = read_json(path)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        return [_check("ucc_drift_response_cr_proof_readable", False, "External Change Request binding report can be read.", {"error": sanitize_sensitive_text(str(exc))})]
+
+    proof_rows = [row for row in report.get("items", []) if isinstance(row, dict)]
+    binding_rows = [row for row in cr_bindings.get("items", []) if isinstance(row, dict)]
+    manual_by_item = {str(row.get("item_id")): row for row in manual_items}
+    proof_by_item = {str(row.get("item_id")): row for row in proof_rows}
+    binding_by_item = {str(row.get("item_id")): row for row in binding_rows}
+    manual_ids = set(manual_by_item)
+    proof_ids = set(proof_by_item)
+    binding_ids = set(binding_by_item)
+    cr_ids = [str(row.get("change_request_id") or "") for row in proof_rows if row.get("change_request_id")]
+    duplicate_cr_ids = sorted({value for value in cr_ids if cr_ids.count(value) > 1})
+
+    checks.extend(
+        [
+            _check("ucc_drift_response_cr_proof_package_type", report.get("package_type") == UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_CR_BINDING_REPORT_PACKAGE_TYPE, "External Change Request binding report package type is valid."),
+            _check("ucc_drift_response_cr_proof_integrity", _integrity_ok(report), "External Change Request binding report integrity hash is valid."),
+            _check("ucc_drift_response_cr_proof_response_binding", report.get("response_id") == queue.get("response_id") == cr_bindings.get("response_id"), "External CR report binds the same response id."),
+            _check("ucc_drift_response_cr_proof_source_binding", report.get("source_hash") == queue.get("source_hash") == cr_bindings.get("source_hash"), "External CR report binds the same source hash."),
+            _check("ucc_drift_response_cr_proof_queue_binding", report.get("action_queue_hash") == queue.get("integrity_hash"), "External CR report binds the action queue."),
+            _check("ucc_drift_response_cr_proof_bindings_binding", report.get("change_request_bindings_hash") == cr_bindings.get("integrity_hash"), "External CR report binds the package CR bindings."),
+            _check("ucc_drift_response_cr_proof_item_coverage", proof_ids == manual_ids == binding_ids, "External CR report covers every manual action item exactly.", {"missing_proof": sorted(manual_ids - proof_ids), "extra_proof": sorted(proof_ids - manual_ids), "missing_binding": sorted(manual_ids - binding_ids)}),
+            _check("ucc_drift_response_cr_proof_unique_change_requests", not duplicate_cr_ids, "External CR report does not reuse a Change Request id across manual items.", {"duplicates": duplicate_cr_ids}),
+        ]
+    )
+    if any(check["status"] == "failed" for check in checks):
+        return checks
+
+    for item_id in sorted(manual_ids):
+        item = manual_by_item[item_id]
+        proof = proof_by_item[item_id]
+        binding = binding_by_item[item_id]
+        expected_approval_hash = _approval_hash(binding)
+        expected_proof_hash = stable_hash({key: value for key, value in proof.items() if key != "proof_hash"})
+        checks.extend(
+            [
+                _check(f"ucc_drift_response_cr_proof_{item_id}_status", proof.get("status") == "approved" and binding.get("status") == "approved", "CR proof and binding are approved.", {"item_id": item_id}),
+                _check(f"ucc_drift_response_cr_proof_{item_id}_drift", proof.get("source_drift_id") == item.get("source_drift_id") == binding.get("source_drift_id"), "CR proof binds the source drift id.", {"item_id": item_id}),
+                _check(f"ucc_drift_response_cr_proof_{item_id}_action", proof.get("action") == item.get("action") == binding.get("action"), "CR proof binds the action.", {"item_id": item_id}),
+                _check(f"ucc_drift_response_cr_proof_{item_id}_component", proof.get("component_type") == item.get("component_type") == binding.get("component_type") and proof.get("component_id") == item.get("component_id") == binding.get("component_id"), "CR proof binds the component.", {"item_id": item_id}),
+                _check(f"ucc_drift_response_cr_proof_{item_id}_approval_hash", proof.get("approval_hash") == binding.get("approval_hash") == expected_approval_hash, "CR proof binds the approval payload.", {"item_id": item_id}),
+                _check(f"ucc_drift_response_cr_proof_{item_id}_proof_hash", proof.get("proof_hash") == expected_proof_hash, "CR proof hash is valid.", {"item_id": item_id}),
+            ]
+        )
+    return checks
+
+
+def _approval_hash(binding: dict[str, Any]) -> str:
+    return stable_hash(
+        {
+            "change_request_id": binding.get("change_request_id"),
+            "status": binding.get("status"),
+            "approved_by": binding.get("approved_by"),
+            "approved_at": binding.get("approved_at"),
+            "reason": binding.get("reason"),
+            "evidence_hash": binding.get("evidence_hash"),
+        }
     )
 
 
