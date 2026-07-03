@@ -104,6 +104,10 @@ python -m song_agent.cli unified-command-center-evidence-review replay ucc-00000
 python -m song_agent.cli unified-command-center-evidence-review zip ucc-000001 uccer-000001 --json
 python -m song_agent.cli unified-command-center-evidence-review verify ucc-000001 uccer-000001 --strict --json
 python -m song_agent.cli verify-unified-command-center-evidence-review-package .musicforge\unified-command-centers\ucc-000001\evidence-reviews\uccer-000001\musicforge-unified-command-center-evidence-review.zip --strict --require-replay-passed --unified-command-center .musicforge\unified-command-centers\ucc-000001\musicforge-unified-command-center.zip --unified-command-center-verification-report .musicforge\unified-command-centers\ucc-000001\verification-report.json --json
+python -m song_agent.cli unified-command-center-reviewer-decision-board create ucc-000001 --review-id uccer-000001 --accepted-evidence <tech-accepted-evidence.zip> --accepted-evidence-verification-report <tech-accepted-verification.json> --accepted-evidence-response-verification-report <tech-response-verification.json> --accepted-evidence <owner-accepted-evidence.zip> --accepted-evidence-verification-report <owner-accepted-verification.json> --accepted-evidence-response-verification-report <owner-response-verification.json> --json
+python -m song_agent.cli unified-command-center-reviewer-decision-board signoff ucc-000001 uccdb-000001 --signed-by "Decision Chair" --reason "Reviewer quorum accepted" --json
+python -m song_agent.cli unified-command-center-reviewer-decision-board zip ucc-000001 uccdb-000001 --json
+python -m song_agent.cli unified-command-center-reviewer-decision-board verify ucc-000001 uccdb-000001 --strict --json
 ```
 
 The runbook only executes safe local refresh/export/ZIP/verify actions. It does
@@ -133,6 +137,16 @@ release-check evidence. Review responses must explicitly bind the current review
 pack hash and source hash; the import path will not invent that binding. Accepted
 responses can be exported as separate acceptance evidence and GA readiness can
 require `require_unified_command_center_evidence_review=true`.
+
+Unified Command Center Reviewer Decision Board turns multiple accepted external
+review responses into a formal quorum decision. The Board verifies required
+roles, organization count, rejection and high/critical finding blockers, then
+writes a signed archive with hash-chained history. Its verifier re-checks the
+current Evidence Review package, each accepted evidence ZIP, the accepted
+evidence verification reports, and the original response verification summaries;
+it does not trust role or acceptance fields that only appear inside the Board
+ZIP. Release signoff and GA readiness can require
+`require_unified_command_center_reviewer_decision_board=true`.
 
 ## Audio Lab
 

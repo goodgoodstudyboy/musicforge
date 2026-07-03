@@ -146,6 +146,16 @@ def build_ga_readiness_report(
     unified_command_center_evidence_review_acceptance_zip_path: Path | str | None = None,
     unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None = None,
     unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None = None,
+    require_unified_command_center_reviewer_decision_board: bool = False,
+    unified_command_center_reviewer_decision_board_zip_path: Path | str | None = None,
+    unified_command_center_reviewer_decision_board_verification_report_path: Path | str | None = None,
+    require_unified_command_center_reviewer_decision_board_signed: bool = True,
+    require_unified_command_center_reviewer_decision_board_quorum: bool = True,
+    unified_command_center_reviewer_decision_board_evidence_review_zip_path: Path | str | None = None,
+    unified_command_center_reviewer_decision_board_evidence_review_verification_report_path: Path | str | None = None,
+    unified_command_center_reviewer_decision_board_accepted_evidence_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     unified_release_zip_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -192,6 +202,9 @@ def build_ga_readiness_report(
         "require_unified_command_center_drift_response": require_unified_command_center_drift_response,
         "require_unified_command_center_evidence_review": require_unified_command_center_evidence_review,
         "require_unified_command_center_evidence_review_accepted": require_unified_command_center_evidence_review_accepted,
+        "require_unified_command_center_reviewer_decision_board": require_unified_command_center_reviewer_decision_board,
+        "require_unified_command_center_reviewer_decision_board_signed": require_unified_command_center_reviewer_decision_board_signed,
+        "require_unified_command_center_reviewer_decision_board_quorum": require_unified_command_center_reviewer_decision_board_quorum,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -627,6 +640,26 @@ def build_ga_readiness_report(
         "Unified Command Center Evidence Review is passed." if unified_evidence_review_summary.get("status") == "passed" else "Unified Command Center Evidence Review is missing or not passed.",
         unified_evidence_review_summary,
     )
+    unified_decision_board_summary = _unified_command_center_reviewer_decision_board_summary(
+        required=require_unified_command_center_reviewer_decision_board,
+        board_zip_path=unified_command_center_reviewer_decision_board_zip_path,
+        board_verification_report_path=unified_command_center_reviewer_decision_board_verification_report_path,
+        require_signed=require_unified_command_center_reviewer_decision_board_signed,
+        require_quorum=require_unified_command_center_reviewer_decision_board_quorum,
+        evidence_review_zip_path=unified_command_center_reviewer_decision_board_evidence_review_zip_path or unified_command_center_evidence_review_zip_path,
+        evidence_review_verification_report_path=unified_command_center_reviewer_decision_board_evidence_review_verification_report_path or unified_command_center_evidence_review_verification_report_path,
+        accepted_evidence_zip_paths=unified_command_center_reviewer_decision_board_accepted_evidence_zip_paths,
+        accepted_evidence_verification_report_paths=unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths,
+        accepted_evidence_response_verification_report_paths=unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths,
+    )
+    _add_check(
+        checks,
+        "ga.unified_command_center_reviewer_decision_board",
+        "passed" if unified_decision_board_summary.get("status") == "passed" else "failed" if require_unified_command_center_reviewer_decision_board else "warning",
+        "blocking" if require_unified_command_center_reviewer_decision_board else "warning",
+        "Unified Command Center Reviewer Decision Board is passed." if unified_decision_board_summary.get("status") == "passed" else "Unified Command Center Reviewer Decision Board is missing or not passed.",
+        unified_decision_board_summary,
+    )
 
     latest_summary = _release_check_summary(
         root,
@@ -701,6 +734,7 @@ def build_ga_readiness_report(
             "unified_command_center_continuous_review_status": unified_review_summary.get("status", "missing"),
             "unified_command_center_drift_response_status": unified_drift_response_summary.get("status", "missing"),
             "unified_command_center_evidence_review_status": unified_evidence_review_summary.get("status", "missing"),
+            "unified_command_center_reviewer_decision_board_status": unified_decision_board_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -1782,6 +1816,65 @@ def _unified_command_center_evidence_review_summary(
             if acceptance_runtime.get("status") != "passed" or acceptance_external.get("status") != "passed":
                 status = "failed"
         return {"status": status, "zip_sha256": runtime_fp.get("zip_sha256"), "manifest_hash": runtime_fp.get("manifest_hash"), "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"), "runtime_verification_status": runtime_report.get("status"), "external_verification_status": external_report.get("status") if external_report else None, "external_integrity_ok": external_integrity_ok, "zip_binding_ok": zip_binding_ok, "manifest_binding_ok": manifest_binding_ok, "acceptance": acceptance_summary, "blockers": runtime_report.get("blockers", []), "summary": runtime_report.get("summary", {})}
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_command_center_reviewer_decision_board_summary(
+    *,
+    required: bool,
+    board_zip_path: Path | str | None,
+    board_verification_report_path: Path | str | None,
+    require_signed: bool,
+    require_quorum: bool,
+    evidence_review_zip_path: Path | str | None,
+    evidence_review_verification_report_path: Path | str | None,
+    accepted_evidence_zip_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+) -> dict[str, Any]:
+    if board_zip_path is None:
+        return {"status": "missing", "message": "Unified Command Center Reviewer Decision Board archive was not provided."}
+    if required and board_verification_report_path is None:
+        return {"status": "failed", "message": "Unified Command Center Reviewer Decision Board requires a verification report."}
+    try:
+        from song_agent.unified_command_center_reviewer_decision_board_verifier import verify_unified_command_center_reviewer_decision_board_package
+
+        runtime_report = verify_unified_command_center_reviewer_decision_board_package(
+            board_zip_path,
+            strict=True,
+            require_signed=require_signed or required,
+            require_quorum=require_quorum or required,
+            evidence_review_path=evidence_review_zip_path,
+            evidence_review_verification_report_path=evidence_review_verification_report_path,
+            accepted_evidence_paths=accepted_evidence_zip_paths or [],
+            accepted_evidence_verification_report_paths=accepted_evidence_verification_report_paths or [],
+            accepted_evidence_response_verification_report_paths=accepted_evidence_response_verification_report_paths or [],
+        )
+        external_report: dict[str, Any] = {}
+        if board_verification_report_path is not None:
+            external_report = read_json(Path(board_verification_report_path))
+        external_fp = _verification_fingerprint(external_report) if external_report else {}
+        runtime_fp = _verification_fingerprint(runtime_report)
+        from song_agent.releases import stable_hash as release_stable_hash
+
+        external_integrity_ok = not external_report or external_report.get("integrity_hash") == release_stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        zip_binding_ok = not external_report or external_fp.get("zip_sha256") == runtime_fp.get("zip_sha256")
+        manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") and external_integrity_ok and zip_binding_ok and manifest_binding_ok else "failed"
+        return {
+            "status": status,
+            "zip_sha256": runtime_fp.get("zip_sha256"),
+            "manifest_hash": runtime_fp.get("manifest_hash"),
+            "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"),
+            "runtime_verification_status": runtime_report.get("status"),
+            "external_verification_status": external_report.get("status") if external_report else None,
+            "external_integrity_ok": external_integrity_ok,
+            "zip_binding_ok": zip_binding_ok,
+            "manifest_binding_ok": manifest_binding_ok,
+            "blockers": runtime_report.get("blockers", []),
+            "summary": runtime_report.get("summary", {}),
+        }
     except Exception as exc:
         return {"status": "failed" if required else "missing", "error": str(exc)}
 

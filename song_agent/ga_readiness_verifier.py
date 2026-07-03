@@ -59,6 +59,7 @@ UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE = "musicforge
 UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_drift_response_verification"
 UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_evidence_review_verification"
 UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_evidence_review_acceptance_verification"
+UNIFIED_COMMAND_CENTER_REVIEWER_DECISION_BOARD_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_reviewer_decision_board_verification"
 from song_agent.trust_operations_final_readiness_verifier import (
     TRUST_OPERATIONS_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE,
     verify_trust_operations_final_handoff_package,
@@ -147,6 +148,16 @@ def verify_ga_readiness_report(
     unified_command_center_evidence_review_acceptance_path: Path | str | None = None,
     unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None = None,
     unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None = None,
+    require_unified_command_center_reviewer_decision_board: bool = False,
+    unified_command_center_reviewer_decision_board_path: Path | str | None = None,
+    unified_command_center_reviewer_decision_board_verification_report_path: Path | str | None = None,
+    require_unified_command_center_reviewer_decision_board_signed: bool = True,
+    require_unified_command_center_reviewer_decision_board_quorum: bool = True,
+    unified_command_center_reviewer_decision_board_evidence_review_path: Path | str | None = None,
+    unified_command_center_reviewer_decision_board_evidence_review_verification_report_path: Path | str | None = None,
+    unified_command_center_reviewer_decision_board_accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -451,6 +462,20 @@ def verify_ga_readiness_report(
                 unified_command_center_drift_change_request_binding_report_path,
                 unified_command_center_signoff_binding_path,
                 release_check_latest_report_path or release_check_ga_report_path,
+            )
+        if require_unified_command_center_reviewer_decision_board:
+            _verify_unified_command_center_reviewer_decision_board_evidence(
+                checks,
+                checks_by_id.get("ga.unified_command_center_reviewer_decision_board", {}),
+                unified_command_center_reviewer_decision_board_path,
+                unified_command_center_reviewer_decision_board_verification_report_path,
+                require_unified_command_center_reviewer_decision_board_signed,
+                require_unified_command_center_reviewer_decision_board_quorum,
+                unified_command_center_reviewer_decision_board_evidence_review_path or unified_command_center_evidence_review_path,
+                unified_command_center_reviewer_decision_board_evidence_review_verification_report_path or unified_command_center_evidence_review_verification_report_path,
+                unified_command_center_reviewer_decision_board_accepted_evidence_paths,
+                unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths,
+                unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -1798,6 +1823,55 @@ def _verify_unified_command_center_evidence_review_evidence(
         acceptance_verification_report,
         acceptance_runtime_report,
         UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_command_center_reviewer_decision_board_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    board_path: Path | str | None,
+    board_verification_report_path: Path | str | None,
+    require_signed: bool,
+    require_quorum: bool,
+    evidence_review_path: Path | str | None,
+    evidence_review_verification_report_path: Path | str | None,
+    accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+    accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None,
+) -> None:
+    if not board_path:
+        _add_check(checks, "ga_readiness_unified_command_center_reviewer_decision_board_required", "failed", "blocking", "Unified Command Center Reviewer Decision Board requirement needs a Board archive ZIP.")
+        return
+    if not board_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_reviewer_decision_board_verification_required", "failed", "blocking", "Unified Command Center Reviewer Decision Board requirement needs a verification report.")
+        return
+    zip_path = Path(board_path)
+    try:
+        from song_agent.unified_command_center_reviewer_decision_board_verifier import verify_unified_command_center_reviewer_decision_board_package
+
+        verification_report = read_json(Path(board_verification_report_path))
+        runtime_report = verify_unified_command_center_reviewer_decision_board_package(
+            zip_path,
+            strict=True,
+            require_signed=require_signed,
+            require_quorum=require_quorum,
+            evidence_review_path=evidence_review_path,
+            evidence_review_verification_report_path=evidence_review_verification_report_path,
+            accepted_evidence_paths=accepted_evidence_paths or [],
+            accepted_evidence_verification_report_paths=accepted_evidence_verification_report_paths or [],
+            accepted_evidence_response_verification_report_paths=accepted_evidence_response_verification_report_paths or [],
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_command_center_reviewer_decision_board_readable", "failed", "blocking", f"Unified Command Center Reviewer Decision Board evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_command_center_reviewer_decision_board",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_COMMAND_CENTER_REVIEWER_DECISION_BOARD_VERIFICATION_PACKAGE_TYPE,
     )
 
 

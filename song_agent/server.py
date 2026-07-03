@@ -615,6 +615,12 @@ from song_agent.unified_command_center_evidence_review import (
     UnifiedCommandCenterEvidenceReviewStateError,
     UnifiedCommandCenterEvidenceReviewStore,
 )
+from song_agent.unified_command_center_reviewer_decision_board import (
+    UnifiedCommandCenterReviewerDecisionBoardError,
+    UnifiedCommandCenterReviewerDecisionBoardNotFoundError,
+    UnifiedCommandCenterReviewerDecisionBoardStateError,
+    UnifiedCommandCenterReviewerDecisionBoardStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3290,6 +3296,13 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         store.handoff_store = self.unified_command_center_handoff_store
         store.review_store = self.unified_command_center_continuous_review_store
         store.drift_response_store = self.unified_command_center_drift_response_store
+        return store
+
+    @property
+    def unified_command_center_reviewer_decision_board_store(self) -> UnifiedCommandCenterReviewerDecisionBoardStore:
+        store = self.server.unified_command_center_reviewer_decision_board_store  # type: ignore[attr-defined]
+        store.center_store = self.unified_command_center_store
+        store.evidence_review_store = self.unified_command_center_evidence_review_store
         return store
 
     @property
@@ -11286,6 +11299,75 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                         return
                 self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Evidence Review route not found.")
                 return
+            if tail == "/reviewer-decision-boards":
+                if method == "GET":
+                    boards = self.unified_command_center_reviewer_decision_board_store.list_boards(center_id)
+                    self._send_json({"ok": True, "boards": boards, "summary": {"board_count": len(boards)}})
+                    return
+                if method == "POST":
+                    docs = self.unified_command_center_reviewer_decision_board_store.create_board(center_id, self._optional_json_body())
+                    decision = docs.get("decision_report", {})
+                    self._send_json({"ok": decision.get("status") == "ready_for_signoff", "board": docs, "summary": decision.get("summary", {}), "status": decision.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail.startswith("/reviewer-decision-boards/"):
+                board_tail = tail.removeprefix("/reviewer-decision-boards/")
+                board_parts = board_tail.split("/")
+                board_id = board_parts[0]
+                board_action = "/" + "/".join(board_parts[1:]) if len(board_parts) > 1 else ""
+                if board_action in {"", "/"}:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    board = self.unified_command_center_reviewer_decision_board_store.get_board(center_id, board_id)
+                    decision = board.get("decision_report") or {}
+                    self._send_json({"ok": True, "board": board, "summary": decision.get("summary", {}), "status": decision.get("status")})
+                    return
+                if board_action == "/refresh":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    docs = self.unified_command_center_reviewer_decision_board_store.refresh_board(center_id, board_id, self._optional_json_body())
+                    decision = docs.get("decision_report", {})
+                    self._send_json({"ok": decision.get("status") == "ready_for_signoff", "board": docs, "summary": decision.get("summary", {}), "status": decision.get("status")})
+                    return
+                if board_action == "/signoff":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    signoff = self.unified_command_center_reviewer_decision_board_store.signoff(center_id, board_id, self._optional_json_body())
+                    self._send_json({"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")})
+                    return
+                if board_action == "/export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_reviewer_decision_board_store.export_archive(center_id, board_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "signed", **result})
+                    return
+                if board_action == "/zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_reviewer_decision_board_store.build_zip(center_id, board_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                    return
+                if board_action == "/verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.unified_command_center_reviewer_decision_board_store.verify_archive(center_id, board_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if board_action == "/download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.unified_command_center_reviewer_decision_board_store.zip_path(center_id, board_id), "application/zip", filename="musicforge-unified-command-center-reviewer-decision-board.zip")
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Reviewer Decision Board route not found.")
+                return
             if tail in {"", "/"}:
                 if method != "GET":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11452,13 +11534,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterEvidenceReviewNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedCommandCenterReviewerDecisionBoardNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except (UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterHandoffStateError, UnifiedCommandCenterContinuousReviewStateError, UnifiedCommandCenterDriftResponseStateError, UnifiedCommandCenterEvidenceReviewStateError) as exc:
+        except (UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterHandoffStateError, UnifiedCommandCenterContinuousReviewStateError, UnifiedCommandCenterDriftResponseStateError, UnifiedCommandCenterEvidenceReviewStateError, UnifiedCommandCenterReviewerDecisionBoardStateError) as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedCommandCenterError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except (UnifiedCommandCenterSignoffError, UnifiedCommandCenterHandoffError, UnifiedCommandCenterContinuousReviewError, UnifiedCommandCenterDriftResponseError, UnifiedCommandCenterEvidenceReviewError) as exc:
+        except (UnifiedCommandCenterSignoffError, UnifiedCommandCenterHandoffError, UnifiedCommandCenterContinuousReviewError, UnifiedCommandCenterDriftResponseError, UnifiedCommandCenterEvidenceReviewError, UnifiedCommandCenterReviewerDecisionBoardError) as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _unified_command_center_evidence_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -12462,6 +12546,23 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_command_center_evidence_review_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_command_center_evidence_review_gate.get("message") or "Unified Command Center Evidence Review gate failed.")
+        require_unified_command_center_reviewer_decision_board = bool(payload.get("require_unified_command_center_reviewer_decision_board", False))
+        unified_command_center_reviewer_decision_board_gate = self.unified_command_center_reviewer_decision_board_store.gate(
+            str(payload.get("unified_command_center_id") or payload.get("unified_command_center_center_id") or "ucc-000001"),
+            required=require_unified_command_center_reviewer_decision_board,
+            board_id=payload.get("unified_command_center_reviewer_decision_board_id"),
+            archive_zip_path=payload.get("unified_command_center_reviewer_decision_board_archive") or payload.get("unified_command_center_reviewer_decision_board_zip"),
+            verification_report_path=payload.get("unified_command_center_reviewer_decision_board_verification_report"),
+            require_signed=bool(payload.get("require_unified_command_center_reviewer_decision_board_signed", True)),
+            require_quorum=bool(payload.get("require_unified_command_center_reviewer_decision_board_quorum", True)),
+            payload=payload,
+        )
+        if unified_command_center_reviewer_decision_board_gate and require_unified_command_center_reviewer_decision_board:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_command_center_reviewer_decision_board"] = unified_command_center_reviewer_decision_board_gate
+            if unified_command_center_reviewer_decision_board_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_command_center_reviewer_decision_board_gate.get("message") or "Unified Command Center Reviewer Decision Board gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -12646,6 +12747,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(unified_command_center_evidence_review_gate.get("message") or "Unified Command Center Evidence Review gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_command_center_reviewer_decision_board_gate.get("hard_block") and unified_command_center_reviewer_decision_board_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_command_center_reviewer_decision_board_gate.get("message") or "Unified Command Center Reviewer Decision Board gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -20195,6 +20305,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_continuous_review_store = UnifiedCommandCenterContinuousReviewStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store)
         self.unified_command_center_drift_response_store = UnifiedCommandCenterDriftResponseStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store, review_store=self.unified_command_center_continuous_review_store)
         self.unified_command_center_evidence_review_store = UnifiedCommandCenterEvidenceReviewStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store, review_store=self.unified_command_center_continuous_review_store, drift_response_store=self.unified_command_center_drift_response_store)
+        self.unified_command_center_reviewer_decision_board_store = UnifiedCommandCenterReviewerDecisionBoardStore(self.unified_command_center_store, evidence_review_store=self.unified_command_center_evidence_review_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

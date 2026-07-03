@@ -19058,6 +19058,254 @@ def _v114_unified_command_center_evidence_review_smoke(root: Path) -> tuple[bool
         os.chdir(old_cwd)
 
 
+def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_continuous_review import UnifiedCommandCenterContinuousReviewStore
+    from song_agent.unified_command_center_evidence_review import UnifiedCommandCenterEvidenceReviewStore
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_reviewer_decision_board import (
+        UnifiedCommandCenterReviewerDecisionBoardStateError,
+        UnifiedCommandCenterReviewerDecisionBoardStore,
+    )
+    from song_agent.unified_command_center_reviewer_decision_board_verifier import verify_unified_command_center_reviewer_decision_board_package
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v115-ucc-reviewer-board-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
+                center = store.create(
+                    {
+                        "center_id": "ucc-reviewer-board",
+                        "name": "Unified Command Center reviewer decision board smoke",
+                        "requirements": {
+                            "audio-command-center": False,
+                            "trust-operations-hub": False,
+                            "public-trust-center": False,
+                            "ga-readiness": False,
+                            "release-check": True,
+                        },
+                    }
+                )
+                evidence = {"release-check": {"report": passed_report}}
+                store.refresh(center["center_id"], evidence)
+                store.build_zip(center["center_id"], evidence)
+                store.verify_zip(center["center_id"], evidence=evidence, strict=True, require_ready=True)
+                signoff_store = UnifiedCommandCenterSignoffStore(store)
+                signoff_store.signoff(center["center_id"], {"signed_by": "release lead", "reason": "v11.5 smoke"})
+                signoff_store.build_archive_zip(center["center_id"])
+                signoff_store.verify_archive(center["center_id"])
+                handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+                handoff_store.build_handoff_zip(center["center_id"])
+                handoff_store.verify_handoff(center["center_id"])
+
+                review_store = UnifiedCommandCenterContinuousReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store)
+                continuous = review_store.create_plan(center["center_id"], {"review_id": "uccrv-clear"})
+                review_store.run_review(center["center_id"], continuous["review_id"])
+                review_store.build_zip(center["center_id"], continuous["review_id"])
+                review_store.verify_package(center["center_id"], continuous["review_id"])
+
+                evidence_store = UnifiedCommandCenterEvidenceReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store, review_store=review_store)
+                review_id = "uccer-review"
+                created = evidence_store.create_review(center["center_id"], {"review_id": review_id, "continuous_review_id": continuous["review_id"], "release_check_report": passed_report})
+                replay = evidence_store.run_replay(center["center_id"], review_id, {"release_check_report": passed_report})
+                review_zip = evidence_store.build_zip(center["center_id"], review_id)
+                review_verify = evidence_store.verify_zip(center["center_id"], review_id)
+
+                accepted_rows = []
+                for response_id, role, organization in (("response-tech", "technical_reviewer", "QA"), ("response-owner", "release_owner", "Release")):
+                    response = evidence_store.import_response(
+                        center["center_id"],
+                        review_id,
+                        {
+                            "response_id": response_id,
+                            "result": "accepted",
+                            "review_pack_id": review_id,
+                            "review_pack_zip_sha256": review_zip["zip_sha256"],
+                            "review_pack_manifest_hash": review_verify["summary"]["manifest_hash"],
+                            "review_pack_source_hash": created["source"]["source_hash"],
+                            "replay_result_hash": replay["integrity_hash"],
+                            "reviewer": {"name": response_id, "organization": organization, "role": role},
+                            "findings": [],
+                        },
+                    )
+                    accepted = evidence_store.create_acceptance_evidence(center["center_id"], review_id, response["response_id"])
+                    accepted_rows.append(
+                        {
+                            "evidence_id": accepted["evidence_id"],
+                            "role": role,
+                            "organization": organization,
+                            "zip_path": accepted["zip_path"],
+                            "verification_report_path": str(evidence_store.accepted_evidence_verification_report_path(center["center_id"], review_id, accepted["evidence_id"])),
+                            "response_verification_report_path": str(evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json"),
+                        }
+                    )
+
+                board_store = UnifiedCommandCenterReviewerDecisionBoardStore(store, evidence_review_store=evidence_store)
+                board_id = "uccdb-board"
+                docs = board_store.create_board(center["center_id"], {"board_id": board_id, "review_id": review_id, "accepted_evidence": accepted_rows})
+                signoff = board_store.signoff(center["center_id"], board_id, {"signed_by": "decision chair", "reason": "v11.5 smoke"})
+                zipped = board_store.build_zip(center["center_id"], board_id)
+                verified = verify_unified_command_center_reviewer_decision_board_package(
+                    zipped["zip_path"],
+                    strict=True,
+                    require_signed=True,
+                    require_quorum=True,
+                    evidence_review_path=review_zip["zip_path"],
+                    evidence_review_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    accepted_evidence_paths=[row["zip_path"] for row in accepted_rows],
+                    accepted_evidence_verification_report_paths=[row["verification_report_path"] for row in accepted_rows],
+                    accepted_evidence_response_verification_report_paths=[row["response_verification_report_path"] for row in accepted_rows],
+                )
+                missing_external = verify_unified_command_center_reviewer_decision_board_package(
+                    zipped["zip_path"],
+                    strict=True,
+                    require_signed=True,
+                    require_quorum=True,
+                    evidence_review_path=review_zip["zip_path"],
+                    evidence_review_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    accepted_evidence_paths=[accepted_rows[0]["zip_path"]],
+                    accepted_evidence_verification_report_paths=[accepted_rows[0]["verification_report_path"]],
+                    accepted_evidence_response_verification_report_paths=[accepted_rows[0]["response_verification_report_path"]],
+                )
+                declared_extra_zip = base / "reviewer-board-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v115_add_declared_reviewer_board_extra)
+                declared_extra = verify_unified_command_center_reviewer_decision_board_package(declared_extra_zip, strict=True)
+                forged_role_zip = base / "reviewer-board-role.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), forged_role_zip, _v115_forge_reviewer_board_role)
+                forged_role = verify_unified_command_center_reviewer_decision_board_package(
+                    forged_role_zip,
+                    strict=True,
+                    require_signed=True,
+                    require_quorum=True,
+                    evidence_review_path=review_zip["zip_path"],
+                    evidence_review_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    accepted_evidence_paths=[row["zip_path"] for row in accepted_rows],
+                    accepted_evidence_verification_report_paths=[row["verification_report_path"] for row in accepted_rows],
+                    accepted_evidence_response_verification_report_paths=[row["response_verification_report_path"] for row in accepted_rows],
+                )
+                signed_mutation_blocked = False
+                try:
+                    board_store.refresh_board(center["center_id"], board_id, {})
+                except UnifiedCommandCenterReviewerDecisionBoardStateError:
+                    signed_mutation_blocked = True
+                delete_signoff_blocked = False
+                board_store.signoff_path(center["center_id"], board_id).unlink(missing_ok=True)
+                try:
+                    board_store.refresh_board(center["center_id"], board_id, {})
+                except UnifiedCommandCenterReviewerDecisionBoardStateError:
+                    delete_signoff_blocked = True
+
+                rejected_blocked = False
+                rejected = {
+                    "response_id": "response-rejected",
+                    "result": "rejected",
+                    "role": "release_owner",
+                    "organization": "Release",
+                    "reviewer": {"name": "release-owner", "organization": "Release", "role": "release_owner"},
+                }
+                board_store.create_board(center["center_id"], {"board_id": "uccdb-rejected", "review_id": review_id, "accepted_evidence": accepted_rows, "responses": [rejected]})
+                try:
+                    board_store.signoff(center["center_id"], "uccdb-rejected", {})
+                except UnifiedCommandCenterReviewerDecisionBoardStateError:
+                    rejected_blocked = True
+
+                from song_agent.ga_readiness import build_ga_readiness_report
+                from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+
+                ga_path = base / "ga-readiness-reviewer-board.json"
+                ga_report = build_ga_readiness_report(
+                    repo_root=base,
+                    allow_dirty=True,
+                    require_unified_command_center_reviewer_decision_board=True,
+                    unified_command_center_reviewer_decision_board_zip_path=zipped["zip_path"],
+                    unified_command_center_reviewer_decision_board_verification_report_path=board_store.verification_report_path(center["center_id"], board_id),
+                    unified_command_center_reviewer_decision_board_evidence_review_zip_path=review_zip["zip_path"],
+                    unified_command_center_reviewer_decision_board_evidence_review_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    unified_command_center_reviewer_decision_board_accepted_evidence_zip_paths=[row["zip_path"] for row in accepted_rows],
+                    unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths=[row["verification_report_path"] for row in accepted_rows],
+                    unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths=[row["response_verification_report_path"] for row in accepted_rows],
+                    skip_tests=True,
+                )
+                write_json(ga_path, ga_report)
+                ga_verify = verify_ga_readiness_report(
+                    ga_path,
+                    require_unified_command_center_reviewer_decision_board=True,
+                    unified_command_center_reviewer_decision_board_path=zipped["zip_path"],
+                    unified_command_center_reviewer_decision_board_verification_report_path=board_store.verification_report_path(center["center_id"], board_id),
+                    unified_command_center_reviewer_decision_board_evidence_review_path=review_zip["zip_path"],
+                    unified_command_center_reviewer_decision_board_evidence_review_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    unified_command_center_reviewer_decision_board_accepted_evidence_paths=[row["zip_path"] for row in accepted_rows],
+                    unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths=[row["verification_report_path"] for row in accepted_rows],
+                    unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths=[row["response_verification_report_path"] for row in accepted_rows],
+                )
+
+                ok = (
+                    docs["decision_report"].get("status") == "ready_for_signoff"
+                    and signoff.get("status") == "signed"
+                    and verified.get("status") == "passed"
+                    and _v38_check_status(missing_external, "ucc_decision_board_accepted_evidence_external_binding") == "failed"
+                    and _v38_check_status(declared_extra, "ucc_decision_board_allowed_entries") == "failed"
+                    and _v38_check_status(forged_role, "ucc_decision_board_accepted_evidence_external_binding") == "failed"
+                    and signed_mutation_blocked
+                    and delete_signoff_blocked
+                    and rejected_blocked
+                    and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_reviewer_decision_board_verification_status") == "passed"
+                )
+                return ok, (
+                    f"decision={docs['decision_report'].get('status')}, signoff={signoff.get('status')}, verify={verified.get('status')}, "
+                    f"missing_external={_v38_check_status(missing_external, 'ucc_decision_board_accepted_evidence_external_binding')}, "
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_decision_board_allowed_entries')}, "
+                    f"role_full_resign={_v38_check_status(forged_role, 'ucc_decision_board_accepted_evidence_external_binding')}, "
+                    f"signed_mutation={'409' if signed_mutation_blocked else 'allowed'}, delete_signoff={'409' if delete_signoff_blocked else 'allowed'}, "
+                    f"rejected_required={'409' if rejected_blocked else 'allowed'}, "
+                    f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_reviewer_decision_board_verification_status')}/{ga_verify.get('status')}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.5 Unified Command Center reviewer decision board smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v115_add_declared_reviewer_board_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Reviewer Decision Board extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v115_forge_reviewer_board_role(entries: dict[str, bytes]) -> dict[str, bytes]:
+    accepted = json.loads(entries["accepted-evidence-index.json"].decode("utf-8"))
+    for item in accepted.get("items", []):
+        if item.get("role") == "release_owner":
+            item["role"] = "security_reviewer"
+            item.setdefault("reviewer", {})["role"] = "security_reviewer"
+            item["item_hash"] = stable_hash(item)
+    accepted["integrity_hash"] = stable_hash({key: value for key, value in accepted.items() if key != "integrity_hash"})
+    entries["accepted-evidence-index.json"] = json.dumps(accepted, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["accepted_evidence_index_hash"] = accepted["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "accepted-evidence-index.json", entries["accepted-evidence-index.json"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v114_add_declared_evidence_review_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
     extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
     entries[extra_name] = b"Do not trust declared Evidence Review extra files.\n"

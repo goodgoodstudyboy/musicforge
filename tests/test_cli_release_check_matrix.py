@@ -92,6 +92,7 @@ def test_release_check_cli_v11_profile_lists_unified_command_center() -> None:
         "v112.unified_command_center_continuous_review_smoke",
         "v113.unified_command_center_drift_response_smoke",
         "v114.unified_command_center_evidence_review_smoke",
+        "v115.unified_command_center_reviewer_decision_board_smoke",
     ]
 
 

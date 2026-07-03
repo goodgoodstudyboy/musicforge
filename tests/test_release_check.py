@@ -95,6 +95,7 @@ from song_agent.release_checks import (
     _v112_unified_command_center_continuous_review_smoke,
     _v113_unified_command_center_drift_response_smoke,
     _v114_unified_command_center_evidence_review_smoke,
+    _v115_unified_command_center_reviewer_decision_board_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1336,6 +1337,21 @@ def test_v114_unified_command_center_evidence_review_smoke(tmp_path: Path) -> No
     assert "declared_extra=failed" in detail
     assert "naked_response=400" in detail
     assert "ga=passed/" in detail
+
+
+def test_v115_unified_command_center_reviewer_decision_board_smoke(tmp_path: Path) -> None:
+    ok, detail = _v115_unified_command_center_reviewer_decision_board_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "decision=ready_for_signoff" in detail
+    assert "signoff=signed" in detail
+    assert "verify=passed" in detail
+    assert "missing_external=failed" in detail
+    assert "declared_extra=failed" in detail
+    assert "role_full_resign=failed" in detail
+    assert "signed_mutation=409" in detail
+    assert "delete_signoff=409" in detail
+    assert "rejected_required=409" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

@@ -256,6 +256,16 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-command-center-evidence-review-acceptance", type=Path, default=None, help="Unified Command Center Evidence Review Acceptance ZIP.")
     parser.add_argument("--unified-command-center-evidence-review-acceptance-verification-report", type=Path, default=None, help="Unified Command Center Evidence Review Acceptance verification report.")
     parser.add_argument("--unified-command-center-evidence-review-acceptance-response-verification-report", type=Path, default=None, help="Original Evidence Review response verification summary bound by accepted evidence.")
+    parser.add_argument("--require-unified-command-center-reviewer-decision-board", action="store_true", help="Require signed Unified Command Center Reviewer Decision Board evidence.")
+    parser.add_argument("--unified-command-center-reviewer-decision-board", type=Path, default=None, help="Unified Command Center Reviewer Decision Board archive ZIP.")
+    parser.add_argument("--unified-command-center-reviewer-decision-board-verification-report", type=Path, default=None, help="Unified Command Center Reviewer Decision Board verification report.")
+    parser.add_argument("--no-require-unified-command-center-reviewer-decision-board-signed", dest="require_unified_command_center_reviewer_decision_board_signed", action="store_false", default=True, help="Do not require the Reviewer Decision Board to be signed.")
+    parser.add_argument("--no-require-unified-command-center-reviewer-decision-board-quorum", dest="require_unified_command_center_reviewer_decision_board_quorum", action="store_false", default=True, help="Do not require the Reviewer Decision Board quorum to be passed.")
+    parser.add_argument("--unified-command-center-reviewer-decision-board-evidence-review", type=Path, default=None, help="Evidence Review ZIP bound by the Reviewer Decision Board.")
+    parser.add_argument("--unified-command-center-reviewer-decision-board-evidence-review-verification-report", type=Path, default=None, help="Evidence Review verification report bound by the Reviewer Decision Board.")
+    parser.add_argument("--unified-command-center-reviewer-decision-board-accepted-evidence", action="append", default=[], type=Path, help="Accepted Evidence ZIP bound by the Reviewer Decision Board. Repeat for multiple reviewers.")
+    parser.add_argument("--unified-command-center-reviewer-decision-board-accepted-evidence-verification-report", action="append", default=[], type=Path, help="Accepted Evidence verification report bound by the Reviewer Decision Board. Repeat in the same order.")
+    parser.add_argument("--unified-command-center-reviewer-decision-board-accepted-evidence-response-verification-report", action="append", default=[], type=Path, help="Original accepted response verification summary bound by the Reviewer Decision Board. Repeat in the same order.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -1563,6 +1573,57 @@ def build_verify_unified_command_center_evidence_review_acceptance_parser() -> a
     parser.add_argument("--max-zip-size-mb", type=int, default=32)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=64)
     parser.add_argument("--max-entry-count", type=int, default=64)
+    return parser
+
+
+def _add_unified_command_center_reviewer_decision_board_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--review-id", default=None)
+    parser.add_argument("--evidence-review", dest="review_zip", type=Path, default=None, help="Unified Command Center Evidence Review ZIP.")
+    parser.add_argument("--evidence-review-verification-report", dest="review_verification_report", type=Path, default=None, help="Evidence Review verification report.")
+    parser.add_argument("--accepted-evidence", dest="accepted_evidence", action="append", type=Path, default=[], help="Accepted evidence ZIP. Repeat for every reviewer.")
+    parser.add_argument("--accepted-evidence-verification-report", dest="accepted_evidence_verification_report", action="append", type=Path, default=[], help="Accepted evidence verification report. Repeat in the same order.")
+    parser.add_argument("--accepted-evidence-response-verification-report", dest="accepted_evidence_response_verification_report", action="append", type=Path, default=[], help="Original response verification summary. Repeat in the same order.")
+    parser.add_argument("--required-role", action="append", default=[], help="Required reviewer role for quorum. Repeatable.")
+    parser.add_argument("--min-accepted-count", type=int, default=None)
+    parser.add_argument("--min-organization-count", type=int, default=None)
+
+
+def build_unified_command_center_reviewer_decision_board_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Command Center Reviewer Decision Board archives.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("create", help="Create a Reviewer Decision Board.")
+    create.add_argument("center_id")
+    create.add_argument("--board-id", default=None)
+    _add_unified_command_center_reviewer_decision_board_args(create)
+    subparsers.add_parser("list", help="List Reviewer Decision Boards.").add_argument("center_id")
+    for action in ("status", "refresh", "signoff", "export", "zip", "verify"):
+        cmd = subparsers.add_parser(action, help=f"{action} a Reviewer Decision Board.")
+        cmd.add_argument("center_id")
+        cmd.add_argument("board_id")
+        if action in {"refresh", "signoff", "export", "zip", "verify"}:
+            _add_unified_command_center_reviewer_decision_board_args(cmd)
+        if action == "signoff":
+            cmd.add_argument("--signed-by", default=None)
+            cmd.add_argument("--role", default=None)
+            cmd.add_argument("--reason", default=None)
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--require-quorum", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_command_center_reviewer_decision_board_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Command Center Reviewer Decision Board archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-quorum", action="store_true")
+    _add_unified_command_center_reviewer_decision_board_args(parser)
     return parser
 
 
@@ -4962,6 +5023,71 @@ def _run_unified_command_center_evidence_review_command(args: argparse.Namespace
     raise ValueError("Unsupported unified-command-center-evidence-review command.")
 
 
+def _unified_command_center_reviewer_decision_board_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    accepted_zips = list(getattr(args, "accepted_evidence", []) or [])
+    accepted_reports = list(getattr(args, "accepted_evidence_verification_report", []) or [])
+    accepted_response_reports = list(getattr(args, "accepted_evidence_response_verification_report", []) or [])
+    accepted_rows = []
+    for index, zip_path in enumerate(accepted_zips):
+        accepted_rows.append(
+            {
+                "zip_path": zip_path,
+                "verification_report_path": accepted_reports[index] if index < len(accepted_reports) else None,
+                "response_verification_report_path": accepted_response_reports[index] if index < len(accepted_response_reports) else None,
+            }
+        )
+    policy: dict[str, Any] = {}
+    if getattr(args, "required_role", None):
+        policy["required_roles"] = list(args.required_role)
+    if getattr(args, "min_accepted_count", None) is not None:
+        policy["min_accepted_count"] = args.min_accepted_count
+    if getattr(args, "min_organization_count", None) is not None:
+        policy["min_organization_count"] = args.min_organization_count
+    return {
+        "board_id": getattr(args, "board_id", None),
+        "review_id": getattr(args, "review_id", None),
+        "review_zip": getattr(args, "review_zip", None),
+        "review_verification_report": getattr(args, "review_verification_report", None),
+        "accepted_evidence": accepted_rows,
+        "policy": policy,
+    }
+
+
+def _run_unified_command_center_reviewer_decision_board_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_command_center_reviewer_decision_board import UnifiedCommandCenterReviewerDecisionBoardStore
+    from song_agent.unified_command_center_reviewer_decision_board_verifier import write_unified_command_center_reviewer_decision_board_verification_report
+
+    store = UnifiedCommandCenterReviewerDecisionBoardStore()
+    payload = _unified_command_center_reviewer_decision_board_payload_from_args(args)
+    if args.action == "create":
+        docs = store.create_board(args.center_id, payload)
+        return {"ok": docs.get("decision_report", {}).get("status") == "ready_for_signoff", "board": docs, "summary": docs.get("decision_report", {}).get("summary", {}), "status": docs.get("decision_report", {}).get("status")}
+    if args.action == "list":
+        rows = store.list_boards(args.center_id)
+        return {"ok": True, "boards": rows, "summary": {"board_count": len(rows)}, "status": "passed"}
+    if args.action == "status":
+        docs = store.get_board(args.center_id, args.board_id)
+        return {"ok": True, "board": docs, "summary": docs.get("decision_report", {}).get("summary", {}), "status": docs.get("decision_report", {}).get("status") or docs.get("source", {}).get("status")}
+    if args.action == "refresh":
+        docs = store.refresh_board(args.center_id, args.board_id, payload)
+        return {"ok": docs.get("decision_report", {}).get("status") == "ready_for_signoff", "board": docs, "summary": docs.get("decision_report", {}).get("summary", {}), "status": docs.get("decision_report", {}).get("status")}
+    if args.action == "signoff":
+        signoff = store.signoff(args.center_id, args.board_id, {**payload, "signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}
+    if args.action == "export":
+        result = store.export_archive(args.center_id, args.board_id, payload)
+        return {"ok": result.get("status") == "signed", **result, "summary": {"manifest_hash": result.get("manifest_hash")}}
+    if args.action == "zip":
+        result = store.build_zip(args.center_id, args.board_id, payload)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_archive(args.center_id, args.board_id, {**payload, "strict": args.strict, "require_signed": args.require_signed, "require_quorum": args.require_quorum})
+        if args.report_out is not None:
+            write_unified_command_center_reviewer_decision_board_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported unified-command-center-reviewer-decision-board command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -5159,6 +5285,16 @@ def _main() -> None:
             unified_command_center_evidence_review_acceptance_zip_path=args.unified_command_center_evidence_review_acceptance,
             unified_command_center_evidence_review_acceptance_verification_report_path=args.unified_command_center_evidence_review_acceptance_verification_report,
             unified_command_center_evidence_review_acceptance_response_verification_report_path=args.unified_command_center_evidence_review_acceptance_response_verification_report,
+            require_unified_command_center_reviewer_decision_board=args.require_unified_command_center_reviewer_decision_board,
+            unified_command_center_reviewer_decision_board_zip_path=args.unified_command_center_reviewer_decision_board,
+            unified_command_center_reviewer_decision_board_verification_report_path=args.unified_command_center_reviewer_decision_board_verification_report,
+            require_unified_command_center_reviewer_decision_board_signed=args.require_unified_command_center_reviewer_decision_board_signed,
+            require_unified_command_center_reviewer_decision_board_quorum=args.require_unified_command_center_reviewer_decision_board_quorum,
+            unified_command_center_reviewer_decision_board_evidence_review_zip_path=args.unified_command_center_reviewer_decision_board_evidence_review,
+            unified_command_center_reviewer_decision_board_evidence_review_verification_report_path=args.unified_command_center_reviewer_decision_board_evidence_review_verification_report,
+            unified_command_center_reviewer_decision_board_accepted_evidence_zip_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence,
+            unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_verification_report,
+            unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -5271,6 +5407,16 @@ def _main() -> None:
             unified_command_center_evidence_review_acceptance_path=args.unified_command_center_evidence_review_acceptance,
             unified_command_center_evidence_review_acceptance_verification_report_path=args.unified_command_center_evidence_review_acceptance_verification_report,
             unified_command_center_evidence_review_acceptance_response_verification_report_path=args.unified_command_center_evidence_review_acceptance_response_verification_report,
+            require_unified_command_center_reviewer_decision_board=args.require_unified_command_center_reviewer_decision_board,
+            unified_command_center_reviewer_decision_board_path=args.unified_command_center_reviewer_decision_board,
+            unified_command_center_reviewer_decision_board_verification_report_path=args.unified_command_center_reviewer_decision_board_verification_report,
+            require_unified_command_center_reviewer_decision_board_signed=args.require_unified_command_center_reviewer_decision_board_signed,
+            require_unified_command_center_reviewer_decision_board_quorum=args.require_unified_command_center_reviewer_decision_board_quorum,
+            unified_command_center_reviewer_decision_board_evidence_review_path=args.unified_command_center_reviewer_decision_board_evidence_review,
+            unified_command_center_reviewer_decision_board_evidence_review_verification_report_path=args.unified_command_center_reviewer_decision_board_evidence_review_verification_report,
+            unified_command_center_reviewer_decision_board_accepted_evidence_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence,
+            unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_verification_report,
+            unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -5455,6 +5601,16 @@ def _main() -> None:
         parser = build_unified_command_center_evidence_review_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_command_center_evidence_review_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-command-center-reviewer-decision-board":
+        parser = build_unified_command_center_reviewer_decision_board_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_command_center_reviewer_decision_board_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -5882,6 +6038,36 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_command_center_evidence_review_acceptance_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-reviewer-decision-board-package":
+        from song_agent.unified_command_center_reviewer_decision_board_verifier import (
+            unified_command_center_reviewer_decision_board_verification_exit_code,
+            verify_unified_command_center_reviewer_decision_board_package,
+            write_unified_command_center_reviewer_decision_board_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_reviewer_decision_board_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_command_center_reviewer_decision_board_package(
+            args.zip_path,
+            strict=args.strict,
+            require_signed=args.require_signed,
+            require_quorum=args.require_quorum,
+            evidence_review_path=args.review_zip,
+            evidence_review_verification_report_path=args.review_verification_report,
+            accepted_evidence_paths=args.accepted_evidence,
+            accepted_evidence_verification_report_paths=args.accepted_evidence_verification_report,
+            accepted_evidence_response_verification_report_paths=args.accepted_evidence_response_verification_report,
+        )
+        if args.report_out is not None:
+            write_unified_command_center_reviewer_decision_board_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Command Center Reviewer Decision Board verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_reviewer_decision_board_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

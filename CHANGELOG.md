@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.5.0 - 2026-07-03
+
+### Added
+- Unified Command Center Reviewer Decision Board for multi-reviewer decisions, quorum policy, required roles, conflict reporting, decision matrix, signed decision archive, and hash-chained decision history.
+- Fixed-layout Reviewer Decision Board archive ZIP and offline verifier that bind Evidence Review packages, accepted evidence ZIPs, accepted evidence verification reports, and original response verification summaries instead of trusting Board-internal role or acceptance summaries.
+- CLI and HTTP API endpoints for Board create, refresh, signoff, export, ZIP, verify, status, list, and download flows.
+- Release signoff and GA readiness gates for `require_unified_command_center_reviewer_decision_board`.
+- release-check `v115.unified_command_center_reviewer_decision_board_smoke` covering quorum, missing external accepted evidence, declared-extra rejection, role full-resign rejection, signed mutation guards, deleted-signoff history guard, rejected required reviewer blocking, and GA gate binding.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_reviewer_decision_board.py tests\test_release_check.py::test_v115_unified_command_center_reviewer_decision_board_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v11.4.1 - 2026-07-03
 
 ### Fixed
