@@ -99,6 +99,11 @@ python -m song_agent.cli unified-command-center-review create ucc-000001 --creat
 python -m song_agent.cli unified-command-center-review run ucc-000001 uccrv-000001 --json
 python -m song_agent.cli unified-command-center-review zip ucc-000001 uccrv-000001 --json
 python -m song_agent.cli unified-command-center-review verify ucc-000001 uccrv-000001 --json
+python -m song_agent.cli unified-command-center-evidence-review create ucc-000001 --continuous-review-id uccrv-000001 --release-check-report release-check.json --json
+python -m song_agent.cli unified-command-center-evidence-review replay ucc-000001 uccer-000001 --release-check-report release-check.json --json
+python -m song_agent.cli unified-command-center-evidence-review zip ucc-000001 uccer-000001 --json
+python -m song_agent.cli unified-command-center-evidence-review verify ucc-000001 uccer-000001 --strict --json
+python -m song_agent.cli verify-unified-command-center-evidence-review-package .musicforge\unified-command-centers\ucc-000001\evidence-reviews\uccer-000001\musicforge-unified-command-center-evidence-review.zip --strict --require-replay-passed --unified-command-center .musicforge\unified-command-centers\ucc-000001\musicforge-unified-command-center.zip --unified-command-center-verification-report .musicforge\unified-command-centers\ucc-000001\verification-report.json --json
 ```
 
 The runbook only executes safe local refresh/export/ZIP/verify actions. It does
@@ -120,6 +125,14 @@ change requests, and never resets or mutates the signed UCC. Its verifier must b
 run with current Archive/Handoff/UCC evidence to prevent package-internal
 full-resign attacks. GA readiness can require
 `require_unified_command_center_continuous_review=true`.
+
+Unified Command Center Evidence Review / Replay packages are intended for an
+external reviewer. They replay the verification plan against external UCC,
+Archive, Handoff, Continuous Review, optional Drift Response, CR proof, GA, and
+release-check evidence. Review responses must explicitly bind the current review
+pack hash and source hash; the import path will not invent that binding. Accepted
+responses can be exported as separate acceptance evidence and GA readiness can
+require `require_unified_command_center_evidence_review=true`.
 
 ## Audio Lab
 

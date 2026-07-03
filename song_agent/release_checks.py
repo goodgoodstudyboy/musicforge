@@ -18846,6 +18846,208 @@ def _v113_unified_command_center_drift_response_smoke(root: Path) -> tuple[bool,
         os.chdir(old_cwd)
 
 
+def _v114_unified_command_center_evidence_review_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.ga_readiness import build_ga_readiness_report
+    from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+    from song_agent.unified_command_center import UnifiedCommandCenterStore
+    from song_agent.unified_command_center_continuous_review import UnifiedCommandCenterContinuousReviewStore
+    from song_agent.unified_command_center_evidence_review import UnifiedCommandCenterEvidenceReviewStateError, UnifiedCommandCenterEvidenceReviewStore
+    from song_agent.unified_command_center_evidence_review_verifier import (
+        verify_unified_command_center_evidence_review_acceptance_package,
+        verify_unified_command_center_evidence_review_package,
+    )
+    from song_agent.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+    from song_agent.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v114-ucc-evidence-review-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                passed_report = _v110_release_check_report(base / "release-check-passed.json", ok=True)
+                store = UnifiedCommandCenterStore(root=base / ".musicforge" / "unified-command-centers")
+                center = store.create(
+                    {
+                        "center_id": "ucc-evidence-review",
+                        "name": "Unified Command Center evidence review smoke",
+                        "requirements": {
+                            "audio-command-center": False,
+                            "trust-operations-hub": False,
+                            "public-trust-center": False,
+                            "ga-readiness": False,
+                            "release-check": True,
+                        },
+                    }
+                )
+                evidence = {"release-check": {"report": passed_report}}
+                store.refresh(center["center_id"], evidence)
+                store.build_zip(center["center_id"], evidence)
+                center_verify = store.verify_zip(center["center_id"], evidence=evidence, strict=True, require_ready=True)
+                signoff_store = UnifiedCommandCenterSignoffStore(store)
+                signoff_store.signoff(center["center_id"], {"signed_by": "release lead", "reason": "v11.4 smoke"})
+                archive_zip = signoff_store.build_archive_zip(center["center_id"])
+                archive_verify = signoff_store.verify_archive(center["center_id"])
+                handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+                handoff_zip = handoff_store.build_handoff_zip(center["center_id"])
+                handoff_verify = handoff_store.verify_handoff(center["center_id"])
+
+                review_store = UnifiedCommandCenterContinuousReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store)
+                continuous = review_store.create_plan(center["center_id"], {"review_id": "uccrv-clear"})
+                review_store.run_review(center["center_id"], continuous["review_id"])
+                continuous_zip = review_store.build_zip(center["center_id"], continuous["review_id"])
+                continuous_verify = review_store.verify_package(center["center_id"], continuous["review_id"])
+
+                evidence_store = UnifiedCommandCenterEvidenceReviewStore(store, signoff_store=signoff_store, handoff_store=handoff_store, review_store=review_store)
+                review_id = "uccer-review"
+                created = evidence_store.create_review(center["center_id"], {"review_id": review_id, "continuous_review_id": continuous["review_id"], "release_check_report": passed_report})
+                replay = evidence_store.run_replay(center["center_id"], review_id, {"release_check_report": passed_report})
+                zipped = evidence_store.build_zip(center["center_id"], review_id)
+                review_verify = evidence_store.verify_zip(center["center_id"], review_id)
+                external = verify_unified_command_center_evidence_review_package(
+                    zipped["zip_path"],
+                    strict=True,
+                    require_replay_passed=True,
+                    ucc_zip_path=store.zip_path(center["center_id"]),
+                    ucc_verification_report_path=store.verification_report_path(center["center_id"]),
+                    archive_zip_path=archive_zip["zip_path"],
+                    archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    handoff_zip_path=handoff_zip["zip_path"],
+                    handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    continuous_review_zip_path=continuous_zip["zip_path"],
+                    continuous_review_verification_report_path=review_store.verification_report_path(center["center_id"], continuous["review_id"]),
+                    signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    release_check_report_path=passed_report,
+                )
+                missing_external = verify_unified_command_center_evidence_review_package(zipped["zip_path"], strict=True, require_replay_passed=True)
+                declared_extra_zip = base / "ucc-evidence-review-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v114_add_declared_evidence_review_extra)
+                declared_extra = verify_unified_command_center_evidence_review_package(declared_extra_zip, strict=True)
+
+                naked_response_blocked = False
+                try:
+                    evidence_store.import_response(center["center_id"], review_id, {"response_id": "naked", "result": "accepted"})
+                except UnifiedCommandCenterEvidenceReviewStateError:
+                    naked_response_blocked = True
+                response = evidence_store.import_response(
+                    center["center_id"],
+                    review_id,
+                    {
+                        "response_id": "response-001",
+                        "result": "accepted",
+                        "review_pack_id": review_id,
+                        "review_pack_zip_sha256": zipped["zip_sha256"],
+                        "review_pack_manifest_hash": review_verify["summary"]["manifest_hash"],
+                        "review_pack_source_hash": created["source"]["source_hash"],
+                        "replay_result_hash": replay["integrity_hash"],
+                        "reviewer": {"name": "External Reviewer", "organization": "QA", "role": "reviewer"},
+                        "findings": [],
+                    },
+                )
+                accepted = evidence_store.create_acceptance_evidence(center["center_id"], review_id, response["response_id"])
+                accepted_verify = evidence_store.verify_acceptance_evidence(center["center_id"], review_id, accepted["evidence_id"])
+                accepted_external = verify_unified_command_center_evidence_review_acceptance_package(
+                    accepted["zip_path"],
+                    strict=True,
+                    require_accepted=True,
+                    review_pack_path=zipped["zip_path"],
+                    review_pack_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    response_verification_report_path=evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json",
+                )
+
+                ga_report_path = base / "ga-readiness.json"
+                ga_report = build_ga_readiness_report(
+                    repo_root=base,
+                    allow_dirty=True,
+                    require_unified_command_center_evidence_review=True,
+                    unified_command_center_evidence_review_zip_path=zipped["zip_path"],
+                    unified_command_center_evidence_review_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    require_unified_command_center_evidence_review_accepted=True,
+                    unified_command_center_evidence_review_acceptance_zip_path=accepted["zip_path"],
+                    unified_command_center_evidence_review_acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center["center_id"], review_id, accepted["evidence_id"]),
+                    unified_command_center_evidence_review_acceptance_response_verification_report_path=evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json",
+                    unified_command_center_zip_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    unified_command_center_archive_zip_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    unified_command_center_handoff_zip_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    unified_command_center_continuous_review_zip_path=continuous_zip["zip_path"],
+                    unified_command_center_continuous_review_verification_report_path=review_store.verification_report_path(center["center_id"], continuous["review_id"]),
+                    unified_command_center_signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    release_check_latest_report_path=passed_report,
+                    skip_tests=True,
+                )
+                write_json(ga_report_path, ga_report)
+                ga_verify = verify_ga_readiness_report(
+                    ga_report_path,
+                    require_unified_command_center_evidence_review=True,
+                    unified_command_center_evidence_review_path=zipped["zip_path"],
+                    unified_command_center_evidence_review_verification_report_path=evidence_store.verification_report_path(center["center_id"], review_id),
+                    require_unified_command_center_evidence_review_accepted=True,
+                    unified_command_center_evidence_review_acceptance_path=accepted["zip_path"],
+                    unified_command_center_evidence_review_acceptance_verification_report_path=evidence_store.accepted_evidence_verification_report_path(center["center_id"], review_id, accepted["evidence_id"]),
+                    unified_command_center_evidence_review_acceptance_response_verification_report_path=evidence_store.accepted_evidence_dir(center["center_id"], review_id, accepted["evidence_id"]) / "response-verification-summary.json",
+                    unified_command_center_path=store.zip_path(center["center_id"]),
+                    unified_command_center_verification_report_path=store.verification_report_path(center["center_id"]),
+                    unified_command_center_archive_path=archive_zip["zip_path"],
+                    unified_command_center_archive_verification_report_path=signoff_store.archive_verification_report_path(center["center_id"]),
+                    unified_command_center_handoff_path=handoff_zip["zip_path"],
+                    unified_command_center_handoff_verification_report_path=handoff_store.verification_report_path(center["center_id"]),
+                    unified_command_center_continuous_review_path=continuous_zip["zip_path"],
+                    unified_command_center_continuous_review_verification_report_path=review_store.verification_report_path(center["center_id"], continuous["review_id"]),
+                    unified_command_center_signoff_binding_path=signoff_store.signoff_binding_path(center["center_id"]),
+                    release_check_latest_report_path=passed_report,
+                )
+
+                ok = (
+                    center_verify.get("status") == "passed"
+                    and archive_verify.get("status") == "passed"
+                    and handoff_verify.get("status") == "passed"
+                    and continuous_verify.get("status") == "passed"
+                    and replay.get("status") == "passed"
+                    and review_verify.get("status") == "passed"
+                    and external.get("status") == "passed"
+                    and accepted_verify.get("status") == "passed"
+                    and accepted_external.get("status") == "passed"
+                    and _v38_check_status(missing_external, "ucc_review_ucc_external_binding_zip_required") == "failed"
+                    and _v38_check_status(declared_extra, "ucc_review_allowed_entries") == "failed"
+                    and naked_response_blocked
+                    and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_evidence_review_verification_status") == "passed"
+                    and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_evidence_review_acceptance_verification_status") == "passed"
+                )
+                return ok, (
+                    f"center={center_verify.get('status')}, archive={archive_verify.get('status')}, handoff={handoff_verify.get('status')}, "
+                    f"continuous={continuous_verify.get('status')}, review={replay.get('status')}, verify={review_verify.get('status')}/{external.get('status')}, "
+                    f"accepted={accepted_verify.get('status')}/{accepted_external.get('status')}, "
+                    f"missing_external={_v38_check_status(missing_external, 'ucc_review_ucc_external_binding_zip_required')}, "
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_review_allowed_entries')}, naked_response={'400' if naked_response_blocked else 'allowed'}, "
+                    f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_evidence_review_verification_status')}/{_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_evidence_review_acceptance_verification_status')}/{ga_verify.get('status')}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.4 Unified Command Center evidence review smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v114_add_declared_evidence_review_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Evidence Review extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or row.get("entry") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v113_add_declared_drift_response_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
     extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
     entries[extra_name] = b"Do not trust declared Drift Response extra files.\n"

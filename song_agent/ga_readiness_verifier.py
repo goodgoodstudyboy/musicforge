@@ -57,6 +57,8 @@ from song_agent.releases import stable_hash as release_stable_hash
 
 UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_continuous_review_verification"
 UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_drift_response_verification"
+UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_evidence_review_verification"
+UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_evidence_review_acceptance_verification"
 from song_agent.trust_operations_final_readiness_verifier import (
     TRUST_OPERATIONS_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE,
     verify_trust_operations_final_handoff_package,
@@ -138,6 +140,13 @@ def verify_ga_readiness_report(
     unified_command_center_drift_recheck_review_path: Path | str | None = None,
     unified_command_center_drift_recheck_review_verification_report_path: Path | str | None = None,
     unified_command_center_drift_change_request_binding_report_path: Path | str | None = None,
+    require_unified_command_center_evidence_review: bool = False,
+    unified_command_center_evidence_review_path: Path | str | None = None,
+    unified_command_center_evidence_review_verification_report_path: Path | str | None = None,
+    require_unified_command_center_evidence_review_accepted: bool = False,
+    unified_command_center_evidence_review_acceptance_path: Path | str | None = None,
+    unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None = None,
+    unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -156,6 +165,8 @@ def verify_ga_readiness_report(
     require_no_critical_audio_quality_risk: bool = False,
     final_handoff_package_path: Path | str | None = None,
     final_handoff_verification_report_path: Path | str | None = None,
+    release_check_latest_report_path: Path | str | None = None,
+    release_check_ga_report_path: Path | str | None = None,
 ) -> dict[str, Any]:
     target = Path(report_path)
     checks: list[dict[str, Any]] = []
@@ -412,6 +423,34 @@ def verify_ga_readiness_report(
                 unified_command_center_handoff_verification_report_path,
                 unified_command_center_path,
                 unified_command_center_verification_report_path,
+            )
+        if require_unified_command_center_evidence_review:
+            _verify_unified_command_center_evidence_review_evidence(
+                checks,
+                checks_by_id.get("ga.unified_command_center_evidence_review", {}),
+                unified_command_center_evidence_review_path,
+                unified_command_center_evidence_review_verification_report_path,
+                require_unified_command_center_evidence_review_accepted,
+                unified_command_center_evidence_review_acceptance_path,
+                unified_command_center_evidence_review_acceptance_verification_report_path,
+                unified_command_center_evidence_review_acceptance_response_verification_report_path,
+                unified_command_center_path,
+                unified_command_center_verification_report_path,
+                unified_command_center_archive_path,
+                unified_command_center_archive_verification_report_path,
+                unified_command_center_handoff_path,
+                unified_command_center_handoff_verification_report_path,
+                unified_command_center_continuous_review_path,
+                unified_command_center_continuous_review_verification_report_path,
+                unified_command_center_drift_response_path,
+                unified_command_center_drift_response_verification_report_path,
+                unified_command_center_drift_source_review_path,
+                unified_command_center_drift_source_review_verification_report_path,
+                unified_command_center_drift_recheck_review_path,
+                unified_command_center_drift_recheck_review_verification_report_path,
+                unified_command_center_drift_change_request_binding_report_path,
+                unified_command_center_signoff_binding_path,
+                release_check_latest_report_path or release_check_ga_report_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -1648,6 +1687,117 @@ def _verify_unified_command_center_drift_response_evidence(
         verification_report,
         runtime_report,
         UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_command_center_evidence_review_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    review_path: Path | str | None,
+    review_verification_report_path: Path | str | None,
+    require_accepted: bool,
+    acceptance_path: Path | str | None,
+    acceptance_verification_report_path: Path | str | None,
+    acceptance_response_verification_report_path: Path | str | None,
+    command_center_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    archive_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+    handoff_path: Path | str | None,
+    handoff_verification_report_path: Path | str | None,
+    continuous_review_path: Path | str | None,
+    continuous_review_verification_report_path: Path | str | None,
+    drift_response_path: Path | str | None,
+    drift_response_verification_report_path: Path | str | None,
+    source_review_path: Path | str | None,
+    source_review_verification_report_path: Path | str | None,
+    recheck_review_path: Path | str | None,
+    recheck_review_verification_report_path: Path | str | None,
+    drift_change_request_binding_report_path: Path | str | None,
+    signoff_binding_path: Path | str | None,
+    release_check_report_path: Path | str | None,
+) -> None:
+    if not review_path:
+        _add_check(checks, "ga_readiness_unified_command_center_evidence_review_required", "failed", "blocking", "Unified Command Center Evidence Review requirement needs a review ZIP.")
+        return
+    if not review_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_evidence_review_verification_required", "failed", "blocking", "Unified Command Center Evidence Review requirement needs a verification report.")
+        return
+    zip_path = Path(review_path)
+    try:
+        from song_agent.unified_command_center_evidence_review_verifier import (
+            verify_unified_command_center_evidence_review_acceptance_package,
+            verify_unified_command_center_evidence_review_package,
+        )
+
+        verification_report = read_json(Path(review_verification_report_path))
+        runtime_report = verify_unified_command_center_evidence_review_package(
+            zip_path,
+            strict=True,
+            require_replay_passed=True,
+            ucc_zip_path=command_center_path,
+            ucc_verification_report_path=command_center_verification_report_path,
+            archive_zip_path=archive_path,
+            archive_verification_report_path=archive_verification_report_path,
+            handoff_zip_path=handoff_path,
+            handoff_verification_report_path=handoff_verification_report_path,
+            continuous_review_zip_path=continuous_review_path,
+            continuous_review_verification_report_path=continuous_review_verification_report_path,
+            drift_response_zip_path=drift_response_path,
+            drift_response_verification_report_path=drift_response_verification_report_path,
+            drift_change_request_binding_report_path=drift_change_request_binding_report_path,
+            source_review_zip_path=source_review_path,
+            source_review_verification_report_path=source_review_verification_report_path,
+            recheck_review_zip_path=recheck_review_path,
+            recheck_review_verification_report_path=recheck_review_verification_report_path,
+            signoff_binding_path=signoff_binding_path,
+            release_check_report_path=release_check_report_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_command_center_evidence_review_readable", "failed", "blocking", f"Unified Command Center Evidence Review evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_command_center_evidence_review",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_VERIFICATION_PACKAGE_TYPE,
+    )
+    if not require_accepted:
+        return
+    if not acceptance_path:
+        _add_check(checks, "ga_readiness_unified_command_center_evidence_review_acceptance_required", "failed", "blocking", "Unified Command Center Evidence Review accepted evidence requirement needs an acceptance ZIP.")
+        return
+    if not acceptance_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_evidence_review_acceptance_verification_required", "failed", "blocking", "Unified Command Center Evidence Review accepted evidence requirement needs a verification report.")
+        return
+    if not acceptance_response_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_command_center_evidence_review_acceptance_response_verification_required", "failed", "blocking", "Unified Command Center Evidence Review accepted evidence requirement needs the original response verification summary.")
+        return
+    acceptance_zip_path = Path(acceptance_path)
+    try:
+        acceptance_verification_report = read_json(Path(acceptance_verification_report_path))
+        acceptance_runtime_report = verify_unified_command_center_evidence_review_acceptance_package(
+            acceptance_zip_path,
+            strict=True,
+            require_accepted=True,
+            review_pack_path=review_path,
+            review_pack_verification_report_path=review_verification_report_path,
+            response_verification_report_path=acceptance_response_verification_report_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_command_center_evidence_review_acceptance_readable", "failed", "blocking", f"Unified Command Center Evidence Review accepted evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_command_center_evidence_review_acceptance",
+        {"status": "passed", "detail": {"zip_sha256": acceptance_verification_report.get("zip_sha256"), "manifest_hash": acceptance_verification_report.get("manifest_hash"), "verification_hash": acceptance_verification_report.get("integrity_hash")}},
+        acceptance_zip_path,
+        acceptance_verification_report,
+        acceptance_runtime_report,
+        UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE,
     )
 
 

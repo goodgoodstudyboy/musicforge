@@ -94,6 +94,7 @@ from song_agent.release_checks import (
     _v111_unified_command_center_signoff_archive_smoke,
     _v112_unified_command_center_continuous_review_smoke,
     _v113_unified_command_center_drift_response_smoke,
+    _v114_unified_command_center_evidence_review_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1321,6 +1322,19 @@ def test_v113_unified_command_center_drift_response_smoke(tmp_path: Path) -> Non
     assert "close_without_cr=409" in detail
     assert "declared_extra=failed" in detail
     assert "full_resign=failed" in detail
+    assert "ga=passed/" in detail
+
+
+def test_v114_unified_command_center_evidence_review_smoke(tmp_path: Path) -> None:
+    ok, detail = _v114_unified_command_center_evidence_review_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "review=passed" in detail
+    assert "verify=passed" in detail
+    assert "accepted=passed" in detail
+    assert "missing_external=failed" in detail
+    assert "declared_extra=failed" in detail
+    assert "naked_response=400" in detail
     assert "ga=passed/" in detail
 
 

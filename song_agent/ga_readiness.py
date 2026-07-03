@@ -139,6 +139,13 @@ def build_ga_readiness_report(
     unified_command_center_drift_recheck_review_zip_path: Path | str | None = None,
     unified_command_center_drift_recheck_review_verification_report_path: Path | str | None = None,
     unified_command_center_drift_change_request_binding_report_path: Path | str | None = None,
+    require_unified_command_center_evidence_review: bool = False,
+    unified_command_center_evidence_review_zip_path: Path | str | None = None,
+    unified_command_center_evidence_review_verification_report_path: Path | str | None = None,
+    require_unified_command_center_evidence_review_accepted: bool = False,
+    unified_command_center_evidence_review_acceptance_zip_path: Path | str | None = None,
+    unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None = None,
+    unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None = None,
     unified_release_zip_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -183,6 +190,8 @@ def build_ga_readiness_report(
         "require_unified_command_center_handoff": require_unified_command_center_handoff,
         "require_unified_command_center_continuous_review": require_unified_command_center_continuous_review,
         "require_unified_command_center_drift_response": require_unified_command_center_drift_response,
+        "require_unified_command_center_evidence_review": require_unified_command_center_evidence_review,
+        "require_unified_command_center_evidence_review_accepted": require_unified_command_center_evidence_review_accepted,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -583,6 +592,41 @@ def build_ga_readiness_report(
         "Unified Command Center Drift Response is passed." if unified_drift_response_summary.get("status") == "passed" else "Unified Command Center Drift Response is missing or not passed.",
         unified_drift_response_summary,
     )
+    unified_evidence_review_summary = _unified_command_center_evidence_review_summary(
+        required=require_unified_command_center_evidence_review,
+        review_zip_path=unified_command_center_evidence_review_zip_path,
+        review_verification_report_path=unified_command_center_evidence_review_verification_report_path,
+        require_accepted=require_unified_command_center_evidence_review_accepted,
+        acceptance_zip_path=unified_command_center_evidence_review_acceptance_zip_path,
+        acceptance_verification_report_path=unified_command_center_evidence_review_acceptance_verification_report_path,
+        acceptance_response_verification_report_path=unified_command_center_evidence_review_acceptance_response_verification_report_path,
+        ucc_zip_path=unified_command_center_zip_path,
+        ucc_verification_report_path=unified_command_center_verification_report_path,
+        archive_zip_path=unified_command_center_archive_zip_path,
+        archive_verification_report_path=unified_command_center_archive_verification_report_path,
+        handoff_zip_path=unified_command_center_handoff_zip_path,
+        handoff_verification_report_path=unified_command_center_handoff_verification_report_path,
+        continuous_review_zip_path=unified_command_center_continuous_review_zip_path,
+        continuous_review_verification_report_path=unified_command_center_continuous_review_verification_report_path,
+        drift_response_zip_path=unified_command_center_drift_response_zip_path,
+        drift_response_verification_report_path=unified_command_center_drift_response_verification_report_path,
+        source_review_zip_path=unified_command_center_drift_source_review_zip_path,
+        source_review_verification_report_path=unified_command_center_drift_source_review_verification_report_path,
+        recheck_review_zip_path=unified_command_center_drift_recheck_review_zip_path,
+        recheck_review_verification_report_path=unified_command_center_drift_recheck_review_verification_report_path,
+        drift_change_request_binding_report_path=unified_command_center_drift_change_request_binding_report_path,
+        signoff_binding_path=unified_command_center_signoff_binding_path,
+        ga_readiness_report_path=None,
+        release_check_report_path=release_check_latest_report_path or release_check_ga_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.unified_command_center_evidence_review",
+        "passed" if unified_evidence_review_summary.get("status") == "passed" else "failed" if require_unified_command_center_evidence_review else "warning",
+        "blocking" if require_unified_command_center_evidence_review else "warning",
+        "Unified Command Center Evidence Review is passed." if unified_evidence_review_summary.get("status") == "passed" else "Unified Command Center Evidence Review is missing or not passed.",
+        unified_evidence_review_summary,
+    )
 
     latest_summary = _release_check_summary(
         root,
@@ -656,6 +700,7 @@ def build_ga_readiness_report(
             "unified_command_center_handoff_status": unified_handoff_summary.get("status", "missing"),
             "unified_command_center_continuous_review_status": unified_review_summary.get("status", "missing"),
             "unified_command_center_drift_response_status": unified_drift_response_summary.get("status", "missing"),
+            "unified_command_center_evidence_review_status": unified_evidence_review_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -1640,6 +1685,103 @@ def _unified_command_center_drift_response_summary(
         manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
         status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") and external_integrity_ok and zip_binding_ok and manifest_binding_ok else "failed"
         return {"status": status, "zip_sha256": runtime_fp.get("zip_sha256"), "manifest_hash": runtime_fp.get("manifest_hash"), "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"), "runtime_verification_status": runtime_report.get("status"), "external_verification_status": external_report.get("status") if external_report else None, "external_integrity_ok": external_integrity_ok, "zip_binding_ok": zip_binding_ok, "manifest_binding_ok": manifest_binding_ok, "blockers": runtime_report.get("blockers", []), "summary": runtime_report.get("summary", {})}
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_command_center_evidence_review_summary(
+    *,
+    required: bool,
+    review_zip_path: Path | str | None,
+    review_verification_report_path: Path | str | None,
+    require_accepted: bool,
+    acceptance_zip_path: Path | str | None,
+    acceptance_verification_report_path: Path | str | None,
+    acceptance_response_verification_report_path: Path | str | None,
+    ucc_zip_path: Path | str | None,
+    ucc_verification_report_path: Path | str | None,
+    archive_zip_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+    handoff_zip_path: Path | str | None,
+    handoff_verification_report_path: Path | str | None,
+    continuous_review_zip_path: Path | str | None,
+    continuous_review_verification_report_path: Path | str | None,
+    drift_response_zip_path: Path | str | None,
+    drift_response_verification_report_path: Path | str | None,
+    source_review_zip_path: Path | str | None,
+    source_review_verification_report_path: Path | str | None,
+    recheck_review_zip_path: Path | str | None,
+    recheck_review_verification_report_path: Path | str | None,
+    drift_change_request_binding_report_path: Path | str | None,
+    signoff_binding_path: Path | str | None,
+    ga_readiness_report_path: Path | str | None,
+    release_check_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if review_zip_path is None:
+        return {"status": "missing", "message": "Unified Command Center Evidence Review package was not provided."}
+    if required and review_verification_report_path is None:
+        return {"status": "failed", "message": "Unified Command Center Evidence Review requires a verification report."}
+    if require_accepted and (acceptance_zip_path is None or acceptance_verification_report_path is None):
+        return {"status": "failed", "message": "Unified Command Center Evidence Review accepted response evidence is required."}
+    try:
+        from song_agent.unified_command_center_evidence_review_verifier import (
+            verify_unified_command_center_evidence_review_acceptance_package,
+            verify_unified_command_center_evidence_review_package,
+        )
+
+        runtime_report = verify_unified_command_center_evidence_review_package(
+            review_zip_path,
+            strict=True,
+            require_replay_passed=required,
+            ucc_zip_path=ucc_zip_path,
+            ucc_verification_report_path=ucc_verification_report_path,
+            archive_zip_path=archive_zip_path,
+            archive_verification_report_path=archive_verification_report_path,
+            handoff_zip_path=handoff_zip_path,
+            handoff_verification_report_path=handoff_verification_report_path,
+            continuous_review_zip_path=continuous_review_zip_path,
+            continuous_review_verification_report_path=continuous_review_verification_report_path,
+            drift_response_zip_path=drift_response_zip_path,
+            drift_response_verification_report_path=drift_response_verification_report_path,
+            source_review_zip_path=source_review_zip_path,
+            source_review_verification_report_path=source_review_verification_report_path,
+            recheck_review_zip_path=recheck_review_zip_path,
+            recheck_review_verification_report_path=recheck_review_verification_report_path,
+            drift_change_request_binding_report_path=drift_change_request_binding_report_path,
+            signoff_binding_path=signoff_binding_path,
+            ga_readiness_report_path=ga_readiness_report_path,
+            release_check_report_path=release_check_report_path,
+        )
+        external_report: dict[str, Any] = {}
+        if review_verification_report_path is not None:
+            external_report = read_json(Path(review_verification_report_path))
+        external_fp = _verification_fingerprint(external_report) if external_report else {}
+        runtime_fp = _verification_fingerprint(runtime_report)
+        from song_agent.releases import stable_hash as release_stable_hash
+
+        external_integrity_ok = not external_report or external_report.get("integrity_hash") == release_stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        zip_binding_ok = not external_report or external_fp.get("zip_sha256") == runtime_fp.get("zip_sha256")
+        manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") and external_integrity_ok and zip_binding_ok and manifest_binding_ok else "failed"
+        acceptance_summary: dict[str, Any] = {}
+        if require_accepted and acceptance_zip_path and acceptance_verification_report_path:
+            acceptance_runtime = verify_unified_command_center_evidence_review_acceptance_package(
+                acceptance_zip_path,
+                strict=True,
+                require_accepted=True,
+                review_pack_path=review_zip_path,
+                review_pack_verification_report_path=review_verification_report_path,
+                response_verification_report_path=acceptance_response_verification_report_path,
+            )
+            acceptance_external = read_json(Path(acceptance_verification_report_path))
+            acceptance_summary = {
+                "runtime_status": acceptance_runtime.get("status"),
+                "external_status": acceptance_external.get("status"),
+                "verification_hash": acceptance_external.get("integrity_hash"),
+            }
+            if acceptance_runtime.get("status") != "passed" or acceptance_external.get("status") != "passed":
+                status = "failed"
+        return {"status": status, "zip_sha256": runtime_fp.get("zip_sha256"), "manifest_hash": runtime_fp.get("manifest_hash"), "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"), "runtime_verification_status": runtime_report.get("status"), "external_verification_status": external_report.get("status") if external_report else None, "external_integrity_ok": external_integrity_ok, "zip_binding_ok": zip_binding_ok, "manifest_binding_ok": manifest_binding_ok, "acceptance": acceptance_summary, "blockers": runtime_report.get("blockers", []), "summary": runtime_report.get("summary", {})}
     except Exception as exc:
         return {"status": "failed" if required else "missing", "error": str(exc)}
 

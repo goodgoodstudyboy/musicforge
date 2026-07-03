@@ -144,6 +144,86 @@ def test_unified_command_center_api_continuous_review_lifecycle(tmp_path, monkey
     assert review_verify_body["verification"]["status"] == "passed"
 
 
+def test_unified_command_center_api_evidence_review_lifecycle(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    release_check = _release_check_report(tmp_path / "release-check.json")
+    server = start_test_server()
+    try:
+        create_status, create_body = request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers",
+            {
+                "center_id": "ucc-api-evidence-review",
+                "requirements": {
+                    "audio-command-center": False,
+                    "trust-operations-hub": False,
+                    "public-trust-center": False,
+                    "ga-readiness": False,
+                    "release-check": True,
+                },
+            },
+        )
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/zip", {"release_check_report": str(release_check)})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/verify", {"strict": True, "require_ready": True, "release_check_report": str(release_check)})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/signoff", {"signed_by": "release lead", "reason": "ready"})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/archive/zip", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/archive/verify", {"strict": True})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/handoff/zip", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/handoff/verify", {"strict": True})
+        review_create_status, review_create_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/continuous-reviews", {"review_id": "uccrv-clear", "created_by": "qa"})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/continuous-reviews/uccrv-clear/run", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/continuous-reviews/uccrv-clear/zip", {})
+        request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/continuous-reviews/uccrv-clear/verify", {"strict": True})
+        evidence_create_status, evidence_create_body = request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews",
+            {"review_id": "uccer-api", "continuous_review_id": "uccrv-clear", "release_check_report": str(release_check)},
+        )
+        replay_status, replay_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews/uccer-api/replay", {"release_check_report": str(release_check)})
+        zip_status, zip_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews/uccer-api/zip", {})
+        verify_status, verify_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews/uccer-api/verify", {"strict": True, "release_check_report": str(release_check)})
+        naked_status, naked_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews/uccer-api/responses/import", {"response_id": "naked", "result": "accepted"})
+        response_status, response_body = request_json(
+            server,
+            "POST",
+            "/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews/uccer-api/responses/import",
+            {
+                "response_id": "response-001",
+                "result": "accepted",
+                "review_pack_id": "uccer-api",
+                "review_pack_zip_sha256": zip_body["zip_sha256"],
+                "review_pack_manifest_hash": verify_body["summary"]["manifest_hash"],
+                "review_pack_source_hash": evidence_create_body["review"]["source"]["source_hash"],
+                "replay_result_hash": replay_body["replay_result"]["integrity_hash"],
+                "reviewer": {"name": "External Reviewer", "organization": "QA", "role": "reviewer"},
+                "findings": [],
+            },
+        )
+        acceptance_status, acceptance_body = request_json(server, "POST", "/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews/uccer-api/responses/response-001/accepted-evidence", {})
+        evidence_id = acceptance_body["evidence_id"]
+        acceptance_verify_status, acceptance_verify_body = request_json(server, "POST", f"/api/unified-command-centers/ucc-api-evidence-review/evidence-reviews/uccer-api/accepted-evidence/{evidence_id}/verify", {"strict": True})
+    finally:
+        stop_test_server(server)
+
+    assert create_status == 201, create_body
+    assert review_create_status == 201, review_create_body
+    assert evidence_create_status == 201, evidence_create_body
+    assert replay_status == 200, replay_body
+    assert replay_body["status"] == "passed"
+    assert zip_status == 200, zip_body
+    assert Path(zip_body["zip_path"]).exists()
+    assert verify_status == 200, verify_body
+    assert verify_body["verification"]["status"] == "passed", verify_body["verification"].get("blockers")
+    assert naked_status == 409, naked_body
+    assert response_status == 201, response_body
+    assert response_body["response"]["status"] == "current"
+    assert acceptance_status == 201, acceptance_body
+    assert acceptance_verify_status == 200, acceptance_verify_body
+    assert acceptance_verify_body["verification"]["status"] == "passed", acceptance_verify_body["verification"].get("blockers")
+
+
 def test_unified_command_center_api_continuous_review_blocks_failed_release_check(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     release_check = _release_check_report(tmp_path / "release-check.json")

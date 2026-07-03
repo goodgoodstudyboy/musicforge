@@ -1,5 +1,19 @@
 # Changelog
 
+## v11.4.0 - 2026-07-03
+
+### Added
+- Unified Command Center Evidence Review / Replay packages that bind UCC, Archive, Handoff, Continuous Review, optional Drift Response, CR proof, GA readiness, and release-check evidence into a fixed-layout external reviewer pack.
+- Offline Evidence Review verifier that rejects declared extra entries, unsafe paths, nested ZIPs, missing external evidence, stale runtime replay, and package-internal self-certification.
+- External review response import with explicit review pack source binding; accepted responses can generate a fixed-layout acceptance evidence package and independent acceptance verifier report.
+- CLI and HTTP API endpoints for Evidence Review create, replay, export, ZIP, verify, response import, acceptance evidence, and downloads.
+- Release signoff and GA readiness gates for `require_unified_command_center_evidence_review`, including optional accepted external review evidence.
+- release-check `v114.unified_command_center_evidence_review_smoke` covering replay, accepted evidence, missing external evidence, declared-extra rejection, naked response rejection, and GA gate binding.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_evidence_review.py tests\test_release_check.py::test_v114_unified_command_center_evidence_review_smoke tests\test_release_check_matrix.py::test_release_check_profile_and_filters tests\test_cli_release_check_matrix.py::test_release_check_cli_v11_profile_lists_unified_command_center -q`
+- `python -m song_agent.cli release-check --profile v11 --skip-tests --json`
+
 ## v11.3.1 - 2026-07-03
 
 ### Fixed
