@@ -1,5 +1,16 @@
 # Changelog
 
+## v11.5.2 - 2026-07-04
+
+### Fixed
+- Reviewer Decision Board signoff no longer merges Board policy from signoff payloads.
+- Board policy is now created with defaults only during Board creation and is updated only through unsigned Board refresh with an explicit `policy` field.
+- Strict quorum policies remain blocked at signoff time instead of being reset to defaults by `signed_by` / `reason` / `role` payloads.
+- release-check `v115.unified_command_center_reviewer_decision_board_smoke` now covers `policy_override=blocked/409/unchanged`.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_reviewer_decision_board.py tests\test_release_check.py::test_v115_unified_command_center_reviewer_decision_board_smoke -q`
+
 ## v11.5.1 - 2026-07-03
 
 ### Fixed

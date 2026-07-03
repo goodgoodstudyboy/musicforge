@@ -157,7 +157,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             if self.source_path(center_id, board_id).exists():
                 raise UnifiedCommandCenterReviewerDecisionBoardStateError(f"Reviewer Decision Board already exists: {board_id}.")
             self.board_dir(center_id, board_id).mkdir(parents=True, exist_ok=True)
-            paths = self._local_paths(center_id, board_id, payload)
+            paths = self._local_paths(center_id, board_id, payload, include_default_policy=True)
             docs = self._build_documents(center_id, board_id, paths)
             self._write_docs(center_id, board_id, docs)
             write_json(self.local_paths_path(center_id, board_id), paths)
@@ -177,7 +177,9 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
         payload = payload or {}
         with self.lock:
             self._ensure_unsigned(center_id, board_id)
-            paths = self._merged_local_paths(center_id, board_id, payload)
+            if "policy" in payload:
+                raise UnifiedCommandCenterReviewerDecisionBoardStateError("Reviewer Decision Board policy cannot be changed during signoff. Refresh the unsigned Board first.")
+            paths = self._stored_local_paths(center_id, board_id)
             docs = self._build_documents(center_id, board_id, paths)
             decision = docs["decision_report"]
             if decision.get("status") != "ready_for_signoff":
@@ -352,7 +354,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
                 return candidate
             index += 1
 
-    def _local_paths(self, center_id: str, board_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _local_paths(self, center_id: str, board_id: str, payload: dict[str, Any], *, include_default_policy: bool = False) -> dict[str, Any]:
         review_id = str(payload.get("review_id") or "")
         if not review_id:
             reviews = self.evidence_review_store.list_reviews(center_id)
@@ -374,8 +376,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
                     "response_verification_report_path": str(row.get("response_verification_report_path") or row.get("accepted_evidence_response_verification_report") or row.get("response_verification_report") or (self.evidence_review_store.accepted_evidence_dir(center_id, review_id, evidence_id) / "response-verification-summary.json" if review_id and evidence_id else "")),
                 }
             )
-        policy = _policy(payload.get("policy") if isinstance(payload.get("policy"), dict) else payload)
-        return {
+        paths = {
             "board_id": board_id,
             "review_id": review_id,
             "review_zip": str(payload.get("review_zip") or payload.get("evidence_review_zip") or payload.get("unified_command_center_evidence_review") or (self.evidence_review_store.zip_path(center_id, review_id) if review_id else "")),
@@ -383,8 +384,12 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             "accepted_evidence": normalized_accepted,
             "responses": sanitize_metadata(payload.get("responses") if isinstance(payload.get("responses"), list) else []),
             "findings": sanitize_metadata(payload.get("findings") if isinstance(payload.get("findings"), list) else []),
-            "policy": policy,
         }
+        if isinstance(payload.get("policy"), dict):
+            paths["policy"] = _policy(payload["policy"])
+        elif include_default_policy:
+            paths["policy"] = _policy({})
+        return paths
 
     def _merged_local_paths(self, center_id: str, board_id: str | None, payload: dict[str, Any]) -> dict[str, Any]:
         base: dict[str, Any] = {}
@@ -392,11 +397,20 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             base = read_json(self.local_paths_path(center_id, board_id))
         incoming = self._local_paths(center_id, board_id or str(payload.get("board_id") or ""), payload) if payload else {}
         for key, value in incoming.items():
+            if key == "policy":
+                continue
             if value not in (None, "", [], {}):
                 base[key] = value
         if "policy" in incoming:
-            base["policy"] = _policy({**(base.get("policy") if isinstance(base.get("policy"), dict) else {}), **incoming["policy"]})
+            explicit_policy = payload.get("policy") if isinstance(payload.get("policy"), dict) else incoming["policy"]
+            base["policy"] = _policy({**(base.get("policy") if isinstance(base.get("policy"), dict) else {}), **explicit_policy})
         return base
+
+    def _stored_local_paths(self, center_id: str, board_id: str) -> dict[str, Any]:
+        path = self.local_paths_path(center_id, board_id)
+        if not path.exists():
+            raise UnifiedCommandCenterReviewerDecisionBoardNotFoundError(f"Unified Command Center Reviewer Decision Board not found: {board_id}.")
+        return read_json(path)
 
     def _build_documents(self, center_id: str, board_id: str, paths: dict[str, Any]) -> dict[str, Any]:
         source = _source_document(center_id, board_id, paths)

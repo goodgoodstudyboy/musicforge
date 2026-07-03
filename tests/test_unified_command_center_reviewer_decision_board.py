@@ -174,6 +174,33 @@ def test_reviewer_decision_board_blocks_payload_role_override_before_signoff(tmp
         board_store.signoff(center_id, "uccdb-role-override", {})
 
 
+def test_reviewer_decision_board_signoff_does_not_reset_strict_policy(tmp_path: Path) -> None:
+    _store, _evidence_store, board_store, center_id, review_id, _review_zip, accepted = _board_fixture(tmp_path)
+    strict_policy = {
+        "min_accepted_count": 2,
+        "min_organization_count": 2,
+        "required_roles": ["technical_reviewer", "release_owner", "security_reviewer"],
+    }
+    docs = board_store.create_board(
+        center_id,
+        {
+            "board_id": "uccdb-strict-policy",
+            "review_id": review_id,
+            "accepted_evidence": accepted,
+            "policy": strict_policy,
+        },
+    )
+
+    assert docs["decision_report"]["status"] == "blocked"
+    assert "quorum:required_roles" in docs["decision_report"]["blockers"]
+    with pytest.raises(UnifiedCommandCenterReviewerDecisionBoardStateError):
+        board_store.signoff(center_id, "uccdb-strict-policy", {"signed_by": "chair", "policy": {"required_roles": ["technical_reviewer", "release_owner"]}})
+    with pytest.raises(UnifiedCommandCenterReviewerDecisionBoardStateError):
+        board_store.signoff(center_id, "uccdb-strict-policy", {"signed_by": "chair"})
+    stored = read_json(board_store.local_paths_path(center_id, "uccdb-strict-policy"))
+    assert stored["policy"]["required_roles"] == ["technical_reviewer", "release_owner", "security_reviewer"]
+
+
 def test_reviewer_decision_board_blocks_rejection_and_high_findings(tmp_path: Path) -> None:
     _store, _evidence_store, board_store, center_id, review_id, _review_zip, accepted = _board_fixture(tmp_path)
     rejected = {

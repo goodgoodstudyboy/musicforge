@@ -19237,6 +19237,31 @@ def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tu
                 except UnifiedCommandCenterReviewerDecisionBoardStateError:
                     role_override_blocked = True
 
+                policy_override_blocked = False
+                policy_override_docs_status = "unknown"
+                policy_override_unchanged = False
+                strict_policy = {
+                    "min_accepted_count": 2,
+                    "min_organization_count": 2,
+                    "required_roles": ["technical_reviewer", "release_owner", "security_reviewer"],
+                }
+                policy_override_docs = board_store.create_board(
+                    center["center_id"],
+                    {
+                        "board_id": "uccdb-policy-override",
+                        "review_id": review_id,
+                        "accepted_evidence": accepted_rows,
+                        "policy": strict_policy,
+                    },
+                )
+                policy_override_docs_status = str(policy_override_docs["decision_report"].get("status") or "unknown")
+                try:
+                    board_store.signoff(center["center_id"], "uccdb-policy-override", {"signed_by": "decision chair"})
+                except UnifiedCommandCenterReviewerDecisionBoardStateError:
+                    policy_override_blocked = True
+                stored_policy = read_json(board_store.local_paths_path(center["center_id"], "uccdb-policy-override")).get("policy", {})
+                policy_override_unchanged = stored_policy.get("required_roles") == strict_policy["required_roles"]
+
                 from song_agent.ga_readiness import build_ga_readiness_report
                 from song_agent.ga_readiness_verifier import verify_ga_readiness_report
 
@@ -19279,6 +19304,9 @@ def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tu
                     and rejected_blocked
                     and role_override_docs_status == "blocked"
                     and role_override_blocked
+                    and policy_override_docs_status == "blocked"
+                    and policy_override_blocked
+                    and policy_override_unchanged
                     and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_reviewer_decision_board_verification_status") == "passed"
                 )
                 return ok, (
@@ -19288,6 +19316,7 @@ def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tu
                     f"role_full_resign={_v38_check_status(forged_role, 'ucc_decision_board_accepted_evidence_external_binding')}, "
                     f"signed_mutation={'409' if signed_mutation_blocked else 'allowed'}, delete_signoff={'409' if delete_signoff_blocked else 'allowed'}, "
                     f"rejected_required={'409' if rejected_blocked else 'allowed'}, role_override_input={role_override_docs_status}/{'409' if role_override_blocked else 'allowed'}, "
+                    f"policy_override={policy_override_docs_status}/{'409' if policy_override_blocked else 'allowed'}/{'unchanged' if policy_override_unchanged else 'changed'}, "
                     f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_reviewer_decision_board_verification_status')}/{ga_verify.get('status')}"
                 )
             finally:
