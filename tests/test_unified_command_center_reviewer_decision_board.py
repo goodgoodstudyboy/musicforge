@@ -145,6 +145,35 @@ def test_reviewer_decision_board_verifier_rejects_role_full_resign(tmp_path: Pat
     assert "ucc_decision_board_accepted_evidence_external_binding" in report["blockers"]
 
 
+def test_reviewer_decision_board_blocks_payload_role_override_before_signoff(tmp_path: Path) -> None:
+    _store, _evidence_store, board_store, center_id, review_id, _review_zip, accepted = _board_fixture(tmp_path)
+    forged = dict(accepted[0])
+    assert forged["role"] == "technical_reviewer"
+    forged["role"] = "release_owner"
+
+    docs = board_store.create_board(
+        center_id,
+        {
+            "board_id": "uccdb-role-override",
+            "review_id": review_id,
+            "accepted_evidence": [forged],
+            "policy": {
+                "min_accepted_count": 1,
+                "min_organization_count": 1,
+                "required_roles": ["release_owner"],
+            },
+        },
+    )
+
+    item = docs["accepted_evidence_index"]["items"][0]
+    assert item["status"] == "failed"
+    assert item["role"] == "technical_reviewer"
+    assert "accepted_evidence_role_mismatch" in item["blockers"]
+    assert docs["decision_report"]["status"] == "blocked"
+    with pytest.raises(UnifiedCommandCenterReviewerDecisionBoardStateError):
+        board_store.signoff(center_id, "uccdb-role-override", {})
+
+
 def test_reviewer_decision_board_blocks_rejection_and_high_findings(tmp_path: Path) -> None:
     _store, _evidence_store, board_store, center_id, review_id, _review_zip, accepted = _board_fixture(tmp_path)
     rejected = {

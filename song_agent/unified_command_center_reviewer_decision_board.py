@@ -530,8 +530,19 @@ def _accepted_evidence_item(row: dict[str, Any], review_zip: Any, review_report:
         if external.get("zip_sha256") != runtime.get("zip_sha256") or external.get("manifest_hash") != runtime.get("manifest_hash"):
             blockers.append("accepted_evidence_verification_stale")
     reviewer = public_response.get("reviewer") if isinstance(public_response.get("reviewer"), dict) else {}
-    role = _bounded(row.get("role") or reviewer.get("role") or "reviewer", 80)
-    organization = _bounded(row.get("organization") or reviewer.get("organization") or "", 120)
+    role = _bounded(reviewer.get("role") or "reviewer", 80)
+    organization = _bounded(reviewer.get("organization") or "", 120)
+    reviewer_name = _bounded(reviewer.get("name") or "Reviewer", 120)
+    hint_role = _bounded(row.get("role") or "", 80)
+    hint_organization = _bounded(row.get("organization") or "", 120)
+    hint_reviewer = _bounded(row.get("reviewer_id") or "", 120)
+    if public_response:
+        if hint_role and hint_role != role:
+            blockers.append("accepted_evidence_role_mismatch")
+        if hint_organization and hint_organization != organization:
+            blockers.append("accepted_evidence_organization_mismatch")
+        if hint_reviewer and hint_reviewer != reviewer_name:
+            blockers.append("accepted_evidence_reviewer_mismatch")
     item = {
         "evidence_id": str(row.get("evidence_id") or runtime.get("summary", {}).get("evidence_id") or ""),
         "response_id": str(public_response.get("response_id") or response_summary.get("response_id") or ""),
@@ -539,9 +550,14 @@ def _accepted_evidence_item(row: dict[str, Any], review_zip: Any, review_report:
         "status": "passed" if not blockers else "failed",
         "blockers": blockers,
         "reviewer": {
-            "name": _bounded(row.get("reviewer_id") or reviewer.get("name") or "Reviewer", 120),
+            "name": reviewer_name,
             "organization": organization,
             "role": role,
+        },
+        "payload_hints": {
+            "reviewer": hint_reviewer,
+            "organization": hint_organization,
+            "role": hint_role,
         },
         "role": role,
         "organization": organization,

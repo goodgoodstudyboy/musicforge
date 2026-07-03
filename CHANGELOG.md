@@ -1,5 +1,15 @@
 # Changelog
 
+## v11.5.1 - 2026-07-03
+
+### Fixed
+- Reviewer Decision Board accepted evidence quorum now uses reviewer role, organization, and reviewer identity from the external accepted evidence package instead of trusting payload hints.
+- Payload role, organization, or reviewer mismatches now mark the accepted evidence row failed before signoff, so forged role input cannot create a signed Board.
+- release-check `v115.unified_command_center_reviewer_decision_board_smoke` now covers `role_override_input=blocked/409`.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_reviewer_decision_board.py tests\test_release_check.py::test_v115_unified_command_center_reviewer_decision_board_smoke -q`
+
 ## v11.5.0 - 2026-07-03
 
 ### Added

@@ -19218,6 +19218,25 @@ def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tu
                 except UnifiedCommandCenterReviewerDecisionBoardStateError:
                     rejected_blocked = True
 
+                role_override_blocked = False
+                role_override_docs_status = "unknown"
+                forged_payload_row = dict(accepted_rows[0])
+                forged_payload_row["role"] = "release_owner"
+                role_override_docs = board_store.create_board(
+                    center["center_id"],
+                    {
+                        "board_id": "uccdb-role-override",
+                        "review_id": review_id,
+                        "accepted_evidence": [forged_payload_row],
+                        "policy": {"min_accepted_count": 1, "min_organization_count": 1, "required_roles": ["release_owner"]},
+                    },
+                )
+                role_override_docs_status = str(role_override_docs["decision_report"].get("status") or "unknown")
+                try:
+                    board_store.signoff(center["center_id"], "uccdb-role-override", {})
+                except UnifiedCommandCenterReviewerDecisionBoardStateError:
+                    role_override_blocked = True
+
                 from song_agent.ga_readiness import build_ga_readiness_report
                 from song_agent.ga_readiness_verifier import verify_ga_readiness_report
 
@@ -19258,6 +19277,8 @@ def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tu
                     and signed_mutation_blocked
                     and delete_signoff_blocked
                     and rejected_blocked
+                    and role_override_docs_status == "blocked"
+                    and role_override_blocked
                     and _v38_check_status(ga_verify, "ga_readiness_unified_command_center_reviewer_decision_board_verification_status") == "passed"
                 )
                 return ok, (
@@ -19266,7 +19287,7 @@ def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tu
                     f"declared_extra={_v38_check_status(declared_extra, 'ucc_decision_board_allowed_entries')}, "
                     f"role_full_resign={_v38_check_status(forged_role, 'ucc_decision_board_accepted_evidence_external_binding')}, "
                     f"signed_mutation={'409' if signed_mutation_blocked else 'allowed'}, delete_signoff={'409' if delete_signoff_blocked else 'allowed'}, "
-                    f"rejected_required={'409' if rejected_blocked else 'allowed'}, "
+                    f"rejected_required={'409' if rejected_blocked else 'allowed'}, role_override_input={role_override_docs_status}/{'409' if role_override_blocked else 'allowed'}, "
                     f"ga={_v38_check_status(ga_verify, 'ga_readiness_unified_command_center_reviewer_decision_board_verification_status')}/{ga_verify.get('status')}"
                 )
             finally:
