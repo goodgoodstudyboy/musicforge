@@ -376,11 +376,21 @@ class UnifiedCommandCenterReleaseTrainStore:
             require_go=bool(payload.get("require_go", True)),
             require_signed=bool(payload.get("require_signed", True)),
             external_evidence_manifest_path=payload.get("external_evidence_manifest") or payload.get("external_evidence_manifest_path"),
+            signoff_binding_path=payload.get("signoff_binding") or payload.get("signoff_binding_path") or payload.get("unified_command_center_release_train_signoff_binding") or self.signoff_binding_path(train_id),
         )
         write_unified_command_center_release_train_verification_report(report, self.verification_report_path(train_id))
         return report
 
-    def gate(self, train_id: str, *, required: bool = True, archive_zip_path: Path | str | None = None, verification_report_path: Path | str | None = None, external_evidence_manifest_path: Path | str | None = None) -> dict[str, Any]:
+    def gate(
+        self,
+        train_id: str,
+        *,
+        required: bool = True,
+        archive_zip_path: Path | str | None = None,
+        verification_report_path: Path | str | None = None,
+        external_evidence_manifest_path: Path | str | None = None,
+        signoff_binding_path: Path | str | None = None,
+    ) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
         archive_zip = Path(archive_zip_path) if archive_zip_path else self.zip_path(train_id)
@@ -391,7 +401,14 @@ class UnifiedCommandCenterReleaseTrainStore:
             return _gate_failed("Unified Command Center Release Train verification report is missing.")
         try:
             external = read_json(verification_path)
-            runtime = verify_unified_command_center_release_train_package(archive_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=external_evidence_manifest_path)
+            runtime = verify_unified_command_center_release_train_package(
+                archive_zip,
+                strict=True,
+                require_go=True,
+                require_signed=True,
+                external_evidence_manifest_path=external_evidence_manifest_path,
+                signoff_binding_path=signoff_binding_path or self.signoff_binding_path(train_id),
+            )
             if not _integrity_ok(external):
                 return _gate_failed("Unified Command Center Release Train verification integrity failed.")
             if external.get("status") != "passed" or runtime.get("status") != "passed":

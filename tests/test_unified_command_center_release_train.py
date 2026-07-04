@@ -79,6 +79,7 @@ def test_release_train_lifecycle_signoff_and_delete_guard(tmp_path: Path) -> Non
         require_go=True,
         require_signed=True,
         external_evidence_manifest_path=manifest_path,
+        signoff_binding_path=store.signoff_binding_path(train_id),
     )
 
     assert report["status"] == "go", report.get("blockers")
@@ -113,13 +114,13 @@ def test_release_train_external_manifest_reorder_ok_and_missing_failed(tmp_path:
 
     store.signoff(train_id, {"external_evidence_manifest": reordered, "signed_by": "train lead"})
     zipped = store.build_zip(train_id)
-    ok_report = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=reordered)
+    ok_report = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=reordered, signoff_binding_path=store.signoff_binding_path(train_id))
 
     manifest["items"] = manifest["items"][:-1]
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     missing = tmp_path / "train-external-missing.json"
     missing.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    missing_report = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=missing)
+    missing_report = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=missing, signoff_binding_path=store.signoff_binding_path(train_id))
 
     assert ok_report["status"] == "passed", ok_report["blockers"]
     assert missing_report["status"] == "failed"
@@ -133,11 +134,17 @@ def test_release_train_rejects_declared_extra_full_resign_and_stale_external_zip
 
     extra_zip = tmp_path / "train-extra.zip"
     _v76_rewrite_zip(Path(zipped["zip_path"]), extra_zip, _add_declared_extra)
-    extra = verify_unified_command_center_release_train_package(extra_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path)
+    extra = verify_unified_command_center_release_train_package(extra_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path, signoff_binding_path=store.signoff_binding_path(train_id))
+
+    missing_binding = verify_unified_command_center_release_train_package(Path(zipped["zip_path"]), strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path)
 
     forged_zip = tmp_path / "train-forged-signer.zip"
     _v76_rewrite_zip(Path(zipped["zip_path"]), forged_zip, _forge_train_signer)
-    forged = verify_unified_command_center_release_train_package(forged_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path)
+    forged = verify_unified_command_center_release_train_package(forged_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path, signoff_binding_path=store.signoff_binding_path(train_id))
+
+    full_resign_zip = tmp_path / "train-full-resign-signer.zip"
+    _v76_rewrite_zip(Path(zipped["zip_path"]), full_resign_zip, _full_resign_train_signer_with_binding)
+    full_resign = verify_unified_command_center_release_train_package(full_resign_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path, signoff_binding_path=store.signoff_binding_path(train_id))
 
     stale_ucc_zip = tmp_path / "ucc-stale.zip"
     _v76_rewrite_zip(ucc_store.zip_path(center_id), stale_ucc_zip, _add_declared_extra)
@@ -148,12 +155,16 @@ def test_release_train_rejects_declared_extra_full_resign_and_stale_external_zip
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     stale_manifest = tmp_path / "train-external-stale-ucc.json"
     stale_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    stale = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=stale_manifest)
+    stale = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=stale_manifest, signoff_binding_path=store.signoff_binding_path(train_id))
 
     assert extra["status"] == "failed"
     assert "ucc_train_allowed_entries" in extra["blockers"]
+    assert missing_binding["status"] == "failed"
+    assert "ucc_train_external_signoff_binding_required" in missing_binding["blockers"]
     assert forged["status"] == "failed"
     assert "ucc_train_signoff_binding_signed_by" in forged["blockers"]
+    assert full_resign["status"] == "failed"
+    assert "ucc_train_external_signoff_binding_hash" in full_resign["blockers"]
     assert stale["status"] == "failed"
     assert any(blocker.startswith("ucc_train_external_evidence_binding") for blocker in stale["blockers"])
 
@@ -208,6 +219,58 @@ def _forge_train_signer(entries: dict[str, bytes]) -> dict[str, bytes]:
     manifest.setdefault("source", {})["train_signoff_hash"] = signoff["integrity_hash"]
     _sync_manifest_file(manifest, "train-signoff.json", entries["train-signoff.json"])
     _sync_manifest_file(manifest, "train-history.jsonl", entries["train-history.jsonl"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _full_resign_train_signer_with_binding(entries: dict[str, bytes]) -> dict[str, bytes]:
+    signoff = json.loads(entries["train-signoff.json"].decode("utf-8"))
+    signoff["signed_by"] = "forged signer"
+    signoff["role"] = "forged_role"
+    signoff["reason"] = "forged release train signoff"
+    signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
+    signoff["integrity_hash"] = stable_hash({key: value for key, value in signoff.items() if key != "integrity_hash"})
+    entries["train-signoff.json"] = json.dumps(signoff, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    history_rows = []
+    previous = ""
+    signoff_event = None
+    for line in entries["train-history.jsonl"].decode("utf-8").splitlines():
+        event = json.loads(line)
+        if event.get("event_type") == "ucc_release_train_signoff_created":
+            event["signed_by"] = signoff["signed_by"]
+            event["role"] = signoff["role"]
+            event["reason"] = signoff["reason"]
+            event["signoff_hash"] = signoff["integrity_hash"]
+            event["signoff_payload_hash"] = signoff["payload_hash"]
+        event["previous_event_hash"] = previous
+        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
+        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        previous = event["event_hash"]
+        history_rows.append(event)
+        if event.get("event_type") == "ucc_release_train_signoff_created":
+            signoff_event = event
+    entries["train-history.jsonl"] = ("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in history_rows) + "\n").encode("utf-8")
+
+    binding = json.loads(entries["train-signoff-binding-summary.json"].decode("utf-8"))
+    binding["signed_by"] = signoff["signed_by"]
+    binding["role"] = signoff["role"]
+    binding["reason"] = signoff["reason"]
+    binding["signoff_hash"] = signoff["integrity_hash"]
+    binding["signoff_payload_hash"] = signoff["payload_hash"]
+    if signoff_event:
+        binding["history_event_hash"] = signoff_event["event_hash"]
+        binding["history_event_payload_hash"] = signoff_event["payload_hash"]
+    binding["integrity_hash"] = stable_hash({key: value for key, value in binding.items() if key != "integrity_hash"})
+    entries["train-signoff-binding-summary.json"] = json.dumps(binding, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["train_signoff_hash"] = signoff["integrity_hash"]
+    manifest.setdefault("source", {})["train_signoff_binding_hash"] = binding["integrity_hash"]
+    _sync_manifest_file(manifest, "train-signoff.json", entries["train-signoff.json"])
+    _sync_manifest_file(manifest, "train-history.jsonl", entries["train-history.jsonl"])
+    _sync_manifest_file(manifest, "train-signoff-binding-summary.json", entries["train-signoff-binding-summary.json"])
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     return entries

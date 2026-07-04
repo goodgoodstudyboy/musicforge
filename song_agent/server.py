@@ -12681,6 +12681,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             archive_zip_path=payload.get("unified_command_center_release_train_archive") or payload.get("unified_command_center_release_train_zip"),
             verification_report_path=payload.get("unified_command_center_release_train_verification_report"),
             external_evidence_manifest_path=payload.get("unified_command_center_release_train_external_evidence_manifest"),
+            signoff_binding_path=payload.get("unified_command_center_release_train_signoff_binding"),
         )
         if unified_command_center_release_train_gate and require_unified_command_center_release_train:
             acceptance_gate = dict(acceptance_gate or {})

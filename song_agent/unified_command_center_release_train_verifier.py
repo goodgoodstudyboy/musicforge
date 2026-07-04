@@ -63,6 +63,7 @@ def verify_unified_command_center_release_train_package(
     require_go: bool = False,
     require_signed: bool = False,
     external_evidence_manifest_path: Path | str | None = None,
+    signoff_binding_path: Path | str | None = None,
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
@@ -151,6 +152,7 @@ def verify_unified_command_center_release_train_package(
             checks.extend(_dependency_semantics_checks(dependency, readiness, report))
             checks.extend(_history_checks(history, signoff))
             checks.extend(_signoff_binding_checks(binding, signoff, history, source, report, inventory, readiness))
+            checks.extend(_external_signoff_binding_checks(signoff_binding_path, binding, signoff, history, source, report, inventory, readiness, require=require_signed))
             checks.extend(_external_evidence_manifest_checks(external_evidence_manifest_path, inventory, require=require_go or require_signed or strict))
             checks.append(_redaction_check(archive, names))
             if require_go:
@@ -271,6 +273,41 @@ def _document_binding_checks(
         _check("ucc_train_manifest_signoff_binding", manifest_source.get("train_signoff_hash") == signoff.get("integrity_hash"), "Manifest binds train signoff."),
         _check("ucc_train_manifest_signoff_sidecar_binding", manifest_source.get("train_signoff_binding_hash") == binding.get("integrity_hash"), "Manifest binds signoff binding sidecar."),
     ]
+    return checks
+
+
+def _external_signoff_binding_checks(
+    path: Path | str | None,
+    binding: dict[str, Any],
+    signoff: dict[str, Any],
+    history: list[dict[str, Any]],
+    source: dict[str, Any],
+    report: dict[str, Any],
+    inventory: dict[str, Any],
+    readiness: dict[str, Any],
+    *,
+    require: bool,
+) -> list[dict[str, Any]]:
+    if not path:
+        if require:
+            return [_check("ucc_train_external_signoff_binding_required", False, "External train signoff binding proof is required.")]
+        return []
+    binding_path = Path(path)
+    checks = [_check("ucc_train_external_signoff_binding_exists", binding_path.exists() and binding_path.is_file(), "External train signoff binding proof exists.")]
+    if not binding_path.exists() or not binding_path.is_file():
+        return checks
+    external = _read_json_file(binding_path)
+    checks.extend(
+        [
+            _check("ucc_train_external_signoff_binding_integrity", _integrity_ok(external), "External train signoff binding integrity hash is valid."),
+            _check("ucc_train_external_signoff_binding_hash", external.get("integrity_hash") == binding.get("integrity_hash"), "External signoff binding matches archive binding hash."),
+            _check("ucc_train_external_signoff_binding_signed_by", external.get("signed_by") == binding.get("signed_by") == signoff.get("signed_by"), "External signoff binding matches signed_by."),
+            _check("ucc_train_external_signoff_binding_role", external.get("role") == binding.get("role") == signoff.get("role"), "External signoff binding matches role."),
+            _check("ucc_train_external_signoff_binding_reason", external.get("reason") == binding.get("reason") == signoff.get("reason"), "External signoff binding matches reason."),
+            _check("ucc_train_external_signoff_binding_signed_at", external.get("signed_at") == binding.get("signed_at") == signoff.get("signed_at"), "External signoff binding matches signed_at."),
+        ]
+    )
+    checks.extend(_signoff_binding_checks(external, signoff, history, source, report, inventory, readiness))
     return checks
 
 

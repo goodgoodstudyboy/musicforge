@@ -1,5 +1,15 @@
 # Changelog
 
+## v11.6.1 - 2026-07-04
+
+### Fixed
+- Release Train archive verification now requires an external `train-signoff-binding-summary.json` proof when `require_signed=true`, so a ZIP-internal full resign of signoff, history, binding, and manifest cannot forge signer metadata.
+- Release Train store, CLI verifier, server Release signoff gate, and release-check v11.6 smoke now pass and validate the external signoff binding proof.
+- release-check `v116.unified_command_center_release_train_smoke` now covers full-resign signer tampering with synchronized signoff/history/binding/manifest rewrites.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_release_train.py tests\test_cli_unified_command_center_release_train.py tests\test_server_unified_command_center_release_train.py tests\test_release_check.py::test_v116_unified_command_center_release_train_smoke -q`
+
 ## v11.6.0 - 2026-07-04
 
 ### Added

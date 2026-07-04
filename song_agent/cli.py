@@ -1661,6 +1661,7 @@ def build_unified_command_center_release_train_parser() -> argparse.ArgumentPars
             cmd.add_argument("--strict", action="store_true")
             cmd.add_argument("--require-go", action="store_true")
             cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--signoff-binding", type=Path, default=None)
             cmd.add_argument("--report-out", type=Path, default=None)
     return parser
 
@@ -1674,6 +1675,7 @@ def build_verify_unified_command_center_release_train_parser() -> argparse.Argum
     parser.add_argument("--require-go", action="store_true")
     parser.add_argument("--require-signed", action="store_true")
     parser.add_argument("--external-evidence-manifest", type=Path, default=None)
+    parser.add_argument("--signoff-binding", type=Path, default=None)
     parser.add_argument("--max-zip-size-mb", type=int, default=128)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
@@ -5196,7 +5198,7 @@ def _run_unified_command_center_release_train_command(args: argparse.Namespace) 
         result = store.build_zip(args.train_id)
         return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
     if args.action == "verify":
-        report = store.verify_archive(args.train_id, {**payload, "strict": args.strict, "require_go": args.require_go, "require_signed": args.require_signed})
+        report = store.verify_archive(args.train_id, {**payload, "strict": args.strict, "require_go": args.require_go, "require_signed": args.require_signed, "signoff_binding": args.signoff_binding})
         if args.report_out is not None:
             write_unified_command_center_release_train_verification_report(report, args.report_out)
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
@@ -6208,6 +6210,7 @@ def _main() -> None:
             require_go=args.require_go,
             require_signed=args.require_signed,
             external_evidence_manifest_path=args.external_evidence_manifest,
+            signoff_binding_path=args.signoff_binding,
             max_zip_size_mb=args.max_zip_size_mb,
             max_uncompressed_size_mb=args.max_uncompressed_size_mb,
             max_entry_count=args.max_entry_count,

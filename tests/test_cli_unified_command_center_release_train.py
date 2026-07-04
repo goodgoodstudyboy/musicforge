@@ -26,6 +26,8 @@ def test_verify_unified_command_center_release_train_cli(tmp_path: Path) -> None
             "--require-signed",
             "--external-evidence-manifest",
             str(manifest_path),
+            "--signoff-binding",
+            str(store.signoff_binding_path(train_id)),
             "--json",
         ],
         cwd=tmp_path,

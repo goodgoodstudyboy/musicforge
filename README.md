@@ -160,13 +160,17 @@ python -m song_agent.cli unified-command-center-release-train add-item uct-00000
 python -m song_agent.cli unified-command-center-release-train refresh uct-000001 --external-evidence-manifest train-external-evidence.json --json
 python -m song_agent.cli unified-command-center-release-train signoff uct-000001 --external-evidence-manifest train-external-evidence.json --signed-by "Train Lead" --reason "Wave accepted" --json
 python -m song_agent.cli unified-command-center-release-train zip uct-000001 --json
-python -m song_agent.cli verify-unified-command-center-release-train-package .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train.zip --strict --require-go --require-signed --external-evidence-manifest train-external-evidence.json --json
+python -m song_agent.cli verify-unified-command-center-release-train-package .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train.zip --strict --require-go --require-signed --external-evidence-manifest train-external-evidence.json --signoff-binding .musicforge\unified-command-trains\uct-000001\train-signoff-binding-summary.json --json
 ```
 
 After train signoff, refresh, item mutation, run-safe, archive export, and ZIP
 rebuild are blocked by signoff history even if local signoff/export/ZIP files are
 deleted. Duplicate `center_id` entries require `allow_duplicate_center=true`.
-Release signoff can require `require_unified_command_center_release_train=true`.
+Release Train signed verification also requires the external signoff binding
+summary that was written at signoff time; the archive ZIP's internal copy is not
+trusted by itself. Release signoff can require
+`require_unified_command_center_release_train=true` and pass
+`unified_command_center_release_train_signoff_binding`.
 
 ## Audio Lab
 
