@@ -1627,6 +1627,59 @@ def build_verify_unified_command_center_reviewer_decision_board_parser() -> argp
     return parser
 
 
+def build_unified_command_center_release_train_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Command Center Release Train archives.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("create", help="Create a Release Train.")
+    create.add_argument("--train-id", default=None)
+    create.add_argument("--name", default=None)
+    create.add_argument("--profile", default="ga")
+    create.add_argument("--allow-duplicate-center", action="store_true")
+    create.add_argument("--required-evidence", action="append", default=[])
+    list_cmd = subparsers.add_parser("list", help="List Release Trains.")
+    del list_cmd
+    add_item = subparsers.add_parser("add-item", help="Add a UCC item to a Release Train.")
+    add_item.add_argument("train_id")
+    add_item.add_argument("--item-id", default=None)
+    add_item.add_argument("--center-id", required=True)
+    add_item.add_argument("--label", default=None)
+    add_item.add_argument("--wave", type=int, default=1)
+    add_item.add_argument("--depends-on", action="append", default=[])
+    add_item.add_argument("--allow-duplicate-center", action="store_true")
+    add_item.add_argument("--required-evidence", action="append", default=[])
+    for action in ("status", "refresh", "run-safe", "signoff", "export", "zip", "verify"):
+        cmd = subparsers.add_parser(action, help=f"{action} a Release Train.")
+        cmd.add_argument("train_id")
+        if action in {"refresh", "run-safe", "signoff", "verify"}:
+            cmd.add_argument("--external-evidence-manifest", type=Path, default=None)
+        if action == "signoff":
+            cmd.add_argument("--signed-by", default="release-train-owner")
+            cmd.add_argument("--role", default="release_train_owner")
+            cmd.add_argument("--reason", default="Unified Command Center Release Train approved for release.")
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-go", action="store_true")
+            cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_command_center_release_train_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Command Center Release Train archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-go", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--external-evidence-manifest", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
 def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Verify a MusicForge LTS maintenance backup ZIP.")
     parser.add_argument("zip_path", type=Path, help="Path to musicforge-maintenance-backup.zip.")
@@ -5088,6 +5141,68 @@ def _run_unified_command_center_reviewer_decision_board_command(args: argparse.N
     raise ValueError("Unsupported unified-command-center-reviewer-decision-board command.")
 
 
+def _run_unified_command_center_release_train_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_command_center_release_train import UnifiedCommandCenterReleaseTrainStore
+    from song_agent.unified_command_center_release_train_verifier import write_unified_command_center_release_train_verification_report
+
+    store = UnifiedCommandCenterReleaseTrainStore()
+    if args.action == "create":
+        train = store.create_train(
+            {
+                "train_id": args.train_id,
+                "name": args.name,
+                "profile": args.profile,
+                "allow_duplicate_center": args.allow_duplicate_center,
+                "required_evidence": args.required_evidence,
+            }
+        )
+        return {"ok": True, "train": train, "summary": {"train_id": train.get("train_id")}, "status": train.get("status")}
+    if args.action == "list":
+        trains = store.list_trains()
+        return {"ok": True, "trains": trains, "summary": {"train_count": len(trains)}, "status": "passed"}
+    if args.action == "add-item":
+        item = store.add_item(
+            args.train_id,
+            {
+                "item_id": args.item_id,
+                "center_id": args.center_id,
+                "label": args.label,
+                "wave": args.wave,
+                "depends_on": args.depends_on,
+                "allow_duplicate_center": args.allow_duplicate_center,
+                "required_evidence": args.required_evidence,
+            },
+        )
+        return {"ok": True, "item": item, "summary": {"item_id": item.get("item_id")}, "status": item.get("status")}
+    if args.action == "status":
+        docs = store.read_docs(args.train_id) if store.report_path(args.train_id).exists() else {"train": store.read_train(args.train_id)}
+        report = docs.get("report", {})
+        return {"ok": True, "train": docs.get("train"), "report": report, "summary": report.get("summary", {}), "status": report.get("status") or docs.get("train", {}).get("status")}
+    payload = {"external_evidence_manifest": getattr(args, "external_evidence_manifest", None)}
+    if args.action == "refresh":
+        report = store.refresh(args.train_id, payload)
+        return {"ok": report.get("status") == "go", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "run-safe":
+        result = store.run_safe(args.train_id, payload)
+        failed = int((result.get("summary") or {}).get("failed_count") or 0)
+        return {"ok": failed == 0, "runbook_result": result, "summary": result.get("summary", {}), "status": "passed" if failed == 0 else "failed"}
+    if args.action == "signoff":
+        signoff = store.signoff(args.train_id, {**payload, "signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}
+    if args.action == "export":
+        manifest = store.export_archive(args.train_id)
+        return {"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"}
+    if args.action == "zip":
+        result = store.build_zip(args.train_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_archive(args.train_id, {**payload, "strict": args.strict, "require_go": args.require_go, "require_signed": args.require_signed})
+        if args.report_out is not None:
+            write_unified_command_center_release_train_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    raise ValueError("Unsupported unified-command-center-release-train command.")
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -5617,6 +5732,16 @@ def _main() -> None:
         if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
             raise SystemExit(1)
         return
+    elif raw_args and raw_args[0] == "unified-command-center-release-train":
+        parser = build_unified_command_center_release_train_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_command_center_release_train_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
     elif raw_args and raw_args[0] == "verify-release-audio-baseline-registry-package":
         from song_agent.release_audio_baseline_governance_verifier import (
             release_audio_baseline_registry_verification_exit_code,
@@ -6068,6 +6193,35 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_command_center_reviewer_decision_board_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-release-train-package":
+        from song_agent.unified_command_center_release_train_verifier import (
+            unified_command_center_release_train_verification_exit_code,
+            verify_unified_command_center_release_train_package,
+            write_unified_command_center_release_train_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_release_train_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_command_center_release_train_package(
+            args.zip_path,
+            strict=args.strict,
+            require_go=args.require_go,
+            require_signed=args.require_signed,
+            external_evidence_manifest_path=args.external_evidence_manifest,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_command_center_release_train_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Command Center Release Train verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_release_train_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

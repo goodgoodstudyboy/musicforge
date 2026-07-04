@@ -148,6 +148,26 @@ it does not trust role or acceptance fields that only appear inside the Board
 ZIP. Release signoff and GA readiness can require
 `require_unified_command_center_reviewer_decision_board=true`.
 
+Unified Command Center Release Train groups multiple UCCs into a wave-based
+release train with dependency checks and Go/No-Go readiness. The train does not
+embed UCC ZIPs; it binds external evidence through a local manifest keyed by
+`item_id + center_id + evidence_type`, so verifier results do not depend on CLI
+argument order:
+
+```powershell
+python -m song_agent.cli unified-command-center-release-train create --train-id uct-000001 --json
+python -m song_agent.cli unified-command-center-release-train add-item uct-000001 --center-id ucc-000001 --wave 1 --json
+python -m song_agent.cli unified-command-center-release-train refresh uct-000001 --external-evidence-manifest train-external-evidence.json --json
+python -m song_agent.cli unified-command-center-release-train signoff uct-000001 --external-evidence-manifest train-external-evidence.json --signed-by "Train Lead" --reason "Wave accepted" --json
+python -m song_agent.cli unified-command-center-release-train zip uct-000001 --json
+python -m song_agent.cli verify-unified-command-center-release-train-package .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train.zip --strict --require-go --require-signed --external-evidence-manifest train-external-evidence.json --json
+```
+
+After train signoff, refresh, item mutation, run-safe, archive export, and ZIP
+rebuild are blocked by signoff history even if local signoff/export/ZIP files are
+deleted. Duplicate `center_id` entries require `allow_duplicate_center=true`.
+Release signoff can require `require_unified_command_center_release_train=true`.
+
 ## Audio Lab
 
 Use Audio Lab when you need to prove the generated music can be rendered,

@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.6.0 - 2026-07-04
+
+### Added
+- Unified Command Center Release Train for grouping multiple UCCs into waves with dependency checks, per-item external evidence requirements, Go/No-Go readiness, safe runbook output, and signed release-train archive.
+- Fixed-layout Release Train archive ZIP and offline verifier with strict allow-list, dependency graph validation, signoff history hash-chain checks, signoff binding sidecar checks, redaction scanning, and external evidence manifest binding by `item_id + center_id + evidence_type`.
+- CLI and HTTP API endpoints for Release Train create, item add, refresh, run-safe, signoff, archive export, ZIP, verify, list, status, and download flows.
+- Release signoff gate for `require_unified_command_center_release_train=true`.
+- release-check `v116.unified_command_center_release_train_smoke` covering manifest reorder, missing external evidence, declared-extra rejection, stale external ZIP rejection, duplicate center guard, dependency cycle guard, deleted-signoff history guard, and signoff signer full-resign rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_release_train.py tests\test_cli_unified_command_center_release_train.py tests\test_server_unified_command_center_release_train.py tests\test_release_check.py::test_v116_unified_command_center_release_train_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v11.5.2 - 2026-07-04
 
 ### Fixed

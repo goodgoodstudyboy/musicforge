@@ -19327,6 +19327,197 @@ def _v115_unified_command_center_reviewer_decision_board_smoke(root: Path) -> tu
         os.chdir(old_cwd)
 
 
+def _v116_unified_command_center_release_train_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.unified_command_center_release_train import (
+        DEFAULT_REQUIRED_EVIDENCE,
+        UnifiedCommandCenterReleaseTrainStateError,
+        UnifiedCommandCenterReleaseTrainStore,
+        write_external_evidence_manifest,
+    )
+    from song_agent.unified_command_center_release_train_verifier import (
+        EXPECTED_EVIDENCE_PACKAGE_TYPES,
+        verify_unified_command_center_release_train_package,
+    )
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v116-ucc-release-train-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                store = UnifiedCommandCenterReleaseTrainStore(root=base / ".musicforge" / "unified-command-trains")
+                train = store.create_train({"train_id": "uct-smoke", "required_evidence": DEFAULT_REQUIRED_EVIDENCE})
+                item = store.add_item(train["train_id"], {"item_id": "item-001", "center_id": "ucc-smoke"})
+                rows = []
+                for evidence_type in DEFAULT_REQUIRED_EVIDENCE:
+                    zip_path, report_path = _v116_fake_external_evidence(base, item["item_id"], item["center_id"], evidence_type, EXPECTED_EVIDENCE_PACKAGE_TYPES[evidence_type])
+                    rows.append({"item_id": item["item_id"], "center_id": item["center_id"], "evidence_type": evidence_type, "zip_path": str(zip_path), "verification_report_path": str(report_path)})
+                manifest_path = base / "train-external-evidence.json"
+                write_external_evidence_manifest(manifest_path, train_id=train["train_id"], items=rows)
+                report = store.refresh(train["train_id"], {"external_evidence_manifest": manifest_path})
+                signoff = store.signoff(train["train_id"], {"external_evidence_manifest": manifest_path, "signed_by": "train lead", "reason": "v11.6 smoke"})
+                zipped = store.build_zip(train["train_id"])
+                verified = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path)
+
+                reordered_payload = read_json(manifest_path)
+                reordered_payload["items"] = list(reversed(reordered_payload["items"]))
+                reordered_payload["integrity_hash"] = stable_hash({key: value for key, value in reordered_payload.items() if key != "integrity_hash"})
+                reordered_path = base / "train-external-reordered.json"
+                write_json(reordered_path, reordered_payload)
+                reordered = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=reordered_path)
+
+                missing_payload = read_json(manifest_path)
+                missing_payload["items"] = missing_payload["items"][:-1]
+                missing_payload["integrity_hash"] = stable_hash({key: value for key, value in missing_payload.items() if key != "integrity_hash"})
+                missing_path = base / "train-external-missing.json"
+                write_json(missing_path, missing_payload)
+                missing_external = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=missing_path)
+
+                declared_extra_zip = base / "release-train-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v116_add_declared_release_train_extra)
+                declared_extra = verify_unified_command_center_release_train_package(declared_extra_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path)
+
+                signer_zip = base / "release-train-forged-signer.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), signer_zip, _v116_full_resign_release_train_signer)
+                forged_signer = verify_unified_command_center_release_train_package(signer_zip, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path)
+
+                stale_external_payload = read_json(manifest_path)
+                stale_zip = base / "stale-ucc.zip"
+                _v76_rewrite_zip(Path(stale_external_payload["items"][0]["zip_path"]), stale_zip, _v116_add_declared_fake_evidence_extra)
+                stale_external_payload["items"][0]["zip_path"] = str(stale_zip)
+                stale_external_payload["integrity_hash"] = stable_hash({key: value for key, value in stale_external_payload.items() if key != "integrity_hash"})
+                stale_path = base / "train-external-stale.json"
+                write_json(stale_path, stale_external_payload)
+                stale_external = verify_unified_command_center_release_train_package(zipped["zip_path"], strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=stale_path)
+
+                delete_signoff_blocked = False
+                store.signoff_path(train["train_id"]).unlink(missing_ok=True)
+                try:
+                    store.add_item(train["train_id"], {"item_id": "item-002", "center_id": "ucc-after-signoff"})
+                except UnifiedCommandCenterReleaseTrainStateError:
+                    delete_signoff_blocked = True
+
+                duplicate_blocked = False
+                duplicate_train = store.create_train({"train_id": "uct-duplicate"})
+                store.add_item(duplicate_train["train_id"], {"item_id": "dup-a", "center_id": "ucc-dup"})
+                try:
+                    store.add_item(duplicate_train["train_id"], {"item_id": "dup-b", "center_id": "ucc-dup"})
+                except UnifiedCommandCenterReleaseTrainStateError:
+                    duplicate_blocked = True
+
+                cycle_train = store.create_train({"train_id": "uct-cycle"})
+                store.add_item(cycle_train["train_id"], {"item_id": "a", "center_id": "ucc-cycle-a", "depends_on": ["b"]})
+                store.add_item(cycle_train["train_id"], {"item_id": "b", "center_id": "ucc-cycle-b", "depends_on": ["a"]})
+                cycle_report = store.refresh(cycle_train["train_id"], {"external_evidence_manifest": manifest_path})
+
+                ok = (
+                    report.get("status") == "go"
+                    and signoff.get("status") == "signed"
+                    and verified.get("status") == "passed"
+                    and reordered.get("status") == "passed"
+                    and _v38_check_status(missing_external, "ucc_train_external_evidence_manifest_identity") == "failed"
+                    and _v38_check_status(declared_extra, "ucc_train_allowed_entries") == "failed"
+                    and _v38_check_status(forged_signer, "ucc_train_signoff_binding_signed_by") == "failed"
+                    and any(blocker.startswith("ucc_train_external_evidence_binding") for blocker in stale_external.get("blockers", []))
+                    and delete_signoff_blocked
+                    and duplicate_blocked
+                    and "dependency:cycle" in cycle_report.get("blockers", [])
+                )
+                return ok, (
+                    f"report={report.get('status')}, signoff={signoff.get('status')}, verify={verified.get('status')}, "
+                    f"manifest_reorder={reordered.get('status')}, missing_external={_v38_check_status(missing_external, 'ucc_train_external_evidence_manifest_identity')}, "
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_train_allowed_entries')}, "
+                    f"signoff_full_resign_signed_by={_v38_check_status(forged_signer, 'ucc_train_signoff_binding_signed_by')}, "
+                    f"stale_external={stale_external.get('status')}, delete_signoff={'409' if delete_signoff_blocked else 'allowed'}, "
+                    f"duplicate_center={'409' if duplicate_blocked else 'allowed'}, dependency_cycle={'blocked' if 'dependency:cycle' in cycle_report.get('blockers', []) else 'allowed'}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.6 Unified Command Center Release Train smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v116_fake_external_evidence(base: Path, item_id: str, center_id: str, evidence_type: str, package_type: str) -> tuple[Path, Path]:
+    evidence_dir = base / "external-evidence" / evidence_type
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": 1,
+        "package_type": f"musicforge_fake_{evidence_type}_package",
+        "item_id": item_id,
+        "center_id": center_id,
+        "evidence_type": evidence_type,
+        "files": [],
+    }
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    zip_path = evidence_dir / f"{evidence_type}.zip"
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("manifest.json", manifest_bytes)
+    report = {
+        "schema_version": 1,
+        "package_type": package_type,
+        "status": "passed",
+        "zip_sha256": hashlib.sha256(zip_path.read_bytes()).hexdigest(),
+        "manifest_hash": manifest["integrity_hash"],
+        "summary": {"zip_sha256": hashlib.sha256(zip_path.read_bytes()).hexdigest(), "manifest_hash": manifest["integrity_hash"], "status": "passed"},
+    }
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    report_path = evidence_dir / f"{evidence_type}-verification-report.json"
+    write_json(report_path, report)
+    return zip_path, report_path
+
+
+def _v116_add_declared_fake_evidence_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    entries["unexpected.txt"] = b"unexpected external evidence mutation\n"
+    return entries
+
+
+def _v116_add_declared_release_train_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Release Train extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v116_full_resign_release_train_signer(entries: dict[str, bytes]) -> dict[str, bytes]:
+    signoff = json.loads(entries["train-signoff.json"].decode("utf-8"))
+    signoff["signed_by"] = "forged train signer"
+    signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
+    signoff["integrity_hash"] = stable_hash({key: value for key, value in signoff.items() if key != "integrity_hash"})
+    entries["train-signoff.json"] = json.dumps(signoff, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    history_rows = []
+    previous = ""
+    for line in entries["train-history.jsonl"].decode("utf-8").splitlines():
+        event = json.loads(line)
+        if event.get("event_type") == "ucc_release_train_signoff_created":
+            event["signed_by"] = "forged train signer"
+            event["signoff_hash"] = signoff["integrity_hash"]
+        event["previous_event_hash"] = previous
+        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
+        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        previous = str(event["event_hash"])
+        history_rows.append(event)
+    entries["train-history.jsonl"] = ("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in history_rows) + "\n").encode("utf-8")
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["train_signoff_hash"] = signoff["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "train-signoff.json", entries["train-signoff.json"])
+    _v74_sync_manifest_file(manifest, "train-history.jsonl", entries["train-history.jsonl"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v115_add_declared_reviewer_board_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
     extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
     entries[extra_name] = b"Do not trust declared Reviewer Decision Board extra files.\n"

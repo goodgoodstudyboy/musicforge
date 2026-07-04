@@ -621,6 +621,12 @@ from song_agent.unified_command_center_reviewer_decision_board import (
     UnifiedCommandCenterReviewerDecisionBoardStateError,
     UnifiedCommandCenterReviewerDecisionBoardStore,
 )
+from song_agent.unified_command_center_release_train import (
+    UnifiedCommandCenterReleaseTrainError,
+    UnifiedCommandCenterReleaseTrainNotFoundError,
+    UnifiedCommandCenterReleaseTrainStateError,
+    UnifiedCommandCenterReleaseTrainStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3306,6 +3312,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return store
 
     @property
+    def unified_command_center_release_train_store(self) -> UnifiedCommandCenterReleaseTrainStore:
+        return self.server.unified_command_center_release_train_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3457,6 +3467,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/maintenance/status" or path.startswith("/api/maintenance/"):
                 self._handle_maintenance_route(method, path)
+                return
+            if path == "/api/unified-command-center-release-trains" or path.startswith("/api/unified-command-center-release-trains/"):
+                self._handle_unified_command_center_release_trains_route(method, path)
                 return
             if path == "/api/unified-command-centers" or path.startswith("/api/unified-command-centers/"):
                 self._handle_unified_command_centers_route(method, path)
@@ -11029,6 +11042,104 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except ReleaseAudioCommandCenterError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def _handle_unified_command_center_release_trains_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/unified-command-center-release-trains":
+                if method == "GET":
+                    trains = self.unified_command_center_release_train_store.list_trains()
+                    self._send_json({"ok": True, "trains": trains, "summary": {"train_count": len(trains)}})
+                    return
+                if method == "POST":
+                    train = self.unified_command_center_release_train_store.create_train(self._optional_json_body())
+                    self._send_json({"ok": True, "train": train, "summary": {"train_id": train.get("train_id")}, "status": train.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            prefix = "/api/unified-command-center-release-trains/"
+            if not path.startswith(prefix):
+                self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Release Train route not found.")
+                return
+            parts = path.removeprefix(prefix).strip("/").split("/")
+            train_id = parts[0]
+            tail = "/" + "/".join(parts[1:]) if len(parts) > 1 else ""
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                train = self.unified_command_center_release_train_store.read_train(train_id)
+                docs = self.unified_command_center_release_train_store.read_docs(train_id) if self.unified_command_center_release_train_store.report_path(train_id).exists() else {}
+                report = docs.get("report", {}) if docs else {}
+                self._send_json({"ok": True, "train": train, "docs": docs, "summary": report.get("summary", {}), "status": report.get("status") or train.get("status")})
+                return
+            if tail == "/items":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                item = self.unified_command_center_release_train_store.add_item(train_id, self._read_json_body())
+                self._send_json({"ok": True, "item": item, "summary": {"item_id": item.get("item_id")}, "status": item.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_command_center_release_train_store.refresh(train_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "go", "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/run-safe":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_command_center_release_train_store.run_safe(train_id, self._optional_json_body())
+                failed_count = int((result.get("summary") or {}).get("failed_count") or 0)
+                self._send_json({"ok": failed_count == 0, "runbook_result": result, "summary": result.get("summary", {}), "status": "passed" if failed_count == 0 else "failed"})
+                return
+            if tail == "/signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                signoff = self.unified_command_center_release_train_store.signoff(train_id, self._optional_json_body())
+                self._send_json({"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/archive":
+                if method == "GET":
+                    manifest_path = self.unified_command_center_release_train_store.archive_manifest_path(train_id)
+                    manifest = read_json(manifest_path) if manifest_path.exists() else {}
+                    self._send_json({"ok": bool(manifest), "manifest": manifest, "summary": manifest.get("summary", {}) if manifest else {}})
+                    return
+                if method == "POST":
+                    manifest = self.unified_command_center_release_train_store.export_archive(train_id)
+                    self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail == "/archive/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_command_center_release_train_store.build_zip(train_id)
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/archive/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_command_center_release_train_store.verify_archive(train_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.unified_command_center_release_train_store.zip_path(train_id), "application/zip", filename="musicforge-unified-command-center-release-train.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Release Train route not found.")
+        except UnifiedCommandCenterReleaseTrainNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedCommandCenterReleaseTrainStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedCommandCenterReleaseTrainError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
     def _handle_unified_command_centers_route(self, method: str, path: str) -> None:
         try:
             if path == "/api/unified-command-centers":
@@ -12563,6 +12674,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_command_center_reviewer_decision_board_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_command_center_reviewer_decision_board_gate.get("message") or "Unified Command Center Reviewer Decision Board gate failed.")
+        require_unified_command_center_release_train = bool(payload.get("require_unified_command_center_release_train", False))
+        unified_command_center_release_train_gate = self.unified_command_center_release_train_store.gate(
+            str(payload.get("unified_command_center_release_train_id") or "uct-000001"),
+            required=require_unified_command_center_release_train,
+            archive_zip_path=payload.get("unified_command_center_release_train_archive") or payload.get("unified_command_center_release_train_zip"),
+            verification_report_path=payload.get("unified_command_center_release_train_verification_report"),
+            external_evidence_manifest_path=payload.get("unified_command_center_release_train_external_evidence_manifest"),
+        )
+        if unified_command_center_release_train_gate and require_unified_command_center_release_train:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_command_center_release_train"] = unified_command_center_release_train_gate
+            if unified_command_center_release_train_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_command_center_release_train_gate.get("message") or "Unified Command Center Release Train gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -12756,6 +12881,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(unified_command_center_reviewer_decision_board_gate.get("message") or "Unified Command Center Reviewer Decision Board gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_command_center_release_train_gate.get("hard_block") and unified_command_center_release_train_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_command_center_release_train_gate.get("message") or "Unified Command Center Release Train gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -20306,6 +20440,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_drift_response_store = UnifiedCommandCenterDriftResponseStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store, review_store=self.unified_command_center_continuous_review_store)
         self.unified_command_center_evidence_review_store = UnifiedCommandCenterEvidenceReviewStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store, review_store=self.unified_command_center_continuous_review_store, drift_response_store=self.unified_command_center_drift_response_store)
         self.unified_command_center_reviewer_decision_board_store = UnifiedCommandCenterReviewerDecisionBoardStore(self.unified_command_center_store, evidence_review_store=self.unified_command_center_evidence_review_store)
+        self.unified_command_center_release_train_store = UnifiedCommandCenterReleaseTrainStore(release_store=self.release_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

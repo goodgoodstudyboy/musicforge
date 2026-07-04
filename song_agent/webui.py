@@ -929,6 +929,7 @@ def panel_html() -> str:
             <button class="secondary" id="unified-command-center-continuous-review-verify" type="button">Verify Review</button>
           </div>
           <span class="hidden" data-api="/api/unified-command-centers"></span>
+          <span class="hidden" data-api="/api/unified-command-center-release-trains"></span>
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
       </section>
