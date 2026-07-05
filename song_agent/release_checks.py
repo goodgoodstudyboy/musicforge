@@ -19699,7 +19699,7 @@ def _v119_unified_command_center_release_train_handoff_smoke(root: Path) -> tupl
 
     from song_agent.unified_command_center_release_train import DEFAULT_REQUIRED_EVIDENCE, UnifiedCommandCenterReleaseTrainStore, write_external_evidence_manifest
     from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
-    from song_agent.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStore
+    from song_agent.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStateError, UnifiedCommandCenterReleaseTrainHandoffStore
     from song_agent.unified_command_center_release_train_handoff_verifier import verify_unified_command_center_release_train_handoff_package
     from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
     from song_agent.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
@@ -19800,18 +19800,92 @@ def _v119_unified_command_center_release_train_handoff_smoke(root: Path) -> tupl
                     lifecycle_verification_report_path=lifecycle.verification_report_path(train["train_id"]),
                     handoff_signoff_binding_path=handoff_store.signoff_binding_path(train["train_id"], handoff_id),
                 )
+                strict_handoff = handoff_store.create_handoff(
+                    train["train_id"],
+                    {
+                        "handoff_id": "rth-role-forge",
+                        **handoff_payload,
+                        "policy": {
+                            "require_external_acceptance": True,
+                            "quorum": {"min_accepted": 1, "min_organizations": 1, "required_roles": ["release_owner"]},
+                        },
+                    },
+                )
+                strict_handoff_id = strict_handoff["handoff"]["handoff_id"]
+                strict_report = handoff_store.refresh_report(train["train_id"], strict_handoff_id, handoff_payload)
+                strict_zip = handoff_store.build_zip(train["train_id"], strict_handoff_id)
+                strict_verify_payload = {
+                    "strict": True,
+                    "require_current": True,
+                    "require_lifecycle": True,
+                    "train_archive_path": store.zip_path(train["train_id"]),
+                    "train_archive_verification_report_path": store.verification_report_path(train["train_id"]),
+                    "train_signoff_binding_path": store.signoff_binding_path(train["train_id"]),
+                    "external_evidence_manifest_path": manifest_path,
+                    "change_control_zip_path": change_store.zip_path(train["train_id"]),
+                    "change_control_verification_report_path": change_store.verification_report_path(train["train_id"]),
+                    "reset_proof_paths": reset_proofs,
+                    "lifecycle_zip_path": lifecycle.zip_path(train["train_id"]),
+                    "lifecycle_verification_report_path": lifecycle.verification_report_path(train["train_id"]),
+                    "accepted_evidence_dir": handoff_store.responses_dir(train["train_id"], strict_handoff_id),
+                }
+                strict_verification = handoff_store.verify_package(train["train_id"], strict_handoff_id, strict_verify_payload)
+                strict_response = handoff_store.import_response(
+                    train["train_id"],
+                    strict_handoff_id,
+                    {
+                        "reviewer": {"name": "technical reviewer", "organization": "reviewer org", "role": "technical_reviewer"},
+                        "decision": "accepted",
+                        "reviewed_at": "2026-07-05T00:00:00Z",
+                        "handoff_id": strict_handoff_id,
+                        "train_id": train["train_id"],
+                        "handoff_zip_sha256": strict_zip["zip_sha256"],
+                        "handoff_manifest_hash": strict_zip["manifest"]["integrity_hash"],
+                        "handoff_source_hash": strict_report["source_hash"],
+                        "handoff_verification_report_hash": strict_verification["integrity_hash"],
+                    },
+                )
+                strict_response_id = strict_response["response"]["response_id"]
+                handoff_store.create_accepted_evidence(train["train_id"], strict_handoff_id, strict_response_id)
+                role_forge_blocked_before = False
+                try:
+                    handoff_store.signoff(train["train_id"], strict_handoff_id, {**handoff_payload, "signed_by": "handoff chair"})
+                except UnifiedCommandCenterReleaseTrainHandoffStateError:
+                    role_forge_blocked_before = True
+                evidence_path = handoff_store.response_dir(train["train_id"], strict_handoff_id, strict_response_id) / "accepted-evidence.json"
+                evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+                evidence["public_summary"]["reviewer_role"] = "release_owner"
+                evidence["integrity_hash"] = stable_hash({key: value for key, value in evidence.items() if key != "integrity_hash"})
+                evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+                role_forge_blocked_after = False
+                try:
+                    handoff_store.signoff(train["train_id"], strict_handoff_id, {**handoff_payload, "signed_by": "handoff chair"})
+                except UnifiedCommandCenterReleaseTrainHandoffStateError:
+                    role_forge_blocked_after = True
+                handoff_store.refresh_report(train["train_id"], strict_handoff_id, handoff_payload)
+                handoff_store.export_handoff(train["train_id"], strict_handoff_id)
+                strict_role_zip = handoff_store.build_zip(train["train_id"], strict_handoff_id)
+                role_forge_verify = verify_unified_command_center_release_train_handoff_package(
+                    strict_role_zip["zip_path"],
+                    require_accepted=True,
+                    **strict_verify_payload,
+                )
                 ok = (
                     report.get("status") == "ready"
                     and verified.get("status") == "passed"
                     and _v38_check_status(missing_binding, "ucc_train_handoff_external_signoff_binding_required") == "failed"
                     and _v38_check_status(declared_extra, "ucc_train_handoff_allowed_entries") == "failed"
                     and _v38_check_status(forged, "ucc_train_handoff_external_signoff_binding_hash") == "failed"
+                    and role_forge_blocked_before
+                    and role_forge_blocked_after
+                    and _v38_check_status(role_forge_verify, "ucc_train_handoff_accepted_evidence_external_sidecars_valid") == "failed"
                 )
                 return ok, (
                     f"handoff={report.get('status')}, verify={verified.get('status')}, "
                     f"missing_binding={_v38_check_status(missing_binding, 'ucc_train_handoff_external_signoff_binding_required')}, "
                     f"declared_extra={_v38_check_status(declared_extra, 'ucc_train_handoff_allowed_entries')}, "
-                    f"full_resign_signed_by={_v38_check_status(forged, 'ucc_train_handoff_external_signoff_binding_hash')}"
+                    f"full_resign_signed_by={_v38_check_status(forged, 'ucc_train_handoff_external_signoff_binding_hash')}, "
+                    f"role_forge={role_forge_blocked_before}/{role_forge_blocked_after}/{_v38_check_status(role_forge_verify, 'ucc_train_handoff_accepted_evidence_external_sidecars_valid')}"
                 )
             finally:
                 os.chdir(old_cwd)

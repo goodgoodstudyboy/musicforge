@@ -588,10 +588,9 @@ class UnifiedCommandCenterReleaseTrainHandoffStore:
     def _accepted_summary(self, train_id: str, handoff_id: str) -> dict[str, Any]:
         rows = []
         for path in sorted(self.responses_dir(train_id, handoff_id).glob("*/accepted-evidence.json")) if self.responses_dir(train_id, handoff_id).exists() else []:
-            doc = read_json(path)
-            public = doc.get("public_summary", {})
-            rows.append({"response_id": doc.get("response_id"), "accepted_evidence_hash": doc.get("integrity_hash"), "reviewer_role": public.get("reviewer_role"), "organization": public.get("organization"), "decision": public.get("decision"), "reviewed_at": public.get("reviewed_at")})
-        doc = {"schema_version": 1, "package_type": "musicforge_release_train_handoff_accepted_evidence_summary", "handoff_id": handoff_id, "train_id": train_id, "items": rows, "summary": {"accepted_count": len(rows), "organization_count": len({row.get("organization") for row in rows if row.get("organization")}), "roles": sorted({str(row.get("reviewer_role")) for row in rows if row.get("reviewer_role")})}}
+            rows.append(_accepted_evidence_row_from_dir(path.parent))
+        passed_rows = [row for row in rows if row.get("status") == "passed"]
+        doc = {"schema_version": 1, "package_type": "musicforge_release_train_handoff_accepted_evidence_summary", "handoff_id": handoff_id, "train_id": train_id, "items": rows, "summary": {"accepted_count": len(passed_rows), "failed_count": len(rows) - len(passed_rows), "organization_count": len({row.get("organization") for row in passed_rows if row.get("organization")}), "roles": sorted({str(row.get("reviewer_role")) for row in passed_rows if row.get("reviewer_role")})}}
         doc["integrity_hash"] = _integrity_hash(doc)
         return doc
 
@@ -721,7 +720,7 @@ def _readiness_doc(train_id: str, handoff_id: str, source_hash: str, policy: dic
         status = "passed" if row.get("status") in {"passed", "not_required"} else "failed"
         rows.append({"check_id": f"{row.get('evidence_type')}_verified", "status": status, "severity": "critical", "evidence_refs": [row.get("evidence_type")]})
     quorum = policy.get("quorum", {})
-    accepted_items = [row for row in accepted.get("items", []) if isinstance(row, dict)]
+    accepted_items = [row for row in accepted.get("items", []) if isinstance(row, dict) and row.get("status") == "passed"]
     roles = {str(row.get("reviewer_role")) for row in accepted_items}
     orgs = {str(row.get("organization")) for row in accepted_items if row.get("organization")}
     required_roles = set(str(role) for role in quorum.get("required_roles", []))
@@ -827,6 +826,48 @@ def _response_binding_summary(response: dict[str, Any], verification: dict[str, 
     doc = {"schema_version": 1, "package_type": "musicforge_release_train_handoff_response_binding_summary", "response_id": response.get("response_id"), "handoff_id": response.get("handoff_id"), "train_id": response.get("train_id"), "raw_response_sha256": response.get("integrity_hash"), "payload_hash": response.get("payload_hash"), "verification_report_hash": verification.get("integrity_hash"), "handoff_zip_sha256": response.get("handoff_zip_sha256"), "handoff_manifest_hash": response.get("handoff_manifest_hash"), "handoff_source_hash": response.get("handoff_source_hash")}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
+
+
+def _accepted_evidence_row_from_dir(response_dir: Path) -> dict[str, Any]:
+    accepted = _read_optional_json(response_dir / "accepted-evidence.json")
+    response = _read_optional_json(response_dir / "response.json")
+    verification = _read_optional_json(response_dir / "response-verification-report.json")
+    binding = _read_optional_json(response_dir / "response-binding-summary.json")
+    response_public = _response_public_summary(response) if response else {}
+    expected_binding = _response_binding_summary(response, verification) if response and verification else {}
+    evidence_binding = accepted.get("response_binding") if isinstance(accepted.get("response_binding"), dict) else {}
+    failures: list[str] = []
+
+    def require(check_id: str, passed: bool) -> None:
+        if not passed:
+            failures.append(check_id)
+
+    require("accepted_evidence_integrity", _integrity_ok(accepted) and accepted.get("package_type") == "musicforge_release_train_handoff_accepted_evidence")
+    require("accepted_evidence_response_integrity", _integrity_ok(response) and response.get("package_type") == "musicforge_release_train_handoff_response")
+    require("accepted_evidence_response_verification_integrity", _integrity_ok(verification) and verification.get("package_type") == "musicforge_release_train_handoff_response_verification")
+    require("accepted_evidence_response_verification_passed", verification.get("status") == "passed")
+    require("accepted_evidence_response_decision", response.get("decision") == "accepted")
+    require("accepted_evidence_binding_integrity", _integrity_ok(binding) and binding.get("package_type") == "musicforge_release_train_handoff_response_binding_summary")
+    require("accepted_evidence_binding_matches_response", bool(expected_binding) and binding == expected_binding)
+    require("accepted_evidence_public_summary_matches_response", accepted.get("public_summary") == response_public)
+    require("accepted_evidence_embedded_binding_matches_sidecar", evidence_binding == binding)
+    require("accepted_evidence_response_id", accepted.get("response_id") == response.get("response_id") == verification.get("response_id") == binding.get("response_id"))
+    require("accepted_evidence_handoff_id", accepted.get("handoff_id") == response.get("handoff_id") == binding.get("handoff_id"))
+    require("accepted_evidence_train_id", accepted.get("train_id") == response.get("train_id") == binding.get("train_id"))
+
+    return {
+        "response_id": accepted.get("response_id") or response.get("response_id") or response_dir.name,
+        "accepted_evidence_hash": accepted.get("integrity_hash"),
+        "response_hash": response.get("integrity_hash"),
+        "response_verification_report_hash": verification.get("integrity_hash"),
+        "response_binding_hash": binding.get("integrity_hash"),
+        "reviewer_role": response_public.get("reviewer_role"),
+        "organization": response_public.get("organization"),
+        "decision": response_public.get("decision"),
+        "reviewed_at": response_public.get("reviewed_at"),
+        "status": "passed" if not failures else "failed",
+        "failures": failures,
+    }
 
 
 def _assert_signed_docs_current(docs: dict[str, Any]) -> None:

@@ -1,5 +1,15 @@
 # Changelog
 
+## v11.9.1 - 2026-07-06
+
+### Fixed
+- Release Train Final Handoff accepted-evidence quorum now derives reviewer role, organization, decision, and hashes from the original response, response verification report, and response binding summary instead of trusting `accepted-evidence.json` public summary fields.
+- Handoff package verifier now rejects accepted evidence whose public summary or embedded binding no longer matches the response sidecars, blocking local full-resign role forgery before signoff and during offline verification.
+- v11.9 release-check smoke now covers `technical_reviewer` accepted evidence forged to `release_owner`; signoff remains blocked and verifier reports `ucc_train_handoff_accepted_evidence_external_sidecars_valid=failed`.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_release_train_handoff.py tests\test_release_check.py::test_v119_unified_command_center_release_train_handoff_smoke -q`
+
 ## v11.9.0 - 2026-07-05
 
 ### Added

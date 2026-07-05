@@ -367,10 +367,12 @@ def _accepted_evidence_state(path: Path | str | None, *, require: bool) -> dict[
     checks.append(_check("ucc_train_handoff_accepted_evidence_present", bool(files) or not require, "Accepted evidence is present."))
     rows = []
     for index, file_path in enumerate(files):
-        doc = read_json(file_path)
-        ok = _integrity_ok(doc) and doc.get("package_type") == "musicforge_release_train_handoff_accepted_evidence"
+        row = _accepted_evidence_row_from_dir(file_path.parent)
+        ok = row.get("status") == "passed"
         checks.append(_check(f"ucc_train_handoff_accepted_evidence_{index:03d}_integrity", ok, "Accepted evidence integrity and package type are valid."))
-        rows.append(doc)
+        if row.get("failures"):
+            checks.append(_check(f"ucc_train_handoff_accepted_evidence_{index:03d}_sidecar_binding", False, "Accepted evidence matches response, verification, and binding sidecars.", {"failures": row.get("failures")}))
+        rows.append(row)
     state["items"] = rows
     return state
 
@@ -379,14 +381,103 @@ def _accepted_semantic_checks(accepted_summary: dict[str, Any], readiness: dict[
     checks: list[dict[str, Any]] = []
     items = [row for row in accepted_summary.get("items", []) if isinstance(row, dict)]
     external_items = [row for row in external.get("items", []) if isinstance(row, dict)]
-    summary_hashes = sorted(str(row.get("accepted_evidence_hash") or row.get("integrity_hash") or "") for row in items)
-    external_hashes = sorted(str(row.get("integrity_hash") or "") for row in external_items)
-    checks.append(_check("ucc_train_handoff_accepted_evidence_external_match", (not require and not external_hashes) or summary_hashes == external_hashes, "Accepted evidence summary matches external accepted evidence.", {"summary": summary_hashes, "external": external_hashes}))
-    accepted_count = len(external_items) if external_hashes else len(items)
+    summary_rows = sorted((_accepted_row_projection(row) for row in items), key=lambda row: str(row.get("response_id") or ""))
+    external_rows = sorted((_accepted_row_projection(row) for row in external_items), key=lambda row: str(row.get("response_id") or ""))
+    checks.append(_check("ucc_train_handoff_accepted_evidence_external_match", (not require and not external_rows) or summary_rows == external_rows, "Accepted evidence summary matches external response-bound accepted evidence.", {"summary": summary_rows, "external": external_rows}))
+    failed_external = [row for row in external_rows if row.get("status") != "passed"]
+    checks.append(_check("ucc_train_handoff_accepted_evidence_external_sidecars_valid", (not require) or not failed_external, "External accepted evidence sidecars are valid.", {"failed": failed_external}))
+    accepted_count = len([row for row in external_rows if row.get("status") == "passed"]) if external_rows else len([row for row in summary_rows if row.get("status") == "passed"])
     checks.append(_check("ucc_train_handoff_accepted_evidence_quorum_count", (not require) or accepted_count >= 1, "Accepted evidence quorum count is satisfied.", {"accepted_count": accepted_count}))
     if require:
         checks.append(_check("ucc_train_handoff_accepted_readiness_status", readiness.get("summary", {}).get("acceptance_status") == "passed", "Readiness matrix records accepted quorum."))
     return checks
+
+
+def _accepted_evidence_row_from_dir(response_dir: Path) -> dict[str, Any]:
+    accepted = _read_optional_json(response_dir / "accepted-evidence.json")
+    response = _read_optional_json(response_dir / "response.json")
+    verification = _read_optional_json(response_dir / "response-verification-report.json")
+    binding = _read_optional_json(response_dir / "response-binding-summary.json")
+    response_public = _response_public_summary(response) if response else {}
+    expected_binding = _response_binding_summary(response, verification) if response and verification else {}
+    evidence_binding = accepted.get("response_binding") if isinstance(accepted.get("response_binding"), dict) else {}
+    failures: list[str] = []
+
+    def require(check_id: str, passed: bool) -> None:
+        if not passed:
+            failures.append(check_id)
+
+    require("accepted_evidence_integrity", _integrity_ok(accepted) and accepted.get("package_type") == "musicforge_release_train_handoff_accepted_evidence")
+    require("accepted_evidence_response_integrity", _integrity_ok(response) and response.get("package_type") == "musicforge_release_train_handoff_response")
+    require("accepted_evidence_response_verification_integrity", _integrity_ok(verification) and verification.get("package_type") == "musicforge_release_train_handoff_response_verification")
+    require("accepted_evidence_response_verification_passed", verification.get("status") == "passed")
+    require("accepted_evidence_response_decision", response.get("decision") == "accepted")
+    require("accepted_evidence_binding_integrity", _integrity_ok(binding) and binding.get("package_type") == "musicforge_release_train_handoff_response_binding_summary")
+    require("accepted_evidence_binding_matches_response", bool(expected_binding) and binding == expected_binding)
+    require("accepted_evidence_public_summary_matches_response", accepted.get("public_summary") == response_public)
+    require("accepted_evidence_embedded_binding_matches_sidecar", evidence_binding == binding)
+    require("accepted_evidence_response_id", accepted.get("response_id") == response.get("response_id") == verification.get("response_id") == binding.get("response_id"))
+    require("accepted_evidence_handoff_id", accepted.get("handoff_id") == response.get("handoff_id") == binding.get("handoff_id"))
+    require("accepted_evidence_train_id", accepted.get("train_id") == response.get("train_id") == binding.get("train_id"))
+
+    return {
+        "response_id": accepted.get("response_id") or response.get("response_id") or response_dir.name,
+        "accepted_evidence_hash": accepted.get("integrity_hash"),
+        "response_hash": response.get("integrity_hash"),
+        "response_verification_report_hash": verification.get("integrity_hash"),
+        "response_binding_hash": binding.get("integrity_hash"),
+        "reviewer_role": response_public.get("reviewer_role"),
+        "organization": response_public.get("organization"),
+        "decision": response_public.get("decision"),
+        "reviewed_at": response_public.get("reviewed_at"),
+        "status": "passed" if not failures else "failed",
+        "failures": failures,
+    }
+
+
+def _accepted_row_projection(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "response_id": row.get("response_id"),
+        "accepted_evidence_hash": row.get("accepted_evidence_hash"),
+        "response_hash": row.get("response_hash"),
+        "response_verification_report_hash": row.get("response_verification_report_hash"),
+        "response_binding_hash": row.get("response_binding_hash"),
+        "reviewer_role": row.get("reviewer_role"),
+        "organization": row.get("organization"),
+        "decision": row.get("decision"),
+        "reviewed_at": row.get("reviewed_at"),
+        "status": row.get("status"),
+    }
+
+
+def _response_public_summary(response: dict[str, Any]) -> dict[str, Any]:
+    reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
+    return {
+        "reviewer_id": reviewer.get("reviewer_id"),
+        "reviewer_name": sanitize_sensitive_text(str(reviewer.get("name") or "")) or None,
+        "organization": sanitize_sensitive_text(str(reviewer.get("organization") or "")) or None,
+        "reviewer_role": sanitize_sensitive_text(str(reviewer.get("role") or "")) or None,
+        "decision": response.get("decision"),
+        "reviewed_at": response.get("reviewed_at"),
+    }
+
+
+def _response_binding_summary(response: dict[str, Any], verification: dict[str, Any]) -> dict[str, Any]:
+    doc = {
+        "schema_version": 1,
+        "package_type": "musicforge_release_train_handoff_response_binding_summary",
+        "response_id": response.get("response_id"),
+        "handoff_id": response.get("handoff_id"),
+        "train_id": response.get("train_id"),
+        "raw_response_sha256": response.get("integrity_hash"),
+        "payload_hash": response.get("payload_hash"),
+        "verification_report_hash": verification.get("integrity_hash"),
+        "handoff_zip_sha256": response.get("handoff_zip_sha256"),
+        "handoff_manifest_hash": response.get("handoff_manifest_hash"),
+        "handoff_source_hash": response.get("handoff_source_hash"),
+    }
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
 
 
 def _external_semantic_checks(report: dict[str, Any], inventory: dict[str, Any], readiness: dict[str, Any], external_manifest: dict[str, Any], train: dict[str, Any], change: dict[str, Any], lifecycle: dict[str, Any]) -> list[dict[str, Any]]:
@@ -551,6 +642,10 @@ def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | 
 
 def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
     return json.loads(archive.read(name).decode("utf-8"))
+
+
+def _read_optional_json(path: Path) -> dict[str, Any]:
+    return read_json(path) if path.exists() else {}
 
 
 def _parse_jsonl(text: str) -> list[dict[str, Any]]:

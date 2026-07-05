@@ -1401,6 +1401,7 @@ def test_v119_unified_command_center_release_train_handoff_smoke(tmp_path: Path)
     assert "missing_binding=failed" in detail
     assert "declared_extra=failed" in detail
     assert "full_resign_signed_by=failed" in detail
+    assert "role_forge=True/True/failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

@@ -6,13 +6,13 @@ from pathlib import Path
 from song_agent.release_checks import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
-from song_agent.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStore
+from song_agent.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStateError, UnifiedCommandCenterReleaseTrainHandoffStore
 from song_agent.unified_command_center_release_train_handoff_verifier import verify_unified_command_center_release_train_handoff_package
 from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
 from tests.test_unified_command_center_release_train import _sha256_bytes, _sync_manifest_file, _train_fixture
 
 
-def _handoff_fixture(tmp_path: Path):
+def _handoff_fixture(tmp_path: Path, policy: dict | None = None):
     train_store, train_id, manifest_path, _ucc_store, _center_id = _train_fixture(tmp_path)
     train_store.signoff(train_id, {"external_evidence_manifest": manifest_path, "signed_by": "original train lead"})
     train_store.build_zip(train_id)
@@ -58,7 +58,10 @@ def _handoff_fixture(tmp_path: Path):
         "lifecycle_zip": lifecycle_store.zip_path(train_id),
         "lifecycle_verification_report": lifecycle_store.verification_report_path(train_id),
     }
-    handoff = handoff_store.create_handoff(train_id, {"handoff_id": "rth-test", **payload})
+    create_payload = {"handoff_id": "rth-test", **payload}
+    if policy is not None:
+        create_payload["policy"] = policy
+    handoff = handoff_store.create_handoff(train_id, create_payload)
     return handoff_store, handoff["handoff"]["handoff_id"], train_store, change_store, lifecycle_store, train_id, manifest_path, payload
 
 
@@ -132,6 +135,69 @@ def test_release_train_handoff_signed_flow_and_acceptance(tmp_path: Path) -> Non
     assert evidence["package_type"] == "musicforge_release_train_handoff_accepted_evidence"
     assert signed["status"] == "signed"
     assert signed_verify["status"] == "passed", signed_verify["blockers"]
+
+
+def test_release_train_handoff_rejects_accepted_evidence_role_forgery(tmp_path: Path) -> None:
+    strict_policy = {
+        "require_external_acceptance": True,
+        "quorum": {"min_accepted": 1, "min_organizations": 1, "required_roles": ["release_owner"]},
+    }
+    handoff_store, handoff_id, train_store, change_store, lifecycle_store, train_id, manifest_path, payload = _handoff_fixture(tmp_path, policy=strict_policy)
+    report = handoff_store.refresh_report(train_id, handoff_id, payload)
+    zipped = handoff_store.build_zip(train_id, handoff_id)
+    verify_payload = _verify_payload(handoff_store, handoff_id, train_store, change_store, lifecycle_store, train_id, manifest_path, payload)
+    verification = handoff_store.verify_package(train_id, handoff_id, verify_payload)
+    response = handoff_store.import_response(
+        train_id,
+        handoff_id,
+        {
+            "reviewer": {"name": "technical reviewer", "organization": "reviewer org", "role": "technical_reviewer"},
+            "decision": "accepted",
+            "reviewed_at": "2026-07-05T00:00:00Z",
+            "handoff_id": handoff_id,
+            "train_id": train_id,
+            "handoff_zip_sha256": zipped["zip_sha256"],
+            "handoff_manifest_hash": zipped["manifest"]["integrity_hash"],
+            "handoff_source_hash": report["source_hash"],
+            "handoff_verification_report_hash": verification["integrity_hash"],
+        },
+    )
+    response_id = response["response"]["response_id"]
+    handoff_store.create_accepted_evidence(train_id, handoff_id, response_id)
+
+    try:
+        handoff_store.signoff(train_id, handoff_id, {**payload, "signed_by": "handoff chair"})
+    except UnifiedCommandCenterReleaseTrainHandoffStateError:
+        pass
+    else:  # pragma: no cover - explicit assertion clarity
+        raise AssertionError("technical_reviewer accepted evidence must not satisfy release_owner quorum")
+
+    evidence_path = handoff_store.response_dir(train_id, handoff_id, response_id) / "accepted-evidence.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    evidence["public_summary"]["reviewer_role"] = "release_owner"
+    evidence["integrity_hash"] = stable_hash({key: value for key, value in evidence.items() if key != "integrity_hash"})
+    evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+    try:
+        handoff_store.signoff(train_id, handoff_id, {**payload, "signed_by": "handoff chair"})
+    except UnifiedCommandCenterReleaseTrainHandoffStateError:
+        pass
+    else:  # pragma: no cover - explicit assertion clarity
+        raise AssertionError("forged accepted-evidence public_summary role must not satisfy quorum")
+
+    forged_report = handoff_store.refresh_report(train_id, handoff_id, payload)
+    handoff_store.export_handoff(train_id, handoff_id)
+    forged_verify = verify_unified_command_center_release_train_handoff_package(
+        handoff_store.build_zip(train_id, handoff_id)["zip_path"],
+        require_accepted=True,
+        accepted_evidence_dir=handoff_store.responses_dir(train_id, handoff_id),
+        **verify_payload,
+    )
+
+    assert forged_report["status"] == "blocked"
+    assert forged_report["summary"]["blocker_count"] >= 1
+    assert forged_verify["status"] == "failed"
+    assert "ucc_train_handoff_accepted_evidence_external_sidecars_valid" in forged_verify["blockers"]
 
 
 def test_release_train_handoff_rejects_declared_extra_and_full_resign(tmp_path: Path) -> None:
