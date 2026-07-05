@@ -105,6 +105,13 @@ class UnifiedCommandCenterReleaseTrainStore:
     def verification_report_path(self, train_id: str) -> Path:
         return self.archive_dir(train_id) / "unified-command-center-release-train-verification-report.json"
 
+    def archive_history_dir(self, train_id: str) -> Path:
+        return self.train_dir(train_id) / "archive-history"
+
+    def archive_history_signoff_dir(self, train_id: str, signoff_hash: str) -> Path:
+        safe_hash = _safe_id(signoff_hash)
+        return self.archive_history_dir(train_id) / (safe_hash[:16] or "unknown")
+
     def create_train(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
@@ -393,6 +400,12 @@ class UnifiedCommandCenterReleaseTrainStore:
     ) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
+        state = self.latest_signoff_state(train_id)
+        if state.get("status") != "signed":
+            return _gate_failed("Unified Command Center Release Train is not currently signed.", signoff_state=state)
+        open_change = self._open_approved_change_request(train_id)
+        if open_change:
+            return _gate_failed("Unified Command Center Release Train has an approved unapplied Change Request.", change_request=open_change)
         archive_zip = Path(archive_zip_path) if archive_zip_path else self.zip_path(train_id)
         verification_path = Path(verification_report_path) if verification_report_path else self.verification_report_path(train_id)
         if not archive_zip.exists():
@@ -429,6 +442,13 @@ class UnifiedCommandCenterReleaseTrainStore:
         for event in self.read_history(train_id):
             if event.get("event_type") == "ucc_release_train_signoff_created":
                 latest = {"status": "signed", "signoff_hash": event.get("signoff_hash"), "event": event}
+            elif event.get("event_type") == "ucc_release_train_signoff_reset":
+                latest = {
+                    "status": "reset",
+                    "signoff_hash": event.get("previous_signoff_hash") or event.get("signoff_hash"),
+                    "change_request_id": event.get("change_request_id"),
+                    "event": event,
+                }
         if latest:
             return latest
         if self.signoff_path(train_id).exists():
@@ -518,6 +538,9 @@ class UnifiedCommandCenterReleaseTrainStore:
     def _signed_docs_for_export(self, train_id: str) -> dict[str, Any]:
         train = self.read_train(train_id)
         signoff_path = self.signoff_path(train_id)
+        state = self.latest_signoff_state(train_id)
+        if state.get("status") != "signed":
+            raise UnifiedCommandCenterReleaseTrainStateError("Release Train is not currently signed.")
         if not signoff_path.exists() and self.latest_signoff_state(train_id).get("status") == "signed":
             raise UnifiedCommandCenterReleaseTrainStateError("Release Train signoff file is missing but history shows a signed state.")
         if not signoff_path.exists():
@@ -525,6 +548,8 @@ class UnifiedCommandCenterReleaseTrainStore:
         signoff = read_json(signoff_path)
         if not _integrity_ok(signoff) or signoff.get("status") != "signed":
             raise UnifiedCommandCenterReleaseTrainStateError("Release Train signoff integrity failed.")
+        if state.get("signoff_hash") and state.get("signoff_hash") != signoff.get("integrity_hash"):
+            raise UnifiedCommandCenterReleaseTrainStateError("Release Train signoff file does not match latest signed history state.")
         binding = self._read_signoff_binding(train_id, signoff)
         docs = self.read_docs(train_id)
         checks = {
@@ -604,6 +629,23 @@ class UnifiedCommandCenterReleaseTrainStore:
 
     def _archive_built_for_signoff(self, train_id: str, signoff_hash: str) -> bool:
         return any(event.get("event_type") == "ucc_release_train_archive_built" and event.get("signoff_hash") == signoff_hash for event in self.read_history(train_id))
+
+    def _open_approved_change_request(self, train_id: str) -> dict[str, Any] | None:
+        change_dir = self.train_dir(train_id) / "change-control" / "change-requests"
+        if not change_dir.exists():
+            return None
+        for path in sorted(change_dir.glob("*/train-change-request.json")):
+            try:
+                request = read_json(path)
+            except Exception:
+                continue
+            if request.get("status") == "approved" and not request.get("applied_at"):
+                return {
+                    "change_request_id": request.get("change_request_id"),
+                    "status": request.get("status"),
+                    "reason": request.get("reason"),
+                }
+        return None
 
     def _next_train_id(self) -> str:
         self.root.mkdir(parents=True, exist_ok=True)

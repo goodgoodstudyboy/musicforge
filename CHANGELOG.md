@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.7.0 - 2026-07-05
+
+### Added
+- Unified Command Center Release Train Change Control for submitted/approved single-use Train Change Requests, impact reports, reset proof, request binding reports, archive-history preservation, and reset/reopen of signed trains.
+- Fixed-layout Change Control ZIP and offline verifier with strict allow-list, hash-chained request history, archive-history checks, external reset-proof binding, and optional current Release Train runtime verification.
+- CLI and HTTP API endpoints for Change Request create, approve, reset, status, export, ZIP, verify, and download flows.
+- Release Train state now understands `ucc_release_train_signoff_reset`; reset trains are not release-ready until they are refreshed, re-signed, re-archived, and re-verified.
+- release-check `v117.unified_command_center_release_train_change_control_smoke` covering reset gate blocking, successor signoff, missing reset proof, declared-extra rejection, and forged reset proof hash rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_release_train_change_control.py tests\test_cli_unified_command_center_release_train_change_control.py tests\test_server_unified_command_center_release_train_change_control.py tests\test_release_check.py::test_v117_unified_command_center_release_train_change_control_smoke -q`
+
 ## v11.6.1 - 2026-07-04
 
 ### Fixed

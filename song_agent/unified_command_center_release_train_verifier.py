@@ -360,7 +360,10 @@ def _history_checks(history: list[dict[str, Any]], signoff: dict[str, Any]) -> l
 
 
 def _signoff_binding_checks(binding: dict[str, Any], signoff: dict[str, Any], history: list[dict[str, Any]], source: dict[str, Any], report: dict[str, Any], inventory: dict[str, Any], readiness: dict[str, Any]) -> list[dict[str, Any]]:
-    signoff_event = next((row for row in history if row.get("event_type") == "ucc_release_train_signoff_created"), None)
+    signoff_event = None
+    for row in history:
+        if row.get("event_type") == "ucc_release_train_signoff_created" and row.get("signoff_hash") == signoff.get("integrity_hash"):
+            signoff_event = row
     binding_source = binding.get("source") if isinstance(binding.get("source"), dict) else {}
     checks = [
         _check("ucc_train_signoff_binding_package_type", binding.get("package_type") == "musicforge_unified_command_center_release_train_signoff_binding", "Signoff binding package type is valid."),

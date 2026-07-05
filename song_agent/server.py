@@ -627,6 +627,12 @@ from song_agent.unified_command_center_release_train import (
     UnifiedCommandCenterReleaseTrainStateError,
     UnifiedCommandCenterReleaseTrainStore,
 )
+from song_agent.unified_command_center_release_train_change_control import (
+    UnifiedCommandCenterReleaseTrainChangeControlError,
+    UnifiedCommandCenterReleaseTrainChangeControlNotFoundError,
+    UnifiedCommandCenterReleaseTrainChangeControlStateError,
+    UnifiedCommandCenterReleaseTrainChangeControlStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3314,6 +3320,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_command_center_release_train_store(self) -> UnifiedCommandCenterReleaseTrainStore:
         return self.server.unified_command_center_release_train_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_command_center_release_train_change_control_store(self) -> UnifiedCommandCenterReleaseTrainChangeControlStore:
+        return self.server.unified_command_center_release_train_change_control_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -11071,6 +11081,73 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 report = docs.get("report", {}) if docs else {}
                 self._send_json({"ok": True, "train": train, "docs": docs, "summary": report.get("summary", {}), "status": report.get("status") or train.get("status")})
                 return
+            if tail == "/changes":
+                if method == "GET":
+                    report = self.unified_command_center_release_train_change_control_store.refresh_report(train_id) if self.unified_command_center_release_train_change_control_store.change_dir(train_id).exists() else {}
+                    requests = self.unified_command_center_release_train_change_control_store.list_requests(train_id)
+                    self._send_json({"ok": True, "report": report, "change_requests": requests, "summary": report.get("summary", {}) if report else {}, "status": report.get("status") if report else "not_configured"})
+                    return
+                if method == "POST":
+                    request = self.unified_command_center_release_train_change_control_store.create_request(train_id, self._optional_json_body())
+                    self._send_json({"ok": True, "change_request": request, "summary": {"change_request_id": request.get("change_request_id")}, "status": request.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail.startswith("/changes/"):
+                change_tail = tail.removeprefix("/changes/").strip("/")
+                if change_tail == "export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.unified_command_center_release_train_change_control_store.export_package(train_id)
+                    self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"})
+                    return
+                if change_tail == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_release_train_change_control_store.build_zip(train_id)
+                    self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                    return
+                if change_tail == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.unified_command_center_release_train_change_control_store.verify_package(train_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if change_tail == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.unified_command_center_release_train_change_control_store.zip_path(train_id), "application/zip", filename="musicforge-unified-command-center-release-train-change-control.zip")
+                    return
+                change_parts = change_tail.split("/")
+                request_id = change_parts[0]
+                action = "/" + "/".join(change_parts[1:]) if len(change_parts) > 1 else ""
+                if action in {"", "/"}:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    request = self.unified_command_center_release_train_change_control_store.read_request(train_id, request_id)
+                    self._send_json({"ok": True, "change_request": request, "summary": {"change_request_id": request.get("change_request_id")}, "status": request.get("status")})
+                    return
+                if action == "/approve":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    approval = self.unified_command_center_release_train_change_control_store.approve_request(train_id, request_id, self._optional_json_body())
+                    self._send_json({"ok": approval.get("status") == "approved", "approval": approval, "summary": {"approval_hash": approval.get("integrity_hash")}, "status": approval.get("status")})
+                    return
+                if action == "/reset":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    proof = self.unified_command_center_release_train_change_control_store.reset_train_signoff(train_id, request_id, self._optional_json_body())
+                    self._send_json({"ok": proof.get("status") == "applied", "reset_proof": proof, "summary": {"reset_event_hash": proof.get("reset_event_hash")}, "status": proof.get("status")})
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Train Change Control route not found.")
+                return
             if tail == "/items":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11135,8 +11212,14 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, "Unified Command Center Release Train route not found.")
         except UnifiedCommandCenterReleaseTrainNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedCommandCenterReleaseTrainChangeControlNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterReleaseTrainStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedCommandCenterReleaseTrainChangeControlStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedCommandCenterReleaseTrainChangeControlError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedCommandCenterReleaseTrainError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -20442,6 +20525,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_evidence_review_store = UnifiedCommandCenterEvidenceReviewStore(self.unified_command_center_store, signoff_store=self.unified_command_center_signoff_store, handoff_store=self.unified_command_center_handoff_store, review_store=self.unified_command_center_continuous_review_store, drift_response_store=self.unified_command_center_drift_response_store)
         self.unified_command_center_reviewer_decision_board_store = UnifiedCommandCenterReviewerDecisionBoardStore(self.unified_command_center_store, evidence_review_store=self.unified_command_center_evidence_review_store)
         self.unified_command_center_release_train_store = UnifiedCommandCenterReleaseTrainStore(release_store=self.release_store)
+        self.unified_command_center_release_train_change_control_store = UnifiedCommandCenterReleaseTrainChangeControlStore(self.unified_command_center_release_train_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

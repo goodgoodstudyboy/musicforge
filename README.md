@@ -172,6 +172,20 @@ trusted by itself. Release signoff can require
 `require_unified_command_center_release_train=true` and pass
 `unified_command_center_release_train_signoff_binding`.
 
+Release Train Change Control is the only supported way to reopen a signed train.
+Create a Train Change Request against the current signed archive, approve it,
+then apply reset. Reset preserves the previous archive under `archive-history/`,
+appends a `ucc_release_train_signoff_reset` history event, marks the request
+single-use, and puts the train back into a non-release-ready state until it is
+refreshed, signed, archived, and verified again:
+
+```powershell
+python -m song_agent.cli unified-command-center-release-train-change-control create-request uct-000001 --external-evidence-manifest train-external-evidence.json --change "refresh UCC evidence" --json
+python -m song_agent.cli unified-command-center-release-train-change-control approve uct-000001 tcr-000001 --external-evidence-manifest train-external-evidence.json --approved-by "Train Owner" --json
+python -m song_agent.cli unified-command-center-release-train-change-control reset uct-000001 tcr-000001 --external-evidence-manifest train-external-evidence.json --reset-by "Train Owner" --json
+python -m song_agent.cli verify-unified-command-center-release-train-change-control-package .musicforge\unified-command-trains\uct-000001\change-control\export\unified-command-center-release-train-change-control.zip --strict --require-reset-applied --require-current-train --train-archive .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train.zip --train-archive-verification-report .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train-verification-report.json --train-signoff-binding .musicforge\unified-command-trains\uct-000001\train-signoff-binding-summary.json --external-evidence-manifest train-external-evidence.json --reset-proof .musicforge\unified-command-trains\uct-000001\change-control\change-requests\tcr-000001\reset-proof.json --json
+```
+
 ## Audio Lab
 
 Use Audio Lab when you need to prove the generated music can be rendered,

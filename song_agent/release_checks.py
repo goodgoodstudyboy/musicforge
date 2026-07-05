@@ -19444,6 +19444,111 @@ def _v116_unified_command_center_release_train_smoke(root: Path) -> tuple[bool, 
         os.chdir(old_cwd)
 
 
+def _v117_unified_command_center_release_train_change_control_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.unified_command_center_release_train import DEFAULT_REQUIRED_EVIDENCE, UnifiedCommandCenterReleaseTrainStore, write_external_evidence_manifest
+    from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
+    from song_agent.unified_command_center_release_train_change_control_verifier import verify_unified_command_center_release_train_change_control_package
+    from song_agent.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v117-ucc-release-train-change-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                store = UnifiedCommandCenterReleaseTrainStore(root=base / ".musicforge" / "unified-command-trains")
+                train = store.create_train({"train_id": "uct-change", "required_evidence": DEFAULT_REQUIRED_EVIDENCE})
+                item = store.add_item(train["train_id"], {"item_id": "item-001", "center_id": "ucc-change"})
+                rows = []
+                for evidence_type in DEFAULT_REQUIRED_EVIDENCE:
+                    zip_path, report_path = _v116_fake_external_evidence(base, item["item_id"], item["center_id"], evidence_type, EXPECTED_EVIDENCE_PACKAGE_TYPES[evidence_type])
+                    rows.append({"item_id": item["item_id"], "center_id": item["center_id"], "evidence_type": evidence_type, "zip_path": str(zip_path), "verification_report_path": str(report_path)})
+                manifest_path = base / "train-external-evidence.json"
+                write_external_evidence_manifest(manifest_path, train_id=train["train_id"], items=rows)
+                store.signoff(train["train_id"], {"external_evidence_manifest": manifest_path, "signed_by": "original train lead", "reason": "v11.7 smoke"})
+                store.build_zip(train["train_id"])
+                train_verify = store.verify_archive(train["train_id"], {"external_evidence_manifest": manifest_path, "strict": True, "require_go": True, "require_signed": True})
+                change_store = UnifiedCommandCenterReleaseTrainChangeControlStore(store)
+                request = change_store.create_request(train["train_id"], {"external_evidence_manifest": manifest_path, "change": ["refresh evidence"]})
+                change_store.approve_request(train["train_id"], request["change_request_id"], {"external_evidence_manifest": manifest_path, "approved_by": "train owner"})
+                proof = change_store.reset_train_signoff(train["train_id"], request["change_request_id"], {"external_evidence_manifest": manifest_path, "reset_by": "train owner"})
+                gate_after_reset = store.gate(train["train_id"], external_evidence_manifest_path=manifest_path)
+                store.signoff(train["train_id"], {"external_evidence_manifest": manifest_path, "signed_by": "successor train lead", "reason": "v11.7 successor"})
+                store.build_zip(train["train_id"])
+                train_verify_after = store.verify_archive(train["train_id"], {"external_evidence_manifest": manifest_path, "strict": True, "require_go": True, "require_signed": True})
+                zipped = change_store.build_zip(train["train_id"])
+                verified = verify_unified_command_center_release_train_change_control_package(
+                    zipped["zip_path"],
+                    strict=True,
+                    require_reset_applied=True,
+                    require_current_train=True,
+                    train_archive_path=store.zip_path(train["train_id"]),
+                    train_archive_verification_report_path=store.verification_report_path(train["train_id"]),
+                    train_signoff_binding_path=store.signoff_binding_path(train["train_id"]),
+                    external_evidence_manifest_path=manifest_path,
+                    reset_proof_path=change_store.reset_proof_path(train["train_id"], request["change_request_id"]),
+                )
+                missing_proof = verify_unified_command_center_release_train_change_control_package(zipped["zip_path"], strict=True, require_reset_applied=True)
+                declared_extra_zip = base / "change-control-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v117_add_declared_change_control_extra)
+                declared_extra = verify_unified_command_center_release_train_change_control_package(declared_extra_zip, strict=True, require_reset_applied=True, reset_proof_path=change_store.reset_proof_path(train["train_id"], request["change_request_id"]))
+                forged_reset_zip = base / "change-control-forged-reset.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), forged_reset_zip, _v117_forge_change_control_reset_proof_hash)
+                forged_reset = verify_unified_command_center_release_train_change_control_package(forged_reset_zip, strict=True, require_reset_applied=True, reset_proof_path=change_store.reset_proof_path(train["train_id"], request["change_request_id"]))
+                ok = (
+                    train_verify.get("status") == "passed"
+                    and proof.get("status") == "applied"
+                    and gate_after_reset.get("status") == "failed"
+                    and train_verify_after.get("status") == "passed"
+                    and verified.get("status") == "passed"
+                    and _v38_check_status(missing_proof, "ucc_train_change_control_external_reset_proof_required") == "failed"
+                    and _v38_check_status(declared_extra, "ucc_train_change_control_allowed_entries") == "failed"
+                    and _v38_check_status(forged_reset, "ucc_train_change_control_external_reset_proof_hash") == "failed"
+                )
+                return ok, (
+                    f"reset={proof.get('status')}, gate_after_reset={gate_after_reset.get('status')}, "
+                    f"train_after={train_verify_after.get('status')}, verify={verified.get('status')}, "
+                    f"missing_proof={_v38_check_status(missing_proof, 'ucc_train_change_control_external_reset_proof_required')}, "
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_train_change_control_allowed_entries')}, "
+                    f"forged_reset={_v38_check_status(forged_reset, 'ucc_train_change_control_external_reset_proof_hash')}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.7 Unified Command Center Release Train Change Control smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v117_add_declared_change_control_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Change Control extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v117_forge_change_control_reset_proof_hash(entries: dict[str, bytes]) -> dict[str, bytes]:
+    summaries = json.loads(entries["change-request-summaries.json"].decode("utf-8"))
+    summaries["requests"][0]["reset_proof_hash"] = "0" * 64
+    summaries["integrity_hash"] = stable_hash({key: value for key, value in summaries.items() if key != "integrity_hash"})
+    entries["change-request-summaries.json"] = json.dumps(summaries, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["summaries_hash"] = summaries["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "change-request-summaries.json", entries["change-request-summaries.json"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v116_fake_external_evidence(base: Path, item_id: str, center_id: str, evidence_type: str, package_type: str) -> tuple[Path, Path]:
     evidence_dir = base / "external-evidence" / evidence_type
     evidence_dir.mkdir(parents=True, exist_ok=True)
