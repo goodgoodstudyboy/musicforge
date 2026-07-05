@@ -639,6 +639,12 @@ from song_agent.unified_command_center_release_train_lifecycle import (
     UnifiedCommandCenterReleaseTrainLifecycleStateError,
     UnifiedCommandCenterReleaseTrainLifecycleStore,
 )
+from song_agent.unified_command_center_release_train_handoff import (
+    UnifiedCommandCenterReleaseTrainHandoffError,
+    UnifiedCommandCenterReleaseTrainHandoffNotFoundError,
+    UnifiedCommandCenterReleaseTrainHandoffStateError,
+    UnifiedCommandCenterReleaseTrainHandoffStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3334,6 +3340,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_command_center_release_train_lifecycle_store(self) -> UnifiedCommandCenterReleaseTrainLifecycleStore:
         return self.server.unified_command_center_release_train_lifecycle_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_command_center_release_train_handoff_store(self) -> UnifiedCommandCenterReleaseTrainHandoffStore:
+        return self.server.unified_command_center_release_train_handoff_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -11135,6 +11145,88 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_file(self.unified_command_center_release_train_lifecycle_store.zip_path(train_id), "application/zip", filename="musicforge-unified-command-center-release-train-lifecycle.zip")
                     return
                 self._send_error(HTTPStatus.NOT_FOUND, "Release Train Lifecycle route not found.")
+                return
+            if tail == "/handoffs":
+                if method == "GET":
+                    handoffs = self.unified_command_center_release_train_handoff_store.list_handoffs(train_id)
+                    self._send_json({"ok": True, "handoffs": handoffs, "summary": {"handoff_count": len(handoffs)}, "status": "passed"})
+                    return
+                if method == "POST":
+                    detail = self.unified_command_center_release_train_handoff_store.create_handoff(train_id, self._optional_json_body())
+                    report = detail.get("report", {})
+                    self._send_json({"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail.startswith("/handoffs/"):
+                handoff_parts = tail.removeprefix("/handoffs/").strip("/").split("/")
+                handoff_id = handoff_parts[0]
+                action = "/".join(handoff_parts[1:]) if len(handoff_parts) > 1 else ""
+                if action == "":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    detail = self.unified_command_center_release_train_handoff_store.get_handoff(train_id, handoff_id)
+                    report = detail.get("report", {})
+                    self._send_json({"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if action == "refresh":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.unified_command_center_release_train_handoff_store.refresh_report(train_id, handoff_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if action == "export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.unified_command_center_release_train_handoff_store.export_handoff(train_id, handoff_id)
+                    self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"})
+                    return
+                if action == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_release_train_handoff_store.build_zip(train_id, handoff_id)
+                    self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                    return
+                if action == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.unified_command_center_release_train_handoff_store.verify_package(train_id, handoff_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if action == "import-response":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_release_train_handoff_store.import_response(train_id, handoff_id, self._read_json_body())
+                    self._send_json({"ok": result.get("verification", {}).get("status") == "passed", **result, "summary": result.get("verification", {}).get("summary", {}), "status": result.get("response", {}).get("decision")}, status=HTTPStatus.CREATED)
+                    return
+                if action.startswith("accepted-evidence/"):
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    response_id = action.removeprefix("accepted-evidence/").strip("/")
+                    evidence = self.unified_command_center_release_train_handoff_store.create_accepted_evidence(train_id, handoff_id, response_id)
+                    self._send_json({"ok": True, "accepted_evidence": evidence, "summary": evidence.get("public_summary", {}), "status": "passed"}, status=HTTPStatus.CREATED)
+                    return
+                if action == "signoff":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    signoff = self.unified_command_center_release_train_handoff_store.signoff(train_id, handoff_id, self._optional_json_body())
+                    self._send_json({"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signed_by": signoff.get("signed_by")}, "status": signoff.get("status")})
+                    return
+                if action == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.unified_command_center_release_train_handoff_store.zip_path(train_id, handoff_id), "application/zip", filename="musicforge-unified-command-center-release-train-handoff.zip")
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Train Handoff route not found.")
                 return
             if tail == "/changes":
                 if method == "GET":
@@ -20588,6 +20680,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_release_train_store = UnifiedCommandCenterReleaseTrainStore(release_store=self.release_store)
         self.unified_command_center_release_train_change_control_store = UnifiedCommandCenterReleaseTrainChangeControlStore(self.unified_command_center_release_train_store)
         self.unified_command_center_release_train_lifecycle_store = UnifiedCommandCenterReleaseTrainLifecycleStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store)
+        self.unified_command_center_release_train_handoff_store = UnifiedCommandCenterReleaseTrainHandoffStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store, self.unified_command_center_release_train_lifecycle_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

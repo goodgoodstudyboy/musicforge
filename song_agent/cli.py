@@ -1784,6 +1784,76 @@ def _add_unified_command_center_release_train_lifecycle_args(parser: argparse.Ar
     parser.add_argument("--reset-proof", type=Path, action="append", default=[])
 
 
+def build_unified_command_center_release_train_handoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Command Center Release Train Final Handoff Board.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("create", help="Create a Release Train Handoff.")
+    create.add_argument("train_id")
+    create.add_argument("--handoff-id", default=None)
+    create.add_argument("--require-external-acceptance", action="store_true")
+    _add_unified_command_center_release_train_handoff_args(create)
+    for action in ("status", "refresh", "export", "zip", "verify", "board", "signoff"):
+        cmd = subparsers.add_parser(action, help=f"{action} Release Train Handoff.")
+        cmd.add_argument("train_id")
+        cmd.add_argument("--handoff-id", default=None)
+        if action in {"refresh", "verify", "signoff"}:
+            _add_unified_command_center_release_train_handoff_args(cmd)
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-current", action="store_true")
+            cmd.add_argument("--require-lifecycle", action="store_true")
+            cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--require-accepted", action="store_true")
+            cmd.add_argument("--handoff-signoff-binding", type=Path, default=None)
+            cmd.add_argument("--accepted-evidence-dir", type=Path, default=None)
+            cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "signoff":
+            cmd.add_argument("--signed-by", default="release-train-handoff-chair")
+            cmd.add_argument("--role", default="release_owner")
+            cmd.add_argument("--reason", default="Release Train Handoff accepted.")
+    response = subparsers.add_parser("import-response", help="Import an external handoff response JSON.")
+    response.add_argument("train_id")
+    response.add_argument("handoff_id")
+    response.add_argument("--response-json", type=Path, required=True)
+    accepted = subparsers.add_parser("accepted-evidence", help="Create accepted handoff evidence from a response.")
+    accepted.add_argument("train_id")
+    accepted.add_argument("handoff_id")
+    accepted.add_argument("response_id")
+    return parser
+
+
+def build_verify_unified_command_center_release_train_handoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Command Center Release Train Handoff ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current", action="store_true")
+    parser.add_argument("--require-lifecycle", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-accepted", action="store_true")
+    _add_unified_command_center_release_train_handoff_args(parser)
+    parser.add_argument("--handoff-signoff-binding", type=Path, default=None)
+    parser.add_argument("--accepted-evidence-dir", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def _add_unified_command_center_release_train_handoff_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--external-evidence-manifest", type=Path, default=None)
+    parser.add_argument("--train-archive", type=Path, default=None)
+    parser.add_argument("--train-archive-verification-report", type=Path, default=None)
+    parser.add_argument("--train-signoff-binding", type=Path, default=None)
+    parser.add_argument("--change-control-zip", type=Path, default=None)
+    parser.add_argument("--change-control-verification-report", type=Path, default=None)
+    parser.add_argument("--reset-proof", type=Path, action="append", default=[])
+    parser.add_argument("--lifecycle-zip", type=Path, default=None)
+    parser.add_argument("--lifecycle-verification-report", type=Path, default=None)
+
+
 def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Verify a MusicForge LTS maintenance backup ZIP.")
     parser.add_argument("zip_path", type=Path, help="Path to musicforge-maintenance-backup.zip.")
@@ -5424,6 +5494,84 @@ def _release_train_lifecycle_payload_from_args(args: argparse.Namespace) -> dict
     }
 
 
+def _run_unified_command_center_release_train_handoff_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.projectio import read_json
+    from song_agent.unified_command_center_release_train import UnifiedCommandCenterReleaseTrainStore
+    from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
+    from song_agent.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStore
+    from song_agent.unified_command_center_release_train_handoff_verifier import write_unified_command_center_release_train_handoff_verification_report
+    from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
+
+    train_store = UnifiedCommandCenterReleaseTrainStore()
+    change_store = UnifiedCommandCenterReleaseTrainChangeControlStore(train_store)
+    lifecycle_store = UnifiedCommandCenterReleaseTrainLifecycleStore(train_store, change_store)
+    store = UnifiedCommandCenterReleaseTrainHandoffStore(train_store, change_store, lifecycle_store)
+    handoff_id = getattr(args, "handoff_id", None)
+    if args.action == "status":
+        detail = store.get_handoff(args.train_id, handoff_id)
+        report = detail.get("report", {})
+        return {"ok": report.get("status") != "failed", **detail, "summary": report.get("summary", {}), "status": report.get("status")}
+    payload = _release_train_handoff_payload_from_args(args)
+    if args.action == "create":
+        if getattr(args, "handoff_id", None):
+            payload["handoff_id"] = args.handoff_id
+        if getattr(args, "require_external_acceptance", False):
+            payload["policy"] = {"require_external_acceptance": True}
+        detail = store.create_handoff(args.train_id, payload)
+        return {"ok": detail.get("report", {}).get("status") in {"ready", "manual_required"}, **detail, "summary": detail.get("report", {}).get("summary", {}), "status": detail.get("report", {}).get("status")}
+    if args.action in {"refresh", "board"}:
+        report = store.refresh_report(args.train_id, handoff_id, payload)
+        return {"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "export":
+        manifest = store.export_handoff(args.train_id, handoff_id)
+        return {"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"}
+    if args.action == "zip":
+        result = store.build_zip(args.train_id, handoff_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "verify":
+        report = store.verify_package(
+            args.train_id,
+            handoff_id,
+            {
+                **payload,
+                "strict": args.strict,
+                "require_current": args.require_current,
+                "require_lifecycle": args.require_lifecycle,
+                "require_signed": args.require_signed,
+                "require_accepted": args.require_accepted,
+                "handoff_signoff_binding": getattr(args, "handoff_signoff_binding", None),
+                "accepted_evidence_dir": getattr(args, "accepted_evidence_dir", None),
+            },
+        )
+        if args.report_out is not None:
+            write_unified_command_center_release_train_handoff_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "import-response":
+        response = store.import_response(args.train_id, args.handoff_id, read_json(args.response_json))
+        return {"ok": response.get("verification", {}).get("status") == "passed", **response, "summary": response.get("verification", {}).get("summary", {}), "status": response.get("response", {}).get("decision")}
+    if args.action == "accepted-evidence":
+        evidence = store.create_accepted_evidence(args.train_id, args.handoff_id, args.response_id)
+        return {"ok": True, "accepted_evidence": evidence, "summary": evidence.get("public_summary", {}), "status": "passed"}
+    if args.action == "signoff":
+        signoff = store.signoff(args.train_id, handoff_id, {**payload, "signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signed_by": signoff.get("signed_by")}, "status": signoff.get("status")}
+    raise ValueError("Unsupported unified-command-center-release-train-handoff command.")
+
+
+def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
+        "train_archive": getattr(args, "train_archive", None),
+        "train_archive_verification_report": getattr(args, "train_archive_verification_report", None),
+        "train_signoff_binding": getattr(args, "train_signoff_binding", None),
+        "change_control_zip": getattr(args, "change_control_zip", None),
+        "change_control_verification_report": getattr(args, "change_control_verification_report", None),
+        "reset_proofs": [path for path in getattr(args, "reset_proof", []) if path],
+        "lifecycle_zip": getattr(args, "lifecycle_zip", None),
+        "lifecycle_verification_report": getattr(args, "lifecycle_verification_report", None),
+    }
+
+
 def _print_audio_lab_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -5983,6 +6131,16 @@ def _main() -> None:
         if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
             raise SystemExit(1)
         return
+    elif raw_args and raw_args[0] == "unified-command-center-release-train-handoff":
+        parser = build_unified_command_center_release_train_handoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_command_center_release_train_handoff_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
     elif raw_args and raw_args[0] == "verify-release-audio-baseline-registry-package":
         from song_agent.release_audio_baseline_governance_verifier import (
             release_audio_baseline_registry_verification_exit_code,
@@ -6532,6 +6690,47 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_command_center_release_train_lifecycle_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-command-center-release-train-handoff-package":
+        from song_agent.unified_command_center_release_train_handoff_verifier import (
+            unified_command_center_release_train_handoff_verification_exit_code,
+            verify_unified_command_center_release_train_handoff_package,
+            write_unified_command_center_release_train_handoff_verification_report,
+        )
+
+        parser = build_verify_unified_command_center_release_train_handoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_command_center_release_train_handoff_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_lifecycle=args.require_lifecycle,
+            require_signed=args.require_signed,
+            require_accepted=args.require_accepted,
+            external_evidence_manifest_path=args.external_evidence_manifest,
+            train_archive_path=args.train_archive,
+            train_archive_verification_report_path=args.train_archive_verification_report,
+            train_signoff_binding_path=args.train_signoff_binding,
+            change_control_zip_path=args.change_control_zip,
+            change_control_verification_report_path=args.change_control_verification_report,
+            reset_proof_paths=args.reset_proof,
+            lifecycle_zip_path=args.lifecycle_zip,
+            lifecycle_verification_report_path=args.lifecycle_verification_report,
+            handoff_signoff_binding_path=args.handoff_signoff_binding,
+            accepted_evidence_dir=args.accepted_evidence_dir,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_command_center_release_train_handoff_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Command Center Release Train Handoff verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_command_center_release_train_handoff_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

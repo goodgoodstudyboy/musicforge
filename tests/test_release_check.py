@@ -99,6 +99,7 @@ from song_agent.release_checks import (
     _v116_unified_command_center_release_train_smoke,
     _v117_unified_command_center_release_train_change_control_smoke,
     _v118_unified_command_center_release_train_lifecycle_smoke,
+    _v119_unified_command_center_release_train_handoff_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1389,11 +1390,17 @@ def test_v118_unified_command_center_release_train_lifecycle_smoke(tmp_path: Pat
     ok, detail = _v118_unified_command_center_release_train_lifecycle_smoke(tmp_path)
 
     assert ok is True, detail
-    assert "lifecycle=passed" in detail
+
+
+def test_v119_unified_command_center_release_train_handoff_smoke(tmp_path: Path) -> None:
+    ok, detail = _v119_unified_command_center_release_train_handoff_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "handoff=ready" in detail
     assert "verify=passed" in detail
-    assert "missing_proof=failed" in detail
+    assert "missing_binding=failed" in detail
     assert "declared_extra=failed" in detail
-    assert "full_resign_reset=failed" in detail
+    assert "full_resign_signed_by=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

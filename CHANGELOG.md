@@ -1,5 +1,16 @@
 # Changelog
 
+## v11.9.0 - 2026-07-05
+
+### Added
+- Unified Command Center Release Train Final Handoff Board for consolidating signed Release Train, Change Control reset proof, Lifecycle Audit, external response, accepted evidence, readiness, gap plan, and final handoff signoff.
+- Fixed-layout Handoff ZIP and offline verifier with strict allow-list, no nested ZIPs, runtime binding to current Train / Change Control / Lifecycle evidence, external handoff signoff binding proof, response binding, accepted evidence checks, redaction scanning, and full-resign signer tamper rejection.
+- CLI and HTTP API endpoints for Handoff create, status, refresh, export, ZIP, verify, response import, accepted evidence, signoff, and standalone package verification.
+- release-check `v119.unified_command_center_release_train_handoff_smoke` covering current evidence verification, missing external signoff binding, declared-extra rejection, and signoff/history/binding/manifest full-resign rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_release_train_handoff.py tests\test_cli_unified_command_center_release_train_handoff.py tests\test_release_check.py::test_v119_unified_command_center_release_train_handoff_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v11.8.1 - 2026-07-05
 
 ### Fixed
