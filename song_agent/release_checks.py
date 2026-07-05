@@ -19585,10 +19585,20 @@ def _v118_unified_command_center_release_train_lifecycle_smoke(root: Path) -> tu
                 store.signoff(train["train_id"], {"external_evidence_manifest": manifest_path, "signed_by": "successor train lead"})
                 store.build_zip(train["train_id"])
                 store.verify_archive(train["train_id"], {"external_evidence_manifest": manifest_path, "strict": True, "require_go": True, "require_signed": True})
+                request_2 = change_store.create_request(train["train_id"], {"external_evidence_manifest": manifest_path, "change": ["refresh evidence again"]})
+                change_store.approve_request(train["train_id"], request_2["change_request_id"], {"external_evidence_manifest": manifest_path, "approved_by": "train owner"})
+                proof_2 = change_store.reset_train_signoff(train["train_id"], request_2["change_request_id"], {"external_evidence_manifest": manifest_path, "reset_by": "train owner"})
+                store.signoff(train["train_id"], {"external_evidence_manifest": manifest_path, "signed_by": "final train lead"})
+                store.build_zip(train["train_id"])
+                store.verify_archive(train["train_id"], {"external_evidence_manifest": manifest_path, "strict": True, "require_go": True, "require_signed": True})
                 change_store.build_zip(train["train_id"])
-                change_store.verify_package(train["train_id"], {"strict": True, "require_reset_applied": True, "require_current_train": True, "external_evidence_manifest": manifest_path, "reset_proof": change_store.reset_proof_path(train["train_id"], request["change_request_id"])})
+                change_store.verify_package(train["train_id"], {"strict": True, "require_reset_applied": True, "require_current_train": True, "external_evidence_manifest": manifest_path, "reset_proof": change_store.reset_proof_path(train["train_id"], request_2["change_request_id"])})
                 lifecycle = UnifiedCommandCenterReleaseTrainLifecycleStore(store, change_store)
-                payload = {"external_evidence_manifest": manifest_path, "change_control_zip": change_store.zip_path(train["train_id"]), "change_control_verification_report": change_store.verification_report_path(train["train_id"]), "reset_proofs": [change_store.reset_proof_path(train["train_id"], request["change_request_id"])]}
+                reset_proof_paths = [
+                    change_store.reset_proof_path(train["train_id"], request["change_request_id"]),
+                    change_store.reset_proof_path(train["train_id"], request_2["change_request_id"]),
+                ]
+                payload = {"external_evidence_manifest": manifest_path, "change_control_zip": change_store.zip_path(train["train_id"]), "change_control_verification_report": change_store.verification_report_path(train["train_id"]), "reset_proofs": reset_proof_paths}
                 report = lifecycle.refresh_report(train["train_id"], payload)
                 zipped = lifecycle.build_zip(train["train_id"])
                 verified = verify_unified_command_center_release_train_lifecycle_package(
@@ -19601,7 +19611,7 @@ def _v118_unified_command_center_release_train_lifecycle_smoke(root: Path) -> tu
                     external_evidence_manifest_path=manifest_path,
                     change_control_zip_path=change_store.zip_path(train["train_id"]),
                     change_control_verification_report_path=change_store.verification_report_path(train["train_id"]),
-                    reset_proof_paths=[change_store.reset_proof_path(train["train_id"], request["change_request_id"])],
+                    reset_proof_paths=reset_proof_paths,
                 )
                 missing_proof = verify_unified_command_center_release_train_lifecycle_package(
                     zipped["zip_path"],
@@ -19629,18 +19639,20 @@ def _v118_unified_command_center_release_train_lifecycle_smoke(root: Path) -> tu
                     external_evidence_manifest_path=manifest_path,
                     change_control_zip_path=change_store.zip_path(train["train_id"]),
                     change_control_verification_report_path=change_store.verification_report_path(train["train_id"]),
-                    reset_proof_paths=[change_store.reset_proof_path(train["train_id"], request["change_request_id"])],
+                    reset_proof_paths=reset_proof_paths,
                 )
                 ok = (
                     proof.get("status") == "applied"
+                    and proof_2.get("status") == "applied"
                     and report.get("status") == "passed"
+                    and report.get("summary", {}).get("reset_count") == 2
                     and verified.get("status") == "passed"
                     and _v38_check_status(missing_proof, "ucc_train_lifecycle_reset_semantics_001_proof") == "failed"
                     and _v38_check_status(declared_extra, "ucc_train_lifecycle_allowed_entries") == "failed"
                     and _v38_check_status(forged_reset, "ucc_train_lifecycle_report_reset_count") == "failed"
                 )
                 return ok, (
-                    f"lifecycle={report.get('status')}, verify={verified.get('status')}, "
+                    f"lifecycle={report.get('status')}, resets={report.get('summary', {}).get('reset_count')}, verify={verified.get('status')}, "
                     f"missing_proof={_v38_check_status(missing_proof, 'ucc_train_lifecycle_reset_semantics_001_proof')}, "
                     f"declared_extra={_v38_check_status(declared_extra, 'ucc_train_lifecycle_allowed_entries')}, "
                     f"full_resign_reset={_v38_check_status(forged_reset, 'ucc_train_lifecycle_report_reset_count')}"

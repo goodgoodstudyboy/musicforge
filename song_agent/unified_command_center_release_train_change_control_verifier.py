@@ -239,17 +239,19 @@ def _document_binding_checks(manifest: dict[str, Any], report: dict[str, Any], i
 
 def _history_checks(history: list[dict[str, Any]], summaries: dict[str, Any]) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
-    previous = ""
+    previous_by_request: dict[str, str] = {}
     reset_events = {}
     for index, event in enumerate(history):
+        request_id = str(event.get("change_request_id") or "")
         payload_hash = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         event_hash = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        previous = previous_by_request.get(request_id, "")
         checks.append(_check(f"ucc_train_change_control_history_{index:03d}_payload_hash", event.get("payload_hash") == payload_hash, "History event payload hash is valid."))
         checks.append(_check(f"ucc_train_change_control_history_{index:03d}_event_hash", event.get("event_hash") == event_hash, "History event hash is valid."))
-        checks.append(_check(f"ucc_train_change_control_history_{index:03d}_chain", str(event.get("previous_event_hash") or "") == previous, "History hash chain is contiguous."))
-        previous = str(event.get("event_hash") or "")
+        checks.append(_check(f"ucc_train_change_control_history_{index:03d}_chain", str(event.get("previous_event_hash") or "") == previous, "History hash chain is contiguous within its change request."))
+        previous_by_request[request_id] = str(event.get("event_hash") or "")
         if event.get("event_type") == "train_change_request_reset_applied":
-            reset_events[str(event.get("change_request_id") or "")] = event
+            reset_events[request_id] = event
     for request in summaries.get("requests", []):
         if isinstance(request, dict) and request.get("status") == "applied":
             event = reset_events.get(str(request.get("change_request_id") or ""))

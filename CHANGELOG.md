@@ -1,5 +1,14 @@
 # Changelog
 
+## v11.8.1 - 2026-07-05
+
+### Fixed
+- Release Train Change Control verification now validates `change-request-history.jsonl` as per-request hash chains, so multiple legitimate reset requests no longer look like a broken single global chain.
+- Release Train Lifecycle Audit smoke now covers two sequential approved resets, two reset proofs, successor signoff, Change Control verification, and Lifecycle verification.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_release_train_change_control.py tests\test_unified_command_center_release_train_lifecycle.py tests\test_release_check.py::test_v118_unified_command_center_release_train_lifecycle_smoke -q`
+
 ## v11.8.0 - 2026-07-05
 
 ### Added
