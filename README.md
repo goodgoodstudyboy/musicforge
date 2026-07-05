@@ -186,6 +186,19 @@ python -m song_agent.cli unified-command-center-release-train-change-control res
 python -m song_agent.cli verify-unified-command-center-release-train-change-control-package .musicforge\unified-command-trains\uct-000001\change-control\export\unified-command-center-release-train-change-control.zip --strict --require-reset-applied --require-current-train --train-archive .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train.zip --train-archive-verification-report .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train-verification-report.json --train-signoff-binding .musicforge\unified-command-trains\uct-000001\train-signoff-binding-summary.json --external-evidence-manifest train-external-evidence.json --reset-proof .musicforge\unified-command-trains\uct-000001\change-control\change-requests\tcr-000001\reset-proof.json --json
 ```
 
+Release Train Lifecycle Audit consolidates the current train archive, train
+verification report, signoff succession, Change Control reset coverage,
+archive-history, reset proof, and external evidence manifest into a fixed
+offline-verifiable ledger. It does not mutate the train or embed child ZIPs; the
+verifier re-runs the current Train and Change Control verifiers from external
+evidence:
+
+```powershell
+python -m song_agent.cli unified-command-center-release-train-lifecycle refresh uct-000001 --external-evidence-manifest train-external-evidence.json --change-control-zip .musicforge\unified-command-trains\uct-000001\change-control\export\unified-command-center-release-train-change-control.zip --change-control-verification-report .musicforge\unified-command-trains\uct-000001\change-control\export\unified-command-center-release-train-change-control-verification-report.json --reset-proof .musicforge\unified-command-trains\uct-000001\change-control\change-requests\tcr-000001\reset-proof.json --json
+python -m song_agent.cli unified-command-center-release-train-lifecycle zip uct-000001 --json
+python -m song_agent.cli verify-unified-command-center-release-train-lifecycle-package .musicforge\unified-command-trains\uct-000001\lifecycle\export\unified-command-center-release-train-lifecycle.zip --strict --require-current-train --train-archive .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train.zip --train-archive-verification-report .musicforge\unified-command-trains\uct-000001\archive\unified-command-center-release-train-verification-report.json --train-signoff-binding .musicforge\unified-command-trains\uct-000001\train-signoff-binding-summary.json --external-evidence-manifest train-external-evidence.json --change-control-zip .musicforge\unified-command-trains\uct-000001\change-control\export\unified-command-center-release-train-change-control.zip --change-control-verification-report .musicforge\unified-command-trains\uct-000001\change-control\export\unified-command-center-release-train-change-control-verification-report.json --reset-proof .musicforge\unified-command-trains\uct-000001\change-control\change-requests\tcr-000001\reset-proof.json --json
+```
+
 ## Audio Lab
 
 Use Audio Lab when you need to prove the generated music can be rendered,

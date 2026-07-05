@@ -633,6 +633,12 @@ from song_agent.unified_command_center_release_train_change_control import (
     UnifiedCommandCenterReleaseTrainChangeControlStateError,
     UnifiedCommandCenterReleaseTrainChangeControlStore,
 )
+from song_agent.unified_command_center_release_train_lifecycle import (
+    UnifiedCommandCenterReleaseTrainLifecycleError,
+    UnifiedCommandCenterReleaseTrainLifecycleNotFoundError,
+    UnifiedCommandCenterReleaseTrainLifecycleStateError,
+    UnifiedCommandCenterReleaseTrainLifecycleStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3324,6 +3330,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_command_center_release_train_change_control_store(self) -> UnifiedCommandCenterReleaseTrainChangeControlStore:
         return self.server.unified_command_center_release_train_change_control_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_command_center_release_train_lifecycle_store(self) -> UnifiedCommandCenterReleaseTrainLifecycleStore:
+        return self.server.unified_command_center_release_train_lifecycle_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -11081,6 +11091,51 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 report = docs.get("report", {}) if docs else {}
                 self._send_json({"ok": True, "train": train, "docs": docs, "summary": report.get("summary", {}), "status": report.get("status") or train.get("status")})
                 return
+            if tail == "/lifecycle":
+                if method == "GET":
+                    report = self.unified_command_center_release_train_lifecycle_store.read_report(train_id) if self.unified_command_center_release_train_lifecycle_store.report_path(train_id).exists() else {}
+                    self._send_json({"ok": True, "report": report, "summary": report.get("summary", {}) if report else {}, "status": report.get("status") if report else "not_configured"})
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            if tail.startswith("/lifecycle/"):
+                lifecycle_tail = tail.removeprefix("/lifecycle/").strip("/")
+                if lifecycle_tail == "refresh":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.unified_command_center_release_train_lifecycle_store.refresh_report(train_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if lifecycle_tail == "export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.unified_command_center_release_train_lifecycle_store.export_package(train_id, self._optional_json_body())
+                    self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"})
+                    return
+                if lifecycle_tail == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    result = self.unified_command_center_release_train_lifecycle_store.build_zip(train_id, self._optional_json_body())
+                    self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                    return
+                if lifecycle_tail == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.unified_command_center_release_train_lifecycle_store.verify_package(train_id, self._optional_json_body())
+                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                    return
+                if lifecycle_tail == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.unified_command_center_release_train_lifecycle_store.zip_path(train_id), "application/zip", filename="musicforge-unified-command-center-release-train-lifecycle.zip")
+                    return
+                self._send_error(HTTPStatus.NOT_FOUND, "Release Train Lifecycle route not found.")
+                return
             if tail == "/changes":
                 if method == "GET":
                     report = self.unified_command_center_release_train_change_control_store.refresh_report(train_id) if self.unified_command_center_release_train_change_control_store.change_dir(train_id).exists() else {}
@@ -11214,11 +11269,17 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterReleaseTrainChangeControlNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedCommandCenterReleaseTrainLifecycleNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedCommandCenterReleaseTrainStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedCommandCenterReleaseTrainChangeControlStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedCommandCenterReleaseTrainLifecycleStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedCommandCenterReleaseTrainChangeControlError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except UnifiedCommandCenterReleaseTrainLifecycleError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedCommandCenterReleaseTrainError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -20526,6 +20587,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_reviewer_decision_board_store = UnifiedCommandCenterReviewerDecisionBoardStore(self.unified_command_center_store, evidence_review_store=self.unified_command_center_evidence_review_store)
         self.unified_command_center_release_train_store = UnifiedCommandCenterReleaseTrainStore(release_store=self.release_store)
         self.unified_command_center_release_train_change_control_store = UnifiedCommandCenterReleaseTrainChangeControlStore(self.unified_command_center_release_train_store)
+        self.unified_command_center_release_train_lifecycle_store = UnifiedCommandCenterReleaseTrainLifecycleStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

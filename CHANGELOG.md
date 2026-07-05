@@ -1,5 +1,16 @@
 # Changelog
 
+## v11.8.0 - 2026-07-05
+
+### Added
+- Unified Command Center Release Train Lifecycle Audit for consolidating current train verification, signoff succession, Change Control reset coverage, archive-history, current readiness, gap planning, and evidence fingerprints.
+- Fixed-layout Lifecycle Audit ZIP and offline verifier with strict allow-list, ledger hash-chain checks, external current train runtime verification, Change Control runtime verification, signoff binding, external evidence manifest, and reset-proof binding.
+- CLI and HTTP API endpoints for Lifecycle status, refresh, export, ZIP, verify, download, and standalone package verification.
+- release-check `v118.unified_command_center_release_train_lifecycle_smoke` covering reset lifecycle pass, missing reset proof rejection, declared-extra rejection, and lifecycle report full-resign reset-count rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_command_center_release_train_lifecycle.py tests\test_cli_unified_command_center_release_train_lifecycle.py tests\test_server_unified_command_center_release_train_lifecycle.py tests\test_release_check.py::test_v118_unified_command_center_release_train_lifecycle_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v11.7.0 - 2026-07-05
 
 ### Added

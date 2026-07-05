@@ -19549,6 +19549,138 @@ def _v117_forge_change_control_reset_proof_hash(entries: dict[str, bytes]) -> di
     return entries
 
 
+def _v118_unified_command_center_release_train_lifecycle_smoke(root: Path) -> tuple[bool, str]:
+    import os
+    import tempfile
+
+    from song_agent.unified_command_center_release_train import DEFAULT_REQUIRED_EVIDENCE, UnifiedCommandCenterReleaseTrainStore, write_external_evidence_manifest
+    from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
+    from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
+    from song_agent.unified_command_center_release_train_lifecycle_verifier import verify_unified_command_center_release_train_lifecycle_package
+    from song_agent.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
+
+    del root
+    old_cwd = Path.cwd()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v118-ucc-release-train-life-") as temp:
+            base = Path(temp)
+            os.chdir(base)
+            try:
+                store = UnifiedCommandCenterReleaseTrainStore(root=base / ".musicforge" / "unified-command-trains")
+                train = store.create_train({"train_id": "uct-life", "required_evidence": DEFAULT_REQUIRED_EVIDENCE})
+                item = store.add_item(train["train_id"], {"item_id": "item-001", "center_id": "ucc-life"})
+                rows = []
+                for evidence_type in DEFAULT_REQUIRED_EVIDENCE:
+                    zip_path, report_path = _v116_fake_external_evidence(base, item["item_id"], item["center_id"], evidence_type, EXPECTED_EVIDENCE_PACKAGE_TYPES[evidence_type])
+                    rows.append({"item_id": item["item_id"], "center_id": item["center_id"], "evidence_type": evidence_type, "zip_path": str(zip_path), "verification_report_path": str(report_path)})
+                manifest_path = base / "train-external-evidence.json"
+                write_external_evidence_manifest(manifest_path, train_id=train["train_id"], items=rows)
+                store.signoff(train["train_id"], {"external_evidence_manifest": manifest_path, "signed_by": "original train lead"})
+                store.build_zip(train["train_id"])
+                store.verify_archive(train["train_id"], {"external_evidence_manifest": manifest_path, "strict": True, "require_go": True, "require_signed": True})
+                change_store = UnifiedCommandCenterReleaseTrainChangeControlStore(store)
+                request = change_store.create_request(train["train_id"], {"external_evidence_manifest": manifest_path, "change": ["refresh evidence"]})
+                change_store.approve_request(train["train_id"], request["change_request_id"], {"external_evidence_manifest": manifest_path, "approved_by": "train owner"})
+                proof = change_store.reset_train_signoff(train["train_id"], request["change_request_id"], {"external_evidence_manifest": manifest_path, "reset_by": "train owner"})
+                store.signoff(train["train_id"], {"external_evidence_manifest": manifest_path, "signed_by": "successor train lead"})
+                store.build_zip(train["train_id"])
+                store.verify_archive(train["train_id"], {"external_evidence_manifest": manifest_path, "strict": True, "require_go": True, "require_signed": True})
+                change_store.build_zip(train["train_id"])
+                change_store.verify_package(train["train_id"], {"strict": True, "require_reset_applied": True, "require_current_train": True, "external_evidence_manifest": manifest_path, "reset_proof": change_store.reset_proof_path(train["train_id"], request["change_request_id"])})
+                lifecycle = UnifiedCommandCenterReleaseTrainLifecycleStore(store, change_store)
+                payload = {"external_evidence_manifest": manifest_path, "change_control_zip": change_store.zip_path(train["train_id"]), "change_control_verification_report": change_store.verification_report_path(train["train_id"]), "reset_proofs": [change_store.reset_proof_path(train["train_id"], request["change_request_id"])]}
+                report = lifecycle.refresh_report(train["train_id"], payload)
+                zipped = lifecycle.build_zip(train["train_id"])
+                verified = verify_unified_command_center_release_train_lifecycle_package(
+                    zipped["zip_path"],
+                    strict=True,
+                    require_current_train=True,
+                    train_archive_path=store.zip_path(train["train_id"]),
+                    train_archive_verification_report_path=store.verification_report_path(train["train_id"]),
+                    train_signoff_binding_path=store.signoff_binding_path(train["train_id"]),
+                    external_evidence_manifest_path=manifest_path,
+                    change_control_zip_path=change_store.zip_path(train["train_id"]),
+                    change_control_verification_report_path=change_store.verification_report_path(train["train_id"]),
+                    reset_proof_paths=[change_store.reset_proof_path(train["train_id"], request["change_request_id"])],
+                )
+                missing_proof = verify_unified_command_center_release_train_lifecycle_package(
+                    zipped["zip_path"],
+                    strict=True,
+                    require_current_train=True,
+                    train_archive_path=store.zip_path(train["train_id"]),
+                    train_archive_verification_report_path=store.verification_report_path(train["train_id"]),
+                    train_signoff_binding_path=store.signoff_binding_path(train["train_id"]),
+                    external_evidence_manifest_path=manifest_path,
+                    change_control_zip_path=change_store.zip_path(train["train_id"]),
+                    change_control_verification_report_path=change_store.verification_report_path(train["train_id"]),
+                )
+                extra_zip = base / "lifecycle-extra.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), extra_zip, _v118_add_declared_lifecycle_extra)
+                declared_extra = verify_unified_command_center_release_train_lifecycle_package(extra_zip, strict=True)
+                forged_zip = base / "lifecycle-forged-reset.zip"
+                _v76_rewrite_zip(Path(zipped["zip_path"]), forged_zip, _v118_forge_lifecycle_reset_count)
+                forged_reset = verify_unified_command_center_release_train_lifecycle_package(
+                    forged_zip,
+                    strict=True,
+                    require_current_train=True,
+                    train_archive_path=store.zip_path(train["train_id"]),
+                    train_archive_verification_report_path=store.verification_report_path(train["train_id"]),
+                    train_signoff_binding_path=store.signoff_binding_path(train["train_id"]),
+                    external_evidence_manifest_path=manifest_path,
+                    change_control_zip_path=change_store.zip_path(train["train_id"]),
+                    change_control_verification_report_path=change_store.verification_report_path(train["train_id"]),
+                    reset_proof_paths=[change_store.reset_proof_path(train["train_id"], request["change_request_id"])],
+                )
+                ok = (
+                    proof.get("status") == "applied"
+                    and report.get("status") == "passed"
+                    and verified.get("status") == "passed"
+                    and _v38_check_status(missing_proof, "ucc_train_lifecycle_reset_semantics_001_proof") == "failed"
+                    and _v38_check_status(declared_extra, "ucc_train_lifecycle_allowed_entries") == "failed"
+                    and _v38_check_status(forged_reset, "ucc_train_lifecycle_report_reset_count") == "failed"
+                )
+                return ok, (
+                    f"lifecycle={report.get('status')}, verify={verified.get('status')}, "
+                    f"missing_proof={_v38_check_status(missing_proof, 'ucc_train_lifecycle_reset_semantics_001_proof')}, "
+                    f"declared_extra={_v38_check_status(declared_extra, 'ucc_train_lifecycle_allowed_entries')}, "
+                    f"full_resign_reset={_v38_check_status(forged_reset, 'ucc_train_lifecycle_report_reset_count')}"
+                )
+            finally:
+                os.chdir(old_cwd)
+    except Exception as exc:
+        return False, f"v11.8 Unified Command Center Release Train Lifecycle Audit smoke failed: {exc}"
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v118_add_declared_lifecycle_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Lifecycle extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v118_forge_lifecycle_reset_count(entries: dict[str, bytes]) -> dict[str, bytes]:
+    report = json.loads(entries["lifecycle-report.json"].decode("utf-8"))
+    report["summary"]["reset_count"] = 0
+    report["summary"]["applied_change_request_count"] = 0
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    entries["lifecycle-report.json"] = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["report_hash"] = report["integrity_hash"]
+    manifest.setdefault("summary", {})["reset_count"] = 0
+    manifest.setdefault("summary", {})["applied_change_request_count"] = 0
+    _v74_sync_manifest_file(manifest, "lifecycle-report.json", entries["lifecycle-report.json"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v116_fake_external_evidence(base: Path, item_id: str, center_id: str, evidence_type: str, package_type: str) -> tuple[Path, Path]:
     evidence_dir = base / "external-evidence" / evidence_type
     evidence_dir.mkdir(parents=True, exist_ok=True)

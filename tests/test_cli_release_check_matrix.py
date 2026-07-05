@@ -95,6 +95,7 @@ def test_release_check_cli_v11_profile_lists_unified_command_center() -> None:
         "v115.unified_command_center_reviewer_decision_board_smoke",
         "v116.unified_command_center_release_train_smoke",
         "v117.unified_command_center_release_train_change_control_smoke",
+        "v118.unified_command_center_release_train_lifecycle_smoke",
     ]
 
 
