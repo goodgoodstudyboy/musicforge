@@ -266,6 +266,11 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-command-center-reviewer-decision-board-accepted-evidence", action="append", default=[], type=Path, help="Accepted Evidence ZIP bound by the Reviewer Decision Board. Repeat for multiple reviewers.")
     parser.add_argument("--unified-command-center-reviewer-decision-board-accepted-evidence-verification-report", action="append", default=[], type=Path, help="Accepted Evidence verification report bound by the Reviewer Decision Board. Repeat in the same order.")
     parser.add_argument("--unified-command-center-reviewer-decision-board-accepted-evidence-response-verification-report", action="append", default=[], type=Path, help="Original accepted response verification summary bound by the Reviewer Decision Board. Repeat in the same order.")
+    parser.add_argument("--require-unified-release-program-handoff", action="store_true", help="Require Unified Release Program Final Handoff evidence.")
+    parser.add_argument("--unified-release-program-handoff", type=Path, default=None, help="Unified Release Program Final Handoff archive ZIP.")
+    parser.add_argument("--unified-release-program-handoff-verification-report", type=Path, default=None, help="Unified Release Program Final Handoff verification report.")
+    parser.add_argument("--unified-release-program-handoff-external-evidence-manifest", type=Path, default=None, help="External evidence manifest bound by the Unified Release Program Handoff.")
+    parser.add_argument("--unified-release-program-handoff-signoff-binding", type=Path, default=None, help="Signoff binding summary bound by the Unified Release Program Handoff.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -6267,6 +6272,11 @@ def _main() -> None:
             unified_command_center_reviewer_decision_board_accepted_evidence_zip_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence,
             unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_verification_report,
             unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report,
+            require_unified_release_program_handoff=args.require_unified_release_program_handoff,
+            unified_release_program_handoff_zip_path=args.unified_release_program_handoff,
+            unified_release_program_handoff_verification_report_path=args.unified_release_program_handoff_verification_report,
+            unified_release_program_handoff_external_evidence_manifest_path=args.unified_release_program_handoff_external_evidence_manifest,
+            unified_release_program_handoff_signoff_binding_path=args.unified_release_program_handoff_signoff_binding,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -6389,6 +6399,11 @@ def _main() -> None:
             unified_command_center_reviewer_decision_board_accepted_evidence_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence,
             unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_verification_report,
             unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths=args.unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report,
+            require_unified_release_program_handoff=args.require_unified_release_program_handoff,
+            unified_release_program_handoff_path=args.unified_release_program_handoff,
+            unified_release_program_handoff_verification_report_path=args.unified_release_program_handoff_verification_report,
+            unified_release_program_handoff_external_evidence_manifest_path=args.unified_release_program_handoff_external_evidence_manifest,
+            unified_release_program_handoff_signoff_binding_path=args.unified_release_program_handoff_signoff_binding,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,

@@ -1,5 +1,18 @@
 # Changelog
 
+## v12.2.1 - 2026-07-06
+
+### Fixed
+- Program Final Handoff Decision Board now scans all imported reviewer responses; `rejected` and `needs_changes` responses block readiness/signoff when board policy requires it.
+- Release signoff and GA readiness can now require Unified Release Program Handoff archive evidence through runtime gate verification instead of relying on standalone smoke coverage.
+- Program Handoff response import and accepted-evidence API responses now report `ok=true` for successful `imported` / `accepted` store results.
+- v12.2 smoke now covers `rejected_blocks=blocked` for Program Handoff quorum/signoff.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_handoff.py tests\test_server_unified_release_program_handoff.py tests\test_release_check.py::test_v122_unified_release_program_final_handoff_smoke -q`
+- `python -m pytest tests\test_release_check.py::test_v122_unified_release_program_final_handoff_smoke tests\test_cli_release_check_matrix.py tests\test_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.2.0 - 2026-07-06
 
 ### Added

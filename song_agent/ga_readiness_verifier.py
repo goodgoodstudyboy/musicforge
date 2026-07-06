@@ -158,6 +158,11 @@ def verify_ga_readiness_report(
     unified_command_center_reviewer_decision_board_accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
     unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
+    require_unified_release_program_handoff: bool = False,
+    unified_release_program_handoff_path: Path | str | None = None,
+    unified_release_program_handoff_verification_report_path: Path | str | None = None,
+    unified_release_program_handoff_external_evidence_manifest_path: Path | str | None = None,
+    unified_release_program_handoff_signoff_binding_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -476,6 +481,15 @@ def verify_ga_readiness_report(
                 unified_command_center_reviewer_decision_board_accepted_evidence_paths,
                 unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths,
                 unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths,
+            )
+        if require_unified_release_program_handoff:
+            _verify_unified_release_program_handoff_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_handoff", {}),
+                unified_release_program_handoff_path,
+                unified_release_program_handoff_verification_report_path,
+                unified_release_program_handoff_external_evidence_manifest_path,
+                unified_release_program_handoff_signoff_binding_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -1872,6 +1886,48 @@ def _verify_unified_command_center_reviewer_decision_board_evidence(
         verification_report,
         runtime_report,
         UNIFIED_COMMAND_CENTER_REVIEWER_DECISION_BOARD_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_release_program_handoff_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    handoff_path: Path | str | None,
+    handoff_verification_report_path: Path | str | None,
+    external_evidence_manifest_path: Path | str | None,
+    handoff_signoff_binding_path: Path | str | None,
+) -> None:
+    if not handoff_path:
+        _add_check(checks, "ga_readiness_unified_release_program_handoff_required", "failed", "blocking", "Unified Release Program Handoff requirement needs a Handoff archive ZIP.")
+        return
+    if not handoff_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_release_program_handoff_verification_required", "failed", "blocking", "Unified Release Program Handoff requirement needs a verification report.")
+        return
+    zip_path = Path(handoff_path)
+    try:
+        from song_agent.unified_release_program_handoff_verifier import UNIFIED_RELEASE_PROGRAM_HANDOFF_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_handoff_package
+
+        verification_report = read_json(Path(handoff_verification_report_path))
+        runtime_report = verify_unified_release_program_handoff_package(
+            zip_path,
+            strict=True,
+            require_current=True,
+            require_accepted=True,
+            require_signed=True,
+            external_evidence_manifest_path=external_evidence_manifest_path,
+            handoff_signoff_binding_path=handoff_signoff_binding_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_release_program_handoff_readable", "failed", "blocking", f"Unified Release Program Handoff evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_handoff",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_RELEASE_PROGRAM_HANDOFF_VERIFICATION_PACKAGE_TYPE,
     )
 
 

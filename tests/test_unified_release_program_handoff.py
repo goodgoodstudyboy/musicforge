@@ -161,6 +161,37 @@ def test_unified_release_program_handoff_blocks_role_forge_before_signoff(tmp_pa
         store.signoff_handoff(program_id, {"signed_by": "chair", "role": "release_owner"})
 
 
+@pytest.mark.parametrize(
+    ("decision", "reason"),
+    [
+        ("rejected", "rejected_response_present"),
+        ("needs_changes", "needs_changes_response_present"),
+    ],
+)
+def test_unified_release_program_handoff_blocks_negative_responses_before_signoff(tmp_path: Path, decision: str, reason: str) -> None:
+    store, program_store, ops_store, program_id, program_manifest_path, evidence_manifest = _program_ops_handoff(tmp_path)
+    store.refresh_handoff(program_id, {"external_evidence_manifest": evidence_manifest})
+    pack = store.export_review_pack(program_id, {"audience": "release_owner"})
+    store.build_review_pack_zip(program_id, pack["review_pack_id"])
+    accepted_response = store.import_response(program_id, _review_response(store, program_id, pack["review_pack_id"], role="release_owner", decision="accepted"))
+    accepted = store.create_accepted_evidence(program_id, accepted_response["response"]["response_id"])
+    store.import_response(program_id, _review_response(store, program_id, pack["review_pack_id"], role="technical_reviewer", organization="qa-team", decision=decision))
+    evidence_id = accepted["evidence"]["evidence_id"]
+    _write_handoff_manifest(store, program_store, ops_store, program_id, program_manifest_path, evidence_manifest, [_accepted_manifest_row(store, program_id, evidence_id, accepted_response["response"]["response_id"])])
+
+    refreshed = store.refresh_handoff(program_id, {"external_evidence_manifest": evidence_manifest})
+    board = store.refresh_decision_board(
+        program_id,
+        {"policy": {"required_roles": ["release_owner"], "minimum_acceptances": 1, "minimum_organizations": 1, "block_on_rejected": True, "block_on_needs_changes": True}},
+    )
+
+    assert refreshed["status"] == "ready_for_review"
+    assert board["status"] == "blocked"
+    assert any(row["reason"] == reason for row in board["conflicts"])
+    with pytest.raises(UnifiedReleaseProgramHandoffStateError):
+        store.signoff_handoff(program_id, {"signed_by": "chair", "role": "release_owner"})
+
+
 def test_unified_release_program_handoff_verifier_rejects_declared_extra_and_full_resign(tmp_path: Path) -> None:
     store, program_store, ops_store, program_id, program_manifest_path, evidence_manifest = _program_ops_handoff(tmp_path)
     store.refresh_handoff(program_id, {"external_evidence_manifest": evidence_manifest})

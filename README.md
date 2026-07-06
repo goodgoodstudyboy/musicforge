@@ -97,6 +97,10 @@ evidence, and signoff binding proofs. Use
 `python -m song_agent.cli verify-unified-release-program-handoff-package --help`
 for the local commands.
 
+v12.2.1 tightens Program Handoff gating: rejected or needs-changes reviewer
+responses can block the Decision Board, and Release / GA gates can require the
+Program Handoff archive with external verification evidence.
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

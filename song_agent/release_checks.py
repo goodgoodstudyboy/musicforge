@@ -20266,6 +20266,9 @@ def _v122_unified_release_program_final_handoff_smoke(root: Path) -> tuple[bool,
             handoff_store.build_review_pack_zip(program["program_id"], pack["review_pack_id"])
             response = handoff_store.import_response(program["program_id"], _v122_handoff_response(handoff_store, program["program_id"], pack["review_pack_id"]))
             accepted = handoff_store.create_accepted_evidence(program["program_id"], response["response"]["response_id"])
+            rejected = handoff_store.import_response(program["program_id"], _v122_handoff_response(handoff_store, program["program_id"], pack["review_pack_id"], reviewer_role="technical_reviewer", reviewer_id="rev-technical", decision="rejected"))
+            rejected_board = handoff_store.refresh_decision_board(program["program_id"], {"policy": {"required_roles": ["release_owner"], "minimum_acceptances": 1, "minimum_organizations": 1, "block_on_rejected": True}})
+            shutil.rmtree(handoff_store.response_dir(program["program_id"], rejected["response"]["response_id"]))
             evidence_id = accepted["evidence"]["evidence_id"]
             accepted_row = {
                 "evidence_id": evidence_id,
@@ -20304,6 +20307,7 @@ def _v122_unified_release_program_final_handoff_smoke(root: Path) -> tuple[bool,
             ok = (
                 report.get("status") == "ready_for_review"
                 and refreshed.get("status") == "ready_for_signoff"
+                and rejected_board.get("status") == "blocked"
                 and board.get("status") == "ready_for_signoff"
                 and signoff.get("status") == "signed"
                 and verified.get("status") == "passed"
@@ -20312,7 +20316,7 @@ def _v122_unified_release_program_final_handoff_smoke(root: Path) -> tuple[bool,
                 and signed_mutation == "409"
             )
             return ok, (
-                f"handoff={refreshed.get('status')}, board={board.get('status')}, signoff={signoff.get('status')}, verify={verified.get('status')}, "
+                f"handoff={refreshed.get('status')}, rejected_blocks={rejected_board.get('status')}, board={board.get('status')}, signoff={signoff.get('status')}, verify={verified.get('status')}, "
                 f"declared_extra={_v38_check_status(declared_extra, 'urph_allowed_entries')}, "
                 f"signoff_full_resign_signed_by={_v38_check_status(full_resign, 'urph_external_signoff_binding_hash')}, "
                 f"signed_mutation={signed_mutation}"
@@ -20349,7 +20353,7 @@ def _v122_handoff_manifest_rows(program_store, ops_store, program_id: str, progr
     ]
 
 
-def _v122_handoff_response(store, program_id: str, review_pack_id: str) -> dict[str, object]:
+def _v122_handoff_response(store, program_id: str, review_pack_id: str, *, reviewer_role: str = "release_owner", reviewer_id: str = "rev-release-owner", decision: str = "accepted") -> dict[str, object]:
     pack_report = read_json(store.review_pack_dir(program_id, review_pack_id) / "review-pack-report.json")
     zip_path = store.review_pack_zip_path(program_id, review_pack_id)
     payload: dict[str, object] = {
@@ -20361,11 +20365,11 @@ def _v122_handoff_response(store, program_id: str, review_pack_id: str) -> dict[
         "review_pack_manifest_hash": _v122_manifest_hash(zip_path),
         "program_id": program_id,
         "handoff_id": pack_report["handoff_id"],
-        "reviewer_id": "rev-release-owner",
-        "reviewer_name": "Release owner reviewer",
-        "reviewer_role": "release_owner",
+        "reviewer_id": reviewer_id,
+        "reviewer_name": f"{reviewer_role} reviewer",
+        "reviewer_role": reviewer_role,
         "organization": "release-team",
-        "decision": "accepted",
+        "decision": decision,
         "findings": [],
         "notes": "Reviewed.",
     }

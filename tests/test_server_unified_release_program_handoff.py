@@ -120,7 +120,9 @@ def test_unified_release_program_handoff_api_lifecycle(tmp_path, monkeypatch) ->
     assert pack_status == 201, pack_body
     assert pack_zip_status == 200
     assert response_status == 201, response_body
+    assert response_body["ok"] is True
     assert accepted_status == 201, accepted_body
+    assert accepted_body["ok"] is True
     assert board_status == 200, board_body
     assert board_body["decision_board"]["status"] == "ready_for_signoff"
     assert signoff_status == 201, signoff_body

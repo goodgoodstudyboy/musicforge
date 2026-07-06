@@ -11535,7 +11535,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 response = self.unified_release_program_handoff_store.import_response(program_id, self._read_json_body())
-                self._send_json({"ok": response.get("status") in {"accepted", "accepted_with_notes"}, "response": response.get("response"), "verification": response.get("verification"), "summary": {"response_id": response.get("response", {}).get("response_id")}, "status": response.get("status")}, status=HTTPStatus.CREATED)
+                self._send_json({"ok": response.get("status") == "imported", "response": response.get("response"), "verification": response.get("verification"), "summary": {"response_id": response.get("response", {}).get("response_id")}, "status": response.get("status")}, status=HTTPStatus.CREATED)
                 return
             if tail.startswith("/handoff/responses/") and tail.endswith("/accepted-evidence"):
                 if method != "POST":
@@ -11543,7 +11543,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                     return
                 response_id = tail.split("/")[3]
                 result = self.unified_release_program_handoff_store.create_accepted_evidence(program_id, response_id)
-                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"evidence_id": result.get("evidence", {}).get("evidence_id")}}, status=HTTPStatus.CREATED)
+                self._send_json({"ok": result.get("status") == "accepted", **result, "summary": {"evidence_id": result.get("evidence", {}).get("evidence_id")}}, status=HTTPStatus.CREATED)
                 return
             if tail.startswith("/handoff/accepted-evidence/") and tail.endswith("/zip"):
                 if method != "POST":
@@ -13258,6 +13258,21 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_command_center_release_train_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_command_center_release_train_gate.get("message") or "Unified Command Center Release Train gate failed.")
+        require_unified_release_program_handoff = bool(payload.get("require_unified_release_program_handoff", False))
+        unified_release_program_handoff_gate = self.unified_release_program_handoff_store.gate(
+            str(payload.get("unified_release_program_id") or payload.get("unified_release_program_handoff_program_id") or "urp-000001"),
+            required=require_unified_release_program_handoff,
+            handoff_archive_zip_path=payload.get("unified_release_program_handoff_archive") or payload.get("unified_release_program_handoff_zip"),
+            handoff_archive_verification_report_path=payload.get("unified_release_program_handoff_verification_report"),
+            external_evidence_manifest=payload.get("unified_release_program_handoff_external_evidence_manifest"),
+            handoff_signoff_binding=payload.get("unified_release_program_handoff_signoff_binding"),
+        )
+        if unified_release_program_handoff_gate and require_unified_release_program_handoff:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_release_program_handoff"] = unified_release_program_handoff_gate
+            if unified_release_program_handoff_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_release_program_handoff_gate.get("message") or "Unified Release Program Handoff gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -13460,6 +13475,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(unified_command_center_release_train_gate.get("message") or "Unified Command Center Release Train gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_release_program_handoff_gate.get("hard_block") and unified_release_program_handoff_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_release_program_handoff_gate.get("message") or "Unified Release Program Handoff gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,

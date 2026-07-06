@@ -518,6 +518,7 @@ class UnifiedReleaseProgramHandoffStore:
             self.ensure_unsigned(program_id)
             policy = _board_policy(payload.get("policy") if "policy" in payload else (_read_optional_json(self.decision_board_path(program_id)).get("policy") or None))
             participants, conflicts = self._accepted_participants(program_id)
+            conflicts.extend(self._response_decision_conflicts(program_id, policy))
             readiness = _decision_readiness(policy, participants, conflicts)
             board = _with_integrity(
                 {
@@ -738,10 +739,15 @@ class UnifiedReleaseProgramHandoffStore:
         checks = list(program_state.get("checks", [])) + list(operations_state.get("checks", []))
         blockers = [row["check_id"] for row in checks if row.get("status") == "failed"]
         participants, conflicts = self._accepted_participants(program_id)
-        accepted_index = self._accepted_index_document(program_id, participants)
         decision = _read_optional_json(self.decision_board_path(program_id))
+        policy = _board_policy(decision.get("policy") if decision else DEFAULT_BOARD_POLICY)
+        conflicts.extend(self._response_decision_conflicts(program_id, policy))
+        accepted_index = self._accepted_index_document(program_id, participants)
         if not decision:
-            decision = _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_HANDOFF_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_decision_board", "program_id": program_id, "handoff_id": handoff_id, "board_id": "urpdb-000001", "policy": DEFAULT_BOARD_POLICY, "participants": participants, "conflicts": conflicts, "readiness": _decision_readiness(DEFAULT_BOARD_POLICY, participants, conflicts), "status": "pending"})
+            decision = _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_HANDOFF_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_decision_board", "program_id": program_id, "handoff_id": handoff_id, "board_id": "urpdb-000001", "policy": policy, "participants": participants, "conflicts": conflicts, "readiness": _decision_readiness(policy, participants, conflicts), "status": "pending"})
+        else:
+            decision = {**decision, "participants": participants, "conflicts": conflicts, "readiness": _decision_readiness(policy, participants, conflicts), "status": _decision_readiness(policy, participants, conflicts).get("status"), "integrity_hash": None}
+            decision["integrity_hash"] = _integrity_hash(decision)
         inventory = self._evidence_inventory(program_id, handoff_id, program_state, operations_state, participants)
         now = now_iso()
         source = {
@@ -751,7 +757,7 @@ class UnifiedReleaseProgramHandoffStore:
             "accepted_evidence_index_hash": accepted_index.get("integrity_hash"),
         }
         source_hash = stable_hash(source)
-        readiness_summary = _decision_readiness(decision.get("policy") or DEFAULT_BOARD_POLICY, participants, conflicts)
+        readiness_summary = _decision_readiness(policy, participants, conflicts)
         status = "ready_for_signoff" if not blockers and readiness_summary.get("status") == "ready_for_signoff" else "ready_for_review" if not blockers else "blocked"
         report = _with_integrity(
             {
@@ -1026,6 +1032,47 @@ class UnifiedReleaseProgramHandoffStore:
                 }
             )
         return participants, conflicts
+
+    def _response_decision_conflicts(self, program_id: str, policy: dict[str, Any]) -> list[dict[str, Any]]:
+        base = self.handoff_dir(program_id) / "responses"
+        conflicts: list[dict[str, Any]] = []
+        if not base.exists():
+            return conflicts
+        for response_path in sorted(base.glob("*/response.json")):
+            try:
+                response = read_json(response_path)
+            except Exception as exc:
+                conflicts.append({"response_id": response_path.parent.name, "reason": "response_unreadable", "message": sanitize_sensitive_text(str(exc))})
+                continue
+            response_id = str(response.get("response_id") or response_path.parent.name)
+            decision = str(response.get("decision") or "")
+            base_row = {
+                "response_id": response_id,
+                "reviewer_id": response.get("reviewer_id"),
+                "role": response.get("reviewer_role"),
+                "organization": response.get("organization"),
+                "decision": decision,
+            }
+            if not _integrity_ok(response):
+                conflicts.append({**base_row, "reason": "response_integrity_failed"})
+                continue
+            verification = _read_optional_json(self.response_verification_path(program_id, response_id))
+            binding = _read_optional_json(self.response_binding_path(program_id, response_id))
+            if not verification or not binding or not _integrity_ok(verification) or not _integrity_ok(binding):
+                conflicts.append({**base_row, "reason": "response_binding_failed"})
+                continue
+            if binding.get("decision") != decision or binding.get("reviewer_role") != response.get("reviewer_role") or binding.get("organization") != response.get("organization"):
+                conflicts.append({**base_row, "reason": "response_binding_mismatch"})
+                continue
+            if decision == "rejected" and policy.get("block_on_rejected", True):
+                conflicts.append({**base_row, "reason": "rejected_response_present"})
+            if decision == "needs_changes" and policy.get("block_on_needs_changes", True):
+                conflicts.append({**base_row, "reason": "needs_changes_response_present"})
+            if policy.get("block_on_critical_finding", True):
+                findings = response.get("findings") if isinstance(response.get("findings"), list) else []
+                if any(str(row.get("severity") or "").lower() == "critical" for row in findings if isinstance(row, dict)):
+                    conflicts.append({**base_row, "reason": "critical_finding_present"})
+        return conflicts
 
     def _accepted_index_document(self, program_id: str, participants: list[dict[str, Any]]) -> dict[str, Any]:
         handoff_id = self._handoff_id(program_id, {})
