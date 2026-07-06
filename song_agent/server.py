@@ -645,6 +645,12 @@ from song_agent.unified_command_center_release_train_handoff import (
     UnifiedCommandCenterReleaseTrainHandoffStateError,
     UnifiedCommandCenterReleaseTrainHandoffStore,
 )
+from song_agent.unified_release_program import (
+    UnifiedReleaseProgramError,
+    UnifiedReleaseProgramNotFoundError,
+    UnifiedReleaseProgramStateError,
+    UnifiedReleaseProgramStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3346,6 +3352,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         return self.server.unified_command_center_release_train_handoff_store  # type: ignore[attr-defined]
 
     @property
+    def unified_release_program_store(self) -> UnifiedReleaseProgramStore:
+        return self.server.unified_release_program_store  # type: ignore[attr-defined]
+
+    @property
     def distribution_store(self) -> DistributionStore:
         return self.server.distribution_store  # type: ignore[attr-defined]
 
@@ -3500,6 +3510,9 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/unified-command-center-release-trains" or path.startswith("/api/unified-command-center-release-trains/"):
                 self._handle_unified_command_center_release_trains_route(method, path)
+                return
+            if path == "/api/unified-release-programs" or path.startswith("/api/unified-release-programs/"):
+                self._handle_unified_release_programs_route(method, path)
                 return
             if path == "/api/unified-command-centers" or path.startswith("/api/unified-command-centers/"):
                 self._handle_unified_command_centers_route(method, path)
@@ -11374,6 +11387,103 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except UnifiedCommandCenterReleaseTrainLifecycleError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedCommandCenterReleaseTrainError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def _handle_unified_release_programs_route(self, method: str, path: str) -> None:
+        try:
+            if path == "/api/unified-release-programs":
+                if method == "GET":
+                    programs = self.unified_release_program_store.list_programs()
+                    self._send_json({"ok": True, "programs": programs, "summary": {"program_count": len(programs)}})
+                    return
+                if method == "POST":
+                    program = self.unified_release_program_store.create_program(self._optional_json_body())
+                    self._send_json({"ok": True, "program": program, "summary": {"program_id": program.get("program_id")}, "status": program.get("status")}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            prefix = "/api/unified-release-programs/"
+            if not path.startswith(prefix):
+                self._send_error(HTTPStatus.NOT_FOUND, "Unified Release Program route not found.")
+                return
+            parts = path.removeprefix(prefix).strip("/").split("/")
+            program_id = parts[0]
+            tail = "/" + "/".join(parts[1:]) if len(parts) > 1 else ""
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                detail = self.unified_release_program_store.get_program(program_id)
+                report = detail.get("report", {})
+                self._send_json({"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or detail.get("program", {}).get("status")})
+                return
+            if tail == "/items":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                item = self.unified_release_program_store.add_train_item(program_id, self._read_json_body())
+                self._send_json({"ok": True, "item": item, "summary": {"item_id": item.get("item_id")}, "status": item.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_store.refresh_report(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                signoff = self.unified_release_program_store.signoff(program_id, self._optional_json_body())
+                self._send_json({"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.unified_release_program_store.export_program(program_id)
+                self._send_json({"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"})
+                return
+            if tail == "/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_release_program_store.build_zip(program_id)
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_store.verify_package(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/gate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                gate = self.unified_release_program_store.gate(
+                    program_zip_path=payload.get("program_zip"),
+                    verification_report_path=payload.get("program_verification_report"),
+                    external_evidence_manifest_path=payload.get("external_evidence_manifest"),
+                    program_signoff_binding_path=payload.get("program_signoff_binding"),
+                )
+                self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
+                return
+            if tail == "/download":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_file(self.unified_release_program_store.zip_path(program_id), "application/zip", filename="musicforge-unified-release-program.zip")
+                return
+            self._send_error(HTTPStatus.NOT_FOUND, "Unified Release Program route not found.")
+        except UnifiedReleaseProgramNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedReleaseProgramStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedReleaseProgramError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_unified_command_centers_route(self, method: str, path: str) -> None:
@@ -20681,6 +20791,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_release_train_change_control_store = UnifiedCommandCenterReleaseTrainChangeControlStore(self.unified_command_center_release_train_store)
         self.unified_command_center_release_train_lifecycle_store = UnifiedCommandCenterReleaseTrainLifecycleStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store)
         self.unified_command_center_release_train_handoff_store = UnifiedCommandCenterReleaseTrainHandoffStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store, self.unified_command_center_release_train_lifecycle_store)
+        self.unified_release_program_store = UnifiedReleaseProgramStore(release_store=self.release_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

@@ -1,5 +1,19 @@
 # Changelog
 
+## v12.0.0 - 2026-07-06
+
+### Added
+- Unified Release Program Board for grouping multiple signed Release Train Handoffs into a Program-level readiness board with train items, dependency graph, readiness matrix, risk register, exception register, gap plan, signoff, immutable ZIP, and offline verifier.
+- Program external evidence manifests bind each train item by `item_id`, `train_id`, `handoff_id`, handoff ZIP fingerprint, handoff verification report hash, and handoff signoff binding hash; Program runtime verification rechecks each referenced Handoff instead of trusting package-internal summaries.
+- CLI and HTTP API endpoints for Program create, train item add, refresh, signoff, export, ZIP, verify, gate, download, and standalone `verify-unified-release-program-package`.
+- release-check `v120.unified_release_program_board_smoke` and `v12` profile covering Program signoff, current external Handoff binding, missing external signoff proof, declared-extra ZIP rejection, and signoff/history/binding/manifest full-resign rejection.
+
+### Fixed
+- Program external evidence input now keeps runtime paths only in the external manifest while exported Program packages contain public-safe fingerprint summaries, avoiding local path leakage while preserving offline current verification.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program.py tests\test_release_check.py::test_v120_unified_release_program_board_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+
 ## v11.9.1 - 2026-07-06
 
 ### Fixed

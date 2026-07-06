@@ -204,6 +204,7 @@ V7_PROFILES = ("full", "v7")
 GA_PROFILES = ("full", "quick", "latest", "ga")
 V10_PROFILES = ("full", "quick", "latest", "ga", "v10")
 V11_PROFILES = ("full", "quick", "latest", "ga", "v11")
+V12_PROFILES = ("full", "quick", "latest", "ga", "v12")
 
 CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000),
@@ -336,6 +337,7 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v117.unified_command_center_release_train_change_control_smoke", "v11.7 Unified Command Center Release Train Change Control smoke", "_v117_unified_command_center_release_train_change_control_smoke", group="command-center", version="11.7", risk="critical", timeout_seconds=300, tags=("v11", "ga", "unified-command-center", "release-train", "change-control"), profiles=V11_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v118.unified_command_center_release_train_lifecycle_smoke", "v11.8 Unified Command Center Release Train Lifecycle Audit smoke", "_v118_unified_command_center_release_train_lifecycle_smoke", group="command-center", version="11.8", risk="critical", timeout_seconds=300, tags=("v11", "ga", "unified-command-center", "release-train", "lifecycle"), profiles=V11_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v119.unified_command_center_release_train_handoff_smoke", "v11.9 Unified Command Center Release Train Final Handoff Board smoke", "_v119_unified_command_center_release_train_handoff_smoke", group="command-center", version="11.9", risk="critical", timeout_seconds=300, tags=("v11", "ga", "unified-command-center", "release-train", "handoff"), profiles=V11_PROFILES, expected_warnings=("Duplicate name:",)),
+    _callable("v120.unified_release_program_board_smoke", "v12.0 Unified Release Program Board smoke", "_v120_unified_release_program_board_smoke", group="command-center", version="12.0", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "release-train", "program-board"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
 )
 
-KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "ga", "publish"}
+KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "ga", "publish"}

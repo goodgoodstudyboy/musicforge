@@ -19956,6 +19956,231 @@ def _v119_full_resign_handoff_signer(entries: dict[str, bytes]) -> dict[str, byt
     return entries
 
 
+def _v120_unified_release_program_board_smoke(root: Path) -> tuple[bool, str]:
+    import tempfile
+
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
+    from song_agent.unified_release_program_verifier import (
+        UNIFIED_RELEASE_PROGRAM_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE,
+        verify_unified_release_program_package,
+    )
+    import song_agent.unified_release_program as program_module
+    import song_agent.unified_release_program_verifier as program_verifier_module
+
+    del root
+    original_store_verifier = program_module.verify_unified_command_center_release_train_handoff_package
+    original_package_verifier = program_verifier_module.verify_unified_command_center_release_train_handoff_package
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v120-unified-release-program-") as temp:
+            base = Path(temp)
+            program_module.verify_unified_command_center_release_train_handoff_package = _v120_fake_handoff_verifier
+            program_verifier_module.verify_unified_command_center_release_train_handoff_package = _v120_fake_handoff_verifier
+            store = UnifiedReleaseProgramStore(root=base / ".musicforge" / "unified-release-programs")
+            handoff_zip, handoff_report, handoff_binding = _v120_fake_handoff_evidence(base)
+            program = store.create_program({"program_id": "urp-smoke", "name": "Unified Release Program smoke"})
+            item = store.add_train_item(
+                program["program_id"],
+                {
+                    "item_id": "train-a",
+                    "train_id": "uct-smoke",
+                    "handoff_id": "rth-smoke",
+                    "type": "required",
+                    "lane": "release",
+                    "handoff_zip": handoff_zip,
+                    "handoff_verification_report": handoff_report,
+                    "handoff_signoff_binding": handoff_binding,
+                },
+            )
+            manifest_path = base / "program-external-evidence.json"
+            write_external_evidence_manifest(
+                manifest_path,
+                program_id=program["program_id"],
+                items=[
+                    {
+                        "item_id": item["item_id"],
+                        "train_id": item["train_id"],
+                        "handoff_id": item["handoff_id"],
+                        "handoff_zip": str(handoff_zip),
+                        "handoff_verification_report": str(handoff_report),
+                        "handoff_signoff_binding": str(handoff_binding),
+                    }
+                ],
+            )
+            report = store.refresh_report(program["program_id"], {"external_evidence_manifest": manifest_path})
+            signoff = store.signoff(program["program_id"], {"external_evidence_manifest": manifest_path, "signed_by": "program owner", "role": "release_owner"})
+            zipped = store.build_zip(program["program_id"])
+            verified = verify_unified_release_program_package(
+                zipped["zip_path"],
+                strict=True,
+                require_current=True,
+                require_signed=True,
+                external_evidence_manifest_path=manifest_path,
+                program_signoff_binding_path=store.signoff_binding_path(program["program_id"]),
+            )
+            missing_binding = verify_unified_release_program_package(
+                zipped["zip_path"],
+                strict=True,
+                require_current=True,
+                require_signed=True,
+                external_evidence_manifest_path=manifest_path,
+            )
+            declared_extra_zip = base / "program-declared-extra.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v120_add_declared_program_extra)
+            declared_extra = verify_unified_release_program_package(declared_extra_zip, strict=True)
+            forged_zip = base / "program-forged-signer.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), forged_zip, _v120_full_resign_program_signer)
+            full_resign = verify_unified_release_program_package(
+                forged_zip,
+                strict=True,
+                require_current=True,
+                require_signed=True,
+                external_evidence_manifest_path=manifest_path,
+                program_signoff_binding_path=store.signoff_binding_path(program["program_id"]),
+            )
+            deferred = store.create_program({"program_id": "urp-deferred", "name": "Deferred only Program"})
+            store.add_train_item(deferred["program_id"], {"item_id": "train-deferred", "train_id": "uct-deferred", "handoff_id": "rth-deferred", "type": "deferred"})
+            deferred_report = store.refresh_report(deferred["program_id"], {})
+            deferred_signoff_blocked = False
+            try:
+                store.signoff(deferred["program_id"], {"signed_by": "program owner"})
+            except Exception:
+                deferred_signoff_blocked = True
+            ok = (
+                report.get("status") == "ready"
+                and signoff.get("status") == "signed"
+                and verified.get("status") == "passed"
+                and _v38_check_status(missing_binding, "urp_external_signoff_binding_required") == "failed"
+                and _v38_check_status(declared_extra, "urp_allowed_entries") == "failed"
+                and _v38_check_status(full_resign, "urp_external_signoff_binding_hash") == "failed"
+                and deferred_report.get("status") == "blocked"
+                and deferred_signoff_blocked
+            )
+            return ok, (
+                f"program={report.get('status')}, signoff={signoff.get('status')}, verify={verified.get('status')}, "
+                f"missing_binding={_v38_check_status(missing_binding, 'urp_external_signoff_binding_required')}, "
+                f"declared_extra={_v38_check_status(declared_extra, 'urp_allowed_entries')}, "
+                f"signoff_full_resign_signed_by={_v38_check_status(full_resign, 'urp_external_signoff_binding_hash')}, "
+                f"deferred_only={deferred_report.get('status')}/{'409' if deferred_signoff_blocked else 'signed'}"
+            )
+    except Exception as exc:
+        return False, f"v12.0 Unified Release Program Board smoke failed: {exc}"
+    finally:
+        program_module.verify_unified_command_center_release_train_handoff_package = original_store_verifier
+        program_verifier_module.verify_unified_command_center_release_train_handoff_package = original_package_verifier
+
+
+def _v120_fake_handoff_evidence(base: Path) -> tuple[Path, Path, Path]:
+    from song_agent.unified_command_center_release_train_handoff_verifier import UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE
+
+    zip_path = base / "handoff.zip"
+    zip_path.write_bytes(b"fake handoff zip for v12 program smoke\n")
+    binding = {
+        "schema_version": 1,
+        "package_type": "musicforge_release_train_handoff_signoff_binding_summary",
+        "handoff_id": "rth-smoke",
+        "train_id": "uct-smoke",
+        "signoff_hash": "handoff-signoff-hash",
+        "signed_by": "handoff chair",
+    }
+    binding["integrity_hash"] = stable_hash({key: value for key, value in binding.items() if key != "integrity_hash"})
+    binding_path = base / "handoff-signoff-binding-summary.json"
+    write_json(binding_path, binding)
+    report = {
+        "schema_version": 1,
+        "package_type": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE,
+        "status": "passed",
+        "summary": {"zip_sha256": _v120_sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": "handoff-manifest-hash"},
+        "checks": [],
+        "blockers": [],
+    }
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    report_path = base / "handoff-verification-report.json"
+    write_json(report_path, report)
+    return zip_path, report_path, binding_path
+
+
+def _v120_fake_handoff_verifier(zip_path: Path | str, **_: object) -> dict[str, object]:
+    path = Path(zip_path)
+    report = {
+        "schema_version": 1,
+        "package_type": "musicforge_unified_command_center_release_train_handoff_verification",
+        "status": "passed",
+        "summary": {"zip_sha256": _v120_sha256_path(path), "zip_size_bytes": path.stat().st_size, "manifest_hash": "handoff-manifest-hash"},
+        "checks": [],
+        "blockers": [],
+    }
+    report["integrity_hash"] = stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
+    return report
+
+
+def _v120_sha256_path(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _v120_add_declared_program_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Unified Release Program extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": hashlib.sha256(entries[extra_name]).hexdigest()})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v120_full_resign_program_signer(entries: dict[str, bytes]) -> dict[str, bytes]:
+    signoff = json.loads(entries["program-signoff.json"].decode("utf-8"))
+    signoff["signed_by"] = "forged program signer"
+    signoff["role"] = "forged_program_role"
+    signoff["reason"] = "forged program reason"
+    signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
+    signoff["integrity_hash"] = stable_hash({key: value for key, value in signoff.items() if key != "integrity_hash"})
+    entries["program-signoff.json"] = json.dumps(signoff, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    history_rows = []
+    previous = ""
+    signoff_event = None
+    for line in entries["program-history.jsonl"].decode("utf-8").splitlines():
+        event = json.loads(line)
+        if event.get("event_type") == "unified_release_program_signoff_created":
+            event["signed_by"] = signoff["signed_by"]
+            event["role"] = signoff["role"]
+            event["signoff_hash"] = signoff["integrity_hash"]
+            event["program_report_hash"] = signoff.get("program_report_hash")
+            signoff_event = event
+        event["previous_event_hash"] = previous
+        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
+        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        previous = event["event_hash"]
+        history_rows.append(event)
+    entries["program-history.jsonl"] = ("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in history_rows) + "\n").encode("utf-8")
+
+    binding = json.loads(entries["program-signoff-binding-summary.json"].decode("utf-8"))
+    binding["signed_by"] = signoff["signed_by"]
+    binding["role"] = signoff["role"]
+    binding["reason"] = signoff["reason"]
+    binding["signoff_hash"] = signoff["integrity_hash"]
+    if signoff_event:
+        binding["latest_history_event_hash"] = signoff_event["event_hash"]
+    binding["integrity_hash"] = stable_hash({key: value for key, value in binding.items() if key != "integrity_hash"})
+    entries["program-signoff-binding-summary.json"] = json.dumps(binding, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest.setdefault("source", {})["program_signoff_hash"] = signoff["integrity_hash"]
+    manifest.setdefault("source", {})["program_signoff_binding_hash"] = binding["integrity_hash"]
+    _v74_sync_manifest_file(manifest, "program-signoff.json", entries["program-signoff.json"])
+    _v74_sync_manifest_file(manifest, "program-signoff-binding-summary.json", entries["program-signoff-binding-summary.json"])
+    _v74_sync_manifest_file(manifest, "program-history.jsonl", entries["program-history.jsonl"])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
 def _v116_fake_external_evidence(base: Path, item_id: str, center_id: str, evidence_type: str, package_type: str) -> tuple[Path, Path]:
     evidence_dir = base / "external-evidence" / evidence_type
     evidence_dir.mkdir(parents=True, exist_ok=True)

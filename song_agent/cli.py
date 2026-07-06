@@ -65,7 +65,7 @@ def build_doctor_parser() -> argparse.ArgumentParser:
 
 def build_release_check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
-    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "ga", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "ga", "publish"], help="Release-check profile to run.")
     parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
     parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
     parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")
@@ -1836,6 +1836,67 @@ def build_verify_unified_command_center_release_train_handoff_parser() -> argpar
     _add_unified_command_center_release_train_handoff_args(parser)
     parser.add_argument("--handoff-signoff-binding", type=Path, default=None)
     parser.add_argument("--accepted-evidence-dir", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def build_unified_release_program_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Board.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    create = subparsers.add_parser("create", help="Create a Unified Release Program.")
+    create.add_argument("--program-id", default=None)
+    create.add_argument("--name", default="Unified Release Program")
+    create.add_argument("--require-external-handoff-acceptance", action="store_true")
+    add = subparsers.add_parser("add-train", help="Add a Release Train Handoff item.")
+    add.add_argument("program_id")
+    add.add_argument("--item-id", required=True)
+    add.add_argument("--train-id", required=True)
+    add.add_argument("--handoff-id", required=True)
+    add.add_argument("--type", default="required", choices=["required", "optional", "advisory", "deferred"])
+    add.add_argument("--lane", default="release")
+    add.add_argument("--wave", default="wave-1")
+    add.add_argument("--depends-on", action="append", default=[])
+    add.add_argument("--handoff-zip", type=Path, default=None)
+    add.add_argument("--handoff-verification-report", type=Path, default=None)
+    add.add_argument("--handoff-signoff-binding", type=Path, default=None)
+    add.add_argument("--accepted-evidence-dir", type=Path, default=None)
+    for action in ("status", "refresh", "export", "zip", "verify", "signoff", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Unified Release Program.")
+        if action != "gate":
+            cmd.add_argument("program_id")
+        if action in {"refresh", "verify", "signoff"}:
+            cmd.add_argument("--external-evidence-manifest", type=Path, default=None)
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-current", action="store_true")
+            cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--program-signoff-binding", type=Path, default=None)
+            cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "signoff":
+            cmd.add_argument("--signed-by", default="program-owner")
+            cmd.add_argument("--role", default="release_owner")
+            cmd.add_argument("--reason", default="Unified Release Program ready.")
+        if action == "gate":
+            cmd.add_argument("--program-zip", type=Path, required=True)
+            cmd.add_argument("--program-verification-report", type=Path, required=True)
+            cmd.add_argument("--external-evidence-manifest", type=Path, required=True)
+            cmd.add_argument("--program-signoff-binding", type=Path, required=True)
+    return parser
+
+
+def build_verify_unified_release_program_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--external-evidence-manifest", type=Path, default=None)
+    parser.add_argument("--program-signoff-binding", type=Path, default=None)
     parser.add_argument("--max-zip-size-mb", type=int, default=128)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
@@ -5558,6 +5619,71 @@ def _run_unified_command_center_release_train_handoff_command(args: argparse.Nam
     raise ValueError("Unsupported unified-command-center-release-train-handoff command.")
 
 
+def _run_unified_release_program_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_verifier import write_unified_release_program_verification_report
+
+    store = UnifiedReleaseProgramStore()
+    if args.action == "create":
+        policy = {}
+        if getattr(args, "require_external_handoff_acceptance", False):
+            policy["require_external_handoff_acceptance"] = True
+        return {"program": store.create_program({"program_id": args.program_id, "name": args.name, "policy": policy})}
+    if args.action == "add-train":
+        return {
+            "item": store.add_train_item(
+                args.program_id,
+                {
+                    "item_id": args.item_id,
+                    "train_id": args.train_id,
+                    "handoff_id": args.handoff_id,
+                    "type": args.type,
+                    "lane": args.lane,
+                    "wave": args.wave,
+                    "depends_on": args.depends_on,
+                    "handoff_zip": args.handoff_zip,
+                    "handoff_verification_report": args.handoff_verification_report,
+                    "handoff_signoff_binding": args.handoff_signoff_binding,
+                    "accepted_evidence_dir": args.accepted_evidence_dir,
+                },
+            )
+        }
+    if args.action == "status":
+        return store.get_program(args.program_id)
+    if args.action == "refresh":
+        return {"report": store.refresh_report(args.program_id, {"external_evidence_manifest": args.external_evidence_manifest})}
+    if args.action == "export":
+        return {"manifest": store.export_program(args.program_id)}
+    if args.action == "zip":
+        return {"zip": store.build_zip(args.program_id)}
+    if args.action == "verify":
+        report = store.verify_package(
+            args.program_id,
+            {
+                "strict": args.strict,
+                "require_current": args.require_current,
+                "require_signed": args.require_signed,
+                "external_evidence_manifest": args.external_evidence_manifest,
+                "program_signoff_binding": args.program_signoff_binding,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_verification_report(report, args.report_out)
+        return {"verification": report, "status": report.get("status"), "summary": report.get("summary", {})}
+    if args.action == "signoff":
+        return {"signoff": store.signoff(args.program_id, {"external_evidence_manifest": args.external_evidence_manifest, "signed_by": args.signed_by, "role": args.role, "reason": args.reason})}
+    if args.action == "gate":
+        return {
+            "gate": store.gate(
+                program_zip_path=args.program_zip,
+                verification_report_path=args.program_verification_report,
+                external_evidence_manifest_path=args.external_evidence_manifest,
+                program_signoff_binding_path=args.program_signoff_binding,
+            )
+        }
+    raise ValueError("Unsupported unified-release-program command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -6135,6 +6261,16 @@ def _main() -> None:
         parser = build_unified_command_center_release_train_handoff_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_command_center_release_train_handoff_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program":
+        parser = build_unified_release_program_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -6731,6 +6867,36 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_command_center_release_train_handoff_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-package":
+        from song_agent.unified_release_program_verifier import (
+            unified_release_program_verification_exit_code,
+            verify_unified_release_program_package,
+            write_unified_release_program_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_signed=args.require_signed,
+            external_evidence_manifest_path=args.external_evidence_manifest,
+            program_signoff_binding_path=args.program_signoff_binding,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

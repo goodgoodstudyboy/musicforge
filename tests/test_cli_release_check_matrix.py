@@ -100,6 +100,16 @@ def test_release_check_cli_v11_profile_lists_unified_command_center() -> None:
     ]
 
 
+def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
+    completed = _run_cli(["release-check", "--profile", "v12", "--list", "--json"])
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert [item["check_id"] for item in payload["checks"]] == [
+        "v120.unified_release_program_board_smoke",
+    ]
+
+
 def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
     completed = _run_cli(["release-check", "--profile", "v9", "--list", "--json"])
 

@@ -100,6 +100,7 @@ from song_agent.release_checks import (
     _v117_unified_command_center_release_train_change_control_smoke,
     _v118_unified_command_center_release_train_lifecycle_smoke,
     _v119_unified_command_center_release_train_handoff_smoke,
+    _v120_unified_release_program_board_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1369,6 +1370,7 @@ def test_v116_unified_command_center_release_train_smoke(tmp_path: Path) -> None
     assert "missing_external=failed" in detail
     assert "declared_extra=failed" in detail
     assert "signoff_full_resign_signed_by=failed" in detail
+    assert "deferred_only=blocked/409" in detail
     assert "stale_external=failed" in detail
     assert "delete_signoff=409" in detail
 
@@ -1402,6 +1404,18 @@ def test_v119_unified_command_center_release_train_handoff_smoke(tmp_path: Path)
     assert "declared_extra=failed" in detail
     assert "full_resign_signed_by=failed" in detail
     assert "role_forge=True/True/failed" in detail
+
+
+def test_v120_unified_release_program_board_smoke(tmp_path: Path) -> None:
+    ok, detail = _v120_unified_release_program_board_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "program=ready" in detail
+    assert "signoff=signed" in detail
+    assert "verify=passed" in detail
+    assert "missing_binding=failed" in detail
+    assert "declared_extra=failed" in detail
+    assert "signoff_full_resign_signed_by=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:
