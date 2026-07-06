@@ -108,6 +108,7 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
     assert [item["check_id"] for item in payload["checks"]] == [
         "v120.unified_release_program_board_smoke",
         "v121.unified_release_program_operations_smoke",
+        "v122.unified_release_program_final_handoff_smoke",
     ]
 
 

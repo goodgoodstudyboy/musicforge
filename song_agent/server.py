@@ -657,6 +657,12 @@ from song_agent.unified_release_program_operations import (
     UnifiedReleaseProgramOperationsStateError,
     UnifiedReleaseProgramOperationsStore,
 )
+from song_agent.unified_release_program_handoff import (
+    UnifiedReleaseProgramHandoffError,
+    UnifiedReleaseProgramHandoffNotFoundError,
+    UnifiedReleaseProgramHandoffStateError,
+    UnifiedReleaseProgramHandoffStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3364,6 +3370,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_release_program_operations_store(self) -> UnifiedReleaseProgramOperationsStore:
         return self.server.unified_release_program_operations_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_release_program_handoff_store(self) -> UnifiedReleaseProgramHandoffStore:
+        return self.server.unified_release_program_handoff_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -11482,6 +11492,125 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 )
                 self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
                 return
+            if tail == "/handoff":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                detail = self.unified_release_program_handoff_store.get_handoff(program_id)
+                report = detail.get("report") or {}
+                self._send_json({"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/handoff/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_handoff_store.refresh_handoff(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") in {"ready_for_review", "ready_for_signoff"}, "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/handoff/review-pack":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                pack = self.unified_release_program_handoff_store.export_review_pack(program_id, self._optional_json_body())
+                self._send_json({"ok": pack.get("status") == "ready", "review_pack": pack, "summary": {"review_pack_id": pack.get("review_pack_id")}, "status": pack.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail.startswith("/handoff/review-packs/") and tail.endswith("/zip"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review_pack_id = tail.split("/")[3]
+                result = self.unified_release_program_handoff_store.build_review_pack_zip(program_id, review_pack_id)
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail.startswith("/handoff/review-packs/") and tail.endswith("/verify"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                review_pack_id = tail.split("/")[3]
+                report = self.unified_release_program_handoff_store.verify_review_pack_zip(program_id, review_pack_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/handoff/responses/import":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                response = self.unified_release_program_handoff_store.import_response(program_id, self._read_json_body())
+                self._send_json({"ok": response.get("status") in {"accepted", "accepted_with_notes"}, "response": response.get("response"), "verification": response.get("verification"), "summary": {"response_id": response.get("response", {}).get("response_id")}, "status": response.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail.startswith("/handoff/responses/") and tail.endswith("/accepted-evidence"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                response_id = tail.split("/")[3]
+                result = self.unified_release_program_handoff_store.create_accepted_evidence(program_id, response_id)
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"evidence_id": result.get("evidence", {}).get("evidence_id")}}, status=HTTPStatus.CREATED)
+                return
+            if tail.startswith("/handoff/accepted-evidence/") and tail.endswith("/zip"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                evidence_id = tail.split("/")[3]
+                result = self.unified_release_program_handoff_store.build_accepted_evidence_zip(program_id, evidence_id)
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail.startswith("/handoff/accepted-evidence/") and tail.endswith("/verify"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                evidence_id = tail.split("/")[3]
+                report = self.unified_release_program_handoff_store.verify_accepted_evidence_zip(program_id, evidence_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/handoff/decision-board/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                board = self.unified_release_program_handoff_store.refresh_decision_board(program_id, self._optional_json_body())
+                self._send_json({"ok": board.get("status") == "ready_for_signoff", "decision_board": board, "summary": board.get("readiness", {}), "status": board.get("status")})
+                return
+            if tail == "/handoff/signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                signoff = self.unified_release_program_handoff_store.signoff_handoff(program_id, self._optional_json_body())
+                self._send_json({"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/handoff/archive/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.unified_release_program_handoff_store.export_handoff_archive(program_id, self._optional_json_body())
+                self._send_json({"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"})
+                return
+            if tail == "/handoff/archive/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_release_program_handoff_store.build_handoff_archive_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
+                return
+            if tail == "/handoff/archive/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_handoff_store.verify_handoff_archive_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/handoff/gate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                gate = self.unified_release_program_handoff_store.gate(
+                    program_id,
+                    required=True,
+                    handoff_archive_zip_path=payload.get("handoff_archive_zip"),
+                    handoff_archive_verification_report_path=payload.get("handoff_archive_verification_report"),
+                    external_evidence_manifest=payload.get("external_evidence_manifest"),
+                    handoff_signoff_binding=payload.get("handoff_signoff_binding"),
+                )
+                self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
+                return
             if tail == "/operations/change-requests":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11561,6 +11690,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 self._send_file(self.unified_release_program_store.zip_path(program_id), "application/zip", filename="musicforge-unified-release-program.zip")
                 return
             self._send_error(HTTPStatus.NOT_FOUND, "Unified Release Program route not found.")
+        except UnifiedReleaseProgramHandoffNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedReleaseProgramHandoffStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedReleaseProgramHandoffError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedReleaseProgramOperationsNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedReleaseProgramOperationsStateError as exc:
@@ -20881,6 +21016,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_release_train_handoff_store = UnifiedCommandCenterReleaseTrainHandoffStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store, self.unified_command_center_release_train_lifecycle_store)
         self.unified_release_program_store = UnifiedReleaseProgramStore(release_store=self.release_store)
         self.unified_release_program_operations_store = UnifiedReleaseProgramOperationsStore(self.unified_release_program_store)
+        self.unified_release_program_handoff_store = UnifiedReleaseProgramHandoffStore(self.unified_release_program_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

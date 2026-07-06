@@ -88,6 +88,15 @@ fixed-layout Operations Archive ZIP. Use
 `python -m song_agent.cli verify-unified-release-program-operations-package --help`
 for the local commands.
 
+v12.2 adds the Program Final Handoff Board. It creates a review pack, imports
+explicitly bound external review responses, turns accepted responses into
+accepted evidence, evaluates reviewer quorum, signs an immutable Program
+Handoff Archive, and verifies it with external Program, Operations, accepted
+evidence, and signoff binding proofs. Use
+`python -m song_agent.cli unified-release-program-handoff --help` and
+`python -m song_agent.cli verify-unified-release-program-handoff-package --help`
+for the local commands.
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

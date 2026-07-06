@@ -1,5 +1,21 @@
 # Changelog
 
+## v12.2.0 - 2026-07-06
+
+### Added
+- Unified Release Program Final Handoff Board with review-pack export, explicit-bound external response import, accepted evidence packages, reviewer quorum decision board, signed immutable Program Handoff Archive ZIP, and offline verifier.
+- CLI and HTTP API endpoints for Program Handoff refresh, review-pack export/ZIP/verify, response import, accepted evidence ZIP/verify, decision board refresh, handoff signoff, archive export/ZIP/verify, and standalone `verify-unified-release-program-handoff-package`.
+- release-check `v122.unified_release_program_final_handoff_smoke` covering Program/Operations external evidence binding, accepted evidence quorum, declared-extra ZIP rejection, signoff full-resign rejection, and signed mutation blocking.
+
+### Fixed
+- Program Handoff Archive no longer stores local runtime evidence paths in its public external evidence manifest; runtime paths stay in the local verifier manifest while the archive carries a public fingerprint projection.
+- Handoff verifier now derives accepted roles from external accepted evidence runtime proof instead of trusting package-internal quorum summaries.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_handoff.py tests\test_release_check.py::test_v122_unified_release_program_final_handoff_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json`
+
 ## v12.1.0 - 2026-07-06
 
 ### Added

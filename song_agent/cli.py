@@ -1988,6 +1988,106 @@ def build_verify_unified_release_program_operations_parser() -> argparse.Argumen
     return parser
 
 
+def build_unified_release_program_handoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Final Handoff Board.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    def add_program_arg(cmd: argparse.ArgumentParser) -> None:
+        cmd.add_argument("program_id")
+
+    def add_external_args(cmd: argparse.ArgumentParser) -> None:
+        cmd.add_argument("--external-evidence-manifest", type=Path, default=None)
+
+    for action in ("status", "refresh"):
+        cmd = subparsers.add_parser(action, help=f"{action} Program Handoff.")
+        add_program_arg(cmd)
+        if action == "refresh":
+            add_external_args(cmd)
+
+    review_pack = subparsers.add_parser("review-pack", help="Export a Program Handoff review pack.")
+    add_program_arg(review_pack)
+    review_pack.add_argument("--review-pack-id", default=None)
+    review_pack.add_argument("--audience", default="release_owner")
+
+    review_pack_zip = subparsers.add_parser("review-pack-zip", help="Build a Program Handoff review pack ZIP.")
+    add_program_arg(review_pack_zip)
+    review_pack_zip.add_argument("review_pack_id")
+
+    review_pack_verify = subparsers.add_parser("review-pack-verify", help="Verify a Program Handoff review pack ZIP.")
+    add_program_arg(review_pack_verify)
+    review_pack_verify.add_argument("review_pack_id")
+    review_pack_verify.add_argument("--strict", action="store_true")
+    review_pack_verify.add_argument("--report-out", type=Path, default=None)
+
+    import_response = subparsers.add_parser("import-response", help="Import an external Program Handoff review response JSON.")
+    add_program_arg(import_response)
+    import_response.add_argument("response_json", type=Path)
+
+    accepted = subparsers.add_parser("accepted-evidence", help="Create accepted evidence from an accepted response.")
+    add_program_arg(accepted)
+    accepted.add_argument("response_id")
+
+    accepted_zip = subparsers.add_parser("accepted-evidence-zip", help="Build an accepted evidence ZIP.")
+    add_program_arg(accepted_zip)
+    accepted_zip.add_argument("evidence_id")
+
+    accepted_verify = subparsers.add_parser("accepted-evidence-verify", help="Verify an accepted evidence ZIP.")
+    add_program_arg(accepted_verify)
+    accepted_verify.add_argument("evidence_id")
+    accepted_verify.add_argument("--strict", action="store_true")
+    accepted_verify.add_argument("--require-accepted", action="store_true")
+    accepted_verify.add_argument("--response-verification-report", type=Path, default=None)
+    accepted_verify.add_argument("--response-binding-summary", type=Path, default=None)
+    accepted_verify.add_argument("--report-out", type=Path, default=None)
+
+    board = subparsers.add_parser("decision-board", help="Refresh the Program Handoff decision board.")
+    add_program_arg(board)
+    board.add_argument("--required-role", dest="required_roles", action="append", default=None)
+    board.add_argument("--minimum-acceptances", type=int, default=None)
+    board.add_argument("--minimum-organizations", type=int, default=None)
+
+    signoff = subparsers.add_parser("signoff", help="Sign off the Program Handoff.")
+    add_program_arg(signoff)
+    signoff.add_argument("--signed-by", default="program-handoff-chair")
+    signoff.add_argument("--role", default="release_owner")
+    signoff.add_argument("--reason", default="Unified Release Program final handoff accepted.")
+
+    for action in ("archive-export", "archive-zip", "archive-verify", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Program Handoff Archive.")
+        add_program_arg(cmd)
+        if action in {"archive-verify", "gate"}:
+            add_external_args(cmd)
+            cmd.add_argument("--handoff-signoff-binding", type=Path, default=None)
+        if action == "archive-verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-current", action="store_true")
+            cmd.add_argument("--require-accepted", action="store_true")
+            cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "gate":
+            cmd.add_argument("--handoff-archive-zip", type=Path, default=None)
+            cmd.add_argument("--handoff-archive-verification-report", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_handoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program Final Handoff Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current", action="store_true")
+    parser.add_argument("--require-accepted", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--external-evidence-manifest", type=Path, default=None)
+    parser.add_argument("--handoff-signoff-binding", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
 def _add_unified_command_center_release_train_handoff_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--external-evidence-manifest", type=Path, default=None)
     parser.add_argument("--train-archive", type=Path, default=None)
@@ -5846,6 +5946,106 @@ def _unified_release_program_operations_payload_from_args(args: argparse.Namespa
     return payload
 
 
+def _run_unified_release_program_handoff_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.projectio import read_json
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore
+    from song_agent.unified_release_program_handoff_verifier import (
+        write_unified_release_program_accepted_evidence_verification_report,
+        write_unified_release_program_handoff_verification_report,
+        write_unified_release_program_review_pack_verification_report,
+    )
+
+    store = UnifiedReleaseProgramHandoffStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    if args.action == "status":
+        detail = store.get_handoff(program_id)
+        status = (detail.get("report") or {}).get("status") or "unknown"
+        return {"ok": True, **detail, "summary": (detail.get("report") or {}).get("summary", {}), "status": status}
+    if args.action == "refresh":
+        report = store.refresh_handoff(program_id, {"external_evidence_manifest": args.external_evidence_manifest})
+        return {"ok": report.get("status") in {"ready_for_review", "ready_for_signoff"}, "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "review-pack":
+        pack = store.export_review_pack(program_id, {"review_pack_id": args.review_pack_id, "audience": args.audience})
+        return {"ok": pack.get("status") == "ready", "review_pack": pack, "summary": {"review_pack_id": pack.get("review_pack_id")}, "status": pack.get("status")}
+    if args.action == "review-pack-zip":
+        result = store.build_review_pack_zip(program_id, args.review_pack_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "review-pack-verify":
+        report = store.verify_review_pack_zip(program_id, args.review_pack_id, {"strict": args.strict})
+        if args.report_out is not None:
+            write_unified_release_program_review_pack_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "import-response":
+        response = store.import_response(program_id, read_json(args.response_json))
+        return {"ok": response.get("status") in {"accepted", "accepted_with_notes"}, "response": response.get("response"), "verification": response.get("verification"), "summary": {"response_id": response.get("response", {}).get("response_id")}, "status": response.get("status")}
+    if args.action == "accepted-evidence":
+        result = store.create_accepted_evidence(program_id, args.response_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"evidence_id": result.get("evidence", {}).get("evidence_id")}}
+    if args.action == "accepted-evidence-zip":
+        result = store.build_accepted_evidence_zip(program_id, args.evidence_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "accepted-evidence-verify":
+        report = store.verify_accepted_evidence_zip(
+            program_id,
+            args.evidence_id,
+            {
+                "strict": args.strict,
+                "require_accepted": args.require_accepted,
+                "response_verification_report": args.response_verification_report,
+                "response_binding_summary": args.response_binding_summary,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_accepted_evidence_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "decision-board":
+        policy: dict[str, Any] = {}
+        if args.required_roles is not None:
+            policy["required_roles"] = args.required_roles
+        if args.minimum_acceptances is not None:
+            policy["minimum_acceptances"] = args.minimum_acceptances
+        if args.minimum_organizations is not None:
+            policy["minimum_organizations"] = args.minimum_organizations
+        board = store.refresh_decision_board(program_id, {"policy": policy} if policy else {})
+        return {"ok": board.get("status") == "ready_for_signoff", "decision_board": board, "summary": board.get("readiness", {}), "status": board.get("status")}
+    if args.action == "signoff":
+        signoff = store.signoff_handoff(program_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}
+    if args.action == "archive-export":
+        manifest = store.export_handoff_archive(program_id)
+        return {"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"}
+    if args.action == "archive-zip":
+        result = store.build_handoff_archive_zip(program_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "archive-verify":
+        report = store.verify_handoff_archive_zip(
+            program_id,
+            {
+                "strict": args.strict,
+                "require_current": args.require_current,
+                "require_accepted": args.require_accepted,
+                "require_signed": args.require_signed,
+                "external_evidence_manifest": args.external_evidence_manifest,
+                "handoff_signoff_binding": args.handoff_signoff_binding,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_handoff_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            handoff_archive_zip_path=args.handoff_archive_zip,
+            handoff_archive_verification_report_path=args.handoff_archive_verification_report,
+            external_evidence_manifest=args.external_evidence_manifest,
+            handoff_signoff_binding=args.handoff_signoff_binding,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
+    raise ValueError("Unsupported unified-release-program-handoff command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -6443,6 +6643,16 @@ def _main() -> None:
         parser = build_unified_release_program_operations_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_operations_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-handoff":
+        parser = build_unified_release_program_handoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_handoff_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -7103,6 +7313,37 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_operations_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-handoff-package":
+        from song_agent.unified_release_program_handoff_verifier import (
+            unified_release_program_handoff_verification_exit_code,
+            verify_unified_release_program_handoff_package,
+            write_unified_release_program_handoff_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_handoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_handoff_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_accepted=args.require_accepted,
+            require_signed=args.require_signed,
+            external_evidence_manifest_path=args.external_evidence_manifest,
+            handoff_signoff_binding_path=args.handoff_signoff_binding,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_handoff_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program Handoff verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_handoff_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 
