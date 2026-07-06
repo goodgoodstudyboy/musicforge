@@ -1903,6 +1903,91 @@ def build_verify_unified_release_program_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_unified_release_program_operations_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Operations Center.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    def add_program_arg(cmd: argparse.ArgumentParser) -> None:
+        cmd.add_argument("program_id")
+
+    def add_current_args(cmd: argparse.ArgumentParser) -> None:
+        cmd.add_argument("--program-zip", type=Path, default=None)
+        cmd.add_argument("--program-verification-report", type=Path, default=None)
+        cmd.add_argument("--program-signoff-binding", type=Path, default=None)
+        cmd.add_argument("--external-evidence-manifest", type=Path, default=None)
+
+    create_cr = subparsers.add_parser("change-request-create", help="Create a Program Change Request.")
+    add_program_arg(create_cr)
+    add_current_args(create_cr)
+    create_cr.add_argument("--change-request-id", default=None)
+    create_cr.add_argument("--change-type", default="reset_signoff")
+    create_cr.add_argument("--reason", default="Program evidence changed after signoff.")
+    create_cr.add_argument("--requested-by", default="program-operator")
+    create_cr.add_argument("--allowed-action", dest="allowed_actions", action="append", default=None)
+
+    approve_cr = subparsers.add_parser("change-request-approve", help="Approve a Program Change Request.")
+    add_program_arg(approve_cr)
+    add_current_args(approve_cr)
+    approve_cr.add_argument("change_request_id")
+    approve_cr.add_argument("--approved-by", default="program-owner")
+    approve_cr.add_argument("--role", default="program_owner")
+    approve_cr.add_argument("--reason", default="Approved Program reset.")
+
+    reset = subparsers.add_parser("reset-signoff", help="Reset Program signoff with an approved Change Request.")
+    add_program_arg(reset)
+    add_current_args(reset)
+    reset.add_argument("--change-request-id", required=True)
+    reset.add_argument("--reset-by", default="program-owner")
+    reset.add_argument("--reason", default="Approved Program reset.")
+
+    runbook_create = subparsers.add_parser("runbook-create", help="Create a Program Operations runbook.")
+    add_program_arg(runbook_create)
+
+    runbook_run = subparsers.add_parser("runbook-run-safe", help="Run safe Program Operations actions.")
+    add_program_arg(runbook_run)
+    add_current_args(runbook_run)
+    runbook_run.add_argument("runbook_id")
+
+    for action in ("continuous-review-refresh", "lifecycle-refresh", "archive-export", "archive-zip", "archive-verify", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Program Operations.")
+        if action != "gate":
+            add_program_arg(cmd)
+        add_current_args(cmd)
+        if action == "archive-verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-current", action="store_true")
+            cmd.add_argument("--require-signed-program", action="store_true")
+            cmd.add_argument("--require-continuous-review-clear", action="store_true")
+            cmd.add_argument("--require-lifecycle-audit", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "gate":
+            cmd.add_argument("--program-id", required=True)
+            cmd.add_argument("--operations-archive-zip", type=Path, required=True)
+            cmd.add_argument("--operations-archive-verification-report", type=Path, required=True)
+    return parser
+
+
+def build_verify_unified_release_program_operations_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program Operations Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current", action="store_true")
+    parser.add_argument("--require-signed-program", action="store_true")
+    parser.add_argument("--require-continuous-review-clear", action="store_true")
+    parser.add_argument("--require-lifecycle-audit", action="store_true")
+    parser.add_argument("--program-zip", type=Path, default=None)
+    parser.add_argument("--program-verification-report", type=Path, default=None)
+    parser.add_argument("--program-signoff-binding", type=Path, default=None)
+    parser.add_argument("--external-evidence-manifest", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=128)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
 def _add_unified_command_center_release_train_handoff_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--external-evidence-manifest", type=Path, default=None)
     parser.add_argument("--train-archive", type=Path, default=None)
@@ -5684,6 +5769,83 @@ def _run_unified_release_program_command(args: argparse.Namespace) -> dict[str, 
     raise ValueError("Unsupported unified-release-program command.")
 
 
+def _run_unified_release_program_operations_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
+    from song_agent.unified_release_program_operations_verifier import write_unified_release_program_operations_verification_report
+
+    program_store = UnifiedReleaseProgramStore()
+    store = UnifiedReleaseProgramOperationsStore(program_store)
+    payload = _unified_release_program_operations_payload_from_args(args)
+    program_id = getattr(args, "program_id", None)
+    if args.action == "change-request-create":
+        request = store.create_change_request(program_id, payload)
+        return {"ok": True, "change_request": request, "summary": {"change_request_id": request.get("change_request_id")}, "status": request.get("status")}
+    if args.action == "change-request-approve":
+        approval = store.approve_change_request(program_id, args.change_request_id, payload)
+        return {"ok": True, "approval": approval, "summary": {"change_request_id": approval.get("change_request_id")}, "status": approval.get("status")}
+    if args.action == "reset-signoff":
+        proof = store.reset_program_signoff(program_id, payload)
+        return {"ok": proof.get("status") == "applied", "reset_proof": proof, "summary": {"reset_event_hash": proof.get("reset_event_hash")}, "status": proof.get("status")}
+    if args.action == "runbook-create":
+        runbook = store.create_runbook(program_id, payload)
+        return {"ok": True, "runbook": runbook, "summary": runbook.get("summary", {}), "status": runbook.get("status")}
+    if args.action == "runbook-run-safe":
+        result = store.run_safe(program_id, args.runbook_id, payload)
+        return {"ok": result.get("status") in {"completed", "completed_with_manual_actions"}, **result}
+    if args.action == "continuous-review-refresh":
+        review = store.refresh_continuous_review(program_id, payload)
+        return {"ok": review.get("status") == "passed", "review": review, "summary": review.get("summary", {}), "status": review.get("status")}
+    if args.action == "lifecycle-refresh":
+        report = store.refresh_lifecycle_audit(program_id, payload)
+        return {"ok": report.get("status") == "passed", "lifecycle": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "archive-export":
+        manifest = store.export_operations_archive(program_id, payload)
+        return {"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"}
+    if args.action == "archive-zip":
+        result = store.build_operations_archive_zip(program_id, payload)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+    if args.action == "archive-verify":
+        report = store.verify_operations_archive_zip(
+            program_id,
+            {
+                **payload,
+                "strict": args.strict,
+                "require_current": args.require_current,
+                "require_signed_program": args.require_signed_program,
+                "require_continuous_review_clear": args.require_continuous_review_clear,
+                "require_lifecycle_audit": args.require_lifecycle_audit,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_operations_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "gate":
+        gate = store.gate(
+            args.program_id,
+            required=True,
+            operations_archive_zip_path=args.operations_archive_zip,
+            operations_archive_verification_report_path=args.operations_archive_verification_report,
+            **payload,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
+    raise ValueError("Unsupported unified-release-program-operations command.")
+
+
+def _unified_release_program_operations_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "program_zip": getattr(args, "program_zip", None),
+        "program_verification_report": getattr(args, "program_verification_report", None),
+        "program_signoff_binding": getattr(args, "program_signoff_binding", None),
+        "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
+    }
+    for name in ("change_request_id", "change_type", "reason", "requested_by", "approved_by", "role", "reset_by", "allowed_actions"):
+        value = getattr(args, name, None)
+        if value is not None:
+            payload[name] = value
+    return payload
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -6271,6 +6433,16 @@ def _main() -> None:
         parser = build_unified_release_program_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-operations":
+        parser = build_unified_release_program_operations_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_operations_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -6897,6 +7069,40 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-operations-package":
+        from song_agent.unified_release_program_operations_verifier import (
+            unified_release_program_operations_verification_exit_code,
+            verify_unified_release_program_operations_package,
+            write_unified_release_program_operations_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_operations_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_operations_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current=args.require_current,
+            require_signed_program=args.require_signed_program,
+            require_continuous_review_clear=args.require_continuous_review_clear,
+            require_lifecycle_audit=args.require_lifecycle_audit,
+            program_zip_path=args.program_zip,
+            program_verification_report_path=args.program_verification_report,
+            program_signoff_binding_path=args.program_signoff_binding,
+            external_evidence_manifest_path=args.external_evidence_manifest,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_operations_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program Operations verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_operations_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

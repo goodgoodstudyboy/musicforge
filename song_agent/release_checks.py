@@ -20069,6 +20069,146 @@ def _v120_unified_release_program_board_smoke(root: Path) -> tuple[bool, str]:
         program_verifier_module.verify_unified_command_center_release_train_handoff_package = original_package_verifier
 
 
+def _v121_unified_release_program_operations_smoke(root: Path) -> tuple[bool, str]:
+    import tempfile
+
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
+    from song_agent.unified_release_program_operations import UnifiedReleaseProgramOperationsStateError, UnifiedReleaseProgramOperationsStore
+    from song_agent.unified_release_program_operations_verifier import verify_unified_release_program_operations_package
+    import song_agent.unified_release_program as program_module
+    import song_agent.unified_release_program_verifier as program_verifier_module
+
+    del root
+    original_store_verifier = program_module.verify_unified_command_center_release_train_handoff_package
+    original_package_verifier = program_verifier_module.verify_unified_command_center_release_train_handoff_package
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v121-unified-release-program-ops-") as temp:
+            base = Path(temp)
+            program_module.verify_unified_command_center_release_train_handoff_package = _v120_fake_handoff_verifier
+            program_verifier_module.verify_unified_command_center_release_train_handoff_package = _v120_fake_handoff_verifier
+            program_store = UnifiedReleaseProgramStore(root=base / ".musicforge" / "unified-release-programs")
+            ops_store = UnifiedReleaseProgramOperationsStore(program_store)
+            handoff_zip, handoff_report, handoff_binding = _v120_fake_handoff_evidence(base)
+            program = program_store.create_program({"program_id": "urp-ops-smoke", "name": "Unified Release Program Operations smoke"})
+            item = program_store.add_train_item(
+                program["program_id"],
+                {
+                    "item_id": "train-a",
+                    "train_id": "uct-smoke",
+                    "handoff_id": "rth-smoke",
+                    "type": "required",
+                    "lane": "release",
+                    "handoff_zip": handoff_zip,
+                    "handoff_verification_report": handoff_report,
+                    "handoff_signoff_binding": handoff_binding,
+                },
+            )
+            manifest_path = base / "program-external-evidence.json"
+            write_external_evidence_manifest(
+                manifest_path,
+                program_id=program["program_id"],
+                items=[
+                    {
+                        "item_id": item["item_id"],
+                        "train_id": item["train_id"],
+                        "handoff_id": item["handoff_id"],
+                        "handoff_zip": str(handoff_zip),
+                        "handoff_verification_report": str(handoff_report),
+                        "handoff_signoff_binding": str(handoff_binding),
+                    }
+                ],
+            )
+            payload = {
+                "external_evidence_manifest": manifest_path,
+                "program_zip": program_store.zip_path(program["program_id"]),
+                "program_verification_report": program_store.verification_report_path(program["program_id"]),
+                "program_signoff_binding": program_store.signoff_binding_path(program["program_id"]),
+            }
+            program_store.refresh_report(program["program_id"], {"external_evidence_manifest": manifest_path})
+            program_store.signoff(program["program_id"], {"external_evidence_manifest": manifest_path, "signed_by": "program owner", "role": "release_owner"})
+            program_store.build_zip(program["program_id"])
+            program_store.verify_package(program["program_id"], {"strict": True, "require_current": True, "require_signed": True, "external_evidence_manifest": manifest_path, "program_signoff_binding": program_store.signoff_binding_path(program["program_id"])})
+            review = ops_store.refresh_continuous_review(program["program_id"], payload)
+            lifecycle = ops_store.refresh_lifecycle_audit(program["program_id"], payload)
+            zipped = ops_store.build_operations_archive_zip(program["program_id"], payload)
+            verified = ops_store.verify_operations_archive_zip(program["program_id"], payload)
+            declared_extra_zip = base / "operations-declared-extra.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v121_add_declared_operations_extra)
+            declared_extra = verify_unified_release_program_operations_package(declared_extra_zip, strict=True)
+            bad_report_path = base / "wrong-program-verification-report.json"
+            bad_report = read_json(program_store.verification_report_path(program["program_id"]))
+            bad_report["package_type"] = "wrong_package_type"
+            bad_report["integrity_hash"] = stable_hash({key: value for key, value in bad_report.items() if key != "integrity_hash"})
+            write_json(bad_report_path, bad_report)
+            wrong_type = verify_unified_release_program_operations_package(
+                Path(zipped["zip_path"]),
+                strict=True,
+                require_current=True,
+                require_signed_program=True,
+                require_continuous_review_clear=True,
+                require_lifecycle_audit=True,
+                program_zip_path=program_store.zip_path(program["program_id"]),
+                program_verification_report_path=bad_report_path,
+                program_signoff_binding_path=program_store.signoff_binding_path(program["program_id"]),
+                external_evidence_manifest_path=manifest_path,
+            )
+            wrong_cr = ops_store.create_change_request(program["program_id"], {**payload, "change_request_id": "wrong-action", "allowed_actions": ["refresh_program_report"]})
+            ops_store.approve_change_request(program["program_id"], wrong_cr["change_request_id"], payload)
+            try:
+                ops_store.reset_program_signoff(program["program_id"], {**payload, "change_request_id": wrong_cr["change_request_id"]})
+                wrong_action_reset = "allowed"
+            except UnifiedReleaseProgramOperationsStateError:
+                wrong_action_reset = "409"
+            cr = ops_store.create_change_request(program["program_id"], payload)
+            approval = ops_store.approve_change_request(program["program_id"], cr["change_request_id"], payload)
+            reset = ops_store.reset_program_signoff(program["program_id"], {**payload, "change_request_id": cr["change_request_id"]})
+            try:
+                ops_store.build_operations_archive_zip(program["program_id"], payload)
+                reset_archive_zip = "passed"
+            except UnifiedReleaseProgramOperationsStateError:
+                reset_archive_zip = "409"
+            reset_gate = ops_store.gate(program["program_id"], required=True, operations_archive_zip_path=ops_store.archive_zip_path(program["program_id"]), operations_archive_verification_report_path=ops_store.archive_verification_report_path(program["program_id"]), **payload)
+            ok = (
+                review.get("status") == "passed"
+                and lifecycle.get("status") == "passed"
+                and verified.get("status") == "passed"
+                and _v38_check_status(declared_extra, "urp_ops_allowed_entries") == "failed"
+                and _v38_check_status(wrong_type, "urp_ops_current_program_verification_package_type") == "failed"
+                and wrong_action_reset == "409"
+                and approval.get("status") == "approved"
+                and reset.get("status") == "applied"
+                and reset_archive_zip == "409"
+                and reset_gate.get("status") == "failed"
+            )
+            return ok, (
+                f"review={review.get('status')}, lifecycle={lifecycle.get('status')}, archive={verified.get('status')}, "
+                f"declared_extra={_v38_check_status(declared_extra, 'urp_ops_allowed_entries')}, "
+                f"wrong_program_verification_type={_v38_check_status(wrong_type, 'urp_ops_current_program_verification_package_type')}, "
+                f"wrong_action_reset={wrong_action_reset}, reset={reset.get('status')}, reset_archive_zip={reset_archive_zip}, reset_gate={reset_gate.get('status')}"
+            )
+    except Exception as exc:
+        return False, f"v12.1 Unified Release Program Operations smoke failed: {exc}"
+    finally:
+        program_module.verify_unified_command_center_release_train_handoff_package = original_store_verifier
+        program_verifier_module.verify_unified_command_center_release_train_handoff_package = original_package_verifier
+
+
+def _v121_add_declared_operations_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra_name = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra_name] = b"Do not trust declared Unified Release Program Operations extra files.\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+    files.append({"path": extra_name, "size_bytes": len(entries[extra_name]), "sha256": _v121_sha256_bytes(entries[extra_name])})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v121_sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
 def _v120_fake_handoff_evidence(base: Path) -> tuple[Path, Path, Path]:
     from song_agent.unified_command_center_release_train_handoff_verifier import UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE
 

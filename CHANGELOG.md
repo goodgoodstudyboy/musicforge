@@ -1,5 +1,24 @@
 # Changelog
 
+## v12.1.0 - 2026-07-06
+
+### Added
+- Unified Release Program Operations Center with Program Change Requests, approved single-use signoff reset, Operations Runbook safe actions, Continuous Review drift checks, Lifecycle Audit, fixed-layout Operations Archive ZIP, and offline verifier.
+- CLI and HTTP API endpoints for Program Operations change-request create/approve, signoff reset, runbook create/run-safe, continuous review, lifecycle audit, archive export/ZIP/verify, and standalone `verify-unified-release-program-operations-package`.
+- release-check `v121.unified_release_program_operations_smoke` covering current Program verification, Operations Archive verification, declared-extra ZIP rejection, approved CR reset, and reset-state gate blocking.
+
+### Fixed
+- Unified Release Program signoff history now recognizes reset events, so deleted signoff files or reset states cannot be treated as currently signed by Store-level gates.
+- Program signoff reset now requires an approved Change Request with `change_type=reset_signoff` and `allowed_actions` containing `reset_program_signoff`, blocking refresh-only CR reset escalation.
+- Program Operations archive build and verifier now reject stale or wrong-package-type Program verification reports.
+- Program reset state now blocks Operations Archive export/ZIP immediately instead of producing a package that only fails later during offline verification.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_operations.py tests\test_release_check.py::test_v121_unified_release_program_operations_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- `python -m pytest tests\test_unified_release_program.py tests\test_unified_release_program_operations.py tests\test_server_unified_release_program.py tests\test_cli_unified_release_program.py tests\test_release_check.py::test_v120_unified_release_program_board_smoke tests\test_release_check.py::test_v121_unified_release_program_operations_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json`
+
 ## v12.0.0 - 2026-07-06
 
 ### Added

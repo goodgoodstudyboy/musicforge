@@ -466,6 +466,10 @@ class UnifiedReleaseProgramStore:
         for event in self.read_history(program_id):
             if event.get("event_type") == "unified_release_program_signoff_created":
                 latest = {"status": "signed", "signoff_hash": event.get("signoff_hash"), "event": event}
+            elif event.get("event_type") == "unified_release_program_signoff_reset":
+                previous_hash = event.get("previous_signoff_hash")
+                if latest and (not previous_hash or latest.get("signoff_hash") == previous_hash):
+                    latest = {"status": "reset", "previous_signoff_hash": previous_hash, "event": event}
         if latest:
             return latest
         if self.signoff_path(program_id).exists():

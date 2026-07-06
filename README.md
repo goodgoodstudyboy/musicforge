@@ -70,12 +70,23 @@ Use these commands before treating a branch as releasable:
 ```powershell
 python -m song_agent.cli doctor
 python -m song_agent.cli release-check --profile ga --skip-tests --json
+python -m song_agent.cli release-check --profile v12 --skip-tests --json
 python -m song_agent.cli release-check --profile v11 --skip-tests --json
 python -m song_agent.cli ga-check --json
 ```
 
 `--auto-review` is synthetic smoke evidence only. Manual music acceptance means
 a person played the MIDI or WAV and recorded a manual review.
+
+## Unified Release Program Operations
+
+v12.1 adds a Program Operations Center on top of signed Unified Release Programs.
+It provides approved single-use Program Change Requests for signoff reset,
+safe-only runbooks, Continuous Review drift checks, Lifecycle Audit, and a
+fixed-layout Operations Archive ZIP. Use
+`python -m song_agent.cli unified-release-program-operations --help` and
+`python -m song_agent.cli verify-unified-release-program-operations-package --help`
+for the local commands.
 
 ## Unified Command Center
 

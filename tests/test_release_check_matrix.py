@@ -109,6 +109,7 @@ def test_release_check_profile_and_filters() -> None:
     ]
     assert [definition.check_id for definition in select_check_definitions(profile="v12")] == [
         "v120.unified_release_program_board_smoke",
+        "v121.unified_release_program_operations_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

@@ -101,6 +101,7 @@ from song_agent.release_checks import (
     _v118_unified_command_center_release_train_lifecycle_smoke,
     _v119_unified_command_center_release_train_handoff_smoke,
     _v120_unified_release_program_board_smoke,
+    _v121_unified_release_program_operations_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1410,12 +1411,20 @@ def test_v120_unified_release_program_board_smoke(tmp_path: Path) -> None:
     ok, detail = _v120_unified_release_program_board_smoke(tmp_path)
 
     assert ok is True, detail
-    assert "program=ready" in detail
-    assert "signoff=signed" in detail
-    assert "verify=passed" in detail
-    assert "missing_binding=failed" in detail
+
+
+def test_v121_unified_release_program_operations_smoke(tmp_path: Path) -> None:
+    ok, detail = _v121_unified_release_program_operations_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "review=passed" in detail
+    assert "archive=passed" in detail
     assert "declared_extra=failed" in detail
-    assert "signoff_full_resign_signed_by=failed" in detail
+    assert "wrong_program_verification_type=failed" in detail
+    assert "wrong_action_reset=409" in detail
+    assert "reset=applied" in detail
+    assert "reset_archive_zip=409" in detail
+    assert "reset_gate=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:
