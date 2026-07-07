@@ -171,6 +171,10 @@ def verify_ga_readiness_report(
     unified_release_program_vault_operations_path: Path | str | None = None,
     unified_release_program_vault_operations_verification_report_path: Path | str | None = None,
     unified_release_program_vault_operations_signoff_binding_path: Path | str | None = None,
+    require_unified_release_program_continuity: bool = False,
+    unified_release_program_continuity_path: Path | str | None = None,
+    unified_release_program_continuity_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_signoff_binding_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -511,6 +515,17 @@ def verify_ga_readiness_report(
             _verify_unified_release_program_vault_operations_evidence(
                 checks,
                 checks_by_id.get("ga.unified_release_program_vault_operations", {}),
+                unified_release_program_vault_operations_path,
+                unified_release_program_vault_operations_verification_report_path,
+                unified_release_program_vault_operations_signoff_binding_path,
+            )
+        if require_unified_release_program_continuity:
+            _verify_unified_release_program_continuity_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_continuity", {}),
+                unified_release_program_continuity_path,
+                unified_release_program_continuity_verification_report_path,
+                unified_release_program_continuity_signoff_binding_path,
                 unified_release_program_vault_operations_path,
                 unified_release_program_vault_operations_verification_report_path,
                 unified_release_program_vault_operations_signoff_binding_path,
@@ -2037,6 +2052,58 @@ def _verify_unified_release_program_vault_operations_evidence(
         verification_report,
         runtime_report,
         UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_release_program_continuity_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    archive_path: Path | str | None,
+    archive_verification_report_path: Path | str | None,
+    signoff_binding_path: Path | str | None,
+    vault_operations_path: Path | str | None,
+    vault_operations_verification_report_path: Path | str | None,
+    vault_operations_signoff_binding_path: Path | str | None,
+) -> None:
+    if not archive_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_required", "failed", "blocking", "Unified Release Program Continuity requirement needs an archive ZIP.")
+        return
+    if not archive_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_verification_required", "failed", "blocking", "Unified Release Program Continuity requirement needs a verification report.")
+        return
+    if not signoff_binding_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_binding_required", "failed", "blocking", "Unified Release Program Continuity requirement needs a signoff binding.")
+        return
+    if not vault_operations_path or not vault_operations_verification_report_path or not vault_operations_signoff_binding_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_source_required", "failed", "blocking", "Unified Release Program Continuity requirement needs source Vault Operations evidence.")
+        return
+    zip_path = Path(archive_path)
+    try:
+        from song_agent.unified_release_program_continuity_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_continuity_package
+
+        verification_report = read_json(Path(archive_verification_report_path))
+        runtime_report = verify_unified_release_program_continuity_package(
+            zip_path,
+            strict=True,
+            deep_restore=True,
+            require_signed=True,
+            require_current_vault_operations=True,
+            signoff_binding_path=signoff_binding_path,
+            vault_operations_archive_path=vault_operations_path,
+            vault_operations_verification_report_path=vault_operations_verification_report_path,
+            vault_operations_signoff_binding_path=vault_operations_signoff_binding_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_readable", "failed", "blocking", f"Unified Release Program Continuity evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_continuity",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_RELEASE_PROGRAM_CONTINUITY_VERIFICATION_PACKAGE_TYPE,
     )
 
 

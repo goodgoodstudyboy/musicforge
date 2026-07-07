@@ -20584,6 +20584,146 @@ def _v124_unified_release_program_vault_operations_smoke(root: Path) -> tuple[bo
         return False, f"v12.4 Unified Release Program Vault Operations smoke failed: {exc}"
 
 
+def _v125_unified_release_program_continuity_recovery_smoke(root: Path) -> tuple[bool, str]:
+    import tempfile
+
+    from song_agent.unified_release_program_continuity import UnifiedReleaseProgramContinuityStateError, UnifiedReleaseProgramContinuityStore
+    from song_agent.unified_release_program_continuity_verifier import verify_unified_release_program_continuity_package
+    from tests.test_unified_release_program_continuity import _add_declared_extra, _forge_signoff_signed_by
+    from tests.test_unified_release_program_vault_operations import _prepared_vault_operations
+
+    del root
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v125-unified-release-program-continuity-") as temp:
+            base = Path(temp)
+            program_store, _vault_store, ops, program_id = _prepared_vault_operations(base)
+            ops.signoff_operations(program_id, {"signed_by": "custody chair"})
+            ops.build_archive_zip(program_id)
+            ops.verify_archive_zip(program_id, {"deep": True, "require_signed": True, "require_current_vault": True})
+            continuity = UnifiedReleaseProgramContinuityStore(program_store)
+            continuity.init_policy(program_id)
+            continuity.create_recovery_plan(program_id)
+            drill = continuity.run_recovery_drill(program_id)
+            continuity.generate_runbook(program_id)
+            signoff = continuity.signoff_continuity(program_id, {"signed_by": "continuity lead"})
+            zipped = continuity.build_archive_zip(program_id)
+            verified = continuity.verify_archive_zip(program_id, {"deep_restore": True, "require_signed": True, "require_current_vault_operations": True})
+            standalone = verify_unified_release_program_continuity_package(
+                zipped["zip_path"],
+                strict=True,
+                deep_restore=True,
+                require_signed=True,
+                require_current_vault_operations=True,
+                signoff_binding_path=continuity.signoff_binding_path(program_id),
+                vault_operations_archive_path=ops.archive_zip_path(program_id),
+                vault_operations_verification_report_path=ops.verification_report_path(program_id),
+                vault_operations_signoff_binding_path=ops.signoff_binding_path(program_id),
+            )
+            missing_binding = verify_unified_release_program_continuity_package(
+                zipped["zip_path"],
+                strict=True,
+                deep_restore=True,
+                require_signed=True,
+                require_current_vault_operations=True,
+                vault_operations_archive_path=ops.archive_zip_path(program_id),
+                vault_operations_verification_report_path=ops.verification_report_path(program_id),
+                vault_operations_signoff_binding_path=ops.signoff_binding_path(program_id),
+            )
+            extra_zip = base / "continuity-extra.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), extra_zip, _add_declared_extra)
+            declared_extra = verify_unified_release_program_continuity_package(extra_zip, strict=True, deep_restore=True, require_signed=True, require_current_vault_operations=True, signoff_binding_path=continuity.signoff_binding_path(program_id), vault_operations_archive_path=ops.archive_zip_path(program_id), vault_operations_verification_report_path=ops.verification_report_path(program_id), vault_operations_signoff_binding_path=ops.signoff_binding_path(program_id))
+            forged_zip = base / "continuity-forged-signoff.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), forged_zip, _forge_signoff_signed_by)
+            forged = verify_unified_release_program_continuity_package(forged_zip, strict=True, deep_restore=True, require_signed=True, require_current_vault_operations=True, signoff_binding_path=continuity.signoff_binding_path(program_id), vault_operations_archive_path=ops.archive_zip_path(program_id), vault_operations_verification_report_path=ops.verification_report_path(program_id), vault_operations_signoff_binding_path=ops.signoff_binding_path(program_id))
+            trailing_zip = base / "continuity-trailing.zip"
+            shutil.copyfile(Path(zipped["zip_path"]), trailing_zip)
+            with trailing_zip.open("ab") as fh:
+                fh.write(b"tamper")
+            trailing = verify_unified_release_program_continuity_package(trailing_zip, strict=True, deep_restore=True, require_signed=True, require_current_vault_operations=True, signoff_binding_path=continuity.signoff_binding_path(program_id), vault_operations_archive_path=ops.archive_zip_path(program_id), vault_operations_verification_report_path=ops.verification_report_path(program_id), vault_operations_signoff_binding_path=ops.signoff_binding_path(program_id))
+            archive_zip_tamper_blocked = False
+            with Path(zipped["zip_path"]).open("ab") as fh:
+                fh.write(b"tamper")
+            try:
+                continuity.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityStateError:
+                archive_zip_tamper_blocked = True
+            signed_mutation_blocked = False
+            try:
+                continuity.run_recovery_drill(program_id)
+            except UnifiedReleaseProgramContinuityStateError:
+                signed_mutation_blocked = True
+            source_tamper_case = base / "source-tamper"
+            source_tamper_case.mkdir(parents=True, exist_ok=True)
+            program_store2, _vault_store2, ops2, program_id2 = _prepared_vault_operations(source_tamper_case)
+            ops2.signoff_operations(program_id2, {"signed_by": "custody chair"})
+            ops2.build_archive_zip(program_id2)
+            ops2.verify_archive_zip(program_id2, {"deep": True, "require_signed": True, "require_current_vault": True})
+            continuity2 = UnifiedReleaseProgramContinuityStore(program_store2)
+            continuity2.init_policy(program_id2)
+            continuity2.create_recovery_plan(program_id2)
+            continuity2.run_recovery_drill(program_id2)
+            continuity2.generate_runbook(program_id2)
+            continuity2.signoff_continuity(program_id2, {"signed_by": "continuity lead"})
+            with ops2.archive_zip_path(program_id2).open("ab") as fh:
+                fh.write(b"tamper")
+            source_tamper_blocked = False
+            try:
+                continuity2.build_archive_zip(program_id2)
+            except UnifiedReleaseProgramContinuityStateError:
+                source_tamper_blocked = True
+            export_tamper_case = base / "export-tamper"
+            export_tamper_case.mkdir(parents=True, exist_ok=True)
+            program_store3, _vault_store3, ops3, program_id3 = _prepared_vault_operations(export_tamper_case)
+            ops3.signoff_operations(program_id3, {"signed_by": "custody chair"})
+            ops3.build_archive_zip(program_id3)
+            ops3.verify_archive_zip(program_id3, {"deep": True, "require_signed": True, "require_current_vault": True})
+            continuity3 = UnifiedReleaseProgramContinuityStore(program_store3)
+            continuity3.init_policy(program_id3)
+            continuity3.create_recovery_plan(program_id3)
+            continuity3.run_recovery_drill(program_id3)
+            continuity3.generate_runbook(program_id3)
+            continuity3.signoff_continuity(program_id3, {"signed_by": "continuity lead"})
+            continuity3.export_archive(program_id3)
+            tampered_signoff_path = continuity3.export_dir(program_id3) / "continuity-signoff.json"
+            tampered_signoff = read_json(tampered_signoff_path)
+            tampered_signoff["signed_by"] = "forged signer"
+            tampered_signoff["payload_hash"] = stable_hash({key: value for key, value in tampered_signoff.items() if key not in {"payload_hash", "integrity_hash"}})
+            tampered_signoff["integrity_hash"] = stable_hash({key: value for key, value in tampered_signoff.items() if key != "integrity_hash"})
+            write_json(tampered_signoff_path, tampered_signoff)
+            export_dir_tamper_blocked = False
+            try:
+                continuity3.build_archive_zip(program_id3)
+            except UnifiedReleaseProgramContinuityStateError:
+                export_dir_tamper_blocked = True
+            ok = (
+                drill.get("status") == "passed"
+                and signoff.get("status") == "signed"
+                and verified.get("status") == "passed"
+                and standalone.get("status") == "passed"
+                and _v38_check_status(missing_binding, "urpc_external_signoff_binding_required") == "failed"
+                and _v38_check_status(declared_extra, "urpc_allowed_entries") == "failed"
+                and _v38_check_status(forged, "urpc_external_signoff_binding_hash") == "failed"
+                and _v38_check_status(trailing, "urpc_no_trailing_data") == "failed"
+                and source_tamper_blocked
+                and archive_zip_tamper_blocked
+                and export_dir_tamper_blocked
+                and signed_mutation_blocked
+            )
+            return ok, (
+                f"drill={drill.get('status')}, signoff={signoff.get('status')}, verify={verified.get('status')}, standalone={standalone.get('status')}, "
+                f"missing_binding={_v38_check_status(missing_binding, 'urpc_external_signoff_binding_required')}, "
+                f"declared_extra={_v38_check_status(declared_extra, 'urpc_allowed_entries')}, "
+                f"full_resign={_v38_check_status(forged, 'urpc_external_signoff_binding_hash')}, "
+                f"trailing_bytes={_v38_check_status(trailing, 'urpc_no_trailing_data')}, "
+                f"source_vault_operations_tamper_409={source_tamper_blocked}, "
+                f"archive_zip_tamper_409={archive_zip_tamper_blocked}, "
+                f"export_dir_tamper_409={export_dir_tamper_blocked}, "
+                f"signed_mutation_409={signed_mutation_blocked}"
+            )
+    except Exception as exc:
+        return False, f"v12.5 Unified Release Program Continuity smoke failed: {exc}"
+
+
 def _v122_handoff_response(store, program_id: str, review_pack_id: str, *, reviewer_role: str = "release_owner", reviewer_id: str = "rev-release-owner", decision: str = "accepted") -> dict[str, object]:
     pack_report = read_json(store.review_pack_dir(program_id, review_pack_id) / "review-pack-report.json")
     zip_path = store.review_pack_zip_path(program_id, review_pack_id)

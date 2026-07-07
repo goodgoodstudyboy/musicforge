@@ -129,6 +129,21 @@ python -m song_agent.cli unified-release-program-vault-ops archive-zip urp-00000
 python -m song_agent.cli verify-unified-release-program-vault-operations-package .musicforge\unified-release-programs\urp-000001\vault-operations\unified-release-program-vault-operations-archive.zip --deep --require-signed --require-current-vault --signoff-binding .musicforge\unified-release-programs\urp-000001\vault-operations\vault-operations-signoff-binding-summary.json --json
 ```
 
+v12.5 adds Continuity / Recovery Drill on top of a signed Vault Operations
+Archive. It performs an isolated restore replay, signs continuity readiness, and
+verifies the fixed continuity archive with both the continuity signoff binding
+and the source Vault Operations evidence:
+
+```powershell
+python -m song_agent.cli unified-release-program-continuity init-policy urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity plan urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity drill urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity runbook urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity signoff urp-000001 --signed-by "Continuity Lead" --json
+python -m song_agent.cli unified-release-program-continuity archive-zip urp-000001 --json
+python -m song_agent.cli verify-unified-release-program-continuity-package .musicforge\unified-release-programs\urp-000001\continuity\unified-release-program-continuity-archive.zip --strict --deep-restore --require-signed --require-current-vault-operations --signoff-binding .musicforge\unified-release-programs\urp-000001\continuity\continuity-signoff-binding-summary.json --vault-operations-archive .musicforge\unified-release-programs\urp-000001\vault-operations\unified-release-program-vault-operations-archive.zip --vault-operations-verification-report .musicforge\unified-release-programs\urp-000001\vault-operations\unified-release-program-vault-operations-verification-report.json --vault-operations-signoff-binding .musicforge\unified-release-programs\urp-000001\vault-operations\vault-operations-signoff-binding-summary.json --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

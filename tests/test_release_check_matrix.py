@@ -113,6 +113,7 @@ def test_release_check_profile_and_filters() -> None:
         "v122.unified_release_program_final_handoff_smoke",
         "v123.unified_release_program_evidence_vault_smoke",
         "v124.unified_release_program_vault_operations_smoke",
+        "v125.unified_release_program_continuity_recovery_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

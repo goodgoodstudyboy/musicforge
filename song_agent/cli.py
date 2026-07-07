@@ -279,6 +279,10 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-release-program-vault-operations", type=Path, default=None, help="Unified Release Program Vault Operations Archive ZIP.")
     parser.add_argument("--unified-release-program-vault-operations-verification-report", type=Path, default=None, help="Unified Release Program Vault Operations verification report.")
     parser.add_argument("--unified-release-program-vault-operations-signoff-binding", type=Path, default=None, help="External Vault Operations signoff binding summary.")
+    parser.add_argument("--require-unified-release-program-continuity", action="store_true", help="Require Unified Release Program Continuity / Recovery Drill evidence.")
+    parser.add_argument("--unified-release-program-continuity", type=Path, default=None, help="Unified Release Program Continuity Archive ZIP.")
+    parser.add_argument("--unified-release-program-continuity-verification-report", type=Path, default=None, help="Unified Release Program Continuity verification report.")
+    parser.add_argument("--unified-release-program-continuity-signoff-binding", type=Path, default=None, help="External Continuity signoff binding summary.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -2206,6 +2210,58 @@ def build_verify_unified_release_program_vault_operations_parser() -> argparse.A
     parser.add_argument("--max-zip-size-mb", type=int, default=1024)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=4096)
     parser.add_argument("--max-entry-count", type=int, default=5000)
+    return parser
+
+
+def build_unified_release_program_continuity_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Continuity / Recovery Drill.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    def add_program_arg(cmd: argparse.ArgumentParser) -> None:
+        cmd.add_argument("program_id")
+
+    for action in ("status", "init-policy", "plan", "drill", "readiness", "runbook", "signoff", "archive-export", "archive-zip", "archive-verify", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Program Continuity.")
+        add_program_arg(cmd)
+        if action in {"plan", "drill", "readiness", "signoff", "archive-verify", "gate"}:
+            cmd.add_argument("--vault-operations-archive", type=Path, default=None)
+            cmd.add_argument("--vault-operations-verification-report", type=Path, default=None)
+            cmd.add_argument("--vault-operations-signoff-binding", type=Path, default=None)
+        if action == "signoff":
+            cmd.add_argument("--signed-by", default="continuity-lead")
+            cmd.add_argument("--role", default="continuity_owner")
+            cmd.add_argument("--reason", default="Recovery drill passed.")
+        if action == "archive-verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--deep-restore", action="store_true")
+            cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--require-current-vault-operations", action="store_true")
+            cmd.add_argument("--signoff-binding", type=Path, default=None)
+            cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "gate":
+            cmd.add_argument("--archive-zip", type=Path, default=None)
+            cmd.add_argument("--verification-report", type=Path, default=None)
+            cmd.add_argument("--signoff-binding", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_continuity_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program Continuity Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--deep-restore", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-current-vault-operations", action="store_true")
+    parser.add_argument("--signoff-binding", type=Path, default=None)
+    parser.add_argument("--vault-operations-archive", type=Path, default=None)
+    parser.add_argument("--vault-operations-verification-report", type=Path, default=None)
+    parser.add_argument("--vault-operations-signoff-binding", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=256)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=1024)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
     return parser
 
 
@@ -6279,6 +6335,76 @@ def _run_unified_release_program_vault_operations_command(args: argparse.Namespa
     raise ValueError("Unsupported unified-release-program-vault-ops command.")
 
 
+def _run_unified_release_program_continuity_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity import UnifiedReleaseProgramContinuityStore
+    from song_agent.unified_release_program_continuity_verifier import write_unified_release_program_continuity_verification_report
+
+    store = UnifiedReleaseProgramContinuityStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    evidence_payload = {
+        "vault_operations_archive": getattr(args, "vault_operations_archive", None),
+        "vault_operations_verification_report": getattr(args, "vault_operations_verification_report", None),
+        "vault_operations_signoff_binding": getattr(args, "vault_operations_signoff_binding", None),
+    }
+    if args.action == "status":
+        detail = store.get_continuity(program_id)
+        report = detail.get("report") or {}
+        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or (detail.get("signoff_state") or {}).get("status") or "unknown"}
+    if args.action == "init-policy":
+        policy = store.init_policy(program_id, {})
+        return {"ok": policy.get("status") == "active", "policy": policy, "summary": {"policy_hash": policy.get("integrity_hash")}, "status": policy.get("status")}
+    if args.action == "plan":
+        plan = store.create_recovery_plan(program_id, evidence_payload)
+        return {"ok": plan.get("status") == "planned", "recovery_plan": plan, "summary": {"plan_hash": plan.get("integrity_hash")}, "status": plan.get("status")}
+    if args.action == "drill":
+        drill = store.run_recovery_drill(program_id, evidence_payload)
+        return {"ok": drill.get("status") == "passed", "drill_report": drill, "summary": drill.get("summary", {}), "status": drill.get("status")}
+    if args.action == "readiness":
+        readiness = store.refresh_readiness(program_id, evidence_payload)
+        return {"ok": readiness.get("status") == "passed", "readiness": readiness, "summary": readiness.get("summary", {}), "status": readiness.get("status")}
+    if args.action == "runbook":
+        runbook = store.generate_runbook(program_id, {})
+        return {"ok": runbook.get("status") == "ready", "runbook": runbook, "summary": runbook.get("summary", {}), "status": runbook.get("status")}
+    if args.action == "signoff":
+        signoff = store.signoff_continuity(program_id, {**evidence_payload, "signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}
+    if args.action == "archive-export":
+        manifest = store.export_archive(program_id, {})
+        return {"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"}
+    if args.action == "archive-zip":
+        result = store.build_archive_zip(program_id, {})
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "manifest_hash": result.get("manifest_hash")}}
+    if args.action == "archive-verify":
+        report = store.verify_archive_zip(
+            program_id,
+            {
+                **evidence_payload,
+                "strict": args.strict,
+                "deep_restore": args.deep_restore,
+                "require_signed": args.require_signed,
+                "require_current_vault_operations": args.require_current_vault_operations,
+                "signoff_binding": args.signoff_binding,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            archive_zip_path=args.archive_zip,
+            verification_report_path=args.verification_report,
+            signoff_binding_path=args.signoff_binding,
+            vault_operations_archive_path=args.vault_operations_archive,
+            vault_operations_verification_report_path=args.vault_operations_verification_report,
+            vault_operations_signoff_binding_path=args.vault_operations_signoff_binding,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
+    raise ValueError("Unsupported unified-release-program-continuity command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -6513,6 +6639,10 @@ def _main() -> None:
             unified_release_program_vault_operations_zip_path=args.unified_release_program_vault_operations,
             unified_release_program_vault_operations_verification_report_path=args.unified_release_program_vault_operations_verification_report,
             unified_release_program_vault_operations_signoff_binding_path=args.unified_release_program_vault_operations_signoff_binding,
+            require_unified_release_program_continuity=args.require_unified_release_program_continuity,
+            unified_release_program_continuity_zip_path=args.unified_release_program_continuity,
+            unified_release_program_continuity_verification_report_path=args.unified_release_program_continuity_verification_report,
+            unified_release_program_continuity_signoff_binding_path=args.unified_release_program_continuity_signoff_binding,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -6648,6 +6778,10 @@ def _main() -> None:
             unified_release_program_vault_operations_path=args.unified_release_program_vault_operations,
             unified_release_program_vault_operations_verification_report_path=args.unified_release_program_vault_operations_verification_report,
             unified_release_program_vault_operations_signoff_binding_path=args.unified_release_program_vault_operations_signoff_binding,
+            require_unified_release_program_continuity=args.require_unified_release_program_continuity,
+            unified_release_program_continuity_path=args.unified_release_program_continuity,
+            unified_release_program_continuity_verification_report_path=args.unified_release_program_continuity_verification_report,
+            unified_release_program_continuity_signoff_binding_path=args.unified_release_program_continuity_signoff_binding,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -6932,6 +7066,16 @@ def _main() -> None:
         parser = build_unified_release_program_vault_operations_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_vault_operations_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-continuity":
+        parser = build_unified_release_program_continuity_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_continuity_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -7686,6 +7830,39 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_vault_operations_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-package":
+        from song_agent.unified_release_program_continuity_verifier import (
+            unified_release_program_continuity_verification_exit_code,
+            verify_unified_release_program_continuity_package,
+            write_unified_release_program_continuity_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_continuity_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_continuity_package(
+            args.zip_path,
+            strict=args.strict,
+            deep_restore=args.deep_restore,
+            require_signed=args.require_signed,
+            require_current_vault_operations=args.require_current_vault_operations,
+            signoff_binding_path=args.signoff_binding,
+            vault_operations_archive_path=args.vault_operations_archive,
+            vault_operations_verification_report_path=args.vault_operations_verification_report,
+            vault_operations_signoff_binding_path=args.vault_operations_signoff_binding,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program Continuity verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_continuity_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

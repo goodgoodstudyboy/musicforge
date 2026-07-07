@@ -105,6 +105,7 @@ from song_agent.release_checks import (
     _v122_unified_release_program_final_handoff_smoke,
     _v123_unified_release_program_evidence_vault_smoke,
     _v124_unified_release_program_vault_operations_smoke,
+    _v125_unified_release_program_continuity_recovery_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1465,6 +1466,21 @@ def test_v124_unified_release_program_vault_operations_smoke(tmp_path: Path) -> 
     assert "trailing_bytes=failed" in detail
     assert "registry_full_resign=failed/True" in detail
     assert "source_vault_tamper_409=True" in detail
+    assert "signed_mutation_409=True" in detail
+
+
+def test_v125_unified_release_program_continuity_recovery_smoke(tmp_path: Path) -> None:
+    ok, detail = _v125_unified_release_program_continuity_recovery_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "drill=passed" in detail
+    assert "signoff=signed" in detail
+    assert "verify=passed" in detail
+    assert "missing_binding=failed" in detail
+    assert "declared_extra=failed" in detail
+    assert "full_resign=failed" in detail
+    assert "trailing_bytes=failed" in detail
+    assert "source_vault_operations_tamper_409=True" in detail
     assert "signed_mutation_409=True" in detail
 
 

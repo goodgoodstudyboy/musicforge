@@ -1,5 +1,17 @@
 # Changelog
 
+## v12.5.0 - 2026-07-07
+
+### Added
+- Unified Release Program Continuity / Recovery Drill with isolated restore replay, continuity readiness, runbook, signed immutable Continuity Archive, and fixed-layout offline verifier.
+- CLI and HTTP API endpoints for `unified-release-program-continuity` plus standalone `verify-unified-release-program-continuity-package`.
+- Release signoff and GA readiness can require continuity evidence bound to the current Vault Operations Archive, verification report, and external continuity signoff binding.
+- release-check `v125.unified_release_program_continuity_recovery_smoke` covering happy path, missing binding failure, declared-extra rejection, signoff full-resign rejection, source Vault Operations tamper blocking, trailing-data rejection, and signed mutation blocking.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity.py tests\test_release_check.py::test_v125_unified_release_program_continuity_recovery_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.4.0 - 2026-07-07
 
 ### Added

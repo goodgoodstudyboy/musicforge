@@ -675,6 +675,12 @@ from song_agent.unified_release_program_vault_operations import (
     UnifiedReleaseProgramVaultOperationsStateError,
     UnifiedReleaseProgramVaultOperationsStore,
 )
+from song_agent.unified_release_program_continuity import (
+    UnifiedReleaseProgramContinuityError,
+    UnifiedReleaseProgramContinuityNotFoundError,
+    UnifiedReleaseProgramContinuityStateError,
+    UnifiedReleaseProgramContinuityStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3394,6 +3400,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_release_program_vault_operations_store(self) -> UnifiedReleaseProgramVaultOperationsStore:
         return self.server.unified_release_program_vault_operations_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_release_program_continuity_store(self) -> UnifiedReleaseProgramContinuityStore:
+        return self.server.unified_release_program_continuity_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -11791,6 +11801,94 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 )
                 self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
                 return
+            if tail == "/continuity":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                detail = self.unified_release_program_continuity_store.get_continuity(program_id)
+                report = detail.get("report") or {}
+                self._send_json({"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/continuity/policy":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                policy = self.unified_release_program_continuity_store.init_policy(program_id, self._optional_json_body())
+                self._send_json({"ok": policy.get("status") == "active", "policy": policy, "summary": {"policy_hash": policy.get("integrity_hash")}, "status": policy.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/continuity/plan":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                plan = self.unified_release_program_continuity_store.create_recovery_plan(program_id, self._optional_json_body())
+                self._send_json({"ok": plan.get("status") == "planned", "recovery_plan": plan, "summary": {"plan_hash": plan.get("integrity_hash")}, "status": plan.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/continuity/drill":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                drill = self.unified_release_program_continuity_store.run_recovery_drill(program_id, self._optional_json_body())
+                self._send_json({"ok": drill.get("status") == "passed", "drill_report": drill, "summary": drill.get("summary", {}), "status": drill.get("status")})
+                return
+            if tail == "/continuity/readiness":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                readiness = self.unified_release_program_continuity_store.refresh_readiness(program_id, self._optional_json_body())
+                self._send_json({"ok": readiness.get("status") == "passed", "readiness": readiness, "summary": readiness.get("summary", {}), "status": readiness.get("status")})
+                return
+            if tail == "/continuity/runbook":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                runbook = self.unified_release_program_continuity_store.generate_runbook(program_id, self._optional_json_body())
+                self._send_json({"ok": runbook.get("status") == "ready", "runbook": runbook, "summary": runbook.get("summary", {}), "status": runbook.get("status")})
+                return
+            if tail == "/continuity/signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                signoff = self.unified_release_program_continuity_store.signoff_continuity(program_id, self._optional_json_body())
+                self._send_json({"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail == "/continuity/archive/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.unified_release_program_continuity_store.export_archive(program_id, self._optional_json_body())
+                self._send_json({"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"})
+                return
+            if tail == "/continuity/archive/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_release_program_continuity_store.build_archive_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "manifest_hash": result.get("manifest_hash")}})
+                return
+            if tail == "/continuity/archive/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_continuity_store.verify_archive_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/continuity/gate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                gate = self.unified_release_program_continuity_store.gate(
+                    program_id,
+                    required=True,
+                    archive_zip_path=payload.get("archive_zip") or payload.get("continuity_archive"),
+                    verification_report_path=payload.get("verification_report") or payload.get("continuity_verification_report"),
+                    signoff_binding_path=payload.get("signoff_binding") or payload.get("continuity_signoff_binding"),
+                    vault_operations_archive_path=payload.get("vault_operations_archive"),
+                    vault_operations_verification_report_path=payload.get("vault_operations_verification_report"),
+                    vault_operations_signoff_binding_path=payload.get("vault_operations_signoff_binding"),
+                )
+                self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
+                return
             if tail == "/operations/change-requests":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11881,6 +11979,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except UnifiedReleaseProgramVaultOperationsStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedReleaseProgramVaultOperationsError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except UnifiedReleaseProgramContinuityNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedReleaseProgramContinuityStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedReleaseProgramContinuityError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedReleaseProgramHandoffNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -13497,6 +13601,23 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_release_program_vault_operations_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_release_program_vault_operations_gate.get("message") or "Unified Release Program Vault Operations gate failed.")
+        require_unified_release_program_continuity = bool(payload.get("require_unified_release_program_continuity", False))
+        unified_release_program_continuity_gate = self.unified_release_program_continuity_store.gate(
+            str(payload.get("unified_release_program_id") or payload.get("unified_release_program_continuity_program_id") or "urp-000001"),
+            required=require_unified_release_program_continuity,
+            archive_zip_path=payload.get("unified_release_program_continuity") or payload.get("unified_release_program_continuity_archive"),
+            verification_report_path=payload.get("unified_release_program_continuity_verification_report"),
+            signoff_binding_path=payload.get("unified_release_program_continuity_signoff_binding"),
+            vault_operations_archive_path=payload.get("unified_release_program_vault_operations") or payload.get("unified_release_program_vault_operations_archive"),
+            vault_operations_verification_report_path=payload.get("unified_release_program_vault_operations_verification_report"),
+            vault_operations_signoff_binding_path=payload.get("unified_release_program_vault_operations_signoff_binding"),
+        )
+        if unified_release_program_continuity_gate and require_unified_release_program_continuity:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_release_program_continuity"] = unified_release_program_continuity_gate
+            if unified_release_program_continuity_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_release_program_continuity_gate.get("message") or "Unified Release Program Continuity gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -13726,6 +13847,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(unified_release_program_vault_operations_gate.get("message") or "Unified Release Program Vault Operations gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_release_program_continuity_gate.get("hard_block") and unified_release_program_continuity_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_release_program_continuity_gate.get("message") or "Unified Release Program Continuity gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -21285,6 +21415,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_release_program_handoff_store = UnifiedReleaseProgramHandoffStore(self.unified_release_program_store)
         self.unified_release_program_vault_store = UnifiedReleaseProgramVaultStore(self.unified_release_program_store)
         self.unified_release_program_vault_operations_store = UnifiedReleaseProgramVaultOperationsStore(self.unified_release_program_store)
+        self.unified_release_program_continuity_store = UnifiedReleaseProgramContinuityStore(self.unified_release_program_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)
