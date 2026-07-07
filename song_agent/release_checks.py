@@ -20496,6 +20496,94 @@ def _v123_unified_release_program_evidence_vault_smoke(root: Path) -> tuple[bool
         program_verifier_module.verify_unified_command_center_release_train_handoff_package = original_package_verifier
 
 
+def _v124_unified_release_program_vault_operations_smoke(root: Path) -> tuple[bool, str]:
+    import tempfile
+
+    from song_agent.unified_release_program_vault_operations import UnifiedReleaseProgramVaultOperationsStateError
+    from song_agent.unified_release_program_vault_operations_verifier import verify_unified_release_program_vault_operations_package
+    from tests.test_unified_release_program_vault_operations import _add_declared_extra, _forge_signoff_signed_by, _prepared_vault_operations
+
+    del root
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v124-unified-release-program-vault-ops-") as temp:
+            base = Path(temp)
+            _program_store, _vault_store, ops, program_id = _prepared_vault_operations(base)
+            signoff = ops.signoff_operations(program_id, {"signed_by": "custody chair"})
+            zipped = ops.build_archive_zip(program_id)
+            verified = ops.verify_archive_zip(program_id, {"deep": True, "require_signed": True, "require_current_vault": True})
+            standalone = verify_unified_release_program_vault_operations_package(zipped["zip_path"], strict=True, deep=True, require_signed=True, require_current_vault=True, signoff_binding_path=ops.signoff_binding_path(program_id))
+            missing_binding = verify_unified_release_program_vault_operations_package(zipped["zip_path"], strict=True, deep=True, require_signed=True, require_current_vault=True)
+            extra_zip = base / "vault-ops-extra.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), extra_zip, _add_declared_extra)
+            declared_extra = verify_unified_release_program_vault_operations_package(extra_zip, strict=True, deep=True, require_signed=True, require_current_vault=True, signoff_binding_path=ops.signoff_binding_path(program_id))
+            forged_zip = base / "vault-ops-forged-signoff.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), forged_zip, _forge_signoff_signed_by)
+            forged_signoff = verify_unified_release_program_vault_operations_package(forged_zip, strict=True, deep=True, require_signed=True, require_current_vault=True, signoff_binding_path=ops.signoff_binding_path(program_id))
+            trailing_zip = base / "vault-ops-trailing.zip"
+            shutil.copyfile(Path(zipped["zip_path"]), trailing_zip)
+            with trailing_zip.open("ab") as fh:
+                fh.write(b"tamper")
+            trailing = verify_unified_release_program_vault_operations_package(trailing_zip, strict=True, deep=True, require_signed=True, require_current_vault=True, signoff_binding_path=ops.signoff_binding_path(program_id))
+            mutation_blocked = False
+            try:
+                ops.run_custody_review(program_id)
+            except UnifiedReleaseProgramVaultOperationsStateError:
+                mutation_blocked = True
+            registry_case = base / "registry-full-resign"
+            registry_case.mkdir(parents=True, exist_ok=True)
+            _program_store2, _vault_store2, ops2, program_id2 = _prepared_vault_operations(registry_case)
+            registry = read_json(ops2.registry_path(program_id2))
+            current_id = registry["current_generation_id"]
+            for row in registry.get("generations", []):
+                if row.get("generation_id") == current_id:
+                    row["vault"]["vault_zip_sha256"] = "0" * 64
+            registry["summary"]["current_vault_zip_sha256"] = "0" * 64
+            registry["integrity_hash"] = stable_hash({key: value for key, value in registry.items() if key != "integrity_hash"})
+            write_json(ops2.registry_path(program_id2), registry)
+            registry_review = ops2.run_custody_review(program_id2)
+            registry_signoff_blocked = False
+            try:
+                ops2.signoff_operations(program_id2, {"signed_by": "custody chair"})
+            except UnifiedReleaseProgramVaultOperationsStateError:
+                registry_signoff_blocked = True
+            source_tamper_case = base / "source-vault-tamper"
+            source_tamper_case.mkdir(parents=True, exist_ok=True)
+            _program_store3, vault_store3, ops3, program_id3 = _prepared_vault_operations(source_tamper_case)
+            ops3.signoff_operations(program_id3, {"signed_by": "custody chair"})
+            with vault_store3.zip_path(program_id3).open("ab") as fh:
+                fh.write(b"tamper")
+            source_vault_tamper_blocked = False
+            try:
+                ops3.build_archive_zip(program_id3)
+            except UnifiedReleaseProgramVaultOperationsStateError:
+                source_vault_tamper_blocked = True
+            ok = (
+                signoff.get("status") == "signed"
+                and verified.get("status") == "passed"
+                and standalone.get("status") == "passed"
+                and _v38_check_status(missing_binding, "urpvo_external_signoff_binding_required") == "failed"
+                and _v38_check_status(declared_extra, "urpvo_allowed_entries") == "failed"
+                and _v38_check_status(forged_signoff, "urpvo_external_signoff_binding_hash") == "failed"
+                and _v38_check_status(trailing, "urpvo_no_trailing_data") == "failed"
+                and registry_review.get("status") == "failed"
+                and registry_signoff_blocked
+                and source_vault_tamper_blocked
+                and mutation_blocked
+            )
+            return ok, (
+                f"signoff={signoff.get('status')}, verify={verified.get('status')}, standalone={standalone.get('status')}, "
+                f"missing_binding={_v38_check_status(missing_binding, 'urpvo_external_signoff_binding_required')}, "
+                f"declared_extra={_v38_check_status(declared_extra, 'urpvo_allowed_entries')}, "
+                f"full_resign={_v38_check_status(forged_signoff, 'urpvo_external_signoff_binding_hash')}, "
+                f"trailing_bytes={_v38_check_status(trailing, 'urpvo_no_trailing_data')}, "
+                f"registry_full_resign={registry_review.get('status')}/{registry_signoff_blocked}, "
+                f"source_vault_tamper_409={source_vault_tamper_blocked}, "
+                f"signed_mutation_409={mutation_blocked}"
+            )
+    except Exception as exc:
+        return False, f"v12.4 Unified Release Program Vault Operations smoke failed: {exc}"
+
+
 def _v122_handoff_response(store, program_id: str, review_pack_id: str, *, reviewer_role: str = "release_owner", reviewer_id: str = "rev-release-owner", decision: str = "accepted") -> dict[str, object]:
     pack_report = read_json(store.review_pack_dir(program_id, review_pack_id) / "review-pack-report.json")
     zip_path = store.review_pack_zip_path(program_id, review_pack_id)

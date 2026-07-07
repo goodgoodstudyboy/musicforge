@@ -1,5 +1,17 @@
 # Changelog
 
+## v12.4.0 - 2026-07-07
+
+### Added
+- Unified Release Program Vault Operations with Vault Registry, custody policy, runtime custody review, rotation plan, transfer pack, signed immutable Vault Operations Archive, and fixed-layout offline verifier.
+- CLI and HTTP API endpoints for `unified-release-program-vault-ops` plus standalone `verify-unified-release-program-vault-operations-package`.
+- Release signoff and GA readiness can require Vault Operations evidence with runtime deep Vault verification and external signoff binding proof.
+- release-check `v124.unified_release_program_vault_operations_smoke` covering happy path, missing binding failure, declared-extra rejection, signoff full-resign rejection, and signed mutation blocking.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_vault_operations.py tests\test_release_check.py::test_v124_unified_release_program_vault_operations_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.3.0 - 2026-07-07
 
 ### Added

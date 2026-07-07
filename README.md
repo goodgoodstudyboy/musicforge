@@ -114,6 +114,21 @@ python -m song_agent.cli unified-release-program-vault verify urp-000001 --deep 
 python -m song_agent.cli verify-unified-release-program-vault-package .musicforge\unified-release-programs\urp-000001\evidence-vault\unified-release-program-evidence-vault.zip --deep --require-anchor --vault-anchor .musicforge\unified-release-programs\urp-000001\evidence-vault\vault-anchor.json --json
 ```
 
+v12.4 adds Vault Operations for long-term custody. It registers the current
+Evidence Vault, runs a runtime custody review, creates a transfer pack, signs a
+frozen operations archive, and verifies that archive with the external signoff
+binding:
+
+```powershell
+python -m song_agent.cli unified-release-program-vault-ops init-policy urp-000001 --json
+python -m song_agent.cli unified-release-program-vault-ops register-vault urp-000001 --json
+python -m song_agent.cli unified-release-program-vault-ops review urp-000001 --json
+python -m song_agent.cli unified-release-program-vault-ops transfer-pack urp-000001 --json
+python -m song_agent.cli unified-release-program-vault-ops signoff urp-000001 --signed-by "Custody Lead" --json
+python -m song_agent.cli unified-release-program-vault-ops archive-zip urp-000001 --json
+python -m song_agent.cli verify-unified-release-program-vault-operations-package .musicforge\unified-release-programs\urp-000001\vault-operations\unified-release-program-vault-operations-archive.zip --deep --require-signed --require-current-vault --signoff-binding .musicforge\unified-release-programs\urp-000001\vault-operations\vault-operations-signoff-binding-summary.json --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.
