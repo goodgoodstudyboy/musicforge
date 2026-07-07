@@ -271,6 +271,10 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-release-program-handoff-verification-report", type=Path, default=None, help="Unified Release Program Final Handoff verification report.")
     parser.add_argument("--unified-release-program-handoff-external-evidence-manifest", type=Path, default=None, help="External evidence manifest bound by the Unified Release Program Handoff.")
     parser.add_argument("--unified-release-program-handoff-signoff-binding", type=Path, default=None, help="Signoff binding summary bound by the Unified Release Program Handoff.")
+    parser.add_argument("--require-unified-release-program-vault", action="store_true", help="Require Unified Release Program Evidence Vault evidence.")
+    parser.add_argument("--unified-release-program-vault", type=Path, default=None, help="Unified Release Program Evidence Vault ZIP.")
+    parser.add_argument("--unified-release-program-vault-verification-report", type=Path, default=None, help="Unified Release Program Evidence Vault verification report.")
+    parser.add_argument("--unified-release-program-vault-anchor", type=Path, default=None, help="External Vault anchor bound to the Evidence Vault ZIP.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -2090,6 +2094,52 @@ def build_verify_unified_release_program_handoff_parser() -> argparse.ArgumentPa
     parser.add_argument("--max-zip-size-mb", type=int, default=128)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def build_unified_release_program_vault_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Evidence Vault.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    def add_program_arg(cmd: argparse.ArgumentParser) -> None:
+        cmd.add_argument("program_id")
+
+    for action in ("status", "refresh", "export", "zip", "verify", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Program Evidence Vault.")
+        add_program_arg(cmd)
+        if action == "verify":
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--deep", action="store_true")
+            cmd.add_argument("--require-anchor", action="store_true")
+            cmd.add_argument("--vault-anchor", type=Path, default=None)
+            cmd.add_argument("--require-current-program", action="store_true")
+            cmd.add_argument("--require-current-operations", action="store_true")
+            cmd.add_argument("--require-current-handoff", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+        if action == "gate":
+            cmd.add_argument("--vault-zip", type=Path, default=None)
+            cmd.add_argument("--vault-verification-report", type=Path, default=None)
+            cmd.add_argument("--vault-anchor", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_vault_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program Evidence Vault ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--deep", action="store_true")
+    parser.add_argument("--require-anchor", action="store_true")
+    parser.add_argument("--vault-anchor", type=Path, default=None)
+    parser.add_argument("--require-current-program", action="store_true")
+    parser.add_argument("--require-current-operations", action="store_true")
+    parser.add_argument("--require-current-handoff", action="store_true")
+    parser.add_argument("--no-require-accepted-evidence", action="store_true")
+    parser.add_argument("--max-zip-size-mb", type=int, default=512)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=2048)
+    parser.add_argument("--max-entry-count", type=int, default=5000)
     return parser
 
 
@@ -6051,6 +6101,54 @@ def _run_unified_release_program_handoff_command(args: argparse.Namespace) -> di
     raise ValueError("Unsupported unified-release-program-handoff command.")
 
 
+def _run_unified_release_program_vault_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_vault import UnifiedReleaseProgramVaultStore
+    from song_agent.unified_release_program_vault_verifier import write_unified_release_program_vault_verification_report
+
+    store = UnifiedReleaseProgramVaultStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    if args.action == "status":
+        detail = store.get_vault(program_id)
+        status = (detail.get("report") or {}).get("status") or "unknown"
+        return {"ok": True, **detail, "summary": (detail.get("report") or {}).get("summary", {}), "status": status}
+    if args.action == "refresh":
+        report = store.refresh_vault(program_id)
+        return {"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "export":
+        manifest = store.export_vault(program_id)
+        return {"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"}
+    if args.action == "zip":
+        result = store.build_vault_zip(program_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "anchor_path": result.get("anchor_path")}}
+    if args.action == "verify":
+        report = store.verify_vault_zip(
+            program_id,
+            {
+                "strict": args.strict,
+                "deep": args.deep,
+                "require_anchor": args.require_anchor,
+                "vault_anchor": args.vault_anchor,
+                "require_current_program": args.require_current_program,
+                "require_current_operations": args.require_current_operations,
+                "require_current_handoff": args.require_current_handoff,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_vault_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            vault_zip_path=args.vault_zip,
+            vault_verification_report_path=args.vault_verification_report,
+            vault_anchor_path=args.vault_anchor,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
+    raise ValueError("Unsupported unified-release-program-vault command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -6277,6 +6375,10 @@ def _main() -> None:
             unified_release_program_handoff_verification_report_path=args.unified_release_program_handoff_verification_report,
             unified_release_program_handoff_external_evidence_manifest_path=args.unified_release_program_handoff_external_evidence_manifest,
             unified_release_program_handoff_signoff_binding_path=args.unified_release_program_handoff_signoff_binding,
+            require_unified_release_program_vault=args.require_unified_release_program_vault,
+            unified_release_program_vault_zip_path=args.unified_release_program_vault,
+            unified_release_program_vault_verification_report_path=args.unified_release_program_vault_verification_report,
+            unified_release_program_vault_anchor_path=args.unified_release_program_vault_anchor,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -6404,6 +6506,10 @@ def _main() -> None:
             unified_release_program_handoff_verification_report_path=args.unified_release_program_handoff_verification_report,
             unified_release_program_handoff_external_evidence_manifest_path=args.unified_release_program_handoff_external_evidence_manifest,
             unified_release_program_handoff_signoff_binding_path=args.unified_release_program_handoff_signoff_binding,
+            require_unified_release_program_vault=args.require_unified_release_program_vault,
+            unified_release_program_vault_path=args.unified_release_program_vault,
+            unified_release_program_vault_verification_report_path=args.unified_release_program_vault_verification_report,
+            unified_release_program_vault_anchor_path=args.unified_release_program_vault_anchor,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -6668,6 +6774,16 @@ def _main() -> None:
         parser = build_unified_release_program_handoff_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_handoff_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-vault":
+        parser = build_unified_release_program_vault_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_vault_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -7359,6 +7475,39 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_handoff_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-vault-package":
+        from song_agent.unified_release_program_vault_verifier import (
+            unified_release_program_vault_verification_exit_code,
+            verify_unified_release_program_vault_package,
+            write_unified_release_program_vault_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_vault_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_vault_package(
+            args.zip_path,
+            strict=args.strict,
+            deep=args.deep,
+            require_anchor=args.require_anchor,
+            vault_anchor_path=args.vault_anchor,
+            require_current_program=args.require_current_program,
+            require_current_operations=args.require_current_operations,
+            require_current_handoff=args.require_current_handoff,
+            require_accepted_evidence=not args.no_require_accepted_evidence,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_vault_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program Evidence Vault verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_vault_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

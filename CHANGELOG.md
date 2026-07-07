@@ -1,5 +1,17 @@
 # Changelog
 
+## v12.3.0 - 2026-07-07
+
+### Added
+- Unified Release Program Evidence Vault with fixed-layout Vault ZIP, nested Program / Operations / Handoff / accepted-evidence packages, public-safe proof indexes, chain-of-custody, replay plan, auditor guide, and ZIP-external `vault-anchor.json`.
+- Standalone `verify-unified-release-program-vault-package` and `unified-release-program-vault` CLI commands, plus HTTP API routes for Vault status, refresh, export, ZIP, verify, and gate.
+- Release signoff and GA readiness can require Program Evidence Vault evidence with runtime deep verification and external anchor binding.
+- release-check `v123.unified_release_program_evidence_vault_smoke` covering happy path, missing anchor failure, declared extra rejection, and nested package tamper rejection.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_vault.py tests\test_release_check.py::test_v123_unified_release_program_evidence_vault_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.2.1 - 2026-07-06
 
 ### Fixed

@@ -163,6 +163,10 @@ def verify_ga_readiness_report(
     unified_release_program_handoff_verification_report_path: Path | str | None = None,
     unified_release_program_handoff_external_evidence_manifest_path: Path | str | None = None,
     unified_release_program_handoff_signoff_binding_path: Path | str | None = None,
+    require_unified_release_program_vault: bool = False,
+    unified_release_program_vault_path: Path | str | None = None,
+    unified_release_program_vault_verification_report_path: Path | str | None = None,
+    unified_release_program_vault_anchor_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -490,6 +494,14 @@ def verify_ga_readiness_report(
                 unified_release_program_handoff_verification_report_path,
                 unified_release_program_handoff_external_evidence_manifest_path,
                 unified_release_program_handoff_signoff_binding_path,
+            )
+        if require_unified_release_program_vault:
+            _verify_unified_release_program_vault_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_vault", {}),
+                unified_release_program_vault_path,
+                unified_release_program_vault_verification_report_path,
+                unified_release_program_vault_anchor_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -1928,6 +1940,48 @@ def _verify_unified_release_program_handoff_evidence(
         verification_report,
         runtime_report,
         UNIFIED_RELEASE_PROGRAM_HANDOFF_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_release_program_vault_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    vault_path: Path | str | None,
+    vault_verification_report_path: Path | str | None,
+    vault_anchor_path: Path | str | None,
+) -> None:
+    if not vault_path:
+        _add_check(checks, "ga_readiness_unified_release_program_vault_required", "failed", "blocking", "Unified Release Program Evidence Vault requirement needs a Vault ZIP.")
+        return
+    if not vault_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_release_program_vault_verification_required", "failed", "blocking", "Unified Release Program Evidence Vault requirement needs a verification report.")
+        return
+    if not vault_anchor_path:
+        _add_check(checks, "ga_readiness_unified_release_program_vault_anchor_required", "failed", "blocking", "Unified Release Program Evidence Vault requirement needs an external anchor.")
+        return
+    zip_path = Path(vault_path)
+    try:
+        from song_agent.unified_release_program_vault_verifier import UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_vault_package
+
+        verification_report = read_json(Path(vault_verification_report_path))
+        runtime_report = verify_unified_release_program_vault_package(
+            zip_path,
+            strict=True,
+            deep=True,
+            require_anchor=True,
+            vault_anchor_path=vault_anchor_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_release_program_vault_readable", "failed", "blocking", f"Unified Release Program Evidence Vault evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_vault",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE,
     )
 
 

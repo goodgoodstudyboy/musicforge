@@ -20353,6 +20353,149 @@ def _v122_handoff_manifest_rows(program_store, ops_store, program_id: str, progr
     ]
 
 
+def _v123_unified_release_program_evidence_vault_smoke(root: Path) -> tuple[bool, str]:
+    import tempfile
+
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
+    from song_agent.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore, write_handoff_external_evidence_manifest
+    from song_agent.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
+    from song_agent.unified_release_program_vault import UnifiedReleaseProgramVaultStore
+    from song_agent.unified_release_program_vault_verifier import verify_unified_release_program_vault_package
+    import song_agent.unified_release_program as program_module
+    import song_agent.unified_release_program_verifier as program_verifier_module
+
+    del root
+    original_store_verifier = program_module.verify_unified_command_center_release_train_handoff_package
+    original_package_verifier = program_verifier_module.verify_unified_command_center_release_train_handoff_package
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v123-unified-release-program-vault-") as temp:
+            base = Path(temp)
+            program_module.verify_unified_command_center_release_train_handoff_package = _v120_fake_handoff_verifier
+            program_verifier_module.verify_unified_command_center_release_train_handoff_package = _v120_fake_handoff_verifier
+            program_store = UnifiedReleaseProgramStore(root=base / ".musicforge" / "unified-release-programs")
+            ops_store = UnifiedReleaseProgramOperationsStore(program_store)
+            handoff_store = UnifiedReleaseProgramHandoffStore(program_store)
+            vault_store = UnifiedReleaseProgramVaultStore(program_store)
+            handoff_zip, handoff_report, handoff_binding = _v120_fake_handoff_evidence(base)
+            program = program_store.create_program({"program_id": "urp-vault-smoke", "name": "Unified Release Program Vault smoke"})
+            item = program_store.add_train_item(
+                program["program_id"],
+                {
+                    "item_id": "train-a",
+                    "train_id": "uct-smoke",
+                    "handoff_id": "rth-smoke",
+                    "type": "required",
+                    "lane": "release",
+                    "handoff_zip": handoff_zip,
+                    "handoff_verification_report": handoff_report,
+                    "handoff_signoff_binding": handoff_binding,
+                },
+            )
+            program_manifest_path = base / "program-external-evidence.json"
+            write_external_evidence_manifest(
+                program_manifest_path,
+                program_id=program["program_id"],
+                items=[{"item_id": item["item_id"], "train_id": item["train_id"], "handoff_id": item["handoff_id"], "handoff_zip": str(handoff_zip), "handoff_verification_report": str(handoff_report), "handoff_signoff_binding": str(handoff_binding)}],
+            )
+            program_payload = {
+                "external_evidence_manifest": program_manifest_path,
+                "program_zip": program_store.zip_path(program["program_id"]),
+                "program_verification_report": program_store.verification_report_path(program["program_id"]),
+                "program_signoff_binding": program_store.signoff_binding_path(program["program_id"]),
+            }
+            program_store.refresh_report(program["program_id"], {"external_evidence_manifest": program_manifest_path})
+            program_store.signoff(program["program_id"], {"external_evidence_manifest": program_manifest_path, "signed_by": "program owner", "role": "release_owner"})
+            program_store.build_zip(program["program_id"])
+            program_store.verify_package(program["program_id"], {"strict": True, "require_current": True, "require_signed": True, "external_evidence_manifest": program_manifest_path, "program_signoff_binding": program_store.signoff_binding_path(program["program_id"])})
+            ops_store.refresh_continuous_review(program["program_id"], program_payload)
+            ops_store.refresh_lifecycle_audit(program["program_id"], program_payload)
+            ops_store.build_operations_archive_zip(program["program_id"], program_payload)
+            ops_store.verify_operations_archive_zip(program["program_id"], program_payload)
+            handoff_manifest = base / "handoff-external-evidence.json"
+            base_rows = _v122_handoff_manifest_rows(program_store, ops_store, program["program_id"], program_manifest_path)
+            write_handoff_external_evidence_manifest(handoff_manifest, program_id=program["program_id"], handoff_id="uph-000001", items=base_rows)
+            handoff_store.refresh_handoff(program["program_id"], {"external_evidence_manifest": handoff_manifest})
+            pack = handoff_store.export_review_pack(program["program_id"], {"audience": "release_owner"})
+            handoff_store.build_review_pack_zip(program["program_id"], pack["review_pack_id"])
+            response = handoff_store.import_response(program["program_id"], _v122_handoff_response(handoff_store, program["program_id"], pack["review_pack_id"]))
+            accepted = handoff_store.create_accepted_evidence(program["program_id"], response["response"]["response_id"])
+            evidence_id = accepted["evidence"]["evidence_id"]
+            accepted_row = {
+                "evidence_id": evidence_id,
+                "evidence_type": "program_accepted_evidence",
+                "component_id": "uph-000001",
+                "accepted_evidence_zip": str(handoff_store.accepted_evidence_zip_path(program["program_id"], evidence_id)),
+                "accepted_evidence_verification_report": str(handoff_store.accepted_evidence_verification_report_path(program["program_id"], evidence_id)),
+                "response_verification_report": str(handoff_store.response_verification_path(program["program_id"], response["response"]["response_id"])),
+                "response_binding_summary": str(handoff_store.response_binding_path(program["program_id"], response["response"]["response_id"])),
+            }
+            write_handoff_external_evidence_manifest(handoff_manifest, program_id=program["program_id"], handoff_id="uph-000001", items=[*base_rows, accepted_row])
+            handoff_store.refresh_handoff(program["program_id"], {"external_evidence_manifest": handoff_manifest})
+            handoff_store.refresh_decision_board(program["program_id"], {})
+            handoff_store.signoff_handoff(program["program_id"], {"signed_by": "handoff chair", "role": "release_owner"})
+            handoff_store.build_handoff_archive_zip(program["program_id"])
+            handoff_store.verify_handoff_archive_zip(program["program_id"], {"external_evidence_manifest": handoff_manifest, "handoff_signoff_binding": handoff_store.signoff_binding_path(program["program_id"])})
+            vault_report = vault_store.refresh_vault(program["program_id"])
+            vault_zip = vault_store.build_vault_zip(program["program_id"])
+            verified = vault_store.verify_vault_zip(program["program_id"], {"strict": True, "deep": True, "require_anchor": True})
+            missing_anchor = verify_unified_release_program_vault_package(vault_zip["zip_path"], strict=True, deep=True, require_anchor=True)
+            declared_extra_zip = base / "vault-declared-extra.zip"
+            _v76_rewrite_zip(Path(vault_zip["zip_path"]), declared_extra_zip, _v123_add_declared_vault_extra)
+            declared_extra = verify_unified_release_program_vault_package(declared_extra_zip, strict=True, deep=True, require_anchor=True, vault_anchor_path=vault_store.anchor_path(program["program_id"]))
+            nested_tamper_zip = base / "vault-nested-tamper.zip"
+            _v76_rewrite_zip(Path(vault_zip["zip_path"]), nested_tamper_zip, _v123_tamper_nested_handoff)
+            nested_tamper = verify_unified_release_program_vault_package(nested_tamper_zip, strict=True, deep=True, require_anchor=True, vault_anchor_path=vault_store.anchor_path(program["program_id"]))
+            forged_package_zip = base / "vault-forged-package.zip"
+            _v76_rewrite_zip(Path(vault_zip["zip_path"]), forged_package_zip, _v123_add_indexed_evil_vault_package)
+            forged_package_anchor = base / "vault-forged-package-anchor.json"
+            _v123_write_forged_vault_anchor(vault_store.anchor_path(program["program_id"]), forged_package_zip, forged_package_anchor)
+            forged_package = verify_unified_release_program_vault_package(forged_package_zip, strict=True, deep=True, require_anchor=True, vault_anchor_path=forged_package_anchor)
+            unsafe_zip = base / "vault-dangerous-entry.zip"
+            _v76_rewrite_zip(Path(vault_zip["zip_path"]), unsafe_zip, lambda entries: _v123_add_unsafe_vault_entry(entries, "../outside.txt"))
+            unsafe = verify_unified_release_program_vault_package(unsafe_zip, strict=True, deep=True)
+            musicforge_zip = base / "vault-musicforge-entry.zip"
+            _v76_rewrite_zip(Path(vault_zip["zip_path"]), musicforge_zip, lambda entries: _v123_add_unsafe_vault_entry(entries, ".MusicForge/internal.json"))
+            musicforge = verify_unified_release_program_vault_package(musicforge_zip, strict=True, deep=True)
+            backslash_zip = base / "vault-backslash-entry.zip"
+            _v76_rewrite_zip(Path(vault_zip["zip_path"]), backslash_zip, lambda entries: _v123_add_unsafe_vault_entry(entries, "packages/evil.zip"))
+            backslash_zip.write_bytes(backslash_zip.read_bytes().replace(b"packages/evil.zip", b"packages\\evil.zip"))
+            backslash = verify_unified_release_program_vault_package(backslash_zip, strict=True, deep=True)
+            nested_resigned_zip = base / "vault-nested-tamper-resigned.zip"
+            _v76_rewrite_zip(Path(vault_zip["zip_path"]), nested_resigned_zip, _v123_tamper_nested_handoff_and_indexes)
+            nested_resigned_anchor = base / "vault-nested-tamper-resigned-anchor.json"
+            _v123_write_forged_vault_anchor(vault_store.anchor_path(program["program_id"]), nested_resigned_zip, nested_resigned_anchor)
+            nested_resigned = verify_unified_release_program_vault_package(nested_resigned_zip, strict=True, deep=True, require_anchor=True, vault_anchor_path=nested_resigned_anchor)
+            ok = (
+                vault_report.get("status") == "passed"
+                and verified.get("status") == "passed"
+                and _v38_check_status(missing_anchor, "urpv_anchor_required") == "failed"
+                and _v38_check_status(declared_extra, "urpv_allowed_entries") == "failed"
+                and _v38_check_status(nested_tamper, "urpv_anchor_zip_sha256") == "failed"
+                and _v38_check_status(forged_package, "urpv_allowed_entries") == "failed"
+                and _v38_check_status(forged_package, "urpv_package_packages_evil_zip_allowed_component") == "failed"
+                and _v38_check_status(unsafe, "urpv_deep_preflight") == "failed"
+                and _v38_check_status(musicforge, "urpv_deep_preflight") == "failed"
+                and _v38_check_status(backslash, "urpv_deep_preflight") == "failed"
+                and _v38_check_status(nested_resigned, "urpv_deep_handoff_zip_sha256") == "failed"
+            )
+            return ok, (
+                f"vault={vault_report.get('status')}, verify={verified.get('status')}, "
+                f"missing_anchor={_v38_check_status(missing_anchor, 'urpv_anchor_required')}, "
+                f"declared_extra={_v38_check_status(declared_extra, 'urpv_allowed_entries')}, "
+                f"nested_tamper={_v38_check_status(nested_tamper, 'urpv_anchor_zip_sha256')}, "
+                f"forged_package={_v38_check_status(forged_package, 'urpv_allowed_entries')}/{_v38_check_status(forged_package, 'urpv_package_packages_evil_zip_allowed_component')}, "
+                f"unsafe={_v38_check_status(unsafe, 'urpv_entry_paths_safe')}/{_v38_check_status(unsafe, 'urpv_deep_preflight')}, "
+                f"musicforge={_v38_check_status(musicforge, 'urpv_entry_paths_safe')}/{_v38_check_status(musicforge, 'urpv_deep_preflight')}, "
+                f"backslash={_v38_check_status(backslash, 'urpv_entry_paths_safe')}/{_v38_check_status(backslash, 'urpv_deep_preflight')}, "
+                f"nested_resigned={_v38_check_status(nested_resigned, 'urpv_deep_handoff_zip_sha256')}"
+            )
+    except Exception as exc:
+        return False, f"v12.3 Unified Release Program Evidence Vault smoke failed: {exc}"
+    finally:
+        program_module.verify_unified_command_center_release_train_handoff_package = original_store_verifier
+        program_verifier_module.verify_unified_command_center_release_train_handoff_package = original_package_verifier
+
+
 def _v122_handoff_response(store, program_id: str, review_pack_id: str, *, reviewer_role: str = "release_owner", reviewer_id: str = "rev-release-owner", decision: str = "accepted") -> dict[str, object]:
     pack_report = read_json(store.review_pack_dir(program_id, review_pack_id) / "review-pack-report.json")
     zip_path = store.review_pack_zip_path(program_id, review_pack_id)
@@ -20395,6 +20538,111 @@ def _v122_add_declared_handoff_extra(entries: dict[str, bytes]) -> dict[str, byt
     manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
     entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     return entries
+
+
+def _v123_add_declared_vault_extra(entries: dict[str, bytes]) -> dict[str, bytes]:
+    extra = "docs/UNTRUSTED-INSTRUCTIONS.txt"
+    entries[extra] = b"unexpected vault file\n"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    manifest["files"].append({"path": extra, "size_bytes": len(entries[extra]), "sha256": _v121_sha256_bytes(entries[extra])})
+    manifest["files"] = sorted(manifest["files"], key=lambda row: row.get("path") or "")
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v123_tamper_nested_handoff(entries: dict[str, bytes]) -> dict[str, bytes]:
+    rel = "packages/unified-release-program-handoff.zip"
+    entries[rel] = entries[rel] + b"tamper"
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    for row in manifest.get("files", []):
+        if row.get("path") == rel:
+            row["size_bytes"] = len(entries[rel])
+            row["sha256"] = _v121_sha256_bytes(entries[rel])
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return entries
+
+
+def _v123_add_indexed_evil_vault_package(entries: dict[str, bytes]) -> dict[str, bytes]:
+    rel = "packages/evil.zip"
+    entries[rel] = b"not a trusted nested package\n"
+    package_index = json.loads(entries["package-index.json"].decode("utf-8"))
+    package_index.setdefault("packages", []).append(
+        {
+            "component_type": "evil",
+            "component_id": "evil",
+            "path": rel,
+            "zip_sha256": _v121_sha256_bytes(entries[rel]),
+            "zip_size_bytes": len(entries[rel]),
+            "exists": True,
+        }
+    )
+    package_index["summary"] = {"package_count": len(package_index.get("packages", []))}
+    package_index["integrity_hash"] = stable_hash({key: value for key, value in package_index.items() if key != "integrity_hash"})
+    entries["package-index.json"] = json.dumps(package_index, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    _v123_sync_vault_manifest(entries, "package-index.json", entries["package-index.json"], package_index_hash=package_index["integrity_hash"])
+    _v123_sync_vault_manifest(entries, rel, entries[rel])
+    return entries
+
+
+def _v123_add_unsafe_vault_entry(entries: dict[str, bytes], name: str) -> dict[str, bytes]:
+    entries[name] = b"unsafe vault entry\n"
+    return entries
+
+
+def _v123_tamper_nested_handoff_and_indexes(entries: dict[str, bytes]) -> dict[str, bytes]:
+    rel = "packages/unified-release-program-handoff.zip"
+    entries[rel] = entries[rel] + b"tamper"
+    package_index = json.loads(entries["package-index.json"].decode("utf-8"))
+    for row in package_index.get("packages", []):
+        if isinstance(row, dict) and row.get("path") == rel:
+            row["zip_sha256"] = _v121_sha256_bytes(entries[rel])
+            row["zip_size_bytes"] = len(entries[rel])
+    package_index["integrity_hash"] = stable_hash({key: value for key, value in package_index.items() if key != "integrity_hash"})
+    entries["package-index.json"] = json.dumps(package_index, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    _v123_sync_vault_manifest(entries, rel, entries[rel])
+    _v123_sync_vault_manifest(entries, "package-index.json", entries["package-index.json"], package_index_hash=package_index["integrity_hash"])
+    return entries
+
+
+def _v123_sync_vault_manifest(entries: dict[str, bytes], rel: str, data: bytes, *, package_index_hash: str | None = None) -> None:
+    manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+    if package_index_hash:
+        manifest.setdefault("source", {})["package_index_hash"] = package_index_hash
+    files = [row for row in manifest.get("files", []) if isinstance(row, dict) and row.get("path") != rel]
+    files.append({"path": rel, "size_bytes": len(data), "sha256": _v121_sha256_bytes(data)})
+    manifest["files"] = sorted(files, key=lambda row: row.get("path") or "")
+    manifest.setdefault("zip", {})["entries"] = sorted({*manifest.get("zip", {}).get("entries", []), *entries.keys()})
+    manifest["integrity_hash"] = stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
+    entries["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+
+def _v123_write_forged_vault_anchor(original_anchor_path: Path, zip_path: Path, target_anchor_path: Path) -> None:
+    anchor = read_json(original_anchor_path)
+    with zipfile.ZipFile(zip_path) as archive:
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        source = json.loads(archive.read("source-summary.json").decode("utf-8"))
+        report = json.loads(archive.read("vault-report.json").decode("utf-8"))
+        package_index = json.loads(archive.read("package-index.json").decode("utf-8"))
+        verification_index = json.loads(archive.read("verification-index.json").decode("utf-8"))
+        proof_index = json.loads(archive.read("proof-index.json").decode("utf-8"))
+        chain = json.loads(archive.read("chain-of-custody.json").decode("utf-8"))
+    anchor.update(
+        {
+            "vault_zip_sha256": _v120_sha256_path(zip_path),
+            "vault_zip_size_bytes": zip_path.stat().st_size,
+            "vault_manifest_hash": manifest.get("integrity_hash"),
+            "vault_source_hash": source.get("source_hash"),
+            "vault_report_hash": report.get("integrity_hash"),
+            "package_index_hash": package_index.get("integrity_hash"),
+            "verification_index_hash": verification_index.get("integrity_hash"),
+            "proof_index_hash": proof_index.get("integrity_hash"),
+            "chain_of_custody_hash": chain.get("integrity_hash"),
+        }
+    )
+    anchor["integrity_hash"] = stable_hash({key: value for key, value in anchor.items() if key != "integrity_hash"})
+    write_json(target_anchor_path, anchor)
 
 
 def _v122_full_resign_handoff_signer(entries: dict[str, bytes]) -> dict[str, bytes]:

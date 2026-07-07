@@ -663,6 +663,12 @@ from song_agent.unified_release_program_handoff import (
     UnifiedReleaseProgramHandoffStateError,
     UnifiedReleaseProgramHandoffStore,
 )
+from song_agent.unified_release_program_vault import (
+    UnifiedReleaseProgramVaultError,
+    UnifiedReleaseProgramVaultNotFoundError,
+    UnifiedReleaseProgramVaultStateError,
+    UnifiedReleaseProgramVaultStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3374,6 +3380,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_release_program_handoff_store(self) -> UnifiedReleaseProgramHandoffStore:
         return self.server.unified_release_program_handoff_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_release_program_vault_store(self) -> UnifiedReleaseProgramVaultStore:
+        return self.server.unified_release_program_vault_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -11611,6 +11621,60 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 )
                 self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
                 return
+            if tail == "/vault":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                detail = self.unified_release_program_vault_store.get_vault(program_id)
+                report = detail.get("report") or {}
+                self._send_json({"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/vault/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_vault_store.refresh_vault(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/vault/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.unified_release_program_vault_store.export_vault(program_id, self._optional_json_body())
+                self._send_json({"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"})
+                return
+            if tail == "/vault/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_release_program_vault_store.build_vault_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "anchor_path": result.get("anchor_path")}})
+                return
+            if tail == "/vault/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_vault_store.verify_vault_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/vault/gate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                gate = self.unified_release_program_vault_store.gate(
+                    program_id,
+                    required=True,
+                    vault_zip_path=payload.get("vault_zip") or payload.get("vault"),
+                    vault_verification_report_path=payload.get("vault_verification_report"),
+                    vault_anchor_path=payload.get("vault_anchor") or payload.get("anchor"),
+                    require_current_program=bool(payload.get("require_current_program", False)),
+                    require_current_operations=bool(payload.get("require_current_operations", False)),
+                    require_current_handoff=bool(payload.get("require_current_handoff", False)),
+                    require_accepted_evidence=bool(payload.get("require_accepted_evidence", True)),
+                )
+                self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
+                return
             if tail == "/operations/change-requests":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -11687,9 +11751,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 if method != "GET":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                self._send_file(self.unified_release_program_store.zip_path(program_id), "application/zip", filename="musicforge-unified-release-program.zip")
-                return
+            self._send_file(self.unified_release_program_store.zip_path(program_id), "application/zip", filename="musicforge-unified-release-program.zip")
+            return
             self._send_error(HTTPStatus.NOT_FOUND, "Unified Release Program route not found.")
+        except UnifiedReleaseProgramVaultNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedReleaseProgramVaultStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedReleaseProgramVaultError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedReleaseProgramHandoffNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
         except UnifiedReleaseProgramHandoffStateError as exc:
@@ -13273,6 +13343,24 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_release_program_handoff_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_release_program_handoff_gate.get("message") or "Unified Release Program Handoff gate failed.")
+        require_unified_release_program_vault = bool(payload.get("require_unified_release_program_vault", False))
+        unified_release_program_vault_gate = self.unified_release_program_vault_store.gate(
+            str(payload.get("unified_release_program_id") or payload.get("unified_release_program_vault_program_id") or "urp-000001"),
+            required=require_unified_release_program_vault,
+            vault_zip_path=payload.get("unified_release_program_vault") or payload.get("unified_release_program_vault_zip"),
+            vault_verification_report_path=payload.get("unified_release_program_vault_verification_report"),
+            vault_anchor_path=payload.get("unified_release_program_vault_anchor"),
+            require_current_program=bool(payload.get("unified_release_program_vault_require_current_program", False)),
+            require_current_operations=bool(payload.get("unified_release_program_vault_require_current_operations", False)),
+            require_current_handoff=bool(payload.get("unified_release_program_vault_require_current_handoff", False)),
+            require_accepted_evidence=bool(payload.get("unified_release_program_vault_require_accepted_evidence", True)),
+        )
+        if unified_release_program_vault_gate and require_unified_release_program_vault:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_release_program_vault"] = unified_release_program_vault_gate
+            if unified_release_program_vault_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_release_program_vault_gate.get("message") or "Unified Release Program Evidence Vault gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -13484,6 +13572,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(unified_release_program_handoff_gate.get("message") or "Unified Release Program Handoff gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_release_program_vault_gate.get("hard_block") and unified_release_program_vault_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_release_program_vault_gate.get("message") or "Unified Release Program Evidence Vault gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -21041,6 +21138,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_release_program_store = UnifiedReleaseProgramStore(release_store=self.release_store)
         self.unified_release_program_operations_store = UnifiedReleaseProgramOperationsStore(self.unified_release_program_store)
         self.unified_release_program_handoff_store = UnifiedReleaseProgramHandoffStore(self.unified_release_program_store)
+        self.unified_release_program_vault_store = UnifiedReleaseProgramVaultStore(self.unified_release_program_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

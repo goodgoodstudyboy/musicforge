@@ -101,6 +101,19 @@ v12.2.1 tightens Program Handoff gating: rejected or needs-changes reviewer
 responses can block the Decision Board, and Release / GA gates can require the
 Program Handoff archive with external verification evidence.
 
+v12.3 adds the Program Evidence Vault. It gathers the Program Board,
+Operations Archive, Final Handoff Archive, accepted evidence packages, public
+proof summaries, an auditor replay plan, and a ZIP-external `vault-anchor.json`.
+The Vault verifier supports deep nested package verification and Release / GA
+gates require the external anchor instead of trusting package-internal hashes:
+
+```powershell
+python -m song_agent.cli unified-release-program-vault refresh urp-000001 --json
+python -m song_agent.cli unified-release-program-vault zip urp-000001 --json
+python -m song_agent.cli unified-release-program-vault verify urp-000001 --deep --require-anchor --json
+python -m song_agent.cli verify-unified-release-program-vault-package .musicforge\unified-release-programs\urp-000001\evidence-vault\unified-release-program-evidence-vault.zip --deep --require-anchor --vault-anchor .musicforge\unified-release-programs\urp-000001\evidence-vault\vault-anchor.json --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.
