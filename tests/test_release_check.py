@@ -106,6 +106,7 @@ from song_agent.release_checks import (
     _v123_unified_release_program_evidence_vault_smoke,
     _v124_unified_release_program_vault_operations_smoke,
     _v125_unified_release_program_continuity_recovery_smoke,
+    _v126_unified_release_program_continuity_distribution_kit_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1482,6 +1483,20 @@ def test_v125_unified_release_program_continuity_recovery_smoke(tmp_path: Path) 
     assert "trailing_bytes=failed" in detail
     assert "source_vault_operations_tamper_409=True" in detail
     assert "signed_mutation_409=True" in detail
+
+
+def test_v126_unified_release_program_continuity_distribution_kit_smoke(tmp_path: Path) -> None:
+    ok, detail = _v126_unified_release_program_continuity_distribution_kit_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "verify=passed" in detail
+    assert "standalone=passed" in detail
+    assert "declared_extra=failed" in detail
+    assert "extra_nested_zip=failed" in detail
+    assert "backslash=failed" in detail
+    assert "musicforge=failed" in detail
+    assert "receipt_wrong_hash=failed" in detail
+    assert "source_continuity_tamper_409=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

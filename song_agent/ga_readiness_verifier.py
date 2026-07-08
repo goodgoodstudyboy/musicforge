@@ -175,6 +175,10 @@ def verify_ga_readiness_report(
     unified_release_program_continuity_path: Path | str | None = None,
     unified_release_program_continuity_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_signoff_binding_path: Path | str | None = None,
+    require_unified_release_program_continuity_kit: bool = False,
+    unified_release_program_continuity_kit_path: Path | str | None = None,
+    unified_release_program_continuity_kit_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_kit_receiver_receipt_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -529,6 +533,14 @@ def verify_ga_readiness_report(
                 unified_release_program_vault_operations_path,
                 unified_release_program_vault_operations_verification_report_path,
                 unified_release_program_vault_operations_signoff_binding_path,
+            )
+        if require_unified_release_program_continuity_kit:
+            _verify_unified_release_program_continuity_kit_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_continuity_kit", {}),
+                unified_release_program_continuity_kit_path,
+                unified_release_program_continuity_kit_verification_report_path,
+                unified_release_program_continuity_kit_receiver_receipt_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -2104,6 +2116,46 @@ def _verify_unified_release_program_continuity_evidence(
         verification_report,
         runtime_report,
         UNIFIED_RELEASE_PROGRAM_CONTINUITY_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_release_program_continuity_kit_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    kit_path: Path | str | None,
+    kit_verification_report_path: Path | str | None,
+    receiver_receipt_path: Path | str | None,
+) -> None:
+    if not kit_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_kit_required", "failed", "blocking", "Unified Release Program Continuity Distribution Kit requirement needs a kit ZIP.")
+        return
+    if not kit_verification_report_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_kit_verification_required", "failed", "blocking", "Unified Release Program Continuity Distribution Kit requirement needs a verification report.")
+        return
+    zip_path = Path(kit_path)
+    try:
+        from song_agent.unified_release_program_continuity_distribution_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_DISTRIBUTION_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_continuity_distribution_package
+
+        verification_report = read_json(Path(kit_verification_report_path))
+        runtime_report = verify_unified_release_program_continuity_distribution_package(
+            zip_path,
+            strict=True,
+            deep=True,
+            require_receiver_receipt=bool(receiver_receipt_path),
+            receiver_receipt_path=receiver_receipt_path,
+            kit_verification_report_path=kit_verification_report_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_kit_readable", "failed", "blocking", f"Unified Release Program Continuity Distribution Kit evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_continuity_kit",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_RELEASE_PROGRAM_CONTINUITY_DISTRIBUTION_VERIFICATION_PACKAGE_TYPE,
     )
 
 

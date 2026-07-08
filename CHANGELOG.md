@@ -1,5 +1,17 @@
 # Changelog
 
+## v12.6.0 - 2026-07-08
+
+### Added
+- Unified Release Program Continuity Distribution Kit for external disaster-recovery handoff, bundling the signed Continuity Archive, Vault Operations Archive, Evidence Vault, external verification reports, signoff bindings, vault anchor, receiver guide, and receiver receipt template into a fixed-layout ZIP.
+- Standalone `verify-unified-release-program-continuity-kit-package` and `unified-release-program-continuity-kit` CLI commands, plus HTTP API routes for kit prepare/export/ZIP/verify/gate and receiver receipt import/verification.
+- Release signoff and GA readiness can require Continuity Distribution Kit evidence through runtime deep verification instead of trusting package indexes or copied verification reports.
+- release-check `v126.unified_release_program_continuity_distribution_kit_smoke` covering happy path, declared-extra rejection, extra nested ZIP rejection, raw backslash rejection, `.MusicForge/` rejection, nested Continuity tamper blocking, receiver receipt wrong-hash failure, and source Continuity tamper blocking.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity_distribution.py tests\test_release_check.py::test_v126_unified_release_program_continuity_distribution_kit_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.5.0 - 2026-07-07
 
 ### Added

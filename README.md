@@ -144,6 +144,20 @@ python -m song_agent.cli unified-release-program-continuity archive-zip urp-0000
 python -m song_agent.cli verify-unified-release-program-continuity-package .musicforge\unified-release-programs\urp-000001\continuity\unified-release-program-continuity-archive.zip --strict --deep-restore --require-signed --require-current-vault-operations --signoff-binding .musicforge\unified-release-programs\urp-000001\continuity\continuity-signoff-binding-summary.json --vault-operations-archive .musicforge\unified-release-programs\urp-000001\vault-operations\unified-release-program-vault-operations-archive.zip --vault-operations-verification-report .musicforge\unified-release-programs\urp-000001\vault-operations\unified-release-program-vault-operations-verification-report.json --vault-operations-signoff-binding .musicforge\unified-release-programs\urp-000001\vault-operations\vault-operations-signoff-binding-summary.json --json
 ```
 
+v12.6 adds a Continuity Distribution Kit for external disaster-recovery handoff.
+It packages exactly three nested ZIPs: the Continuity Archive, Vault Operations
+Archive, and Evidence Vault. The verifier re-runs all nested verifiers at
+runtime and rejects declared extra files, unlisted nested ZIPs, raw backslash
+entries, `.MusicForge/` paths, trailing data, redaction hits, stale source
+evidence, and receiver receipts bound to the wrong kit hash:
+
+```powershell
+python -m song_agent.cli unified-release-program-continuity-kit prepare urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-kit zip urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-kit verify urp-000001 --strict --deep --json
+python -m song_agent.cli verify-unified-release-program-continuity-kit-package .musicforge\unified-release-programs\urp-000001\continuity-distribution\unified-release-program-continuity-distribution-kit.zip --strict --deep --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

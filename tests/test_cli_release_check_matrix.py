@@ -112,6 +112,7 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
         "v123.unified_release_program_evidence_vault_smoke",
         "v124.unified_release_program_vault_operations_smoke",
         "v125.unified_release_program_continuity_recovery_smoke",
+        "v126.unified_release_program_continuity_distribution_kit_smoke",
     ]
 
 

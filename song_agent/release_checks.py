@@ -20724,6 +20724,130 @@ def _v125_unified_release_program_continuity_recovery_smoke(root: Path) -> tuple
         return False, f"v12.5 Unified Release Program Continuity smoke failed: {exc}"
 
 
+def _v126_unified_release_program_continuity_distribution_kit_smoke(root: Path) -> tuple[bool, str]:
+    import tempfile
+
+    from song_agent.unified_release_program_continuity_distribution import UnifiedReleaseProgramContinuityDistributionStateError, UnifiedReleaseProgramContinuityDistributionStore
+    from song_agent.unified_release_program_continuity_distribution_verifier import verify_unified_release_program_continuity_distribution_package
+    from tests.test_unified_release_program_continuity import _prepared_continuity
+    from tests.test_unified_release_program_continuity_distribution import (
+        _add_declared_extra as _v126_add_declared_extra,
+        _add_extra_nested_zip as _v126_add_extra_nested_zip,
+        _replace_zip_name_bytes as _v126_replace_zip_name_bytes,
+        _tamper_nested_continuity as _v126_tamper_nested_continuity,
+        _write_with_extra_entry as _v126_write_with_extra_entry,
+    )
+
+    del root
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v126-unified-release-program-continuity-kit-") as temp:
+            base = Path(temp)
+            program_store, _ops, continuity, program_id = _prepared_continuity(base)
+            continuity.signoff_continuity(program_id, {"signed_by": "continuity lead"})
+            continuity.build_archive_zip(program_id)
+            continuity.verify_archive_zip(program_id, {"deep_restore": True, "require_signed": True, "require_current_vault_operations": True})
+            kit = UnifiedReleaseProgramContinuityDistributionStore(program_store)
+            kit.prepare_kit(program_id)
+            zipped = kit.build_kit_zip(program_id)
+            verified = kit.verify_kit(program_id, {"deep": True})
+            standalone = verify_unified_release_program_continuity_distribution_package(zipped["zip_path"], strict=True, deep=True)
+
+            declared_extra_zip = base / "kit-declared-extra.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v126_add_declared_extra)
+            declared_extra = verify_unified_release_program_continuity_distribution_package(declared_extra_zip, strict=True, deep=True)
+
+            extra_nested_zip = base / "kit-extra-nested.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), extra_nested_zip, _v126_add_extra_nested_zip)
+            extra_nested = verify_unified_release_program_continuity_distribution_package(extra_nested_zip, strict=True, deep=True)
+
+            backslash_zip = base / "kit-backslash.zip"
+            _v126_replace_zip_name_bytes(Path(zipped["zip_path"]), backslash_zip, b"README.txt", b"README\\txt")
+            backslash = verify_unified_release_program_continuity_distribution_package(backslash_zip, strict=True, deep=True)
+
+            musicforge_zip = base / "kit-musicforge.zip"
+            _v126_write_with_extra_entry(Path(zipped["zip_path"]), musicforge_zip, ".MusicForge/internal.json", b"{}")
+            musicforge = verify_unified_release_program_continuity_distribution_package(musicforge_zip, strict=True, deep=True)
+
+            nested_tamper_zip = base / "kit-nested-tamper.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), nested_tamper_zip, _v126_tamper_nested_continuity)
+            nested_tamper = verify_unified_release_program_continuity_distribution_package(nested_tamper_zip, strict=True, deep=True)
+
+            receipt = kit.import_receiver_receipt(
+                program_id,
+                {
+                    "receiver_name": "Receiver",
+                    "organization": "QA",
+                    "decision": "accepted",
+                    "verification_status": "passed",
+                    "kit_sha256": "0" * 64,
+                    "kit_manifest_hash": zipped["manifest_hash"],
+                    "verification_report_hash": verified.get("integrity_hash"),
+                },
+            )
+            receipt_wrong = verify_unified_release_program_continuity_distribution_package(
+                zipped["zip_path"],
+                strict=True,
+                deep=True,
+                require_receiver_receipt=True,
+                receiver_receipt_path=kit.receiver_receipt_path(program_id, str(receipt["receipt_id"])),
+                kit_verification_report_path=kit.verification_report_path(program_id),
+            )
+            receipt_bad_verification = kit.import_receiver_receipt(
+                program_id,
+                {
+                    "receiver_name": "Receiver",
+                    "organization": "QA",
+                    "decision": "accepted",
+                    "verification_status": "passed",
+                    "kit_sha256": zipped["zip_sha256"],
+                    "kit_manifest_hash": zipped["manifest_hash"],
+                    "verification_report_hash": "f" * 64,
+                },
+            )
+            receipt_wrong_verification = verify_unified_release_program_continuity_distribution_package(
+                zipped["zip_path"],
+                strict=True,
+                deep=True,
+                require_receiver_receipt=True,
+                receiver_receipt_path=kit.receiver_receipt_path(program_id, str(receipt_bad_verification["receipt_id"])),
+                kit_verification_report_path=kit.verification_report_path(program_id),
+            )
+
+            with continuity.archive_zip_path(program_id).open("ab") as fh:
+                fh.write(b"tamper")
+            source_tamper_blocked = False
+            try:
+                kit.build_kit_zip(program_id)
+            except UnifiedReleaseProgramContinuityDistributionStateError:
+                source_tamper_blocked = True
+
+            ok = (
+                verified.get("status") == "passed"
+                and standalone.get("status") == "passed"
+                and _v38_check_status(declared_extra, "urpcdk_allowed_entries") == "failed"
+                and _v38_check_status(extra_nested, "urpcdk_nested_zip_allowlist") == "failed"
+                and _v38_check_status(backslash, "urpcdk_entry_paths_safe") == "failed"
+                and _v38_check_status(musicforge, "urpcdk_entry_paths_safe") == "failed"
+                and (_v38_check_status(nested_tamper, "urpcdk_source_continuity_zip_sha256") == "failed" or _v38_check_status(nested_tamper, "urpcdk_continuity_runtime_zip_hash") == "failed")
+                and _v38_check_status(receipt_wrong, "urpcdk_receiver_receipt_kit_sha256") == "failed"
+                and _v38_check_status(receipt_wrong_verification, "urpcdk_receiver_receipt_verification_hash") == "failed"
+                and source_tamper_blocked
+            )
+            return ok, (
+                f"verify={verified.get('status')}, standalone={standalone.get('status')}, "
+                f"declared_extra={_v38_check_status(declared_extra, 'urpcdk_allowed_entries')}, "
+                f"extra_nested_zip={_v38_check_status(extra_nested, 'urpcdk_nested_zip_allowlist')}, "
+                f"backslash={_v38_check_status(backslash, 'urpcdk_entry_paths_safe')}, "
+                f"musicforge={_v38_check_status(musicforge, 'urpcdk_entry_paths_safe')}, "
+                f"nested_continuity_tamper={nested_tamper.get('status')}, "
+                f"receipt_wrong_hash={_v38_check_status(receipt_wrong, 'urpcdk_receiver_receipt_kit_sha256')}, "
+                f"receipt_wrong_verification_hash={_v38_check_status(receipt_wrong_verification, 'urpcdk_receiver_receipt_verification_hash')}, "
+                f"source_continuity_tamper_409={source_tamper_blocked}"
+            )
+    except Exception as exc:
+        return False, f"v12.6 Unified Release Program Continuity Distribution Kit smoke failed: {exc}"
+
+
 def _v122_handoff_response(store, program_id: str, review_pack_id: str, *, reviewer_role: str = "release_owner", reviewer_id: str = "rev-release-owner", decision: str = "accepted") -> dict[str, object]:
     pack_report = read_json(store.review_pack_dir(program_id, review_pack_id) / "review-pack-report.json")
     zip_path = store.review_pack_zip_path(program_id, review_pack_id)
