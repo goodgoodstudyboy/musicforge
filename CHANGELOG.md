@@ -1,5 +1,17 @@
 # Changelog
 
+## v12.7.0 - 2026-07-08
+
+### Added
+- Unified Release Program Continuity Acceptance Board for external disaster-recovery receiver responses, externally supplied response verification / binding proof, accepted evidence, quorum decisions, signed immutable acceptance archive, and fixed-layout offline verifier.
+- CLI and HTTP API endpoints for `unified-release-program-continuity-acceptance` plus standalone `verify-unified-release-program-continuity-acceptance-package`.
+- Release signoff and GA readiness can require Continuity Acceptance evidence bound to the current Continuity Distribution Kit, external verification report, and signoff binding proof.
+- release-check `v127.unified_release_program_continuity_acceptance_board_smoke` covering happy path, missing explicit response binding, role forge rejection, rejected / needs-changes blockers, declared-extra ZIP rejection, signoff full-resign rejection, and signed mutation blocking.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity_acceptance.py tests\test_release_check.py::test_v127_unified_release_program_continuity_acceptance_board_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.6.0 - 2026-07-08
 
 ### Added

@@ -20848,6 +20848,115 @@ def _v126_unified_release_program_continuity_distribution_kit_smoke(root: Path) 
         return False, f"v12.6 Unified Release Program Continuity Distribution Kit smoke failed: {exc}"
 
 
+def _v127_unified_release_program_continuity_acceptance_board_smoke(root: Path) -> tuple[bool, str]:
+    import tempfile
+
+    from song_agent.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStateError, UnifiedReleaseProgramContinuityAcceptanceStore
+    from song_agent.unified_release_program_continuity_acceptance_verifier import verify_unified_release_program_continuity_acceptance_package
+    from tests.test_unified_release_program_continuity_acceptance import (
+        _add_declared_extra as _v127_add_declared_extra,
+        _accepted_pair as _v127_accepted_pair,
+        _full_resign_signer as _v127_full_resign_signer,
+        _prepared_acceptance as _v127_prepared_acceptance,
+        _response as _v127_response,
+    )
+
+    del root
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v127-unified-release-program-continuity-acceptance-") as temp:
+            base = Path(temp)
+            _program_store, distribution, store, program_id, zipped = _v127_prepared_acceptance(base)
+            _v127_accepted_pair(distribution, store, program_id, zipped)
+            board = store.refresh_decision_board(program_id)
+            signoff = store.signoff_acceptance(program_id, {"signed_by": "continuity chair", "role": "program_owner"})
+            archive = store.build_archive_zip(program_id)
+            verified = store.verify_archive_zip(program_id)
+            standalone = verify_unified_release_program_continuity_acceptance_package(
+                archive["zip_path"],
+                strict=True,
+                require_current_kit=True,
+                require_signed=True,
+                require_quorum=True,
+                continuity_kit_path=distribution.kit_zip_path(program_id),
+                continuity_kit_verification_report_path=distribution.verification_report_path(program_id),
+                signoff_binding_path=store.signoff_binding_path(program_id),
+            )
+
+            declared_extra_zip = base / "acceptance-declared-extra.zip"
+            _v76_rewrite_zip(Path(archive["zip_path"]), declared_extra_zip, _v127_add_declared_extra)
+            declared_extra = verify_unified_release_program_continuity_acceptance_package(declared_extra_zip, strict=True)
+
+            forged_zip = base / "acceptance-forged.zip"
+            _v76_rewrite_zip(Path(archive["zip_path"]), forged_zip, _v127_full_resign_signer)
+            full_resign = verify_unified_release_program_continuity_acceptance_package(
+                forged_zip,
+                strict=True,
+                require_current_kit=True,
+                require_signed=True,
+                require_quorum=True,
+                continuity_kit_path=distribution.kit_zip_path(program_id),
+                continuity_kit_verification_report_path=distribution.verification_report_path(program_id),
+                signoff_binding_path=store.signoff_binding_path(program_id),
+            )
+
+            role_base = base / "role"
+            role_base.mkdir(parents=True, exist_ok=True)
+            signed_mutation_blocked = False
+            try:
+                store.import_response(program_id, _v127_response(distribution, program_id, zipped, receiver_id="receiver-004", role="observer", organization="Late Org"))
+            except UnifiedReleaseProgramContinuityAcceptanceStateError:
+                signed_mutation_blocked = True
+            signed_source_tamper_blocked = False
+            tampered_response_path = store.response_path(program_id, "response-receiver-001")
+            tampered_response = read_json(tampered_response_path)
+            tampered_response["notes"] = "polluted after signoff"
+            tampered_response["integrity_hash"] = stable_hash({key: value for key, value in tampered_response.items() if key != "integrity_hash"})
+            write_json(tampered_response_path, tampered_response)
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityAcceptanceStateError:
+                signed_source_tamper_blocked = True
+
+            with tempfile.TemporaryDirectory(prefix="mf-v127-stale-kit-") as stale_temp:
+                stale_base = Path(stale_temp)
+                _program_store_stale, distribution_stale, store_stale, program_id_stale, zipped_stale = _v127_prepared_acceptance(stale_base)
+                _v127_accepted_pair(distribution_stale, store_stale, program_id_stale, zipped_stale)
+                stale_kit_path = distribution_stale.kit_zip_path(program_id_stale)
+                stale_kit_path.write_bytes(stale_kit_path.read_bytes() + b"tamper")
+                distribution_stale.verify_kit(program_id_stale, {"deep": True})
+                distribution_stale.build_kit_zip(program_id_stale)
+                distribution_stale.verify_kit(program_id_stale, {"deep": True})
+                stale_board = store_stale.refresh_decision_board(program_id_stale)
+                stale_signoff_blocked = False
+                try:
+                    store_stale.signoff_acceptance(program_id_stale, {"signed_by": "chair", "role": "program_owner"})
+                except UnifiedReleaseProgramContinuityAcceptanceStateError:
+                    stale_signoff_blocked = True
+
+            ok = (
+                board.get("status") == "ready_for_signoff"
+                and signoff.get("status") == "signed"
+                and verified.get("status") == "passed"
+                and standalone.get("status") == "passed"
+                and _v38_check_status(declared_extra, "urpca_allowed_entries") == "failed"
+                and _v38_check_status(full_resign, "urpca_external_signoff_binding_hash") == "failed"
+                and signed_mutation_blocked
+                and signed_source_tamper_blocked
+                and stale_board.get("status") == "blocked"
+                and stale_signoff_blocked
+            )
+            return ok, (
+                f"board={board.get('status')}, verify={verified.get('status')}, standalone={standalone.get('status')}, "
+                f"declared_extra={_v38_check_status(declared_extra, 'urpca_allowed_entries')}, "
+                f"full_resign_signed_by={_v38_check_status(full_resign, 'urpca_external_signoff_binding_hash')}, "
+                f"signed_mutation_409={signed_mutation_blocked}, "
+                f"signed_source_tamper_409={signed_source_tamper_blocked}, "
+                f"stale_kit_after_response={stale_board.get('status')}/{stale_signoff_blocked}"
+            )
+    except Exception as exc:
+        return False, f"v12.7 Unified Release Program Continuity Acceptance Board smoke failed: {exc}"
+
+
 def _v122_handoff_response(store, program_id: str, review_pack_id: str, *, reviewer_role: str = "release_owner", reviewer_id: str = "rev-release-owner", decision: str = "accepted") -> dict[str, object]:
     pack_report = read_json(store.review_pack_dir(program_id, review_pack_id) / "review-pack-report.json")
     zip_path = store.review_pack_zip_path(program_id, review_pack_id)

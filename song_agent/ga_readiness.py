@@ -177,6 +177,10 @@ def build_ga_readiness_report(
     unified_release_program_continuity_kit_zip_path: Path | str | None = None,
     unified_release_program_continuity_kit_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_kit_receiver_receipt_path: Path | str | None = None,
+    require_unified_release_program_continuity_acceptance: bool = False,
+    unified_release_program_continuity_acceptance_zip_path: Path | str | None = None,
+    unified_release_program_continuity_acceptance_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_acceptance_signoff_binding_path: Path | str | None = None,
     unified_release_zip_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -231,6 +235,7 @@ def build_ga_readiness_report(
         "require_unified_release_program_vault_operations": require_unified_release_program_vault_operations,
         "require_unified_release_program_continuity": require_unified_release_program_continuity,
         "require_unified_release_program_continuity_kit": require_unified_release_program_continuity_kit,
+        "require_unified_release_program_continuity_acceptance": require_unified_release_program_continuity_acceptance,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -760,6 +765,22 @@ def build_ga_readiness_report(
         "Unified Release Program Continuity Distribution Kit is passed." if unified_release_program_continuity_kit_summary.get("status") == "passed" else "Unified Release Program Continuity Distribution Kit is missing or not passed.",
         unified_release_program_continuity_kit_summary,
     )
+    unified_release_program_continuity_acceptance_summary = _unified_release_program_continuity_acceptance_summary(
+        required=require_unified_release_program_continuity_acceptance,
+        archive_zip_path=unified_release_program_continuity_acceptance_zip_path,
+        verification_report_path=unified_release_program_continuity_acceptance_verification_report_path,
+        signoff_binding_path=unified_release_program_continuity_acceptance_signoff_binding_path,
+        kit_zip_path=unified_release_program_continuity_kit_zip_path,
+        kit_verification_report_path=unified_release_program_continuity_kit_verification_report_path,
+    )
+    _add_check(
+        checks,
+        "ga.unified_release_program_continuity_acceptance",
+        "passed" if unified_release_program_continuity_acceptance_summary.get("status") == "passed" else "failed" if require_unified_release_program_continuity_acceptance else "warning",
+        "blocking" if require_unified_release_program_continuity_acceptance else "warning",
+        "Unified Release Program Continuity Acceptance Board is passed." if unified_release_program_continuity_acceptance_summary.get("status") == "passed" else "Unified Release Program Continuity Acceptance Board is missing or not passed.",
+        unified_release_program_continuity_acceptance_summary,
+    )
 
     latest_summary = _release_check_summary(
         root,
@@ -837,6 +858,10 @@ def build_ga_readiness_report(
             "unified_command_center_reviewer_decision_board_status": unified_decision_board_summary.get("status", "missing"),
             "unified_release_program_handoff_status": unified_release_program_handoff_summary.get("status", "missing"),
             "unified_release_program_vault_status": unified_release_program_vault_summary.get("status", "missing"),
+            "unified_release_program_vault_operations_status": unified_release_program_vault_operations_summary.get("status", "missing"),
+            "unified_release_program_continuity_status": unified_release_program_continuity_summary.get("status", "missing"),
+            "unified_release_program_continuity_kit_status": unified_release_program_continuity_kit_summary.get("status", "missing"),
+            "unified_release_program_continuity_acceptance_status": unified_release_program_continuity_acceptance_summary.get("status", "missing"),
             "renderer_status": renderer_summary.get("status", "unknown"),
             "provider_status": provider_summary.get("status", "unknown"),
             "trust_final_readiness_status": final_summary.get("status", "missing"),
@@ -2231,6 +2256,58 @@ def _unified_release_program_continuity_kit_summary(
             "zip_binding_ok": zip_binding_ok,
             "manifest_binding_ok": manifest_binding_ok,
             "receiver_receipt_required": bool(receiver_receipt_path),
+            "blockers": runtime_report.get("blockers", []),
+            "summary": runtime_report.get("summary", {}),
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_release_program_continuity_acceptance_summary(
+    *,
+    required: bool,
+    archive_zip_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    signoff_binding_path: Path | str | None,
+    kit_zip_path: Path | str | None,
+    kit_verification_report_path: Path | str | None,
+) -> dict[str, Any]:
+    if archive_zip_path is None:
+        return {"status": "missing", "message": "Unified Release Program Continuity Acceptance Archive ZIP was not provided."}
+    if required and verification_report_path is None:
+        return {"status": "failed", "message": "Unified Release Program Continuity Acceptance requires a verification report."}
+    try:
+        from song_agent.unified_release_program_continuity_acceptance_verifier import verify_unified_release_program_continuity_acceptance_package
+
+        runtime_report = verify_unified_release_program_continuity_acceptance_package(
+            archive_zip_path,
+            strict=True,
+            require_current_kit=True,
+            require_signed=True,
+            require_quorum=True,
+            continuity_kit_path=kit_zip_path,
+            continuity_kit_verification_report_path=kit_verification_report_path,
+            signoff_binding_path=signoff_binding_path,
+        )
+        external_report: dict[str, Any] = {}
+        if verification_report_path is not None:
+            external_report = read_json(Path(verification_report_path))
+        external_fp = _verification_fingerprint(external_report) if external_report else {}
+        runtime_fp = _verification_fingerprint(runtime_report)
+        external_integrity_ok = not external_report or external_report.get("integrity_hash") == stable_hash({key: value for key, value in external_report.items() if key != "integrity_hash"})
+        zip_binding_ok = not external_report or external_fp.get("zip_sha256") == runtime_fp.get("zip_sha256")
+        manifest_binding_ok = not external_report or external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        status = "passed" if runtime_report.get("status") == "passed" and (not external_report or external_report.get("status") == "passed") and external_integrity_ok and zip_binding_ok and manifest_binding_ok else "failed"
+        return {
+            "status": status,
+            "zip_sha256": runtime_fp.get("zip_sha256"),
+            "manifest_hash": runtime_fp.get("manifest_hash"),
+            "verification_hash": external_report.get("integrity_hash") if external_report else runtime_report.get("integrity_hash"),
+            "runtime_verification_status": runtime_report.get("status"),
+            "external_verification_status": external_report.get("status") if external_report else None,
+            "external_integrity_ok": external_integrity_ok,
+            "zip_binding_ok": zip_binding_ok,
+            "manifest_binding_ok": manifest_binding_ok,
             "blockers": runtime_report.get("blockers", []),
             "summary": runtime_report.get("summary", {}),
         }

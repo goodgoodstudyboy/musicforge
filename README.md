@@ -158,6 +158,22 @@ python -m song_agent.cli unified-release-program-continuity-kit verify urp-00000
 python -m song_agent.cli verify-unified-release-program-continuity-kit-package .musicforge\unified-release-programs\urp-000001\continuity-distribution\unified-release-program-continuity-distribution-kit.zip --strict --deep --json
 ```
 
+v12.7 adds a Continuity Acceptance Board for external disaster-recovery
+receivers. Receiver responses must explicitly bind the current Continuity
+Distribution Kit hash, manifest hash, and verification report hash; the import
+path does not fill those fields in. Accepted responses can be turned into
+accepted evidence, evaluated for quorum, signed into an immutable archive, and
+verified offline with the current Kit and signoff binding:
+
+```powershell
+python -m song_agent.cli unified-release-program-continuity-acceptance import-response urp-000001 --response-json response.json --response-verification-report response-verification-report.json --response-binding-summary response-binding-summary.json --json
+python -m song_agent.cli unified-release-program-continuity-acceptance accept-evidence urp-000001 urpcares-000001 --json
+python -m song_agent.cli unified-release-program-continuity-acceptance board urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-acceptance signoff urp-000001 --signed-by "Continuity Board Chair" --json
+python -m song_agent.cli unified-release-program-continuity-acceptance zip urp-000001 --json
+python -m song_agent.cli verify-unified-release-program-continuity-acceptance-package .musicforge\unified-release-programs\urp-000001\continuity-acceptance\unified-release-program-continuity-acceptance-archive.zip --strict --require-current-kit --require-signed --require-quorum --continuity-kit .musicforge\unified-release-programs\urp-000001\continuity-distribution\unified-release-program-continuity-distribution-kit.zip --continuity-kit-verification-report .musicforge\unified-release-programs\urp-000001\continuity-distribution\unified-release-program-continuity-distribution-verification-report.json --signoff-binding .musicforge\unified-release-programs\urp-000001\continuity-acceptance\continuity-acceptance-signoff-binding-summary.json --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

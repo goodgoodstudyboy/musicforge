@@ -287,6 +287,10 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-release-program-continuity-kit", type=Path, default=None, help="Unified Release Program Continuity Distribution Kit ZIP.")
     parser.add_argument("--unified-release-program-continuity-kit-verification-report", type=Path, default=None, help="Unified Release Program Continuity Distribution Kit verification report.")
     parser.add_argument("--unified-release-program-continuity-kit-receiver-receipt", type=Path, default=None, help="Receiver receipt bound to the Continuity Distribution Kit.")
+    parser.add_argument("--require-unified-release-program-continuity-acceptance", action="store_true", help="Require Unified Release Program Continuity Acceptance Board evidence.")
+    parser.add_argument("--unified-release-program-continuity-acceptance", type=Path, default=None, help="Unified Release Program Continuity Acceptance Board archive ZIP.")
+    parser.add_argument("--unified-release-program-continuity-acceptance-verification-report", type=Path, default=None, help="Unified Release Program Continuity Acceptance Board verification report.")
+    parser.add_argument("--unified-release-program-continuity-acceptance-signoff-binding", type=Path, default=None, help="External Continuity Acceptance Board signoff binding summary.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -2320,6 +2324,58 @@ def build_verify_unified_release_program_continuity_distribution_parser() -> arg
     parser.add_argument("--verification-report", type=Path, default=None, help="Current Kit verification report required when checking receiver receipt binding.")
     parser.add_argument("--max-zip-size-mb", type=int, default=4096)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=8192)
+    parser.add_argument("--max-entry-count", type=int, default=2000)
+    return parser
+
+
+def build_unified_release_program_continuity_acceptance_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Continuity Acceptance Board.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    for action in ("status", "import-response", "accept-evidence", "board", "signoff", "export", "zip", "verify", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Program Continuity Acceptance Board.")
+        cmd.add_argument("program_id")
+        if action == "import-response":
+            cmd.add_argument("--response-json", type=Path, required=True)
+            cmd.add_argument("--response-verification-report", type=Path, required=True)
+            cmd.add_argument("--response-binding-summary", type=Path, required=True)
+        if action == "accept-evidence":
+            cmd.add_argument("response_id")
+        if action == "board":
+            cmd.add_argument("--policy-json", type=Path, default=None)
+        if action == "signoff":
+            cmd.add_argument("--signed-by", default=None)
+            cmd.add_argument("--role", default=None)
+            cmd.add_argument("--reason", default=None)
+        if action in {"verify", "gate"}:
+            cmd.add_argument("--archive-zip", type=Path, default=None)
+            cmd.add_argument("--verification-report", type=Path, default=None)
+            cmd.add_argument("--continuity-kit", type=Path, default=None)
+            cmd.add_argument("--continuity-kit-verification-report", type=Path, default=None)
+            cmd.add_argument("--signoff-binding", type=Path, default=None)
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-current-kit", action="store_true")
+            cmd.add_argument("--require-signed", action="store_true")
+            cmd.add_argument("--require-quorum", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_continuity_acceptance_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program Continuity Acceptance Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current-kit", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--require-quorum", action="store_true")
+    parser.add_argument("--continuity-kit", type=Path, default=None)
+    parser.add_argument("--continuity-kit-verification-report", type=Path, default=None)
+    parser.add_argument("--signoff-binding", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=256)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=2000)
     return parser
 
@@ -6516,6 +6572,75 @@ def _run_unified_release_program_continuity_distribution_command(args: argparse.
     raise ValueError("Unsupported unified-release-program-continuity-kit command.")
 
 
+def _run_unified_release_program_continuity_acceptance_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.projectio import read_json
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStore
+    from song_agent.unified_release_program_continuity_acceptance_verifier import write_unified_release_program_continuity_acceptance_verification_report
+
+    store = UnifiedReleaseProgramContinuityAcceptanceStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    if args.action == "status":
+        detail = store.get_board(program_id)
+        report = detail.get("report") or {}
+        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or "unknown"}
+    if args.action == "import-response":
+        result = store.import_response(
+            program_id,
+            {
+                "response": read_json(args.response_json),
+                "response_verification_report": read_json(args.response_verification_report),
+                "response_binding_summary": read_json(args.response_binding_summary),
+            },
+        )
+        return {"ok": result.get("status") == "imported", **result, "summary": {"response_id": result.get("response", {}).get("response_id")}, "status": result.get("status")}
+    if args.action == "accept-evidence":
+        result = store.create_accepted_evidence(program_id, args.response_id)
+        return {"ok": result.get("status") == "accepted", **result, "summary": {"evidence_id": result.get("evidence", {}).get("evidence_id")}, "status": result.get("status")}
+    if args.action == "board":
+        policy = read_json(args.policy_json) if args.policy_json else None
+        board = store.refresh_decision_board(program_id, {"policy": policy} if policy else {})
+        return {"ok": board.get("status") == "ready_for_signoff", "board": board, "summary": board.get("readiness", {}), "status": board.get("status")}
+    if args.action == "signoff":
+        signoff = store.signoff_acceptance(program_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}
+    if args.action == "export":
+        manifest = store.export_archive(program_id)
+        return {"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"}
+    if args.action == "zip":
+        result = store.build_archive_zip(program_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "manifest_hash": result.get("manifest_hash")}}
+    if args.action == "verify":
+        report = store.verify_archive_zip(
+            program_id,
+            {
+                "archive_zip": args.archive_zip,
+                "strict": args.strict,
+                "require_current_kit": args.require_current_kit or True,
+                "require_signed": args.require_signed or True,
+                "require_quorum": args.require_quorum or True,
+                "continuity_kit": args.continuity_kit,
+                "continuity_kit_verification_report": args.continuity_kit_verification_report,
+                "signoff_binding": args.signoff_binding,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_acceptance_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            archive_zip_path=args.archive_zip,
+            verification_report_path=args.verification_report,
+            continuity_kit=args.continuity_kit,
+            continuity_kit_verification_report=args.continuity_kit_verification_report,
+            signoff_binding=args.signoff_binding,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
+    raise ValueError("Unsupported unified-release-program-continuity-acceptance command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -6758,6 +6883,10 @@ def _main() -> None:
             unified_release_program_continuity_kit_zip_path=args.unified_release_program_continuity_kit,
             unified_release_program_continuity_kit_verification_report_path=args.unified_release_program_continuity_kit_verification_report,
             unified_release_program_continuity_kit_receiver_receipt_path=args.unified_release_program_continuity_kit_receiver_receipt,
+            require_unified_release_program_continuity_acceptance=args.require_unified_release_program_continuity_acceptance,
+            unified_release_program_continuity_acceptance_zip_path=args.unified_release_program_continuity_acceptance,
+            unified_release_program_continuity_acceptance_verification_report_path=args.unified_release_program_continuity_acceptance_verification_report,
+            unified_release_program_continuity_acceptance_signoff_binding_path=args.unified_release_program_continuity_acceptance_signoff_binding,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -6901,6 +7030,10 @@ def _main() -> None:
             unified_release_program_continuity_kit_path=args.unified_release_program_continuity_kit,
             unified_release_program_continuity_kit_verification_report_path=args.unified_release_program_continuity_kit_verification_report,
             unified_release_program_continuity_kit_receiver_receipt_path=args.unified_release_program_continuity_kit_receiver_receipt,
+            require_unified_release_program_continuity_acceptance=args.require_unified_release_program_continuity_acceptance,
+            unified_release_program_continuity_acceptance_path=args.unified_release_program_continuity_acceptance,
+            unified_release_program_continuity_acceptance_verification_report_path=args.unified_release_program_continuity_acceptance_verification_report,
+            unified_release_program_continuity_acceptance_signoff_binding_path=args.unified_release_program_continuity_acceptance_signoff_binding,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -7205,6 +7338,16 @@ def _main() -> None:
         parser = build_unified_release_program_continuity_distribution_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_continuity_distribution_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-continuity-acceptance":
+        parser = build_unified_release_program_continuity_acceptance_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_continuity_acceptance_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -8022,6 +8165,38 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_continuity_distribution_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-acceptance-package":
+        from song_agent.unified_release_program_continuity_acceptance_verifier import (
+            unified_release_program_continuity_acceptance_verification_exit_code,
+            verify_unified_release_program_continuity_acceptance_package,
+            write_unified_release_program_continuity_acceptance_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_continuity_acceptance_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_continuity_acceptance_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current_kit=args.require_current_kit,
+            require_signed=args.require_signed,
+            require_quorum=args.require_quorum,
+            continuity_kit_path=args.continuity_kit,
+            continuity_kit_verification_report_path=args.continuity_kit_verification_report,
+            signoff_binding_path=args.signoff_binding,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_acceptance_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program Continuity Acceptance verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_continuity_acceptance_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 
