@@ -2380,6 +2380,58 @@ def build_verify_unified_release_program_continuity_acceptance_parser() -> argpa
     return parser
 
 
+def build_unified_release_program_continuity_acceptance_change_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Continuity Acceptance Change Control.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    for action in ("status", "create-change-request", "approve-change-request", "reset-signoff", "lifecycle", "export", "zip", "verify", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Continuity Acceptance Change Control.")
+        cmd.add_argument("program_id")
+        if action in {"approve-change-request", "reset-signoff"}:
+            cmd.add_argument("change_request_id")
+        if action == "create-change-request":
+            cmd.add_argument("--change-request-id", default=None)
+            cmd.add_argument("--change-type", default=None)
+            cmd.add_argument("--allowed-action", action="append", default=[])
+            cmd.add_argument("--reason", default=None)
+            cmd.add_argument("--requested-by", default=None)
+        if action == "approve-change-request":
+            cmd.add_argument("--approved-by", default=None)
+            cmd.add_argument("--role", default=None)
+            cmd.add_argument("--reason", default=None)
+            cmd.add_argument("--approved-action", action="append", default=[])
+        if action == "reset-signoff":
+            cmd.add_argument("--reset-by", default=None)
+            cmd.add_argument("--reason", default=None)
+        if action in {"verify", "gate"}:
+            cmd.add_argument("--archive-zip", type=Path, default=None)
+            cmd.add_argument("--verification-report", type=Path, default=None)
+            cmd.add_argument("--acceptance-archive", type=Path, default=None)
+            cmd.add_argument("--acceptance-verification-report", type=Path, default=None)
+            cmd.add_argument("--acceptance-signoff-binding", type=Path, default=None)
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--require-current-acceptance", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_continuity_acceptance_change_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program Continuity Acceptance Change Control Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current-acceptance", action="store_true")
+    parser.add_argument("--acceptance-archive", type=Path, default=None)
+    parser.add_argument("--acceptance-verification-report", type=Path, default=None)
+    parser.add_argument("--acceptance-signoff-binding", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=256)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=2000)
+    return parser
+
+
 def _add_unified_command_center_release_train_handoff_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--external-evidence-manifest", type=Path, default=None)
     parser.add_argument("--train-archive", type=Path, default=None)
@@ -6641,6 +6693,82 @@ def _run_unified_release_program_continuity_acceptance_command(args: argparse.Na
     raise ValueError("Unsupported unified-release-program-continuity-acceptance command.")
 
 
+def _run_unified_release_program_continuity_acceptance_change_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
+    from song_agent.unified_release_program_continuity_acceptance_change_verifier import write_unified_release_program_continuity_acceptance_change_verification_report
+
+    store = UnifiedReleaseProgramContinuityAcceptanceChangeStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    if args.action == "status":
+        detail = store.get_state(program_id)
+        state = detail.get("state") or {}
+        return {"ok": True, **detail, "summary": state, "status": state.get("status") or "unknown"}
+    if args.action == "create-change-request":
+        request = store.create_change_request(
+            program_id,
+            {
+                "change_request_id": args.change_request_id,
+                "change_type": args.change_type,
+                "allowed_actions": args.allowed_action or None,
+                "reason": args.reason,
+                "requested_by": args.requested_by,
+            },
+        )
+        return {"ok": request.get("status") in {"submitted", "approved"}, "change_request": request, "summary": {"change_request_id": request.get("change_request_id")}, "status": request.get("status")}
+    if args.action == "approve-change-request":
+        approval = store.approve_change_request(
+            program_id,
+            args.change_request_id,
+            {
+                "approved_by": args.approved_by,
+                "role": args.role,
+                "reason": args.reason,
+                "approved_actions": args.approved_action or None,
+            },
+        )
+        return {"ok": approval.get("status") == "approved", "approval": approval, "summary": {"approval_hash": approval.get("integrity_hash")}, "status": approval.get("status")}
+    if args.action == "reset-signoff":
+        proof = store.reset_acceptance_signoff(program_id, args.change_request_id, {"reset_by": args.reset_by, "reason": args.reason})
+        return {"ok": proof.get("status") == "applied", "reset_proof": proof, "summary": {"reset_proof_hash": proof.get("integrity_hash")}, "status": proof.get("status")}
+    if args.action == "lifecycle":
+        report = store.refresh_lifecycle_audit(program_id)
+        return {"ok": report.get("status") == "passed", "lifecycle_report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "export":
+        manifest = store.export_archive(program_id)
+        return {"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"}
+    if args.action == "zip":
+        result = store.build_archive_zip(program_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "manifest_hash": result.get("manifest_hash")}}
+    if args.action == "verify":
+        report = store.verify_archive_zip(
+            program_id,
+            {
+                "archive_zip": args.archive_zip,
+                "strict": args.strict,
+                "require_current_acceptance": args.require_current_acceptance or True,
+                "acceptance_archive": args.acceptance_archive,
+                "acceptance_verification_report": args.acceptance_verification_report,
+                "acceptance_signoff_binding": args.acceptance_signoff_binding,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_acceptance_change_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            archive_zip_path=args.archive_zip,
+            verification_report_path=args.verification_report,
+            acceptance_archive=args.acceptance_archive,
+            acceptance_verification_report=args.acceptance_verification_report,
+            acceptance_signoff_binding=args.acceptance_signoff_binding,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
+    raise ValueError("Unsupported unified-release-program-continuity-acceptance-change command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -7348,6 +7476,16 @@ def _main() -> None:
         parser = build_unified_release_program_continuity_acceptance_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_continuity_acceptance_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-continuity-acceptance-change":
+        parser = build_unified_release_program_continuity_acceptance_change_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_continuity_acceptance_change_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -8197,6 +8335,36 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_continuity_acceptance_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-acceptance-change-package":
+        from song_agent.unified_release_program_continuity_acceptance_change_verifier import (
+            unified_release_program_continuity_acceptance_change_verification_exit_code,
+            verify_unified_release_program_continuity_acceptance_change_package,
+            write_unified_release_program_continuity_acceptance_change_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_continuity_acceptance_change_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_continuity_acceptance_change_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current_acceptance=args.require_current_acceptance,
+            acceptance_archive_path=args.acceptance_archive,
+            acceptance_verification_report_path=args.acceptance_verification_report,
+            acceptance_signoff_binding_path=args.acceptance_signoff_binding,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_acceptance_change_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program Continuity Acceptance Change Control verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_continuity_acceptance_change_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

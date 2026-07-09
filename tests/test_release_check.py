@@ -108,6 +108,7 @@ from song_agent.release_checks import (
     _v125_unified_release_program_continuity_recovery_smoke,
     _v126_unified_release_program_continuity_distribution_kit_smoke,
     _v127_unified_release_program_continuity_acceptance_board_smoke,
+    _v128_unified_release_program_continuity_acceptance_change_control_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1510,6 +1511,17 @@ def test_v127_unified_release_program_continuity_acceptance_board_smoke(tmp_path
     assert "declared_extra=failed" in detail
     assert "full_resign_signed_by=failed" in detail
     assert "signed_mutation_409=True" in detail
+
+
+def test_v128_unified_release_program_continuity_acceptance_change_control_smoke(tmp_path: Path) -> None:
+    ok, detail = _v128_unified_release_program_continuity_acceptance_change_control_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "wrong_action_reset_409=True" in detail
+    assert "reset_gate_failed=True" in detail
+    assert "successor_gate_passed=True" in detail
+    assert "declared_extra_failed=True" in detail
+    assert "source_tamper_409=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

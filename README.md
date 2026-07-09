@@ -174,6 +174,20 @@ python -m song_agent.cli unified-release-program-continuity-acceptance zip urp-0
 python -m song_agent.cli verify-unified-release-program-continuity-acceptance-package .musicforge\unified-release-programs\urp-000001\continuity-acceptance\unified-release-program-continuity-acceptance-archive.zip --strict --require-current-kit --require-signed --require-quorum --continuity-kit .musicforge\unified-release-programs\urp-000001\continuity-distribution\unified-release-program-continuity-distribution-kit.zip --continuity-kit-verification-report .musicforge\unified-release-programs\urp-000001\continuity-distribution\unified-release-program-continuity-distribution-verification-report.json --signoff-binding .musicforge\unified-release-programs\urp-000001\continuity-acceptance\continuity-acceptance-signoff-binding-summary.json --json
 ```
 
+v12.8 adds Continuity Acceptance Change Control. A signed Acceptance Board can
+only be reset by an approved, single-use Change Request whose allowed actions
+explicitly include `reset_continuity_acceptance_signoff`. Reset creates an
+independent reset proof and lifecycle event; the old Board is no longer current
+until a successor Board is re-signed, archived, and verified:
+
+```powershell
+python -m song_agent.cli unified-release-program-continuity-acceptance-change create-change-request urp-000001 --reason "Receiver evidence changed" --json
+python -m song_agent.cli unified-release-program-continuity-acceptance-change approve-change-request urp-000001 cr-000001 --approved-by "Program Owner" --approved-action reset_continuity_acceptance_signoff --json
+python -m song_agent.cli unified-release-program-continuity-acceptance-change reset-signoff urp-000001 cr-000001 --reset-by "Program Owner" --json
+python -m song_agent.cli unified-release-program-continuity-acceptance-change zip urp-000001 --json
+python -m song_agent.cli verify-unified-release-program-continuity-acceptance-change-package .musicforge\unified-release-programs\urp-000001\continuity-acceptance\change-control\cc-archive.zip --strict --require-current-acceptance --acceptance-archive .musicforge\unified-release-programs\urp-000001\continuity-acceptance\unified-release-program-continuity-acceptance-archive.zip --acceptance-verification-report .musicforge\unified-release-programs\urp-000001\continuity-acceptance\unified-release-program-continuity-acceptance-verification-report.json --acceptance-signoff-binding .musicforge\unified-release-programs\urp-000001\continuity-acceptance\signoff\continuity-acceptance-signoff-binding-summary.json --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

@@ -693,6 +693,12 @@ from song_agent.unified_release_program_continuity_acceptance import (
     UnifiedReleaseProgramContinuityAcceptanceStateError,
     UnifiedReleaseProgramContinuityAcceptanceStore,
 )
+from song_agent.unified_release_program_continuity_acceptance_change import (
+    UnifiedReleaseProgramContinuityAcceptanceChangeError,
+    UnifiedReleaseProgramContinuityAcceptanceChangeNotFoundError,
+    UnifiedReleaseProgramContinuityAcceptanceChangeStateError,
+    UnifiedReleaseProgramContinuityAcceptanceChangeStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3424,6 +3430,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_release_program_continuity_acceptance_store(self) -> UnifiedReleaseProgramContinuityAcceptanceStore:
         return self.server.unified_release_program_continuity_acceptance_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_release_program_continuity_acceptance_change_store(self) -> UnifiedReleaseProgramContinuityAcceptanceChangeStore:
+        return self.server.unified_release_program_continuity_acceptance_change_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -12056,6 +12066,81 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 )
                 self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
                 return
+            if tail == "/continuity-acceptance/change-control":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                detail = self.unified_release_program_continuity_acceptance_change_store.get_state(program_id)
+                state = detail.get("state") or {}
+                self._send_json({"ok": True, **detail, "summary": state, "status": state.get("status") or "unknown"})
+                return
+            if tail == "/continuity-acceptance/change-control/change-requests":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                request = self.unified_release_program_continuity_acceptance_change_store.create_change_request(program_id, self._optional_json_body())
+                self._send_json({"ok": request.get("status") in {"submitted", "approved"}, "change_request": request, "summary": {"change_request_id": request.get("change_request_id")}, "status": request.get("status")}, status=HTTPStatus.CREATED)
+                return
+            if tail.startswith("/continuity-acceptance/change-control/change-requests/") and tail.endswith("/approve"):
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                request_id = tail.split("/")[4]
+                approval = self.unified_release_program_continuity_acceptance_change_store.approve_change_request(program_id, request_id, self._optional_json_body())
+                self._send_json({"ok": approval.get("status") == "approved", "approval": approval, "summary": {"change_request_id": approval.get("change_request_id")}, "status": approval.get("status")})
+                return
+            if tail == "/continuity-acceptance/change-control/reset-signoff":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._read_json_body()
+                proof = self.unified_release_program_continuity_acceptance_change_store.reset_acceptance_signoff(program_id, payload)
+                self._send_json({"ok": proof.get("status") == "applied", "reset_proof": proof, "summary": {"reset_proof_hash": proof.get("integrity_hash")}, "status": proof.get("status")})
+                return
+            if tail == "/continuity-acceptance/change-control/lifecycle":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_continuity_acceptance_change_store.refresh_lifecycle_audit(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "lifecycle_report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/continuity-acceptance/change-control/archive":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.unified_release_program_continuity_acceptance_change_store.export_archive(program_id, self._optional_json_body())
+                self._send_json({"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"})
+                return
+            if tail == "/continuity-acceptance/change-control/archive/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_release_program_continuity_acceptance_change_store.build_archive_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "manifest_hash": result.get("manifest_hash")}})
+                return
+            if tail == "/continuity-acceptance/change-control/archive/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_continuity_acceptance_change_store.verify_archive_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/continuity-acceptance/change-control/gate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                gate = self.unified_release_program_continuity_acceptance_change_store.gate(
+                    program_id,
+                    required=True,
+                    archive_zip_path=payload.get("archive_zip") or payload.get("change_control_archive"),
+                    verification_report_path=payload.get("verification_report") or payload.get("change_control_verification_report"),
+                    acceptance_archive=payload.get("acceptance_archive"),
+                    acceptance_verification_report=payload.get("acceptance_verification_report"),
+                    acceptance_signoff_binding=payload.get("acceptance_signoff_binding"),
+                )
+                self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
+                return
             if tail == "/operations/change-requests":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -12164,6 +12249,12 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except UnifiedReleaseProgramContinuityAcceptanceStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedReleaseProgramContinuityAcceptanceError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except UnifiedReleaseProgramContinuityAcceptanceChangeNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except UnifiedReleaseProgramContinuityAcceptanceChangeStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedReleaseProgramContinuityAcceptanceChangeError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedReleaseProgramHandoffNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -21646,6 +21737,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_release_program_continuity_store = UnifiedReleaseProgramContinuityStore(self.unified_release_program_store)
         self.unified_release_program_continuity_distribution_store = UnifiedReleaseProgramContinuityDistributionStore(self.unified_release_program_store)
         self.unified_release_program_continuity_acceptance_store = UnifiedReleaseProgramContinuityAcceptanceStore(self.unified_release_program_store)
+        self.unified_release_program_continuity_acceptance_change_store = UnifiedReleaseProgramContinuityAcceptanceChangeStore(self.unified_release_program_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

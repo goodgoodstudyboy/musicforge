@@ -20957,6 +20957,123 @@ def _v127_unified_release_program_continuity_acceptance_board_smoke(root: Path) 
         return False, f"v12.7 Unified Release Program Continuity Acceptance Board smoke failed: {exc}"
 
 
+def _v128_unified_release_program_continuity_acceptance_change_control_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.projectio import read_json, write_json
+        from song_agent.releases import stable_hash
+        from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStateError, UnifiedReleaseProgramContinuityAcceptanceChangeStore
+        from song_agent.unified_release_program_continuity_acceptance_change_verifier import verify_unified_release_program_continuity_acceptance_change_package
+        from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance
+        from tests.test_unified_release_program_continuity_acceptance_change import _add_declared_extra as _v128_add_declared_extra, _tamper_reset_proof as _v128_tamper_reset_proof
+
+        with tempfile.TemporaryDirectory(prefix="mf-v128-cc-") as temp:
+            base = Path(temp)
+            _program_store, _distribution, acceptance, change, program_id, zipped = _v128_prepare_signed(base)
+            wrong = change.create_change_request(
+                program_id,
+                {
+                    "change_request_id": "cr-wrong-action",
+                    "change_type": "reset_continuity_acceptance_signoff",
+                    "allowed_actions": ["refresh_continuity_acceptance_report"],
+                },
+            )
+            change.approve_change_request(program_id, wrong["change_request_id"], {"approved_by": "owner", "approved_actions": ["refresh_continuity_acceptance_report"]})
+            wrong_action_reset = False
+            try:
+                change.reset_acceptance_signoff(program_id, wrong["change_request_id"])
+            except UnifiedReleaseProgramContinuityAcceptanceChangeStateError:
+                wrong_action_reset = True
+
+        with tempfile.TemporaryDirectory(prefix="mf-v128-cc-main-") as temp:
+            base = Path(temp)
+            _program_store, _distribution, acceptance, change, program_id, zipped = _v128_prepare_signed(base)
+            request = change.create_change_request(program_id)
+            change.approve_change_request(program_id, request["change_request_id"], {"approved_by": "owner"})
+            proof = change.reset_acceptance_signoff(program_id, request["change_request_id"])
+            reset_gate = change.gate(program_id, required=True)
+            acceptance.refresh_decision_board(program_id)
+            acceptance.signoff_acceptance(program_id, {"signed_by": "successor chair", "role": "program_owner"})
+            acceptance.build_archive_zip(program_id)
+            acceptance.verify_archive_zip(program_id)
+            zipped_change = change.build_archive_zip(program_id)
+            verified = change.verify_archive_zip(program_id)
+            gate = change.gate(program_id, required=True)
+
+            declared_extra_zip = base / "change-declared-extra.zip"
+            _v76_rewrite_zip(Path(zipped_change["zip_path"]), declared_extra_zip, _v128_add_declared_extra)
+            declared_extra = verify_unified_release_program_continuity_acceptance_change_package(declared_extra_zip, strict=True)
+
+            reset_resign_zip = base / "change-reset-proof-resigned.zip"
+            _v76_rewrite_zip(Path(zipped_change["zip_path"]), reset_resign_zip, lambda entries: _v128_tamper_reset_proof(entries, str(proof["reset_id"])))
+            reset_proof_full_resign = verify_unified_release_program_continuity_acceptance_change_package(reset_resign_zip, strict=True)
+
+            signoff = read_json(acceptance.signoff_path(program_id))
+            signoff["signed_by"] = "tampered successor"
+            signoff["integrity_hash"] = stable_hash({key: value for key, value in signoff.items() if key != "integrity_hash"})
+            write_json(acceptance.signoff_path(program_id), signoff)
+            source_tamper_409 = False
+            try:
+                change.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityAcceptanceChangeStateError:
+                source_tamper_409 = True
+
+        with tempfile.TemporaryDirectory(prefix="mf-v128-cc-reset-") as temp:
+            base = Path(temp)
+            _program_store, _distribution, acceptance, change, program_id, zipped = _v128_prepare_signed(base)
+            request = change.create_change_request(program_id)
+            change.approve_change_request(program_id, request["change_request_id"], {"approved_by": "owner"})
+            proof = change.reset_acceptance_signoff(program_id, request["change_request_id"])
+            acceptance.refresh_decision_board(program_id)
+            acceptance.signoff_acceptance(program_id, {"signed_by": "successor chair", "role": "program_owner"})
+            acceptance.build_archive_zip(program_id)
+            acceptance.verify_archive_zip(program_id)
+            change.build_archive_zip(program_id)
+            proof_doc = read_json(change.reset_proof_path(program_id, str(proof["reset_id"])))
+            proof_doc["previous_signoff_hash"] = "f" * 64
+            proof_doc["previous_archive_zip_sha256"] = "e" * 64
+            proof_doc["integrity_hash"] = stable_hash({key: value for key, value in proof_doc.items() if key != "integrity_hash"})
+            write_json(change.reset_proof_path(program_id, str(proof["reset_id"])), proof_doc)
+            binding_doc = read_json(change.reset_binding_path(program_id, str(proof["reset_id"])))
+            binding_doc["reset_proof_hash"] = proof_doc["integrity_hash"]
+            binding_doc["integrity_hash"] = stable_hash({key: value for key, value in binding_doc.items() if key != "integrity_hash"})
+            write_json(change.reset_binding_path(program_id, str(proof["reset_id"])), binding_doc)
+            signed_reset_proof_tamper_409 = False
+            try:
+                change.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityAcceptanceChangeStateError:
+                signed_reset_proof_tamper_409 = True
+
+            checks = {
+                "wrong_action_reset_409": wrong_action_reset,
+                "reset_gate_failed": reset_gate.get("status") == "failed",
+                "successor_gate_passed": gate.get("status") == "passed",
+                "archive_verified": verified.get("status") == "passed",
+                "declared_extra_failed": declared_extra.get("status") == "failed" and "urpca_cc_allowed_entries" in declared_extra.get("blockers", []),
+                "reset_proof_full_resign": reset_proof_full_resign.get("status") == "failed",
+                "source_tamper_409": source_tamper_409,
+                "signed_reset_proof_tamper_409": signed_reset_proof_tamper_409,
+            }
+            ok = all(checks.values())
+            return ok, "v12.8 continuity acceptance change control: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.8 Unified Release Program Continuity Acceptance Change Control smoke failed: {exc}"
+
+
+def _v128_prepare_signed(base: Path):
+    from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
+    from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance
+
+    program_store, distribution, acceptance, program_id, zipped = _v127_prepared_acceptance(base)
+    _v127_accepted_pair(distribution, acceptance, program_id, zipped)
+    acceptance.refresh_decision_board(program_id)
+    acceptance.signoff_acceptance(program_id, {"signed_by": "continuity chair", "role": "program_owner"})
+    acceptance.build_archive_zip(program_id)
+    acceptance.verify_archive_zip(program_id)
+    change = UnifiedReleaseProgramContinuityAcceptanceChangeStore(program_store)
+    return program_store, distribution, acceptance, change, program_id, zipped
+
+
 def _v122_handoff_response(store, program_id: str, review_pack_id: str, *, reviewer_role: str = "release_owner", reviewer_id: str = "rev-release-owner", decision: str = "accepted") -> dict[str, object]:
     pack_report = read_json(store.review_pack_dir(program_id, review_pack_id) / "review-pack-report.json")
     zip_path = store.review_pack_zip_path(program_id, review_pack_id)

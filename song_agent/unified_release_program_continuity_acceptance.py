@@ -571,6 +571,8 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
         for event in self.read_history(program_id):
             if event.get("event_type") == "continuity_acceptance_signoff_created":
                 latest = {"status": "signed", "signoff_hash": event.get("signoff_hash"), "event": event}
+            if event.get("event_type") == "continuity_acceptance_signoff_reset":
+                latest = {"status": "reset", "previous_signoff_hash": event.get("previous_signoff_hash"), "event": event}
         if latest:
             return latest
         return {"status": "unsigned"}

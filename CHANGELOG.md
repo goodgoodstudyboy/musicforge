@@ -1,5 +1,17 @@
 # Changelog
 
+## v12.8.0 - 2026-07-09
+
+### Added
+- Unified Release Program Continuity Acceptance Change Control for approved single-use reset of signed Continuity Acceptance Boards, reset proof generation, successor Board lifecycle tracking, fixed-layout change-control archive, and offline verifier.
+- CLI and HTTP API endpoints for `unified-release-program-continuity-acceptance-change` plus standalone `verify-unified-release-program-continuity-acceptance-change-package`.
+- Continuity Acceptance signoff history now recognizes reset events so old signed Boards stop being current until a successor Board is re-signed and re-verified.
+- release-check `v128.unified_release_program_continuity_acceptance_change_control_smoke` covering wrong-action reset rejection, reset gate failure, successor re-sign gate recovery, declared-extra ZIP rejection, and current Acceptance source tamper blocking.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity_acceptance_change.py tests\test_release_check.py::test_v128_unified_release_program_continuity_acceptance_change_control_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.7.0 - 2026-07-08
 
 ### Added
