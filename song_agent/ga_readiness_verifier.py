@@ -183,6 +183,10 @@ def verify_ga_readiness_report(
     unified_release_program_continuity_acceptance_path: Path | str | None = None,
     unified_release_program_continuity_acceptance_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_acceptance_signoff_binding_path: Path | str | None = None,
+    require_unified_release_program_continuity_command_center: bool = False,
+    unified_release_program_continuity_command_center_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -555,6 +559,14 @@ def verify_ga_readiness_report(
                 unified_release_program_continuity_acceptance_signoff_binding_path,
                 unified_release_program_continuity_kit_path,
                 unified_release_program_continuity_kit_verification_report_path,
+            )
+        if require_unified_release_program_continuity_command_center:
+            _verify_unified_release_program_continuity_command_center_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_continuity_command_center", {}),
+                unified_release_program_continuity_command_center_path,
+                unified_release_program_continuity_command_center_verification_report_path,
+                unified_release_program_continuity_command_center_external_evidence_manifest_path,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -2226,6 +2238,51 @@ def _verify_unified_release_program_continuity_acceptance_evidence(
     )
 
 
+def _verify_unified_release_program_continuity_command_center_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    command_center_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    external_evidence_manifest_path: Path | str | None,
+) -> None:
+    if not command_center_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_required", "failed", "blocking", "Unified Release Program Continuity Command Center requirement needs a ZIP.")
+        return
+    if not verification_report_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_verification_required", "failed", "blocking", "Unified Release Program Continuity Command Center requirement needs a verification report.")
+        return
+    if not external_evidence_manifest_path:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_manifest_required", "failed", "blocking", "Unified Release Program Continuity Command Center requirement needs an external evidence manifest.")
+        return
+    zip_path = Path(command_center_path)
+    try:
+        from song_agent.unified_release_program_continuity_command_center_verifier import (
+            UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_release_program_continuity_command_center_package,
+        )
+
+        verification_report = read_json(Path(verification_report_path))
+        runtime_report = verify_unified_release_program_continuity_command_center_package(
+            zip_path,
+            strict=True,
+            deep=True,
+            require_ready=True,
+            evidence_manifest_path=external_evidence_manifest_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_readable", "failed", "blocking", f"Unified Release Program Continuity Command Center evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_continuity_command_center",
+        ga_check,
+        zip_path,
+        verification_report,
+        runtime_report,
+        UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
 def _verify_external_package_binding(
     checks: list[dict[str, Any]],
     prefix: str,
@@ -2248,7 +2305,17 @@ def _verify_external_package_binding(
     _add_check(checks, f"{prefix}_verification_package_type", "passed" if verification_report.get("package_type") == expected_package_type else "failed", "blocking", "Verification package type is valid.")
     _add_check(checks, f"{prefix}_verification_integrity", "passed" if integrity_ok else "failed", "blocking", "Verification integrity hash matches.")
     _add_check(checks, f"{prefix}_verification_status", "passed" if verification_report.get("status") == "passed" and runtime_report.get("status") == "passed" else "failed", "blocking", "Verification is passed.", {"external_status": verification_report.get("status"), "current_status": runtime_report.get("status")})
-    _add_check(checks, f"{prefix}_zip_binding", "passed" if external_fp.get("zip_sha256") == _sha256_file(zip_path) and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash") else "failed", "blocking", "Verification report matches ZIP and manifest.")
+    _add_check(
+        checks,
+        f"{prefix}_zip_binding",
+        "passed"
+        if external_fp.get("zip_sha256") == _sha256_file(zip_path)
+        and int(external_fp.get("zip_size_bytes") or -1) == zip_path.stat().st_size == int(runtime_fp.get("zip_size_bytes") or -2)
+        and external_fp.get("manifest_hash") == runtime_fp.get("manifest_hash")
+        else "failed",
+        "blocking",
+        "Verification report matches ZIP size, hash, and manifest.",
+    )
     _add_check(checks, f"{prefix}_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness check matches external verification.")
 
 

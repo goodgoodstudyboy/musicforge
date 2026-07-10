@@ -291,6 +291,10 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-release-program-continuity-acceptance", type=Path, default=None, help="Unified Release Program Continuity Acceptance Board archive ZIP.")
     parser.add_argument("--unified-release-program-continuity-acceptance-verification-report", type=Path, default=None, help="Unified Release Program Continuity Acceptance Board verification report.")
     parser.add_argument("--unified-release-program-continuity-acceptance-signoff-binding", type=Path, default=None, help="External Continuity Acceptance Board signoff binding summary.")
+    parser.add_argument("--require-unified-release-program-continuity-command-center", action="store_true", help="Require Unified Release Program Continuity Command Center evidence.")
+    parser.add_argument("--unified-release-program-continuity-command-center", type=Path, default=None, help="Unified Release Program Continuity Command Center ZIP.")
+    parser.add_argument("--unified-release-program-continuity-command-center-verification-report", type=Path, default=None, help="Unified Release Program Continuity Command Center verification report.")
+    parser.add_argument("--unified-release-program-continuity-command-center-external-evidence-manifest", type=Path, default=None, help="External evidence manifest used for Command Center runtime verification.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -2429,6 +2433,40 @@ def build_verify_unified_release_program_continuity_acceptance_change_parser() -
     parser.add_argument("--max-zip-size-mb", type=int, default=256)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=2000)
+    return parser
+
+
+def build_unified_release_program_continuity_command_center_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Continuity Command Center.")
+    parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    for action in ("status", "refresh", "run-safe", "export", "zip", "verify", "gate"):
+        cmd = subparsers.add_parser(action, help=f"{action} Continuity Command Center.")
+        cmd.add_argument("program_id")
+        if action in {"verify", "gate"}:
+            cmd.add_argument("--command-center-zip", type=Path, default=None)
+            cmd.add_argument("--verification-report", type=Path, default=None)
+            cmd.add_argument("--evidence-manifest", type=Path, default=None)
+            cmd.add_argument("--strict", action="store_true")
+            cmd.add_argument("--deep", action="store_true")
+            cmd.add_argument("--require-ready", action="store_true")
+            cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_continuity_command_center_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a MusicForge Unified Release Program Continuity Command Center ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--deep", action="store_true")
+    parser.add_argument("--require-ready", action="store_true")
+    parser.add_argument("--evidence-manifest", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=256)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=1000)
     return parser
 
 
@@ -6769,6 +6807,55 @@ def _run_unified_release_program_continuity_acceptance_change_command(args: argp
     raise ValueError("Unsupported unified-release-program-continuity-acceptance-change command.")
 
 
+def _run_unified_release_program_continuity_command_center_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_command_center import UnifiedReleaseProgramContinuityCommandCenterStore
+    from song_agent.unified_release_program_continuity_command_center_verifier import write_unified_release_program_continuity_command_center_verification_report
+
+    store = UnifiedReleaseProgramContinuityCommandCenterStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    if args.action == "status":
+        detail = store.get_command_center(program_id)
+        report = detail.get("report") or {}
+        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or "unknown"}
+    if args.action == "refresh":
+        report = store.refresh_command_center(program_id)
+        return {"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "run-safe":
+        result = store.run_safe(program_id)
+        return {"ok": result.get("status") in {"passed", "warning"}, "runbook_result": result, "summary": result.get("summary", {}), "status": result.get("status")}
+    if args.action == "export":
+        manifest = store.export_package(program_id)
+        return {"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"}
+    if args.action == "zip":
+        result = store.build_zip(program_id)
+        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "manifest_hash": result.get("manifest_hash")}}
+    if args.action == "verify":
+        report = store.verify_zip(
+            program_id,
+            {
+                "command_center_zip": args.command_center_zip,
+                "strict": args.strict,
+                "deep": args.deep or True,
+                "require_ready": args.require_ready or True,
+                "evidence_manifest": args.evidence_manifest,
+            },
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_command_center_verification_report(report, args.report_out)
+        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            command_center_zip_path=args.command_center_zip,
+            verification_report_path=args.verification_report,
+            evidence_manifest_path=args.evidence_manifest,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
+    raise ValueError("Unsupported unified-release-program-continuity-command-center command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -7162,6 +7249,10 @@ def _main() -> None:
             unified_release_program_continuity_acceptance_path=args.unified_release_program_continuity_acceptance,
             unified_release_program_continuity_acceptance_verification_report_path=args.unified_release_program_continuity_acceptance_verification_report,
             unified_release_program_continuity_acceptance_signoff_binding_path=args.unified_release_program_continuity_acceptance_signoff_binding,
+            require_unified_release_program_continuity_command_center=args.require_unified_release_program_continuity_command_center,
+            unified_release_program_continuity_command_center_path=args.unified_release_program_continuity_command_center,
+            unified_release_program_continuity_command_center_verification_report_path=args.unified_release_program_continuity_command_center_verification_report,
+            unified_release_program_continuity_command_center_external_evidence_manifest_path=args.unified_release_program_continuity_command_center_external_evidence_manifest,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -7486,6 +7577,16 @@ def _main() -> None:
         parser = build_unified_release_program_continuity_acceptance_change_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_continuity_acceptance_change_command(args)
+        json_output = bool(getattr(args, "json", False))
+        _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-continuity-command-center":
+        parser = build_unified_release_program_continuity_command_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_continuity_command_center_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
@@ -8365,6 +8466,35 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_continuity_acceptance_change_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-command-center-package":
+        from song_agent.unified_release_program_continuity_command_center_verifier import (
+            unified_release_program_continuity_command_center_verification_exit_code,
+            verify_unified_release_program_continuity_command_center_package,
+            write_unified_release_program_continuity_command_center_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_continuity_command_center_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_continuity_command_center_package(
+            args.zip_path,
+            strict=args.strict,
+            deep=args.deep,
+            require_ready=args.require_ready,
+            evidence_manifest_path=args.evidence_manifest,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out is not None:
+            write_unified_release_program_continuity_command_center_verification_report(report, args.report_out)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"MusicForge Unified Release Program Continuity Command Center verification: {report.get('status')}")
+            for check in report.get("checks", []):
+                marker = "ok" if check.get("status") == "passed" else check.get("status")
+                print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
+        raise SystemExit(unified_release_program_continuity_command_center_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

@@ -109,6 +109,7 @@ from song_agent.release_checks import (
     _v126_unified_release_program_continuity_distribution_kit_smoke,
     _v127_unified_release_program_continuity_acceptance_board_smoke,
     _v128_unified_release_program_continuity_acceptance_change_control_smoke,
+    _v129_unified_release_program_continuity_command_center_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1522,6 +1523,26 @@ def test_v128_unified_release_program_continuity_acceptance_change_control_smoke
     assert "successor_gate_passed=True" in detail
     assert "declared_extra_failed=True" in detail
     assert "source_tamper_409=True" in detail
+
+
+def test_v129_unified_release_program_continuity_command_center_smoke(tmp_path: Path) -> None:
+    ok, detail = _v129_unified_release_program_continuity_command_center_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "command=ready" in detail
+    assert "verify=passed" in detail
+    assert "runtime_tamper=failed" in detail
+    assert "runtime_refresh=blocked" in detail
+    assert "stale_report=blocked" in detail
+    assert "release_gate=409" in detail
+    assert "ga_gate=failed" in detail
+    assert "runtime_export_409=True" in detail
+    assert "runtime_zip_409=True" in detail
+    assert "reset_pending=True" in detail
+    assert "wrong_package_type=failed" in detail
+    assert "declared_extra=failed" in detail
+    assert "trailing_bytes=failed" in detail
+    assert "runbook_unsupported=1" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

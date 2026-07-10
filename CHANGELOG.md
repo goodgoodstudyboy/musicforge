@@ -1,5 +1,19 @@
 # Changelog
 
+## v12.9.0 - 2026-07-10
+
+### Added
+- Unified Release Program Continuity Command Center that aggregates Evidence Vault, Vault Operations, Continuity Recovery, Continuity Distribution Kit, Continuity Acceptance Board, and Acceptance Change Control into one runtime-verified readiness dashboard.
+- Fixed-layout Continuity Command Center ZIP and offline verifier with external evidence manifest runtime re-verification, declared-extra rejection, raw path safety, trailing-data detection, redaction scanning, and wrong verification package-type blocking.
+- Evidence inventory separates old-report `stale`, current-package `runtime_failed`, and Acceptance lifecycle `reset_pending` states; package export and ZIP build now stop before producing a non-ready artifact.
+- Release and GA gates rebuild current component verification from ZIP, manifest, report size/hash, generation, and Acceptance signoff history, so force signoff cannot reuse an old passed report after source tamper or reset.
+- Safe runbook handling for Command Center refresh/export/ZIP/verify actions; unsupported safe actions are reported as `skipped_unsupported` instead of completed.
+- release-check `v129.unified_release_program_continuity_command_center_smoke` covering ready path, runtime evidence tamper, stale verification report, reset pending, Release/GA gates, wrong package type, declared extra, trailing bytes, and unsupported runbook action handling.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity_command_center.py tests\test_release_check.py::test_v129_unified_release_program_continuity_command_center_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.8.0 - 2026-07-09
 
 ### Added

@@ -699,6 +699,11 @@ from song_agent.unified_release_program_continuity_acceptance_change import (
     UnifiedReleaseProgramContinuityAcceptanceChangeStateError,
     UnifiedReleaseProgramContinuityAcceptanceChangeStore,
 )
+from song_agent.unified_release_program_continuity_command_center import (
+    UnifiedReleaseProgramContinuityCommandCenterError,
+    UnifiedReleaseProgramContinuityCommandCenterStateError,
+    UnifiedReleaseProgramContinuityCommandCenterStore,
+)
 from song_agent.unified_command_center_handoff import (
     UnifiedCommandCenterHandoffError,
     UnifiedCommandCenterHandoffStateError,
@@ -3434,6 +3439,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
     @property
     def unified_release_program_continuity_acceptance_change_store(self) -> UnifiedReleaseProgramContinuityAcceptanceChangeStore:
         return self.server.unified_release_program_continuity_acceptance_change_store  # type: ignore[attr-defined]
+
+    @property
+    def unified_release_program_continuity_command_center_store(self) -> UnifiedReleaseProgramContinuityCommandCenterStore:
+        return self.server.unified_release_program_continuity_command_center_store  # type: ignore[attr-defined]
 
     @property
     def distribution_store(self) -> DistributionStore:
@@ -12141,6 +12150,63 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
                 )
                 self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
                 return
+            if tail == "/continuity-command-center":
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                detail = self.unified_release_program_continuity_command_center_store.get_command_center(program_id)
+                report = detail.get("report") or {}
+                self._send_json({"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or "unknown"})
+                return
+            if tail == "/continuity-command-center/refresh":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_continuity_command_center_store.refresh_command_center(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/continuity-command-center/run-safe":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_release_program_continuity_command_center_store.run_safe(program_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") in {"passed", "warning"}, "runbook_result": result, "summary": result.get("summary", {}), "status": result.get("status")})
+                return
+            if tail == "/continuity-command-center/export":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                manifest = self.unified_release_program_continuity_command_center_store.export_package(program_id, self._optional_json_body())
+                self._send_json({"ok": True, "manifest": manifest, "summary": {"manifest_hash": manifest.get("integrity_hash")}, "status": "passed"})
+                return
+            if tail == "/continuity-command-center/zip":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                result = self.unified_release_program_continuity_command_center_store.build_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256"), "manifest_hash": result.get("manifest_hash")}})
+                return
+            if tail == "/continuity-command-center/verify":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                report = self.unified_release_program_continuity_command_center_store.verify_zip(program_id, self._optional_json_body())
+                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
+                return
+            if tail == "/continuity-command-center/gate":
+                if method != "POST":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                payload = self._optional_json_body()
+                gate = self.unified_release_program_continuity_command_center_store.gate(
+                    program_id,
+                    required=True,
+                    command_center_zip_path=payload.get("command_center_zip") or payload.get("continuity_command_center"),
+                    verification_report_path=payload.get("verification_report") or payload.get("command_center_verification_report"),
+                    evidence_manifest_path=payload.get("external_evidence_manifest") or payload.get("evidence_manifest"),
+                )
+                self._send_json({"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")})
+                return
             if tail == "/operations/change-requests":
                 if method != "POST":
                     self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -12255,6 +12321,10 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
         except UnifiedReleaseProgramContinuityAcceptanceChangeStateError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
         except UnifiedReleaseProgramContinuityAcceptanceChangeError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except UnifiedReleaseProgramContinuityCommandCenterStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except UnifiedReleaseProgramContinuityCommandCenterError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except UnifiedReleaseProgramHandoffNotFoundError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -13919,6 +13989,20 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             if unified_release_program_continuity_acceptance_gate.get("status") == "failed":
                 acceptance_gate["status"] = "failed"
                 acceptance_gate["message"] = str(unified_release_program_continuity_acceptance_gate.get("message") or "Unified Release Program Continuity Acceptance gate failed.")
+        require_unified_release_program_continuity_command_center = bool(payload.get("require_unified_release_program_continuity_command_center", False))
+        unified_release_program_continuity_command_center_gate = self.unified_release_program_continuity_command_center_store.gate(
+            str(payload.get("unified_release_program_id") or payload.get("unified_release_program_continuity_command_center_program_id") or "urp-000001"),
+            required=require_unified_release_program_continuity_command_center,
+            command_center_zip_path=payload.get("unified_release_program_continuity_command_center") or payload.get("unified_release_program_continuity_command_center_zip"),
+            verification_report_path=payload.get("unified_release_program_continuity_command_center_verification_report"),
+            evidence_manifest_path=payload.get("unified_release_program_continuity_command_center_external_evidence_manifest"),
+        )
+        if unified_release_program_continuity_command_center_gate and require_unified_release_program_continuity_command_center:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["unified_release_program_continuity_command_center"] = unified_release_program_continuity_command_center_gate
+            if unified_release_program_continuity_command_center_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(unified_release_program_continuity_command_center_gate.get("message") or "Unified Release Program Continuity Command Center gate failed.")
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -14175,6 +14259,15 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "error": str(unified_release_program_continuity_acceptance_gate.get("message") or "Unified Release Program Continuity Acceptance gate failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+        if unified_release_program_continuity_command_center_gate.get("hard_block") and unified_release_program_continuity_command_center_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(unified_release_program_continuity_command_center_gate.get("message") or "Unified Release Program Continuity Command Center gate failed."),
                     "acceptance_gate": acceptance_gate,
                 },
                 status=HTTPStatus.CONFLICT,
@@ -21738,6 +21831,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_release_program_continuity_distribution_store = UnifiedReleaseProgramContinuityDistributionStore(self.unified_release_program_store)
         self.unified_release_program_continuity_acceptance_store = UnifiedReleaseProgramContinuityAcceptanceStore(self.unified_release_program_store)
         self.unified_release_program_continuity_acceptance_change_store = UnifiedReleaseProgramContinuityAcceptanceChangeStore(self.unified_release_program_store)
+        self.unified_release_program_continuity_command_center_store = UnifiedReleaseProgramContinuityCommandCenterStore(self.unified_release_program_store)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

@@ -21060,6 +21060,159 @@ def _v128_unified_release_program_continuity_acceptance_change_control_smoke(roo
         return False, f"v12.8 Unified Release Program Continuity Acceptance Change Control smoke failed: {exc}"
 
 
+def _v129_unified_release_program_continuity_command_center_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+        from song_agent.projectio import read_json, write_json
+        from song_agent.releases import stable_hash
+        from song_agent.unified_release_program_continuity_command_center import UnifiedReleaseProgramContinuityCommandCenterStateError
+        from song_agent.unified_release_program_continuity_command_center_verifier import verify_unified_release_program_continuity_command_center_package
+        from tests.test_ga_readiness import _write_repo as _v129_write_ga_repo
+        from tests.test_unified_release_program_continuity_command_center import _add_declared_extra as _v129_add_declared_extra, _prepared_command_center as _v129_prepared_command_center
+
+        with tempfile.TemporaryDirectory(prefix="mf-v129-cc-") as temp:
+            base = Path(temp)
+            _program_store, change, command, program_id = _v129_prepared_command_center(base)
+            report = command.refresh_command_center(program_id)
+            zipped = command.build_zip(program_id)
+            verified = command.verify_zip(program_id)
+            gate = command.gate(program_id, required=True)
+
+            declared_extra_zip = base / "command-center-declared-extra.zip"
+            _v76_rewrite_zip(Path(zipped["zip_path"]), declared_extra_zip, _v129_add_declared_extra)
+            declared_extra = verify_unified_release_program_continuity_command_center_package(declared_extra_zip, strict=True, deep=True, require_ready=True, evidence_manifest_path=command.local_evidence_manifest_path(program_id))
+
+            trailing_zip = base / "command-center-trailing.zip"
+            trailing_zip.write_bytes(Path(zipped["zip_path"]).read_bytes() + b"tamper")
+            trailing = verify_unified_release_program_continuity_command_center_package(trailing_zip, strict=True, deep=True, require_ready=True, evidence_manifest_path=command.local_evidence_manifest_path(program_id))
+
+            runbook = read_json(command.runbook_path(program_id))
+            runbook["actions"].append({"action_id": "unsupported", "action_type": "continuity_acceptance_change_control.reset", "mode": "safe"})
+            runbook["integrity_hash"] = stable_hash({key: value for key, value in runbook.items() if key != "integrity_hash"})
+            write_json(command.runbook_path(program_id), runbook)
+            runbook_result = command.run_safe(program_id)
+
+        with tempfile.TemporaryDirectory(prefix="mf-v129-runtime-") as temp:
+            base = Path(temp)
+            _program_store, change, command, program_id = _v129_prepared_command_center(base)
+            zipped = command.build_zip(program_id)
+            command.verify_zip(program_id)
+            ga_root = base / "ga-repo"
+            _v129_write_ga_repo(ga_root)
+            ga_report = build_ga_readiness_report(
+                repo_root=ga_root,
+                allow_dirty=True,
+                require_unified_release_program_continuity_command_center=True,
+                unified_release_program_continuity_command_center_zip_path=zipped["zip_path"],
+                unified_release_program_continuity_command_center_verification_report_path=command.verification_report_path(program_id),
+                unified_release_program_continuity_command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            ga_path = base / "ga-command-center.json"
+            write_ga_readiness_report(ga_report, ga_path)
+            change.archive_zip_path(program_id).write_bytes(change.archive_zip_path(program_id).read_bytes() + b"tamper")
+            runtime_refresh = command.refresh_command_center(program_id)
+            runtime_gate = command.gate(program_id, required=True)
+            runtime_export_409 = False
+            runtime_zip_409 = False
+            try:
+                command.export_package(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterStateError:
+                runtime_export_409 = True
+            try:
+                command.build_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterStateError:
+                runtime_zip_409 = True
+            runtime_tamper = verify_unified_release_program_continuity_command_center_package(
+                zipped["zip_path"],
+                strict=True,
+                deep=True,
+                require_ready=True,
+                evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            ga_gate = verify_ga_readiness_report(
+                ga_path,
+                require_unified_release_program_continuity_command_center=True,
+                unified_release_program_continuity_command_center_path=command.zip_path(program_id),
+                unified_release_program_continuity_command_center_verification_report_path=command.verification_report_path(program_id),
+                unified_release_program_continuity_command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            reset_request = change.create_change_request(program_id, {"reason": "v12.9 reset-pending smoke"})
+            change.approve_change_request(program_id, reset_request["change_request_id"], {"approved_by": "program owner"})
+            change.reset_acceptance_signoff(program_id, reset_request["change_request_id"], {"reset_by": "program owner"})
+            reset_report = command.refresh_command_center(program_id)
+            reset_pending = reset_report.get("status") == "blocked" and reset_report.get("current_generation_status") == "reset_pending"
+
+        with tempfile.TemporaryDirectory(prefix="mf-v129-stale-") as temp:
+            base = Path(temp)
+            _program_store, change, command, program_id = _v129_prepared_command_center(base)
+            command.build_zip(program_id)
+            command.verify_zip(program_id)
+            stale_verification = read_json(change.verification_report_path(program_id))
+            stale_verification["zip_sha256"] = "f" * 64
+            stale_verification["integrity_hash"] = stable_hash({key: value for key, value in stale_verification.items() if key != "integrity_hash"})
+            write_json(change.verification_report_path(program_id), stale_verification)
+            stale_report = command.refresh_command_center(program_id)
+            stale_gate = command.gate(program_id, required=True)
+
+        with tempfile.TemporaryDirectory(prefix="mf-v129-type-") as temp:
+            base = Path(temp)
+            _program_store, change, command, program_id = _v129_prepared_command_center(base)
+            zipped = command.build_zip(program_id)
+            verification = read_json(change.verification_report_path(program_id))
+            verification["package_type"] = "musicforge_wrong_verification"
+            verification["integrity_hash"] = stable_hash({key: value for key, value in verification.items() if key != "integrity_hash"})
+            write_json(change.verification_report_path(program_id), verification)
+            wrong_type = verify_unified_release_program_continuity_command_center_package(
+                zipped["zip_path"],
+                strict=True,
+                deep=True,
+                require_ready=True,
+                evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+
+        checks = {
+            "command": report.get("status"),
+            "verify": verified.get("status"),
+            "gate": gate.get("status"),
+            "runtime_tamper": runtime_tamper.get("status"),
+            "runtime_refresh": runtime_refresh.get("status"),
+            "stale_report": stale_report.get("status"),
+            "stale_gate": stale_gate.get("status"),
+            "release_gate": 409 if runtime_gate.get("status") == "failed" and runtime_gate.get("hard_block") else 200,
+            "ga_gate": ga_gate.get("status"),
+            "runtime_export_409": runtime_export_409,
+            "runtime_zip_409": runtime_zip_409,
+            "reset_pending": reset_pending,
+            "wrong_package_type": wrong_type.get("status"),
+            "declared_extra": declared_extra.get("status"),
+            "trailing_bytes": trailing.get("status"),
+            "runbook_unsupported": (runbook_result.get("summary") or {}).get("unsupported_count"),
+        }
+        ok = (
+            checks["command"] == "ready"
+            and checks["verify"] == "passed"
+            and checks["gate"] == "passed"
+            and checks["runtime_tamper"] == "failed"
+            and checks["runtime_refresh"] == "blocked"
+            and checks["stale_report"] == "blocked"
+            and checks["stale_gate"] == "failed"
+            and checks["release_gate"] == 409
+            and checks["ga_gate"] == "failed"
+            and checks["runtime_export_409"] is True
+            and checks["runtime_zip_409"] is True
+            and checks["reset_pending"] is True
+            and checks["wrong_package_type"] == "failed"
+            and checks["declared_extra"] == "failed"
+            and checks["trailing_bytes"] == "failed"
+            and checks["runbook_unsupported"] == 1
+        )
+        return ok, "v12.9 continuity command center: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.9 Unified Release Program Continuity Command Center smoke failed: {exc}"
+
+
 def _v128_prepare_signed(base: Path):
     from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
     from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance

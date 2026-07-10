@@ -188,6 +188,15 @@ python -m song_agent.cli unified-release-program-continuity-acceptance-change zi
 python -m song_agent.cli verify-unified-release-program-continuity-acceptance-change-package .musicforge\unified-release-programs\urp-000001\continuity-acceptance\change-control\cc-archive.zip --strict --require-current-acceptance --acceptance-archive .musicforge\unified-release-programs\urp-000001\continuity-acceptance\unified-release-program-continuity-acceptance-archive.zip --acceptance-verification-report .musicforge\unified-release-programs\urp-000001\continuity-acceptance\unified-release-program-continuity-acceptance-verification-report.json --acceptance-signoff-binding .musicforge\unified-release-programs\urp-000001\continuity-acceptance\signoff\continuity-acceptance-signoff-binding-summary.json --json
 ```
 
+v12.9 adds the Continuity Command Center. It runtime re-verifies the v12.3
+Evidence Vault, v12.4 Vault Operations, v12.5 Continuity Recovery, v12.6
+Distribution Kit, v12.7 Acceptance Board, and v12.8 Change Control into one
+readiness dashboard. The offline verifier requires an external evidence
+manifest for ready-mode validation instead of trusting package-internal
+summaries. Runtime checks distinguish stale verification reports from failed
+current ZIPs and bind the current Acceptance generation/signoff history; a
+blocked refresh cannot be exported or used by Release/GA gates.
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.
