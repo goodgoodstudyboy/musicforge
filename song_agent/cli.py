@@ -295,6 +295,10 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-release-program-continuity-command-center", type=Path, default=None, help="Unified Release Program Continuity Command Center ZIP.")
     parser.add_argument("--unified-release-program-continuity-command-center-verification-report", type=Path, default=None, help="Unified Release Program Continuity Command Center verification report.")
     parser.add_argument("--unified-release-program-continuity-command-center-external-evidence-manifest", type=Path, default=None, help="External evidence manifest used for Command Center runtime verification.")
+    parser.add_argument("--require-unified-release-program-continuity-command-center-signoff", action="store_true", help="Require signed Unified Release Program Continuity Command Center Archive evidence.")
+    parser.add_argument("--unified-release-program-continuity-command-center-signoff-archive", type=Path, default=None, help="Continuity Command Center Signoff Archive ZIP.")
+    parser.add_argument("--unified-release-program-continuity-command-center-signoff-verification-report", type=Path, default=None, help="Continuity Command Center Signoff Archive verification report.")
+    parser.add_argument("--unified-release-program-continuity-command-center-signoff-binding", type=Path, default=None, help="Independent Continuity Command Center signoff binding summary.")
 
 
 def build_maintenance_parser() -> argparse.ArgumentParser:
@@ -2467,6 +2471,75 @@ def build_verify_unified_release_program_continuity_command_center_parser() -> a
     parser.add_argument("--max-zip-size-mb", type=int, default=256)
     parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
     parser.add_argument("--max-entry-count", type=int, default=1000)
+    return parser
+
+
+def build_unified_release_program_continuity_command_center_signoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Unified Release Program Continuity Command Center signoff and handoff.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    actions = (
+        "status",
+        "preflight",
+        "sign",
+        "create-cr",
+        "approve-cr",
+        "reset",
+        "export",
+        "zip",
+        "verify",
+        "handoff-export",
+        "handoff-zip",
+        "handoff-verify",
+        "gate",
+    )
+    for action in actions:
+        cmd = subparsers.add_parser(action, help=f"{action} Continuity Command Center signoff evidence.")
+        cmd.add_argument("program_id")
+        cmd.add_argument("--json", action="store_true")
+        cmd.add_argument("--signed-by", default=None)
+        cmd.add_argument("--role", default=None)
+        cmd.add_argument("--reason", default=None)
+        cmd.add_argument("--change-request-id", default=None)
+        cmd.add_argument("--approved-by", default=None)
+        cmd.add_argument("--reset-by", default=None)
+        cmd.add_argument("--allowed-action", action="append", default=[])
+        cmd.add_argument("--archive-zip", type=Path, default=None)
+        cmd.add_argument("--archive-verification-report", type=Path, default=None)
+        cmd.add_argument("--signoff-binding", type=Path, default=None)
+        cmd.add_argument("--command-center", type=Path, default=None)
+        cmd.add_argument("--command-center-verification-report", type=Path, default=None)
+        cmd.add_argument("--command-center-evidence-manifest", type=Path, default=None)
+        cmd.add_argument("--report-out", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_continuity_command_center_signoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a Continuity Command Center Signoff Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-signed", action="store_true")
+    parser.add_argument("--signoff-binding", type=Path, default=None)
+    parser.add_argument("--command-center", type=Path, default=None)
+    parser.add_argument("--command-center-verification-report", type=Path, default=None)
+    parser.add_argument("--command-center-evidence-manifest", type=Path, default=None)
+    return parser
+
+
+def build_verify_unified_release_program_continuity_command_center_handoff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a Continuity Command Center Final Handoff ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-archive", action="store_true")
+    parser.add_argument("--archive-zip", type=Path, default=None)
+    parser.add_argument("--archive-verification-report", type=Path, default=None)
+    parser.add_argument("--signoff-binding", type=Path, default=None)
+    parser.add_argument("--command-center", type=Path, default=None)
+    parser.add_argument("--command-center-verification-report", type=Path, default=None)
+    parser.add_argument("--command-center-evidence-manifest", type=Path, default=None)
     return parser
 
 
@@ -6856,6 +6929,87 @@ def _run_unified_release_program_continuity_command_center_command(args: argpars
     raise ValueError("Unsupported unified-release-program-continuity-command-center command.")
 
 
+def _run_unified_release_program_continuity_command_center_signoff_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_command_center_signoff import (
+        UnifiedReleaseProgramContinuityCommandCenterSignoffStore,
+    )
+
+    store = UnifiedReleaseProgramContinuityCommandCenterSignoffStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    payload = {
+        "signed_by": args.signed_by,
+        "role": args.role,
+        "reason": args.reason,
+        "change_request_id": args.change_request_id,
+        "approved_by": args.approved_by,
+        "reset_by": args.reset_by,
+        "allowed_actions": args.allowed_action or None,
+        "archive_zip": args.archive_zip,
+        "archive_verification_report": args.archive_verification_report,
+        "signoff_binding": args.signoff_binding,
+        "command_center_zip": args.command_center,
+        "command_center_verification_report": args.command_center_verification_report,
+        "command_center_external_evidence_manifest": args.command_center_evidence_manifest,
+    }
+    payload = {key: value for key, value in payload.items() if value is not None}
+    if args.action == "status":
+        state = store.get_state(program_id)
+        return {"ok": True, **state, "summary": {"status": state.get("status")}}
+    if args.action == "preflight":
+        report = store.preflight(program_id, payload)
+        return {"ok": report.get("status") == "passed", "preflight": report, "status": report.get("status"), "summary": report.get("summary", {})}
+    if args.action == "sign":
+        signoff = store.signoff(program_id, payload)
+        return {"ok": True, "signoff": signoff, "status": signoff.get("status"), "summary": signoff.get("summary", {})}
+    if args.action == "create-cr":
+        request = store.create_change_request(program_id, payload)
+        return {"ok": True, "change_request": request, "status": request.get("status"), "summary": {"change_request_id": request.get("change_request_id")}}
+    if args.action == "approve-cr":
+        if not args.change_request_id:
+            raise ValueError("--change-request-id is required for approve-cr.")
+        approval = store.approve_change_request(program_id, args.change_request_id, payload)
+        return {"ok": True, "approval": approval, "status": approval.get("status"), "summary": {"change_request_id": args.change_request_id}}
+    if args.action == "reset":
+        if not args.change_request_id:
+            raise ValueError("--change-request-id is required for reset.")
+        proof = store.reset_signoff(program_id, args.change_request_id, payload)
+        return {"ok": proof.get("status") == "applied", "reset_proof": proof, "status": proof.get("status"), "summary": {"reset_event_hash": proof.get("reset_event_hash")}}
+    if args.action == "export":
+        manifest = store.export_archive(program_id, payload)
+        return {"ok": True, "manifest": manifest, "status": "passed", "summary": {"manifest_hash": manifest.get("integrity_hash")}}
+    if args.action == "zip":
+        return {"ok": True, **store.build_archive_zip(program_id, payload)}
+    if args.action == "verify":
+        report = store.verify_archive_zip(program_id, payload)
+        if args.report_out:
+            write_json(args.report_out, report)
+        return {"ok": report.get("status") == "passed", "verification": report, "status": report.get("status"), "summary": report.get("summary", {})}
+    if args.action == "handoff-export":
+        manifest = store.export_final_handoff(program_id, payload)
+        return {"ok": True, "manifest": manifest, "status": "passed", "summary": {"manifest_hash": manifest.get("integrity_hash")}}
+    if args.action == "handoff-zip":
+        return {"ok": True, **store.build_final_handoff_zip(program_id, payload)}
+    if args.action == "handoff-verify":
+        report = store.verify_final_handoff_zip(program_id, payload)
+        if args.report_out:
+            write_json(args.report_out, report)
+        return {"ok": report.get("status") == "passed", "verification": report, "status": report.get("status"), "summary": report.get("summary", {})}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            archive_zip_path=args.archive_zip,
+            archive_verification_report_path=args.archive_verification_report,
+            signoff_binding_path=args.signoff_binding,
+            command_center_zip_path=args.command_center,
+            command_center_verification_report_path=args.command_center_verification_report,
+            command_center_external_evidence_manifest_path=args.command_center_evidence_manifest,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "status": gate.get("status"), "summary": gate.get("summary", {})}
+    raise ValueError("Unsupported unified-release-program-continuity-command-center-signoff command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -7102,6 +7256,14 @@ def _main() -> None:
             unified_release_program_continuity_acceptance_zip_path=args.unified_release_program_continuity_acceptance,
             unified_release_program_continuity_acceptance_verification_report_path=args.unified_release_program_continuity_acceptance_verification_report,
             unified_release_program_continuity_acceptance_signoff_binding_path=args.unified_release_program_continuity_acceptance_signoff_binding,
+            require_unified_release_program_continuity_command_center=args.require_unified_release_program_continuity_command_center,
+            unified_release_program_continuity_command_center_zip_path=args.unified_release_program_continuity_command_center,
+            unified_release_program_continuity_command_center_verification_report_path=args.unified_release_program_continuity_command_center_verification_report,
+            unified_release_program_continuity_command_center_external_evidence_manifest_path=args.unified_release_program_continuity_command_center_external_evidence_manifest,
+            require_unified_release_program_continuity_command_center_signoff=args.require_unified_release_program_continuity_command_center_signoff,
+            unified_release_program_continuity_command_center_signoff_archive_path=args.unified_release_program_continuity_command_center_signoff_archive,
+            unified_release_program_continuity_command_center_signoff_verification_report_path=args.unified_release_program_continuity_command_center_signoff_verification_report,
+            unified_release_program_continuity_command_center_signoff_binding_path=args.unified_release_program_continuity_command_center_signoff_binding,
             unified_release_zip_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_zip_paths=args.unified_distribution_zip,
@@ -7253,6 +7415,10 @@ def _main() -> None:
             unified_release_program_continuity_command_center_path=args.unified_release_program_continuity_command_center,
             unified_release_program_continuity_command_center_verification_report_path=args.unified_release_program_continuity_command_center_verification_report,
             unified_release_program_continuity_command_center_external_evidence_manifest_path=args.unified_release_program_continuity_command_center_external_evidence_manifest,
+            require_unified_release_program_continuity_command_center_signoff=args.require_unified_release_program_continuity_command_center_signoff,
+            unified_release_program_continuity_command_center_signoff_archive_path=args.unified_release_program_continuity_command_center_signoff_archive,
+            unified_release_program_continuity_command_center_signoff_verification_report_path=args.unified_release_program_continuity_command_center_signoff_verification_report,
+            unified_release_program_continuity_command_center_signoff_binding_path=args.unified_release_program_continuity_command_center_signoff_binding,
             unified_release_path=args.unified_release_zip,
             unified_release_verification_report_path=args.unified_release_verification_report,
             unified_distribution_paths=args.unified_distribution_zip,
@@ -7589,6 +7755,15 @@ def _main() -> None:
         result = _run_unified_release_program_continuity_command_center_command(args)
         json_output = bool(getattr(args, "json", False))
         _print_release_audio_certification_result(result, json_output=json_output)
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-continuity-command-center-signoff":
+        parser = build_unified_release_program_continuity_command_center_signoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_continuity_command_center_signoff_command(args)
+        _print_release_audio_certification_result(result, json_output=bool(getattr(args, "json", False)))
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
         if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
             raise SystemExit(1)
@@ -8495,6 +8670,52 @@ def _main() -> None:
                 marker = "ok" if check.get("status") == "passed" else check.get("status")
                 print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
         raise SystemExit(unified_release_program_continuity_command_center_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-command-center-signoff-package":
+        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+            command_center_signoff_verification_exit_code,
+            verify_unified_release_program_continuity_command_center_signoff_package,
+            write_unified_release_program_continuity_command_center_signoff_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_continuity_command_center_signoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_continuity_command_center_signoff_package(
+            args.zip_path,
+            strict=args.strict,
+            require_signed=args.require_signed,
+            signoff_binding_path=args.signoff_binding,
+            command_center_zip_path=args.command_center,
+            command_center_verification_report_path=args.command_center_verification_report,
+            command_center_external_evidence_manifest_path=args.command_center_evidence_manifest,
+        )
+        if args.report_out:
+            write_unified_release_program_continuity_command_center_signoff_verification_report(report, args.report_out)
+        print(json.dumps(report, ensure_ascii=False, indent=2) if args.json else f"Continuity Command Center Signoff Archive verification: {report.get('status')}")
+        raise SystemExit(command_center_signoff_verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-command-center-handoff-package":
+        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+            command_center_signoff_verification_exit_code,
+            verify_unified_release_program_continuity_command_center_final_handoff_package,
+            write_unified_release_program_continuity_command_center_final_handoff_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_continuity_command_center_handoff_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_continuity_command_center_final_handoff_package(
+            args.zip_path,
+            strict=args.strict,
+            require_archive=args.require_archive,
+            archive_zip_path=args.archive_zip,
+            archive_verification_report_path=args.archive_verification_report,
+            signoff_binding_path=args.signoff_binding,
+            command_center_zip_path=args.command_center,
+            command_center_verification_report_path=args.command_center_verification_report,
+            command_center_external_evidence_manifest_path=args.command_center_evidence_manifest,
+        )
+        if args.report_out:
+            write_unified_release_program_continuity_command_center_final_handoff_verification_report(report, args.report_out)
+        print(json.dumps(report, ensure_ascii=False, indent=2) if args.json else f"Continuity Command Center Final Handoff verification: {report.get('status')}")
+        raise SystemExit(command_center_signoff_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-audio-campaign-package":
         from song_agent.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
 

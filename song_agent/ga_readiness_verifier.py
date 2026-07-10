@@ -187,6 +187,10 @@ def verify_ga_readiness_report(
     unified_release_program_continuity_command_center_path: Path | str | None = None,
     unified_release_program_continuity_command_center_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None = None,
+    require_unified_release_program_continuity_command_center_signoff: bool = False,
+    unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -564,6 +568,17 @@ def verify_ga_readiness_report(
             _verify_unified_release_program_continuity_command_center_evidence(
                 checks,
                 checks_by_id.get("ga.unified_release_program_continuity_command_center", {}),
+                unified_release_program_continuity_command_center_path,
+                unified_release_program_continuity_command_center_verification_report_path,
+                unified_release_program_continuity_command_center_external_evidence_manifest_path,
+            )
+        if require_unified_release_program_continuity_command_center_signoff:
+            _verify_unified_release_program_continuity_command_center_signoff_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_continuity_command_center_signoff", {}),
+                unified_release_program_continuity_command_center_signoff_archive_path,
+                unified_release_program_continuity_command_center_signoff_verification_report_path,
+                unified_release_program_continuity_command_center_signoff_binding_path,
                 unified_release_program_continuity_command_center_path,
                 unified_release_program_continuity_command_center_verification_report_path,
                 unified_release_program_continuity_command_center_external_evidence_manifest_path,
@@ -2280,6 +2295,50 @@ def _verify_unified_release_program_continuity_command_center_evidence(
         verification_report,
         runtime_report,
         UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_release_program_continuity_command_center_signoff_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    archive_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    signoff_binding_path: Path | str | None,
+    command_center_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    external_evidence_manifest_path: Path | str | None,
+) -> None:
+    if not all((archive_path, verification_report_path, signoff_binding_path, command_center_path, command_center_verification_report_path, external_evidence_manifest_path)):
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_signoff_required", "failed", "blocking", "Continuity Command Center signoff requires Archive, verification report, independent binding, current Command Center, and evidence manifest.")
+        return
+    try:
+        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+            COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_release_program_continuity_command_center_signoff_package,
+        )
+
+        zip_path = Path(archive_path)
+        external = read_json(Path(verification_report_path))
+        runtime = verify_unified_release_program_continuity_command_center_signoff_package(
+            zip_path,
+            strict=True,
+            require_signed=True,
+            signoff_binding_path=signoff_binding_path,
+            command_center_zip_path=command_center_path,
+            command_center_verification_report_path=command_center_verification_report_path,
+            command_center_external_evidence_manifest_path=external_evidence_manifest_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_signoff_readable", "failed", "blocking", f"Continuity Command Center signoff evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_continuity_command_center_signoff",
+        ga_check,
+        zip_path,
+        external,
+        runtime,
+        COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
     )
 
 

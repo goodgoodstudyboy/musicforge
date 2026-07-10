@@ -1,5 +1,19 @@
 # Changelog
 
+## v12.10.0 - 2026-07-10
+
+### Added
+- Unified Release Program Continuity Command Center signoff with signoff-time independent binding summary, authoritative hash-chained history, and signed-source runtime preflight.
+- Immutable fixed-layout Signoff Archive and lightweight Final Handoff ZIP; both reject declared extras, duplicate or unsafe paths, nested ZIPs, trailing data, redaction findings, and stale v12.9 runtime evidence.
+- Approved, action-scoped, single-use Change Request reset with historical Archive preservation and successor signoff support; deleting signoff/export/ZIP files cannot reopen or silently rebuild signed evidence.
+- CLI and HTTP API workflows for status, preflight, signoff, Change Request approval/reset, Archive export/ZIP/verify, Final Handoff, and gate verification.
+- Release signoff and GA readiness gates that require the external signoff binding plus current Command Center ZIP, verification report, and external evidence manifest; force signoff cannot bypass failed or stale evidence.
+- release-check `v1210.unified_release_program_continuity_command_center_signoff_smoke` covering full-resign, missing binding, stale source, deletion guard, CR action scope, reset/successor, fixed layout, and trailing data.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity_command_center_signoff.py tests\test_release_check.py::test_v1210_unified_release_program_continuity_command_center_signoff_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.9.0 - 2026-07-10
 
 ### Added

@@ -185,6 +185,10 @@ def build_ga_readiness_report(
     unified_release_program_continuity_command_center_zip_path: Path | str | None = None,
     unified_release_program_continuity_command_center_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None = None,
+    require_unified_release_program_continuity_command_center_signoff: bool = False,
+    unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_zip_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -241,6 +245,7 @@ def build_ga_readiness_report(
         "require_unified_release_program_continuity_kit": require_unified_release_program_continuity_kit,
         "require_unified_release_program_continuity_acceptance": require_unified_release_program_continuity_acceptance,
         "require_unified_release_program_continuity_command_center": require_unified_release_program_continuity_command_center,
+        "require_unified_release_program_continuity_command_center_signoff": require_unified_release_program_continuity_command_center_signoff,
         "require_no_critical_audio_quality_risk": require_no_critical_audio_quality_risk,
         "audio_campaign_id": audio_campaign_id,
         "require_final_readiness": require_final_readiness,
@@ -799,6 +804,23 @@ def build_ga_readiness_report(
         "blocking" if require_unified_release_program_continuity_command_center else "warning",
         "Unified Release Program Continuity Command Center is ready." if unified_release_program_continuity_command_center_summary.get("status") == "passed" else "Unified Release Program Continuity Command Center is missing or not ready.",
         unified_release_program_continuity_command_center_summary,
+    )
+    unified_release_program_continuity_command_center_signoff_summary = _unified_release_program_continuity_command_center_signoff_summary(
+        required=require_unified_release_program_continuity_command_center_signoff,
+        archive_zip_path=unified_release_program_continuity_command_center_signoff_archive_path,
+        verification_report_path=unified_release_program_continuity_command_center_signoff_verification_report_path,
+        signoff_binding_path=unified_release_program_continuity_command_center_signoff_binding_path,
+        command_center_zip_path=unified_release_program_continuity_command_center_zip_path,
+        command_center_verification_report_path=unified_release_program_continuity_command_center_verification_report_path,
+        external_evidence_manifest_path=unified_release_program_continuity_command_center_external_evidence_manifest_path,
+    )
+    _add_check(
+        checks,
+        "ga.unified_release_program_continuity_command_center_signoff",
+        "passed" if unified_release_program_continuity_command_center_signoff_summary.get("status") == "passed" else "failed" if require_unified_release_program_continuity_command_center_signoff else "warning",
+        "blocking" if require_unified_release_program_continuity_command_center_signoff else "warning",
+        "Unified Release Program Continuity Command Center signoff archive is passed." if unified_release_program_continuity_command_center_signoff_summary.get("status") == "passed" else "Unified Release Program Continuity Command Center signoff archive is missing or not passed.",
+        unified_release_program_continuity_command_center_signoff_summary,
     )
 
     latest_summary = _release_check_summary(
@@ -2388,6 +2410,65 @@ def _unified_release_program_continuity_command_center_summary(
             "external_evidence_manifest_required": bool(external_evidence_manifest_path),
             "blockers": runtime_report.get("blockers", []),
             "summary": runtime_report.get("summary", {}),
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_release_program_continuity_command_center_signoff_summary(
+    *,
+    required: bool,
+    archive_zip_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    signoff_binding_path: Path | str | None,
+    command_center_zip_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    external_evidence_manifest_path: Path | str | None,
+) -> dict[str, Any]:
+    required_paths = (
+        archive_zip_path,
+        verification_report_path,
+        signoff_binding_path,
+        command_center_zip_path,
+        command_center_verification_report_path,
+        external_evidence_manifest_path,
+    )
+    if not archive_zip_path:
+        return {"status": "missing", "message": "Continuity Command Center Signoff Archive was not provided."}
+    if required and not all(required_paths):
+        return {"status": "failed", "message": "Continuity Command Center signoff requires Archive, verification report, binding, Command Center, and evidence manifest."}
+    try:
+        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+            COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_release_program_continuity_command_center_signoff_package,
+        )
+
+        runtime = verify_unified_release_program_continuity_command_center_signoff_package(
+            archive_zip_path,
+            strict=True,
+            require_signed=True,
+            signoff_binding_path=signoff_binding_path,
+            command_center_zip_path=command_center_zip_path,
+            command_center_verification_report_path=command_center_verification_report_path,
+            command_center_external_evidence_manifest_path=external_evidence_manifest_path,
+        )
+        external = read_json(Path(verification_report_path)) if verification_report_path else {}
+        integrity_ok = bool(external) and external.get("integrity_hash") == stable_hash({key: value for key, value in external.items() if key != "integrity_hash"})
+        package_type_ok = external.get("package_type") == COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE
+        binding_ok = external.get("zip_sha256") == runtime.get("zip_sha256") and external.get("manifest_hash") == runtime.get("manifest_hash")
+        status = "passed" if runtime.get("status") == "passed" and external.get("status") == "passed" and integrity_ok and package_type_ok and binding_ok else "failed"
+        return {
+            "status": status,
+            "zip_sha256": runtime.get("zip_sha256"),
+            "zip_size_bytes": runtime.get("zip_size_bytes"),
+            "manifest_hash": runtime.get("manifest_hash"),
+            "verification_hash": external.get("integrity_hash"),
+            "runtime_verification_status": runtime.get("status"),
+            "external_verification_status": external.get("status"),
+            "external_integrity_ok": integrity_ok,
+            "external_package_type_ok": package_type_ok,
+            "binding_ok": binding_ok,
+            "blockers": runtime.get("blockers") or [],
         }
     except Exception as exc:
         return {"status": "failed" if required else "missing", "error": str(exc)}

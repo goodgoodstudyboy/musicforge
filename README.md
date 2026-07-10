@@ -197,6 +197,19 @@ summaries. Runtime checks distinguish stale verification reports from failed
 current ZIPs and bind the current Acceptance generation/signoff history; a
 blocked refresh cannot be exported or used by Release/GA gates.
 
+v12.10 freezes a ready Continuity Command Center into an independently bound
+signoff, immutable Archive, and lightweight Final Handoff package. Signed
+Archive verification requires the external signoff binding plus the current
+v12.9 Command Center ZIP, verification report, and evidence manifest:
+
+```powershell
+python -m song_agent.cli unified-release-program-continuity-command-center-signoff sign urp-000001 --signed-by "Program Owner" --role release_owner --reason "Ready for continuity handoff" --json
+python -m song_agent.cli unified-release-program-continuity-command-center-signoff zip urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-command-center-signoff verify urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-command-center-signoff handoff-zip urp-000001 --json
+python -m song_agent.cli verify-unified-release-program-continuity-command-center-signoff-package <archive.zip> --strict --require-signed --signoff-binding <binding.json> --command-center <command-center.zip> --command-center-verification-report <verification.json> --command-center-evidence-manifest <external-evidence-manifest.local.json> --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

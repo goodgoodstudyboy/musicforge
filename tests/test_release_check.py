@@ -110,6 +110,7 @@ from song_agent.release_checks import (
     _v127_unified_release_program_continuity_acceptance_board_smoke,
     _v128_unified_release_program_continuity_acceptance_change_control_smoke,
     _v129_unified_release_program_continuity_command_center_smoke,
+    _v1210_unified_release_program_continuity_command_center_signoff_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1543,6 +1544,31 @@ def test_v129_unified_release_program_continuity_command_center_smoke(tmp_path: 
     assert "declared_extra=failed" in detail
     assert "trailing_bytes=failed" in detail
     assert "runbook_unsupported=1" in detail
+
+
+def test_v1210_unified_release_program_continuity_command_center_signoff_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1210_unified_release_program_continuity_command_center_signoff_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "signoff=signed" in detail
+    assert "archive=passed" in detail
+    assert "handoff=passed" in detail
+    assert "release_gate=passed" in detail
+    assert "ga_gate=passed" in detail
+    assert "missing_binding=failed" in detail
+    assert "full_resign_signed_by=failed" in detail
+    assert "delete_signoff_409=True" in detail
+    assert "delete_history_signoff_409=True" in detail
+    assert "delete_history_export_409=True" in detail
+    assert "delete_history_zip_409=True" in detail
+    assert "delete_history_gate=failed" in detail
+    assert "wrong_action_409=True" in detail
+    assert "approval_target_mismatch=409" in detail
+    assert "reset=applied" in detail
+    assert "reset_gate=failed" in detail
+    assert "successor_signoff=signed" in detail
+    assert "declared_extra=failed" in detail
+    assert "trailing_bytes=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

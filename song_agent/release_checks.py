@@ -21213,6 +21213,218 @@ def _v129_unified_release_program_continuity_command_center_smoke(root: Path) ->
         return False, f"v12.9 Unified Release Program Continuity Command Center smoke failed: {exc}"
 
 
+def _v1210_unified_release_program_continuity_command_center_signoff_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+        from song_agent.projectio import read_json, write_json
+        from song_agent.unified_release_program_continuity_command_center_signoff import (
+            RESET_ACTION,
+            UnifiedReleaseProgramContinuityCommandCenterSignoffStateError,
+            UnifiedReleaseProgramContinuityCommandCenterSignoffStore,
+        )
+        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import verify_unified_release_program_continuity_command_center_signoff_package
+        from tests.test_ga_readiness import _write_repo as _v1210_write_ga_repo
+        from tests.test_unified_release_program_continuity_command_center import _prepared_command_center as _v1210_prepared_command_center
+        from tests.test_unified_release_program_continuity_command_center_signoff import _add_declared_extra as _v1210_add_declared_extra, _full_resign_signed_by as _v1210_full_resign
+
+        with tempfile.TemporaryDirectory(prefix="mf-v1210-signoff-") as temp:
+            base = Path(temp)
+            program_store, change, command, program_id = _v1210_prepared_command_center(base)
+            command.build_zip(program_id)
+            command.verify_zip(program_id)
+            store = UnifiedReleaseProgramContinuityCommandCenterSignoffStore(program_store)
+            signed = store.signoff(program_id, {"signed_by": "program owner", "role": "release_owner"})
+            archive = store.build_archive_zip(program_id)
+            verified = store.verify_archive_zip(program_id)
+            handoff = store.build_final_handoff_zip(program_id)
+            handoff_verified = store.verify_final_handoff_zip(program_id)
+            release_gate = store.gate(program_id, required=True)
+
+            missing_binding = verify_unified_release_program_continuity_command_center_signoff_package(
+                archive["zip_path"],
+                strict=True,
+                require_signed=True,
+                command_center_zip_path=command.zip_path(program_id),
+                command_center_verification_report_path=command.verification_report_path(program_id),
+                command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            forged_zip = base / "signoff-full-resign.zip"
+            _v76_rewrite_zip(Path(archive["zip_path"]), forged_zip, _v1210_full_resign)
+            full_resign = verify_unified_release_program_continuity_command_center_signoff_package(
+                forged_zip,
+                strict=True,
+                require_signed=True,
+                signoff_binding_path=store.signoff_binding_path(program_id),
+                command_center_zip_path=command.zip_path(program_id),
+                command_center_verification_report_path=command.verification_report_path(program_id),
+                command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            extra_zip = base / "signoff-extra.zip"
+            _v76_rewrite_zip(Path(archive["zip_path"]), extra_zip, _v1210_add_declared_extra)
+            declared_extra = verify_unified_release_program_continuity_command_center_signoff_package(extra_zip, strict=True)
+            trailing_zip = base / "signoff-trailing.zip"
+            trailing_zip.write_bytes(Path(archive["zip_path"]).read_bytes() + b"tamper")
+            trailing = verify_unified_release_program_continuity_command_center_signoff_package(trailing_zip, strict=True)
+
+            ga_root = base / "ga-repo"
+            _v1210_write_ga_repo(ga_root)
+            ga_report = build_ga_readiness_report(
+                repo_root=ga_root,
+                allow_dirty=True,
+                require_unified_release_program_continuity_command_center_signoff=True,
+                unified_release_program_continuity_command_center_signoff_archive_path=store.archive_zip_path(program_id),
+                unified_release_program_continuity_command_center_signoff_verification_report_path=store.archive_verification_report_path(program_id),
+                unified_release_program_continuity_command_center_signoff_binding_path=store.signoff_binding_path(program_id),
+                unified_release_program_continuity_command_center_zip_path=command.zip_path(program_id),
+                unified_release_program_continuity_command_center_verification_report_path=command.verification_report_path(program_id),
+                unified_release_program_continuity_command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            ga_path = base / "ga-v1210.json"
+            write_ga_readiness_report(ga_report, ga_path)
+            ga_gate = verify_ga_readiness_report(
+                ga_path,
+                require_unified_release_program_continuity_command_center_signoff=True,
+                unified_release_program_continuity_command_center_signoff_archive_path=store.archive_zip_path(program_id),
+                unified_release_program_continuity_command_center_signoff_verification_report_path=store.archive_verification_report_path(program_id),
+                unified_release_program_continuity_command_center_signoff_binding_path=store.signoff_binding_path(program_id),
+                unified_release_program_continuity_command_center_path=command.zip_path(program_id),
+                unified_release_program_continuity_command_center_verification_report_path=command.verification_report_path(program_id),
+                unified_release_program_continuity_command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            ga_signoff_gate = next(
+                (row for row in ga_gate.get("checks", []) if row.get("check_id") == "ga_readiness_unified_release_program_continuity_command_center_signoff_verification_status"),
+                {},
+            )
+
+            signoff_copy = read_json(store.signoff_path(program_id))
+            store.signoff_path(program_id).unlink()
+            delete_signoff_409 = False
+            try:
+                store.signoff(program_id, {"signed_by": "forged"})
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                delete_signoff_409 = True
+            write_json(store.signoff_path(program_id), signoff_copy)
+
+            history_copy = store.history_path(program_id).read_text(encoding="utf-8")
+            store.history_path(program_id).unlink()
+            delete_history_signoff_409 = False
+            delete_history_export_409 = False
+            delete_history_zip_409 = False
+            try:
+                store.signoff(program_id, {"signed_by": "forged"})
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                delete_history_signoff_409 = True
+            try:
+                store.export_archive(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                delete_history_export_409 = True
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                delete_history_zip_409 = True
+            delete_history_gate = store.gate(program_id, required=True)
+            store.history_path(program_id).write_text(history_copy, encoding="utf-8")
+
+            wrong = store.create_change_request(program_id, {"allowed_actions": ["refresh_command_center"]})
+            store.approve_change_request(program_id, wrong["change_request_id"], {"approved_by": "chair"})
+            wrong_action_409 = False
+            try:
+                store.reset_signoff(program_id, wrong["change_request_id"])
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                wrong_action_409 = True
+            request = store.create_change_request(program_id, {"allowed_actions": [RESET_ACTION]})
+            store.approve_change_request(program_id, request["change_request_id"], {"approved_by": "chair"})
+            approval_path = store.change_approval_path(program_id, request["change_request_id"])
+            approval_copy = read_json(approval_path)
+            forged_approval = dict(approval_copy)
+            forged_approval["target"] = dict(approval_copy.get("target") or {})
+            forged_approval["target"]["signoff_hash"] = "f" * 64
+            forged_approval["payload_hash"] = stable_hash(
+                {key: value for key, value in forged_approval.items() if key not in {"payload_hash", "integrity_hash"}}
+            )
+            forged_approval["integrity_hash"] = stable_hash(
+                {key: value for key, value in forged_approval.items() if key != "integrity_hash"}
+            )
+            write_json(approval_path, forged_approval)
+            approval_target_mismatch = "allowed"
+            try:
+                store.reset_signoff(program_id, request["change_request_id"])
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                approval_target_mismatch = "409"
+            write_json(approval_path, approval_copy)
+            reset = store.reset_signoff(program_id, request["change_request_id"], {"reset_by": "program owner"})
+            reset_gate = store.gate(program_id, required=True)
+            successor = store.signoff(program_id, {"signed_by": "successor owner", "role": "release_owner"})
+            store.build_archive_zip(program_id)
+            store.verify_archive_zip(program_id)
+
+            change.archive_zip_path(program_id).write_bytes(change.archive_zip_path(program_id).read_bytes() + b"tamper")
+            stale_export_409 = False
+            stale_zip_409 = False
+            try:
+                store.export_archive(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                stale_export_409 = True
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                stale_zip_409 = True
+
+        checks = {
+            "signoff": signed.get("status"),
+            "archive": verified.get("status"),
+            "handoff": handoff_verified.get("status"),
+            "verify": verified.get("status"),
+            "release_gate": release_gate.get("status"),
+            "ga_gate": ga_signoff_gate.get("status"),
+            "missing_binding": missing_binding.get("status"),
+            "full_resign_signed_by": full_resign.get("status"),
+            "stale_command_center_export_409": stale_export_409,
+            "stale_command_center_zip_409": stale_zip_409,
+            "delete_signoff_409": delete_signoff_409,
+            "delete_history_signoff_409": delete_history_signoff_409,
+            "delete_history_export_409": delete_history_export_409,
+            "delete_history_zip_409": delete_history_zip_409,
+            "delete_history_gate": delete_history_gate.get("status"),
+            "wrong_action_409": wrong_action_409,
+            "approval_target_mismatch": approval_target_mismatch,
+            "reset": reset.get("status"),
+            "reset_gate": reset_gate.get("status"),
+            "successor_signoff": successor.get("status"),
+            "declared_extra": declared_extra.get("status"),
+            "trailing_bytes": trailing.get("status"),
+        }
+        ok = (
+            checks["signoff"] == "signed"
+            and checks["archive"] == "passed"
+            and checks["handoff"] == "passed"
+            and checks["verify"] == "passed"
+            and checks["release_gate"] == "passed"
+            and checks["ga_gate"] == "passed"
+            and checks["missing_binding"] == "failed"
+            and checks["full_resign_signed_by"] == "failed"
+            and checks["stale_command_center_export_409"] is True
+            and checks["stale_command_center_zip_409"] is True
+            and checks["delete_signoff_409"] is True
+            and checks["delete_history_signoff_409"] is True
+            and checks["delete_history_export_409"] is True
+            and checks["delete_history_zip_409"] is True
+            and checks["delete_history_gate"] == "failed"
+            and checks["wrong_action_409"] is True
+            and checks["approval_target_mismatch"] == "409"
+            and checks["reset"] == "applied"
+            and checks["reset_gate"] == "failed"
+            and checks["successor_signoff"] == "signed"
+            and checks["declared_extra"] == "failed"
+            and checks["trailing_bytes"] == "failed"
+        )
+        return ok, "v12.10 continuity command center signoff: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.10 Unified Release Program Continuity Command Center Signoff smoke failed: {exc}"
+
+
 def _v128_prepare_signed(base: Path):
     from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
     from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance
