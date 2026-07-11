@@ -933,6 +933,48 @@ def panel_html() -> str:
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
       </section>
+      <section>
+        <div class="panel-title">
+          <span>Continuity Receiver Acceptance</span>
+          <span id="continuity-receiver-status" class="status">not configured</span>
+        </div>
+        <div class="panel-body">
+          <div class="grid2">
+            <label>Program ID
+              <input id="continuity-receiver-program-id" placeholder="urp-000001">
+            </label>
+            <label>Response ID
+              <input id="continuity-receiver-response-id" placeholder="receiver-001">
+            </label>
+          </div>
+          <label>External response JSON
+            <textarea id="continuity-receiver-response" rows="4"></textarea>
+          </label>
+          <div class="grid2">
+            <label>Response verification report
+              <textarea id="continuity-receiver-response-verification" rows="4"></textarea>
+            </label>
+            <label>Response binding summary
+              <textarea id="continuity-receiver-response-binding" rows="4"></textarea>
+            </label>
+          </div>
+          <label>Signoff owner
+            <input id="continuity-receiver-signed-by" placeholder="Receiver Chair">
+          </label>
+          <div class="actions">
+            <button class="secondary" id="continuity-receiver-refresh" type="button">Refresh</button>
+            <button class="secondary" id="continuity-receiver-review-pack" type="button">Review Pack</button>
+            <button class="secondary" id="continuity-receiver-verify-pack" type="button">Verify Pack</button>
+            <button class="secondary" id="continuity-receiver-import" type="button">Import Response</button>
+            <button class="secondary" id="continuity-receiver-accept" type="button">Accepted Evidence</button>
+            <button class="secondary" id="continuity-receiver-board" type="button">Refresh Board</button>
+            <button class="secondary" id="continuity-receiver-signoff" type="button">Signoff</button>
+            <button class="secondary" id="continuity-receiver-zip" type="button">Archive ZIP</button>
+            <button class="secondary" id="continuity-receiver-verify" type="button">Verify Archive</button>
+          </div>
+          <pre id="continuity-receiver-result" class="json-preview"></pre>
+        </div>
+      </section>
     <section>
       <div class="panel-title">
         <span>Song Request</span>
@@ -12468,6 +12510,61 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
       });
       $("maintenance-result").textContent = JSON.stringify(data, null, 2);
       await loadMaintenanceStatus();
+    });
+
+    function continuityReceiverBase() {
+      const programId = $("continuity-receiver-program-id").value.trim();
+      if (!programId) throw new Error("Program ID is required.");
+      return `/api/unified-release-programs/${encodeURIComponent(programId)}/continuity-command-center-acceptance`;
+    }
+
+    async function showContinuityReceiver(path, options = {}) {
+      const data = await api(path, options);
+      $("continuity-receiver-status").textContent = data.status || (data.report || {}).status || (data.verification || {}).status || "updated";
+      $("continuity-receiver-result").textContent = JSON.stringify(data, null, 2);
+      return data;
+    }
+
+    bindAction("continuity-receiver-refresh", async () => {
+      await showContinuityReceiver(continuityReceiverBase());
+    });
+    bindAction("continuity-receiver-review-pack", async () => {
+      await showContinuityReceiver(`${continuityReceiverBase()}/review-pack`, { method: "POST" });
+    });
+    bindAction("continuity-receiver-verify-pack", async () => {
+      await showContinuityReceiver(`${continuityReceiverBase()}/review-pack/verify`, { method: "POST" });
+    });
+    bindAction("continuity-receiver-import", async () => {
+      const response = JSON.parse($("continuity-receiver-response").value || "{}");
+      const verification = JSON.parse($("continuity-receiver-response-verification").value || "{}");
+      const binding = JSON.parse($("continuity-receiver-response-binding").value || "{}");
+      await showContinuityReceiver(`${continuityReceiverBase()}/responses/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response, response_verification_report: verification, response_binding_summary: binding }),
+      });
+    });
+    bindAction("continuity-receiver-accept", async () => {
+      const responseId = $("continuity-receiver-response-id").value.trim();
+      if (!responseId) throw new Error("Response ID is required.");
+      await showContinuityReceiver(`${continuityReceiverBase()}/responses/${encodeURIComponent(responseId)}/accepted-evidence`, { method: "POST" });
+    });
+    bindAction("continuity-receiver-board", async () => {
+      await showContinuityReceiver(`${continuityReceiverBase()}/board/refresh`, { method: "POST" });
+    });
+    bindAction("continuity-receiver-signoff", async () => {
+      const signedBy = $("continuity-receiver-signed-by").value.trim();
+      await showContinuityReceiver(`${continuityReceiverBase()}/signoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signed_by: signedBy || "receiver-acceptance-chair", role: "program_owner" }),
+      });
+    });
+    bindAction("continuity-receiver-zip", async () => {
+      await showContinuityReceiver(`${continuityReceiverBase()}/archive/zip`, { method: "POST" });
+    });
+    bindAction("continuity-receiver-verify", async () => {
+      await showContinuityReceiver(`${continuityReceiverBase()}/archive/verify`, { method: "POST" });
     });
 
     function escapeHtml(value) {

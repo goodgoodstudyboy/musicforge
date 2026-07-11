@@ -189,6 +189,16 @@ def build_ga_readiness_report(
     unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None = None,
     unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None = None,
+    require_unified_release_program_continuity_command_center_acceptance: bool = False,
+    unified_release_program_continuity_command_center_acceptance_archive_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_signoff_binding_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_review_pack_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None = None,
+    unified_release_program_continuity_command_center_final_handoff_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None = None,
     unified_release_zip_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
     unified_distribution_zip_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
@@ -821,6 +831,32 @@ def build_ga_readiness_report(
         "blocking" if require_unified_release_program_continuity_command_center_signoff else "warning",
         "Unified Release Program Continuity Command Center signoff archive is passed." if unified_release_program_continuity_command_center_signoff_summary.get("status") == "passed" else "Unified Release Program Continuity Command Center signoff archive is missing or not passed.",
         unified_release_program_continuity_command_center_signoff_summary,
+    )
+    unified_release_program_continuity_command_center_acceptance_summary = _unified_release_program_continuity_command_center_acceptance_summary(
+        required=require_unified_release_program_continuity_command_center_acceptance,
+        archive_zip_path=unified_release_program_continuity_command_center_acceptance_archive_path,
+        verification_report_path=unified_release_program_continuity_command_center_acceptance_verification_report_path,
+        acceptance_signoff_binding_path=unified_release_program_continuity_command_center_acceptance_signoff_binding_path,
+        review_pack_path=unified_release_program_continuity_command_center_acceptance_review_pack_path,
+        review_pack_verification_report_path=unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path,
+        accepted_evidence_dir=unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir,
+        response_proof_dir=unified_release_program_continuity_command_center_acceptance_response_proof_dir,
+        signoff_archive_path=unified_release_program_continuity_command_center_signoff_archive_path,
+        signoff_archive_verification_report_path=unified_release_program_continuity_command_center_signoff_verification_report_path,
+        final_handoff_path=unified_release_program_continuity_command_center_final_handoff_path,
+        final_handoff_verification_report_path=unified_release_program_continuity_command_center_final_handoff_verification_report_path,
+        command_center_signoff_binding_path=unified_release_program_continuity_command_center_signoff_binding_path,
+        command_center_path=unified_release_program_continuity_command_center_zip_path,
+        command_center_verification_report_path=unified_release_program_continuity_command_center_verification_report_path,
+        command_center_evidence_manifest_path=unified_release_program_continuity_command_center_external_evidence_manifest_path,
+    )
+    _add_check(
+        checks,
+        "ga.unified_release_program_continuity_command_center_acceptance",
+        "passed" if unified_release_program_continuity_command_center_acceptance_summary.get("status") == "passed" else "failed" if require_unified_release_program_continuity_command_center_acceptance else "warning",
+        "blocking" if require_unified_release_program_continuity_command_center_acceptance else "warning",
+        "Unified Release Program Continuity Command Center Receiver Acceptance is passed." if unified_release_program_continuity_command_center_acceptance_summary.get("status") == "passed" else "Receiver Acceptance evidence is missing or not passed.",
+        unified_release_program_continuity_command_center_acceptance_summary,
     )
 
     latest_summary = _release_check_summary(
@@ -2455,6 +2491,92 @@ def _unified_release_program_continuity_command_center_signoff_summary(
         external = read_json(Path(verification_report_path)) if verification_report_path else {}
         integrity_ok = bool(external) and external.get("integrity_hash") == stable_hash({key: value for key, value in external.items() if key != "integrity_hash"})
         package_type_ok = external.get("package_type") == COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE
+        binding_ok = external.get("zip_sha256") == runtime.get("zip_sha256") and external.get("manifest_hash") == runtime.get("manifest_hash")
+        status = "passed" if runtime.get("status") == "passed" and external.get("status") == "passed" and integrity_ok and package_type_ok and binding_ok else "failed"
+        return {
+            "status": status,
+            "zip_sha256": runtime.get("zip_sha256"),
+            "zip_size_bytes": runtime.get("zip_size_bytes"),
+            "manifest_hash": runtime.get("manifest_hash"),
+            "verification_hash": external.get("integrity_hash"),
+            "runtime_verification_status": runtime.get("status"),
+            "external_verification_status": external.get("status"),
+            "external_integrity_ok": integrity_ok,
+            "external_package_type_ok": package_type_ok,
+            "binding_ok": binding_ok,
+            "blockers": runtime.get("blockers") or [],
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_release_program_continuity_command_center_acceptance_summary(
+    *,
+    required: bool,
+    archive_zip_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    acceptance_signoff_binding_path: Path | str | None,
+    review_pack_path: Path | str | None,
+    review_pack_verification_report_path: Path | str | None,
+    accepted_evidence_dir: Path | str | None,
+    response_proof_dir: Path | str | None,
+    signoff_archive_path: Path | str | None,
+    signoff_archive_verification_report_path: Path | str | None,
+    final_handoff_path: Path | str | None,
+    final_handoff_verification_report_path: Path | str | None,
+    command_center_signoff_binding_path: Path | str | None,
+    command_center_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    command_center_evidence_manifest_path: Path | str | None,
+) -> dict[str, Any]:
+    required_paths = (
+        archive_zip_path,
+        verification_report_path,
+        acceptance_signoff_binding_path,
+        review_pack_path,
+        review_pack_verification_report_path,
+        accepted_evidence_dir,
+        response_proof_dir,
+        signoff_archive_path,
+        signoff_archive_verification_report_path,
+        final_handoff_path,
+        final_handoff_verification_report_path,
+        command_center_signoff_binding_path,
+        command_center_path,
+        command_center_verification_report_path,
+        command_center_evidence_manifest_path,
+    )
+    if not archive_zip_path:
+        return {"status": "missing", "message": "Receiver Acceptance Archive was not provided."}
+    if required and not all(required_paths):
+        return {"status": "failed", "message": "Receiver Acceptance requires Archive, external proof roots, and current v12.10 evidence."}
+    try:
+        from song_agent.unified_release_program_continuity_command_center_acceptance_verifier import (
+            ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_release_program_continuity_command_center_acceptance_package,
+        )
+
+        runtime = verify_unified_release_program_continuity_command_center_acceptance_package(
+            archive_zip_path,
+            strict=True,
+            require_signed=True,
+            signoff_binding_path=acceptance_signoff_binding_path,
+            review_pack_path=review_pack_path,
+            review_pack_verification_report_path=review_pack_verification_report_path,
+            accepted_evidence_dir=accepted_evidence_dir,
+            response_proof_dir=response_proof_dir,
+            command_center_signoff_archive_path=signoff_archive_path,
+            command_center_signoff_archive_verification_report_path=signoff_archive_verification_report_path,
+            command_center_final_handoff_path=final_handoff_path,
+            command_center_final_handoff_verification_report_path=final_handoff_verification_report_path,
+            command_center_signoff_binding_path=command_center_signoff_binding_path,
+            command_center_path=command_center_path,
+            command_center_verification_report_path=command_center_verification_report_path,
+            command_center_evidence_manifest_path=command_center_evidence_manifest_path,
+        )
+        external = read_json(Path(verification_report_path)) if verification_report_path else {}
+        integrity_ok = bool(external) and external.get("integrity_hash") == stable_hash({key: value for key, value in external.items() if key != "integrity_hash"})
+        package_type_ok = external.get("package_type") == ARCHIVE_VERIFICATION_PACKAGE_TYPE
         binding_ok = external.get("zip_sha256") == runtime.get("zip_sha256") and external.get("manifest_hash") == runtime.get("manifest_hash")
         status = "passed" if runtime.get("status") == "passed" and external.get("status") == "passed" and integrity_ok and package_type_ok and binding_ok else "failed"
         return {

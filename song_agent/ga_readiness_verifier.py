@@ -191,6 +191,16 @@ def verify_ga_readiness_report(
     unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None = None,
     unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None = None,
+    require_unified_release_program_continuity_command_center_acceptance: bool = False,
+    unified_release_program_continuity_command_center_acceptance_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_signoff_binding_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_review_pack_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None = None,
+    unified_release_program_continuity_command_center_final_handoff_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
     unified_release_path: Path | str | None = None,
     unified_release_verification_report_path: Path | str | None = None,
@@ -578,6 +588,26 @@ def verify_ga_readiness_report(
                 checks_by_id.get("ga.unified_release_program_continuity_command_center_signoff", {}),
                 unified_release_program_continuity_command_center_signoff_archive_path,
                 unified_release_program_continuity_command_center_signoff_verification_report_path,
+                unified_release_program_continuity_command_center_signoff_binding_path,
+                unified_release_program_continuity_command_center_path,
+                unified_release_program_continuity_command_center_verification_report_path,
+                unified_release_program_continuity_command_center_external_evidence_manifest_path,
+            )
+        if require_unified_release_program_continuity_command_center_acceptance:
+            _verify_unified_release_program_continuity_command_center_acceptance_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_continuity_command_center_acceptance", {}),
+                unified_release_program_continuity_command_center_acceptance_path,
+                unified_release_program_continuity_command_center_acceptance_verification_report_path,
+                unified_release_program_continuity_command_center_acceptance_signoff_binding_path,
+                unified_release_program_continuity_command_center_acceptance_review_pack_path,
+                unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path,
+                unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir,
+                unified_release_program_continuity_command_center_acceptance_response_proof_dir,
+                unified_release_program_continuity_command_center_signoff_archive_path,
+                unified_release_program_continuity_command_center_signoff_verification_report_path,
+                unified_release_program_continuity_command_center_final_handoff_path,
+                unified_release_program_continuity_command_center_final_handoff_verification_report_path,
                 unified_release_program_continuity_command_center_signoff_binding_path,
                 unified_release_program_continuity_command_center_path,
                 unified_release_program_continuity_command_center_verification_report_path,
@@ -2339,6 +2369,91 @@ def _verify_unified_release_program_continuity_command_center_signoff_evidence(
         external,
         runtime,
         COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_release_program_continuity_command_center_acceptance_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    archive_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    acceptance_signoff_binding_path: Path | str | None,
+    review_pack_path: Path | str | None,
+    review_pack_verification_report_path: Path | str | None,
+    accepted_evidence_dir: Path | str | None,
+    response_proof_dir: Path | str | None,
+    command_center_signoff_archive_path: Path | str | None,
+    command_center_signoff_archive_verification_report_path: Path | str | None,
+    command_center_final_handoff_path: Path | str | None,
+    command_center_final_handoff_verification_report_path: Path | str | None,
+    command_center_signoff_binding_path: Path | str | None,
+    command_center_path: Path | str | None,
+    command_center_verification_report_path: Path | str | None,
+    command_center_evidence_manifest_path: Path | str | None,
+) -> None:
+    required_paths = (
+        archive_path,
+        verification_report_path,
+        acceptance_signoff_binding_path,
+        review_pack_path,
+        review_pack_verification_report_path,
+        accepted_evidence_dir,
+        response_proof_dir,
+        command_center_signoff_archive_path,
+        command_center_signoff_archive_verification_report_path,
+        command_center_final_handoff_path,
+        command_center_final_handoff_verification_report_path,
+        command_center_signoff_binding_path,
+        command_center_path,
+        command_center_verification_report_path,
+        command_center_evidence_manifest_path,
+    )
+    if not all(required_paths):
+        _add_check(
+            checks,
+            "ga_readiness_unified_release_program_continuity_command_center_acceptance_required",
+            "failed",
+            "blocking",
+            "Receiver Acceptance requires Archive, independent binding, response proofs, accepted evidence, Review Pack, and current v12.10 evidence.",
+        )
+        return
+    try:
+        from song_agent.unified_release_program_continuity_command_center_acceptance_verifier import (
+            ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_release_program_continuity_command_center_acceptance_package,
+        )
+
+        zip_path = Path(archive_path)
+        external = read_json(Path(verification_report_path))
+        runtime = verify_unified_release_program_continuity_command_center_acceptance_package(
+            zip_path,
+            strict=True,
+            require_signed=True,
+            signoff_binding_path=acceptance_signoff_binding_path,
+            review_pack_path=review_pack_path,
+            review_pack_verification_report_path=review_pack_verification_report_path,
+            accepted_evidence_dir=accepted_evidence_dir,
+            response_proof_dir=response_proof_dir,
+            command_center_signoff_archive_path=command_center_signoff_archive_path,
+            command_center_signoff_archive_verification_report_path=command_center_signoff_archive_verification_report_path,
+            command_center_final_handoff_path=command_center_final_handoff_path,
+            command_center_final_handoff_verification_report_path=command_center_final_handoff_verification_report_path,
+            command_center_signoff_binding_path=command_center_signoff_binding_path,
+            command_center_path=command_center_path,
+            command_center_verification_report_path=command_center_verification_report_path,
+            command_center_evidence_manifest_path=command_center_evidence_manifest_path,
+        )
+    except Exception as exc:
+        _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_acceptance_readable", "failed", "blocking", f"Receiver Acceptance evidence could not be read: {exc}")
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_continuity_command_center_acceptance",
+        ga_check,
+        zip_path,
+        external,
+        runtime,
+        ARCHIVE_VERIFICATION_PACKAGE_TYPE,
     )
 
 

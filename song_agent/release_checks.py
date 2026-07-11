@@ -21425,6 +21425,210 @@ def _v1210_unified_release_program_continuity_command_center_signoff_smoke(root:
         return False, f"v12.10 Unified Release Program Continuity Command Center Signoff smoke failed: {exc}"
 
 
+def _v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+        from song_agent.unified_release_program_continuity_command_center_acceptance import (
+            UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
+        )
+        from tests.test_ga_readiness import _write_repo as _v1211_write_ga_repo
+        from tests.test_unified_release_program_continuity_command_center_acceptance import (
+            _accepted_pair as _v1211_accepted_pair,
+            _add_declared_extra as _v1211_add_declared_extra,
+            _full_resign_signed_by as _v1211_full_resign,
+            _ga_build_kwargs as _v1211_ga_build_kwargs,
+            _ga_verify_kwargs as _v1211_ga_verify_kwargs,
+            _prepared_acceptance as _v1211_prepared_acceptance,
+            _response_proof as _v1211_response_proof,
+            _runtime_paths as _v1211_runtime_paths,
+        )
+        from tests.test_unified_release_program_continuity_distribution import (
+            _replace_zip_name_bytes as _v1211_replace_zip_name_bytes,
+            _write_with_extra_entry as _v1211_write_extra,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="mf-v1211-receiver-acceptance-") as temp:
+            base = Path(temp)
+            _program, _command, signoff, store, program_id, _review = _v1211_prepared_acceptance(base)
+
+            proof = _v1211_response_proof(
+                store,
+                program_id,
+                response_id="receiver-proof-boundary",
+                reviewer="Boundary Reviewer",
+                organization="Boundary Org",
+                role="technical_reviewer",
+            )
+            bare_import_blocked = False
+            try:
+                store.import_response(program_id, proof["response"])
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                bare_import_blocked = True
+            forged_role = json.loads(json.dumps(proof))
+            forged_role["response"]["role"] = "continuity_owner"
+            forged_role["response"]["payload_hash"] = stable_hash({key: value for key, value in forged_role["response"].items() if key not in {"payload_hash", "integrity_hash"}})
+            forged_role["response"]["integrity_hash"] = stable_hash({key: value for key, value in forged_role["response"].items() if key != "integrity_hash"})
+            role_forge_blocked = False
+            try:
+                store.import_response(program_id, forged_role)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                role_forge_blocked = True
+
+            _v1211_accepted_pair(store, program_id)
+            negative_results: dict[str, bool] = {}
+            for decision in ("rejected", "needs_changes"):
+                response_id = f"receiver-{decision}"
+                store.import_response(
+                    program_id,
+                    _v1211_response_proof(
+                        store,
+                        program_id,
+                        response_id=response_id,
+                        reviewer="Negative Reviewer",
+                        organization="Negative Org",
+                        role="observer",
+                        decision=decision,
+                    ),
+                )
+                board = store.refresh_board(program_id)
+                blocked = board.get("status") == "blocked"
+                try:
+                    store.signoff(program_id, {"signed_by": "forged chair"})
+                except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                    blocked = blocked and True
+                else:
+                    blocked = False
+                negative_results[decision] = blocked
+                shutil.rmtree(store.response_dir(program_id, response_id))
+
+            stale_handoff = base / "stale-final-handoff.zip"
+            stale_handoff.write_bytes(signoff.final_handoff_zip_path(program_id).read_bytes() + b"tamper")
+            stale_board = store.refresh_board(program_id, {"command_center_final_handoff": stale_handoff})
+            stale_handoff_blocked = stale_board.get("status") == "blocked"
+
+            board = store.refresh_board(program_id)
+            signed = store.signoff(program_id, {"signed_by": "receiver chair", "role": "program_owner"})
+            archived = store.build_archive_zip(program_id)
+            verified = store.verify_archive_zip(program_id)
+            gate = store.gate(program_id, required=True)
+            paths = _v1211_runtime_paths(store, program_id)
+
+            missing_binding = store._verify_archive_runtime(program_id, {"acceptance_signoff_binding": base / "missing-binding.json"})
+            forged_zip = base / "receiver-acceptance-full-resign.zip"
+            _v76_rewrite_zip(Path(archived["zip_path"]), forged_zip, _v1211_full_resign)
+            full_resign = store._verify_archive_runtime(program_id, {"archive_zip": forged_zip})
+            extra_zip = base / "receiver-acceptance-extra.zip"
+            _v76_rewrite_zip(Path(archived["zip_path"]), extra_zip, _v1211_add_declared_extra)
+            declared_extra = store._verify_archive_runtime(program_id, {"archive_zip": extra_zip})
+            musicforge_zip = base / "receiver-acceptance-musicforge.zip"
+            _v1211_write_extra(Path(archived["zip_path"]), musicforge_zip, ".MusicForge/internal.json", b"{}")
+            musicforge = store._verify_archive_runtime(program_id, {"archive_zip": musicforge_zip})
+            backslash_zip = base / "receiver-acceptance-backslash.zip"
+            _v1211_replace_zip_name_bytes(Path(archived["zip_path"]), backslash_zip, b"README.txt", b"README\\txt")
+            backslash = store._verify_archive_runtime(program_id, {"archive_zip": backslash_zip})
+            trailing_zip = base / "receiver-acceptance-trailing.zip"
+            trailing_zip.write_bytes(Path(archived["zip_path"]).read_bytes() + b"tamper")
+            trailing = store._verify_archive_runtime(program_id, {"archive_zip": trailing_zip})
+
+            ga_root = base / "ga-repo"
+            _v1211_write_ga_repo(ga_root)
+            ga_report = build_ga_readiness_report(repo_root=ga_root, allow_dirty=True, **_v1211_ga_build_kwargs(paths))
+            ga_path = base / "ga-v1211.json"
+            write_ga_readiness_report(ga_report, ga_path)
+            ga_runtime = verify_ga_readiness_report(ga_path, **_v1211_ga_verify_kwargs(paths))
+            ga_check = next((row for row in ga_report.get("checks", []) if row.get("check_id") == "ga.unified_release_program_continuity_command_center_acceptance"), {})
+
+            history_copy = store.history_path(program_id).read_text(encoding="utf-8")
+            store.history_path(program_id).unlink()
+            delete_history_signoff_409 = False
+            delete_history_export_409 = False
+            delete_history_zip_409 = False
+            try:
+                store.signoff(program_id, {"signed_by": "forged receiver"})
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                delete_history_signoff_409 = True
+            try:
+                store.export_archive(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                delete_history_export_409 = True
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                delete_history_zip_409 = True
+            delete_history_gate = store.gate(program_id, required=True)
+            store.history_path(program_id).write_text(history_copy, encoding="utf-8")
+
+            response_path = store.response_path(program_id, "receiver-001")
+            original_response = response_path.read_text(encoding="utf-8")
+            tampered_response = read_json(response_path)
+            tampered_response["findings"] = [{"severity": "critical", "summary": "tampered"}]
+            tampered_response["payload_hash"] = stable_hash({key: value for key, value in tampered_response.items() if key not in {"payload_hash", "integrity_hash"}})
+            tampered_response["integrity_hash"] = stable_hash({key: value for key, value in tampered_response.items() if key != "integrity_hash"})
+            write_json(response_path, tampered_response)
+            signed_source_tamper_409 = False
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                signed_source_tamper_409 = True
+            response_path.write_text(original_response, encoding="utf-8")
+
+        checks = {
+            "review_pack": _review.get("status"),
+            "bare_import_blocked": bare_import_blocked,
+            "role_forge_blocked": role_forge_blocked,
+            "rejected_blocks": negative_results.get("rejected"),
+            "needs_changes_blocks": negative_results.get("needs_changes"),
+            "stale_handoff": stale_handoff_blocked,
+            "board": board.get("status"),
+            "signoff": signed.get("status"),
+            "archive": verified.get("status"),
+            "gate": gate.get("status"),
+            "ga_gate": ga_check.get("status"),
+            "ga_verify": ga_runtime.get("status"),
+            "missing_binding": missing_binding.get("status"),
+            "signoff_full_resign_signed_by": full_resign.get("status"),
+            "declared_extra": declared_extra.get("status"),
+            "musicforge": musicforge.get("status"),
+            "raw_backslash": backslash.get("status"),
+            "trailing_bytes": trailing.get("status"),
+            "delete_history_signoff_409": delete_history_signoff_409,
+            "delete_history_export_409": delete_history_export_409,
+            "delete_history_zip_409": delete_history_zip_409,
+            "delete_history_gate": delete_history_gate.get("status"),
+            "signed_source_tamper_409": signed_source_tamper_409,
+        }
+        ok = (
+            checks["review_pack"] == "passed"
+            and checks["bare_import_blocked"] is True
+            and checks["role_forge_blocked"] is True
+            and checks["rejected_blocks"] is True
+            and checks["needs_changes_blocks"] is True
+            and checks["stale_handoff"] is True
+            and checks["board"] == "ready_for_signoff"
+            and checks["signoff"] == "signed"
+            and checks["archive"] == "passed"
+            and checks["gate"] == "passed"
+            and checks["ga_gate"] == "passed"
+            and checks["ga_verify"] != "failed"
+            and checks["missing_binding"] == "failed"
+            and checks["signoff_full_resign_signed_by"] == "failed"
+            and checks["declared_extra"] == "failed"
+            and checks["musicforge"] == "failed"
+            and checks["raw_backslash"] == "failed"
+            and checks["trailing_bytes"] == "failed"
+            and checks["delete_history_signoff_409"] is True
+            and checks["delete_history_export_409"] is True
+            and checks["delete_history_zip_409"] is True
+            and checks["delete_history_gate"] == "failed"
+            and checks["signed_source_tamper_409"] is True
+        )
+        return ok, "v12.11 command center receiver acceptance: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.11 Unified Release Program Continuity Command Center Receiver Acceptance smoke failed: {exc}"
+
+
 def _v128_prepare_signed(base: Path):
     from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
     from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance

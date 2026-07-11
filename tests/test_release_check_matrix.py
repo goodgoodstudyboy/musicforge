@@ -35,6 +35,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v1015.release_audio_command_center_smoke" in {definition.check_id for definition in definitions}
     assert "v112.unified_command_center_continuous_review_smoke" in {definition.check_id for definition in definitions}
     assert "v113.unified_command_center_drift_response_smoke" in {definition.check_id for definition in definitions}
+    assert "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke" in {definition.check_id for definition in definitions}
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
 
@@ -119,6 +120,7 @@ def test_release_check_profile_and_filters() -> None:
             "v128.unified_release_program_continuity_acceptance_change_control_smoke",
             "v129.unified_release_program_continuity_command_center_smoke",
             "v1210.unified_release_program_continuity_command_center_signoff_smoke",
+            "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke",
         ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",

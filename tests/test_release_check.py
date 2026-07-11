@@ -111,6 +111,7 @@ from song_agent.release_checks import (
     _v128_unified_release_program_continuity_acceptance_change_control_smoke,
     _v129_unified_release_program_continuity_command_center_smoke,
     _v1210_unified_release_program_continuity_command_center_signoff_smoke,
+    _v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1569,6 +1570,30 @@ def test_v1210_unified_release_program_continuity_command_center_signoff_smoke(t
     assert "successor_signoff=signed" in detail
     assert "declared_extra=failed" in detail
     assert "trailing_bytes=failed" in detail
+
+
+def test_v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "review_pack=passed" in detail
+    assert "bare_import_blocked=True" in detail
+    assert "role_forge_blocked=True" in detail
+    assert "rejected_blocks=True" in detail
+    assert "needs_changes_blocks=True" in detail
+    assert "stale_handoff=True" in detail
+    assert "signoff=signed" in detail
+    assert "archive=passed" in detail
+    assert "gate=passed" in detail
+    assert "ga_gate=passed" in detail
+    assert "missing_binding=failed" in detail
+    assert "signoff_full_resign_signed_by=failed" in detail
+    assert "declared_extra=failed" in detail
+    assert "musicforge=failed" in detail
+    assert "raw_backslash=failed" in detail
+    assert "trailing_bytes=failed" in detail
+    assert "delete_history_signoff_409=True" in detail
+    assert "signed_source_tamper_409=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

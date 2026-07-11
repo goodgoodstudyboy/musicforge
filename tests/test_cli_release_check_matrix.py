@@ -117,6 +117,7 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
             "v128.unified_release_program_continuity_acceptance_change_control_smoke",
             "v129.unified_release_program_continuity_command_center_smoke",
             "v1210.unified_release_program_continuity_command_center_signoff_smoke",
+            "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke",
         ]
 
 

@@ -21,6 +21,22 @@ def test_webui_contains_music_fields():
     assert 'id="include-hidden"' in html
 
 
+def test_webui_contains_continuity_receiver_acceptance_controls():
+    html = panel_html()
+
+    assert "Continuity Receiver Acceptance" in html
+    assert 'id="continuity-receiver-program-id"' in html
+    assert 'id="continuity-receiver-response"' in html
+    assert 'id="continuity-receiver-response-verification"' in html
+    assert 'id="continuity-receiver-response-binding"' in html
+    assert 'id="continuity-receiver-review-pack"' in html
+    assert 'id="continuity-receiver-import"' in html
+    assert 'id="continuity-receiver-accept"' in html
+    assert 'id="continuity-receiver-signoff"' in html
+    assert 'id="continuity-receiver-verify"' in html
+    assert "/responses/import" in html
+
+
 def test_webui_contains_acceptance_workspace():
     html = panel_html()
 

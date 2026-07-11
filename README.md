@@ -210,6 +210,24 @@ python -m song_agent.cli unified-release-program-continuity-command-center-signo
 python -m song_agent.cli verify-unified-release-program-continuity-command-center-signoff-package <archive.zip> --strict --require-signed --signoff-binding <binding.json> --command-center <command-center.zip> --command-center-verification-report <verification.json> --command-center-evidence-manifest <external-evidence-manifest.local.json> --json
 ```
 
+v12.11 adds the external Receiver Acceptance and operational takeover layer.
+The receiver Review Pack binds the current v12.10 Signoff Archive and Final
+Handoff. Imported responses must include an externally generated verification
+report and binding summary; receiver role, organization, decision, and source
+fingerprints are never promoted from an unproved payload. Accepted responses
+can enter quorum and a signed immutable Receiver Acceptance Archive:
+
+```powershell
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance create-review-pack urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance import-response urp-000001 --response <response.json> --response-verification-report <response-verification.json> --response-binding-summary <response-binding.json> --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance create-accepted-evidence urp-000001 --response-id receiver-001 --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance refresh-board urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance signoff urp-000001 --signed-by "Receiver Chair" --role program_owner --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance zip-archive urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance verify-archive urp-000001 --json
+python -m song_agent.cli verify-unified-release-program-continuity-command-center-acceptance-package <receiver-acceptance-archive.zip> --strict --require-signed --signoff-binding <receiver-acceptance-binding.json> --review-pack <review-pack.zip> --review-pack-verification-report <review-pack-verification.json> --accepted-evidence-dir <accepted-evidence-root> --response-proof-dir <response-proof-root> --command-center-signoff-archive <v12.10-archive.zip> --command-center-signoff-archive-verification-report <v12.10-archive-verification.json> --command-center-final-handoff <v12.10-handoff.zip> --command-center-final-handoff-verification-report <v12.10-handoff-verification.json> --command-center-signoff-binding <v12.10-binding.json> --command-center <v12.9-command-center.zip> --command-center-verification-report <v12.9-verification.json> --command-center-evidence-manifest <v12.9-external-evidence-manifest.json> --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

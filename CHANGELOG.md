@@ -1,5 +1,19 @@
 # Changelog
 
+## v12.11.0 - 2026-07-11
+
+### Added
+- Unified Release Program Continuity Command Center Receiver Acceptance workflow with a fixed-layout Review Pack, externally proved receiver responses, immutable Accepted Evidence, multi-organization quorum, findings/conflict registers, and signed takeover evidence.
+- Response import requires the external response JSON, response verification report, and response binding summary; the Store does not synthesize trusted role, organization, decision, or source binding from receiver payload fields.
+- Signed fixed-layout Receiver Acceptance Archive and offline verifier that runtime re-verifies the current v12.10 Signoff Archive, Final Handoff, Review Pack, every response proof, and every Accepted Evidence ZIP.
+- CLI and HTTP API workflows for Review Pack creation/verification, response import, Accepted Evidence creation, Board refresh, signoff, Archive export/ZIP/verification, and gate status.
+- Release signoff and GA readiness gates that require current Receiver Acceptance Archive, independent signoff binding, response proof root, Accepted Evidence root, Review Pack, and all current v12.10 source evidence; force signoff cannot bypass failed runtime verification.
+- release-check `v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke` covering missing proof, role forge, rejected/needs-changes blockers, stale handoff, signoff full-resign, history deletion, signed source tamper, declared extra, `.MusicForge`, raw backslash, and trailing data.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity_command_center_acceptance.py tests\test_release_check.py::test_v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.10.0 - 2026-07-10
 
 ### Added
