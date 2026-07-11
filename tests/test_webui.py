@@ -25,6 +25,10 @@ def test_webui_contains_continuity_receiver_acceptance_controls():
     html = panel_html()
 
     assert "Continuity Receiver Acceptance" in html
+    assert 'id="continuity-receiver-change-create"' in html
+    assert 'id="continuity-receiver-change-reset"' in html
+    assert 'id="continuity-receiver-change-lifecycle"' in html
+    assert 'id="continuity-receiver-change-verify"' in html
     assert 'id="continuity-receiver-program-id"' in html
     assert 'id="continuity-receiver-response"' in html
     assert 'id="continuity-receiver-response-verification"' in html

@@ -197,6 +197,10 @@ def build_ga_readiness_report(
     unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None = None,
     unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None = None,
+    require_unified_release_program_continuity_command_center_acceptance_change_control: bool = False,
+    unified_release_program_continuity_command_center_acceptance_change_archive_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_change_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_previous_root: Path | str | None = None,
     unified_release_program_continuity_command_center_final_handoff_path: Path | str | None = None,
     unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None = None,
     unified_release_zip_path: Path | str | None = None,
@@ -832,8 +836,12 @@ def build_ga_readiness_report(
         "Unified Release Program Continuity Command Center signoff archive is passed." if unified_release_program_continuity_command_center_signoff_summary.get("status") == "passed" else "Unified Release Program Continuity Command Center signoff archive is missing or not passed.",
         unified_release_program_continuity_command_center_signoff_summary,
     )
+    require_receiver_acceptance = (
+        require_unified_release_program_continuity_command_center_acceptance
+        or require_unified_release_program_continuity_command_center_acceptance_change_control
+    )
     unified_release_program_continuity_command_center_acceptance_summary = _unified_release_program_continuity_command_center_acceptance_summary(
-        required=require_unified_release_program_continuity_command_center_acceptance,
+        required=require_receiver_acceptance,
         archive_zip_path=unified_release_program_continuity_command_center_acceptance_archive_path,
         verification_report_path=unified_release_program_continuity_command_center_acceptance_verification_report_path,
         acceptance_signoff_binding_path=unified_release_program_continuity_command_center_acceptance_signoff_binding_path,
@@ -853,10 +861,27 @@ def build_ga_readiness_report(
     _add_check(
         checks,
         "ga.unified_release_program_continuity_command_center_acceptance",
-        "passed" if unified_release_program_continuity_command_center_acceptance_summary.get("status") == "passed" else "failed" if require_unified_release_program_continuity_command_center_acceptance else "warning",
-        "blocking" if require_unified_release_program_continuity_command_center_acceptance else "warning",
+        "passed" if unified_release_program_continuity_command_center_acceptance_summary.get("status") == "passed" else "failed" if require_receiver_acceptance else "warning",
+        "blocking" if require_receiver_acceptance else "warning",
         "Unified Release Program Continuity Command Center Receiver Acceptance is passed." if unified_release_program_continuity_command_center_acceptance_summary.get("status") == "passed" else "Receiver Acceptance evidence is missing or not passed.",
         unified_release_program_continuity_command_center_acceptance_summary,
+    )
+    receiver_acceptance_change_summary = _unified_release_program_continuity_command_center_acceptance_change_summary(
+        required=require_unified_release_program_continuity_command_center_acceptance_change_control,
+        archive_zip_path=unified_release_program_continuity_command_center_acceptance_change_archive_path,
+        verification_report_path=unified_release_program_continuity_command_center_acceptance_change_verification_report_path,
+        acceptance_archive_path=unified_release_program_continuity_command_center_acceptance_archive_path,
+        acceptance_verification_report_path=unified_release_program_continuity_command_center_acceptance_verification_report_path,
+        acceptance_signoff_binding_path=unified_release_program_continuity_command_center_acceptance_signoff_binding_path,
+        previous_acceptance_root=unified_release_program_continuity_command_center_acceptance_previous_root,
+    )
+    _add_check(
+        checks,
+        "ga.unified_release_program_continuity_command_center_acceptance_change_control",
+        "passed" if receiver_acceptance_change_summary.get("status") == "passed" else "failed" if require_unified_release_program_continuity_command_center_acceptance_change_control else "warning",
+        "blocking" if require_unified_release_program_continuity_command_center_acceptance_change_control else "warning",
+        "Receiver Acceptance Change Control lifecycle is current and passed." if receiver_acceptance_change_summary.get("status") == "passed" else "Receiver Acceptance Change Control evidence is missing or not passed.",
+        receiver_acceptance_change_summary,
     )
 
     latest_summary = _release_check_summary(
@@ -2590,6 +2615,73 @@ def _unified_release_program_continuity_command_center_acceptance_summary(
             "external_integrity_ok": integrity_ok,
             "external_package_type_ok": package_type_ok,
             "binding_ok": binding_ok,
+            "blockers": runtime.get("blockers") or [],
+        }
+    except Exception as exc:
+        return {"status": "failed" if required else "missing", "error": str(exc)}
+
+
+def _unified_release_program_continuity_command_center_acceptance_change_summary(
+    *,
+    required: bool,
+    archive_zip_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    acceptance_archive_path: Path | str | None,
+    acceptance_verification_report_path: Path | str | None,
+    acceptance_signoff_binding_path: Path | str | None,
+    previous_acceptance_root: Path | str | None,
+) -> dict[str, Any]:
+    if not archive_zip_path:
+        return {"status": "missing", "message": "Receiver Acceptance Change Control Archive was not provided."}
+    required_paths = (
+        archive_zip_path,
+        verification_report_path,
+        acceptance_archive_path,
+        acceptance_verification_report_path,
+        acceptance_signoff_binding_path,
+    )
+    if required and not all(required_paths):
+        return {"status": "failed", "message": "Receiver Acceptance Change Control requires current Archive, verification report, and signoff binding."}
+    try:
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+            UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_release_program_continuity_command_center_acceptance_change_package,
+        )
+
+        runtime = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+            archive_zip_path,
+            strict=True,
+            require_current_acceptance=True,
+            acceptance_archive_path=acceptance_archive_path,
+            acceptance_verification_report_path=acceptance_verification_report_path,
+            acceptance_signoff_binding_path=acceptance_signoff_binding_path,
+            previous_acceptance_root=previous_acceptance_root,
+            require_reset_proofs=True,
+        )
+        external = read_json(Path(verification_report_path)) if verification_report_path else {}
+        integrity_ok = bool(external) and external.get("integrity_hash") == stable_hash(
+            {key: value for key, value in external.items() if key != "integrity_hash"}
+        )
+        binding_ok = (
+            external.get("zip_sha256") == runtime.get("zip_sha256")
+            and external.get("manifest_hash") == runtime.get("manifest_hash")
+        )
+        status = "passed" if (
+            runtime.get("status") == "passed"
+            and external.get("status") == "passed"
+            and external.get("package_type") == UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_VERIFICATION_PACKAGE_TYPE
+            and integrity_ok
+            and binding_ok
+        ) else "failed"
+        return {
+            "status": status,
+            "zip_sha256": runtime.get("zip_sha256"),
+            "zip_size_bytes": runtime.get("zip_size_bytes"),
+            "manifest_hash": runtime.get("manifest_hash"),
+            "verification_hash": external.get("integrity_hash"),
+            "verification_report_hash": external.get("integrity_hash"),
+            "current_generation": (runtime.get("summary") or {}).get("current_generation"),
+            "reset_count": (runtime.get("summary") or {}).get("reset_count"),
             "blockers": runtime.get("blockers") or [],
         }
     except Exception as exc:

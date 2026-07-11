@@ -199,6 +199,10 @@ def verify_ga_readiness_report(
     unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None = None,
     unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None = None,
     unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None = None,
+    require_unified_release_program_continuity_command_center_acceptance_change_control: bool = False,
+    unified_release_program_continuity_command_center_acceptance_change_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_change_verification_report_path: Path | str | None = None,
+    unified_release_program_continuity_command_center_acceptance_previous_root: Path | str | None = None,
     unified_release_program_continuity_command_center_final_handoff_path: Path | str | None = None,
     unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None = None,
     unified_command_center_signoff_binding_path: Path | str | None = None,
@@ -593,7 +597,10 @@ def verify_ga_readiness_report(
                 unified_release_program_continuity_command_center_verification_report_path,
                 unified_release_program_continuity_command_center_external_evidence_manifest_path,
             )
-        if require_unified_release_program_continuity_command_center_acceptance:
+        if (
+            require_unified_release_program_continuity_command_center_acceptance
+            or require_unified_release_program_continuity_command_center_acceptance_change_control
+        ):
             _verify_unified_release_program_continuity_command_center_acceptance_evidence(
                 checks,
                 checks_by_id.get("ga.unified_release_program_continuity_command_center_acceptance", {}),
@@ -612,6 +619,17 @@ def verify_ga_readiness_report(
                 unified_release_program_continuity_command_center_path,
                 unified_release_program_continuity_command_center_verification_report_path,
                 unified_release_program_continuity_command_center_external_evidence_manifest_path,
+            )
+        if require_unified_release_program_continuity_command_center_acceptance_change_control:
+            _verify_unified_release_program_continuity_command_center_acceptance_change_evidence(
+                checks,
+                checks_by_id.get("ga.unified_release_program_continuity_command_center_acceptance_change_control", {}),
+                unified_release_program_continuity_command_center_acceptance_change_path,
+                unified_release_program_continuity_command_center_acceptance_change_verification_report_path,
+                unified_release_program_continuity_command_center_acceptance_path,
+                unified_release_program_continuity_command_center_acceptance_verification_report_path,
+                unified_release_program_continuity_command_center_acceptance_signoff_binding_path,
+                unified_release_program_continuity_command_center_acceptance_previous_root,
             )
         if require_final_readiness:
             _verify_final_readiness_evidence(
@@ -2454,6 +2472,70 @@ def _verify_unified_release_program_continuity_command_center_acceptance_evidenc
         external,
         runtime,
         ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+    )
+
+
+def _verify_unified_release_program_continuity_command_center_acceptance_change_evidence(
+    checks: list[dict[str, Any]],
+    ga_check: dict[str, Any],
+    archive_path: Path | str | None,
+    verification_report_path: Path | str | None,
+    acceptance_archive_path: Path | str | None,
+    acceptance_verification_report_path: Path | str | None,
+    acceptance_signoff_binding_path: Path | str | None,
+    previous_acceptance_root: Path | str | None,
+) -> None:
+    required_paths = (
+        archive_path,
+        verification_report_path,
+        acceptance_archive_path,
+        acceptance_verification_report_path,
+        acceptance_signoff_binding_path,
+    )
+    if not all(required_paths):
+        _add_check(
+            checks,
+            "ga_readiness_unified_release_program_continuity_command_center_acceptance_change_required",
+            "failed",
+            "blocking",
+            "Receiver Acceptance Change Control requires current lifecycle and Receiver Acceptance evidence.",
+        )
+        return
+    try:
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+            UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_VERIFICATION_PACKAGE_TYPE,
+            verify_unified_release_program_continuity_command_center_acceptance_change_package,
+        )
+
+        zip_path = Path(archive_path)
+        external = read_json(Path(verification_report_path))
+        runtime = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+            zip_path,
+            strict=True,
+            require_current_acceptance=True,
+            acceptance_archive_path=acceptance_archive_path,
+            acceptance_verification_report_path=acceptance_verification_report_path,
+            acceptance_signoff_binding_path=acceptance_signoff_binding_path,
+            previous_acceptance_root=previous_acceptance_root,
+            require_reset_proofs=True,
+        )
+    except Exception as exc:
+        _add_check(
+            checks,
+            "ga_readiness_unified_release_program_continuity_command_center_acceptance_change_readable",
+            "failed",
+            "blocking",
+            f"Receiver Acceptance Change Control evidence could not be read: {exc}",
+        )
+        return
+    _verify_external_package_binding(
+        checks,
+        "ga_readiness_unified_release_program_continuity_command_center_acceptance_change_control",
+        ga_check,
+        zip_path,
+        external,
+        runtime,
+        UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_VERIFICATION_PACKAGE_TYPE,
     )
 
 

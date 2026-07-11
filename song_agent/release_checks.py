@@ -21629,6 +21629,290 @@ def _v1211_unified_release_program_continuity_command_center_receiver_acceptance
         return False, f"v12.11 Unified Release Program Continuity Command Center Receiver Acceptance smoke failed: {exc}"
 
 
+def _v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+        from song_agent.projectio import read_json, write_json
+        from song_agent.releases import stable_hash
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+            UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
+        )
+        from song_agent.unified_release_program_continuity_command_center_acceptance import (
+            UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
+        )
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+            verify_unified_release_program_continuity_command_center_acceptance_change_package,
+        )
+        from tests.test_unified_release_program_continuity_command_center_acceptance_change import (
+            _add_declared_extra as _v1212_add_declared_extra,
+            _full_resign_event_order as _v1212_full_resign_event_order,
+            _full_resign_previous_archive as _v1212_full_resign_previous_archive,
+            _full_resign_redaction as _v1212_full_resign_redaction,
+            _prepared_change as _v1212_prepared_change,
+            _prepare_successor_evidence as _v1212_prepare_successor_evidence,
+        )
+        from tests.test_ga_readiness import _write_repo as _v1212_write_ga_repo
+        from tests.test_unified_release_program_continuity_command_center_acceptance import (
+            _ga_build_kwargs as _v1212_ga_build_kwargs,
+            _ga_verify_kwargs as _v1212_ga_verify_kwargs,
+            _runtime_paths as _v1212_runtime_paths,
+        )
+        from tests.test_unified_release_program_continuity_distribution import (
+            _replace_zip_name_bytes as _v1212_replace_zip_name_bytes,
+            _write_with_extra_entry as _v1212_write_extra,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="mf-v1212-receiver-acceptance-change-") as temp:
+            base = Path(temp)
+            _program, acceptance, change, program_id = _v1212_prepared_change(base)
+
+            wrong_action_reset_409 = False
+            try:
+                change.create_change_request(
+                    program_id,
+                    {
+                        "change_request_id": "cr-wrong-action",
+                        "change_type": "reset_receiver_acceptance_signoff",
+                        "allowed_actions": ["refresh_receiver_acceptance_report"],
+                    },
+                )
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+                wrong_action_reset_409 = True
+
+            request = change.create_change_request(program_id, {"reason": "v12.12 lifecycle smoke"})
+            approval = change.approve_change_request(program_id, request["change_request_id"], {"approved_by": "program owner"})
+            approval_path = change.approval_path(program_id, request["change_request_id"])
+            forged_approval = json.loads(json.dumps(approval))
+            forged_approval["target"]["acceptance_signoff_hash"] = "f" * 64
+            forged_approval["payload_hash"] = stable_hash(
+                {key: value for key, value in forged_approval.items() if key not in {"payload_hash", "integrity_hash"}}
+            )
+            forged_approval["integrity_hash"] = stable_hash(
+                {key: value for key, value in forged_approval.items() if key != "integrity_hash"}
+            )
+            write_json(approval_path, forged_approval)
+            approval_target_mismatch_409 = False
+            try:
+                change.reset_receiver_acceptance_signoff(program_id, request["change_request_id"])
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+                approval_target_mismatch_409 = True
+            write_json(approval_path, approval)
+
+            proof = change.reset_receiver_acceptance_signoff(program_id, request["change_request_id"])
+            reset_gate = change.gate(program_id, required=True)
+            reused_cr_409 = False
+            try:
+                change.reset_receiver_acceptance_signoff(program_id, request["change_request_id"])
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+                reused_cr_409 = True
+
+            policy_override_409 = False
+            try:
+                acceptance.refresh_board(
+                    program_id,
+                    {"policy": {"min_accepted_count": 1, "min_organization_count": 1, "required_roles": []}},
+                )
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                policy_override_409 = True
+            old_evidence_board = acceptance.refresh_board(program_id)
+            _v1212_prepare_successor_evidence(acceptance, program_id)
+            acceptance.refresh_board(program_id)
+            successor = acceptance.signoff(program_id, {"signed_by": "successor chair", "role": "program_owner"})
+            acceptance.build_archive_zip(program_id)
+            acceptance.verify_archive_zip(program_id)
+            lifecycle = change.refresh_lifecycle_audit(program_id)
+            archived = change.build_archive_zip(program_id)
+            verified = change.verify_archive_zip(program_id)
+            gate = change.gate(program_id, required=True)
+            repeat_zip = change.build_archive_zip(program_id)
+
+            acceptance_paths = _v1212_runtime_paths(acceptance, program_id)
+            ga_build_args = _v1212_ga_build_kwargs(acceptance_paths)
+            ga_build_args.update(
+                {
+                    "require_unified_release_program_continuity_command_center_acceptance_change_control": True,
+                    "unified_release_program_continuity_command_center_acceptance_change_archive_path": change.archive_zip_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_change_verification_report_path": change.verification_report_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_previous_root": change.generations_dir(program_id),
+                }
+            )
+            ga_root = base / "ga-repo"
+            _v1212_write_ga_repo(ga_root)
+            ga_report = build_ga_readiness_report(repo_root=ga_root, allow_dirty=True, **ga_build_args)
+            ga_path = base / "ga-v1212.json"
+            write_ga_readiness_report(ga_report, ga_path)
+            ga_verify_args = _v1212_ga_verify_kwargs(acceptance_paths)
+            ga_verify_args.update(
+                {
+                    "require_unified_release_program_continuity_command_center_acceptance_change_control": True,
+                    "unified_release_program_continuity_command_center_acceptance_change_path": change.archive_zip_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_change_verification_report_path": change.verification_report_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_previous_root": change.generations_dir(program_id),
+                }
+            )
+            ga_runtime = verify_ga_readiness_report(ga_path, **ga_verify_args)
+            ga_check = next(
+                (
+                    row
+                    for row in ga_report.get("checks", [])
+                    if row.get("check_id") == "ga.unified_release_program_continuity_command_center_acceptance_change_control"
+                ),
+                {},
+            )
+
+            forged_zip = base / "reset-proof-full-resign.zip"
+            _v76_rewrite_zip(
+                Path(archived["zip_path"]),
+                forged_zip,
+                lambda entries: _v1212_full_resign_previous_archive(entries, str(proof["reset_id"])),
+            )
+            internal_full_resign = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+                forged_zip,
+                strict=True,
+            )
+            reset_proof_full_resign = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+                forged_zip,
+                strict=True,
+                require_reset_proofs=True,
+                previous_acceptance_root=change.generations_dir(program_id),
+            )
+            missing_previous_root = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+                Path(archived["zip_path"]),
+                strict=True,
+                require_reset_proofs=True,
+            )
+            event_order_zip = base / "event-order-full-resign.zip"
+            _v76_rewrite_zip(
+                Path(archived["zip_path"]),
+                event_order_zip,
+                lambda entries: _v1212_full_resign_event_order(entries, str(proof["reset_id"])),
+            )
+            event_order = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+                event_order_zip,
+                strict=True,
+            )
+            declared_extra_zip = base / "declared-extra.zip"
+            _v76_rewrite_zip(Path(archived["zip_path"]), declared_extra_zip, _v1212_add_declared_extra)
+            declared_extra = verify_unified_release_program_continuity_command_center_acceptance_change_package(declared_extra_zip, strict=True)
+            duplicate_zip = base / "duplicate.zip"
+            _v1212_write_extra(Path(archived["zip_path"]), duplicate_zip, "README.txt", b"duplicate")
+            duplicate = verify_unified_release_program_continuity_command_center_acceptance_change_package(duplicate_zip, strict=True)
+            dangerous_zip = base / "dangerous.zip"
+            _v1212_write_extra(Path(archived["zip_path"]), dangerous_zip, "../escape.json", b"{}")
+            dangerous = verify_unified_release_program_continuity_command_center_acceptance_change_package(dangerous_zip, strict=True)
+            nested_zip_path = base / "nested.zip"
+            _v1212_write_extra(Path(archived["zip_path"]), nested_zip_path, "packages/extra.zip", b"PK\x05\x06" + b"\0" * 18)
+            nested_zip = verify_unified_release_program_continuity_command_center_acceptance_change_package(nested_zip_path, strict=True)
+            redaction_zip = base / "redaction.zip"
+            _v76_rewrite_zip(Path(archived["zip_path"]), redaction_zip, _v1212_full_resign_redaction)
+            redaction = verify_unified_release_program_continuity_command_center_acceptance_change_package(redaction_zip, strict=True)
+            musicforge_zip = base / "musicforge.zip"
+            _v1212_write_extra(Path(archived["zip_path"]), musicforge_zip, ".MusicForge/internal.json", b"{}")
+            musicforge = verify_unified_release_program_continuity_command_center_acceptance_change_package(musicforge_zip, strict=True)
+            backslash_zip = base / "backslash.zip"
+            _v1212_replace_zip_name_bytes(Path(archived["zip_path"]), backslash_zip, b"README.txt", b"README\\txt")
+            raw_backslash = verify_unified_release_program_continuity_command_center_acceptance_change_package(backslash_zip, strict=True)
+            trailing_zip = base / "trailing.zip"
+            trailing_zip.write_bytes(Path(archived["zip_path"]).read_bytes() + b"tamper")
+            trailing = verify_unified_release_program_continuity_command_center_acceptance_change_package(trailing_zip, strict=True)
+
+            proof_path = change.reset_proof_path(program_id, str(proof["reset_id"]))
+            local_proof = read_json(proof_path)
+            local_proof["previous_signoff_hash"] = "f" * 64
+            local_proof["integrity_hash"] = stable_hash(
+                {key: value for key, value in local_proof.items() if key != "integrity_hash"}
+            )
+            write_json(proof_path, local_proof)
+            binding_path = change.reset_binding_path(program_id, str(proof["reset_id"]))
+            local_binding = read_json(binding_path)
+            local_binding["reset_proof_hash"] = local_proof["integrity_hash"]
+            local_binding["integrity_hash"] = stable_hash(
+                {key: value for key, value in local_binding.items() if key != "integrity_hash"}
+            )
+            write_json(binding_path, local_binding)
+            signed_reset_proof_export_409 = False
+            signed_reset_proof_zip_409 = False
+            try:
+                change.export_archive(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+                signed_reset_proof_export_409 = True
+            try:
+                change.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+                signed_reset_proof_zip_409 = True
+            signed_reset_proof_gate = change.gate(program_id, required=True)
+
+        checks = {
+            "wrong_action_reset_409": wrong_action_reset_409,
+            "approval_target_mismatch_409": approval_target_mismatch_409,
+            "reset": proof.get("status"),
+            "reset_gate": reset_gate.get("status"),
+            "old_evidence_board": old_evidence_board.get("status"),
+            "policy_override_409": policy_override_409,
+            "reused_cr_409": reused_cr_409,
+            "successor_signoff": successor.get("status"),
+            "lifecycle": lifecycle.get("status"),
+            "archive": verified.get("status"),
+            "gate": gate.get("status"),
+            "repeat_zip": repeat_zip.get("status"),
+            "ga_gate": ga_check.get("status"),
+            "ga_verify": ga_runtime.get("status"),
+            "internal_full_resign": internal_full_resign.get("status"),
+            "reset_proof_full_resign": reset_proof_full_resign.get("status"),
+            "missing_previous_root": missing_previous_root.get("status"),
+            "event_order_full_resign": event_order.get("status"),
+            "declared_extra": declared_extra.get("status"),
+            "duplicate": duplicate.get("status"),
+            "dangerous_path": dangerous.get("status"),
+            "nested_zip": nested_zip.get("status"),
+            "redaction": redaction.get("status"),
+            "musicforge": musicforge.get("status"),
+            "raw_backslash": raw_backslash.get("status"),
+            "trailing_bytes": trailing.get("status"),
+            "signed_reset_proof_export_409": signed_reset_proof_export_409,
+            "signed_reset_proof_zip_409": signed_reset_proof_zip_409,
+            "signed_reset_proof_gate": signed_reset_proof_gate.get("status"),
+        }
+        ok = (
+            checks["wrong_action_reset_409"] is True
+            and checks["approval_target_mismatch_409"] is True
+            and checks["reset"] == "applied"
+            and checks["reset_gate"] == "failed"
+            and checks["old_evidence_board"] == "blocked"
+            and checks["policy_override_409"] is True
+            and checks["reused_cr_409"] is True
+            and checks["successor_signoff"] == "signed"
+            and checks["lifecycle"] == "passed"
+            and checks["archive"] == "passed"
+            and checks["gate"] == "passed"
+            and checks["repeat_zip"] == "passed"
+            and checks["ga_gate"] == "passed"
+            and checks["ga_verify"] != "failed"
+            and checks["internal_full_resign"] == "passed"
+            and checks["reset_proof_full_resign"] == "failed"
+            and checks["missing_previous_root"] == "failed"
+            and checks["event_order_full_resign"] == "failed"
+            and checks["declared_extra"] == "failed"
+            and checks["duplicate"] == "failed"
+            and checks["dangerous_path"] == "failed"
+            and checks["nested_zip"] == "failed"
+            and checks["redaction"] == "failed"
+            and checks["musicforge"] == "failed"
+            and checks["raw_backslash"] == "failed"
+            and checks["trailing_bytes"] == "failed"
+            and checks["signed_reset_proof_export_409"] is True
+            and checks["signed_reset_proof_zip_409"] is True
+            and checks["signed_reset_proof_gate"] == "failed"
+        )
+        return ok, "v12.12 command center receiver acceptance change control: " + ", ".join(
+            f"{key}={value}" for key, value in checks.items()
+        )
+    except Exception as exc:
+        return False, f"v12.12 Receiver Acceptance Change Control smoke failed: {exc}"
+
+
 def _v128_prepare_signed(base: Path):
     from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
     from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance

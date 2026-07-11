@@ -403,14 +403,27 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         payload = sanitize_metadata(payload or {})
         with self.lock:
             self.ensure_unsigned(program_id)
+            if self.latest_signoff_state(program_id).get("status") == "reset_pending":
+                signed_policy = _read_optional_json(self.policy_path(program_id))
+                preserved_policy = _policy(signed_policy)
+                if "policy" in payload and _policy(payload.get("policy")) != preserved_policy:
+                    raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(
+                        "Receiver Acceptance policy cannot change during a reset-scoped successor signoff."
+                    )
+                payload = {**payload, "policy": preserved_policy}
             docs = self._build_board_documents(program_id, payload)
             self._write_board_documents(program_id, docs)
+            self._mark_reset_board_refreshed(program_id, docs)
             return docs["report"]
 
     def signoff(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = sanitize_metadata(payload or {})
         with self.lock:
             self._assert_signoff_allowed(program_id)
+            previous_state = _read_optional_json(self.state_path(program_id))
+            generation = int(previous_state.get("generation") or 1)
+            reset_proof_hash = previous_state.get("reset_proof_hash") if previous_state.get("status") == "reset_pending" else None
+            reset_binding_hash = previous_state.get("reset_binding_hash") if previous_state.get("status") == "reset_pending" else None
             docs = self._build_board_documents(program_id, {})
             if docs["report"].get("status") != "ready_for_signoff":
                 raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(
@@ -436,6 +449,9 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                 "accepted_evidence_index_hash": docs["accepted_index"].get("integrity_hash"),
                 "response_proof_index_hash": docs["response_index"].get("integrity_hash"),
                 "review_pack_source_hash": (docs["report"].get("source") or {}).get("review_pack_source_hash"),
+                "generation": generation,
+                "reset_proof_hash": reset_proof_hash,
+                "reset_binding_hash": reset_binding_hash,
                 "tool": {"name": "MusicForge Receiver Acceptance Board", "version": __version__},
             }
             signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
@@ -453,6 +469,9 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                     "signoff_payload_hash": signoff.get("payload_hash"),
                     "board_report_hash": signoff.get("board_report_hash"),
                     "review_pack_source_hash": signoff.get("review_pack_source_hash"),
+                    "generation": generation,
+                    "reset_proof_hash": reset_proof_hash,
+                    "reset_binding_hash": reset_binding_hash,
                 },
             )
             binding = _with_integrity(
@@ -474,6 +493,9 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                     "accepted_evidence_index_hash": signoff.get("accepted_evidence_index_hash"),
                     "response_proof_index_hash": signoff.get("response_proof_index_hash"),
                     "review_pack_source_hash": signoff.get("review_pack_source_hash"),
+                    "generation": generation,
+                    "reset_proof_hash": reset_proof_hash,
+                    "reset_binding_hash": reset_binding_hash,
                 }
             )
             policy = _with_integrity(
@@ -482,7 +504,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                     "package_type": f"{SIGNOFF_PACKAGE_TYPE}_policy",
                     "program_id": program_id,
                     **docs["report"].get("policy", DEFAULT_POLICY),
-                    "reset_supported": False,
+                    "reset_supported": True,
                 }
             )
             state = _with_integrity(
@@ -495,6 +517,10 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                     "signoff_binding_hash": binding.get("integrity_hash"),
                     "signoff_event_hash": event.get("event_hash"),
                     "signed_at": now,
+                    "generation": generation,
+                    "reset_proof_hash": reset_proof_hash,
+                    "reset_binding_hash": reset_binding_hash,
+                    "board_refresh_required": False,
                 }
             )
             self._write_board_documents(program_id, docs)
@@ -602,6 +628,97 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
+    def mark_reset_pending(
+        self,
+        program_id: str,
+        reset_proof: dict[str, Any],
+        reset_binding: dict[str, Any],
+    ) -> dict[str, Any]:
+        with self.lock:
+            context = self._signed_context(program_id, {}, allow_reset_pending=True)
+            if reset_proof.get("package_type") != "musicforge_unified_release_program_continuity_command_center_acceptance_reset_proof":
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset proof package type is invalid.")
+            if reset_binding.get("package_type") != "musicforge_unified_release_program_continuity_command_center_acceptance_reset_proof_binding_summary":
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset binding package type is invalid.")
+            if not _integrity_ok(reset_proof) or not _integrity_ok(reset_binding):
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset proof integrity failed.")
+            if reset_proof.get("program_id") != program_id or reset_binding.get("program_id") != program_id:
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset proof program_id mismatch.")
+            if reset_binding.get("reset_proof_hash") != reset_proof.get("integrity_hash"):
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset binding does not reference reset proof.")
+            expected = {
+                "previous_signoff_hash": context["signoff"].get("integrity_hash"),
+                "previous_signoff_binding_hash": context["binding"].get("integrity_hash"),
+            }
+            for field, value in expected.items():
+                if reset_proof.get(field) != value:
+                    raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(
+                        f"Receiver Acceptance reset proof {field} does not match current signed evidence."
+                    )
+            reset_event = self.read_history(program_id)[-1]
+            if (
+                reset_event.get("event_type") != "receiver_acceptance_signoff_reset"
+                or reset_event.get("previous_signoff_hash") != context["signoff"].get("integrity_hash")
+                or reset_event.get("change_request_id") != reset_proof.get("change_request_id")
+            ):
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset history event is invalid.")
+            generation_before = int(reset_proof.get("previous_generation") or 0)
+            generation_after = int(reset_proof.get("next_generation") or 0)
+            if generation_before < 1 or generation_after != generation_before + 1:
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset generation transition is invalid.")
+            snapshot = self.acceptance_dir(program_id) / "change-control" / "generations" / f"gen-{generation_before:06d}" / "acceptance-snapshot"
+            if snapshot.exists():
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance generation snapshot already exists.")
+            snapshot.mkdir(parents=True, exist_ok=False)
+            snapshot_files = {
+                self.signoff_path(program_id): "receiver-acceptance-signoff.json",
+                self.signoff_binding_path(program_id): "receiver-acceptance-signoff-binding-summary.json",
+                self.state_path(program_id): "receiver-acceptance-state.json",
+                self.policy_path(program_id): "receiver-acceptance-policy.json",
+                self.history_path(program_id): "receiver-acceptance-history.jsonl",
+                self.archive_zip_path(program_id): "receiver-acceptance-archive.zip",
+                self.archive_verification_report_path(program_id): "receiver-acceptance-verification-report.json",
+            }
+            for source, name in snapshot_files.items():
+                if not source.is_file():
+                    raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(
+                        f"Receiver Acceptance signed snapshot source is missing: {source.name}"
+                    )
+                shutil.copy2(source, snapshot / name)
+            if self.archive_dir(program_id).is_dir():
+                shutil.copytree(self.archive_dir(program_id), snapshot / "archive-export")
+            for source, name in (
+                (self.review_pack_dir(program_id), "review-pack"),
+                (self.responses_dir(program_id), "responses"),
+                (self.accepted_evidence_root(program_id), "accepted-evidence"),
+                (self.board_dir(program_id), "board"),
+            ):
+                if source.is_dir():
+                    shutil.move(str(source), str(snapshot / name))
+            if self.archive_dir(program_id).exists():
+                shutil.rmtree(self.archive_dir(program_id))
+            self.archive_zip_path(program_id).unlink(missing_ok=True)
+            self.archive_verification_report_path(program_id).unlink(missing_ok=True)
+            state = _with_integrity(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "package_type": f"{SIGNOFF_PACKAGE_TYPE}_state",
+                    "program_id": program_id,
+                    "status": "reset_pending",
+                    "generation": generation_after,
+                    "previous_generation": generation_before,
+                    "previous_signoff_hash": context["signoff"].get("integrity_hash"),
+                    "previous_signoff_binding_hash": context["binding"].get("integrity_hash"),
+                    "reset_proof_hash": reset_proof.get("integrity_hash"),
+                    "reset_binding_hash": reset_binding.get("integrity_hash"),
+                    "reset_event_hash": reset_event.get("event_hash"),
+                    "board_refresh_required": True,
+                    "reset_at": reset_proof.get("applied_at"),
+                }
+            )
+            write_json(self.state_path(program_id), state)
+            return state
+
     def ensure_unsigned(self, program_id: str) -> None:
         history_path = self.history_path(program_id)
         signed_artifacts = (
@@ -621,15 +738,32 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                 )
             return
         self._validate_history(program_id)
-        if self.read_history(program_id):
+        latest = self.latest_signoff_state(program_id)
+        if latest.get("status") == "signed":
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(
-                "Receiver Acceptance is signed and immutable; create a new acceptance run for changes."
+                "Receiver Acceptance is signed and immutable; use approved Change Control for reset."
             )
+        if latest.get("status") != "reset_pending":
+            raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history has no valid current state.")
+        state = _read_optional_json(self.state_path(program_id))
+        if not _integrity_ok(state) or state.get("status") != "reset_pending" or state.get("reset_event_hash") != (latest.get("event") or {}).get("event_hash"):
+            raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset-pending state is invalid.")
 
     def latest_signoff_state(self, program_id: str) -> dict[str, Any]:
         rows = self.read_history(program_id)
-        event = next((row for row in reversed(rows) if row.get("event_type") == "receiver_acceptance_signoff_created"), None)
-        return {"status": "signed", "signoff_hash": event.get("signoff_hash"), "event": event} if event else {"status": "unsigned", "event": None}
+        latest: dict[str, Any] = {"status": "unsigned", "event": None}
+        for event in rows:
+            if event.get("event_type") == "receiver_acceptance_signoff_created":
+                latest = {"status": "signed", "signoff_hash": event.get("signoff_hash"), "event": event}
+            elif event.get("event_type") == "receiver_acceptance_signoff_reset":
+                latest = {
+                    "status": "reset_pending",
+                    "previous_signoff_hash": event.get("previous_signoff_hash"),
+                    "reset_proof_hash": event.get("reset_proof_hash"),
+                    "generation": event.get("next_generation"),
+                    "event": event,
+                }
+        return latest
 
     def read_history(self, program_id: str) -> list[dict[str, Any]]:
         path = self.history_path(program_id)
@@ -642,8 +776,36 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
 
     def _assert_signoff_allowed(self, program_id: str) -> None:
         self.ensure_unsigned(program_id)
+        latest = self.latest_signoff_state(program_id)
+        if latest.get("status") == "reset_pending":
+            state = read_json(self.state_path(program_id))
+            if state.get("board_refresh_required"):
+                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(
+                    "Receiver Acceptance Board must be refreshed after reset before successor signoff."
+                )
+            return
         if self.history_path(program_id).exists():
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history already exists; re-sign is not allowed.")
+
+    def _mark_reset_board_refreshed(self, program_id: str, docs: dict[str, Any]) -> None:
+        if self.latest_signoff_state(program_id).get("status") != "reset_pending":
+            return
+        state = read_json(self.state_path(program_id))
+        if not _integrity_ok(state) or state.get("status") != "reset_pending":
+            raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance reset state integrity failed.")
+        state.update(
+            {
+                "board_refresh_required": False,
+                "board_refreshed_at": now_iso(),
+                "board_report_hash": docs["report"].get("integrity_hash"),
+                "decision_matrix_hash": docs["matrix"].get("integrity_hash"),
+                "quorum_report_hash": docs["quorum"].get("integrity_hash"),
+                "accepted_evidence_index_hash": docs["accepted_index"].get("integrity_hash"),
+                "response_proof_index_hash": docs["response_index"].get("integrity_hash"),
+            }
+        )
+        state["integrity_hash"] = _integrity_hash(state)
+        write_json(self.state_path(program_id), state)
 
     def _current_v1210_context(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         archive_path = Path(payload.get("command_center_signoff_archive") or payload.get("signoff_archive") or self.signoff_store.archive_zip_path(program_id))
@@ -1049,8 +1211,21 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         ):
             write_json(path, docs[key])
 
-    def _signed_context(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _signed_context(
+        self,
+        program_id: str,
+        payload: dict[str, Any],
+        *,
+        allow_reset_pending: bool = False,
+    ) -> dict[str, Any]:
         latest = self.latest_signoff_state(program_id)
+        if latest.get("status") == "reset_pending" and allow_reset_pending:
+            event = next(
+                (row for row in reversed(self.read_history(program_id)) if row.get("event_type") == "receiver_acceptance_signoff_created"),
+                None,
+            )
+            if event:
+                latest = {"status": "signed", "signoff_hash": event.get("signoff_hash"), "event": event}
         if latest.get("status") != "signed":
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance is not current signed evidence.")
         paths = (self.signoff_path(program_id), self.signoff_binding_path(program_id), self.state_path(program_id), self.policy_path(program_id))

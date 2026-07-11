@@ -961,6 +961,14 @@ def panel_html() -> str:
           <label>Signoff owner
             <input id="continuity-receiver-signed-by" placeholder="Receiver Chair">
           </label>
+          <div class="grid2">
+            <label>Change Request ID
+              <input id="continuity-receiver-change-request-id" placeholder="cr-000001">
+            </label>
+            <label>Change reason
+              <input id="continuity-receiver-change-reason" placeholder="Receiver acceptance scope changed">
+            </label>
+          </div>
           <div class="actions">
             <button class="secondary" id="continuity-receiver-refresh" type="button">Refresh</button>
             <button class="secondary" id="continuity-receiver-review-pack" type="button">Review Pack</button>
@@ -971,6 +979,13 @@ def panel_html() -> str:
             <button class="secondary" id="continuity-receiver-signoff" type="button">Signoff</button>
             <button class="secondary" id="continuity-receiver-zip" type="button">Archive ZIP</button>
             <button class="secondary" id="continuity-receiver-verify" type="button">Verify Archive</button>
+            <button class="secondary" id="continuity-receiver-change-refresh" type="button">Change Status</button>
+            <button class="secondary" id="continuity-receiver-change-create" type="button">Create CR</button>
+            <button class="secondary" id="continuity-receiver-change-approve" type="button">Approve CR</button>
+            <button class="secondary" id="continuity-receiver-change-reset" type="button">Reset Signoff</button>
+            <button class="secondary" id="continuity-receiver-change-lifecycle" type="button">Refresh Lifecycle</button>
+            <button class="secondary" id="continuity-receiver-change-zip" type="button">Lifecycle ZIP</button>
+            <button class="secondary" id="continuity-receiver-change-verify" type="button">Verify Lifecycle</button>
           </div>
           <pre id="continuity-receiver-result" class="json-preview"></pre>
         </div>
@@ -12565,6 +12580,50 @@ Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,loca
     });
     bindAction("continuity-receiver-verify", async () => {
       await showContinuityReceiver(`${continuityReceiverBase()}/archive/verify`, { method: "POST" });
+    });
+
+    function continuityReceiverChangeBase() {
+      return `${continuityReceiverBase()}/change-control`;
+    }
+    bindAction("continuity-receiver-change-refresh", async () => {
+      await showContinuityReceiver(continuityReceiverChangeBase());
+    });
+    bindAction("continuity-receiver-change-create", async () => {
+      const reason = $("continuity-receiver-change-reason").value.trim();
+      const data = await showContinuityReceiver(`${continuityReceiverChangeBase()}/cr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason || "Receiver acceptance scope changed", allowed_actions: ["reset_receiver_acceptance_signoff"] }),
+      });
+      const requestId = (data.change_request || {}).change_request_id;
+      if (requestId) $("continuity-receiver-change-request-id").value = requestId;
+    });
+    bindAction("continuity-receiver-change-approve", async () => {
+      const requestId = $("continuity-receiver-change-request-id").value.trim();
+      if (!requestId) throw new Error("Change Request ID is required.");
+      await showContinuityReceiver(`${continuityReceiverChangeBase()}/cr/${encodeURIComponent(requestId)}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approved_by: "release-owner", approved_actions: ["reset_receiver_acceptance_signoff"] }),
+      });
+    });
+    bindAction("continuity-receiver-change-reset", async () => {
+      const requestId = $("continuity-receiver-change-request-id").value.trim();
+      if (!requestId) throw new Error("Change Request ID is required.");
+      await showContinuityReceiver(`${continuityReceiverChangeBase()}/cr/${encodeURIComponent(requestId)}/reset-signoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset_by: "continuity-operator" }),
+      });
+    });
+    bindAction("continuity-receiver-change-lifecycle", async () => {
+      await showContinuityReceiver(`${continuityReceiverChangeBase()}/lifecycle`, { method: "POST" });
+    });
+    bindAction("continuity-receiver-change-zip", async () => {
+      await showContinuityReceiver(`${continuityReceiverChangeBase()}/zip`, { method: "POST" });
+    });
+    bindAction("continuity-receiver-change-verify", async () => {
+      await showContinuityReceiver(`${continuityReceiverChangeBase()}/verify`, { method: "POST" });
     });
 
     function escapeHtml(value) {

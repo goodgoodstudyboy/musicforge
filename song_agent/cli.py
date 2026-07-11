@@ -307,6 +307,10 @@ def _add_ga_unified_command_center_evidence_args(parser: argparse.ArgumentParser
     parser.add_argument("--unified-release-program-continuity-command-center-acceptance-review-pack-verification-report", type=Path, default=None, help="Receiver Handoff Review Pack verification report.")
     parser.add_argument("--unified-release-program-continuity-command-center-acceptance-accepted-evidence-dir", type=Path, default=None, help="Receiver Accepted Evidence root directory.")
     parser.add_argument("--unified-release-program-continuity-command-center-acceptance-response-proof-dir", type=Path, default=None, help="Receiver response proof root directory.")
+    parser.add_argument("--require-unified-release-program-continuity-command-center-acceptance-change-control", action="store_true", help="Require current Receiver Acceptance Change Control lifecycle evidence.")
+    parser.add_argument("--unified-release-program-continuity-command-center-acceptance-change-archive", type=Path, default=None, help="Receiver Acceptance Change Control Archive ZIP.")
+    parser.add_argument("--unified-release-program-continuity-command-center-acceptance-change-verification-report", type=Path, default=None, help="Receiver Acceptance Change Control verification report.")
+    parser.add_argument("--unified-release-program-continuity-command-center-acceptance-previous-root", type=Path, default=None, help="Historical Receiver Acceptance generation evidence root.")
     parser.add_argument("--unified-release-program-continuity-command-center-final-handoff", type=Path, default=None, help="Continuity Command Center Final Handoff ZIP bound by Receiver Acceptance.")
     parser.add_argument("--unified-release-program-continuity-command-center-final-handoff-verification-report", type=Path, default=None, help="Continuity Command Center Final Handoff verification report.")
 
@@ -2616,6 +2620,55 @@ def build_verify_unified_release_program_continuity_command_center_acceptance_pa
     parser.add_argument("--require-signed", action="store_true")
     parser.add_argument("--signoff-binding", type=Path, default=None)
     _add_command_center_acceptance_source_args(parser)
+    return parser
+
+
+def build_unified_release_program_continuity_command_center_acceptance_change_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage Receiver Acceptance Change Control and lifecycle audit.")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    actions = ("status", "create-cr", "approve-cr", "reset-signoff", "refresh-lifecycle", "export", "zip", "verify", "gate")
+    for action in actions:
+        cmd = subparsers.add_parser(action, help=f"{action} Receiver Acceptance Change Control.")
+        cmd.add_argument("program_id")
+        cmd.add_argument("--json", action="store_true")
+        cmd.add_argument("--change-request-id", default=None)
+        cmd.add_argument("--change-type", default=None)
+        cmd.add_argument("--allowed-action", action="append", default=[])
+        cmd.add_argument("--reason", default=None)
+        cmd.add_argument("--requested-by", default=None)
+        cmd.add_argument("--approved-by", default=None)
+        cmd.add_argument("--role", default=None)
+        cmd.add_argument("--approved-action", action="append", default=[])
+        cmd.add_argument("--reset-by", default=None)
+        cmd.add_argument("--archive-zip", type=Path, default=None)
+        cmd.add_argument("--verification-report", type=Path, default=None)
+        cmd.add_argument("--receiver-acceptance-archive", "--acceptance-archive", dest="acceptance_archive", type=Path, default=None)
+        cmd.add_argument("--receiver-acceptance-verification-report", "--acceptance-verification-report", dest="acceptance_verification_report", type=Path, default=None)
+        cmd.add_argument("--receiver-acceptance-signoff-binding", "--acceptance-signoff-binding", dest="acceptance_signoff_binding", type=Path, default=None)
+        cmd.add_argument("--previous-acceptance-root", type=Path, default=None)
+        cmd.add_argument("--strict", action="store_true")
+        cmd.add_argument("--require-current", action="store_true")
+        cmd.add_argument("--require-reset-proofs", action="store_true")
+        cmd.add_argument("--report-out", type=Path, default=None)
+        _add_command_center_acceptance_source_args(cmd)
+    return parser
+
+
+def build_verify_unified_release_program_continuity_command_center_acceptance_change_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify a Receiver Acceptance Change Control Archive ZIP.")
+    parser.add_argument("zip_path", type=Path)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--require-current", action="store_true")
+    parser.add_argument("--require-reset-proofs", action="store_true")
+    parser.add_argument("--receiver-acceptance-archive", "--acceptance-archive", dest="acceptance_archive", type=Path, default=None)
+    parser.add_argument("--receiver-acceptance-verification-report", "--acceptance-verification-report", dest="acceptance_verification_report", type=Path, default=None)
+    parser.add_argument("--receiver-acceptance-signoff-binding", "--acceptance-signoff-binding", dest="acceptance_signoff_binding", type=Path, default=None)
+    parser.add_argument("--previous-acceptance-root", type=Path, default=None)
+    parser.add_argument("--max-zip-size-mb", type=int, default=256)
+    parser.add_argument("--max-uncompressed-size-mb", type=int, default=512)
+    parser.add_argument("--max-entry-count", type=int, default=2000)
     return parser
 
 
@@ -7178,6 +7231,85 @@ def _run_unified_release_program_continuity_command_center_acceptance_command(ar
     raise ValueError("Unsupported unified-release-program-continuity-command-center-acceptance command.")
 
 
+def _run_unified_release_program_continuity_command_center_acceptance_change_command(args: argparse.Namespace) -> dict[str, Any]:
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+        UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore,
+    )
+
+    store = UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore(UnifiedReleaseProgramStore())
+    program_id = args.program_id
+    payload = {
+        **_command_center_acceptance_payload(args),
+        "archive_zip": args.archive_zip,
+        "acceptance_archive": args.acceptance_archive,
+        "acceptance_verification_report": args.acceptance_verification_report,
+        "acceptance_signoff_binding": args.acceptance_signoff_binding,
+        "previous_acceptance_root": args.previous_acceptance_root,
+        "strict": args.strict,
+        "require_current_acceptance": args.require_current or True,
+        "require_reset_proofs": args.require_reset_proofs or True,
+    }
+    payload = {key: value for key, value in payload.items() if value is not None}
+    if args.action == "status":
+        state = store.get_state(program_id)
+        return {"ok": True, **state, "status": (state.get("state") or {}).get("status") or "not_configured"}
+    if args.action == "create-cr":
+        request = store.create_change_request(
+            program_id,
+            {
+                "change_request_id": args.change_request_id,
+                "change_type": args.change_type,
+                "allowed_actions": args.allowed_action or None,
+                "reason": args.reason,
+                "requested_by": args.requested_by,
+            },
+        )
+        return {"ok": True, "change_request": request, "status": request.get("status"), "summary": {"change_request_id": request.get("change_request_id")}}
+    if args.action == "approve-cr":
+        if not args.change_request_id:
+            raise ValueError("--change-request-id is required for approve-cr.")
+        approval = store.approve_change_request(
+            program_id,
+            args.change_request_id,
+            {"approved_by": args.approved_by, "role": args.role, "reason": args.reason, "approved_actions": args.approved_action or None},
+        )
+        return {"ok": True, "approval": approval, "status": approval.get("status"), "summary": {"approval_hash": approval.get("integrity_hash")}}
+    if args.action == "reset-signoff":
+        if not args.change_request_id:
+            raise ValueError("--change-request-id is required for reset-signoff.")
+        proof = store.reset_receiver_acceptance_signoff(
+            program_id,
+            args.change_request_id,
+            {"reset_by": args.reset_by, "reason": args.reason},
+        )
+        return {"ok": proof.get("status") == "applied", "reset_proof": proof, "status": proof.get("status"), "summary": {"reset_proof_hash": proof.get("integrity_hash")}}
+    if args.action == "refresh-lifecycle":
+        report = store.refresh_lifecycle_audit(program_id, payload)
+        return {"ok": report.get("status") == "passed", "lifecycle_report": report, "status": report.get("status"), "summary": report.get("summary", {})}
+    if args.action == "export":
+        manifest = store.export_archive(program_id, payload)
+        return {"ok": True, "manifest": manifest, "status": "passed", "summary": {"manifest_hash": manifest.get("integrity_hash")}}
+    if args.action == "zip":
+        result = store.build_archive_zip(program_id, payload)
+        return {"ok": result.get("status") == "passed", **result}
+    if args.action == "verify":
+        report = store.verify_archive_zip(program_id, payload)
+        if args.report_out:
+            write_json(args.report_out, report)
+        return {"ok": report.get("status") == "passed", "verification": report, "status": report.get("status"), "summary": report.get("summary", {})}
+    if args.action == "gate":
+        gate = store.gate(
+            program_id,
+            required=True,
+            archive_zip_path=args.archive_zip,
+            verification_report_path=args.verification_report,
+            **payload,
+        )
+        return {"ok": gate.get("status") == "passed", "gate": gate, "status": gate.get("status"), "summary": gate.get("summary", {})}
+    raise ValueError("Unsupported unified-release-program-continuity-command-center-acceptance-change command.")
+
+
 def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "external_evidence_manifest": getattr(args, "external_evidence_manifest", None),
@@ -7440,6 +7572,10 @@ def _main() -> None:
             unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path=args.unified_release_program_continuity_command_center_acceptance_review_pack_verification_report,
             unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir=args.unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir,
             unified_release_program_continuity_command_center_acceptance_response_proof_dir=args.unified_release_program_continuity_command_center_acceptance_response_proof_dir,
+            require_unified_release_program_continuity_command_center_acceptance_change_control=args.require_unified_release_program_continuity_command_center_acceptance_change_control,
+            unified_release_program_continuity_command_center_acceptance_change_archive_path=args.unified_release_program_continuity_command_center_acceptance_change_archive,
+            unified_release_program_continuity_command_center_acceptance_change_verification_report_path=args.unified_release_program_continuity_command_center_acceptance_change_verification_report,
+            unified_release_program_continuity_command_center_acceptance_previous_root=args.unified_release_program_continuity_command_center_acceptance_previous_root,
             unified_release_program_continuity_command_center_final_handoff_path=args.unified_release_program_continuity_command_center_final_handoff,
             unified_release_program_continuity_command_center_final_handoff_verification_report_path=args.unified_release_program_continuity_command_center_final_handoff_verification_report,
             unified_release_zip_path=args.unified_release_zip,
@@ -7605,6 +7741,10 @@ def _main() -> None:
             unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path=args.unified_release_program_continuity_command_center_acceptance_review_pack_verification_report,
             unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir=args.unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir,
             unified_release_program_continuity_command_center_acceptance_response_proof_dir=args.unified_release_program_continuity_command_center_acceptance_response_proof_dir,
+            require_unified_release_program_continuity_command_center_acceptance_change_control=args.require_unified_release_program_continuity_command_center_acceptance_change_control,
+            unified_release_program_continuity_command_center_acceptance_change_path=args.unified_release_program_continuity_command_center_acceptance_change_archive,
+            unified_release_program_continuity_command_center_acceptance_change_verification_report_path=args.unified_release_program_continuity_command_center_acceptance_change_verification_report,
+            unified_release_program_continuity_command_center_acceptance_previous_root=args.unified_release_program_continuity_command_center_acceptance_previous_root,
             unified_release_program_continuity_command_center_final_handoff_path=args.unified_release_program_continuity_command_center_final_handoff,
             unified_release_program_continuity_command_center_final_handoff_verification_report_path=args.unified_release_program_continuity_command_center_final_handoff_verification_report,
             unified_release_path=args.unified_release_zip,
@@ -7960,6 +8100,15 @@ def _main() -> None:
         parser = build_unified_release_program_continuity_command_center_acceptance_parser()
         args = parser.parse_args(raw_args[1:])
         result = _run_unified_release_program_continuity_command_center_acceptance_command(args)
+        _print_release_audio_certification_result(result, json_output=bool(getattr(args, "json", False)))
+        status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+        if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
+            raise SystemExit(1)
+        return
+    elif raw_args and raw_args[0] == "unified-release-program-continuity-command-center-acceptance-change":
+        parser = build_unified_release_program_continuity_command_center_acceptance_change_parser()
+        args = parser.parse_args(raw_args[1:])
+        result = _run_unified_release_program_continuity_command_center_acceptance_change_command(args)
         _print_release_audio_certification_result(result, json_output=bool(getattr(args, "json", False)))
         status = str(result.get("status") or result.get("summary", {}).get("status") or "")
         if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
@@ -8920,6 +9069,32 @@ def _main() -> None:
             write_verification_report(report, args.report_out)
         print(json.dumps(report, ensure_ascii=False, indent=2) if args.json else f"Continuity Command Center Receiver Acceptance verification: {report.get('status')}")
         raise SystemExit(verification_exit_code(report))
+    elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-command-center-acceptance-change-package":
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+            unified_release_program_continuity_command_center_acceptance_change_verification_exit_code,
+            verify_unified_release_program_continuity_command_center_acceptance_change_package,
+            write_unified_release_program_continuity_command_center_acceptance_change_verification_report,
+        )
+
+        parser = build_verify_unified_release_program_continuity_command_center_acceptance_change_parser()
+        args = parser.parse_args(raw_args[1:])
+        report = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+            args.zip_path,
+            strict=args.strict,
+            require_current_acceptance=args.require_current,
+            acceptance_archive_path=args.acceptance_archive,
+            acceptance_verification_report_path=args.acceptance_verification_report,
+            acceptance_signoff_binding_path=args.acceptance_signoff_binding,
+            previous_acceptance_root=args.previous_acceptance_root,
+            require_reset_proofs=args.require_reset_proofs,
+            max_zip_size_mb=args.max_zip_size_mb,
+            max_uncompressed_size_mb=args.max_uncompressed_size_mb,
+            max_entry_count=args.max_entry_count,
+        )
+        if args.report_out:
+            write_unified_release_program_continuity_command_center_acceptance_change_verification_report(report, args.report_out)
+        print(json.dumps(report, ensure_ascii=False, indent=2) if args.json else f"Receiver Acceptance Change Control verification: {report.get('status')}")
+        raise SystemExit(unified_release_program_continuity_command_center_acceptance_change_verification_exit_code(report))
     elif raw_args and raw_args[0] == "verify-unified-release-program-continuity-command-center-handoff-package":
         from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
             command_center_signoff_verification_exit_code,

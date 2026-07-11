@@ -112,6 +112,7 @@ from song_agent.release_checks import (
     _v129_unified_release_program_continuity_command_center_smoke,
     _v1210_unified_release_program_continuity_command_center_signoff_smoke,
     _v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke,
+    _v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1594,6 +1595,40 @@ def test_v1211_unified_release_program_continuity_command_center_receiver_accept
     assert "trailing_bytes=failed" in detail
     assert "delete_history_signoff_409=True" in detail
     assert "signed_source_tamper_409=True" in detail
+
+
+def test_v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "wrong_action_reset_409=True" in detail
+    assert "approval_target_mismatch_409=True" in detail
+    assert "reset=applied" in detail
+    assert "reset_gate=failed" in detail
+    assert "old_evidence_board=blocked" in detail
+    assert "policy_override_409=True" in detail
+    assert "reused_cr_409=True" in detail
+    assert "successor_signoff=signed" in detail
+    assert "lifecycle=passed" in detail
+    assert "archive=passed" in detail
+    assert "gate=passed" in detail
+    assert "ga_gate=passed" in detail
+    assert "repeat_zip=passed" in detail
+    assert "internal_full_resign=passed" in detail
+    assert "reset_proof_full_resign=failed" in detail
+    assert "missing_previous_root=failed" in detail
+    assert "event_order_full_resign=failed" in detail
+    assert "declared_extra=failed" in detail
+    assert "duplicate=failed" in detail
+    assert "dangerous_path=failed" in detail
+    assert "nested_zip=failed" in detail
+    assert "redaction=failed" in detail
+    assert "musicforge=failed" in detail
+    assert "raw_backslash=failed" in detail
+    assert "trailing_bytes=failed" in detail
+    assert "signed_reset_proof_export_409=True" in detail
+    assert "signed_reset_proof_zip_409=True" in detail
+    assert "signed_reset_proof_gate=failed" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

@@ -228,6 +228,23 @@ python -m song_agent.cli unified-release-program-continuity-command-center-accep
 python -m song_agent.cli verify-unified-release-program-continuity-command-center-acceptance-package <receiver-acceptance-archive.zip> --strict --require-signed --signoff-binding <receiver-acceptance-binding.json> --review-pack <review-pack.zip> --review-pack-verification-report <review-pack-verification.json> --accepted-evidence-dir <accepted-evidence-root> --response-proof-dir <response-proof-root> --command-center-signoff-archive <v12.10-archive.zip> --command-center-signoff-archive-verification-report <v12.10-archive-verification.json> --command-center-final-handoff <v12.10-handoff.zip> --command-center-final-handoff-verification-report <v12.10-handoff-verification.json> --command-center-signoff-binding <v12.10-binding.json> --command-center <v12.9-command-center.zip> --command-center-verification-report <v12.9-verification.json> --command-center-evidence-manifest <v12.9-external-evidence-manifest.json> --json
 ```
 
+v12.12 adds controlled Receiver Acceptance reset and lifecycle audit. A reset
+requires an approved single-use Change Request scoped to
+`reset_receiver_acceptance_signoff`; it preserves the prior signed Archive and
+verification evidence, marks the old acceptance non-current, and requires a
+new Review Pack, newly proved responses and Accepted Evidence, a refreshed
+Board under the preserved quorum policy, and successor signoff. The audit verifier uses the external
+previous-generation evidence root to reject a package-internal full resign:
+
+```powershell
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance-change create-cr urp-000001 --reason "Receiver ownership changed" --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance-change approve-cr urp-000001 --change-request-id cr-000001 --approved-by "Program Owner" --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance-change reset-signoff urp-000001 --change-request-id cr-000001 --reset-by "Program Owner" --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance-change refresh-lifecycle urp-000001 --json
+python -m song_agent.cli unified-release-program-continuity-command-center-acceptance-change zip urp-000001 --json
+python -m song_agent.cli verify-unified-release-program-continuity-command-center-acceptance-change-package <change-control-archive.zip> --strict --require-current-acceptance --require-reset-proofs --acceptance-archive <current-receiver-acceptance.zip> --acceptance-verification-report <current-verification.json> --acceptance-signoff-binding <current-signoff-binding.json> --previous-acceptance-root <historical-generation-root> --json
+```
+
 ## Unified Command Center
 
 The Unified Command Center is the v11 top-level readiness view for MusicForge.

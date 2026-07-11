@@ -113,12 +113,13 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
         "v124.unified_release_program_vault_operations_smoke",
         "v125.unified_release_program_continuity_recovery_smoke",
         "v126.unified_release_program_continuity_distribution_kit_smoke",
-            "v127.unified_release_program_continuity_acceptance_board_smoke",
-            "v128.unified_release_program_continuity_acceptance_change_control_smoke",
-            "v129.unified_release_program_continuity_command_center_smoke",
-            "v1210.unified_release_program_continuity_command_center_signoff_smoke",
-            "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke",
-        ]
+        "v127.unified_release_program_continuity_acceptance_board_smoke",
+        "v128.unified_release_program_continuity_acceptance_change_control_smoke",
+        "v129.unified_release_program_continuity_command_center_smoke",
+        "v1210.unified_release_program_continuity_command_center_signoff_smoke",
+        "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke",
+        "v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke",
+    ]
 
 
 def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:

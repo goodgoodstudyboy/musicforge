@@ -1,5 +1,20 @@
 # Changelog
 
+## v12.12.0 - 2026-07-11
+
+### Added
+- Receiver Acceptance Change Control with approved, action-scoped, single-use Change Requests, reset-time proof/binding sidecars, `reset_pending` state, preserved quorum policy, and successor generation signoff.
+- Reset rotates the prior Review Pack, response proofs, Accepted Evidence, Board, Archive, and verification report into the historical generation; a successor cannot reuse the previous generation's reviewer evidence.
+- Lifecycle Audit Archive with hash-chained events, request/reset/generation indexes, fixed ZIP layout, trailing-data and path safety checks, and historical Receiver Acceptance snapshots retained outside the audit ZIP.
+- Offline verification that reconstructs reset causality from the external previous-generation Receiver Acceptance Archive, verification report, signoff binding, signoff, and history event instead of trusting package-internal reset summaries.
+- CLI, HTTP API, and Studio workflows for CR creation/approval, controlled reset, lifecycle refresh, Archive export/ZIP/verification, and current gate status.
+- Release signoff and GA readiness gates that require both the current v12.11 Receiver Acceptance evidence and the v12.12 lifecycle Archive; reset-pending, stale generations, invalid proofs, and runtime failures are hard blockers.
+- release-check `v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke` covering action scope, approval target mismatch, CR reuse, reset pending, successor signoff, external-proof full resign, fixed layout, trailing data, and signed local proof mutation.
+
+### Verified
+- `python -m pytest tests\test_unified_release_program_continuity_command_center_acceptance_change.py tests\test_release_check.py::test_v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+
 ## v12.11.0 - 2026-07-11
 
 ### Added
