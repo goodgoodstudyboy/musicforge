@@ -12,6 +12,8 @@ from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import ResetAuthorization
 from song_agent.platform.lifecycle import ChangeRequestService, SignoffService
 from song_agent.platform.lifecycle import HistoryChain
+from song_agent.platform.persistence import WorkspaceLock
+from song_agent.platform.persistence.repository import sync_active_v12_state
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
@@ -63,7 +65,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
     def __init__(self, program_store: UnifiedReleaseProgramStore | None = None) -> None:
         self.program_store = program_store or UnifiedReleaseProgramStore()
         self.command_store = UnifiedReleaseProgramContinuityCommandCenterStore(self.program_store)
-        self.lock = threading.RLock()
+        self.lock = WorkspaceLock(self.program_store.root.parent, operation="program-workflow-write", on_commit=lambda: sync_active_v12_state(self.program_store.root.parent))
 
     def signoff_dir(self, program_id: str) -> Path:
         return self.command_store.command_dir(program_id) / "signoff"

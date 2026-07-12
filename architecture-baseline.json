@@ -165,7 +165,7 @@
       "song_agent.trust_operations_incident_knowledge_verifier"
     ]
   ],
-  "baseline_version": "12.16.0",
+  "baseline_version": "12.17.0",
   "dependency_exceptions": [
     {
       "imported": "song_agent.release_check_runner",
@@ -175,11 +175,11 @@
   ],
   "mega_file_max_lines": {
     "song_agent/cli.py": 14484,
-    "song_agent/release_checks.py": 26198,
+    "song_agent/release_checks.py": 26194,
     "song_agent/server.py": 23753,
     "song_agent/webui.py": 12660
   },
-  "module_count": 312,
+  "module_count": 322,
   "modules": [
     {
       "context": null,
@@ -676,6 +676,12 @@
     {
       "context": "creation",
       "layer": "domain",
+      "module": "song_agent.persistence_cli",
+      "path": "song_agent/persistence_cli.py"
+    },
+    {
+      "context": "creation",
+      "layer": "domain",
       "module": "song_agent.planning_rule_governance",
       "path": "song_agent/planning_rule_governance.py"
     },
@@ -768,6 +774,54 @@
       "layer": "platform",
       "module": "song_agent.platform.lifecycle.signoff",
       "path": "song_agent/platform/lifecycle/signoff.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence",
+      "path": "song_agent/platform/persistence/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence.database",
+      "path": "song_agent/platform/persistence/database.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence.file_artifacts",
+      "path": "song_agent/platform/persistence/file_artifacts.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence.locks",
+      "path": "song_agent/platform/persistence/locks.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence.migrations",
+      "path": "song_agent/platform/persistence/migrations.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence.recovery",
+      "path": "song_agent/platform/persistence/recovery.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence.repository",
+      "path": "song_agent/platform/persistence/repository.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.persistence.unit_of_work",
+      "path": "song_agent/platform/persistence/unit_of_work.py"
     },
     {
       "context": null,
@@ -1182,6 +1236,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check_performance",
       "path": "song_agent/release_check_performance.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_persistence_kernel",
+      "path": "song_agent/release_check_persistence_kernel.py"
     },
     {
       "context": null,
@@ -2057,6 +2117,7 @@
   "notes": {
     "allowed_cycles": "Legacy domain cycles recorded at v12.14; they may be removed but no new cycle may be added.",
     "mega_files": "Tracked files may stay equal or shrink; growth is a release blocker.",
+    "persistence": "Active v12 stores use WorkspaceLock; offline verifiers must remain database and write-lock independent.",
     "security_helpers": "Active v12 verification and lifecycle code uses platform kernels; remaining legacy helper counts may only decrease."
   },
   "required_absent_dependencies": [

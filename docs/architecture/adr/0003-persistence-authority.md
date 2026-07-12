@@ -1,6 +1,6 @@
 # ADR 0003: Persistence Authority
 
-Status: Accepted direction; implementation begins in v12.17.
+Status: Accepted and active since v12.17.
 
 ## Decision
 
@@ -12,9 +12,12 @@ artifacts. Offline verifiers never depend on the local database.
 
 Multi-file updates use a file unit of work, staged writes, atomic replacement,
 database transactions, and cross-process locks. Migrations are versioned,
-restartable, and reversible before cutover.
+restartable, and reversible before cutover. Active v12 Store writes share a
+workspace file lock; read-only offline verifiers do not take that lock.
 
 ## Consequences
 
 The database is not public evidence. Backup, restore, migration, and crash
 recovery tests are required before mutable workflows move to this authority.
+Legacy JSON remains a read-compatible source during migration and is never
+deleted automatically.

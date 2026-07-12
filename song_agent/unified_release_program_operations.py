@@ -10,6 +10,7 @@ from typing import Any
 from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import ResetAuthorization
 from song_agent.platform.lifecycle import ChangeRequestService, HistoryChain
+from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -44,7 +45,7 @@ class UnifiedReleaseProgramOperationsStateError(UnifiedReleaseProgramOperationsE
 class UnifiedReleaseProgramOperationsStore:
     def __init__(self, program_store: UnifiedReleaseProgramStore | None = None) -> None:
         self.program_store = program_store or UnifiedReleaseProgramStore()
-        self.lock = threading.RLock()
+        self.lock = WorkspaceLock(self.program_store.root.parent, operation="program-workflow-write")
 
     def ops_dir(self, program_id: str) -> Path:
         return self.program_store.program_dir(program_id) / "operations"

@@ -1,5 +1,24 @@
 # Changelog
 
+## v12.17.0 - 2026-07-13
+
+### Added
+- A standard-library SQLite persistence kernel with WAL mode, foreign keys, busy timeout, explicit transactions, schema migrations, optimistic workflow records, and transactional ID allocation.
+- A PID-aware, cross-process, thread-reentrant workspace write lock shared by CLI and HTTP Store instances; stale recovery requires a confirmed dead owner or explicit force and never expires a live owner by lease time alone.
+- A generation-based File Unit of Work with staged fingerprints, transaction intents, atomic current pointers, database commit metadata, commit markers, crash injection, and restart recovery.
+- Explicit legacy v12.9-v12.12 migration planning, verified backups, source hash ledgers, mutable-state indexing, idempotent apply, verified rollback, and a `song-agent-state` maintenance command.
+- release-check `v1217.persistence_kernel_smoke`, covering WAL, optimistic conflict, subprocess serialization, crash recovery, corruption blocking, migration, redaction, and Store adoption.
+
+### Changed
+- All active v12 Program/Continuity Stores now use one workspace-scoped cross-process lock facade instead of independent process-local `RLock` instances.
+- v12.9-v12.12 mutable workflow summaries are synchronized into SQLite as public-safe status/generation/fingerprint indexes; immutable evidence and all offline verifier authority remain filesystem based.
+- Read-only verifier modules remain lock-free and independent of the local database.
+
+### Verified
+- `python -m pytest tests\test_persistence_kernel.py tests\test_release_check.py::test_v1217_persistence_kernel_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- Program and Program Operations Store regression suites under the cross-process lock facade.
+- Crash boundaries before/after generation pointer and database commit, corrupt recovery, migration backup failure, rerun, and rollback.
+
 ## v12.16.0 - 2026-07-13
 
 ### Added

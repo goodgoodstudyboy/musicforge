@@ -1,15 +1,14 @@
 # Current Architecture
 
-MusicForge v12.16 is a local-first modular monolith in transition from a large
+MusicForge v12.17 is a local-first modular monolith in transition from a large
 flat package. It remains one Python process, one installation, and one local
 workspace. The existing CLI, HTTP API, Studio, evidence packages, and offline
 verifiers remain compatible while platform contracts are introduced.
 
 ## Current Layers
 
-- `song_agent/platform/`: dependency-free shared contracts and the shared
-  Verification Kernel; lifecycle and persistence primitives follow in later
-  roadmap stages.
+- `song_agent/platform/`: dependency-free shared contracts plus shared
+  verification, lifecycle, and persistence kernels.
 - `song_agent/application/`: orchestration that coordinates domain behavior.
 - Flat `song_agent/*.py` modules: legacy domain modules assigned to one of the
   six bounded contexts in `architecture-baseline.json`.
@@ -58,6 +57,20 @@ verifiers remain compatible while platform contracts are introduced.
   domain runtime checks.
 - Legacy histories remain byte-for-byte read compatible. Explicit migration
   creates a separate target and rollback copy with a fingerprint report.
+
+## v12.17 Changes
+
+- `.musicforge/state/musicforge.db` stores mutable workflow indexes,
+  generation/status metadata, transaction records, migration ledgers, and ID
+  counters using SQLite WAL and explicit transactions.
+- Signed reports, bindings, JSONL history, archives, and public ZIP evidence
+  remain filesystem artifacts. Offline verification never reads SQLite.
+- Active v12 Stores share a PID-aware cross-process write lock; verifier-only
+  paths remain lock-free.
+- Multi-file platform writes use immutable generation directories and an atomic
+  current pointer, with intent/marker recovery across every commit boundary.
+- Legacy v12.9-v12.12 state migration is explicit, backed up, hash verified,
+  idempotent, reversible, and never deletes source evidence.
 
 ## Baseline
 

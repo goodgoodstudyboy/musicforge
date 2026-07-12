@@ -9,6 +9,7 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.platform.lifecycle import HistoryChain
+from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -53,7 +54,7 @@ class UnifiedReleaseProgramStore:
     def __init__(self, root: Path | str | None = None, *, release_store: ReleaseStore | None = None) -> None:
         self.release_store = release_store or ReleaseStore()
         self.root = Path(root) if root is not None else self.release_store.root.parent / "unified-release-programs"
-        self.lock = threading.RLock()
+        self.lock = WorkspaceLock(self.root.parent, operation="program-workflow-write")
 
     def program_dir(self, program_id: str) -> Path:
         return self.root / _safe_id(program_id)

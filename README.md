@@ -2526,3 +2526,10 @@ hash-chained history, action-scoped Change Requests, single-use reset,
 generation rotation, immutable snapshots, and archive construction. Existing
 JSON/JSONL/ZIP layouts remain compatible. Legacy history is never rewritten on
 read; explicit migration creates a fingerprinted copy and rollback artifact.
+
+Since v12.17, active Program/Continuity writes share a PID-aware cross-process
+workspace lock. Mutable workflow indexes live in `.musicforge/state/musicforge.db`
+using SQLite WAL, while signed JSON/JSONL/ZIP evidence remains immutable and
+offline-verifiable without the database. `song-agent-state migrate-plan`,
+`migrate-apply`, `migrate-rollback`, and `recover` provide explicit, backed-up
+state migration and crash recovery.

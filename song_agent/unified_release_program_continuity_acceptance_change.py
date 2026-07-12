@@ -10,6 +10,7 @@ from typing import Any
 from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import GenerationRef, ResetAuthorization
 from song_agent.platform.lifecycle import ChangeRequestService, GenerationService, HistoryChain
+from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -64,7 +65,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
     def __init__(self, program_store: UnifiedReleaseProgramStore | None = None) -> None:
         self.program_store = program_store or UnifiedReleaseProgramStore()
         self.acceptance_store = UnifiedReleaseProgramContinuityAcceptanceStore(self.program_store)
-        self.lock = threading.RLock()
+        self.lock = WorkspaceLock(self.program_store.root.parent, operation="program-workflow-write")
 
     def change_dir(self, program_id: str) -> Path:
         return self.acceptance_store.acceptance_dir(program_id) / "change-control"

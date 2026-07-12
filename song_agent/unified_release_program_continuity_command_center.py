@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.persistence import WorkspaceLock
+from song_agent.platform.persistence.repository import sync_active_v12_state
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -66,7 +68,7 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
         self.distribution_store = UnifiedReleaseProgramContinuityDistributionStore(self.program_store)
         self.acceptance_store = UnifiedReleaseProgramContinuityAcceptanceStore(self.program_store)
         self.change_store = UnifiedReleaseProgramContinuityAcceptanceChangeStore(self.program_store)
-        self.lock = threading.RLock()
+        self.lock = WorkspaceLock(self.program_store.root.parent, operation="program-workflow-write", on_commit=lambda: sync_active_v12_state(self.program_store.root.parent))
 
     def command_dir(self, program_id: str) -> Path:
         return self.program_store.program_dir(program_id) / "continuity-command-center"

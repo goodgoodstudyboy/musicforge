@@ -121,6 +121,7 @@ from song_agent.release_checks import (
     _v1214_architecture_guardrails_smoke,
     _v1215_verification_kernel_smoke,
     _v1216_lifecycle_kernel_smoke,
+    _v1217_persistence_kernel_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1690,6 +1691,18 @@ def test_v1216_lifecycle_kernel_smoke(tmp_path: Path) -> None:
     assert "history_full_resign=True" in detail
     assert "wrong_action=True" in detail
     assert "archive_tamper=True" in detail
+    assert "active_stores_migrated=True" in detail
+
+
+def test_v1217_persistence_kernel_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1217_persistence_kernel_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "wal=True" in detail
+    assert "cross_process=True" in detail
+    assert "crash_recovery=True" in detail
+    assert "corrupt_recovery_blocked=True" in detail
+    assert "migration=True" in detail
     assert "active_stores_migrated=True" in detail
 
 

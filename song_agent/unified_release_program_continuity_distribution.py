@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -72,7 +73,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
         self.continuity_store = UnifiedReleaseProgramContinuityStore(self.program_store)
         self.vault_operations_store = UnifiedReleaseProgramVaultOperationsStore(self.program_store)
         self.vault_store = UnifiedReleaseProgramVaultStore(self.program_store)
-        self.lock = threading.RLock()
+        self.lock = WorkspaceLock(self.program_store.root.parent, operation="program-workflow-write")
 
     def distribution_dir(self, program_id: str) -> Path:
         return self.program_store.program_dir(program_id) / "continuity-distribution"

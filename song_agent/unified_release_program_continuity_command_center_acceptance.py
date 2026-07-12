@@ -13,6 +13,8 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.platform.lifecycle import HistoryChain, SignoffService
+from song_agent.platform.persistence import WorkspaceLock
+from song_agent.platform.persistence.repository import sync_active_v12_state
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -97,7 +99,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         self.program_store = program_store or UnifiedReleaseProgramStore()
         self.signoff_store = UnifiedReleaseProgramContinuityCommandCenterSignoffStore(self.program_store)
         self.root = self.program_store.root.parent / "urpccca"
-        self.lock = threading.RLock()
+        self.lock = WorkspaceLock(self.program_store.root.parent, operation="program-workflow-write", on_commit=lambda: sync_active_v12_state(self.program_store.root.parent))
 
     def acceptance_dir(self, program_id: str) -> Path:
         return self.root / _safe_id(program_id)
