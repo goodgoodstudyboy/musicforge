@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.lifecycle import HistoryChain, SignoffService
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -730,6 +731,15 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             self.archive_zip_path(program_id),
             self.archive_verification_report_path(program_id),
         )
+        try:
+            SignoffService.assert_transition_allowed(
+                HistoryChain(history_path, sanitizer=sanitize_metadata),
+                artifact_paths=signed_artifacts,
+                signed_event_types={"receiver_acceptance_signoff_created"},
+                reset_event_types={"receiver_acceptance_signoff_reset"},
+            )
+        except ValueError as exc:
+            raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(str(exc)) from exc
         if not history_path.exists():
             report = _read_optional_json(self.board_report_path(program_id))
             if any(path.exists() for path in signed_artifacts) or report.get("status") == "signed":
@@ -766,12 +776,9 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         return latest
 
     def read_history(self, program_id: str) -> list[dict[str, Any]]:
-        path = self.history_path(program_id)
-        if not path.exists():
-            return []
         try:
-            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).read()
+        except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history is unreadable.") from exc
 
     def _assert_signoff_allowed(self, program_id: str) -> None:
@@ -1348,38 +1355,24 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         )
 
     def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        rows = self.read_history(program_id)
-        event = sanitize_metadata({**payload, "previous_event_hash": rows[-1].get("event_hash") if rows else ""})
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        self.history_path(program_id).parent.mkdir(parents=True, exist_ok=True)
-        with self.history_path(program_id).open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
+        return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _validate_history(self, program_id: str) -> None:
-        previous = ""
-        rows = self.read_history(program_id)
-        if not rows:
+        validation = HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).validate()
+        if not validation.rows:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history is missing.")
-        for row in rows:
-            payload_hash = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})
-            event_hash = stable_hash({key: value for key, value in {**row, "payload_hash": payload_hash}.items() if key != "event_hash"})
-            if row.get("payload_hash") != payload_hash or row.get("event_hash") != event_hash or str(row.get("previous_event_hash") or "") != previous:
-                raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history hash chain is invalid.")
-            previous = str(row.get("event_hash") or "")
+        if not validation.valid:
+            raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history hash chain is invalid.")
 
     def _find_history_event(self, program_id: str, event_type: str) -> dict[str, Any] | None:
         signoff_hash = self.latest_signoff_state(program_id).get("signoff_hash")
         return next((row for row in reversed(self.read_history(program_id)) if row.get("event_type") == event_type and row.get("signoff_hash") == signoff_hash), None)
 
     def _history_through(self, program_id: str, event_hash: str) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for row in self.read_history(program_id):
-            rows.append(row)
-            if row.get("event_hash") == event_hash:
-                return rows
-        raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Frozen Receiver Acceptance history event is missing.")
+        try:
+            return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).through(event_hash)
+        except ValueError as exc:
+            raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Frozen Receiver Acceptance history event is missing.") from exc
 
     def _write_export_dir(self, root: Path, docs: dict[str, dict[str, Any] | str]) -> None:
         if root.exists():

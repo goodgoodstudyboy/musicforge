@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -578,10 +579,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
         return {"status": "unsigned"}
 
     def read_history(self, program_id: str) -> list[dict[str, Any]]:
-        path = self.history_path(program_id)
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).read()
 
     def _build_board_documents(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         source = self._current_kit_source(program_id)
@@ -906,14 +904,12 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             raise UnifiedReleaseProgramContinuityAcceptanceStateError(f"Continuity Acceptance {evidence_id} source binding failed: " + ", ".join(failed_checks))
 
     def _validate_history_chain(self, program_id: str, signoff: dict[str, Any], binding: dict[str, Any]) -> None:
-        previous = ""
+        validation = HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).validate()
+        if not validation.valid:
+            index = (validation.error_index or 0) + 1
+            raise UnifiedReleaseProgramContinuityAcceptanceStateError(f"Continuity Acceptance history chain failed at event {index}.")
         latest_signoff_event: dict[str, Any] = {}
-        for index, row in enumerate(self.read_history(program_id), start=1):
-            expected_payload = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})
-            expected_event = stable_hash({key: value for key, value in row.items() if key != "event_hash"})
-            if row.get("previous_event_hash") != previous or row.get("payload_hash") != expected_payload or row.get("event_hash") != expected_event:
-                raise UnifiedReleaseProgramContinuityAcceptanceStateError(f"Continuity Acceptance history chain failed at event {index}.")
-            previous = str(row.get("event_hash") or "")
+        for row in validation.rows:
             if row.get("event_type") == "continuity_acceptance_signoff_created":
                 latest_signoff_event = row
         if not latest_signoff_event:
@@ -931,15 +927,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             raise UnifiedReleaseProgramContinuityAcceptanceStateError("Continuity Acceptance signoff history binding failed: " + ", ".join(failed))
 
     def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        history = self.read_history(program_id)
-        previous = str(history[-1].get("event_hash") or "") if history else ""
-        event = sanitize_metadata({**payload, "previous_event_hash": previous})
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        self.history_path(program_id).parent.mkdir(parents=True, exist_ok=True)
-        with self.history_path(program_id).open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
+        return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _next_response_id(self, program_id: str) -> str:
         self.responses_dir(program_id).mkdir(parents=True, exist_ok=True)

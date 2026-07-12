@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -722,10 +723,7 @@ class UnifiedReleaseProgramHandoffStore:
         return {"status": "unsigned"}
 
     def read_history(self, program_id: str) -> list[dict[str, Any]]:
-        path = self.history_path(program_id)
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).read()
 
     def _build_documents(self, program_id: str, payload: dict[str, Any], *, write_external: bool) -> dict[str, Any]:
         handoff_id = self._handoff_id(program_id, payload)
@@ -1134,16 +1132,7 @@ class UnifiedReleaseProgramHandoffStore:
         return binding
 
     def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        history = self.read_history(program_id)
-        previous = str(history[-1].get("event_hash") or "") if history else ""
-        event = sanitize_metadata({**payload, "previous_event_hash": previous})
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        path = self.history_path(program_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
+        return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _handoff_id(self, program_id: str, payload: dict[str, Any]) -> str:
         if payload.get("handoff_id"):

@@ -1,0 +1,19 @@
+"""Composable lifecycle primitives for signed MusicForge evidence."""
+
+from song_agent.platform.lifecycle.archive import ArchiveBuilder, ImmutableSnapshotGuard
+from song_agent.platform.lifecycle.change_control import ChangeRequestService, ResetService
+from song_agent.platform.lifecycle.event_ledger import HistoryChain, HistoryMigrationReport, HistoryValidation
+from song_agent.platform.lifecycle.generation import GenerationService
+from song_agent.platform.lifecycle.signoff import SignoffService
+
+__all__ = [
+    "ArchiveBuilder",
+    "ChangeRequestService",
+    "GenerationService",
+    "HistoryChain",
+    "HistoryMigrationReport",
+    "HistoryValidation",
+    "ImmutableSnapshotGuard",
+    "ResetService",
+    "SignoffService",
+]

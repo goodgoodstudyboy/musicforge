@@ -1,6 +1,6 @@
 # ADR 0002: Evidence Verification Kernel
 
-Status: Accepted direction; implementation begins in v12.15.
+Status: Accepted and active since v12.15.
 
 ## Decision
 

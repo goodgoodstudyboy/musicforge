@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -729,15 +730,8 @@ class UnifiedReleaseProgramContinuityStore:
 
     def _append_history(self, program_id: str, event: dict[str, Any]) -> dict[str, Any]:
         path = self.history_path(program_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        events = _read_history(path)
-        previous = events[-1].get("event_hash") if events else ""
-        event = sanitize_metadata({**event, "event_index": len(events) + 1, "previous_event_hash": previous}, blocked_keys=CONTINUITY_BLOCKED_METADATA_KEYS)
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(_json_line(event) + "\n")
-        return event
+        chain = HistoryChain(path, sanitizer=lambda value: sanitize_metadata(value, blocked_keys=CONTINUITY_BLOCKED_METADATA_KEYS))
+        return chain.append({**event, "event_index": len(chain.read()) + 1})
 
     def _history_has(self, program_id: str, event_type: str) -> bool:
         return any(row.get("event_type") == event_type for row in _read_history(self.history_path(program_id)))
@@ -832,9 +826,7 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
 
 
 def _read_history(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    return [__import__("json").loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return HistoryChain(path).read()
 
 
 def _json_line(doc: dict[str, Any]) -> str:

@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.contracts.lifecycle import ResetAuthorization
+from song_agent.platform.lifecycle import ChangeRequestService, SignoffService
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
@@ -320,6 +323,21 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             if not approval_path.exists():
                 raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Change Request approval proof is missing.")
             approval = read_json(approval_path)
+            try:
+                ChangeRequestService.validate_reset_authorization(
+                    request,
+                    approval,
+                    ResetAuthorization(
+                        program_id,
+                        change_request_id,
+                        RESET_ACTION,
+                        RESET_CHANGE_TYPE,
+                        request.get("target") or {},
+                        request.get("source") if "source" in request else None,
+                    ),
+                )
+            except ValueError as exc:
+                raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError(str(exc)) from exc
             request_identity_valid = (
                 request.get("program_id") == program_id
                 and request.get("change_request_id") == change_request_id
@@ -604,10 +622,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
         return latest or {"status": "unsigned", "event": None}
 
     def read_history(self, program_id: str) -> list[dict[str, Any]]:
-        path = self.history_path(program_id)
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).read()
 
     def _assert_signoff_transition_allowed(self, program_id: str) -> None:
         history_path = self.history_path(program_id)
@@ -626,6 +641,15 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             self.archive_history_dir(program_id),
             self.change_request_dir(program_id),
         )
+        try:
+            SignoffService.assert_transition_allowed(
+                HistoryChain(history_path, sanitizer=sanitize_metadata),
+                artifact_paths=root_artifacts,
+                signed_event_types={"command_center_signoff_created"},
+                reset_event_types={"command_center_signoff_reset"},
+            )
+        except ValueError as exc:
+            raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError(str(exc)) from exc
         if not history_path.exists():
             if any(path.exists() for path in root_artifacts):
                 raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError(
@@ -816,23 +840,11 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
         return _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_signoff_binding", "program_id": signoff.get("program_id"), "created_at": now_iso(), "signoff_hash": signoff.get("integrity_hash"), "signoff_payload_hash": signoff.get("payload_hash"), "signed_by": signoff.get("signed_by"), "role": signoff.get("role"), "reason_hash": stable_hash({"reason": signoff.get("reason")}), "signed_at": signoff.get("signed_at"), "history_event_hash": event.get("event_hash"), **source})
 
     def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        history = self.read_history(program_id)
-        event = sanitize_metadata({**payload, "previous_event_hash": history[-1].get("event_hash") if history else ""})
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        self.history_path(program_id).parent.mkdir(parents=True, exist_ok=True)
-        with self.history_path(program_id).open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
+        return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _validate_history(self, program_id: str) -> None:
-        previous = ""
-        for event in self.read_history(program_id):
-            payload_hash = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-            event_hash = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-            if event.get("payload_hash") != payload_hash or event.get("event_hash") != event_hash or str(event.get("previous_event_hash") or "") != previous:
-                raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Command Center signoff history hash chain is invalid.")
-            previous = str(event.get("event_hash") or "")
+        if not HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).validate().valid:
+            raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Command Center signoff history hash chain is invalid.")
 
     def _find_history_event(self, program_id: str, event_type: str, signoff_hash: Any) -> dict[str, Any] | None:
         return next((row for row in reversed(self.read_history(program_id)) if row.get("event_type") == event_type and row.get("signoff_hash") == signoff_hash), None)
@@ -845,12 +857,10 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
         return event
 
     def _history_through(self, program_id: str, event_hash: str) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for row in self.read_history(program_id):
-            rows.append(row)
-            if row.get("event_hash") == event_hash:
-                return rows
-        raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Frozen archive history event is missing.")
+        try:
+            return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).through(event_hash)
+        except ValueError as exc:
+            raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Frozen archive history event is missing.") from exc
 
     def _assert_request_current(self, program_id: str, request: dict[str, Any]) -> None:
         context = self._signed_context(program_id, {})

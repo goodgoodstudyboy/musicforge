@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v12.15 is a local-first modular monolith in transition from a large
+MusicForge v12.16 is a local-first modular monolith in transition from a large
 flat package. It remains one Python process, one installation, and one local
 workspace. The existing CLI, HTTP API, Studio, evidence packages, and offline
 verifiers remain compatible while platform contracts are introduced.
@@ -44,6 +44,20 @@ verifiers remain compatible while platform contracts are introduced.
   external evidence requirements remain compatible.
 - The duplicate security-helper ratchet was lowered to the post-migration
   count; remaining copies belong to older domains and may only decrease.
+
+## v12.16 Changes
+
+- `platform/lifecycle/` owns history-chain writes, signoff transition guards,
+  reset authorization, generation documents, immutable snapshot checks, and
+  archive construction.
+- Active v12 Program/Continuity stores no longer calculate history event hashes
+  locally. Domain stores retain only current-source, policy, and evidence
+  semantics.
+- Change Control reset entry points use one approved, action-scoped,
+  target/source-bound, single-use authorization rule and still run their
+  domain runtime checks.
+- Legacy histories remain byte-for-byte read compatible. Explicit migration
+  creates a separate target and rollback copy with a fingerprint report.
 
 ## Baseline
 

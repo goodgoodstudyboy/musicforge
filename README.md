@@ -2520,3 +2520,9 @@ the modular-monolith migration proceeds. Since v12.15, active v12 Program and
 Continuity package verifiers share one `PackageSpec`-driven security envelope;
 their existing commands retain domain-specific semantic and external-evidence
 checks.
+
+Since v12.16, active v12 signed workflows also share lifecycle primitives for
+hash-chained history, action-scoped Change Requests, single-use reset,
+generation rotation, immutable snapshots, and archive construction. Existing
+JSON/JSONL/ZIP layouts remain compatible. Legacy history is never rewritten on
+read; explicit migration creates a fingerprinted copy and rollback artifact.

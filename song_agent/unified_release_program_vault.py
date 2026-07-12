@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -569,9 +570,10 @@ def _chain_events(program_id: str, packages: list[dict[str, Any]], verifications
     rows: list[dict[str, Any]] = []
     previous = ""
     for index, row in enumerate(packages + verifications + proofs, start=1):
-        event = {"event_index": index, "program_id": program_id, "event_type": f"vault_{row.get('component_type')}_{'indexed'}", "component_type": row.get("component_type"), "component_id": row.get("component_id"), "path": row.get("path"), "previous_event_hash": previous}
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        event = HistoryChain.build_event(
+            {"event_index": index, "program_id": program_id, "event_type": f"vault_{row.get('component_type')}_{'indexed'}", "component_type": row.get("component_type"), "component_id": row.get("component_id"), "path": row.get("path")},
+            previous_event_hash=previous,
+        )
         previous = event["event_hash"]
         rows.append(event)
     return rows

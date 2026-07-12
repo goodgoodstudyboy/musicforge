@@ -165,7 +165,7 @@
       "song_agent.trust_operations_incident_knowledge_verifier"
     ]
   ],
-  "baseline_version": "12.15.0",
+  "baseline_version": "12.16.0",
   "dependency_exceptions": [
     {
       "imported": "song_agent.release_check_runner",
@@ -175,11 +175,11 @@
   ],
   "mega_file_max_lines": {
     "song_agent/cli.py": 14484,
-    "song_agent/release_checks.py": 26200,
+    "song_agent/release_checks.py": 26198,
     "song_agent/server.py": 23753,
     "song_agent/webui.py": 12660
   },
-  "module_count": 303,
+  "module_count": 312,
   "modules": [
     {
       "context": null,
@@ -718,8 +718,56 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.contracts.evidence_manifest",
+      "path": "song_agent/platform/contracts/evidence_manifest.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.contracts.lifecycle",
+      "path": "song_agent/platform/contracts/lifecycle.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.contracts.packages",
       "path": "song_agent/platform/contracts/packages.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.lifecycle",
+      "path": "song_agent/platform/lifecycle/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.lifecycle.archive",
+      "path": "song_agent/platform/lifecycle/archive.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.lifecycle.change_control",
+      "path": "song_agent/platform/lifecycle/change_control.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.lifecycle.event_ledger",
+      "path": "song_agent/platform/lifecycle/event_ledger.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.lifecycle.generation",
+      "path": "song_agent/platform/lifecycle/generation.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.lifecycle.signoff",
+      "path": "song_agent/platform/lifecycle/signoff.py"
     },
     {
       "context": null,
@@ -1116,6 +1164,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check_fixtures",
       "path": "song_agent/release_check_fixtures.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_lifecycle_kernel",
+      "path": "song_agent/release_check_lifecycle_kernel.py"
     },
     {
       "context": null,
@@ -2003,7 +2057,7 @@
   "notes": {
     "allowed_cycles": "Legacy domain cycles recorded at v12.14; they may be removed but no new cycle may be added.",
     "mega_files": "Tracked files may stay equal or shrink; growth is a release blocker.",
-    "security_helpers": "v12.15 active Program/Continuity verifiers use platform.verification; remaining legacy helper counts may only decrease."
+    "security_helpers": "Active v12 verification and lifecycle code uses platform kernels; remaining legacy helper counts may only decrease."
   },
   "required_absent_dependencies": [
     {
@@ -2017,8 +2071,8 @@
   ],
   "schema_version": 1,
   "security_helper_max_counts": {
-    "_raw_zip_entry_names": 43,
     "_is_safe_zip_entry": 36,
+    "_raw_zip_entry_names": 43,
     "_zip_has_no_trailing_data": 0
   }
 }

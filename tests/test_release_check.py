@@ -120,6 +120,7 @@ from song_agent.release_checks import (
     _v1213_release_check_acceleration_smoke,
     _v1214_architecture_guardrails_smoke,
     _v1215_verification_kernel_smoke,
+    _v1216_lifecycle_kernel_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1679,6 +1680,17 @@ def test_v1215_verification_kernel_smoke(tmp_path: Path) -> None:
     assert "manifest_spoof=failed" in detail
     assert "raw_backslash=failed" in detail
     assert "active_verifiers_migrated=True" in detail
+
+
+def test_v1216_lifecycle_kernel_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1216_lifecycle_kernel_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "history_happy=True" in detail
+    assert "history_full_resign=True" in detail
+    assert "wrong_action=True" in detail
+    assert "archive_tamper=True" in detail
+    assert "active_stores_migrated=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

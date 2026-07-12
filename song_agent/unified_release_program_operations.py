@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.contracts.lifecycle import ResetAuthorization
+from song_agent.platform.lifecycle import ChangeRequestService, HistoryChain
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -200,6 +202,14 @@ class UnifiedReleaseProgramOperationsStore:
             if not self.approval_path(program_id, request_id).exists():
                 raise UnifiedReleaseProgramOperationsStateError("Approved Program Change Request is missing approval proof.")
             approval = read_json(self.approval_path(program_id, request_id))
+            try:
+                ChangeRequestService.validate_reset_authorization(
+                    request,
+                    approval,
+                    ResetAuthorization(program_id, request_id, "reset_program_signoff", "reset_signoff", request.get("target") or {}, request.get("source") or {}),
+                )
+            except ValueError as exc:
+                raise UnifiedReleaseProgramOperationsStateError(str(exc)) from exc
             if not _integrity_ok(approval) or approval.get("status") != "approved":
                 raise UnifiedReleaseProgramOperationsStateError("Program Change Request approval integrity failed.")
             if approval.get("target") != request.get("target") or approval.get("source") != request.get("source"):
@@ -534,10 +544,7 @@ class UnifiedReleaseProgramOperationsStore:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
     def read_change_history(self, program_id: str) -> list[dict[str, Any]]:
-        path = self.change_history_path(program_id)
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return HistoryChain(self.change_history_path(program_id), sanitizer=sanitize_metadata).read()
 
     def _current_program_binding(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         if self.program_store.latest_signoff_state(program_id).get("status") != "signed":
@@ -658,25 +665,18 @@ class UnifiedReleaseProgramOperationsStore:
         return sanitize_metadata({"change_request_id": request_id, "status": request.get("status"), "change_type": request.get("change_type"), "reason": request.get("reason"), "request_hash": request.get("integrity_hash"), "approval_hash": approval.get("integrity_hash") or request.get("approval_hash"), "reset_proof_hash": reset.get("integrity_hash") or request.get("reset_proof_hash"), "reset_event_hash": request.get("reset_event_hash"), "previous_signoff_hash": (request.get("target") or {}).get("program_signoff_hash")})
 
     def _append_change_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        history = self.read_change_history(program_id)
-        previous = str(history[-1].get("event_hash") or "") if history else ""
-        event = sanitize_metadata({**payload, "previous_event_hash": previous})
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        path = self.change_history_path(program_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
+        return HistoryChain(self.change_history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _lifecycle_ledger(self, program_id: str, program_history: list[dict[str, Any]], change_history: list[dict[str, Any]]) -> list[dict[str, Any]]:
         rows = []
         previous = ""
         source_rows = [("program_history", row) for row in program_history] + [("change_control_history", row) for row in change_history]
         for index, (source, raw) in enumerate(source_rows, start=1):
-            event = sanitize_metadata({"event_id": f"uple-{index:06d}", "source": source, "event_type": raw.get("event_type"), "created_at": raw.get("created_at"), "program_id": program_id, "signoff_hash": raw.get("signoff_hash") or raw.get("previous_signoff_hash"), "change_request_id": raw.get("change_request_id"), "source_event_hash": raw.get("event_hash"), "previous_event_hash": previous})
-            event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-            event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+            event = HistoryChain.build_event(
+                {"event_id": f"uple-{index:06d}", "source": source, "event_type": raw.get("event_type"), "created_at": raw.get("created_at"), "program_id": program_id, "signoff_hash": raw.get("signoff_hash") or raw.get("previous_signoff_hash"), "change_request_id": raw.get("change_request_id"), "source_event_hash": raw.get("event_hash")},
+                previous_event_hash=previous,
+                sanitizer=sanitize_metadata,
+            )
             previous = event["event_hash"]
             rows.append(event)
         return rows

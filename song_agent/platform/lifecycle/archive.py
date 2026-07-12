@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import json
+import shutil
+import zipfile
+from pathlib import Path
+from typing import Any
+
+from song_agent.platform.verification.hashing import sha256_file
+from song_agent.platform.verification.zip_security import zip_has_no_trailing_data
+
+
+class ImmutableSnapshotGuard:
+    @staticmethod
+    def require_history_or_no_artifacts(history_path: Path, artifact_paths: tuple[Path, ...]) -> None:
+        if not history_path.is_file() and any(path.exists() for path in artifact_paths):
+            raise ValueError("Lifecycle history is missing while immutable artifacts remain.")
+
+    @staticmethod
+    def require_export_matches(export_dir: Path, expected: dict[str, bytes]) -> None:
+        if not export_dir.is_dir():
+            raise ValueError("Archive export directory is missing.")
+        actual = {path.relative_to(export_dir).as_posix() for path in export_dir.rglob("*") if path.is_file()}
+        if actual != set(expected):
+            raise ValueError("Archive export layout does not match the frozen snapshot.")
+        for name, data in expected.items():
+            if (export_dir / name).read_bytes() != data:
+                raise ValueError(f"Archive export entry changed: {name}")
+
+
+class ArchiveBuilder:
+    @staticmethod
+    def export_documents(export_dir: Path, documents: dict[str, dict[str, Any] | str | bytes]) -> dict[str, bytes]:
+        payloads = {name: _serialize(value) for name, value in documents.items()}
+        if export_dir.exists():
+            ImmutableSnapshotGuard.require_export_matches(export_dir, payloads)
+            return payloads
+        for name, data in payloads.items():
+            path = export_dir / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return payloads
+
+    @staticmethod
+    def build_zip(export_dir: Path, zip_path: Path, expected: dict[str, bytes]) -> Path:
+        ImmutableSnapshotGuard.require_export_matches(export_dir, expected)
+        if zip_path.exists():
+            if not zip_has_no_trailing_data(zip_path):
+                raise ValueError("Existing archive ZIP contains trailing data.")
+            with zipfile.ZipFile(zip_path) as archive:
+                names = set(archive.namelist())
+                if names != set(expected) or any(archive.read(name) != data for name, data in expected.items()):
+                    raise ValueError("Existing archive ZIP does not match the frozen snapshot.")
+            return zip_path
+        zip_path.parent.mkdir(parents=True, exist_ok=True)
+        temp = zip_path.with_suffix(zip_path.suffix + ".tmp")
+        with zipfile.ZipFile(temp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name in sorted(expected):
+                archive.writestr(name, expected[name])
+        temp.replace(zip_path)
+        return zip_path
+
+    @staticmethod
+    def copy_frozen(source: Path, target: Path, *, expected_sha256: str) -> Path:
+        if sha256_file(source) != expected_sha256:
+            raise ValueError("Frozen source fingerprint mismatch.")
+        if target.exists():
+            if sha256_file(target) != expected_sha256:
+                raise ValueError("Existing frozen target fingerprint mismatch.")
+            return target
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        return target
+
+
+def _serialize(value: dict[str, Any] | str | bytes) -> bytes:
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value.encode("utf-8")
+    return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")

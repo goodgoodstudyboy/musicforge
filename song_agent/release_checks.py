@@ -22189,10 +22189,8 @@ def _v1214_architecture_guardrails_smoke(root: Path) -> tuple[bool, str]:
     return run_architecture_guardrails_smoke(root)
 
 
-def _v1215_verification_kernel_smoke(root: Path) -> tuple[bool, str]:
-    from song_agent.release_check_verification_kernel import run_verification_kernel_smoke
-
-    return run_verification_kernel_smoke(root)
+from song_agent.release_check_lifecycle_kernel import run_lifecycle_kernel_smoke as _v1216_lifecycle_kernel_smoke
+from song_agent.release_check_verification_kernel import run_verification_kernel_smoke as _v1215_verification_kernel_smoke
 
 
 def _v129_unified_release_program_continuity_command_center_smoke(root: Path) -> tuple[bool, str]:

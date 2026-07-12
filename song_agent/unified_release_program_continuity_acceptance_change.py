@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.platform.contracts.lifecycle import GenerationRef, ResetAuthorization
+from song_agent.platform.lifecycle import ChangeRequestService, GenerationService, HistoryChain
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -253,6 +255,14 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
             if RESET_ACTION not in set(request.get("allowed_actions") or []):
                 raise UnifiedReleaseProgramContinuityAcceptanceChangeStateError("Continuity Acceptance Change Request does not allow reset_continuity_acceptance_signoff.")
             approval = read_json(self.approval_path(program_id, request_id))
+            try:
+                ChangeRequestService.validate_reset_authorization(
+                    request,
+                    approval,
+                    ResetAuthorization(program_id, request_id, RESET_ACTION, RESET_CHANGE_TYPE, request.get("target") or {}, request.get("source") or {}),
+                )
+            except ValueError as exc:
+                raise UnifiedReleaseProgramContinuityAcceptanceChangeStateError(str(exc)) from exc
             if not _integrity_ok(approval) or approval.get("status") != "approved":
                 raise UnifiedReleaseProgramContinuityAcceptanceChangeStateError("Continuity Acceptance Change Request approval integrity failed.")
             if RESET_ACTION not in set(approval.get("approved_actions") or []):
@@ -511,10 +521,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
         return [read_json(path) for path in sorted(base.glob("*/reset-proof.json"))]
 
     def read_lifecycle_events(self, program_id: str) -> list[dict[str, Any]]:
-        path = self.lifecycle_event_log_path(program_id)
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return HistoryChain(self.lifecycle_event_log_path(program_id), sanitizer=sanitize_metadata).read()
 
     def _current_acceptance_state(self, program_id: str) -> dict[str, Any]:
         latest = self.acceptance_store.latest_signoff_state(program_id)
@@ -625,17 +632,17 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
         return binding
 
     def _write_generation(self, program_id: str, generation: int, status: str, proof: dict[str, Any] | None = None) -> dict[str, Any]:
-        doc = _with_integrity(
-            {
-                "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
-                "package_type": "musicforge_unified_release_program_continuity_acceptance_generation",
-                "program_id": program_id,
-                "generation": generation,
-                "status": status,
-                "updated_at": now_iso(),
-                "reset_proof_hash": (proof or {}).get("integrity_hash"),
-                "previous_generation": (proof or {}).get("previous_generation"),
-            }
+        doc = GenerationService.build_document(
+            GenerationRef(
+                program_id,
+                generation,
+                status,
+                previous_generation=(proof or {}).get("previous_generation"),
+                reset_proof_hash=(proof or {}).get("integrity_hash"),
+            ),
+            package_type="musicforge_unified_release_program_continuity_acceptance_generation",
+            schema_version=UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
+            extra={"program_id": program_id, "updated_at": now_iso()},
         )
         write_json(self.current_generation_path(program_id), doc)
         return doc
@@ -779,15 +786,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
         return summaries
 
     def _append_lifecycle_event(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        rows = self.read_lifecycle_events(program_id)
-        previous = str(rows[-1].get("event_hash") or "") if rows else ""
-        event = sanitize_metadata({**payload, "previous_event_hash": previous})
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        self.lifecycle_event_log_path(program_id).parent.mkdir(parents=True, exist_ok=True)
-        with self.lifecycle_event_log_path(program_id).open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
+        return HistoryChain(self.lifecycle_event_log_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _next_request_id(self, program_id: str) -> str:
         self.requests_dir(program_id).mkdir(parents=True, exist_ok=True)

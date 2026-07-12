@@ -1,5 +1,24 @@
 # Changelog
 
+## v12.16.0 - 2026-07-13
+
+### Added
+- A shared Evidence and Lifecycle Kernel with `HistoryChain`, `SignoffService`, `ChangeRequestService`, `ResetService`, `GenerationService`, immutable snapshot guards, archive construction, and stable external evidence manifests.
+- Explicit, non-mutating history migration copies with source/target fingerprints, schema versions, row counts, and rollback paths.
+- Lifecycle attack tests for missing and reordered history, externally detected full resign, wrong CR action/target/source, re-signed approval, CR reuse, generation mixing, export mutation, and ZIP trailing data.
+- release-check `v1216.lifecycle_kernel_smoke`, included in v12, latest, and GA profiles.
+
+### Changed
+- Migrated active v12 Program, Operations, Handoff, Vault, Vault Operations, Continuity, Acceptance, Command Center Signoff, Receiver Acceptance, and both Change Control chains to shared history primitives without changing public evidence layouts.
+- Centralized reset authorization and generation document construction while retaining each domain's runtime current-source and external-evidence checks.
+- Kept legacy signed evidence read-only; migration is explicit and creates a rollback copy rather than rewriting historical JSONL.
+
+### Verified
+- `python -m pytest tests\test_lifecycle_kernel.py tests\test_release_check.py::test_v1216_lifecycle_kernel_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- Program, Operations, Handoff, Vault Operations, Continuity, Signoff, Acceptance, reset, and successor-generation regression suites.
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json`
+
 ## v12.15.0 - 2026-07-13
 
 ### Added
