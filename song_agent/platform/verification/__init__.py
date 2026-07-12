@@ -1,0 +1,34 @@
+"""Shared verification primitives for MusicForge evidence packages."""
+
+from song_agent.platform.verification.engine import verify_package_envelope
+from song_agent.platform.verification.hashing import (
+    integrity_hash,
+    integrity_ok,
+    sha256_bytes,
+    sha256_file,
+    sha256_or_integrity,
+    stable_hash,
+)
+from song_agent.platform.verification.model import build_check, build_verification_report
+from song_agent.platform.verification.zip_security import (
+    is_safe_zip_entry,
+    raw_central_directory_entry_names,
+    raw_unsafe_entry_names,
+    zip_has_no_trailing_data,
+)
+
+__all__ = [
+    "build_check",
+    "build_verification_report",
+    "integrity_hash",
+    "integrity_ok",
+    "is_safe_zip_entry",
+    "raw_central_directory_entry_names",
+    "raw_unsafe_entry_names",
+    "sha256_bytes",
+    "sha256_file",
+    "sha256_or_integrity",
+    "stable_hash",
+    "verify_package_envelope",
+    "zip_has_no_trailing_data",
+]

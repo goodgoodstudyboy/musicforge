@@ -6,6 +6,23 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from song_agent.platform.contracts.packages import PackageSpec
+from song_agent.platform.verification.engine import verify_package_envelope
+from song_agent.platform.verification.hashing import (
+    integrity_hash as _integrity_hash,
+    integrity_ok as _integrity_ok,
+    sha256_bytes as _sha256_bytes,
+    sha256_file as _sha256_path,
+    sha256_or_integrity as _sha256_or_integrity,
+)
+from song_agent.platform.verification.model import build_check as _check, build_verification_report
+from song_agent.platform.verification.redaction import archive_redaction_check
+from song_agent.platform.verification.zip_security import (
+    is_safe_zip_entry as _is_safe_entry,
+    raw_unsafe_entry_names as _raw_unsafe_entry_names,
+    zip_has_no_trailing_data as _zip_has_no_trailing_data,
+)
+
 from song_agent.projectio import read_json, write_json
 from song_agent.redaction import sanitize_sensitive_text
 from song_agent.releases import stable_hash
@@ -38,18 +55,6 @@ BASE_REQUIRED_ENTRIES = {
 SIGNED_ENTRIES = {"program-signoff.json", "program-signoff-binding-summary.json"}
 REQUIRED_ENTRIES = BASE_REQUIRED_ENTRIES | SIGNED_ENTRIES
 
-SENSITIVE_PATTERNS = [
-    re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{8,}"),
-    re.compile(rb"github_pat_[A-Za-z0-9_]{20,}"),
-    re.compile(rb"ghp_[A-Za-z0-9_]{20,}"),
-    re.compile(rb"bearer\s+[A-Za-z0-9._-]{12,}", re.IGNORECASE),
-    re.compile(rb"api[_-]?key\s*[:=]\s*[^,\s\"']+", re.IGNORECASE),
-    re.compile(rb"[A-Za-z]:\\Users\\[^\\\r\n]+", re.IGNORECASE),
-    re.compile(rb"\\\\[^\\\r\n]+\\[^\\\r\n]+"),
-    re.compile(rb"\.musicforge[\\/]", re.IGNORECASE),
-]
-
-
 def verify_unified_release_program_package(
     zip_path: Path | str,
     *,
@@ -65,6 +70,27 @@ def verify_unified_release_program_package(
     zip_path = Path(zip_path)
     checks: list[dict[str, Any]] = []
     summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks.extend(
+        verify_package_envelope(
+            zip_path,
+            PackageSpec(
+                package_type=UNIFIED_RELEASE_PROGRAM_PACKAGE_TYPE,
+                verification_package_type=UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE,
+                check_prefix="urp_kernel",
+                required_entries=frozenset(BASE_REQUIRED_ENTRIES),
+                optional_entries=frozenset(SIGNED_ENTRIES),
+                allowed_entry_patterns=(),
+                nested_zip_policy="deny",
+                allowed_nested_entries=frozenset(),
+                allowed_nested_patterns=(),
+                manifest_entry="manifest.json",
+                max_zip_size_mb=max_zip_size_mb,
+                max_uncompressed_size_mb=max_uncompressed_size_mb,
+                max_entry_count=max_entry_count,
+            ),
+            strict=strict,
+        ).get("checks", [])
+    )
     if not zip_path.exists():
         return _finish(checks, summary, _check("urp_zip_exists", False, "Unified Release Program ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -455,28 +481,12 @@ def _file_index_checks(file_index: dict[str, Any], expected_files: set[str]) -> 
 def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: dict[str, Any] | None = None) -> dict[str, Any]:
     if first_check is not None:
         checks.insert(0, first_check)
-    failed = [check for check in checks if check.get("status") == "failed"]
-    status = "failed" if failed else "passed"
-    report = {
-        "schema_version": UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION,
-        "package_type": UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE,
-        "status": status,
-        "zip_sha256": summary.get("zip_sha256"),
-        "zip_size_bytes": summary.get("zip_size_bytes"),
-        "manifest_hash": summary.get("manifest_hash"),
-        "summary": summary,
-        "checks": checks,
-        "blockers": [check["check_id"] for check in failed],
-    }
-    report["integrity_hash"] = _integrity_hash(report)
-    return report
-
-
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
-    row = {"check_id": check_id, "status": "passed" if passed else "failed", "message": message}
-    if details:
-        row["details"] = details
-    return row
+    return build_verification_report(
+        package_type=UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE,
+        checks=checks,
+        summary=summary,
+        schema_version=UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION,
+    )
 
 
 def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
@@ -491,40 +501,6 @@ def _parse_jsonl(text: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
-    return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
-
-
-def _integrity_ok(doc: dict[str, Any]) -> bool:
-    return bool(doc.get("integrity_hash")) and doc.get("integrity_hash") == _integrity_hash(doc)
-
-
-def _sha256_path(path: Path) -> str:
-    import hashlib
-
-    h = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _sha256_bytes(data: bytes) -> str:
-    import hashlib
-
-    return hashlib.sha256(data).hexdigest()
-
-
-def _sha256_or_integrity(path: Path) -> str:
-    try:
-        doc = read_json(path)
-        if isinstance(doc, dict) and doc.get("integrity_hash"):
-            return str(doc.get("integrity_hash"))
-    except Exception:
-        pass
-    return _sha256_path(path)
-
-
 def _verification_zip_sha256(report: dict[str, Any]) -> str | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return report.get("zip_sha256") or summary.get("zip_sha256")
@@ -535,27 +511,8 @@ def _verification_manifest_hash(report: dict[str, Any]) -> str | None:
     return report.get("manifest_hash") or summary.get("manifest_hash")
 
 
-def _is_safe_entry(name: str) -> bool:
-    if "\\" in name or name.startswith("/") or name.startswith("../") or "/../" in name or name.endswith("/.."):
-        return False
-    lowered = name.lower()
-    if lowered.startswith(".musicforge/") or "/.musicforge/" in lowered:
-        return False
-    return bool(name) and not Path(name).is_absolute()
-
-
 def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
-    offenders = []
-    for name in names:
-        lowered = name.lower()
-        if not lowered.endswith((".json", ".txt", ".md", ".html", ".jsonl")):
-            continue
-        data = archive.read(name)
-        for pattern in SENSITIVE_PATTERNS:
-            if pattern.search(data):
-                offenders.append(name)
-                break
-    return _check("urp_redaction_scan", not offenders, "Program package contains no obvious secrets or local paths.", {"offenders": sorted(set(offenders))})
+    return archive_redaction_check(archive, names, check_id="urp_redaction_scan")
 
 
 def _item_key(row: dict[str, Any]) -> str:

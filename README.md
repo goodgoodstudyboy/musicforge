@@ -2490,7 +2490,7 @@ path, stem count, completed stem-audio count, and stem error fields.
 
 ```text
 song_agent/
-  platform/       Shared contracts and upcoming verification/lifecycle kernels
+  platform/       Shared contracts and verification kernel
   application/    Cross-domain services and application models
   agent/          Fixed and multinode songwriting workflows
   providers/      LLM provider adapters
@@ -2514,6 +2514,9 @@ examples/
 
 `architecture-baseline.json` assigns every production module to platform,
 application, one of six domains, an interface, release engineering, or a
-compatibility facade. The v12.14 architecture guardrail prevents new import
+compatibility facade. The architecture guardrail prevents new import
 violations, cycles, mega-file growth, and duplicate ZIP-security helpers while
-the modular-monolith migration proceeds.
+the modular-monolith migration proceeds. Since v12.15, active v12 Program and
+Continuity package verifiers share one `PackageSpec`-driven security envelope;
+their existing commands retain domain-specific semantic and external-evidence
+checks.

@@ -132,9 +132,10 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
         "v1212.receiver_acceptance_change_control_external_binding",
         "v1212.receiver_acceptance_change_control_signed_mutation",
         "v1212.receiver_acceptance_change_control_thin_integration",
-        "v1213.release_check_acceleration_smoke",
-        "v1214.architecture_guardrails_smoke",
-    ]
+            "v1213.release_check_acceleration_smoke",
+            "v1214.architecture_guardrails_smoke",
+            "v1215.verification_kernel_smoke",
+        ]
 
 
 def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:

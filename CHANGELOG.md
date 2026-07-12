@@ -1,5 +1,24 @@
 # Changelog
 
+## v12.15.0 - 2026-07-13
+
+### Added
+- A platform Verification Kernel with shared package contracts, deterministic verification reports, hashing, ZIP central-directory and trailing-data checks, fixed layout and manifest validation, redaction scanning, history-chain validation, and external evidence identity matching.
+- `EvidenceRef` and `PackageSpec` contracts for stable component identities and explicit required, optional, dynamic, and nested package layouts.
+- A differential kernel attack matrix covering missing and extra entries, duplicates, dangerous paths, raw backslashes, `.MusicForge`, nested ZIPs, trailing data, manifest spoofing, redaction, and wrong package types.
+- release-check `v1215.verification_kernel_smoke`, included in v12, latest, and GA profiles.
+
+### Changed
+- Migrated all 13 active v12 Program/Continuity verifier modules and their 18 public package verification entry points to the shared Verification Kernel while retaining domain semantic checks and public CLI/API compatibility.
+- Unified verification report generation and removed duplicated hashing, ZIP path safety, trailing-data, redaction, and report-envelope helpers from migrated verifiers.
+- Moved architecture and Verification Kernel smoke implementations out of the `release_checks.py` mega-file and lowered the duplicate security-helper architecture ratchet.
+
+### Verified
+- `python -m pytest tests\test_verification_kernel.py tests\test_release_check.py::test_v1215_verification_kernel_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- Active Program, Operations, Handoff, Vault, Continuity, Acceptance, Command Center, Signoff, Receiver Acceptance, and Change Control verifier regression suites.
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json`
+
 ## v12.14.0 - 2026-07-12
 
 ### Added

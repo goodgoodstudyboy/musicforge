@@ -137,9 +137,10 @@ def test_release_check_profile_and_filters() -> None:
         "v1212.receiver_acceptance_change_control_external_binding",
         "v1212.receiver_acceptance_change_control_signed_mutation",
         "v1212.receiver_acceptance_change_control_thin_integration",
-        "v1213.release_check_acceleration_smoke",
-        "v1214.architecture_guardrails_smoke",
-    ]
+            "v1213.release_check_acceleration_smoke",
+            "v1214.architecture_guardrails_smoke",
+            "v1215.verification_kernel_smoke",
+        ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
         "v76.attestation_portal_review_response_smoke",

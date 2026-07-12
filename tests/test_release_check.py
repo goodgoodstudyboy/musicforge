@@ -119,6 +119,7 @@ from song_agent.release_checks import (
     _v1212_receiver_acceptance_change_control_zip_security,
     _v1213_release_check_acceleration_smoke,
     _v1214_architecture_guardrails_smoke,
+    _v1215_verification_kernel_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1668,6 +1669,16 @@ def test_v1214_architecture_guardrails_smoke(tmp_path: Path, monkeypatch) -> Non
     assert "blocker_count=0" in detail
     assert "job_state_compatibility=True" in detail
     assert "generation_compatibility=True" in detail
+
+
+def test_v1215_verification_kernel_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1215_verification_kernel_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "happy=passed" in detail
+    assert "manifest_spoof=failed" in detail
+    assert "raw_backslash=failed" in detail
+    assert "active_verifiers_migrated=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

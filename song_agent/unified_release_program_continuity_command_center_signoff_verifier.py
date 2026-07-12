@@ -7,6 +7,23 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from song_agent.platform.contracts.packages import PackageSpec
+from song_agent.platform.verification.engine import verify_package_envelope
+from song_agent.platform.verification.hashing import (
+    integrity_hash as _integrity_hash,
+    integrity_ok as _integrity_ok,
+    sha256_bytes as _sha256_bytes,
+    sha256_file as _sha256_path,
+    sha256_or_integrity as _sha256_or_integrity,
+)
+from song_agent.platform.verification.model import build_check as _check, build_verification_report
+from song_agent.platform.verification.redaction import archive_redaction_check
+from song_agent.platform.verification.zip_security import (
+    is_safe_zip_entry as _is_safe_entry,
+    raw_unsafe_entry_names as _raw_unsafe_entry_names,
+    zip_has_no_trailing_data as _zip_has_no_trailing_data,
+)
+
 from song_agent.projectio import read_json, write_json
 from song_agent.redaction import sanitize_sensitive_text
 from song_agent.releases import stable_hash
@@ -53,18 +70,6 @@ HANDOFF_REQUIRED_ENTRIES = {
     "signoff-binding-summary.json",
 }
 
-SENSITIVE_PATTERNS = [
-    re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{8,}"),
-    re.compile(rb"github_pat_[A-Za-z0-9_]{20,}"),
-    re.compile(rb"ghp_[A-Za-z0-9_]{20,}"),
-    re.compile(rb"bearer\s+[A-Za-z0-9._-]{12,}", re.IGNORECASE),
-    re.compile(rb"api[_-]?key\s*[:=]\s*[^,\s\"']+", re.IGNORECASE),
-    re.compile(rb"[A-Za-z]:\\Users\\[^\\\r\n]+", re.IGNORECASE),
-    re.compile(rb"\\\\[^\\\r\n]+\\[^\\\r\n]+"),
-    re.compile(rb"\.musicforge[\\/]", re.IGNORECASE),
-]
-
-
 def verify_unified_release_program_continuity_command_center_signoff_package(
     zip_path: Path | str,
     *,
@@ -78,7 +83,6 @@ def verify_unified_release_program_continuity_command_center_signoff_package(
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
 ) -> dict[str, Any]:
-    del strict
     zip_path = Path(zip_path)
     checks: list[dict[str, Any]] = []
     summary: dict[str, Any] = {
@@ -86,6 +90,23 @@ def verify_unified_release_program_continuity_command_center_signoff_package(
         "zip_size_bytes": 0,
         "manifest_hash": None,
     }
+    checks.extend(
+        verify_package_envelope(
+            zip_path,
+            PackageSpec(
+                package_type=COMMAND_CENTER_SIGNOFF_ARCHIVE_PACKAGE_TYPE,
+                verification_package_type=COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
+                check_prefix="urpcccs_kernel",
+                required_entries=frozenset(ARCHIVE_REQUIRED_ENTRIES),
+                optional_entries=frozenset(),
+                manifest_entry="manifest.json",
+                max_zip_size_mb=max_zip_size_mb,
+                max_uncompressed_size_mb=max_uncompressed_size_mb,
+                max_entry_count=max_entry_count,
+            ),
+            strict=strict,
+        ).get("checks", [])
+    )
     if not zip_path.is_file():
         return _finish_archive(checks, summary, _check("urpcccs_zip_exists", False, "Signoff Archive ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -212,10 +233,23 @@ def verify_unified_release_program_continuity_command_center_final_handoff_packa
     command_center_verification_report_path: Path | str | None = None,
     command_center_external_evidence_manifest_path: Path | str | None = None,
 ) -> dict[str, Any]:
-    del strict
     zip_path = Path(zip_path)
     checks: list[dict[str, Any]] = []
     summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks.extend(
+        verify_package_envelope(
+            zip_path,
+            PackageSpec(
+                package_type=COMMAND_CENTER_FINAL_HANDOFF_PACKAGE_TYPE,
+                verification_package_type=COMMAND_CENTER_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE,
+                check_prefix="urpccfh_kernel",
+                required_entries=frozenset(HANDOFF_REQUIRED_ENTRIES),
+                optional_entries=frozenset(),
+                manifest_entry="manifest.json",
+            ),
+            strict=strict,
+        ).get("checks", [])
+    )
     if not zip_path.is_file():
         return _finish_handoff(checks, summary, _check("urpccch_zip_exists", False, "Final Handoff ZIP exists."))
     summary.update({"zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size})
@@ -537,12 +571,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], require
 
 
 def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> dict[str, Any]:
-    findings: list[str] = []
-    for name in names:
-        data = archive.read(name)
-        if any(pattern.search(data) for pattern in SENSITIVE_PATTERNS):
-            findings.append(name)
-    return _check(check_id, not findings, "Package contains no obvious secrets or local paths.", {"findings": sorted(set(findings))})
+    return archive_redaction_check(archive, names, check_id=check_id)
 
 
 def _finish_archive(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
@@ -555,25 +584,12 @@ def _finish_handoff(checks: list[dict[str, Any]], summary: dict[str, Any], *extr
 
 def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], package_type: str, *extra: dict[str, Any]) -> dict[str, Any]:
     checks.extend(extra)
-    blockers = [row["check_id"] for row in checks if row.get("status") == "failed"]
-    report = {
-        "schema_version": COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION,
-        "package_type": package_type,
-        "status": "failed" if blockers else "passed",
-        "zip_sha256": summary.get("zip_sha256"),
-        "zip_size_bytes": summary.get("zip_size_bytes"),
-        "manifest_hash": summary.get("manifest_hash"),
-        "summary": summary,
-        "checks": checks,
-        "blockers": blockers,
-        "warnings": [],
-    }
-    report["integrity_hash"] = _integrity_hash(report)
-    return report
-
-
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"check_id": check_id, "status": "passed" if passed else "failed", "severity": "blocking", "message": message, "details": details or {}}
+    return build_verification_report(
+        package_type=package_type,
+        checks=checks,
+        summary=summary,
+        schema_version=COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION,
+    )
 
 
 def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
@@ -582,63 +598,6 @@ def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
 
 def _parse_jsonl(value: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in value.splitlines() if line.strip()]
-
-
-def _integrity_hash(doc: dict[str, Any]) -> str:
-    return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
-
-
-def _integrity_ok(doc: dict[str, Any]) -> bool:
-    return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
-
-
-def _sha256_path(path: Path | str | None) -> str | None:
-    if not path or not Path(path).is_file():
-        return None
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _is_safe_entry(name: str) -> bool:
-    if not name or "\\" in name:
-        return False
-    path = Path(name)
-    lowered = name.lower()
-    return not path.is_absolute() and ".." not in path.parts and not lowered.startswith(".musicforge/") and "/.musicforge/" not in lowered
-
-
-def _raw_unsafe_entry_names(zip_path: Path) -> list[str]:
-    data = zip_path.read_bytes()
-    unsafe: list[str] = []
-    offset = 0
-    while True:
-        offset = data.find(b"PK\x01\x02", offset)
-        if offset < 0 or offset + 46 > len(data):
-            break
-        name_len = int.from_bytes(data[offset + 28 : offset + 30], "little")
-        extra_len = int.from_bytes(data[offset + 30 : offset + 32], "little")
-        comment_len = int.from_bytes(data[offset + 32 : offset + 34], "little")
-        raw_name = data[offset + 46 : offset + 46 + name_len]
-        if b"\\" in raw_name:
-            unsafe.append(raw_name.decode("utf-8", errors="replace"))
-        offset += 46 + name_len + extra_len + comment_len
-    return unsafe
-
-
-def _zip_has_no_trailing_data(zip_path: Path) -> bool:
-    data = zip_path.read_bytes()
-    offset = data.rfind(b"PK\x05\x06", max(0, len(data) - (65535 + 22)))
-    if offset < 0 or offset + 22 > len(data):
-        return False
-    comment_len = int.from_bytes(data[offset + 20 : offset + 22], "little")
-    return offset + 22 + comment_len == len(data)
 
 
 def _safe_check_key(value: str) -> str:

@@ -165,7 +165,7 @@
       "song_agent.trust_operations_incident_knowledge_verifier"
     ]
   ],
-  "baseline_version": "12.14.0",
+  "baseline_version": "12.15.0",
   "dependency_exceptions": [
     {
       "imported": "song_agent.release_check_runner",
@@ -175,11 +175,11 @@
   ],
   "mega_file_max_lines": {
     "song_agent/cli.py": 14484,
-    "song_agent/release_checks.py": 26223,
+    "song_agent/release_checks.py": 26200,
     "song_agent/server.py": 23753,
     "song_agent/webui.py": 12660
   },
-  "module_count": 289,
+  "module_count": 303,
   "modules": [
     {
       "context": null,
@@ -710,6 +710,78 @@
       "path": "song_agent/platform/contracts/errors.py"
     },
     {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.contracts.evidence",
+      "path": "song_agent/platform/contracts/evidence.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.contracts.packages",
+      "path": "song_agent/platform/contracts/packages.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification",
+      "path": "song_agent/platform/verification/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.engine",
+      "path": "song_agent/platform/verification/engine.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.external_bindings",
+      "path": "song_agent/platform/verification/external_bindings.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.hashing",
+      "path": "song_agent/platform/verification/hashing.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.history",
+      "path": "song_agent/platform/verification/history.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.manifest",
+      "path": "song_agent/platform/verification/manifest.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.model",
+      "path": "song_agent/platform/verification/model.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.redaction",
+      "path": "song_agent/platform/verification/redaction.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.sanitization",
+      "path": "song_agent/platform/verification/sanitization.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.verification.zip_security",
+      "path": "song_agent/platform/verification/zip_security.py"
+    },
+    {
       "context": "studio",
       "layer": "domain",
       "module": "song_agent.project_compare",
@@ -1036,6 +1108,12 @@
     {
       "context": null,
       "layer": "release_check",
+      "module": "song_agent.release_check_architecture",
+      "path": "song_agent/release_check_architecture.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
       "module": "song_agent.release_check_fixtures",
       "path": "song_agent/release_check_fixtures.py"
     },
@@ -1056,6 +1134,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check_runner",
       "path": "song_agent/release_check_runner.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_verification_kernel",
+      "path": "song_agent/release_check_verification_kernel.py"
     },
     {
       "context": null,
@@ -1919,7 +2003,7 @@
   "notes": {
     "allowed_cycles": "Legacy domain cycles recorded at v12.14; they may be removed but no new cycle may be added.",
     "mega_files": "Tracked files may stay equal or shrink; growth is a release blocker.",
-    "security_helpers": "Duplicate helper counts may stay equal or shrink until v12.15 centralizes ZIP verification."
+    "security_helpers": "v12.15 active Program/Continuity verifiers use platform.verification; remaining legacy helper counts may only decrease."
   },
   "required_absent_dependencies": [
     {
@@ -1933,8 +2017,8 @@
   ],
   "schema_version": 1,
   "security_helper_max_counts": {
-    "_is_safe_zip_entry": 36,
     "_raw_zip_entry_names": 43,
-    "_zip_has_no_trailing_data": 9
+    "_is_safe_zip_entry": 36,
+    "_zip_has_no_trailing_data": 0
   }
 }
