@@ -118,6 +118,7 @@ from song_agent.release_checks import (
     _v1212_receiver_acceptance_change_control_thin_integration,
     _v1212_receiver_acceptance_change_control_zip_security,
     _v1213_release_check_acceleration_smoke,
+    _v1214_architecture_guardrails_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1656,6 +1657,17 @@ def test_v1213_release_check_acceleration_smoke(tmp_path: Path) -> None:
     assert "fixture_cache=hit" in detail
     assert "split_checks=present" in detail
     assert "budget_summary=present" in detail
+
+
+def test_v1214_architecture_guardrails_smoke(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])
+    ok, detail = _v1214_architecture_guardrails_smoke(Path.cwd())
+
+    assert ok is True, detail
+    assert "boundaries=passed" in detail
+    assert "blocker_count=0" in detail
+    assert "job_state_compatibility=True" in detail
+    assert "generation_compatibility=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

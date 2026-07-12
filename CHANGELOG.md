@@ -1,5 +1,23 @@
 # Changelog
 
+## v12.14.0 - 2026-07-12
+
+### Added
+- A checked-in modular-monolith architecture baseline with explicit ownership for every Python module, import-cycle inventory, dependency exceptions, mega-file line budgets, and duplicate ZIP-security helper budgets.
+- AST-based architecture guardrails that reject new boundary violations, unclassified modules, ownership drift, import cycles, forbidden interface dependencies, mega-file growth, and security-helper duplication.
+- Platform contracts plus application-layer homes for job state, generation orchestration, and Release Audio Campaign coverage, while preserving the existing CLI and HTTP compatibility imports.
+- Current/target architecture documentation, dependency rules, debt ownership, and ADRs for the modular monolith, verification kernel, and persistence authority.
+- release-check `v1214.architecture_guardrails_smoke`, included in the v12, latest, and GA profiles with machine-readable architecture metrics.
+
+### Changed
+- Removed the production `server -> cli` dependency, the `mix_render -> server` dependency, and private Release-check imports from the HTTP interface.
+- Updated the repository layout documentation to make platform, application, domain, interface, and release-engineering ownership explicit.
+
+### Verified
+- `python -m pytest tests\test_architecture_boundaries.py tests\test_architecture_metrics.py tests\test_release_check.py::test_v1214_architecture_guardrails_smoke tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json`
+
 ## v12.13.0 - 2026-07-12
 
 ### Added

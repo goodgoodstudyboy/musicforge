@@ -20,7 +20,12 @@ from song_agent.format_decisions import FormatDecisionStore, format_decision_exp
 from song_agent.mastering_qa import MasteringStore
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import ProjectStore, now_iso
-from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
+from song_agent.redaction import (
+    DEFAULT_BLOCKED_METADATA_KEYS,
+    SENSITIVE_VALUE_PATTERNS,
+    sanitize_metadata,
+    sanitize_sensitive_text,
+)
 from song_agent.release_audio import read_release_audio_qa, release_audio_summary
 from song_agent.release_export import read_release_export_manifest, release_export_summary
 from song_agent.release_metadata import metadata_export_summary, read_release_metadata, read_release_metadata_qa, release_metadata_summary
@@ -957,7 +962,7 @@ def _apply_operations_signoff_stage(stage_statuses: list[dict[str, Any]], signof
 def _redaction_summary(value: Any) -> dict[str, Any]:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
-    for pattern, replacement in getattr(__import__("song_agent.redaction", fromlist=["SENSITIVE_VALUE_PATTERNS"]), "SENSITIVE_VALUE_PATTERNS"):
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
         for match in pattern.finditer(text):
             findings.append({"pattern": replacement, "excerpt": sanitize_sensitive_text(match.group(0))[:120]})
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}

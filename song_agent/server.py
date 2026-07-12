@@ -9,7 +9,7 @@ import shutil
 import threading
 import time
 import webbrowser
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import replace
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,6 +20,9 @@ from urllib.parse import parse_qs
 
 from song_agent import __version__
 from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
+from song_agent.application.audio_campaigns.release_coverage import audio_campaign_release_track_coverage
+from song_agent.application.generation.service import generate_request
+from song_agent.application.jobs.model import JobState
 from song_agent.auth import AuthConfig, validate_bearer_header
 from song_agent.audio_artifacts import (
     AUDIO_ARTIFACT_FILENAME,
@@ -50,7 +53,6 @@ from song_agent.candidate_groups import (
     candidate_midi_path,
 )
 from song_agent.candidate_scoring import score_provider_edit_candidate
-from song_agent.cli import generate_request
 from song_agent.edits import (
     EditIntent,
     EditedSongPlanResult,
@@ -1156,93 +1158,6 @@ REFERENCE_IMPORT_MAX_BODY_BYTES = int(MAX_REFERENCE_WAV_BYTES * 4 / 3) + 1_000_0
 
 class JobCancelled(Exception):
     """Raised when a job stops at a stage boundary after cancellation."""
-
-
-@dataclass
-class JobState:
-    job_id: str
-    title: str
-    output_dir: str
-    status: str
-    created_at: str
-    updated_at: str
-    step: str = "created"
-    message: str = ""
-    summary: dict[str, Any] = field(default_factory=dict)
-    error: str | None = None
-    attempt_count: int = 0
-    cancel_requested: bool = False
-    pause_requested: bool = False
-    hidden: bool = False
-    input_payload: dict[str, Any] = field(default_factory=dict)
-    provider_snapshot: dict[str, Any] = field(default_factory=dict)
-    artifacts: dict[str, str] = field(default_factory=dict)
-    deleted: bool = False
-    interrupted: bool = False
-    last_seen_at: str | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
-    heartbeat_at: str | None = None
-    retry_requested: bool = False
-    retry_count: int = 0
-    max_retries: int = 0
-    next_retry_at: str | None = None
-    last_error: str | None = None
-    stalled: bool = False
-    stall_timeout_seconds: int = 300
-    generation_mode: str = "local"
-    pipeline_mode: str = "single"
-    job_type: str = "song"
-    edit_metadata: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "JobState":
-        now = _utc_now()
-        return cls(
-            job_id=str(data["job_id"]),
-            title=str(data.get("title", data["job_id"])),
-            output_dir=str(data["output_dir"]),
-            status=str(data.get("status", "completed")),
-            created_at=str(data.get("created_at", now)),
-            updated_at=str(data.get("updated_at", now)),
-            step=str(data.get("step", "")),
-            message=str(data.get("message", "")),
-            summary=_dict_or_empty(data.get("summary")),
-            error=None if data.get("error") is None else str(data.get("error")),
-            attempt_count=int(data.get("attempt_count", 0) or 0),
-            cancel_requested=bool(data.get("cancel_requested", False)),
-            pause_requested=bool(data.get("pause_requested", False)),
-            hidden=bool(data.get("hidden", False)),
-            input_payload=_dict_or_empty(data.get("input_payload")),
-            provider_snapshot=_dict_or_empty(data.get("provider_snapshot")),
-            artifacts=_dict_or_empty(data.get("artifacts")),
-            deleted=bool(data.get("deleted", False)),
-            interrupted=bool(data.get("interrupted", False)),
-            last_seen_at=None
-            if data.get("last_seen_at") is None
-            else str(data.get("last_seen_at")),
-            started_at=None if data.get("started_at") is None else str(data.get("started_at")),
-            finished_at=None if data.get("finished_at") is None else str(data.get("finished_at")),
-            heartbeat_at=None
-            if data.get("heartbeat_at") is None
-            else str(data.get("heartbeat_at")),
-            retry_requested=bool(data.get("retry_requested", False)),
-            retry_count=int(data.get("retry_count", 0) or 0),
-            max_retries=int(data.get("max_retries", 0) or 0),
-            next_retry_at=None
-            if data.get("next_retry_at") is None
-            else str(data.get("next_retry_at")),
-            last_error=None if data.get("last_error") is None else str(data.get("last_error")),
-            stalled=bool(data.get("stalled", False)),
-            stall_timeout_seconds=int(data.get("stall_timeout_seconds", 300) or 300),
-            generation_mode=str(data.get("generation_mode", "local") or "local"),
-            pipeline_mode=str(data.get("pipeline_mode", "single") or "single"),
-            job_type=str(data.get("job_type", "song") or "song"),
-            edit_metadata=_dict_or_empty(data.get("edit_metadata")),
-        )
 
 
 class JobStore:
@@ -15313,7 +15228,7 @@ class MusicForgeHandler(BaseHTTPRequestHandler):
             case_index = read_json(self.audio_campaign_store.case_index_path(campaign_id))
         except Exception as exc:
             return {"status": "failed", "message": f"Audio Campaign case index is unavailable: {sanitize_sensitive_text(str(exc))}", "missing_tracks": []}
-        return _audio_campaign_release_track_coverage(release.tracks, case_index)
+        return audio_campaign_release_track_coverage(release.tracks, case_index)
 
     def _release_audio_campaign_final_export_current(self, release: Any) -> dict[str, Any]:
         rows = []
@@ -23777,55 +23692,6 @@ def _server_file_sha256(path: Path) -> str | None:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _release_track_audio_campaign_key(track: Any) -> str:
-    project_id = str(getattr(track, "project_id", "") or "").strip()
-    version_id = str(getattr(track, "version_id", "") or "").strip()
-    final_export_hash = str(getattr(track, "final_export_hash", "") or "").strip()
-    if not (project_id and version_id and final_export_hash):
-        return ""
-    return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
-
-
-def _audio_campaign_case_release_key(case: dict[str, Any]) -> str:
-    project_id = str(case.get("project_id") or "").strip()
-    version_id = str(case.get("version_id") or "").strip()
-    final_export_hash = str(case.get("final_export_hash") or "").strip()
-    if not (project_id and version_id and final_export_hash):
-        return ""
-    return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
-
-
-def _audio_campaign_release_track_coverage(tracks: list[Any], case_index: dict[str, Any]) -> dict[str, Any]:
-    cases = [case for case in case_index.get("cases", []) if isinstance(case, dict)]
-    case_keys = {_audio_campaign_case_release_key(case) for case in cases}
-    case_keys.discard("")
-    rows = []
-    missing = []
-    for track in sorted(tracks, key=lambda item: (getattr(item, "disc_number", 1), getattr(item, "track_number", 1), getattr(item, "track_id", ""))):
-        expected = _release_track_audio_campaign_key(track)
-        matched = bool(expected and expected in case_keys)
-        row = {
-            "track_id": getattr(track, "track_id", None),
-            "track_number": getattr(track, "track_number", None),
-            "title": getattr(track, "title", None),
-            "project_id": getattr(track, "project_id", None),
-            "version_id": getattr(track, "version_id", None),
-            "final_export_hash": getattr(track, "final_export_hash", None),
-            "identity_key": expected,
-            "matched": matched,
-        }
-        rows.append(row)
-        if not matched:
-            missing.append(row)
-    return {
-        "status": "passed" if not missing else "failed",
-        "matched_track_count": len(rows) - len(missing),
-        "track_count": len(rows),
-        "case_count": len(cases),
-        "missing_tracks": missing,
-    }
 
 
 def _safe_read_release_export_manifest(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:

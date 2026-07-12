@@ -463,7 +463,7 @@ def _run_summary(plan_path: Path, midi_path: Path) -> dict[str, Any]:
 
 
 def _job_state(job_store: Any | None, job_id: str, run_dir: Path, title: str, now: str, summary: dict[str, Any], request_payload: dict[str, Any], metadata: dict[str, Any], pipeline_mode: str) -> Any:
-    from song_agent.server import JobState
+    from song_agent.application.jobs.model import JobState
 
     artifacts = {
         "request": str(run_dir / "data" / "request.json"),

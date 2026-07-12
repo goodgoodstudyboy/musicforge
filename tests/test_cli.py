@@ -5,6 +5,26 @@ import pytest
 from song_agent.cli import main
 
 
+def test_cli_serve_forwards_compatibility_arguments(monkeypatch):
+    calls = []
+
+    def fake_serve(host, port, *, auth_config):
+        calls.append((host, port, auth_config))
+
+    monkeypatch.setattr("song_agent.server.serve", fake_serve)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["song-agent", "serve", "--host", "127.0.0.1", "--port", "8899"],
+    )
+
+    main()
+
+    assert len(calls) == 1
+    host, port, auth_config = calls[0]
+    assert (host, port) == ("127.0.0.1", 8899)
+    assert auth_config.enabled is False
+
+
 def test_cli_generates_run_artifacts(tmp_path, monkeypatch, capsys):
     request_path = tmp_path / "request.json"
     out_dir = tmp_path / "demo-run"

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from song_agent import __version__
+from song_agent.architecture_guardrails import update_architecture_release_metrics
 from song_agent.release_check_matrix import ReleaseCheckDefinition, ReleaseCheckMatrixError, definition_to_dict, select_check_definitions
 from song_agent.release_check_performance import check_budget_status, performance_summary
 
@@ -207,6 +208,14 @@ def run_release_check_matrix(
             break
     report.finished_at = _now()
     report.duration_ms = int((time.perf_counter() - start) * 1000)
+    if any(definition.check_id == "v1214.architecture_guardrails_smoke" for definition in selected):
+        update_architecture_release_metrics(
+            root / "runs" / "architecture" / "metrics.json",
+            profile=profile,
+            duration_ms=report.duration_ms,
+            status="passed" if report.ok else "failed",
+            check_count=len(report.results),
+        )
     return report
 
 

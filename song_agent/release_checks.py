@@ -15957,7 +15957,7 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
     from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, write_ga_readiness_report
     from song_agent.ga_readiness_verifier import verify_ga_readiness_report
     from song_agent.projectio import read_json
-    from song_agent.server import _audio_campaign_release_track_coverage
+    from song_agent.application.audio_campaigns.release_coverage import audio_campaign_release_track_coverage
 
     old_cwd = Path.cwd()
     try:
@@ -15998,7 +15998,7 @@ def _v105_audio_campaign_governance_smoke(root: Path) -> tuple[bool, str]:
                 gate = governance_store.gate(campaign_id)
                 case_index = read_json(campaign_store.case_index_path(campaign_id))
                 mismatch_track = type("ReleaseTrackLike", (), {"track_id": "track-001", "track_number": 1, "disc_number": 1, "title": "Unrelated Release Track", "project_id": "release-project-a", "version_id": "v001", "final_export_hash": "release-final-export-a"})()
-                mismatch_release_campaign = "409" if _audio_campaign_release_track_coverage([mismatch_track], case_index).get("status") == "failed" else "passed"
+                mismatch_release_campaign = "409" if audio_campaign_release_track_coverage([mismatch_track], case_index).get("status") == "failed" else "passed"
                 immutable_guard = False
                 try:
                     governance_store.build_archive_zip(campaign_id)
@@ -16066,7 +16066,7 @@ def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
     from song_agent.audio_fix_sprints import AudioFixSprintStore
     from song_agent.audio_lab import AudioLabStore
     from song_agent.projectio import read_json, write_json
-    from song_agent.server import _audio_campaign_release_track_coverage
+    from song_agent.application.audio_campaigns.release_coverage import audio_campaign_release_track_coverage
 
     del root
     old_cwd = Path.cwd()
@@ -16103,7 +16103,7 @@ def _v106_release_driven_audio_campaign_smoke(root: Path) -> tuple[bool, str]:
 
                 case_index = read_json(campaign_store.case_index_path(campaign_id))
                 release_track = server.release_store.get_release(release_id).tracks[0]
-                coverage = _audio_campaign_release_track_coverage([release_track], case_index)
+                coverage = audio_campaign_release_track_coverage([release_track], case_index)
                 if release_gate.get("status") == "passed" and coverage.get("status") == "passed":
                     release_gate = {
                         **release_gate,
@@ -22181,6 +22181,41 @@ def _v1213_release_check_acceleration_smoke(root: Path) -> tuple[bool, str]:
         return ok, "v12.13 release-check acceleration: " + ", ".join(f"{key}={value}" for key, value in checks.items())
     except Exception as exc:
         return False, f"v12.13 release-check acceleration failed: {exc}"
+
+
+def _v1214_architecture_guardrails_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        from song_agent.application.generation.service import generate_request as application_generate_request
+        from song_agent.application.jobs.model import JobState as ApplicationJobState
+        from song_agent.architecture_guardrails import evaluate_architecture, write_architecture_metrics
+        from song_agent.cli import generate_request as cli_generate_request
+        from song_agent.server import JobState as ServerJobState
+
+        report = evaluate_architecture(root)
+        write_architecture_metrics(report, root / "runs" / "architecture" / "metrics.json")
+        metrics = dict(report.get("metrics") or {})
+        blockers = list(report.get("blockers") or [])
+        checks = {
+            "boundaries": report.get("status"),
+            "blocker_count": len(blockers),
+            "job_state_compatibility": ServerJobState is ApplicationJobState,
+            "generation_compatibility": cli_generate_request is application_generate_request,
+            "module_count": metrics.get("module_count"),
+            "cycle_count": metrics.get("cycle_count"),
+            "mega_file_ratchet": "passed" if not any("mega_file_growth" in blocker for blocker in blockers) else "failed",
+            "security_helper_ratchet": "passed" if not any("security_helper_growth" in blocker for blocker in blockers) else "failed",
+        }
+        ok = (
+            report.get("status") == "passed"
+            and checks["blocker_count"] == 0
+            and checks["job_state_compatibility"] is True
+            and checks["generation_compatibility"] is True
+        )
+        return ok, "v12.14 architecture guardrails: " + ", ".join(
+            f"{key}={value}" for key, value in checks.items()
+        )
+    except Exception as exc:
+        return False, f"v12.14 Architecture guardrails smoke failed: {exc}"
 
 
 def _v129_unified_release_program_continuity_command_center_smoke(root: Path) -> tuple[bool, str]:

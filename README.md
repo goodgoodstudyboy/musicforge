@@ -2490,14 +2490,30 @@ path, stem count, completed stem-audio count, and stem error fields.
 
 ```text
 song_agent/
-  agent/        Fixed and multinode songwriting workflows
-  providers/    LLM provider adapters
-  renderers/    MIDI/audio render backends
-  schemas/      Song data contracts
-  prompts/      Prompt templates
+  platform/       Shared contracts and upcoming verification/lifecycle kernels
+  application/    Cross-domain services and application models
+  agent/          Fixed and multinode songwriting workflows
+  providers/      LLM provider adapters
+  renderers/      MIDI/audio render backends
+  schemas/        Legacy song data contracts
+  cli.py          CLI compatibility interface
+  server.py       HTTP API compatibility interface
+  webui.py        Studio compatibility interface
+  release_checks.py
 docs/
   ARCHITECTURE.md
+  architecture/
+    CURRENT.md
+    TARGET.md
+    DEPENDENCY_RULES.md
+    DEBT.md
   MVP_PLAN.md
 examples/
   song_request.json
 ```
+
+`architecture-baseline.json` assigns every production module to platform,
+application, one of six domains, an interface, release engineering, or a
+compatibility facade. The v12.14 architecture guardrail prevents new import
+violations, cycles, mega-file growth, and duplicate ZIP-security helpers while
+the modular-monolith migration proceeds.

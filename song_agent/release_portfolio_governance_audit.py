@@ -12,7 +12,12 @@ from typing import Any
 from song_agent import __version__
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
-from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
+from song_agent.redaction import (
+    DEFAULT_BLOCKED_METADATA_KEYS,
+    SENSITIVE_VALUE_PATTERNS,
+    sanitize_metadata,
+    sanitize_sensitive_text,
+)
 from song_agent.release_portfolio_audit import ReleasePortfolioAuditStore, portfolio_report_integrity_hash, portfolio_report_integrity_ok
 from song_agent.release_portfolio_governance import (
     ReleasePortfolioGovernanceStore,
@@ -804,7 +809,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _redaction_summary(value: Any) -> dict[str, Any]:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
-    for pattern, replacement in __import__("song_agent.redaction", fromlist=["SENSITIVE_VALUE_PATTERNS"]).SENSITIVE_VALUE_PATTERNS:
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
         for match in pattern.finditer(text):
             findings.append({"pattern": replacement, "excerpt": sanitize_sensitive_text(match.group(0))[:120]})
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}

@@ -38,6 +38,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke" in {definition.check_id for definition in definitions}
     assert "v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke" in {definition.check_id for definition in definitions}
     assert "v1213.release_check_acceleration_smoke" in {definition.check_id for definition in definitions}
+    assert "v1214.architecture_guardrails_smoke" in {definition.check_id for definition in definitions}
     assert by_id["v1212.receiver_acceptance_change_control_zip_security"].duration_budget_seconds == 90
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
@@ -137,6 +138,7 @@ def test_release_check_profile_and_filters() -> None:
         "v1212.receiver_acceptance_change_control_signed_mutation",
         "v1212.receiver_acceptance_change_control_thin_integration",
         "v1213.release_check_acceleration_smoke",
+        "v1214.architecture_guardrails_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
