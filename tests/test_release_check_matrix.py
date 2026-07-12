@@ -37,6 +37,8 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v113.unified_command_center_drift_response_smoke" in {definition.check_id for definition in definitions}
     assert "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke" in {definition.check_id for definition in definitions}
     assert "v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke" in {definition.check_id for definition in definitions}
+    assert "v1213.release_check_acceleration_smoke" in {definition.check_id for definition in definitions}
+    assert by_id["v1212.receiver_acceptance_change_control_zip_security"].duration_budget_seconds == 90
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
 
@@ -119,10 +121,22 @@ def test_release_check_profile_and_filters() -> None:
         "v126.unified_release_program_continuity_distribution_kit_smoke",
         "v127.unified_release_program_continuity_acceptance_board_smoke",
         "v128.unified_release_program_continuity_acceptance_change_control_smoke",
-        "v129.unified_release_program_continuity_command_center_smoke",
-        "v1210.unified_release_program_continuity_command_center_signoff_smoke",
-        "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke",
-        "v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke",
+        "v1213.v12_continuity_fixture_prepare",
+        "v129.command_center_runtime_inventory",
+        "v129.command_center_external_binding",
+        "v129.command_center_ga_gate",
+        "v1210.command_center_signoff_semantics",
+        "v1210.command_center_signoff_archive_verifier",
+        "v1210.command_center_signoff_reset_guard",
+        "v1211.receiver_acceptance_semantics",
+        "v1211.receiver_acceptance_zip_security",
+        "v1211.receiver_acceptance_ga_gate",
+        "v1212.receiver_acceptance_change_control_semantics",
+        "v1212.receiver_acceptance_change_control_zip_security",
+        "v1212.receiver_acceptance_change_control_external_binding",
+        "v1212.receiver_acceptance_change_control_signed_mutation",
+        "v1212.receiver_acceptance_change_control_thin_integration",
+        "v1213.release_check_acceleration_smoke",
     ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
@@ -164,6 +178,9 @@ def test_release_check_runner_json_and_timing(tmp_path: Path) -> None:
     assert payload["summary"]["total"] == 1
     assert payload["results"][0]["check_id"] == "v75.release_check_matrix_smoke"
     assert timing["results"][0]["duration_ms"] >= 0
+    assert payload["summary"]["duration_budget_status"] in {"passed", "warning"}
+    assert "slow_checks" in payload["summary"]
+    assert "checks_over_budget" in timing
 
 
 def test_release_check_runner_empty_selection_fails() -> None:

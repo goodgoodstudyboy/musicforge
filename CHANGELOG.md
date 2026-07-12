@@ -1,5 +1,20 @@
 # Changelog
 
+## v12.13.0 - 2026-07-12
+
+### Added
+- Release-check performance budgets with per-check duration limits, slow-check reporting, over-budget reporting, and profile-level budgets in JSON and timing reports.
+- A process-scoped v12 Continuity fixture cache that builds trusted evidence once, snapshots it, and restores every attack case into an isolated stable-path checkout.
+- Split v12.9-v12.12 checks for semantics, ZIP security, external evidence binding, signed mutation, GA gates, and thin integration; the original monolithic checks remain available in the `full` profile.
+- Fingerprint-keyed memoization inside fixture preparation avoids repeating deep verification for identical immutable inputs while invalidating on any ZIP, report, binding, response, or Accepted Evidence byte change.
+- `v1213.release_check_acceleration_smoke` covering cache hits, checkout isolation, split selection, `--only`, `--since`, budget summaries, and preservation of functional failures during budget warnings.
+
+### Verified
+- `python -m pytest tests\test_release_check_fixtures.py tests\test_release_check_performance.py tests\test_release_check_matrix.py tests\test_cli_release_check_matrix.py tests\test_release_check.py::test_v1213_release_check_acceleration_smoke -q`
+- `python -m song_agent.cli release-check --profile v12 --since 12.9 --skip-tests --json` (`16/16` passed in about 239 seconds on the release workstation.)
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json` (`25/25` passed in about 346 seconds.)
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json` (`80/80` passed in about 461 seconds.)
+
 ## v12.12.0 - 2026-07-11
 
 ### Added

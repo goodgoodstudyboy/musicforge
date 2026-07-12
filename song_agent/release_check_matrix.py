@@ -19,6 +19,9 @@ class ReleaseCheckDefinition:
     description: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
     profiles: tuple[str, ...] = ("full",)
+    duration_budget_seconds: float | None = None
+    budget_enforced_profiles: tuple[str, ...] = field(default_factory=tuple)
+    budget_warning_only: bool = True
 
 
 class ReleaseCheckMatrixError(ValueError):
@@ -98,6 +101,9 @@ def definition_to_dict(definition: ReleaseCheckDefinition) -> dict[str, object]:
         "description": definition.description,
         "tags": list(definition.tags),
         "profiles": list(definition.profiles),
+        "duration_budget_seconds": definition.duration_budget_seconds,
+        "budget_enforced_profiles": list(definition.budget_enforced_profiles),
+        "budget_warning_only": definition.budget_warning_only,
     }
 
 
@@ -156,6 +162,9 @@ def _callable(
     tags: tuple[str, ...] = (),
     profiles: tuple[str, ...] = ("full",),
     expected_warnings: tuple[str, ...] = (),
+    duration_budget_seconds: float | None = None,
+    budget_enforced_profiles: tuple[str, ...] = (),
+    budget_warning_only: bool = True,
 ) -> ReleaseCheckDefinition:
     return ReleaseCheckDefinition(
         check_id=check_id,
@@ -169,6 +178,9 @@ def _callable(
         expected_warnings=expected_warnings,
         tags=tags,
         profiles=profiles,
+        duration_budget_seconds=duration_budget_seconds,
+        budget_enforced_profiles=budget_enforced_profiles,
+        budget_warning_only=budget_warning_only,
     )
 
 
@@ -183,6 +195,9 @@ def _command(
     timeout_seconds: int = 60,
     tags: tuple[str, ...] = (),
     profiles: tuple[str, ...] = ("full",),
+    duration_budget_seconds: float | None = None,
+    budget_enforced_profiles: tuple[str, ...] = (),
+    budget_warning_only: bool = True,
 ) -> ReleaseCheckDefinition:
     return ReleaseCheckDefinition(
         check_id=check_id,
@@ -195,6 +210,9 @@ def _command(
         command=command,
         tags=tags,
         profiles=profiles,
+        duration_budget_seconds=duration_budget_seconds,
+        budget_enforced_profiles=budget_enforced_profiles,
+        budget_warning_only=budget_warning_only,
     )
 
 
@@ -205,6 +223,7 @@ GA_PROFILES = ("full", "quick", "latest", "ga")
 V10_PROFILES = ("full", "quick", "latest", "ga", "v10")
 V11_PROFILES = ("full", "quick", "latest", "ga", "v11")
 V12_PROFILES = ("full", "quick", "latest", "ga", "v12")
+V12_ACCELERATED_PROFILES = ("full", "latest", "ga", "v12")
 
 CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000),
@@ -346,10 +365,26 @@ CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v126.unified_release_program_continuity_distribution_kit_smoke", "v12.6 Unified Release Program Continuity Distribution Kit smoke", "_v126_unified_release_program_continuity_distribution_kit_smoke", group="command-center", version="12.6", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "continuity", "distribution-kit"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v127.unified_release_program_continuity_acceptance_board_smoke", "v12.7 Unified Release Program Continuity Acceptance Board smoke", "_v127_unified_release_program_continuity_acceptance_board_smoke", group="command-center", version="12.7", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "continuity", "acceptance-board"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
     _callable("v128.unified_release_program_continuity_acceptance_change_control_smoke", "v12.8 Unified Release Program Continuity Acceptance Change Control smoke", "_v128_unified_release_program_continuity_acceptance_change_control_smoke", group="command-center", version="12.8", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "continuity", "acceptance-change-control"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
-    _callable("v129.unified_release_program_continuity_command_center_smoke", "v12.9 Unified Release Program Continuity Command Center smoke", "_v129_unified_release_program_continuity_command_center_smoke", group="command-center", version="12.9", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "continuity", "command-center"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
-    _callable("v1210.unified_release_program_continuity_command_center_signoff_smoke", "v12.10 Unified Release Program Continuity Command Center Signoff smoke", "_v1210_unified_release_program_continuity_command_center_signoff_smoke", group="command-center", version="12.10", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "continuity", "command-center", "signoff"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
-    _callable("v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke", "v12.11 Unified Release Program Continuity Command Center Receiver Acceptance smoke", "_v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke", group="command-center", version="12.11", risk="critical", timeout_seconds=600, tags=("v12", "ga", "unified-release-program", "continuity", "command-center", "receiver-acceptance"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
-    _callable("v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke", "v12.12 Unified Release Program Continuity Command Center Receiver Acceptance Change Control smoke", "_v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke", group="command-center", version="12.12", risk="critical", timeout_seconds=900, tags=("v12", "ga", "unified-release-program", "continuity", "command-center", "receiver-acceptance", "change-control", "lifecycle"), profiles=V12_PROFILES, expected_warnings=("Duplicate name:",)),
+    _callable("v129.unified_release_program_continuity_command_center_smoke", "v12.9 Unified Release Program Continuity Command Center full smoke", "_v129_unified_release_program_continuity_command_center_smoke", group="command-center", version="12.9", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "continuity", "command-center", "full-only"), profiles=("full",), expected_warnings=("Duplicate name:",), duration_budget_seconds=120),
+    _callable("v1210.unified_release_program_continuity_command_center_signoff_smoke", "v12.10 Unified Release Program Continuity Command Center Signoff full smoke", "_v1210_unified_release_program_continuity_command_center_signoff_smoke", group="command-center", version="12.10", risk="critical", timeout_seconds=300, tags=("v12", "ga", "unified-release-program", "continuity", "command-center", "signoff", "full-only"), profiles=("full",), expected_warnings=("Duplicate name:",), duration_budget_seconds=120),
+    _callable("v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke", "v12.11 Unified Release Program Continuity Command Center Receiver Acceptance full smoke", "_v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke", group="command-center", version="12.11", risk="critical", timeout_seconds=600, tags=("v12", "ga", "unified-release-program", "continuity", "command-center", "receiver-acceptance", "full-only"), profiles=("full",), expected_warnings=("Duplicate name:",), duration_budget_seconds=120),
+    _callable("v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke", "v12.12 Receiver Acceptance Change Control full smoke", "_v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke", group="command-center", version="12.12", risk="critical", timeout_seconds=900, tags=("v12", "ga", "unified-release-program", "continuity", "command-center", "receiver-acceptance", "change-control", "lifecycle", "full-only"), profiles=("full",), expected_warnings=("Duplicate name:",), duration_budget_seconds=120),
+    _callable("v1213.v12_continuity_fixture_prepare", "v12 continuity prepared fixture", "_v1213_v12_fixture_prepare_smoke", group="command-center", version="12.13", risk="critical", timeout_seconds=600, tags=("v12", "ga", "fixture", "continuity"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=240),
+    _callable("v129.command_center_runtime_inventory", "v12.9 Command Center runtime inventory", "_v129_command_center_runtime_inventory", group="command-center", version="12.9", risk="critical", timeout_seconds=120, tags=("v12", "ga", "runtime", "continuity"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v129.command_center_external_binding", "v12.9 Command Center external binding", "_v129_command_center_external_binding", group="command-center", version="12.9", risk="critical", timeout_seconds=120, tags=("v12", "ga", "external-binding", "continuity"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v129.command_center_ga_gate", "v12.9 Command Center GA gate", "_v129_command_center_ga_gate", group="command-center", version="12.9", risk="critical", timeout_seconds=120, tags=("v12", "ga", "gate", "continuity"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1210.command_center_signoff_semantics", "v12.10 Command Center signoff semantics", "_v1210_command_center_signoff_semantics", group="command-center", version="12.10", risk="critical", timeout_seconds=120, tags=("v12", "ga", "signoff", "semantics"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1210.command_center_signoff_archive_verifier", "v12.10 Command Center signoff archive verifier", "_v1210_command_center_signoff_archive_verifier", group="command-center", version="12.10", risk="critical", timeout_seconds=120, tags=("v12", "ga", "signoff", "zip-security"), profiles=V12_ACCELERATED_PROFILES, expected_warnings=("Duplicate name:",), duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1210.command_center_signoff_reset_guard", "v12.10 Command Center signoff reset guard", "_v1210_command_center_signoff_reset_guard", group="command-center", version="12.10", risk="critical", timeout_seconds=120, tags=("v12", "ga", "signoff", "reset"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1211.receiver_acceptance_semantics", "v12.11 Receiver Acceptance semantics", "_v1211_receiver_acceptance_semantics", group="command-center", version="12.11", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "semantics"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1211.receiver_acceptance_zip_security", "v12.11 Receiver Acceptance ZIP security", "_v1211_receiver_acceptance_zip_security", group="command-center", version="12.11", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "zip-security"), profiles=V12_ACCELERATED_PROFILES, expected_warnings=("Duplicate name:",), duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1211.receiver_acceptance_ga_gate", "v12.11 Receiver Acceptance GA gate", "_v1211_receiver_acceptance_ga_gate", group="command-center", version="12.11", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "gate"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1212.receiver_acceptance_change_control_semantics", "v12.12 Receiver Acceptance Change Control semantics", "_v1212_receiver_acceptance_change_control_semantics", group="command-center", version="12.12", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "change-control", "semantics"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1212.receiver_acceptance_change_control_zip_security", "v12.12 Receiver Acceptance Change Control ZIP security", "_v1212_receiver_acceptance_change_control_zip_security", group="command-center", version="12.12", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "change-control", "zip-security"), profiles=V12_ACCELERATED_PROFILES, expected_warnings=("Duplicate name:",), duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1212.receiver_acceptance_change_control_external_binding", "v12.12 Receiver Acceptance Change Control external binding", "_v1212_receiver_acceptance_change_control_external_binding", group="command-center", version="12.12", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "change-control", "external-binding"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1212.receiver_acceptance_change_control_signed_mutation", "v12.12 Receiver Acceptance Change Control signed mutation", "_v1212_receiver_acceptance_change_control_signed_mutation", group="command-center", version="12.12", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "change-control", "signed-mutation"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1212.receiver_acceptance_change_control_thin_integration", "v12.12 Receiver Acceptance Change Control thin integration", "_v1212_receiver_acceptance_change_control_thin_integration", group="command-center", version="12.12", risk="critical", timeout_seconds=180, tags=("v12", "ga", "receiver-acceptance", "change-control", "integration"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1213.release_check_acceleration_smoke", "v12.13 Release Check acceleration smoke", "_v1213_release_check_acceleration_smoke", group="release-check", version="12.13", risk="high", timeout_seconds=60, tags=("v12", "ga", "performance", "fixture-cache"), profiles=V12_PROFILES, duration_budget_seconds=30, budget_enforced_profiles=("v12", "latest", "ga")),
 )
 
 KNOWN_PROFILES = {"full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "ga", "publish"}

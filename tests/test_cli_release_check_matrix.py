@@ -53,6 +53,8 @@ def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
     assert payload["summary"]["total"] == 1
     assert written["results"][0]["check_id"] == "v110.unified_command_center_smoke"
     assert timing["results"][0]["check_id"] == "v110.unified_command_center_smoke"
+    assert "performance" in payload
+    assert "checks_over_budget" in timing
 
 
 def test_release_check_cli_group_timing(tmp_path: Path) -> None:
@@ -115,10 +117,22 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
         "v126.unified_release_program_continuity_distribution_kit_smoke",
         "v127.unified_release_program_continuity_acceptance_board_smoke",
         "v128.unified_release_program_continuity_acceptance_change_control_smoke",
-        "v129.unified_release_program_continuity_command_center_smoke",
-        "v1210.unified_release_program_continuity_command_center_signoff_smoke",
-        "v1211.unified_release_program_continuity_command_center_receiver_acceptance_smoke",
-        "v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke",
+        "v1213.v12_continuity_fixture_prepare",
+        "v129.command_center_runtime_inventory",
+        "v129.command_center_external_binding",
+        "v129.command_center_ga_gate",
+        "v1210.command_center_signoff_semantics",
+        "v1210.command_center_signoff_archive_verifier",
+        "v1210.command_center_signoff_reset_guard",
+        "v1211.receiver_acceptance_semantics",
+        "v1211.receiver_acceptance_zip_security",
+        "v1211.receiver_acceptance_ga_gate",
+        "v1212.receiver_acceptance_change_control_semantics",
+        "v1212.receiver_acceptance_change_control_zip_security",
+        "v1212.receiver_acceptance_change_control_external_binding",
+        "v1212.receiver_acceptance_change_control_signed_mutation",
+        "v1212.receiver_acceptance_change_control_thin_integration",
+        "v1213.release_check_acceleration_smoke",
     ]
 
 

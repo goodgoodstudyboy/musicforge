@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
+from song_agent.release_check_fixtures import prepare_v12_command_center_world
 from song_agent.agent.pipeline import deterministic_compose
 from song_agent.assets import AssetStore, apply_asset_refs_to_plan, extract_assets_from_song_plan, write_asset_refs_snapshot
 from song_agent import candidate_groups as candidate_groups_module
@@ -20960,54 +20961,46 @@ def _v127_unified_release_program_continuity_acceptance_board_smoke(root: Path) 
 def _v128_unified_release_program_continuity_acceptance_change_control_smoke(root: Path) -> tuple[bool, str]:
     del root
     try:
-        from song_agent.projectio import read_json, write_json
         from song_agent.releases import stable_hash
-        from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStateError, UnifiedReleaseProgramContinuityAcceptanceChangeStore
+        from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStateError
         from song_agent.unified_release_program_continuity_acceptance_change_verifier import verify_unified_release_program_continuity_acceptance_change_package
-        from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance
         from tests.test_unified_release_program_continuity_acceptance_change import _add_declared_extra as _v128_add_declared_extra, _tamper_reset_proof as _v128_tamper_reset_proof
-
-        with tempfile.TemporaryDirectory(prefix="mf-v128-cc-") as temp:
-            base = Path(temp)
-            _program_store, _distribution, acceptance, change, program_id, zipped = _v128_prepare_signed(base)
+        with _v1213_v128_world_checkout() as checkout:
+            _program, _acceptance, change, program_id, _payload = _v1213_open_v128_world(checkout.path, checkout.metadata)
             wrong = change.create_change_request(
                 program_id,
                 {
-                    "change_request_id": "cr-wrong-action",
+                    "change_request_id": "cr-release-check-wrong-action",
                     "change_type": "reset_continuity_acceptance_signoff",
                     "allowed_actions": ["refresh_continuity_acceptance_report"],
                 },
             )
-            change.approve_change_request(program_id, wrong["change_request_id"], {"approved_by": "owner", "approved_actions": ["refresh_continuity_acceptance_report"]})
-            wrong_action_reset = False
+            change.approve_change_request(
+                program_id,
+                wrong["change_request_id"],
+                {"approved_by": "owner", "approved_actions": ["refresh_continuity_acceptance_report"]},
+            )
+            wrong_action_reset_409 = False
             try:
                 change.reset_acceptance_signoff(program_id, wrong["change_request_id"])
             except UnifiedReleaseProgramContinuityAcceptanceChangeStateError:
-                wrong_action_reset = True
+                wrong_action_reset_409 = True
 
-        with tempfile.TemporaryDirectory(prefix="mf-v128-cc-main-") as temp:
-            base = Path(temp)
-            _program_store, _distribution, acceptance, change, program_id, zipped = _v128_prepare_signed(base)
-            request = change.create_change_request(program_id)
-            change.approve_change_request(program_id, request["change_request_id"], {"approved_by": "owner"})
-            proof = change.reset_acceptance_signoff(program_id, request["change_request_id"])
-            reset_gate = change.gate(program_id, required=True)
-            acceptance.refresh_decision_board(program_id)
-            acceptance.signoff_acceptance(program_id, {"signed_by": "successor chair", "role": "program_owner"})
-            acceptance.build_archive_zip(program_id)
-            acceptance.verify_archive_zip(program_id)
-            zipped_change = change.build_archive_zip(program_id)
-            verified = change.verify_archive_zip(program_id)
-            gate = change.gate(program_id, required=True)
-
+        with _v1213_v128_world_checkout() as checkout:
+            payload = dict(checkout.metadata.get("payload") or {})
+            base = checkout.path
+            _program, acceptance, change, program_id, _payload = _v1213_open_v128_world(base, checkout.metadata)
+            archive = change.archive_zip_path(program_id)
+            reset_id = str(payload["reset_id"])
             declared_extra_zip = base / "change-declared-extra.zip"
-            _v76_rewrite_zip(Path(zipped_change["zip_path"]), declared_extra_zip, _v128_add_declared_extra)
+            _v76_rewrite_zip(archive, declared_extra_zip, _v128_add_declared_extra)
             declared_extra = verify_unified_release_program_continuity_acceptance_change_package(declared_extra_zip, strict=True)
-
             reset_resign_zip = base / "change-reset-proof-resigned.zip"
-            _v76_rewrite_zip(Path(zipped_change["zip_path"]), reset_resign_zip, lambda entries: _v128_tamper_reset_proof(entries, str(proof["reset_id"])))
+            _v76_rewrite_zip(archive, reset_resign_zip, lambda entries: _v128_tamper_reset_proof(entries, reset_id))
             reset_proof_full_resign = verify_unified_release_program_continuity_acceptance_change_package(reset_resign_zip, strict=True)
 
+        with _v1213_v128_world_checkout() as checkout:
+            _program, acceptance, change, program_id, _payload = _v1213_open_v128_world(checkout.path, checkout.metadata)
             signoff = read_json(acceptance.signoff_path(program_id))
             signoff["signed_by"] = "tampered successor"
             signoff["integrity_hash"] = stable_hash({key: value for key, value in signoff.items() if key != "integrity_hash"})
@@ -21018,46 +21011,1176 @@ def _v128_unified_release_program_continuity_acceptance_change_control_smoke(roo
             except UnifiedReleaseProgramContinuityAcceptanceChangeStateError:
                 source_tamper_409 = True
 
-        with tempfile.TemporaryDirectory(prefix="mf-v128-cc-reset-") as temp:
-            base = Path(temp)
-            _program_store, _distribution, acceptance, change, program_id, zipped = _v128_prepare_signed(base)
-            request = change.create_change_request(program_id)
-            change.approve_change_request(program_id, request["change_request_id"], {"approved_by": "owner"})
-            proof = change.reset_acceptance_signoff(program_id, request["change_request_id"])
-            acceptance.refresh_decision_board(program_id)
-            acceptance.signoff_acceptance(program_id, {"signed_by": "successor chair", "role": "program_owner"})
-            acceptance.build_archive_zip(program_id)
-            acceptance.verify_archive_zip(program_id)
-            change.build_archive_zip(program_id)
-            proof_doc = read_json(change.reset_proof_path(program_id, str(proof["reset_id"])))
+        with _v1213_v128_world_checkout() as checkout:
+            payload = dict(checkout.metadata.get("payload") or {})
+            _program, _acceptance, change, program_id, _payload = _v1213_open_v128_world(checkout.path, checkout.metadata)
+            proof_doc = read_json(change.reset_proof_path(program_id, str(payload["reset_id"])))
             proof_doc["previous_signoff_hash"] = "f" * 64
             proof_doc["previous_archive_zip_sha256"] = "e" * 64
             proof_doc["integrity_hash"] = stable_hash({key: value for key, value in proof_doc.items() if key != "integrity_hash"})
-            write_json(change.reset_proof_path(program_id, str(proof["reset_id"])), proof_doc)
-            binding_doc = read_json(change.reset_binding_path(program_id, str(proof["reset_id"])))
+            write_json(change.reset_proof_path(program_id, str(payload["reset_id"])), proof_doc)
+            binding_doc = read_json(change.reset_binding_path(program_id, str(payload["reset_id"])))
             binding_doc["reset_proof_hash"] = proof_doc["integrity_hash"]
             binding_doc["integrity_hash"] = stable_hash({key: value for key, value in binding_doc.items() if key != "integrity_hash"})
-            write_json(change.reset_binding_path(program_id, str(proof["reset_id"])), binding_doc)
+            write_json(change.reset_binding_path(program_id, str(payload["reset_id"])), binding_doc)
             signed_reset_proof_tamper_409 = False
             try:
                 change.build_archive_zip(program_id)
             except UnifiedReleaseProgramContinuityAcceptanceChangeStateError:
                 signed_reset_proof_tamper_409 = True
 
-            checks = {
-                "wrong_action_reset_409": wrong_action_reset,
-                "reset_gate_failed": reset_gate.get("status") == "failed",
-                "successor_gate_passed": gate.get("status") == "passed",
-                "archive_verified": verified.get("status") == "passed",
-                "declared_extra_failed": declared_extra.get("status") == "failed" and "urpca_cc_allowed_entries" in declared_extra.get("blockers", []),
-                "reset_proof_full_resign": reset_proof_full_resign.get("status") == "failed",
-                "source_tamper_409": source_tamper_409,
-                "signed_reset_proof_tamper_409": signed_reset_proof_tamper_409,
-            }
-            ok = all(checks.values())
-            return ok, "v12.8 continuity acceptance change control: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+        signals = dict(payload.get("signals") or {})
+        checks = {
+            "wrong_action_reset_409": wrong_action_reset_409,
+            "reset_gate_failed": signals.get("reset_gate") == "failed",
+            "successor_gate_passed": signals.get("gate") == "passed",
+            "archive_verified": signals.get("archive") == "passed",
+            "declared_extra_failed": declared_extra.get("status") == "failed" and "urpca_cc_allowed_entries" in declared_extra.get("blockers", []),
+            "reset_proof_full_resign": reset_proof_full_resign.get("status") == "failed",
+            "source_tamper_409": source_tamper_409,
+            "signed_reset_proof_tamper_409": signed_reset_proof_tamper_409,
+        }
+        ok = all(checks.values())
+        return ok, "v12.8 continuity acceptance change control: " + ", ".join(f"{key}={value}" for key, value in checks.items())
     except Exception as exc:
         return False, f"v12.8 Unified Release Program Continuity Acceptance Change Control smoke failed: {exc}"
+
+
+def _v1213_build_v128_world(base: Path) -> dict[str, Any]:
+    old_cwd = Path.cwd()
+    try:
+        os.chdir(base)
+        program_store, _distribution, acceptance, change, program_id, _zipped = _v128_prepare_signed(base)
+        request = change.create_change_request(program_id)
+        change.approve_change_request(program_id, request["change_request_id"], {"approved_by": "owner"})
+        proof = change.reset_acceptance_signoff(program_id, request["change_request_id"])
+        reset_gate = change.gate(program_id, required=True)
+        acceptance.refresh_decision_board(program_id)
+        acceptance.signoff_acceptance(program_id, {"signed_by": "successor chair", "role": "program_owner"})
+        acceptance.build_archive_zip(program_id)
+        acceptance.verify_archive_zip(program_id)
+        change.build_archive_zip(program_id)
+        verified = change.verify_archive_zip(program_id)
+        gate = change.gate(program_id, required=True)
+        return {
+            "program_id": program_id,
+            "program_root": str(program_store.root.resolve().relative_to(base.resolve())),
+            "reset_id": str(proof["reset_id"]),
+            "signals": {
+                "reset_gate": reset_gate.get("status"),
+                "gate": gate.get("status"),
+                "archive": verified.get("status"),
+            },
+        }
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v1213_v128_world_checkout():
+    return prepare_v12_command_center_world(
+        _v1213_build_v128_world,
+        variant="continuity-acceptance-change-signed",
+    )
+
+
+def _v1213_open_v128_world(base: Path, metadata: dict[str, Any]):
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStore
+    from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
+
+    payload = dict(metadata.get("payload") or {})
+    program_store = UnifiedReleaseProgramStore(root=base / str(payload["program_root"]))
+    acceptance = UnifiedReleaseProgramContinuityAcceptanceStore(program_store)
+    change = UnifiedReleaseProgramContinuityAcceptanceChangeStore(program_store)
+    return program_store, acceptance, change, str(payload["program_id"]), payload
+
+
+V1212_SPLIT_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
+    "semantics": (
+        "wrong_action_reset_409",
+        "approval_target_mismatch_409",
+        "reset",
+        "reset_gate",
+        "old_evidence_board",
+        "policy_override_409",
+        "reused_cr_409",
+        "successor_signoff",
+        "lifecycle",
+        "archive",
+        "gate",
+    ),
+    "zip_security": (
+        "declared_extra",
+        "duplicate",
+        "dangerous_path",
+        "nested_zip",
+        "redaction",
+        "musicforge",
+        "raw_backslash",
+        "trailing_bytes",
+    ),
+    "external_binding": (
+        "internal_full_resign",
+        "reset_proof_full_resign",
+        "missing_previous_root",
+        "event_order_full_resign",
+    ),
+    "signed_mutation": (
+        "signed_reset_proof_export_409",
+        "signed_reset_proof_zip_409",
+        "signed_reset_proof_gate",
+    ),
+    "integration": ("repeat_zip", "ga_gate", "ga_verify"),
+}
+
+
+def _v1213_fingerprint_paths(paths: list[Path]) -> str:
+    digest = hashlib.sha256()
+    seen: set[str] = set()
+    for source in paths:
+        path = Path(source)
+        resolved = str(path.resolve())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        digest.update(resolved.encode("utf-8"))
+        if path.is_file():
+            digest.update(b"F")
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+        elif path.is_dir():
+            digest.update(b"D")
+            for child in sorted(item for item in path.rglob("*") if item.is_file()):
+                digest.update(child.relative_to(path).as_posix().encode("utf-8"))
+                digest.update(hashlib.sha256(child.read_bytes()).digest())
+        else:
+            digest.update(b"M")
+    return digest.hexdigest()
+
+
+def _v1213_memoize_runtime_method(target: Any, method_name: str, path_provider: Any) -> dict[str, int]:
+    original = getattr(target, method_name)
+    cache: dict[tuple[str, str], Any] = {}
+    stats = {"hits": 0, "misses": 0}
+
+    def cached(*args: Any, **kwargs: Any) -> Any:
+        paths = [Path(path) for path in path_provider(*args, **kwargs)]
+        key = (repr((args, kwargs)), _v1213_fingerprint_paths(paths))
+        if key in cache:
+            stats["hits"] += 1
+            return cache[key]
+        stats["misses"] += 1
+        result = original(*args, **kwargs)
+        cache[key] = result
+        return result
+
+    setattr(target, method_name, cached)
+    return stats
+
+
+def _v1213_acceptance_runtime_cache(store: Any, program_id: str) -> dict[str, dict[str, int]]:
+    signoff = store.signoff_store
+    command = signoff.command_store
+
+    def signoff_sources(_program_id: str, *_args: Any, **_kwargs: Any) -> list[Path]:
+        return [
+            signoff.archive_zip_path(_program_id),
+            signoff.archive_verification_report_path(_program_id),
+            signoff.final_handoff_zip_path(_program_id),
+            signoff.final_handoff_verification_report_path(_program_id),
+            signoff.signoff_binding_path(_program_id),
+            command.zip_path(_program_id),
+            command.verification_report_path(_program_id),
+            command.local_evidence_manifest_path(_program_id),
+        ]
+
+    def review_sources(_program_id: str, *_args: Any, **_kwargs: Any) -> list[Path]:
+        return [store.review_pack_zip_path(_program_id), *signoff_sources(_program_id)]
+
+    def accepted_sources(_program_id: str, evidence_id: str, response_id: str, *_args: Any, **_kwargs: Any) -> list[Path]:
+        return [
+            store.accepted_evidence_zip_path(_program_id, evidence_id),
+            store.response_path(_program_id, response_id),
+            store.response_verification_path(_program_id, response_id),
+            store.response_binding_path(_program_id, response_id),
+        ]
+
+    def archive_sources(_program_id: str, *_args: Any, **_kwargs: Any) -> list[Path]:
+        return [
+            store.archive_zip_path(_program_id),
+            store.signoff_binding_path(_program_id),
+            store.review_pack_zip_path(_program_id),
+            store.review_pack_verification_report_path(_program_id),
+            store.accepted_evidence_root(_program_id),
+            store.responses_dir(_program_id),
+            *signoff_sources(_program_id),
+        ]
+
+    return {
+        "context": _v1213_memoize_runtime_method(store, "_current_v1210_context", signoff_sources),
+        "review": _v1213_memoize_runtime_method(store, "_verify_review_pack_runtime", review_sources),
+        "accepted": _v1213_memoize_runtime_method(store, "_verify_accepted_evidence_runtime", accepted_sources),
+        "archive": _v1213_memoize_runtime_method(store, "_verify_archive_runtime", archive_sources),
+    }
+
+
+def _v1213_build_complete_world(base: Path) -> dict[str, Any]:
+    from song_agent.releases import stable_hash
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_command_center import (
+        UnifiedReleaseProgramContinuityCommandCenterStore,
+    )
+    from song_agent.unified_release_program_continuity_command_center_signoff import (
+        UnifiedReleaseProgramContinuityCommandCenterSignoffStore,
+    )
+    from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+        UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore,
+        UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
+    )
+    from song_agent.unified_release_program_continuity_command_center_acceptance import (
+        UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore,
+        UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
+    )
+    from tests.test_unified_release_program_continuity_command_center_acceptance_change import (
+        _prepare_successor_evidence,
+    )
+    from tests.test_unified_release_program_continuity_command_center_acceptance import _accepted_pair
+
+    old_cwd = Path.cwd()
+    stage_started = time.perf_counter()
+    stage_timings: dict[str, int] = {}
+
+    def mark_stage(name: str) -> None:
+        nonlocal stage_started
+        now = time.perf_counter()
+        stage_timings[name] = int((now - stage_started) * 1000)
+        stage_started = now
+
+    try:
+        with _v1213_v128_world_checkout() as lower:
+            shutil.copytree(lower.path, base, dirs_exist_ok=True)
+            _v1213_relocate_world(lower.path, base)
+            lower_payload = dict(lower.metadata.get("payload") or {})
+        mark_stage("v12.8_restore")
+        os.chdir(base)
+        program_store = UnifiedReleaseProgramStore(root=base / str(lower_payload["program_root"]))
+        program_id = str(lower_payload["program_id"])
+
+        command = UnifiedReleaseProgramContinuityCommandCenterStore(program_store)
+        command_report = command.refresh_command_center(program_id)
+        if command_report.get("status") != "ready":
+            raise RuntimeError(f"Prepared Command Center is not ready: {command_report.get('blockers')}")
+        command.build_zip(program_id)
+        command_verification = command.verify_zip(program_id)
+        if command_verification.get("status") != "passed":
+            raise RuntimeError(f"Prepared Command Center verification failed: {command_verification.get('blockers')}")
+        mark_stage("v12.9_command_center")
+
+        command_signoff = UnifiedReleaseProgramContinuityCommandCenterSignoffStore(program_store)
+        command_signoff.signoff(program_id, {"signed_by": "program owner", "role": "release_owner"})
+        command_signoff.build_archive_zip(program_id)
+        command_signoff_verification = command_signoff.verify_archive_zip(program_id)
+        if command_signoff_verification.get("status") != "passed":
+            raise RuntimeError(
+                f"Prepared Command Center signoff verification failed: {command_signoff_verification.get('blockers')}"
+            )
+        command_signoff.build_final_handoff_zip(program_id)
+        handoff_verification = command_signoff.verify_final_handoff_zip(program_id)
+        if handoff_verification.get("status") != "passed":
+            raise RuntimeError(f"Prepared final handoff verification failed: {handoff_verification.get('blockers')}")
+        mark_stage("v12.10_signoff")
+
+        acceptance = UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore(program_store)
+        acceptance_cache_stats = _v1213_acceptance_runtime_cache(acceptance, program_id)
+        acceptance.create_review_pack(program_id)
+        review_verification = acceptance.verify_review_pack(program_id)
+        if review_verification.get("status") != "passed":
+            raise RuntimeError(f"Prepared receiver review verification failed: {review_verification.get('blockers')}")
+        _accepted_pair(acceptance, program_id)
+        acceptance.refresh_board(program_id)
+        acceptance.signoff(program_id, {"signed_by": "receiver chair", "role": "program_owner"})
+        acceptance.build_archive_zip(program_id)
+        acceptance_verification = acceptance.verify_archive_zip(program_id)
+        if acceptance_verification.get("status") != "passed":
+            raise RuntimeError(f"Prepared receiver acceptance verification failed: {acceptance_verification.get('blockers')}")
+        mark_stage("v12.11_acceptance")
+
+        change = UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore(program_store)
+        change_acceptance_cache_stats = _v1213_acceptance_runtime_cache(change.acceptance_store, program_id)
+        wrong_action_reset_409 = False
+        try:
+            change.create_change_request(
+                program_id,
+                {
+                    "change_request_id": "cr-release-check-wrong-action",
+                    "change_type": "reset_receiver_acceptance_signoff",
+                    "allowed_actions": ["refresh_receiver_acceptance_report"],
+                },
+            )
+        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+            wrong_action_reset_409 = True
+
+        request = change.create_change_request(program_id, {"reason": "v12.13 prepared lifecycle"})
+        approval = change.approve_change_request(program_id, request["change_request_id"], {"approved_by": "program owner"})
+        approval_path = change.approval_path(program_id, request["change_request_id"])
+        forged_approval = json.loads(json.dumps(approval))
+        forged_approval["target"]["acceptance_signoff_hash"] = "f" * 64
+        forged_approval["payload_hash"] = stable_hash(
+            {key: value for key, value in forged_approval.items() if key not in {"payload_hash", "integrity_hash"}}
+        )
+        forged_approval["integrity_hash"] = stable_hash(
+            {key: value for key, value in forged_approval.items() if key != "integrity_hash"}
+        )
+        write_json(approval_path, forged_approval)
+        approval_target_mismatch_409 = False
+        try:
+            change.reset_receiver_acceptance_signoff(program_id, request["change_request_id"])
+        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+            approval_target_mismatch_409 = True
+        write_json(approval_path, approval)
+
+        proof = change.reset_receiver_acceptance_signoff(program_id, request["change_request_id"])
+        reset_gate = change.gate(program_id, required=True)
+        reused_cr_409 = False
+        try:
+            change.reset_receiver_acceptance_signoff(program_id, request["change_request_id"])
+        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+            reused_cr_409 = True
+
+        policy_override_409 = False
+        try:
+            acceptance.refresh_board(
+                program_id,
+                {"policy": {"min_accepted_count": 1, "min_organization_count": 1, "required_roles": []}},
+            )
+        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+            policy_override_409 = True
+        old_evidence_board = acceptance.refresh_board(program_id)
+        _prepare_successor_evidence(acceptance, program_id)
+        acceptance.refresh_board(program_id)
+        successor = acceptance.signoff(program_id, {"signed_by": "successor chair", "role": "program_owner"})
+        acceptance.build_archive_zip(program_id)
+        acceptance.verify_archive_zip(program_id)
+        lifecycle = change.refresh_lifecycle_audit(program_id)
+        change.build_archive_zip(program_id)
+        verified = change.verify_archive_zip(program_id)
+        gate = change.gate(program_id, required=True)
+        mark_stage("v12.12_change_control")
+        program_root = str(program_store.root.resolve().relative_to(base.resolve()))
+        return {
+            "program_id": program_id,
+            "program_root": program_root,
+            "reset_id": str(proof["reset_id"]),
+            "stage_timings_ms": stage_timings,
+            "runtime_cache_stats": {
+                "acceptance": acceptance_cache_stats,
+                "change_acceptance": change_acceptance_cache_stats,
+            },
+            "signals": {
+                "wrong_action_reset_409": wrong_action_reset_409,
+                "approval_target_mismatch_409": approval_target_mismatch_409,
+                "reset": proof.get("status"),
+                "reset_gate": reset_gate.get("status"),
+                "old_evidence_board": old_evidence_board.get("status"),
+                "policy_override_409": policy_override_409,
+                "reused_cr_409": reused_cr_409,
+                "successor_signoff": successor.get("status"),
+                "lifecycle": lifecycle.get("status"),
+                "archive": verified.get("status"),
+                "gate": gate.get("status"),
+            },
+        }
+    finally:
+        os.chdir(old_cwd)
+
+
+def _v1213_relocate_world(source: Path, clone: Path) -> None:
+    source_windows = str(source.resolve())
+    clone_windows = str(clone.resolve())
+    source_posix = source.resolve().as_posix()
+    clone_posix = clone.resolve().as_posix()
+    from song_agent.releases import stable_hash
+
+    for path in clone.rglob("*.local.json"):
+        raw = path.read_text(encoding="utf-8")
+        relocated = raw.replace(source_windows, clone_windows).replace(source_posix, clone_posix)
+        if relocated == raw:
+            continue
+        document = json.loads(relocated)
+        if isinstance(document, dict) and "integrity_hash" in document:
+            document["integrity_hash"] = stable_hash(
+                {key: value for key, value in document.items() if key != "integrity_hash"}
+            )
+        write_json(path, document)
+
+
+def _v1213_world_checkout():
+    return prepare_v12_command_center_world(
+        _v1213_build_complete_world,
+        variant="receiver-acceptance-change-complete",
+    )
+
+
+def _v1213_open_world(base: Path, metadata: dict[str, Any]):
+    from song_agent.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.unified_release_program_continuity_command_center_acceptance import (
+        UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore,
+    )
+    from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+        UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore,
+    )
+
+    payload = dict(metadata.get("payload") or {})
+    program_store = UnifiedReleaseProgramStore(root=base / str(payload["program_root"]))
+    acceptance = UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore(program_store)
+    change = UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore(program_store)
+    program_id = str(payload["program_id"])
+    _v1213_acceptance_runtime_cache(acceptance, program_id)
+    _v1213_acceptance_runtime_cache(change.acceptance_store, program_id)
+    return program_store, acceptance, change, program_id, payload
+
+
+def _v1213_v12_fixture_prepare_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        with _v1213_world_checkout() as checkout:
+            payload = dict(checkout.metadata.get("payload") or {})
+            signals = dict(payload.get("signals") or {})
+            required = V1212_SPLIT_SIGNAL_GROUPS["semantics"]
+            ok = bool(payload.get("program_id")) and all(key in signals for key in required)
+            return ok, (
+                "v12 prepared fixture: "
+                f"fixture_cache={'hit' if checkout.cache_hit else 'miss'}, "
+                f"program_id={payload.get('program_id')}, semantic_signals={len(signals)}"
+                f", stages_ms={payload.get('stage_timings_ms')}"
+            )
+    except Exception as exc:
+        return False, f"v12 prepared fixture failed: {exc}"
+
+
+def _v1212_receiver_acceptance_change_control_semantics(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        with _v1213_world_checkout() as checkout:
+            signals = dict((checkout.metadata.get("payload") or {}).get("signals") or {})
+            checks = {key: signals.get(key) for key in V1212_SPLIT_SIGNAL_GROUPS["semantics"]}
+            expected = {
+                "wrong_action_reset_409": True,
+                "approval_target_mismatch_409": True,
+                "reset": "applied",
+                "reset_gate": "failed",
+                "old_evidence_board": "blocked",
+                "policy_override_409": True,
+                "reused_cr_409": True,
+                "successor_signoff": "signed",
+                "lifecycle": "passed",
+                "archive": "passed",
+                "gate": "passed",
+            }
+            ok = checks == expected
+            return ok, "v12.12 semantics: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.12 semantics failed: {exc}"
+
+
+def _v1212_receiver_acceptance_change_control_zip_security(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+            verify_unified_release_program_continuity_command_center_acceptance_change_package,
+        )
+        from tests.test_unified_release_program_continuity_command_center_acceptance_change import (
+            _add_declared_extra,
+            _full_resign_redaction,
+        )
+        from tests.test_unified_release_program_continuity_distribution import (
+            _replace_zip_name_bytes,
+            _write_with_extra_entry,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            base = checkout.path
+            _program, _acceptance, change, program_id, _payload = _v1213_open_world(base, checkout.metadata)
+            archive = change.archive_zip_path(program_id)
+            declared_extra_zip = base / "declared-extra.zip"
+            _v76_rewrite_zip(archive, declared_extra_zip, _add_declared_extra)
+            duplicate_zip = base / "duplicate.zip"
+            _write_with_extra_entry(archive, duplicate_zip, "README.txt", b"duplicate")
+            dangerous_zip = base / "dangerous.zip"
+            _write_with_extra_entry(archive, dangerous_zip, "../escape.json", b"{}")
+            nested_zip = base / "nested.zip"
+            _write_with_extra_entry(archive, nested_zip, "packages/extra.zip", b"PK\x05\x06" + b"\0" * 18)
+            redaction_zip = base / "redaction.zip"
+            _v76_rewrite_zip(archive, redaction_zip, _full_resign_redaction)
+            musicforge_zip = base / "musicforge.zip"
+            _write_with_extra_entry(archive, musicforge_zip, ".MusicForge/internal.json", b"{}")
+            backslash_zip = base / "backslash.zip"
+            _replace_zip_name_bytes(archive, backslash_zip, b"README.txt", b"README\\txt")
+            trailing_zip = base / "trailing.zip"
+            trailing_zip.write_bytes(archive.read_bytes() + b"tamper")
+            candidates = {
+                "declared_extra": declared_extra_zip,
+                "duplicate": duplicate_zip,
+                "dangerous_path": dangerous_zip,
+                "nested_zip": nested_zip,
+                "redaction": redaction_zip,
+                "musicforge": musicforge_zip,
+                "raw_backslash": backslash_zip,
+                "trailing_bytes": trailing_zip,
+            }
+            checks = {
+                key: verify_unified_release_program_continuity_command_center_acceptance_change_package(path, strict=True).get("status")
+                for key, path in candidates.items()
+            }
+            ok = all(value == "failed" for value in checks.values())
+            return ok, "v12.12 zip security: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.12 zip security failed: {exc}"
+
+
+def _v1212_receiver_acceptance_change_control_external_binding(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+            verify_unified_release_program_continuity_command_center_acceptance_change_package,
+        )
+        from tests.test_unified_release_program_continuity_command_center_acceptance_change import (
+            _full_resign_event_order,
+            _full_resign_previous_archive,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            base = checkout.path
+            _program, _acceptance, change, program_id, payload = _v1213_open_world(base, checkout.metadata)
+            archive = change.archive_zip_path(program_id)
+            reset_id = str(payload["reset_id"])
+            forged_zip = base / "reset-proof-full-resign.zip"
+            _v76_rewrite_zip(archive, forged_zip, lambda entries: _full_resign_previous_archive(entries, reset_id))
+            internal = verify_unified_release_program_continuity_command_center_acceptance_change_package(forged_zip, strict=True)
+            external = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+                forged_zip,
+                strict=True,
+                require_reset_proofs=True,
+                previous_acceptance_root=change.generations_dir(program_id),
+            )
+            missing = verify_unified_release_program_continuity_command_center_acceptance_change_package(
+                archive,
+                strict=True,
+                require_reset_proofs=True,
+            )
+            event_zip = base / "event-order-full-resign.zip"
+            _v76_rewrite_zip(archive, event_zip, lambda entries: _full_resign_event_order(entries, reset_id))
+            event_order = verify_unified_release_program_continuity_command_center_acceptance_change_package(event_zip, strict=True)
+            checks = {
+                "internal_full_resign": internal.get("status"),
+                "reset_proof_full_resign": external.get("status"),
+                "missing_previous_root": missing.get("status"),
+                "event_order_full_resign": event_order.get("status"),
+            }
+            ok = checks == {
+                "internal_full_resign": "passed",
+                "reset_proof_full_resign": "failed",
+                "missing_previous_root": "failed",
+                "event_order_full_resign": "failed",
+            }
+            return ok, "v12.12 external binding: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.12 external binding failed: {exc}"
+
+
+def _v1212_receiver_acceptance_change_control_signed_mutation(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.releases import stable_hash
+        from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+            UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            _program, _acceptance, change, program_id, payload = _v1213_open_world(checkout.path, checkout.metadata)
+            reset_id = str(payload["reset_id"])
+            proof_path = change.reset_proof_path(program_id, reset_id)
+            proof = read_json(proof_path)
+            proof["previous_signoff_hash"] = "f" * 64
+            proof["integrity_hash"] = stable_hash({key: value for key, value in proof.items() if key != "integrity_hash"})
+            write_json(proof_path, proof)
+            binding_path = change.reset_binding_path(program_id, reset_id)
+            binding = read_json(binding_path)
+            binding["reset_proof_hash"] = proof["integrity_hash"]
+            binding["integrity_hash"] = stable_hash({key: value for key, value in binding.items() if key != "integrity_hash"})
+            write_json(binding_path, binding)
+            export_409 = False
+            zip_409 = False
+            try:
+                change.export_archive(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+                export_409 = True
+            try:
+                change.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError:
+                zip_409 = True
+            gate = change.gate(program_id, required=True)
+            checks = {
+                "signed_reset_proof_export_409": export_409,
+                "signed_reset_proof_zip_409": zip_409,
+                "signed_reset_proof_gate": gate.get("status"),
+            }
+            ok = export_409 and zip_409 and gate.get("status") == "failed"
+            return ok, "v12.12 signed mutation: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.12 signed mutation failed: {exc}"
+
+
+def _v1212_receiver_acceptance_change_control_thin_integration(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+        from tests.test_ga_readiness import _write_repo
+        from tests.test_unified_release_program_continuity_command_center_acceptance import (
+            _ga_build_kwargs,
+            _ga_verify_kwargs,
+            _runtime_paths,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            base = checkout.path
+            _program, acceptance, change, program_id, _payload = _v1213_open_world(base, checkout.metadata)
+            repeat_zip = change.build_archive_zip(program_id)
+            paths = _runtime_paths(acceptance, program_id)
+            build_args = _ga_build_kwargs(paths)
+            build_args.update(
+                {
+                    "require_unified_release_program_continuity_command_center_acceptance_change_control": True,
+                    "unified_release_program_continuity_command_center_acceptance_change_archive_path": change.archive_zip_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_change_verification_report_path": change.verification_report_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_previous_root": change.generations_dir(program_id),
+                }
+            )
+            ga_root = base / "ga-repo"
+            _write_repo(ga_root)
+            ga_report = build_ga_readiness_report(repo_root=ga_root, allow_dirty=True, **build_args)
+            ga_path = base / "ga-v1212-thin.json"
+            write_ga_readiness_report(ga_report, ga_path)
+            verify_args = _ga_verify_kwargs(paths)
+            verify_args.update(
+                {
+                    "require_unified_release_program_continuity_command_center_acceptance_change_control": True,
+                    "unified_release_program_continuity_command_center_acceptance_change_path": change.archive_zip_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_change_verification_report_path": change.verification_report_path(program_id),
+                    "unified_release_program_continuity_command_center_acceptance_previous_root": change.generations_dir(program_id),
+                }
+            )
+            ga_runtime = verify_ga_readiness_report(ga_path, **verify_args)
+            ga_check = next(
+                (
+                    row
+                    for row in ga_report.get("checks", [])
+                    if row.get("check_id") == "ga.unified_release_program_continuity_command_center_acceptance_change_control"
+                ),
+                {},
+            )
+            checks = {
+                "repeat_zip": repeat_zip.get("status"),
+                "ga_gate": ga_check.get("status"),
+                "ga_verify": ga_runtime.get("status"),
+            }
+            ok = checks["repeat_zip"] == "passed" and checks["ga_gate"] == "passed" and checks["ga_verify"] != "failed"
+            return ok, "v12.12 thin integration: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.12 thin integration failed: {exc}"
+
+
+def _v129_command_center_runtime_inventory(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.unified_release_program_continuity_command_center_verifier import (
+            verify_unified_release_program_continuity_command_center_package,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            _program, acceptance, _change, program_id, _payload = _v1213_open_world(checkout.path, checkout.metadata)
+            command = acceptance.signoff_store.command_store
+            runtime = verify_unified_release_program_continuity_command_center_package(
+                command.zip_path(program_id),
+                strict=True,
+                deep=True,
+                require_ready=True,
+                evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            inventory = read_json(command.inventory_path(program_id))
+            rows = list(inventory.get("items") or [])
+            checks = {
+                "runtime_inventory": runtime.get("status"),
+                "component_count": len(rows),
+                "runtime_failed": sum(1 for row in rows if row.get("runtime_status") not in {None, "passed"}),
+            }
+            ok = checks["runtime_inventory"] == "passed" and checks["component_count"] > 0 and checks["runtime_failed"] == 0
+            return ok, "v12.9 runtime inventory: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.9 runtime inventory failed: {exc}"
+
+
+def _v129_command_center_external_binding(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.releases import stable_hash
+        from song_agent.unified_release_program_continuity_command_center import (
+            UnifiedReleaseProgramContinuityCommandCenterStateError,
+        )
+        from song_agent.unified_release_program_continuity_command_center_verifier import (
+            verify_unified_release_program_continuity_command_center_package,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            _program, acceptance, _change, program_id, _payload = _v1213_open_world(checkout.path, checkout.metadata)
+            command = acceptance.signoff_store.command_store
+            lower_archive = command.change_store.archive_zip_path(program_id)
+            lower_archive.write_bytes(lower_archive.read_bytes() + b"tamper")
+            refreshed = command.refresh_command_center(program_id)
+            runtime = verify_unified_release_program_continuity_command_center_package(
+                command.zip_path(program_id),
+                strict=True,
+                deep=True,
+                require_ready=True,
+                evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            gate = command.gate(program_id, required=True)
+            export_409 = False
+            zip_409 = False
+            try:
+                command.export_package(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterStateError:
+                export_409 = True
+            try:
+                command.build_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterStateError:
+                zip_409 = True
+            verification = read_json(command.change_store.verification_report_path(program_id))
+            verification["package_type"] = "musicforge_wrong_verification"
+            verification["integrity_hash"] = stable_hash(
+                {key: value for key, value in verification.items() if key != "integrity_hash"}
+            )
+            write_json(command.change_store.verification_report_path(program_id), verification)
+            wrong_type = verify_unified_release_program_continuity_command_center_package(
+                command.zip_path(program_id),
+                strict=True,
+                deep=True,
+                require_ready=True,
+                evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            checks = {
+                "runtime_tamper": runtime.get("status"),
+                "runtime_refresh": refreshed.get("status"),
+                "release_gate": 409 if gate.get("status") == "failed" and gate.get("hard_block") else 200,
+                "runtime_export_409": export_409,
+                "runtime_zip_409": zip_409,
+                "wrong_package_type": wrong_type.get("status"),
+            }
+            ok = checks == {
+                "runtime_tamper": "failed",
+                "runtime_refresh": "blocked",
+                "release_gate": 409,
+                "runtime_export_409": True,
+                "runtime_zip_409": True,
+                "wrong_package_type": "failed",
+            }
+            return ok, "v12.9 external binding: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.9 external binding failed: {exc}"
+
+
+def _v129_command_center_ga_gate(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+        from tests.test_ga_readiness import _write_repo
+
+        with _v1213_world_checkout() as checkout:
+            base = checkout.path
+            _program, acceptance, _change, program_id, _payload = _v1213_open_world(base, checkout.metadata)
+            command = acceptance.signoff_store.command_store
+            ga_root = base / "ga-repo"
+            _write_repo(ga_root)
+            report = build_ga_readiness_report(
+                repo_root=ga_root,
+                allow_dirty=True,
+                require_unified_release_program_continuity_command_center=True,
+                unified_release_program_continuity_command_center_zip_path=command.zip_path(program_id),
+                unified_release_program_continuity_command_center_verification_report_path=command.verification_report_path(program_id),
+                unified_release_program_continuity_command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            path = base / "ga-v129-thin.json"
+            write_ga_readiness_report(report, path)
+            runtime = verify_ga_readiness_report(
+                path,
+                require_unified_release_program_continuity_command_center=True,
+                unified_release_program_continuity_command_center_path=command.zip_path(program_id),
+                unified_release_program_continuity_command_center_verification_report_path=command.verification_report_path(program_id),
+                unified_release_program_continuity_command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            ga_check = next(
+                (row for row in report.get("checks", []) if row.get("check_id") == "ga.unified_release_program_continuity_command_center"),
+                {},
+            )
+            checks = {"ga_gate": ga_check.get("status"), "ga_verify": runtime.get("status")}
+            ok = checks["ga_gate"] == "passed" and checks["ga_verify"] != "failed"
+            return ok, "v12.9 GA gate: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.9 GA gate failed: {exc}"
+
+
+def _v1210_command_center_signoff_semantics(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        with _v1213_world_checkout() as checkout:
+            _program, acceptance, _change, program_id, _payload = _v1213_open_world(checkout.path, checkout.metadata)
+            store = acceptance.signoff_store
+            latest = store.latest_signoff_state(program_id)
+            gate = store.gate(program_id, required=True)
+            archive = read_json(store.archive_verification_report_path(program_id))
+            handoff = read_json(store.final_handoff_verification_report_path(program_id))
+            checks = {
+                "signoff": latest.get("status"),
+                "archive": archive.get("status"),
+                "handoff": handoff.get("status"),
+                "release_gate": gate.get("status"),
+            }
+            ok = checks == {"signoff": "signed", "archive": "passed", "handoff": "passed", "release_gate": "passed"}
+            return ok, "v12.10 signoff semantics: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.10 signoff semantics failed: {exc}"
+
+
+def _v1210_command_center_signoff_archive_verifier(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+            verify_unified_release_program_continuity_command_center_signoff_package,
+        )
+        from tests.test_unified_release_program_continuity_command_center_signoff import (
+            _add_declared_extra,
+            _full_resign_signed_by,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            base = checkout.path
+            _program, acceptance, _change, program_id, _payload = _v1213_open_world(base, checkout.metadata)
+            store = acceptance.signoff_store
+            command = store.command_store
+            archive = store.archive_zip_path(program_id)
+            missing = verify_unified_release_program_continuity_command_center_signoff_package(
+                archive,
+                strict=True,
+                require_signed=True,
+                command_center_zip_path=command.zip_path(program_id),
+                command_center_verification_report_path=command.verification_report_path(program_id),
+                command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            forged_zip = base / "signoff-full-resign.zip"
+            _v76_rewrite_zip(archive, forged_zip, _full_resign_signed_by)
+            forged = verify_unified_release_program_continuity_command_center_signoff_package(
+                forged_zip,
+                strict=True,
+                require_signed=True,
+                signoff_binding_path=store.signoff_binding_path(program_id),
+                command_center_zip_path=command.zip_path(program_id),
+                command_center_verification_report_path=command.verification_report_path(program_id),
+                command_center_external_evidence_manifest_path=command.local_evidence_manifest_path(program_id),
+            )
+            extra_zip = base / "signoff-extra.zip"
+            _v76_rewrite_zip(archive, extra_zip, _add_declared_extra)
+            extra = verify_unified_release_program_continuity_command_center_signoff_package(extra_zip, strict=True)
+            trailing_zip = base / "signoff-trailing.zip"
+            trailing_zip.write_bytes(archive.read_bytes() + b"tamper")
+            trailing = verify_unified_release_program_continuity_command_center_signoff_package(trailing_zip, strict=True)
+            checks = {
+                "missing_binding": missing.get("status"),
+                "full_resign_signed_by": forged.get("status"),
+                "declared_extra": extra.get("status"),
+                "trailing_bytes": trailing.get("status"),
+            }
+            ok = all(value == "failed" for value in checks.values())
+            return ok, "v12.10 archive verifier: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.10 archive verifier failed: {exc}"
+
+
+def _v1210_command_center_signoff_reset_guard(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.unified_release_program_continuity_command_center_signoff import (
+            UnifiedReleaseProgramContinuityCommandCenterSignoffStateError,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            _program, acceptance, _change, program_id, _payload = _v1213_open_world(checkout.path, checkout.metadata)
+            store = acceptance.signoff_store
+            history = store.history_path(program_id).read_bytes()
+            store.history_path(program_id).unlink()
+            signoff_409 = False
+            export_409 = False
+            zip_409 = False
+            try:
+                store.signoff(program_id, {"signed_by": "forged"})
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                signoff_409 = True
+            try:
+                store.export_archive(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                export_409 = True
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                zip_409 = True
+            gate = store.gate(program_id, required=True)
+            store.history_path(program_id).write_bytes(history)
+            wrong = store.create_change_request(program_id, {"allowed_actions": ["refresh_command_center"]})
+            store.approve_change_request(program_id, wrong["change_request_id"], {"approved_by": "chair"})
+            wrong_action_409 = False
+            try:
+                store.reset_signoff(program_id, wrong["change_request_id"])
+            except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError:
+                wrong_action_409 = True
+            checks = {
+                "delete_history_signoff_409": signoff_409,
+                "delete_history_export_409": export_409,
+                "delete_history_zip_409": zip_409,
+                "delete_history_gate": gate.get("status"),
+                "wrong_action_409": wrong_action_409,
+            }
+            ok = signoff_409 and export_409 and zip_409 and gate.get("status") == "failed" and wrong_action_409
+            return ok, "v12.10 reset guard: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.10 reset guard failed: {exc}"
+
+
+def _v1211_receiver_acceptance_semantics(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.releases import stable_hash
+        from song_agent.unified_release_program_continuity_command_center_acceptance import (
+            UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            _program, store, _change, program_id, _payload = _v1213_open_world(checkout.path, checkout.metadata)
+            latest = store.latest_signoff_state(program_id)
+            gate = store.gate(program_id, required=True)
+            history = store.history_path(program_id).read_bytes()
+            store.history_path(program_id).unlink()
+            signoff_409 = False
+            export_409 = False
+            zip_409 = False
+            try:
+                store.signoff(program_id, {"signed_by": "forged receiver"})
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                signoff_409 = True
+            try:
+                store.export_archive(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                export_409 = True
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                zip_409 = True
+            history_gate = store.gate(program_id, required=True)
+            store.history_path(program_id).write_bytes(history)
+            response_path = store.response_path(program_id, "receiver-001")
+            response_original = response_path.read_bytes()
+            response = read_json(response_path)
+            response["findings"] = [{"severity": "critical", "summary": "tampered"}]
+            response["payload_hash"] = stable_hash(
+                {key: value for key, value in response.items() if key not in {"payload_hash", "integrity_hash"}}
+            )
+            response["integrity_hash"] = stable_hash({key: value for key, value in response.items() if key != "integrity_hash"})
+            write_json(response_path, response)
+            source_tamper_409 = False
+            try:
+                store.build_archive_zip(program_id)
+            except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
+                source_tamper_409 = True
+            response_path.write_bytes(response_original)
+            checks = {
+                "signoff": latest.get("status"),
+                "gate": gate.get("status"),
+                "delete_history_signoff_409": signoff_409,
+                "delete_history_export_409": export_409,
+                "delete_history_zip_409": zip_409,
+                "delete_history_gate": history_gate.get("status"),
+                "signed_source_tamper_409": source_tamper_409,
+            }
+            ok = (
+                checks["signoff"] == "signed"
+                and checks["gate"] == "passed"
+                and signoff_409
+                and export_409
+                and zip_409
+                and checks["delete_history_gate"] == "failed"
+                and source_tamper_409
+            )
+            return ok, "v12.11 acceptance semantics: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.11 acceptance semantics failed: {exc}"
+
+
+def _v1211_receiver_acceptance_zip_security(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from tests.test_unified_release_program_continuity_command_center_acceptance import (
+            _add_declared_extra,
+            _full_resign_signed_by,
+        )
+        from tests.test_unified_release_program_continuity_distribution import (
+            _replace_zip_name_bytes,
+            _write_with_extra_entry,
+        )
+
+        with _v1213_world_checkout() as checkout:
+            base = checkout.path
+            _program, store, _change, program_id, _payload = _v1213_open_world(base, checkout.metadata)
+            archive = store.archive_zip_path(program_id)
+            missing = store._verify_archive_runtime(program_id, {"acceptance_signoff_binding": base / "missing-binding.json"})
+            forged_zip = base / "receiver-full-resign.zip"
+            _v76_rewrite_zip(archive, forged_zip, _full_resign_signed_by)
+            forged = store._verify_archive_runtime(program_id, {"archive_zip": forged_zip})
+            extra_zip = base / "receiver-extra.zip"
+            _v76_rewrite_zip(archive, extra_zip, _add_declared_extra)
+            extra = store._verify_archive_runtime(program_id, {"archive_zip": extra_zip})
+            musicforge_zip = base / "receiver-musicforge.zip"
+            _write_with_extra_entry(archive, musicforge_zip, ".MusicForge/internal.json", b"{}")
+            musicforge = store._verify_archive_runtime(program_id, {"archive_zip": musicforge_zip})
+            backslash_zip = base / "receiver-backslash.zip"
+            _replace_zip_name_bytes(archive, backslash_zip, b"README.txt", b"README\\txt")
+            backslash = store._verify_archive_runtime(program_id, {"archive_zip": backslash_zip})
+            trailing_zip = base / "receiver-trailing.zip"
+            trailing_zip.write_bytes(archive.read_bytes() + b"tamper")
+            trailing = store._verify_archive_runtime(program_id, {"archive_zip": trailing_zip})
+            checks = {
+                "missing_binding": missing.get("status"),
+                "signoff_full_resign_signed_by": forged.get("status"),
+                "declared_extra": extra.get("status"),
+                "musicforge": musicforge.get("status"),
+                "raw_backslash": backslash.get("status"),
+                "trailing_bytes": trailing.get("status"),
+            }
+            ok = all(value == "failed" for value in checks.values())
+            return ok, "v12.11 acceptance ZIP security: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.11 acceptance ZIP security failed: {exc}"
+
+
+def _v1211_receiver_acceptance_ga_gate(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.ga_readiness_verifier import verify_ga_readiness_report
+        from tests.test_ga_readiness import _write_repo
+        from tests.test_unified_release_program_continuity_command_center_acceptance import _ga_build_kwargs, _ga_verify_kwargs, _runtime_paths
+
+        with _v1213_world_checkout() as checkout:
+            base = checkout.path
+            _program, store, _change, program_id, _payload = _v1213_open_world(base, checkout.metadata)
+            paths = _runtime_paths(store, program_id)
+            ga_root = base / "ga-repo"
+            _write_repo(ga_root)
+            report = build_ga_readiness_report(repo_root=ga_root, allow_dirty=True, **_ga_build_kwargs(paths))
+            path = base / "ga-v1211-thin.json"
+            write_ga_readiness_report(report, path)
+            runtime = verify_ga_readiness_report(path, **_ga_verify_kwargs(paths))
+            ga_check = next(
+                (row for row in report.get("checks", []) if row.get("check_id") == "ga.unified_release_program_continuity_command_center_acceptance"),
+                {},
+            )
+            checks = {"ga_gate": ga_check.get("status"), "ga_verify": runtime.get("status")}
+            ok = checks["ga_gate"] == "passed" and checks["ga_verify"] != "failed"
+            return ok, "v12.11 acceptance GA gate: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.11 acceptance GA gate failed: {exc}"
+
+
+def _v1213_release_check_acceleration_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from types import SimpleNamespace
+
+        from song_agent.release_check_fixtures import ReleaseCheckFixtureCache
+        from song_agent.release_check_matrix import select_check_definitions
+        from song_agent.release_check_performance import PROFILE_DURATION_BUDGET_SECONDS, performance_summary
+
+        with tempfile.TemporaryDirectory(prefix="mf-v1213-cache-smoke-") as temp:
+            cache = ReleaseCheckFixtureCache(Path(temp) / "cache")
+            build_count = 0
+
+            def builder(path: Path) -> dict[str, Any]:
+                nonlocal build_count
+                build_count += 1
+                (path / "immutable.txt").write_text("prepared\n", encoding="utf-8")
+                return {"fixture": "prepared"}
+
+            with cache.checkout("v12.13-smoke", builder) as first:
+                first_hit = first.cache_hit
+                (first.path / "immutable.txt").write_text("tampered\n", encoding="utf-8")
+            with cache.checkout("v12.13-smoke", builder) as second:
+                second_hit = second.cache_hit
+                isolated = (second.path / "immutable.txt").read_text(encoding="utf-8") == "prepared\n"
+
+        v12_ids = {definition.check_id for definition in select_check_definitions(profile="v12", run_tests=False)}
+        split_ids = {
+            "v1212.receiver_acceptance_change_control_semantics",
+            "v1212.receiver_acceptance_change_control_zip_security",
+            "v1212.receiver_acceptance_change_control_external_binding",
+            "v1212.receiver_acceptance_change_control_signed_mutation",
+            "v1212.receiver_acceptance_change_control_thin_integration",
+        }
+        only = select_check_definitions(
+            profile="v12",
+            only=["v1212.receiver_acceptance_change_control_zip_security"],
+            run_tests=False,
+        )
+        recent = select_check_definitions(profile="v12", groups=["command-center"], since="12.9", run_tests=False)
+
+        def recent_enough(version: str | None) -> bool:
+            parts = [int(part) for part in str(version or "0").split(".") if part.isdigit()]
+            return tuple((parts + [0, 0])[:2]) >= (12, 9)
+
+        sample = [
+            SimpleNamespace(
+                check_id="failed.check",
+                name="failed check",
+                duration_ms=120_000,
+                duration_budget_seconds=90.0,
+                duration_budget_status="warning",
+                budget_warning_only=True,
+                status="failed",
+            )
+        ]
+        budget = performance_summary(sample, profile="v12", duration_ms=120_000)
+        checks = {
+            "fixture_cache": "hit" if not first_hit and second_hit and build_count == 1 else "miss",
+            "fixture_isolation": isolated,
+            "split_checks": "present" if split_ids.issubset(v12_ids) else "missing",
+            "only_split": len(only) == 1 and only[0].check_id.endswith("zip_security"),
+            "recent_selection": bool(recent) and all(recent_enough(definition.version) for definition in recent),
+            "budget_summary": "present" if budget.get("checks_over_budget") else "missing",
+            "failed_check_preserved": sample[0].status == "failed",
+            "v12_budget": "passed" if PROFILE_DURATION_BUDGET_SECONDS.get("v12") == 360.0 else "failed",
+            "latest_budget": "passed" if PROFILE_DURATION_BUDGET_SECONDS.get("latest") == 480.0 else "failed",
+        }
+        ok = checks == {
+            "fixture_cache": "hit",
+            "fixture_isolation": True,
+            "split_checks": "present",
+            "only_split": True,
+            "recent_selection": True,
+            "budget_summary": "present",
+            "failed_check_preserved": True,
+            "v12_budget": "passed",
+            "latest_budget": "passed",
+        }
+        return ok, "v12.13 release-check acceleration: " + ", ".join(f"{key}={value}" for key, value in checks.items())
+    except Exception as exc:
+        return False, f"v12.13 release-check acceleration failed: {exc}"
 
 
 def _v129_unified_release_program_continuity_command_center_smoke(root: Path) -> tuple[bool, str]:

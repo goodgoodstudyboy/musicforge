@@ -112,7 +112,12 @@ from song_agent.release_checks import (
     _v129_unified_release_program_continuity_command_center_smoke,
     _v1210_unified_release_program_continuity_command_center_signoff_smoke,
     _v1211_unified_release_program_continuity_command_center_receiver_acceptance_smoke,
-    _v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke,
+    _v1212_receiver_acceptance_change_control_external_binding,
+    _v1212_receiver_acceptance_change_control_semantics,
+    _v1212_receiver_acceptance_change_control_signed_mutation,
+    _v1212_receiver_acceptance_change_control_thin_integration,
+    _v1212_receiver_acceptance_change_control_zip_security,
+    _v1213_release_check_acceleration_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1598,9 +1603,22 @@ def test_v1211_unified_release_program_continuity_command_center_receiver_accept
 
 
 def test_v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke(tmp_path: Path) -> None:
-    ok, detail = _v1212_unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke(tmp_path)
+    from song_agent.release_check_fixtures import reset_release_check_fixture_cache
 
-    assert ok is True, detail
+    reset_release_check_fixture_cache()
+    results = [
+        function(tmp_path)
+        for function in (
+            _v1212_receiver_acceptance_change_control_semantics,
+            _v1212_receiver_acceptance_change_control_zip_security,
+            _v1212_receiver_acceptance_change_control_external_binding,
+            _v1212_receiver_acceptance_change_control_signed_mutation,
+            _v1212_receiver_acceptance_change_control_thin_integration,
+        )
+    ]
+    detail = ", ".join(item[1] for item in results)
+
+    assert all(item[0] for item in results), detail
     assert "wrong_action_reset_409=True" in detail
     assert "approval_target_mismatch_409=True" in detail
     assert "reset=applied" in detail
@@ -1629,6 +1647,15 @@ def test_v1212_unified_release_program_continuity_command_center_receiver_accept
     assert "signed_reset_proof_export_409=True" in detail
     assert "signed_reset_proof_zip_409=True" in detail
     assert "signed_reset_proof_gate=failed" in detail
+
+
+def test_v1213_release_check_acceleration_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1213_release_check_acceleration_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "fixture_cache=hit" in detail
+    assert "split_checks=present" in detail
+    assert "budget_summary=present" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

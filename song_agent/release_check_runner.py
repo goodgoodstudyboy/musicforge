@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from song_agent import __version__
 from song_agent.release_check_matrix import ReleaseCheckDefinition, ReleaseCheckMatrixError, definition_to_dict, select_check_definitions
+from song_agent.release_check_performance import check_budget_status, performance_summary
 
 
 @dataclass
@@ -33,6 +34,9 @@ class CheckResult:
     expected_warning_matches: list[str] = field(default_factory=list)
     started_at: str = ""
     finished_at: str = ""
+    duration_budget_seconds: float | None = None
+    duration_budget_status: str = "not_configured"
+    budget_warning_only: bool = True
 
 
 @dataclass
@@ -59,13 +63,21 @@ class ReleaseCheckReport:
     def to_json_report(self) -> dict[str, Any]:
         failures = [result for result in self.results if not result.ok]
         warning_results = [result for result in self.results if result.status == "warning"]
-        checks_with_warnings = [result for result in self.results if result.warnings or result.expected_warning_matches or result.status == "warning"]
+        checks_with_warnings = [
+            result
+            for result in self.results
+            if result.warnings
+            or result.expected_warning_matches
+            or result.status == "warning"
+            or result.duration_budget_status == "warning"
+        ]
         expected_warning_count = sum(len(result.expected_warning_matches) for result in self.results)
         raw_warning_count = sum(len(result.warnings) for result in self.results)
         unexpected_warning_count = max(0, raw_warning_count - expected_warning_count)
         timed_out = [result for result in self.results if result.status == "timed_out"]
         network = [result for result in self.results if result.status == "network_error"]
         slowest = sorted(self.results, key=lambda result: result.duration_ms, reverse=True)[:10]
+        performance = performance_summary(self.results, profile=self.profile, duration_ms=self.duration_ms)
         return sanitize_report(
             {
                 "schema_version": 1,
@@ -90,7 +102,12 @@ class ReleaseCheckReport:
                     "network_error": len(network),
                     "skipped": sum(1 for result in self.results if result.status == "skipped"),
                     "slowest": [{"check_id": result.check_id, "duration_ms": result.duration_ms} for result in slowest],
+                    "slow_checks": performance["slow_checks"],
+                    "checks_over_budget": performance["checks_over_budget"],
+                    "duration_budget_status": performance["duration_budget_status"],
+                    "profile_duration_budget_seconds": performance["profile_duration_budget_seconds"],
                 },
+                "performance": performance,
                 "environment": self.environment,
                 "selected_checks": self.selected_checks,
                 "results": [result_to_dict(result) for result in self.results],
@@ -99,14 +116,27 @@ class ReleaseCheckReport:
 
     def to_timing_report(self) -> dict[str, Any]:
         slowest = sorted(self.results, key=lambda result: result.duration_ms, reverse=True)[:20]
+        performance = performance_summary(self.results, profile=self.profile, duration_ms=self.duration_ms)
         return sanitize_report(
             {
                 "schema_version": 1,
                 "profile": self.profile,
                 "duration_ms": self.duration_ms,
                 "slowest": [{"check_id": result.check_id, "name": result.name, "duration_ms": result.duration_ms, "status": result.status} for result in slowest],
+                "slow_checks": performance["slow_checks"],
+                "checks_over_budget": performance["checks_over_budget"],
+                "duration_budget_status": performance["duration_budget_status"],
+                "profile_duration_budget_seconds": performance["profile_duration_budget_seconds"],
+                "performance": performance,
                 "results": [
-                    {"check_id": result.check_id, "name": result.name, "status": result.status, "duration_ms": result.duration_ms}
+                    {
+                        "check_id": result.check_id,
+                        "name": result.name,
+                        "status": result.status,
+                        "duration_ms": result.duration_ms,
+                        "duration_budget_seconds": result.duration_budget_seconds,
+                        "duration_budget_status": result.duration_budget_status,
+                    }
                     for result in self.results
                 ],
             }
@@ -131,6 +161,9 @@ def result_to_dict(result: CheckResult) -> dict[str, Any]:
         "expected_warning_matches": result.expected_warning_matches,
         "started_at": result.started_at,
         "finished_at": result.finished_at,
+        "duration_budget_seconds": result.duration_budget_seconds,
+        "duration_budget_status": result.duration_budget_status,
+        "budget_warning_only": result.budget_warning_only,
     }
 
 
@@ -168,7 +201,7 @@ def run_release_check_matrix(
     for definition in selected:
         if progress is not None:
             progress(definition)
-        result = _run_definition(definition, root, timeout_seconds=timeout_seconds)
+        result = _run_definition(definition, root, profile=profile, timeout_seconds=timeout_seconds)
         report.results.append(result)
         if fail_fast and not result.ok:
             break
@@ -235,7 +268,13 @@ def sanitize_report(value: Any) -> Any:
     return value
 
 
-def _run_definition(definition: ReleaseCheckDefinition, root: Path, *, timeout_seconds: int | None = None) -> CheckResult:
+def _run_definition(
+    definition: ReleaseCheckDefinition,
+    root: Path,
+    *,
+    profile: str,
+    timeout_seconds: int | None = None,
+) -> CheckResult:
     started_at = _now()
     start = time.perf_counter()
     timeout = _effective_timeout(definition.timeout_seconds, timeout_seconds)
@@ -256,6 +295,20 @@ def _run_definition(definition: ReleaseCheckDefinition, root: Path, *, timeout_s
     result.kind = definition.kind
     result.risk = definition.risk
     result.duration_ms = int((time.perf_counter() - start) * 1000)
+    result.duration_budget_seconds = definition.duration_budget_seconds
+    result.budget_warning_only = definition.budget_warning_only
+    result.duration_budget_status = check_budget_status(
+        duration_ms=result.duration_ms,
+        duration_budget_seconds=definition.duration_budget_seconds,
+        profile=profile,
+        budget_enforced_profiles=definition.budget_enforced_profiles,
+        budget_warning_only=definition.budget_warning_only,
+    )
+    if result.duration_budget_status == "failed":
+        result.ok = False
+        result.status = "failed"
+        budget_detail = f"duration budget exceeded: {result.duration_ms}ms > {definition.duration_budget_seconds}s"
+        result.detail = f"{result.detail}\n{budget_detail}" if result.detail else budget_detail
     result.started_at = started_at
     result.finished_at = _now()
     output_for_expected = "\n".join([result.detail, result.stdout_tail, result.stderr_tail, *result.warnings])

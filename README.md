@@ -1225,6 +1225,26 @@ python -m song_agent.cli release-check --group portal --list
 python -m song_agent.cli release-check --only v75.release_check_matrix_smoke --json
 ```
 
+From v12.13, the `v12`, `latest`, and `ga` profiles use an isolated,
+process-scoped prepared fixture for the v12.9-v12.12 Continuity chain. The
+former monolithic smokes remain available in the `full` profile, while the
+accelerated profiles run separate semantics, ZIP security, external binding,
+signed mutation, and thin integration checks. Each checkout is restored from
+an immutable snapshot at a stable path, so one tamper case cannot affect the
+next check and absolute-path evidence bindings remain valid.
+
+JSON and timing reports include `slow_checks`, `checks_over_budget`,
+`duration_budget_status`, and the profile duration budget. Budget overruns are
+warning-only during the v12.13 migration unless a check explicitly enables a
+hard budget for the selected profile; functional failures always remain
+blocking.
+
+```powershell
+python -m song_agent.cli release-check --profile v12 --skip-tests --json --timing-out runs\release-check-v12-timing.json
+python -m song_agent.cli release-check --profile latest --skip-tests --json --report-out runs\release-check-latest.json
+python -m song_agent.cli release-check --profile full --only v1212.unified_release_program_continuity_command_center_receiver_acceptance_change_control_smoke --skip-tests --json
+```
+
 Release Portfolio Governance Attestation Accepted Evidence turns a verified
 accepted Portal Review Response into a public-safe evidence record. It does not
 publish, revoke, supersede, or rewrite Registry history; it only records that
