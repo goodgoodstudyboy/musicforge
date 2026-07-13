@@ -60,6 +60,8 @@ class GAReadinessError(RuntimeError):
 def build_ga_readiness_report(
     *,
     repo_root: Path | str | None = None,
+    policy: str | None = None,
+    evidence_manifest_path: Path | str | None = None,
     strict: bool = False,
     allow_dirty: bool = False,
     require_manual_acceptance: bool = False,
@@ -229,6 +231,7 @@ def build_ga_readiness_report(
     source: dict[str, Any] = {
         "repo_root": ".",
         "strict": strict,
+        "policy_id": policy,
         "require_manual_acceptance": require_manual_acceptance,
         "require_audio": require_audio,
         "require_audio_campaign": require_audio_campaign,
@@ -925,6 +928,20 @@ def build_ga_readiness_report(
         final_severity = "blocking"
     _add_check(checks, "ga.trust_final_readiness", final_status, final_severity, final_message, final_summary)
 
+    policy_summary = _evidence_policy_summary(policy, evidence_manifest_path)
+    if policy or evidence_manifest_path:
+        source["policy_id"] = policy_summary.get("policy_id")
+        source["evidence_graph_hash"] = policy_summary.get("graph_hash")
+        source["evidence_manifest_hash"] = policy_summary.get("manifest_hash")
+        _add_check(
+            checks,
+            "ga.evidence_policy",
+            "passed" if policy_summary.get("status") == "passed" else "failed",
+            "blocking",
+            "Evidence Graph policy gate passed." if policy_summary.get("status") == "passed" else "Evidence Graph policy gate failed.",
+            policy_summary,
+        )
+
     blocking_failures = [check for check in checks if check["status"] == "failed" and check.get("severity") == "blocking"]
     warnings = [check for check in checks if check["status"] == "warning" or check.get("severity") == "warning"]
     status = "blocked" if blocking_failures else "warning" if warnings else "ready"
@@ -976,6 +993,45 @@ def build_ga_readiness_report(
     }
     report["integrity_hash"] = ga_readiness_integrity_hash(report)
     return sanitize_ga_report(report)
+
+
+def _evidence_policy_summary(policy: str | None, evidence_manifest_path: Path | str | None) -> dict[str, Any]:
+    effective_policy = policy or ("ga.standard" if evidence_manifest_path else None)
+    if not effective_policy:
+        return {"status": "not_requested", "policy_id": None}
+    if evidence_manifest_path is None:
+        return {
+            "status": "failed",
+            "policy_id": effective_policy,
+            "blockers": ["ga_policy_evidence_manifest_required"],
+            "message": "Policy evaluation requires an external evidence manifest.",
+        }
+    try:
+        from song_agent.platform.evidence_graph import build_evidence_graph
+        from song_agent.platform.policy import evaluate_policy, get_policy_profile
+        from song_agent.platform.verification.hashing import integrity_ok
+        from song_agent.capabilities import capability_registry
+
+        manifest = read_json(Path(evidence_manifest_path))
+        graph = build_evidence_graph(evidence_manifest_path, registry=capability_registry)
+        gate = evaluate_policy(get_policy_profile(effective_policy), graph)
+        return {
+            "status": gate.status,
+            "policy_id": gate.policy_id,
+            "graph_hash": gate.graph_hash,
+            "manifest_hash": manifest.get("integrity_hash") if integrity_ok(manifest) else None,
+            "blockers": list(gate.blockers),
+            "warnings": list(gate.warnings),
+            "checks": list(gate.checks),
+            "graph": graph.to_dict(),
+        }
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "policy_id": effective_policy,
+            "blockers": ["ga_policy_evaluation_error"],
+            "message": str(exc),
+        }
 
 
 def ga_readiness_integrity_hash(report: dict[str, Any]) -> str:

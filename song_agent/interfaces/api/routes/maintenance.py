@@ -20,8 +20,24 @@ class MaintenanceRoutes:
         from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
 
         payload = self._optional_json_body()
+        policy_id = str(payload.get("policy") or "").strip() or None
+        evidence_manifest = None
+        if policy_id:
+            try:
+                from song_agent.application.evidence_policy_gate import resolve_workspace_evidence_manifest
+
+                evidence_manifest = resolve_workspace_evidence_manifest(
+                    self.server.release_store.root.parent,
+                    manifest_id=payload.get("evidence_manifest_id"),
+                    manifest=payload.get("evidence_manifest"),
+                )
+            except Exception as exc:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
         report = build_ga_readiness_report(
             repo_root=Path.cwd(),
+            policy=policy_id,
+            evidence_manifest_path=evidence_manifest,
             strict=bool(payload.get("strict", False)),
             allow_dirty=bool(payload.get("allow_dirty", False)),
             require_manual_acceptance=bool(payload.get("require_manual_acceptance", False)),

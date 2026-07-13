@@ -75,6 +75,8 @@ def verify_ga_readiness_report(
     report_path: Path | str,
     *,
     strict: bool = False,
+    policy: str | None = None,
+    evidence_manifest_path: Path | str | None = None,
     require_ready: bool = False,
     require_manual_acceptance: bool = False,
     require_audio_campaign: bool = False,
@@ -283,6 +285,13 @@ def verify_ga_readiness_report(
             "GA readiness report contains no obvious token strings." if not _SENSITIVE_RE.search(json.dumps(report, ensure_ascii=False)) else "GA readiness report contains a token-like string.",
         )
         checks_by_id = {str(item.get("check_id")): item for item in report.get("checks", []) if isinstance(item, dict)}
+        _verify_evidence_policy(
+            checks,
+            report,
+            checks_by_id.get("ga.evidence_policy", {}),
+            policy=policy,
+            evidence_manifest_path=evidence_manifest_path,
+        )
         if require_manual_acceptance:
             _verify_manual_acceptance_evidence(checks, checks_by_id.get("ga.acceptance_manual", {}), manual_acceptance_report_path)
         if require_audio_campaign:
@@ -662,6 +671,95 @@ def write_ga_readiness_verification_report(report: dict[str, Any], path: Path | 
     target = Path(path)
     write_json(target, report)
     return target
+
+
+def _verify_evidence_policy(
+    checks: list[dict[str, Any]],
+    report: dict[str, Any],
+    ga_check: dict[str, Any],
+    *,
+    policy: str | None,
+    evidence_manifest_path: Path | str | None,
+) -> None:
+    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    report_policy = str(source.get("policy_id") or "")
+    effective_policy = policy or report_policy
+    if not effective_policy:
+        return
+    if report_policy and not policy:
+        _add_check(
+            checks,
+            "ga_readiness_policy_argument_required",
+            "failed",
+            "blocking",
+            "A policy-bound GA report must be verified with an explicit --policy value.",
+        )
+    if evidence_manifest_path is None:
+        _add_check(
+            checks,
+            "ga_readiness_evidence_manifest_required",
+            "failed",
+            "blocking",
+            "A policy-bound GA report requires the external evidence manifest.",
+        )
+        return
+    try:
+        from song_agent.platform.evidence_graph import build_evidence_graph
+        from song_agent.platform.policy import evaluate_policy, get_policy_profile
+        from song_agent.platform.verification.hashing import integrity_ok
+        from song_agent.capabilities import capability_registry
+
+        manifest = read_json(Path(evidence_manifest_path))
+        graph = build_evidence_graph(evidence_manifest_path, registry=capability_registry)
+        gate = evaluate_policy(get_policy_profile(effective_policy), graph)
+        detail = ga_check.get("detail") if isinstance(ga_check.get("detail"), dict) else {}
+        checks.extend(
+            [
+                _check_result(
+                    "ga_readiness_evidence_manifest_integrity",
+                    integrity_ok(manifest),
+                    "External evidence manifest integrity is valid.",
+                ),
+                _check_result(
+                    "ga_readiness_evidence_policy_status",
+                    gate.status == "passed",
+                    "Current Evidence Graph policy evaluation is passed.",
+                    {"policy_id": effective_policy, "blockers": list(gate.blockers)},
+                ),
+                _check_result(
+                    "ga_readiness_evidence_policy_binding",
+                    ga_check.get("status") == "passed"
+                    and report_policy == effective_policy
+                    and source.get("evidence_graph_hash") == gate.graph_hash
+                    and source.get("evidence_manifest_hash") == manifest.get("integrity_hash")
+                    and detail.get("graph_hash") == gate.graph_hash,
+                    "GA report is bound to the current external Evidence Graph and policy.",
+                    {
+                        "policy_id": effective_policy,
+                        "graph_hash": gate.graph_hash,
+                        "manifest_hash": manifest.get("integrity_hash"),
+                    },
+                ),
+            ]
+        )
+    except Exception as exc:
+        _add_check(
+            checks,
+            "ga_readiness_evidence_policy_runtime",
+            "failed",
+            "blocking",
+            f"Evidence policy runtime verification failed: {exc}",
+        )
+
+
+def _check_result(check_id: str, passed: bool, message: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "check_id": check_id,
+        "status": "passed" if passed else "failed",
+        "severity": "blocking",
+        "message": message,
+        "detail": detail or {},
+    }
 
 
 def _verify_manual_acceptance_evidence(checks: list[dict[str, Any]], ga_check: dict[str, Any], report_path: Path | str | None) -> None:

@@ -63,6 +63,12 @@
       "song_agent.audio_campaign_remediation_verifier"
     ],
     [
+      "song_agent.capabilities.delivery",
+      "song_agent.capabilities.program",
+      "song_agent.capabilities.quality",
+      "song_agent.capabilities.registry"
+    ],
+    [
       "song_agent.ga_readiness",
       "song_agent.ga_readiness_verifier",
       "song_agent.unified_command_center",
@@ -165,7 +171,7 @@
       "song_agent.trust_operations_incident_knowledge_verifier"
     ]
   ],
-  "baseline_version": "12.18.0",
+  "baseline_version": "12.19.0",
   "dependency_exceptions": [
     {
       "imported": "song_agent.release_check_runner",
@@ -176,8 +182,8 @@
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
     "song_agent/interfaces/api/routes/creation.py": 4969,
-    "song_agent/interfaces/api/routes/delivery.py": 2855,
-    "song_agent/interfaces/api/routes/maintenance.py": 148,
+    "song_agent/interfaces/api/routes/delivery.py": 2906,
+    "song_agent/interfaces/api/routes/maintenance.py": 164,
     "song_agent/interfaces/api/routes/program.py": 2112,
     "song_agent/interfaces/api/routes/quality.py": 4394,
     "song_agent/interfaces/api/routes/studio.py": 1707,
@@ -188,14 +194,14 @@
     "song_agent/interfaces/cli/commands/maintenance.py": 1014,
     "song_agent/interfaces/cli/commands/program.py": 3893,
     "song_agent/interfaces/cli/commands/quality.py": 4225,
-    "song_agent/interfaces/cli/commands/release_check.py": 1371,
+    "song_agent/interfaces/cli/commands/release_check.py": 1391,
     "song_agent/interfaces/cli/commands/studio.py": 65,
     "song_agent/interfaces/cli/commands/trust.py": 5545,
-    "song_agent/release_checks.py": 26195,
+    "song_agent/release_checks.py": 26196,
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 356,
+  "module_count": 370,
   "modules": [
     {
       "context": null,
@@ -286,6 +292,12 @@
       "layer": "application",
       "module": "song_agent.application.audio_campaigns.release_coverage",
       "path": "song_agent/application/audio_campaigns/release_coverage.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.evidence_policy_gate",
+      "path": "song_agent/application/evidence_policy_gate.py"
     },
     {
       "context": null,
@@ -454,6 +466,36 @@
       "layer": "domain",
       "module": "song_agent.candidate_scoring",
       "path": "song_agent/candidate_scoring.py"
+    },
+    {
+      "context": "creation",
+      "layer": "domain",
+      "module": "song_agent.capabilities",
+      "path": "song_agent/capabilities/__init__.py"
+    },
+    {
+      "context": "creation",
+      "layer": "domain",
+      "module": "song_agent.capabilities.delivery",
+      "path": "song_agent/capabilities/delivery.py"
+    },
+    {
+      "context": "creation",
+      "layer": "domain",
+      "module": "song_agent.capabilities.program",
+      "path": "song_agent/capabilities/program.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.capabilities.quality",
+      "path": "song_agent/capabilities/quality.py"
+    },
+    {
+      "context": "creation",
+      "layer": "domain",
+      "module": "song_agent.capabilities.registry",
+      "path": "song_agent/capabilities/registry.py"
     },
     {
       "context": "cli",
@@ -956,6 +998,30 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.contracts.policy",
+      "path": "song_agent/platform/contracts/policy.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.evidence_graph",
+      "path": "song_agent/platform/evidence_graph/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.evidence_graph.builder",
+      "path": "song_agent/platform/evidence_graph/builder.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.evidence_graph.model",
+      "path": "song_agent/platform/evidence_graph/model.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.lifecycle",
       "path": "song_agent/platform/lifecycle/__init__.py"
     },
@@ -1036,6 +1102,24 @@
       "layer": "platform",
       "module": "song_agent.platform.persistence.unit_of_work",
       "path": "song_agent/platform/persistence/unit_of_work.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.policy",
+      "path": "song_agent/platform/policy/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.policy.engine",
+      "path": "song_agent/platform/policy/engine.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.policy.profiles",
+      "path": "song_agent/platform/policy/profiles.py"
     },
     {
       "context": null,
@@ -1426,6 +1510,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check_architecture",
       "path": "song_agent/release_check_architecture.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_evidence_policy",
+      "path": "song_agent/release_check_evidence_policy.py"
     },
     {
       "context": null,
@@ -2336,7 +2426,6 @@
   ],
   "notes": {
     "allowed_cycles": "Legacy domain cycles recorded at v12.14; they may be removed but no new cycle may be added.",
-    "interfaces": "v12.18 command and route modules are ratcheted; compatibility facades may only shrink.",
     "mega_files": "Tracked files may stay equal or shrink; growth is a release blocker.",
     "security_helpers": "Duplicate helper counts may stay equal or shrink until v12.15 centralizes ZIP verification."
   },

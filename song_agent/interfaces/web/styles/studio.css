@@ -12,12 +12,40 @@
       --warn: #b54708;
     }
     * { box-sizing: border-box; }
-    body {
+body {
       margin: 0;
       background: var(--bg);
       color: var(--ink);
       font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+}
+
+.workspace-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.workspace-nav a {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.workspace-nav a:hover,
+.workspace-nav a:focus-visible {
+  color: var(--ink);
+  background: var(--bg);
+  outline: 2px solid transparent;
+}
     header {
       height: 56px;
       display: flex;

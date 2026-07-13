@@ -5,6 +5,15 @@ from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.contracts.evidence_manifest import ExternalEvidenceManifest
 from song_agent.platform.contracts.lifecycle import GenerationRef, ResetAuthorization, SignoffRef
 from song_agent.platform.contracts.packages import PackageSpec
+from song_agent.platform.contracts.policy import (
+    CurrentGenerationRequirement,
+    EvidenceRequirement,
+    GateResult,
+    NoBlockerRequirement,
+    PolicyProfile,
+    QuorumRequirement,
+    RuntimeVerificationRequirement,
+)
 
 __all__ = [
     "DomainError",
@@ -12,6 +21,13 @@ __all__ = [
     "ExternalEvidenceManifest",
     "GenerationRef",
     "PackageSpec",
+    "CurrentGenerationRequirement",
+    "EvidenceRequirement",
+    "GateResult",
+    "NoBlockerRequirement",
+    "PolicyProfile",
+    "QuorumRequirement",
+    "RuntimeVerificationRequirement",
     "ResetAuthorization",
     "SignoffRef",
 ]

@@ -789,6 +789,8 @@ def build_release_check_parser() -> argparse.ArgumentParser:
 
 def build_ga_check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MusicForge GA/LTS readiness checks.")
+    parser.add_argument("--policy", choices=("ga.standard", "ga.lts"), default=None, help="Evaluate a declarative GA policy against the external evidence manifest.")
+    parser.add_argument("--evidence-manifest", type=Path, default=None, help="Runtime-verifiable Evidence Graph manifest used by --policy.")
     parser.add_argument("--json", action="store_true", help="Print the full GA readiness report as JSON.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write the GA readiness report to this JSON file.")
     parser.add_argument("--strict", action="store_true", help="Treat a dirty working tree and missing required evidence as blocking.")
@@ -861,6 +863,8 @@ def build_ga_check_parser() -> argparse.ArgumentParser:
 def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Verify a MusicForge GA readiness report.")
     parser.add_argument("report_path", type=Path, help="Path to ga-readiness-report.json.")
+    parser.add_argument("--policy", choices=("ga.standard", "ga.lts"), default=None, help="Require the GA report to match this current Evidence Graph policy.")
+    parser.add_argument("--evidence-manifest", type=Path, default=None, help="External Evidence Graph manifest used for current runtime verification.")
     parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
     parser.add_argument("--report-out", type=Path, default=None, help="Write the verification report to this JSON file.")
     parser.add_argument("--strict", action="store_true", help="Require GA status ready, not warning.")
@@ -961,7 +965,10 @@ def _execute_ga_check(argv: list[str]) -> None:
     from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
     parser = build_ga_check_parser()
     args = parser.parse_args(raw_args[1:])
+    _warn_legacy_ga_flags(argv)
     report = build_ga_readiness_report(
+        policy=args.policy,
+        evidence_manifest_path=args.evidence_manifest,
         strict=args.strict,
         allow_dirty=args.allow_dirty,
         require_manual_acceptance=args.require_manual_acceptance,
@@ -1144,8 +1151,11 @@ def _execute_verify_ga_readiness_report(argv: list[str]) -> None:
     from song_agent.ga_readiness_verifier import verify_ga_readiness_report, write_ga_readiness_verification_report
     parser = build_verify_ga_readiness_parser()
     args = parser.parse_args(raw_args[1:])
+    _warn_legacy_ga_flags(argv)
     report = verify_ga_readiness_report(
         args.report_path,
+        policy=args.policy,
+        evidence_manifest_path=args.evidence_manifest,
         strict=args.strict,
         require_ready=args.require_ready,
         require_manual_acceptance=args.require_manual_acceptance,
@@ -1313,6 +1323,16 @@ def _execute_verify_ga_readiness_report(argv: list[str]) -> None:
 
 def handle_verify_ga_readiness_report(argv: list[str]) -> None:
     _execute_verify_ga_readiness_report(argv)
+
+
+def _warn_legacy_ga_flags(argv: list[str]) -> None:
+    legacy = sorted({value.split("=", 1)[0] for value in argv if value.startswith("--require-") or value.startswith("--no-require-")})
+    if legacy:
+        print(
+            "Deprecated GA evidence flags are compatibility aliases and will be removed in v13.0; use --policy with --evidence-manifest: "
+            + ", ".join(legacy),
+            file=sys.stderr,
+        )
 
 def _execute_release_check(argv: list[str]) -> None:
     raw_args = ['release-check', *argv]

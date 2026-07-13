@@ -1,6 +1,17 @@
 from song_agent.webui import panel_html
 
 
+def test_webui_primary_workspaces_are_consolidated() -> None:
+    html = panel_html()
+
+    for workspace in ("Create", "Studio", "Quality", "Delivery", "Trust", "Program", "System"):
+        assert f">{workspace}</a>" in html
+    for anchor in ("create-workspace", "studio-workspace", "audio-lab", "delivery-workspace", "trust-workspace", "program-workspace", "system-workspace"):
+        assert f'href="#{anchor}"' in html
+    assert '<section id="delivery-workspace" style="grid-column: 1 / -1;">\n      <div class="panel-title">\n        <span>Releases</span>' in html
+    assert '<section id="trust-workspace" style="grid-column: 1 / -1;">\n      <div class="panel-title">\n        <span>Portfolio Audit</span>' in html
+
+
 def test_webui_contains_music_fields():
     html = panel_html()
 

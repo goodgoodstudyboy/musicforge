@@ -1022,6 +1022,13 @@ class DeliveryRoutes:
         report = self._get_or_refresh_release_qa(release_id, refresh=True, options={})
         force = bool(payload.get("force", False))
         acceptance_gate = self._release_acceptance_gate({**payload, "release_id": release_id, "force": force})
+        policy_gate = self._release_declarative_policy_gate(payload)
+        if policy_gate:
+            acceptance_gate = dict(acceptance_gate or {})
+            acceptance_gate["evidence_policy"] = policy_gate
+            if policy_gate.get("status") == "failed":
+                acceptance_gate["status"] = "failed"
+                acceptance_gate["message"] = str(policy_gate.get("message") or "Release Evidence Graph policy failed.")
         audio_gate = self._release_audio_gate(release_id, payload)
         if audio_gate:
             acceptance_gate = dict(acceptance_gate or {})
@@ -1559,6 +1566,15 @@ class DeliveryRoutes:
                     receiver_acceptance_change_gate.get("message")
                     or "Receiver Acceptance Change Control gate failed."
                 )
+        if policy_gate and policy_gate.get("hard_block") and policy_gate.get("status") == "failed":
+            self._send_json(
+                {
+                    "error": str(policy_gate.get("message") or "Release Evidence Graph policy failed."),
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
+            return
         if audio_gate.get("hard_block") and audio_gate.get("status") == "failed":
             self._send_json(
                 {
@@ -2016,6 +2032,41 @@ class DeliveryRoutes:
         document = self.release_store.update_signoff_summary(release_id, release_signoff_summary(signoff))
         self.release_store.append_event(release_id, "release_force_signed" if force else "release_signed", {"status": report.get("status"), "forced": force})
         self._send_json({"ok": True, "release": document.to_dict(), "signoff": signoff, "summary": release_signoff_summary(signoff)})
+
+    def _release_declarative_policy_gate(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        policy_id = str(payload.get("gate_policy") or payload.get("policy") or "").strip()
+        if not policy_id:
+            return None
+        if policy_id not in {"release.standard", "release.audio_strict"}:
+            return {
+                "status": "failed",
+                "hard_block": True,
+                "policy_id": policy_id,
+                "message": "Release signoff only accepts release.standard or release.audio_strict policy.",
+                "blockers": ["release_policy_id"],
+            }
+        workspace = self.release_store.root.parent.resolve()
+        try:
+            from song_agent.application.evidence_policy_gate import evaluate_evidence_policy_gate, resolve_workspace_evidence_manifest
+
+            manifest_path = resolve_workspace_evidence_manifest(
+                workspace,
+                manifest_id=payload.get("evidence_manifest_id"),
+                manifest=payload.get("evidence_manifest"),
+            )
+            result = evaluate_evidence_policy_gate(policy_id, manifest_path, allowed_root=workspace)
+            result["message"] = "Release Evidence Graph policy passed." if result["status"] == "passed" else "Release Evidence Graph policy failed."
+            result.pop("graph", None)
+            result.pop("checks", None)
+            return result
+        except Exception:
+            return {
+                "status": "failed",
+                "hard_block": True,
+                "policy_id": policy_id,
+                "message": "Release Evidence Graph policy could not be evaluated.",
+                "blockers": ["release_policy_runtime"],
+            }
 
     def _release_mix_gate(self, release_id: str, *, require_stem_health: bool, require_current_mix: bool) -> dict[str, Any]:
         if not (require_stem_health or require_current_mix):

@@ -2540,3 +2540,11 @@ registered by bounded context through `CommandSpec`, API routes expose a stable
 `song_agent.cli`, `song_agent.server`, and `song_agent.webui` remain thin
 compatibility facades, so existing commands, imports, API paths, and Studio
 behavior continue to work.
+
+Since v12.19, new GA and Release gates use a runtime-verified Evidence Graph and
+declarative policy profiles. External reports are rebound to the current ZIP,
+manifest, independent proofs, generation, and registered runtime verifier before
+they can satisfy a gate. See [Evidence Graph and Gate Policies](docs/EVIDENCE_GRAPH_AND_POLICIES.md).
+Studio navigation is consolidated into Create, Studio, Quality, Delivery,
+Trust, Program, and System workspaces; existing workflow controls remain
+available within those views.

@@ -18,6 +18,15 @@
       <span id="poll">polling</span>
     </div>
   </header>
+  <nav class="workspace-nav" aria-label="Primary workspaces">
+    <a href="#create-workspace">Create</a>
+    <a href="#studio-workspace">Studio</a>
+    <a href="#audio-lab">Quality</a>
+    <a href="#delivery-workspace">Delivery</a>
+    <a href="#trust-workspace">Trust</a>
+    <a href="#program-workspace">Program</a>
+    <a href="#system-workspace">System</a>
+  </nav>
   <section id="auth-lock" class="auth-lock">
     <div class="panel-title">Access token</div>
     <div class="panel-body">
@@ -34,7 +43,7 @@
   </section>
   <main>
     <div class="stack">
-      <section>
+      <section id="system-workspace">
         <div class="panel-title">
           <span>System Health</span>
           <span id="ga-status" class="status">unknown</span>
@@ -309,7 +318,7 @@
           <pre id="audio-campaign-summary" class="json-preview"></pre>
         </div>
       </section>
-      <section>
+      <section id="program-workspace">
         <div class="panel-title">
           <span>Continuity Receiver Acceptance</span>
           <span id="continuity-receiver-status" class="status">not configured</span>
@@ -366,7 +375,7 @@
           <pre id="continuity-receiver-result" class="json-preview"></pre>
         </div>
       </section>
-    <section>
+    <section id="create-workspace">
       <div class="panel-title">
         <span>Song Request</span>
         <select id="preset"></select>
@@ -500,7 +509,7 @@
           <pre id="context-pack-preview">{}</pre>
         </div>
       </section>
-      <section>
+      <section id="studio-workspace">
         <div class="panel-title">
           <span>Projects</span>
           <div class="actions" style="margin-top:0;">
@@ -698,7 +707,7 @@
         <div id="project-detail" class="project-detail"><div class="empty">Select or create a project.</div></div>
       </div>
     </section>
-    <section style="grid-column: 1 / -1;">
+    <section id="delivery-workspace" style="grid-column: 1 / -1;">
       <div class="panel-title">
         <span>Releases</span>
         <div class="actions" style="margin-top:0;">
@@ -751,7 +760,7 @@
         <div id="release-detail" class="release-detail"><div class="empty">Select or create a release.</div></div>
       </div>
     </section>
-    <section style="grid-column: 1 / -1;">
+    <section id="trust-workspace" style="grid-column: 1 / -1;">
       <div class="panel-title">
         <span>Portfolio Audit</span>
         <div class="actions" style="margin-top:0;">

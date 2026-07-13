@@ -32,6 +32,9 @@ def test_server_ga_readiness_routes(tmp_path: Path, monkeypatch) -> None:
         assert check_status == 200
         assert checked["report"]["status"] == "blocked"
         assert (tmp_path / "runs" / "ga-readiness" / "ga-readiness-report.json").exists()
+
+        policy_status, policy_error = request_json(server, "POST", "/api/ga/check", {"policy": "ga.standard"})
+        assert policy_status == 400
+        assert "manifest" in policy_error["error"].lower()
     finally:
         stop_test_server(server)
-

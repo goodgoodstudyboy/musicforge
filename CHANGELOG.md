@@ -1,5 +1,21 @@
 # Changelog
 
+## v12.19.0 - 2026-07-13
+
+### Added
+- Runtime-verified Evidence Graph nodes and the seven built-in Release, Distribution, GA, Handoff, and Continuity policy profiles.
+- A bounded-context capability registry that fixes package types, verification report types, runtime verifier adapters, external proof requirements, and interface metadata.
+- `ga-check --policy/--evidence-manifest` and matching offline GA report verification, plus a hard Release signoff policy gate that cannot be bypassed with `force=true`.
+- release-check `v1219.evidence_policy_smoke` covering stale passed reports, duplicate verification identity, path redaction, profile inventory, and runtime package tamper.
+
+### Changed
+- Consolidated Studio's primary navigation into Create, Studio, Quality, Delivery, Trust, Program, and System workspaces.
+- Marked legacy GA `--require-*` evidence flags as v13 removal candidates; new gates use policy plus an evidence manifest.
+
+### Security
+- Policy profiles cannot disable integrity, current-generation, runtime-verification, or no-blocker invariants.
+- HTTP policy manifests and all referenced evidence are confined to the MusicForge workspace; one verification report cannot satisfy multiple component identities.
+
 ## v12.18.0 - 2026-07-13
 
 ### Added

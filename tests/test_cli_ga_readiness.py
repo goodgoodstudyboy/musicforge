@@ -55,6 +55,25 @@ def test_ga_check_cli_blocks_missing_manual_acceptance(tmp_path: Path) -> None:
     assert result.returncode == 1
     report = json.loads(result.stdout)
     assert report["status"] == "blocked"
+    assert "Deprecated GA evidence flags" in result.stderr
+
+
+def test_ga_check_cli_policy_requires_external_manifest(tmp_path: Path) -> None:
+    _write_repo(tmp_path)
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1]) + os.pathsep + os.environ.get("PYTHONPATH", "")}
+
+    result = subprocess.run(
+        [sys.executable, "-m", "song_agent.cli", "ga-check", "--policy", "ga.standard", "--json"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    statuses = {check["check_id"]: check["status"] for check in report["checks"]}
+    assert statuses["ga.evidence_policy"] == "failed"
 
 
 def test_verify_ga_readiness_report_cli_json(tmp_path: Path) -> None:
