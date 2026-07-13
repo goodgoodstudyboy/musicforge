@@ -1,6 +1,6 @@
-# Target Modular Monolith
+# Modular Monolith LTS
 
-The v13 target keeps MusicForge as one local application while enforcing:
+The v13 cutover keeps MusicForge as one local application while enforcing:
 
 ```text
 interfaces -> application -> domains -> platform
@@ -22,9 +22,9 @@ class.
 ## Interface Shape
 
 CLI, API, and Web modules are thin adapters over application commands and
-queries. Compatibility facades only forward to new modules. The v13 cutover
-removes superseded implementation paths after differential and migration tests
-pass.
+queries. Superseded matrix/runner facades are removed. The small historical
+release-check adapter remains archive-only through v13.1 so old evidence tests
+stay readable.
 
 Microservices, network queues, distributed transactions, and package-internal
 self-attestation are outside the target architecture.

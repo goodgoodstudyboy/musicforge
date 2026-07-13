@@ -1,22 +1,23 @@
 # Current Architecture
 
-MusicForge v12.17 is a local-first modular monolith in transition from a large
-flat package. It remains one Python process, one installation, and one local
-workspace. The existing CLI, HTTP API, Studio, evidence packages, and offline
-verifiers remain compatible while platform contracts are introduced.
+MusicForge v13.0 is a local-first modular monolith. It remains one Python
+process, one installation, and one local workspace. Active v12/v13 Program
+paths follow `interfaces -> application -> domains -> platform`. Earlier music
+capabilities remain operational through flat compatibility implementations;
+their complete inbound edge set is disclosed and frozen in the architecture
+baseline. Historical v1-v11 release checks are read-only compatibility paths.
 
 ## Current Layers
 
 - `song_agent/platform/`: dependency-free shared contracts plus shared
   verification, lifecycle, and persistence kernels.
 - `song_agent/application/`: orchestration that coordinates domain behavior.
-- Flat `song_agent/*.py` modules: legacy domain modules assigned to one of the
-  six bounded contexts in `architecture-baseline.json`.
-- `song_agent/cli.py`, `server.py`, and `webui.py`: compatibility interfaces
-  pending decomposition in v12.18.
-- `release_checks.py`, `release_check_*`, and `architecture_guardrails.py`:
-  release engineering. `ga_readiness.py` remains in the trust domain with the
-  single temporary dependency exception recorded in `DEBT.md`.
+- `song_agent/domains/`: explicit creation, studio, quality, delivery, trust,
+  and program bounded contexts.
+- `song_agent/interfaces/`: registry-driven CLI, API, and Studio adapters;
+  `cli.py`, `server.py`, and `webui.py` are bounded compatibility facades.
+- `song_agent/release_check/`: domain-owned matrix, runner, performance, and
+  check providers. The historical monolith is archive-only.
 
 ## v12.14 Changes
 
@@ -76,6 +77,18 @@ verifiers remain compatible while platform contracts are introduced.
 
 `architecture-baseline.json` is authoritative for the current ratchets. Runtime
 metrics are generated at `runs/architecture/metrics.json` and are not committed.
-Historical cycles and exceptions may be removed without changing the baseline;
-new cycles, exceptions, modules, or mega-file growth require an explicit
-baseline review.
+The active graph has no cycles or domain-to-interface imports. Historical
+compatibility cycles and every active-to-compatibility import remain visible in
+reviewer metrics. The baseline rejects any new compatibility edge while
+allowing this debt to shrink.
+
+## v13 Cutover
+
+- All active Program verifiers use `platform.verification.PackageSpec`.
+- Active signoff/reset/archive workflows use `platform.lifecycle`.
+- Active mutable Program stores use SQLite transactions and `WorkspaceLock`.
+- Release and GA gates accept Evidence Graph manifests and policy profiles.
+- `release_check_matrix.py` and `release_check_runner.py` were removed; the
+  canonical package owns those APIs.
+- Schema 2 migration requires a verified backup, source preservation,
+  rollback rehearsal, and a verified migration evidence archive.

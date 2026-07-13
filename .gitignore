@@ -1,5 +1,7 @@
 __pycache__/
 *.py[cod]
+*.egg-info/
+.coverage*
 .venv/
 .env
 .pytest_cache/
@@ -9,3 +11,4 @@ dist/
 build/
 outputs/
 runs/
+material/verify1.txt

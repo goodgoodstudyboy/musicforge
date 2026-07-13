@@ -237,7 +237,7 @@ def _command(
     )
 
 
-BASE_PROFILES = ("full", "quick", "latest", "ga")
+BASE_PROFILES = ("full", "quick", "latest", "ga", "v13")
 LATEST_PROFILES = ("full", "quick", "latest")
 V7_PROFILES = ("full", "v7")
 GA_PROFILES = ("full", "quick", "latest", "ga")
@@ -245,10 +245,11 @@ V10_PROFILES = ("full", "quick", "latest", "ga", "v10")
 V11_PROFILES = ("full", "quick", "latest", "ga", "v11")
 V12_PROFILES = ("full", "quick", "latest", "ga", "v12")
 V12_ACCELERATED_PROFILES = ("full", "latest", "ga", "v12")
+V13_PROFILES = ("full", "latest", "ga", "v13")
 
 _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000, duration_budget_seconds=1800),
-    _command("git.diff_check", "git diff --check", ("git", "diff", "--check"), group="git", kind="git", risk="high", timeout_seconds=60, profiles=BASE_PROFILES),
+    _command("git.diff_check", "git diff --check", ("git", "-c", "core.safecrlf=false", "diff", "--check"), group="git", kind="git", risk="high", timeout_seconds=60, profiles=BASE_PROFILES),
     _callable("git.status", "git status", "_git_status_check", group="git", risk="high", timeout_seconds=60, profiles=("full", "ga")),
     _callable("git.remote_url_token", "remote url token check", "_remote_url_token_check", group="git", risk="high", timeout_seconds=60, profiles=("full", "ga")),
     _callable("git.musicforge_configs_untracked", ".musicforge configs untracked", "_musicforge_configs_untracked_check", group="git", risk="normal", timeout_seconds=60, profiles=("full", "ga")),
@@ -406,13 +407,14 @@ _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v1212.receiver_acceptance_change_control_signed_mutation", "v12.12 Receiver Acceptance Change Control signed mutation", "_v1212_receiver_acceptance_change_control_signed_mutation", group="command-center", version="12.12", risk="critical", timeout_seconds=120, tags=("v12", "ga", "receiver-acceptance", "change-control", "signed-mutation"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
     _callable("v1212.receiver_acceptance_change_control_thin_integration", "v12.12 Receiver Acceptance Change Control thin integration", "_v1212_receiver_acceptance_change_control_thin_integration", group="command-center", version="12.12", risk="critical", timeout_seconds=180, tags=("v12", "ga", "receiver-acceptance", "change-control", "integration"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v12", "latest", "ga")),
     _callable("v1213.release_check_acceleration_smoke", "v12.13 Release Check acceleration smoke", "_v1213_release_check_acceleration_smoke", group="release-check", version="12.13", risk="high", timeout_seconds=60, tags=("v12", "ga", "performance", "fixture-cache"), profiles=V12_PROFILES, duration_budget_seconds=30, budget_enforced_profiles=("v12", "latest", "ga")),
-    _callable("v1214.architecture_guardrails_smoke", "v12.14 Architecture guardrails smoke", "_v1214_architecture_guardrails_smoke", group="architecture", version="12.14", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "dependencies", "ratchet"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga")),
-    _callable("v1215.verification_kernel_smoke", "v12.15 Verification Kernel smoke", "_v1215_verification_kernel_smoke", group="architecture", version="12.15", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "verification", "zip-security"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga")),
-    _callable("v1216.lifecycle_kernel_smoke", "v12.16 Evidence and Lifecycle Kernel smoke", "_v1216_lifecycle_kernel_smoke", group="architecture", version="12.16", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "lifecycle", "change-control"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga")),
-    _callable("v1217.persistence_kernel_smoke", "v12.17 Persistence, concurrency, and migration smoke", "_v1217_persistence_kernel_smoke", group="architecture", version="12.17", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "persistence", "concurrency", "migration"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga")),
-    _callable("v1218.interface_registry_smoke", "v12.18 CLI, API, and Web interface registry smoke", "_v1218_interface_registry_smoke", group="architecture", version="12.18", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "interfaces", "compatibility"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga")),
-    _callable("v1219.evidence_policy_smoke", "v12.19 Evidence Graph and policy engine smoke", "_v1219_evidence_policy_smoke", group="architecture", version="12.19", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "evidence-graph", "policy"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga")),
-    _callable("v1220.release_check_governance_smoke", "v12.20 Release Check and CI governance smoke", "_v1220_release_check_governance_smoke", group="release-check", version="12.20", risk="critical", timeout_seconds=120, tags=("v12", "ga", "release-check", "ci", "documentation"), profiles=V12_ACCELERATED_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga")),
+    _callable("v1214.architecture_guardrails_smoke", "v12.14 Architecture guardrails smoke", "_v1214_architecture_guardrails_smoke", group="architecture", version="12.14", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "dependencies", "ratchet"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
+    _callable("v1215.verification_kernel_smoke", "v12.15 Verification Kernel smoke", "_v1215_verification_kernel_smoke", group="architecture", version="12.15", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "verification", "zip-security"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
+    _callable("v1216.lifecycle_kernel_smoke", "v12.16 Evidence and Lifecycle Kernel smoke", "_v1216_lifecycle_kernel_smoke", group="architecture", version="12.16", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "lifecycle", "change-control"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
+    _callable("v1217.persistence_kernel_smoke", "v12.17 Persistence, concurrency, and migration smoke", "_v1217_persistence_kernel_smoke", group="architecture", version="12.17", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "persistence", "concurrency", "migration"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
+    _callable("v1218.interface_registry_smoke", "v12.18 CLI, API, and Web interface registry smoke", "_v1218_interface_registry_smoke", group="architecture", version="12.18", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "interfaces", "compatibility"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
+    _callable("v1219.evidence_policy_smoke", "v12.19 Evidence Graph and policy engine smoke", "_v1219_evidence_policy_smoke", group="architecture", version="12.19", risk="critical", timeout_seconds=120, tags=("v12", "ga", "architecture", "evidence-graph", "policy"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
+    _callable("v1220.release_check_governance_smoke", "v12.20 Release Check and CI governance smoke", "_v1220_release_check_governance_smoke", group="release-check", version="12.20", risk="critical", timeout_seconds=120, tags=("v12", "ga", "release-check", "ci", "documentation"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
+    _callable("v130.lts_cutover_smoke", "v13.0 modular monolith cutover and LTS smoke", "_v130_lts_cutover_smoke", group="architecture", version="13.0", risk="critical", timeout_seconds=180, tags=("v13", "ga", "architecture", "migration", "lts"), profiles=V13_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga")),
 )
 
 
@@ -455,8 +457,8 @@ def _govern_definition(definition: ReleaseCheckDefinition) -> ReleaseCheckDefini
 
 CHECK_DEFINITIONS = tuple(_govern_definition(definition) for definition in _RAW_CHECK_DEFINITIONS)
 
-KNOWN_PROFILES = {"full", "nightly", "security", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "ga", "publish"}
-PROFILE_ORDER = ("full", "quick", "latest", "security", "nightly", "v7", "v8", "v9", "v10", "v11", "v12", "ga", "publish")
+KNOWN_PROFILES = {"full", "nightly", "security", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "ga", "publish"}
+PROFILE_ORDER = ("full", "quick", "latest", "security", "nightly", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "ga", "publish")
 
 
 def release_check_profiles() -> tuple[str, ...]:

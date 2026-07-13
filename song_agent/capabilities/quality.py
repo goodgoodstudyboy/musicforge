@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.capabilities.registry import CapabilitySpec, RuntimeVerificationSpec
+from song_agent.capabilities.model import CapabilitySpec, RuntimeVerificationSpec
 
 
 QUALITY_CAPABILITIES = (

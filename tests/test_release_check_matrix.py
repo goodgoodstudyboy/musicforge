@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from song_agent.release_check_matrix import (
+from song_agent.release_check.matrix import (
     ReleaseCheckDefinition,
     ReleaseCheckMatrixError,
     all_check_definitions,
     select_check_definitions,
     validate_check_definitions,
 )
-from song_agent.release_check_runner import run_release_check_matrix
+from song_agent.release_check.runner import run_release_check_matrix
 
 
 def test_release_check_definitions_are_valid() -> None:

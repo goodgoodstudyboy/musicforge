@@ -6,6 +6,12 @@ locally. The v12.14-v13.0 architecture program replaces the historical flat
 package incrementally without changing public CLI/API behavior or weakening
 offline verification.
 
+v13.0 is the active LTS cutover: active Program workflows use the shared
+verification, lifecycle, persistence, Evidence Graph, and policy kernels.
+Earlier music capabilities remain operational compatibility code. Their
+inbound dependency edges and historical cycles are reported separately and
+held to a no-growth baseline rather than represented as migrated code.
+
 ## Dependency Direction
 
 ```text

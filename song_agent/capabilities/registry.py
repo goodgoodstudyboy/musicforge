@@ -1,37 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from importlib import import_module
-from typing import Any, Callable
+from typing import Any
 
+from song_agent.capabilities.model import CapabilitySpec, RuntimeVerificationSpec
 
-@dataclass(frozen=True)
-class RuntimeVerificationSpec:
-    module: str
-    function: str
-    package_type: str
-    verification_package_type: str
-    defaults: tuple[tuple[str, Any], ...] = ()
-    proof_arguments: tuple[tuple[str, str], ...] = ()
-    required_proofs: tuple[str, ...] = ()
-
-    def verifier(self) -> Callable[..., dict[str, Any]]:
-        return getattr(import_module(self.module), self.function)
-
-
-@dataclass(frozen=True)
-class CapabilitySpec:
-    capability_id: str
-    component_type: str
-    bounded_context: str
-    application_service: str
-    runtime: RuntimeVerificationSpec
-    gate_policies: tuple[str, ...] = ()
-    cli_commands: tuple[str, ...] = ()
-    api_routes: tuple[str, ...] = ()
-    web_panel: str = ""
-    release_checks: tuple[str, ...] = ()
-    compatibility_aliases: tuple[str, ...] = ()
+# Compatibility export for v12 callers; definitions live in model.py so the
+# registry/provider dependency remains acyclic.
+__all__ = ["CapabilityRegistry", "CapabilitySpec", "RuntimeVerificationSpec", "capability_registry"]
 
 
 class CapabilityRegistry:

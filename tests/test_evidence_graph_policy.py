@@ -116,6 +116,17 @@ def test_evidence_graph_rejects_stale_report_after_package_tamper(tmp_path: Path
     assert "evidence_verification_zip_sha256" in tampered.nodes[0].blockers
 
 
+def test_evidence_graph_treats_package_directory_as_failed_evidence(tmp_path: Path) -> None:
+    package, _report, manifest = _fixture(tmp_path)
+    package.unlink()
+    package.mkdir()
+
+    graph = build_evidence_graph(manifest, registry=_registry())
+
+    assert graph.status == "failed"
+    assert "evidence_package_missing" in graph.nodes[0].blockers
+
+
 def test_evidence_graph_rejects_duplicate_identity_and_report_reuse(tmp_path: Path) -> None:
     package, report, manifest = _fixture(tmp_path)
     write_evidence_graph_manifest(

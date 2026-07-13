@@ -3,8 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from song_agent.release_check_matrix import ReleaseCheckDefinition
-from song_agent.release_check_runner import run_release_check_matrix
+from song_agent.release_check.matrix import ReleaseCheckDefinition
+from song_agent.release_check.runner import run_release_check_matrix
 from song_agent.release_check.performance import PROFILE_DURATION_BUDGET_SECONDS
 
 

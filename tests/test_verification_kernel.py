@@ -76,6 +76,18 @@ def test_verification_kernel_happy_package_and_report_envelope(tmp_path: Path) -
     assert blockers == set()
 
 
+def test_verification_kernel_missing_or_directory_path_fails_closed(tmp_path: Path) -> None:
+    missing_status, missing_blockers = _status(tmp_path / "missing.zip")
+    directory = tmp_path / "directory.zip"
+    directory.mkdir()
+    directory_status, directory_blockers = _status(directory)
+
+    assert missing_status == "failed"
+    assert directory_status == "failed"
+    assert "kernel_test_zip_exists" in missing_blockers
+    assert "kernel_test_zip_exists" in directory_blockers
+
+
 @pytest.mark.parametrize(
     ("name", "entries", "expected_check"),
     [
@@ -102,6 +114,18 @@ def test_verification_kernel_attack_matrix(
 
 
 def test_verification_kernel_rejects_duplicate_raw_backslash_trailing_and_spoof(tmp_path: Path) -> None:
+    missing_file_index = tmp_path / "missing-file-index.zip"
+    manifest_without_files = {
+        "schema_version": 1,
+        "package_type": "musicforge_test_kernel_package",
+    }
+    manifest_without_files["integrity_hash"] = integrity_hash(manifest_without_files)
+    with zipfile.ZipFile(missing_file_index, "w") as archive:
+        archive.writestr("manifest.json", json.dumps(manifest_without_files, sort_keys=True))
+        archive.writestr("data.json", b"{}")
+        archive.writestr("README.txt", b"readme")
+    assert "kernel_test_manifest_files_required" in _status(missing_file_index)[1]
+
     duplicate_manifest_rows = tmp_path / "duplicate-manifest-rows.zip"
     data = b"{}"
     readme = b"readme"

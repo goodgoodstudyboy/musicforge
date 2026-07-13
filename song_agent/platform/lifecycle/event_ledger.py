@@ -114,7 +114,7 @@ class HistoryChain:
         raise ValueError("History event was not found.")
 
     def latest_state(self, event_states: dict[str, str], *, default: str = "unsigned") -> dict[str, Any]:
-        state = {"status": default, "event": None}
+        state: dict[str, Any] = {"status": default, "event": None}
         for row in self.read():
             event_type = str(row.get("event_type") or "")
             if event_type in event_states:

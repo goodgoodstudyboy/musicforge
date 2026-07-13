@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from song_agent.platform.persistence import LegacyWorkspaceMigrator, PersistenceRecovery, WorkspaceLock
+from song_agent.platform.persistence import LegacyWorkspaceMigrator, PersistenceRecovery, V13MigrationOrchestrator, WorkspaceLock
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,6 +17,9 @@ def build_parser() -> argparse.ArgumentParser:
     rollback = subparsers.add_parser("migrate-rollback")
     rollback.add_argument("migration_id")
     subparsers.add_parser("recover")
+    subparsers.add_parser("v13-plan")
+    subparsers.add_parser("v13-apply")
+    subparsers.add_parser("v13-rollback-rehearsal")
     recover_lock = subparsers.add_parser("recover-lock")
     recover_lock.add_argument("--force", action="store_true")
     return parser
@@ -34,6 +37,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = LegacyWorkspaceMigrator(workspace).rollback(args.migration_id)
         elif args.action == "recover":
             result = PersistenceRecovery(workspace).recover()
+        elif args.action == "v13-plan":
+            result = V13MigrationOrchestrator(workspace).dry_run()
+        elif args.action == "v13-apply":
+            result = V13MigrationOrchestrator(workspace).execute()
+        elif args.action == "v13-rollback-rehearsal":
+            result = V13MigrationOrchestrator(workspace).rollback_rehearsal()
         else:
             result = {"status": "passed", "recovered": WorkspaceLock(workspace).recover(force=args.force)}
     except Exception as exc:

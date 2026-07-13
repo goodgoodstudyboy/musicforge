@@ -1394,7 +1394,6 @@ def test_v116_unified_command_center_release_train_smoke(tmp_path: Path) -> None
     assert "missing_external=failed" in detail
     assert "declared_extra=failed" in detail
     assert "signoff_full_resign_signed_by=failed" in detail
-    assert "deferred_only=blocked/409" in detail
     assert "stale_external=failed" in detail
     assert "delete_signoff=409" in detail
 
@@ -1434,6 +1433,7 @@ def test_v120_unified_release_program_board_smoke(tmp_path: Path) -> None:
     ok, detail = _v120_unified_release_program_board_smoke(tmp_path)
 
     assert ok is True, detail
+    assert "deferred_only=blocked/409" in detail
 
 
 def test_v121_unified_release_program_operations_smoke(tmp_path: Path) -> None:

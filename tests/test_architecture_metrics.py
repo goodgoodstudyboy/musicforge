@@ -22,7 +22,9 @@ def test_architecture_module_ownership_is_complete() -> None:
 
     assert current_modules == baseline_modules
     assert all(row["layer"] in {"platform", "domain", "application", "interface", "release_check", "compatibility"} for row in baseline["modules"])
-    assert all(row["context"] in {None, "creation", "studio", "quality", "delivery", "trust", "program", "cli", "api", "web"} for row in baseline["modules"])
+    assert all(row["context"] in {None, "creation", "studio", "quality", "delivery", "trust", "program", "registry", "cli", "api", "web"} for row in baseline["modules"])
+    assert baseline["active_to_compatibility_import_max_count"] > 0
+    assert baseline["allowed_active_to_compatibility_imports"] == snapshot["active_to_compatibility_imports"]
 
 
 def test_architecture_ratchets_and_metrics_report(tmp_path: Path) -> None:
@@ -67,6 +69,7 @@ def test_architecture_ratchets_and_metrics_report(tmp_path: Path) -> None:
     assert len(metrics["top_largest_functions"]) == 20
     assert len(metrics["top_largest_classes"]) == 20
     assert metrics["internal_import_edge_count"] == len(metrics["internal_import_edges"])
+    assert metrics["active_to_compatibility_import_count"] == len(metrics["active_to_compatibility_imports"])
     assert metrics["domain_interface_violation_count"] == 0
     assert metrics["store_class_count"] > 0
     assert metrics["verifier_module_count"] > 0

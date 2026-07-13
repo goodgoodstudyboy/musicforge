@@ -43,11 +43,22 @@ runner, performance, fixtures, and domain check providers. Use:
 python -m song_agent.cli release-check --profile latest --skip-tests --json
 python -m song_agent.cli release-check --profile security --skip-tests --json
 python -m song_agent.cli release-check --profile ga --skip-tests --json
+python -m song_agent.cli release-check --profile v13 --skip-tests --json
 ```
 
-Historical v1-v11 checks remain in `full`, `nightly`, and explicit historical
-profiles. Current command, architecture, migration, and deprecation guidance is
-indexed under [`docs/`](docs/ARCHITECTURE.md).
+Historical v1-v11 checks remain read-only in `full`, `nightly`, and explicit
+historical profiles. Active v12/v13 Program paths follow `interfaces ->
+application -> domains -> platform`; earlier music capabilities remain on a
+reported, no-growth compatibility surface. Current architecture, migration,
+and deprecation guidance is indexed under [`docs/`](docs/ARCHITECTURE.md).
+
+`pytest -q` runs the complete active suite. Every active test belongs to exactly
+one primary `unit`, `contract`, or `integration` shard; security and slow are
+additional attributes. Archive-only release-check smoke is kept separate to
+avoid executing every historical scenario twice. CI runs all four `legacy_*`
+shards by test item on Windows and Linux. Active slow evidence replays run in
+nightly layer/partition jobs, while PR unit, contract, integration, and security
+jobs stay within their fast budgets without deleting the full assertions.
 
 ## Studio Panel
 
@@ -85,8 +96,8 @@ Use these commands before treating a branch as releasable:
 ```powershell
 python -m song_agent.cli doctor
 python -m song_agent.cli release-check --profile ga --skip-tests --json
-python -m song_agent.cli release-check --profile v12 --skip-tests --json
-python -m song_agent.cli release-check --profile v11 --skip-tests --json
+python -m song_agent.cli release-check --profile v13 --skip-tests --json
+song-agent-state --workspace .musicforge v13-plan
 python -m song_agent.cli ga-check --json
 ```
 

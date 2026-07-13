@@ -7,6 +7,7 @@ DEFAULT_SLOW_CHECK_SECONDS = 30.0
 PROFILE_DURATION_BUDGET_SECONDS: dict[str, float] = {
     "security": 900.0,
     "v12": 360.0,
+    "v13": 600.0,
     "latest": 480.0,
     "ga": 600.0,
 }

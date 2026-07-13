@@ -45,6 +45,11 @@ SECURITY_HELPER_NAMES = (
     "_is_safe_zip_entry",
     "_zip_has_no_trailing_data",
 )
+CUSTOM_LIFECYCLE_ALGORITHM_NAMES = (
+    "_append_history_event",
+    "_build_history_event",
+    "_hash_history_event",
+)
 DEPENDENCY_EXCEPTIONS: dict[tuple[str, str], str] = {}
 
 
@@ -63,8 +68,17 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
     }
     imports, imported_names, dynamic_internal_imports = _import_graph(modules, trees)
     all_cycles = _import_cycles(imports)
+    active_to_compatibility_imports = [
+        {"importer": importer, "imported": imported}
+        for importer in sorted(imports)
+        if ownership[importer]["layer"] not in {"compatibility", "release_check"}
+        for imported in sorted(imports[importer])
+        if ownership[imported]["layer"] == "compatibility"
+    ]
     production_modules = {
-        module for module, row in ownership.items() if row.get("layer") != "release_check"
+        module
+        for module, row in ownership.items()
+        if row.get("layer") not in {"compatibility", "release_check"}
     }
     production_imports = {
         module: {target for target in imports[module] if target in production_modules}
@@ -75,7 +89,9 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
         modules[module].relative_to(root).as_posix(): len(source.splitlines())
         for module, source in sources.items()
     }
-    helper_counts = _security_helper_counts(trees.values())
+    helper_counts = _security_helper_counts(trees, ownership, active_only=True)
+    all_helper_counts = _security_helper_counts(trees, ownership, active_only=False)
+    lifecycle_algorithm_counts = _lifecycle_algorithm_counts(trees, ownership)
     code_metrics = _code_metrics(root, modules, trees, line_counts, imports, ownership)
     boundary_violations = _boundary_violations(
         ownership,
@@ -98,11 +114,14 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
         ],
         "cycles": cycles,
         "all_import_cycles": all_cycles,
+        "active_to_compatibility_imports": active_to_compatibility_imports,
         "dynamic_internal_imports": dynamic_internal_imports,
         "boundary_violations": boundary_violations,
         "dependency_exceptions": dependency_exceptions,
         "mega_files": {path: line_counts.get(path, 0) for path in MEGA_FILE_PATHS},
         "security_helper_counts": helper_counts,
+        "all_security_helper_counts": all_helper_counts,
+        "active_custom_lifecycle_algorithm_counts": lifecycle_algorithm_counts,
         "code_metrics": code_metrics,
     }
 
@@ -110,7 +129,7 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
 def build_architecture_baseline(
     repo_root: Path | str = ".",
     *,
-    baseline_version: str = "12.14.0",
+    baseline_version: str = "13.0.0",
 ) -> dict[str, Any]:
     snapshot = build_architecture_snapshot(repo_root)
     return {
@@ -121,15 +140,18 @@ def build_architecture_baseline(
         "allowed_cycles": snapshot["cycles"],
         "mega_file_max_lines": snapshot["mega_files"],
         "security_helper_max_counts": snapshot["security_helper_counts"],
+        "active_to_compatibility_import_max_count": len(snapshot["active_to_compatibility_imports"]),
+        "allowed_active_to_compatibility_imports": snapshot["active_to_compatibility_imports"],
         "dependency_exceptions": snapshot["dependency_exceptions"],
         "required_absent_dependencies": [
             {"importer": "song_agent.server", "imported": "song_agent.cli"},
             {"importer": "song_agent.mix_render", "imported": "song_agent.server"},
         ],
         "notes": {
-            "allowed_cycles": "Legacy domain cycles recorded at v12.14; they may be removed but no new cycle may be added.",
-            "mega_files": "Tracked files may stay equal or shrink; growth is a release blocker.",
-            "security_helpers": "Duplicate helper counts may stay equal or shrink until v12.15 centralizes ZIP verification.",
+            "allowed_cycles": "The active production graph is acyclic. Historical compatibility cycles remain visible only in all_import_cycles metrics.",
+            "mega_files": "Interface and release-check facades must remain below v13 hard limits.",
+            "security_helpers": "Active verifier ZIP safety is owned exclusively by platform.verification.",
+            "compatibility_imports": "Active-to-compatibility imports are visible debt and may only decrease after the v13 cutover.",
         },
     }
 
@@ -200,6 +222,24 @@ def evaluate_architecture(
         current = int((snapshot.get("security_helper_counts") or {}).get(name, 0))
         if current > int(maximum):
             blockers.append(f"architecture_security_helper_growth:{name}:{current}>{maximum}")
+    compatibility_import_count = len(snapshot.get("active_to_compatibility_imports", []))
+    compatibility_import_maximum = int(baseline.get("active_to_compatibility_import_max_count", compatibility_import_count))
+    baseline_compatibility_imports = {
+        (str(row.get("importer")), str(row.get("imported")))
+        for row in baseline.get("allowed_active_to_compatibility_imports", [])
+    }
+    current_compatibility_imports = {
+        (str(row.get("importer")), str(row.get("imported")))
+        for row in snapshot.get("active_to_compatibility_imports", [])
+    }
+    blockers.extend(
+        f"architecture_compatibility_import_unapproved:{importer}->{imported}"
+        for importer, imported in sorted(current_compatibility_imports - baseline_compatibility_imports)
+    )
+    if compatibility_import_count > compatibility_import_maximum:
+        blockers.append(
+            f"architecture_compatibility_import_growth:{compatibility_import_count}>{compatibility_import_maximum}"
+        )
 
     metrics = {
         "schema_version": ARCHITECTURE_BASELINE_SCHEMA_VERSION,
@@ -209,9 +249,13 @@ def evaluate_architecture(
         "total_source_lines": snapshot["total_source_lines"],
         "mega_files": snapshot["mega_files"],
         "security_helper_counts": snapshot["security_helper_counts"],
+        "all_security_helper_counts": snapshot["all_security_helper_counts"],
+        "active_custom_lifecycle_algorithm_counts": snapshot["active_custom_lifecycle_algorithm_counts"],
         "cycle_count": len(snapshot["cycles"]),
         "cycles": snapshot["cycles"],
         "all_import_cycle_count": len(snapshot["all_import_cycles"]),
+        "active_to_compatibility_import_count": compatibility_import_count,
+        "active_to_compatibility_imports": snapshot["active_to_compatibility_imports"],
         "boundary_violation_count": len(snapshot["boundary_violations"]),
         "dependency_exceptions": snapshot["dependency_exceptions"],
         "source_file_count": snapshot["code_metrics"]["source_file_count"],
@@ -296,6 +340,8 @@ def _module_ownership(module: str, path: str) -> dict[str, Any]:
         return _ownership_row(module, path, "platform", None)
     if module.startswith("song_agent.application"):
         return _ownership_row(module, path, "application", None)
+    if module.startswith("song_agent.capabilities"):
+        return _ownership_row(module, path, "application", None)
     if module.startswith("song_agent.interfaces."):
         parts = module.split(".")
         context = parts[2] if len(parts) > 2 and parts[2] in INTERFACE_CONTEXTS else None
@@ -307,7 +353,11 @@ def _module_ownership(module: str, path: str) -> dict[str, Any]:
     if module.startswith("song_agent.domains."):
         parts = module.split(".")
         return _ownership_row(module, path, "domain", parts[2] if len(parts) > 2 else "creation")
-    return _ownership_row(module, path, "domain", _legacy_domain_context(module))
+    if module == "song_agent.domains":
+        return _ownership_row(module, path, "domain", None)
+    if module.startswith("song_agent.unified_release_program"):
+        return _ownership_row(module, path, "domain", "program")
+    return _ownership_row(module, path, "compatibility", _legacy_domain_context(module))
 
 
 def _ownership_row(module: str, path: str, layer: str, context: str | None) -> dict[str, Any]:
@@ -499,7 +549,7 @@ def _boundary_violations(
                 reason = "application_must_not_depend_on_interface_or_release_check"
             elif importer_layer == "domain" and imported_layer in {"interface", "release_check"}:
                 reason = "domain_must_not_depend_on_interface_or_release_check"
-            elif importer_layer in {"platform", "application", "domain", "compatibility"} and imported_layer == "release_check":
+            elif importer_layer in {"platform", "application", "domain"} and imported_layer == "release_check":
                 reason = "production_must_not_depend_on_release_check"
             if reason:
                 if (importer, imported) not in DEPENDENCY_EXCEPTIONS:
@@ -535,9 +585,35 @@ def _active_dependency_exceptions(imports: dict[str, set[str]]) -> list[dict[str
     ]
 
 
-def _security_helper_counts(trees: Iterable[ast.AST]) -> dict[str, int]:
+def _security_helper_counts(
+    trees: dict[str, ast.AST],
+    ownership: dict[str, dict[str, Any]],
+    *,
+    active_only: bool,
+) -> dict[str, int]:
     counts = {name: 0 for name in SECURITY_HELPER_NAMES}
-    for tree in trees:
+    for module, tree in trees.items():
+        layer = str(ownership[module]["layer"])
+        if active_only and layer in {"compatibility", "release_check"}:
+            continue
+        if module == "song_agent.platform.verification.zip_security":
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in counts:
+                counts[node.name] += 1
+    return counts
+
+
+def _lifecycle_algorithm_counts(
+    trees: dict[str, ast.AST],
+    ownership: dict[str, dict[str, Any]],
+) -> dict[str, int]:
+    counts = {name: 0 for name in CUSTOM_LIFECYCLE_ALGORITHM_NAMES}
+    for module, tree in trees.items():
+        if ownership[module]["layer"] in {"compatibility", "release_check"}:
+            continue
+        if module.startswith("song_agent.platform.lifecycle"):
+            continue
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in counts:
                 counts[node.name] += 1

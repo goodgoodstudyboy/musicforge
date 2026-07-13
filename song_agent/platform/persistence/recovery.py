@@ -22,7 +22,12 @@ class PersistenceRecovery:
             return []
         rows = []
         for intent_path in sorted(self.artifacts.transactions_root.glob("*/intent.json")):
-            intent = json.loads(intent_path.read_text(encoding="utf-8"))
+            try:
+                intent = json.loads(intent_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"Recovery intent is unreadable: {intent_path.name}.") from exc
+            if not isinstance(intent, dict):
+                raise RuntimeError(f"Recovery intent must be a JSON object: {intent_path.name}.")
             marker = intent_path.parent / "commit.marker"
             if not marker.exists() or intent.get("status") != "committed":
                 rows.append(intent)
@@ -37,7 +42,10 @@ class PersistenceRecovery:
                 namespace = str(intent.get("namespace") or "")
                 generation = self.artifacts.generation_dir(namespace, transaction_id)
                 pointer = self.artifacts.read_pointer(namespace)
-                files = intent.get("files") if isinstance(intent.get("files"), list) else []
+                raw_files = intent.get("files")
+                if not isinstance(raw_files, list) or not raw_files or not all(isinstance(row, dict) for row in raw_files):
+                    raise RuntimeError(f"Recovery file ledger is invalid for transaction {transaction_id}.")
+                files: list[dict[str, Any]] = raw_files
                 if generation.exists():
                     if not self.artifacts.verify_tree(generation, files):
                         raise RuntimeError(f"Recovery integrity failure for transaction {transaction_id}.")

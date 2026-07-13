@@ -85,13 +85,16 @@ from song_agent.public_trust_center_publication import publication_channel_state
 from song_agent.releases import stable_hash
 from song_agent.schemas.song import SongRequest
 from song_agent.song_editor import EditorPreviewStore, apply_editor_patch, build_editor_state, editor_edit_metadata
-from song_agent.release_check_runner import (
+from song_agent.release_check.runner import (
     CheckResult,
     ReleaseCheckReport,
     print_release_check_report,
     run_release_check_matrix,
 )
 from song_agent.trust_operations_hub import TrustOperationsHubStateError
+
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 SECRET_PATTERNS = [
@@ -11499,8 +11502,8 @@ def _v74_release_portfolio_governance_attestation_portal_smoke(root: Path) -> tu
 def _v75_release_check_matrix_smoke(root: Path) -> tuple[bool, str]:
     base: Path | None = None
     try:
-        from song_agent.release_check_matrix import ReleaseCheckDefinition, all_check_definitions, select_check_definitions, validate_check_definitions
-        from song_agent.release_check_runner import run_release_check_matrix
+        from song_agent.release_check.matrix import ReleaseCheckDefinition, all_check_definitions, select_check_definitions, validate_check_definitions
+        from song_agent.release_check.runner import run_release_check_matrix
 
         validate_check_definitions()
         definitions = all_check_definitions()
@@ -16432,7 +16435,7 @@ def _v108_release_audio_certification_smoke(root: Path) -> tuple[bool, str]:
                     require_remediation_when_needed=True,
                 )
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_certification=True,
                     release_audio_certification_zip_path=cert_zip["zip_path"],
@@ -16594,7 +16597,7 @@ def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
                     release_audio_certification_verification_report_path=cert_store.verification_report_path(release_id),
                 )
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_timeline=True,
                     release_audio_timeline_zip_path=timeline_zip["zip_path"],
@@ -16659,7 +16662,7 @@ def _v109_release_audio_timeline_smoke(root: Path) -> tuple[bool, str]:
                 cert_zip_tamper_refresh = tamper_timeline_store.refresh_timeline(tamper_release_id)
                 cert_zip_tamper_gate = tamper_timeline_store.gate(tamper_release_id, required=True, require_signed=True, require_current_certification=True)
                 tamper_ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_timeline=True,
                     release_audio_timeline_zip_path=tamper_timeline_zip["zip_path"],
@@ -16792,7 +16795,7 @@ def _v1010_release_audio_regression_guard_smoke(root: Path) -> tuple[bool, str]:
                 zipped = store.build_zip(current["release_id"])
                 verification = store.verify_zip(current["release_id"], strict=True, require_passed=True, require_signed=True, require_current=True, require_baseline_current=True)
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_regression_guard=True,
                     release_audio_regression_zip_path=zipped["zip_path"],
@@ -17049,7 +17052,7 @@ def _v1011_release_audio_baseline_response_smoke(root: Path) -> tuple[bool, str]
                 )
                 response_gate = response_store.gate(current["release_id"], required=True, require_signed=True)
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_baseline_governance=True,
                     release_audio_baseline_registry_zip_path=clean_baseline_zip,
@@ -17231,7 +17234,7 @@ def _v1012_release_audio_quality_observatory_smoke(root: Path) -> tuple[bool, st
                 gate = store.gate(current["release_id"], observatory_id=observatory_id, required=True, require_no_critical_risk=True)
 
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_quality_observatory=True,
                     release_audio_quality_observatory_zip_path=zipped["zip_path"],
@@ -17365,7 +17368,7 @@ def _v1013_release_audio_quality_action_queue_smoke(root: Path) -> tuple[bool, s
                 filtered_manual_ids.update(str(row.get("item_id")) for row in filtered_run.get("results", {}).get("results", []) if row.get("status") == "manual_required" and row.get("item_id"))
 
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_quality_observatory=True,
                     release_audio_quality_observatory_zip_path=observatory_zip["zip_path"],
@@ -17604,7 +17607,7 @@ def _v1014_release_audio_quality_action_queue_signoff_smoke(root: Path) -> tuple
                 release_gate = signoff_store.gate(current["release_id"], queue_id=queue_id, required=True)
 
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_quality_action_queue_signoff=True,
                     release_audio_quality_action_queue_signoff_archive_path=archive["zip_path"],
@@ -17796,7 +17799,7 @@ def _v1015_release_audio_command_center_smoke(root: Path) -> tuple[bool, str]:
                 release_gate = store.gate(current["release_id"], required=True, evidence=evidence)
 
                 ga_report = build_ga_readiness_report(
-                    repo_root=Path(__file__).resolve().parents[1],
+                    repo_root=_REPOSITORY_ROOT,
                     allow_dirty=True,
                     require_release_audio_command_center=True,
                     release_audio_command_center_zip_path=zipped["zip_path"],
@@ -22102,7 +22105,7 @@ def _v1213_release_check_acceleration_smoke(root: Path) -> tuple[bool, str]:
         from types import SimpleNamespace
 
         from song_agent.release_check_fixtures import ReleaseCheckFixtureCache
-        from song_agent.release_check_matrix import select_check_definitions
+        from song_agent.release_check.matrix import select_check_definitions
         from song_agent.release_check_performance import PROFILE_DURATION_BUDGET_SECONDS, performance_summary
 
         with tempfile.TemporaryDirectory(prefix="mf-v1213-cache-smoke-") as temp:

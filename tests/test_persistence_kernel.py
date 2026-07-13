@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -17,10 +18,12 @@ from song_agent.platform.persistence import (
     PersistenceRecovery,
     WorkflowRepository,
     WorkspaceLock,
-    WorkspaceLockError,
+    V13MigrationOrchestrator,
+    migration_anchor_path,
+    verify_v13_migration_evidence,
 )
 from song_agent.platform.persistence.repository import sync_active_v12_state
-from song_agent.platform.verification.hashing import integrity_hash
+from song_agent.platform.verification.hashing import integrity_hash, sha256_bytes
 
 
 ACTIVE_V12_STORES = (
@@ -47,7 +50,7 @@ def test_database_wal_schema_repository_and_optimistic_concurrency(tmp_path: Pat
     with database.session() as connection:
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-    assert database.schema_version() == 1
+    assert database.schema_version() == 2
 
     repository = WorkflowRepository(database)
     first = repository.save("command_center", "cc-1", generation=1, status="draft", expected_version=0)
@@ -167,6 +170,24 @@ def test_file_unit_of_work_rolls_back_pre_generation_and_blocks_corrupt_recovery
         PersistenceRecovery(tmp_path).recover()
 
 
+def test_persistence_recovery_rejects_resigned_invalid_file_ledger(tmp_path: Path) -> None:
+    def crash(stage: str) -> None:
+        if stage == "after_generation":
+            raise RuntimeError("crash")
+
+    unit = FileUnitOfWork(tmp_path, "command-center", transaction_id="tx-invalid-ledger", crash_hook=crash)
+    unit.write_json("state.json", {"status": "ready"})
+    with pytest.raises(RuntimeError, match="crash"):
+        unit.commit()
+    intent_path = unit.artifacts.intent_path(unit.transaction_id)
+    intent = json.loads(intent_path.read_text(encoding="utf-8"))
+    intent["files"] = "forged"
+    intent_path.write_text(json.dumps(intent), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="file ledger is invalid"):
+        PersistenceRecovery(tmp_path).recover()
+
+
 def test_legacy_migration_is_dry_run_backed_up_idempotent_and_reversible(tmp_path: Path) -> None:
     workspace = tmp_path / ".musicforge"
     source = workspace / "unified-release-programs" / "urp-000001" / "continuity-command-center" / "command-center-report.json"
@@ -251,3 +272,94 @@ def test_active_v12_stores_use_cross_process_lock_facade() -> None:
         "unified_release_program_continuity_command_center_acceptance_change.py",
     ):
         assert "on_commit=lambda: sync_active_v12_state" in (source_root / filename).read_text(encoding="utf-8")
+
+
+def test_v13_migration_requires_verified_backup_rehearses_rollback_and_archives_evidence(tmp_path: Path) -> None:
+    workspace = tmp_path / ".musicforge"
+    source = workspace / "unified-release-programs" / "urp-000001" / "program-report.json"
+    source.parent.mkdir(parents=True)
+    document = {"program_id": "urp-000001", "status": "ready", "reviewer_note": "sk-private-not-exported"}
+    document["integrity_hash"] = integrity_hash(document)
+    source.write_text(json.dumps(document), encoding="utf-8")
+    original = source.read_bytes()
+    migration = V13MigrationOrchestrator(workspace)
+
+    plan = migration.dry_run()
+    rehearsal = migration.rollback_rehearsal()
+    report = migration.execute()
+    archive, verification = migration.build_evidence_archive(plan, report, rehearsal, tmp_path / "v13-migration.zip")
+
+    assert plan["verified_backup_required"] is True
+    assert rehearsal["status"] == "passed"
+    assert report["status"] == "passed"
+    assert report["verified_backup"] is True
+    assert len(report["target_hash"]) == 64
+    assert report["rollback_command"].startswith("song-agent-state migrate-rollback ")
+    assert source.read_bytes() == original
+    assert verification["status"] == "passed"
+    assert b"sk-private-not-exported" not in archive.read_bytes()
+    anchor = migration_anchor_path(archive)
+    assert anchor.is_file()
+
+    archive_without_anchor = tmp_path / "v13-migration-without-anchor.zip"
+    archive_without_anchor.write_bytes(archive.read_bytes())
+    missing_anchor = verify_v13_migration_evidence(archive_without_anchor, require_anchor=True)
+    assert missing_anchor["status"] == "failed"
+    assert "v13_migration_anchor_exists" in missing_anchor["blockers"]
+
+    semantic_tamper = tmp_path / "v13-migration-semantic-tamper.zip"
+    with zipfile.ZipFile(archive) as source_archive:
+        entries = {info.filename: source_archive.read(info.filename) for info in source_archive.infolist()}
+    tampered_report = json.loads(entries["migration-report.json"])
+    tampered_report["source_hash"] = "f" * 64
+    tampered_report["integrity_hash"] = integrity_hash(tampered_report)
+    entries["migration-report.json"] = (json.dumps(tampered_report, indent=2, sort_keys=True) + "\n").encode()
+    manifest = json.loads(entries["manifest.json"])
+    report_row = next(row for row in manifest["files"] if row["path"] == "migration-report.json")
+    report_row.update({"sha256": sha256_bytes(entries["migration-report.json"]), "size_bytes": len(entries["migration-report.json"])})
+    manifest["integrity_hash"] = integrity_hash(manifest)
+    entries["manifest.json"] = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+    with zipfile.ZipFile(semantic_tamper, "w", compression=zipfile.ZIP_DEFLATED) as target_archive:
+        for name, data in entries.items():
+            target_archive.writestr(name, data)
+    semantic_verification = verify_v13_migration_evidence(
+        semantic_tamper,
+        anchor_path=anchor,
+        require_anchor=True,
+    )
+    assert semantic_verification["status"] == "failed"
+    assert "v13_migration_source_hashes_match" in semantic_verification["blockers"]
+
+    full_resign = tmp_path / "v13-migration-full-resign.zip"
+    resigned_entries = dict(entries)
+    resigned_report = json.loads(resigned_entries["migration-report.json"])
+    resigned_report["source_hash"] = plan["source_hash"]
+    resigned_report["target_hash"] = "e" * 64
+    resigned_report["integrity_hash"] = integrity_hash(resigned_report)
+    resigned_entries["migration-report.json"] = (json.dumps(resigned_report, indent=2, sort_keys=True) + "\n").encode()
+    resigned_manifest = json.loads(resigned_entries["manifest.json"])
+    resigned_row = next(row for row in resigned_manifest["files"] if row["path"] == "migration-report.json")
+    resigned_row.update({"sha256": sha256_bytes(resigned_entries["migration-report.json"]), "size_bytes": len(resigned_entries["migration-report.json"])})
+    resigned_manifest["integrity_hash"] = integrity_hash(resigned_manifest)
+    resigned_entries["manifest.json"] = (json.dumps(resigned_manifest, indent=2, sort_keys=True) + "\n").encode()
+    with zipfile.ZipFile(full_resign, "w", compression=zipfile.ZIP_DEFLATED) as target_archive:
+        for name, data in resigned_entries.items():
+            target_archive.writestr(name, data)
+    resigned_verification = verify_v13_migration_evidence(full_resign, anchor_path=anchor, require_anchor=True)
+    assert resigned_verification["status"] == "failed"
+    assert {
+        "v13_migration_anchor_target_hash",
+        "v13_migration_anchor_archive_hash",
+    } <= set(resigned_verification["blockers"])
+
+    archive.write_bytes(archive.read_bytes() + b"tamper")
+    assert verify_v13_migration_evidence(archive, anchor_path=anchor, require_anchor=True)["status"] == "failed"
+
+
+def test_v13_migration_cli_plan_and_rehearsal(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    workspace = tmp_path / ".musicforge"
+
+    assert persistence_main(["--workspace", str(workspace), "v13-plan"]) == 0
+    assert json.loads(capsys.readouterr().out)["package_type"] == "musicforge_v13_migration_plan"
+    assert persistence_main(["--workspace", str(workspace), "v13-rollback-rehearsal"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "passed"

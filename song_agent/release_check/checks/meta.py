@@ -8,6 +8,7 @@ from song_agent.release_check_architecture import run_architecture_guardrails_sm
 from song_agent.release_check.checks.legacy import delegated_check
 from song_agent.release_check_interfaces import run_interface_registry_smoke
 from song_agent.release_check_persistence_kernel import run_persistence_kernel_smoke
+from song_agent.release_check.lts_cutover import run_lts_cutover_smoke
 
 
 DOMAIN = "meta"
@@ -68,4 +69,5 @@ CALLABLES = {
     "_v1217_persistence_kernel_smoke": run_persistence_kernel_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
+    "_v130_lts_cutover_smoke": run_lts_cutover_smoke,
 }

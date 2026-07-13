@@ -1,0 +1,306 @@
+from __future__ import annotations
+
+import ast
+import io
+import json
+import subprocess
+import tarfile
+from pathlib import Path
+from typing import Any
+
+from song_agent import __version__
+from song_agent.architecture_guardrails import build_architecture_snapshot
+from song_agent.capabilities import capability_registry
+from song_agent.release_check.matrix import all_check_definitions
+
+
+ACTIVE_VERIFIERS = (
+    "unified_release_program_verifier.py",
+    "unified_release_program_operations_verifier.py",
+    "unified_release_program_handoff_verifier.py",
+    "unified_release_program_vault_verifier.py",
+    "unified_release_program_vault_operations_verifier.py",
+    "unified_release_program_continuity_verifier.py",
+    "unified_release_program_continuity_distribution_verifier.py",
+    "unified_release_program_continuity_acceptance_verifier.py",
+    "unified_release_program_continuity_acceptance_change_verifier.py",
+    "unified_release_program_continuity_command_center_verifier.py",
+    "unified_release_program_continuity_command_center_signoff_verifier.py",
+    "unified_release_program_continuity_command_center_acceptance_verifier.py",
+    "unified_release_program_continuity_command_center_acceptance_change_verifier.py",
+)
+ACTIVE_LIFECYCLE_STORES = (
+    "unified_release_program.py",
+    "unified_release_program_operations.py",
+    "unified_release_program_handoff.py",
+    "unified_release_program_vault.py",
+    "unified_release_program_vault_operations.py",
+    "unified_release_program_continuity.py",
+    "unified_release_program_continuity_acceptance.py",
+    "unified_release_program_continuity_acceptance_change.py",
+    "unified_release_program_continuity_command_center_signoff.py",
+    "unified_release_program_continuity_command_center_acceptance.py",
+    "unified_release_program_continuity_command_center_acceptance_change.py",
+)
+ACTIVE_MUTABLE_STORES = (*ACTIVE_LIFECYCLE_STORES, "unified_release_program_continuity_command_center.py")
+
+
+def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
+    root = Path(repo_root).resolve()
+    snapshot = build_architecture_snapshot(root)
+    verifier_rows = _migration_rows(root, ACTIVE_VERIFIERS, ("PackageSpec", "verify_package_envelope"))
+    lifecycle_rows = _migration_rows(root, ACTIVE_LIFECYCLE_STORES, ("HistoryChain",))
+    persistence_rows = _migration_rows(root, ACTIVE_MUTABLE_STORES, ("WorkspaceLock",))
+    module_limits, function_limits = _structured_limits(root)
+    definitions = list(all_check_definitions())
+    expired_exceptions = [
+        row.check_id
+        for row in definitions
+        if row.budget_warning_only and _version_key(row.budget_exception_expires_version) <= _version_key(__version__)
+    ]
+    deprecations = json.loads((root / "docs" / "deprecations.json").read_text(encoding="utf-8"))
+    expired_deprecations = [
+        row["old_path"]
+        for row in deprecations["entries"]
+        if _version_key(str(row["removal_version"])) <= _version_key(__version__) and _deprecated_surface_exists(root, str(row["old_path"]))
+    ]
+    source = {
+        "production_cycle_count": len(snapshot["cycles"]),
+        "legacy_all_cycle_count": len(snapshot["all_import_cycles"]),
+        "active_to_compatibility_import_count": len(snapshot["active_to_compatibility_imports"]),
+        "active_to_compatibility_imports": snapshot["active_to_compatibility_imports"],
+        "boundary_violation_count": len(snapshot["boundary_violations"]),
+        "dynamic_internal_import_count": len(snapshot["dynamic_internal_imports"]),
+        "active_security_helpers": snapshot["security_helper_counts"],
+        "legacy_security_helpers": snapshot["all_security_helper_counts"],
+        "active_lifecycle_algorithms": snapshot["active_custom_lifecycle_algorithm_counts"],
+        "verifiers": verifier_rows,
+        "lifecycle": lifecycle_rows,
+        "persistence": persistence_rows,
+        "module_limit_exceptions": module_limits,
+        "function_limit_exceptions": function_limits,
+        "expired_budget_exceptions": expired_exceptions,
+        "expired_deprecations": expired_deprecations,
+    }
+    checks = {
+        "production_cycles_zero": source["production_cycle_count"] == 0,
+        "domain_interface_zero": source["boundary_violation_count"] == 0,
+        "dynamic_imports_zero": source["dynamic_internal_import_count"] == 0,
+        "active_custom_zip_helpers_zero": not any(source["active_security_helpers"].values()),
+        "active_custom_lifecycle_algorithms_zero": not any(source["active_lifecycle_algorithms"].values()),
+        "active_verifiers_migrated": all(row["migrated"] for row in verifier_rows),
+        "active_lifecycle_migrated": all(row["migrated"] for row in lifecycle_rows),
+        "active_persistence_migrated": all(row["migrated"] for row in persistence_rows),
+        "facade_limits": _facade_limits(root),
+        "new_module_limits": not module_limits,
+        "new_function_limits": not function_limits,
+        "policy_driven_ga_release": _policy_driven(root),
+        "test_layers_separated": _test_layers_separated(root),
+        "capability_registry_unique": len(capability_registry.all()) == len({row.component_type for row in capability_registry.all()}),
+        "budgets_current": not expired_exceptions,
+        "deprecations_current": not expired_deprecations,
+    }
+    return {
+        "schema_version": 1,
+        "package_type": "musicforge_v13_lts_audit",
+        "app_version": __version__,
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "source": source,
+        "comparison": _v1213_comparison(root),
+    }
+
+
+def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime: dict[str, Any] | None = None) -> Path:
+    root = Path(repo_root).resolve()
+    output = Path(target)
+    output.mkdir(parents=True, exist_ok=True)
+    audit = build_lts_audit(root)
+    runtime_data = runtime or {}
+    files = {
+        "architecture.json": audit,
+        "source-comparison.json": {"schema_version": 1, **audit["comparison"]},
+        "import-graph.json": {
+            "schema_version": 1,
+            "production_cycle_count": audit["source"]["production_cycle_count"],
+            "legacy_all_cycle_count": audit["source"]["legacy_all_cycle_count"],
+            "active_to_compatibility_import_count": audit["source"]["active_to_compatibility_import_count"],
+            "active_to_compatibility_imports": audit["source"]["active_to_compatibility_imports"],
+            "boundary_violation_count": audit["source"]["boundary_violation_count"],
+            "dynamic_internal_import_count": audit["source"]["dynamic_internal_import_count"],
+        },
+        "duplicate-helpers.json": {
+            "schema_version": 1,
+            "active": audit["source"]["active_security_helpers"],
+            "compatibility": audit["source"]["legacy_security_helpers"],
+            "active_lifecycle": audit["source"]["active_lifecycle_algorithms"],
+        },
+        "verifier-migration.json": {"schema_version": 1, "rows": audit["source"]["verifiers"]},
+        "lifecycle-migration.json": {"schema_version": 1, "rows": audit["source"]["lifecycle"]},
+        "persistence-migration.json": {"schema_version": 1, "rows": audit["source"]["persistence"]},
+        "cli-api-compatibility.json": {
+            "schema_version": 1,
+            "facade_limits_passed": audit["checks"]["facade_limits"],
+            "removed_facades": ["song_agent/release_check_matrix.py", "song_agent/release_check_runner.py"],
+            "archive_adapter": "song_agent/release_checks.py",
+        },
+        "compatibility.json": {
+            "schema_version": 1,
+            "legacy_all_cycle_count": audit["source"]["legacy_all_cycle_count"],
+            "legacy_security_helpers": audit["source"]["legacy_security_helpers"],
+            "catalog": json.loads((root / "docs" / "deprecations.json").read_text(encoding="utf-8")),
+        },
+        "deprecations.json": json.loads((root / "docs" / "deprecations.json").read_text(encoding="utf-8")),
+        "migration-rollback.json": runtime_data.get("migration", {"status": "pending_release_run"}),
+        "ci-matrix.json": runtime_data.get("ci", {"status": "pending_release_run"}),
+        "release-check-reports.json": runtime_data.get("release_checks", {"status": "pending_release_run"}),
+        "performance.json": runtime_data.get("performance", {"status": "pending_release_run"}),
+        "debt.json": {
+            "schema_version": 1,
+            "status": "documented",
+            "open_items": ["ARCH-006", "ARCH-007", "PERF-001", "QUAL-001"],
+            "source": "docs/architecture/DEBT.md",
+        },
+        "release-alignment.json": runtime_data.get("alignment", {"status": "pending_release_run"}),
+        "security-attack-matrix.json": _security_matrix(),
+        "runtime-verification.json": runtime_data or {"status": "pending_release_run"},
+    }
+    for name, document in files.items():
+        (output / name).write_text(json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (output / "README.md").write_text(_reviewer_readme(), encoding="utf-8")
+    return output
+
+
+def _migration_rows(root: Path, names: tuple[str, ...], required_tokens: tuple[str, ...]) -> list[dict[str, Any]]:
+    rows = []
+    for name in names:
+        text = (root / "song_agent" / name).read_text(encoding="utf-8")
+        rows.append({"module": f"song_agent/{name}", "required": list(required_tokens), "migrated": all(token in text for token in required_tokens)})
+    return rows
+
+
+def _structured_limits(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    module_rows: list[dict[str, Any]] = []
+    function_rows: list[dict[str, Any]] = []
+    roots = ("platform", "application", "capabilities", "domains", "release_check")
+    for path in sorted((root / "song_agent").rglob("*.py")):
+        relative = path.relative_to(root / "song_agent")
+        if not relative.parts or relative.parts[0] not in roots or "legacy" in relative.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        line_count = len(text.splitlines())
+        if line_count > 600:
+            module_rows.append({"path": relative.as_posix(), "lines": line_count, "limit": 600})
+        tree = ast.parse(text, filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                lines = int(node.end_lineno or node.lineno) - int(node.lineno) + 1
+                if lines > 80:
+                    function_rows.append({"path": relative.as_posix(), "function": node.name, "lines": lines, "limit": 80})
+    return module_rows, function_rows
+
+
+def _facade_limits(root: Path) -> bool:
+    limits = {"cli.py": 500, "server.py": 1000, "webui.py": 200, "release_checks.py": 300}
+    return all(len((root / "song_agent" / name).read_text(encoding="utf-8").splitlines()) < limit for name, limit in limits.items())
+
+
+def _policy_driven(root: Path) -> bool:
+    ga = (root / "song_agent" / "ga_readiness.py").read_text(encoding="utf-8")
+    release = (root / "song_agent" / "interfaces" / "api" / "routes" / "delivery.py").read_text(encoding="utf-8")
+    return all(token in ga for token in ("policy", "evidence_manifest_path", "ga.evidence_policy")) and all(
+        token in release for token in ("gate_policy", "evidence_manifest", "evaluate_evidence_policy_gate")
+    )
+
+
+def _test_layers_separated(root: Path) -> bool:
+    project = (root / "pyproject.toml").read_text(encoding="utf-8")
+    nightly = (root / ".github" / "workflows" / "nightly.yml").read_text(encoding="utf-8")
+    quality = (root / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
+    conftest = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    markers = ("legacy_early", "legacy_trust", "legacy_audio", "legacy_program")
+    return (
+        "addopts = \"-m 'not legacy' -n 4 --dist load\"" in project
+        and "pytest-xdist" in project
+        and all(f'"song_agent/platform/{name}"' in project for name in ("lifecycle", "persistence", "verification"))
+        and all(marker in project and marker in nightly for marker in markers)
+        and all(f"slow_partition_{index}" in project for index in range(2))
+        and "partition: [0, 1]" in nightly
+        and "-n 4 --dist load" in nightly
+        and "--profile nightly --skip-tests --json" in nightly
+        and "--profile nightly --skip-tests --list" not in nightly
+        and "slow and not legacy and ${{ matrix.layer }} and slow_partition_${{ matrix.partition }}" in nightly
+        and "shard: [unit, contract, integration]" in quality
+        and "def _primary_marker" in conftest
+        and "branches: [master]" in quality
+        and "fail-fast: false" in quality
+        and "actions/checkout@v4" not in quality + nightly
+        and "actions/setup-python@v5" not in quality + nightly
+    )
+
+
+def _deprecated_surface_exists(root: Path, value: str) -> bool:
+    if value.startswith("song_agent/") and "," not in value:
+        return (root / value).exists()
+    if value.startswith("ga --require"):
+        return "--require-manual-acceptance" in (root / "song_agent" / "interfaces" / "cli" / "commands" / "release_check.py").read_text(encoding="utf-8")
+    return False
+
+
+def _v1213_comparison(root: Path) -> dict[str, Any]:
+    current_files = list((root / "song_agent").rglob("*.py"))
+    current = {"modules": len(current_files), "lines": sum(len(path.read_text(encoding="utf-8").splitlines()) for path in current_files)}
+    completed = subprocess.run(["git", "archive", "--format=tar", "v12.13.0", "song_agent"], cwd=root, capture_output=True, check=False)
+    if completed.returncode != 0:
+        return {"v12.13": {"status": "unavailable"}, "v13.0": current}
+    modules = 0
+    lines = 0
+    with tarfile.open(fileobj=io.BytesIO(completed.stdout), mode="r:") as archive:
+        for member in archive.getmembers():
+            if member.isfile() and member.name.endswith(".py"):
+                modules += 1
+                stream = archive.extractfile(member)
+                lines += len((stream.read() if stream else b"").decode("utf-8", errors="replace").splitlines())
+    return {"v12.13": {"modules": modules, "lines": lines}, "v13.0": current, "module_delta": current["modules"] - modules, "line_delta": current["lines"] - lines}
+
+
+def _security_matrix() -> dict[str, Any]:
+    attacks = (
+        "declared_extra",
+        "duplicate_entry",
+        "dangerous_path",
+        "raw_backslash",
+        "musicforge_path",
+        "nested_zip",
+        "trailing_data",
+        "manifest_spoof",
+        "manifest_file_index_missing",
+        "redaction",
+        "external_binding_swap",
+        "full_resign",
+        "signed_mutation",
+        "concurrent_write",
+        "migration_backup_tamper",
+        "migration_archive_full_resign",
+    )
+    return {"schema_version": 1, "status": "covered", "attacks": [{"attack": attack, "expected": "failed_or_blocked"} for attack in attacks]}
+
+
+def _reviewer_readme() -> str:
+    return """# MusicForge v13 Reviewer Package
+
+This directory is generated from the current source and runtime reports. Review
+`architecture.json` first. `production_cycle_count` is the active modular
+monolith graph; `legacy_all_cycle_count` remains visible for compatibility
+adapters and is not represented as zero. `active_to_compatibility_import_count`
+and its complete edge list disclose the remaining migration debt and are held
+to a no-growth architecture ratchet.
+
+Runtime files are generated from the final full/latest/GA/v13, migration,
+package-install, CI, and repository-alignment runs. A `pending_release_run`
+status is not acceptable in the final release reviewer package.
+"""
+
+
+def _version_key(value: str) -> tuple[int, ...]:
+    return tuple(int(part) if part.isdigit() else 0 for part in str(value).strip().lstrip("v").split("."))

@@ -44,6 +44,10 @@ def run_verification_kernel_smoke(root: Path) -> tuple[bool, str]:
             happy_path = _write_package(base / "happy.zip", valid, spec.package_type)
             reports = {
                 "happy": _verify(happy_path, spec),
+                "missing_file_index": _verify(
+                    _write_package_without_file_index(base / "missing-file-index.zip", valid, spec.package_type),
+                    spec,
+                ),
                 "missing": _verify(_write_package(base / "missing.zip", {"README.txt": b"missing data"}, spec.package_type), spec),
                 "declared_extra": _verify(_write_package(base / "extra.zip", {**valid, "UNTRUSTED.txt": b"extra"}, spec.package_type), spec),
                 "dangerous_path": _verify(_write_package(base / "dangerous.zip", {**valid, "../escape.txt": b"escape"}, spec.package_type), spec),
@@ -100,6 +104,16 @@ def _write_package(path: Path, entries: dict[str, bytes], package_type: str) -> 
             for name, data in sorted(entries.items())
         ],
     }
+    manifest["integrity_hash"] = integrity_hash(manifest)
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("manifest.json", json.dumps(manifest, sort_keys=True))
+        for name, data in entries.items():
+            archive.writestr(name, data)
+    return path
+
+
+def _write_package_without_file_index(path: Path, entries: dict[str, bytes], package_type: str) -> Path:
+    manifest = {"schema_version": 1, "package_type": package_type}
     manifest["integrity_hash"] = integrity_hash(manifest)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("manifest.json", json.dumps(manifest, sort_keys=True))

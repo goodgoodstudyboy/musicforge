@@ -51,27 +51,51 @@ def build_evidence_graph(
     allowed_root: Path | str | None = None,
 ) -> EvidenceGraph:
     target = Path(manifest_path)
+    manifest = _read_evidence_manifest(target)
+    if registry is None:
+        raise EvidenceGraphBuildError("Evidence graph construction requires an explicit capability registry.")
+    graph_blockers = _manifest_blockers(manifest)
+    raw_items = manifest.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        graph_blockers.append("evidence_manifest_items_required")
+        raw_items = []
+    nodes = _build_nodes(
+        raw_items,
+        root=target.parent,
+        allowed_root=Path(allowed_root).resolve() if allowed_root is not None else None,
+        registry=registry,
+        blockers=graph_blockers,
+    )
+    return _finalize_graph(manifest, nodes, graph_blockers)
+
+
+def _read_evidence_manifest(target: Path) -> dict[str, Any]:
     try:
         manifest = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise EvidenceGraphBuildError(f"Evidence manifest could not be read: {exc}") from exc
     if not isinstance(manifest, dict):
         raise EvidenceGraphBuildError("Evidence manifest must be a JSON object.")
+    return manifest
 
-    if registry is None:
-        raise EvidenceGraphBuildError("Evidence graph construction requires an explicit capability registry.")
-    graph_blockers: list[str] = []
-    graph_warnings: list[str] = []
+
+def _manifest_blockers(manifest: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
     if manifest.get("package_type") != EVIDENCE_GRAPH_MANIFEST_PACKAGE_TYPE:
-        graph_blockers.append("evidence_manifest_package_type")
+        blockers.append("evidence_manifest_package_type")
     if not integrity_ok(manifest):
-        graph_blockers.append("evidence_manifest_integrity")
+        blockers.append("evidence_manifest_integrity")
+    return blockers
 
-    raw_items = manifest.get("items")
-    if not isinstance(raw_items, list) or not raw_items:
-        graph_blockers.append("evidence_manifest_items_required")
-        raw_items = []
 
+def _build_nodes(
+    raw_items: list[Any],
+    *,
+    root: Path,
+    allowed_root: Path | None,
+    registry: Any,
+    blockers: list[str],
+) -> list[EvidenceNode]:
     nodes: list[EvidenceNode] = []
     seen_identities: set[tuple[str, str, str, int]] = set()
     seen_node_ids: set[str] = set()
@@ -79,83 +103,58 @@ def build_evidence_graph(
     report_hash_owners: dict[str, tuple[str, str, str, int]] = {}
     for index, raw in enumerate(raw_items):
         if not isinstance(raw, dict):
-            graph_blockers.append(f"evidence_manifest_item_{index}_object")
+            blockers.append(f"evidence_manifest_item_{index}_object")
             continue
-        node = _build_node(
-            raw,
-            index=index,
-            root=target.parent,
-            allowed_root=Path(allowed_root).resolve() if allowed_root is not None else None,
-            registry=registry,
-        )
+        node = _build_node(raw, root=root, allowed_root=allowed_root, registry=registry)
         identity = node.ref.identity
         if identity in seen_identities:
-            graph_blockers.append(f"evidence_identity_duplicate:{node.node_id}")
+            blockers.append(f"evidence_identity_duplicate:{node.node_id}")
         seen_identities.add(identity)
         if node.node_id in seen_node_ids:
-            graph_blockers.append(f"evidence_node_id_duplicate:{node.node_id}")
+            blockers.append(f"evidence_node_id_duplicate:{node.node_id}")
         seen_node_ids.add(node.node_id)
-
         report_locator = str(raw.get("verification_report_path") or raw.get("verification_report") or "")
         if report_locator:
-            resolved_locator = str(_resolve_path(target.parent, report_locator)).casefold()
+            resolved_locator = str(_resolve_path(root, report_locator)).casefold()
             owner = report_owners.setdefault(resolved_locator, identity)
             if owner != identity:
-                graph_blockers.append(f"evidence_report_reused:{node.node_id}")
+                blockers.append(f"evidence_report_reused:{node.node_id}")
         if node.ref.verification_report_hash:
             owner = report_hash_owners.setdefault(node.ref.verification_report_hash, identity)
             if owner != identity:
-                graph_blockers.append(f"evidence_report_hash_reused:{node.node_id}")
+                blockers.append(f"evidence_report_hash_reused:{node.node_id}")
         nodes.append(node)
+    return nodes
 
-    edges = _build_edges(manifest, nodes, graph_blockers)
+
+def _finalize_graph(manifest: dict[str, Any], nodes: list[EvidenceNode], blockers: list[str]) -> EvidenceGraph:
+    edges = _build_edges(manifest, nodes, blockers)
     node_ids = {node.node_id for node in nodes}
     for node in nodes:
         for dependency in node.dependencies:
             if dependency not in node_ids:
-                graph_blockers.append(f"evidence_dependency_missing:{node.node_id}:{dependency}")
+                blockers.append(f"evidence_dependency_missing:{node.node_id}:{dependency}")
             else:
                 edges.append(EvidenceEdge(source=node.node_id, target=dependency, relation="depends_on"))
-
-    unique_edges = {
-        (edge.source, edge.target, edge.relation): edge
-        for edge in edges
-    }
+    unique_edges = {(edge.source, edge.target, edge.relation): edge for edge in edges}
     if _dependency_cycle(tuple(unique_edges.values())):
-        graph_blockers.append("evidence_dependency_cycle")
+        blockers.append("evidence_dependency_cycle")
     return EvidenceGraph(
         nodes=tuple(nodes),
         edges=tuple(unique_edges[key] for key in sorted(unique_edges)),
-        blockers=tuple(sorted(set(graph_blockers))),
-        warnings=tuple(sorted(set(graph_warnings))),
+        blockers=tuple(sorted(set(blockers))),
     )
 
 
 def _build_node(
     row: dict[str, Any],
     *,
-    index: int,
     root: Path,
     allowed_root: Path | None,
     registry: Any,
 ) -> EvidenceNode:
-    component_type = _text(row.get("component_type"))
-    component_id = _text(row.get("component_id"))
-    evidence_type = _text(row.get("evidence_type")) or "package"
-    try:
-        generation = max(1, int(row.get("generation") or 1))
-    except (TypeError, ValueError):
-        generation = 1
-    canonical_node_id = _node_id(component_type, component_id, evidence_type, generation)
-    provided_node_id = _text(row.get("node_id"))
-    node_id = canonical_node_id
-    blockers: list[str] = []
+    component_type, component_id, evidence_type, generation, node_id, blockers = _node_identity(row)
     warnings: list[str] = []
-    if not component_type or not component_id:
-        blockers.append("evidence_identity_required")
-    if provided_node_id and provided_node_id != canonical_node_id:
-        blockers.append("evidence_node_id_identity")
-
     capability = registry.resolve_component(component_type)
     package_path = _path_from_row(root, row, "package_path", "package", "zip_path", "zip", allowed_root=allowed_root)
     report_path = _path_from_row(root, row, "verification_report_path", "verification_report", allowed_root=allowed_root)
@@ -174,79 +173,16 @@ def _build_node(
         blockers.append("evidence_package_missing")
     if report_path is None or not report_path.is_file():
         blockers.append("evidence_verification_report_missing")
-
-    external_report: dict[str, Any] = {}
-    if report_path is not None and report_path.is_file():
-        try:
-            value = json.loads(report_path.read_text(encoding="utf-8"))
-            external_report = value if isinstance(value, dict) else {}
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            blockers.append("evidence_verification_report_readable")
     spec = capability.runtime
-    if external_report:
-        if external_report.get("package_type") != spec.verification_package_type:
-            blockers.append("evidence_verification_package_type")
-        if not integrity_ok(external_report):
-            blockers.append("evidence_verification_report_integrity")
-        if external_report.get("status") != "passed":
-            blockers.append("evidence_verification_report_status")
-
-    proofs = row.get("proofs") if isinstance(row.get("proofs"), dict) else {}
-    resolved_proofs: dict[str, Path] = {}
-    for key, _argument in spec.proof_arguments:
-        raw_path = proofs.get(key) or row.get(key)
-        if raw_path:
-            resolved_proofs[key] = _resolve_path(root, str(raw_path), allowed_root=allowed_root)
-    for key in spec.required_proofs:
-        if key not in resolved_proofs or not resolved_proofs[key].exists():
-            blockers.append(f"evidence_proof_missing:{key}")
-
-    runtime: dict[str, Any] = {}
-    if package_path is not None and package_path.is_file() and not any(item.startswith("evidence_proof_missing:") for item in blockers):
-        kwargs = dict(spec.defaults)
-        for key, argument in spec.proof_arguments:
-            if key in resolved_proofs:
-                kwargs[argument] = resolved_proofs[key]
-        try:
-            runtime = spec.verifier()(package_path, **kwargs)
-        except Exception as exc:
-            runtime = {"status": "failed", "blockers": ["runtime_verifier_exception"], "error": type(exc).__name__}
+    external_report = _read_external_report(report_path, spec.verification_package_type, blockers)
+    resolved_proofs = _resolve_proofs(row, root, allowed_root, spec, blockers)
+    runtime = _run_runtime(package_path, resolved_proofs, spec, blockers)
     runtime_status = _text(runtime.get("status")) or "failed"
-    if runtime_status != "passed":
-        blockers.append("evidence_runtime_verification")
-    if runtime and runtime.get("package_type") != spec.verification_package_type:
-        blockers.append("evidence_runtime_package_type")
-
-    actual_zip_hash = sha256_file(package_path) if package_path is not None else None
-    actual_zip_size = package_path.stat().st_size if package_path is not None and package_path.is_file() else 0
-    runtime_fp = _verification_fingerprint(runtime)
-    report_fp = _verification_fingerprint(external_report)
-    if not report_fp["zip_sha256"] or report_fp["zip_sha256"] != actual_zip_hash:
-        blockers.append("evidence_verification_zip_sha256")
-    if not report_fp["zip_size_bytes"] or report_fp["zip_size_bytes"] != actual_zip_size:
-        blockers.append("evidence_verification_zip_size")
-    if not runtime_fp["zip_sha256"] or runtime_fp["zip_sha256"] != actual_zip_hash:
-        blockers.append("evidence_runtime_zip_sha256")
-    if not runtime_fp["manifest_hash"] or report_fp["manifest_hash"] != runtime_fp["manifest_hash"]:
-        blockers.append("evidence_verification_manifest_hash")
-
-    expected_fields = {
-        "zip_sha256": actual_zip_hash,
-        "zip_size_bytes": actual_zip_size,
-        "manifest_hash": runtime_fp["manifest_hash"],
-        "verification_report_hash": external_report.get("integrity_hash"),
-    }
-    for key, actual in expected_fields.items():
-        expected = row.get(key)
-        if expected not in (None, "") and expected != actual:
-            blockers.append(f"evidence_manifest_{key}")
-
-    runtime_blockers = runtime.get("blockers") if isinstance(runtime.get("blockers"), list) else []
-    blockers.extend(f"runtime:{item}" for item in runtime_blockers if item)
-    runtime_warnings = runtime.get("warnings") if isinstance(runtime.get("warnings"), list) else []
-    warnings.extend(f"runtime:{item}" for item in runtime_warnings if item)
+    actual_zip_hash, actual_zip_size, runtime_fp, report_fp = _validate_bindings(
+        row, package_path, runtime, external_report, blockers
+    )
+    _append_runtime_diagnostics(runtime, blockers, warnings)
     current = runtime_status == "passed" and row.get("current", True) is not False and not blockers
-    lifecycle_status = _lifecycle_status(runtime)
     ref = EvidenceRef(
         component_type=component_type,
         component_id=component_id,
@@ -267,12 +203,117 @@ def _build_node(
         report_status=_text(external_report.get("status")) or "missing",
         runtime_status=runtime_status,
         current=current,
-        lifecycle_status=lifecycle_status,
+        lifecycle_status=_lifecycle_status(runtime),
         blockers=tuple(sorted(set(blockers))),
         warnings=tuple(sorted(set(warnings))),
         dependencies=_dependencies(row),
         runtime_summary=_public_runtime_summary(runtime),
     )
+
+
+def _node_identity(row: dict[str, Any]) -> tuple[str, str, str, int, str, list[str]]:
+    component_type = _text(row.get("component_type"))
+    component_id = _text(row.get("component_id"))
+    evidence_type = _text(row.get("evidence_type")) or "package"
+    try:
+        generation = max(1, int(row.get("generation") or 1))
+    except (TypeError, ValueError):
+        generation = 1
+    node_id = _node_id(component_type, component_id, evidence_type, generation)
+    blockers = [] if component_type and component_id else ["evidence_identity_required"]
+    provided = _text(row.get("node_id"))
+    if provided and provided != node_id:
+        blockers.append("evidence_node_id_identity")
+    return component_type, component_id, evidence_type, generation, node_id, blockers
+
+
+def _read_external_report(path: Path | None, package_type: str, blockers: list[str]) -> dict[str, Any]:
+    if path is None or not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        report = value if isinstance(value, dict) else {}
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        blockers.append("evidence_verification_report_readable")
+        return {}
+    if report.get("package_type") != package_type:
+        blockers.append("evidence_verification_package_type")
+    if not integrity_ok(report):
+        blockers.append("evidence_verification_report_integrity")
+    if report.get("status") != "passed":
+        blockers.append("evidence_verification_report_status")
+    return report
+
+
+def _resolve_proofs(row: dict[str, Any], root: Path, allowed_root: Path | None, spec: Any, blockers: list[str]) -> dict[str, Path]:
+    proof_value = row.get("proofs")
+    proofs: dict[str, Any] = proof_value if isinstance(proof_value, dict) else {}
+    resolved: dict[str, Path] = {}
+    for key, _argument in spec.proof_arguments:
+        raw_path = proofs.get(key) or row.get(key)
+        if raw_path:
+            resolved[key] = _resolve_path(root, str(raw_path), allowed_root=allowed_root)
+    for key in spec.required_proofs:
+        if key not in resolved or not resolved[key].exists():
+            blockers.append(f"evidence_proof_missing:{key}")
+    return resolved
+
+
+def _run_runtime(package_path: Path | None, proofs: dict[str, Path], spec: Any, blockers: list[str]) -> dict[str, Any]:
+    runtime: dict[str, Any] = {}
+    if package_path is not None and package_path.is_file() and not any(item.startswith("evidence_proof_missing:") for item in blockers):
+        kwargs = dict(spec.defaults)
+        kwargs.update({argument: proofs[key] for key, argument in spec.proof_arguments if key in proofs})
+        try:
+            runtime = spec.verifier()(package_path, **kwargs)
+        except Exception as exc:
+            runtime = {"status": "failed", "blockers": ["runtime_verifier_exception"], "error": type(exc).__name__}
+    if runtime.get("status") != "passed":
+        blockers.append("evidence_runtime_verification")
+    if runtime and runtime.get("package_type") != spec.verification_package_type:
+        blockers.append("evidence_runtime_package_type")
+    return runtime
+
+
+def _validate_bindings(
+    row: dict[str, Any],
+    package_path: Path | None,
+    runtime: dict[str, Any],
+    report: dict[str, Any],
+    blockers: list[str],
+) -> tuple[str | None, int, dict[str, Any], dict[str, Any]]:
+    actual_hash = sha256_file(package_path) if package_path is not None and package_path.is_file() else None
+    actual_size = package_path.stat().st_size if package_path is not None and package_path.is_file() else 0
+    runtime_fp = _verification_fingerprint(runtime)
+    report_fp = _verification_fingerprint(report)
+    comparisons = {
+        "evidence_verification_zip_sha256": report_fp["zip_sha256"] == actual_hash and bool(report_fp["zip_sha256"]),
+        "evidence_verification_zip_size": report_fp["zip_size_bytes"] == actual_size and bool(report_fp["zip_size_bytes"]),
+        "evidence_runtime_zip_sha256": runtime_fp["zip_sha256"] == actual_hash and bool(runtime_fp["zip_sha256"]),
+        "evidence_verification_manifest_hash": report_fp["manifest_hash"] == runtime_fp["manifest_hash"] and bool(runtime_fp["manifest_hash"]),
+    }
+    blockers.extend(check_id for check_id, valid in comparisons.items() if not valid)
+    expected_fields = {
+        "zip_sha256": actual_hash,
+        "zip_size_bytes": actual_size,
+        "manifest_hash": runtime_fp["manifest_hash"],
+        "verification_report_hash": report.get("integrity_hash"),
+    }
+    blockers.extend(
+        f"evidence_manifest_{key}"
+        for key, actual in expected_fields.items()
+        if row.get(key) not in (None, "") and row.get(key) != actual
+    )
+    return actual_hash, actual_size, runtime_fp, report_fp
+
+
+def _append_runtime_diagnostics(runtime: dict[str, Any], blockers: list[str], warnings: list[str]) -> None:
+    blocker_value = runtime.get("blockers")
+    runtime_blockers: list[Any] = blocker_value if isinstance(blocker_value, list) else []
+    blockers.extend(f"runtime:{item}" for item in runtime_blockers if item)
+    warning_value = runtime.get("warnings")
+    runtime_warnings: list[Any] = warning_value if isinstance(warning_value, list) else []
+    warnings.extend(f"runtime:{item}" for item in runtime_warnings if item)
 
 
 def _failed_node(
@@ -300,7 +341,8 @@ def _failed_node(
 def _build_edges(manifest: dict[str, Any], nodes: list[EvidenceNode], blockers: list[str]) -> list[EvidenceEdge]:
     node_ids = {node.node_id for node in nodes}
     result: list[EvidenceEdge] = []
-    raw_edges = manifest.get("edges") if isinstance(manifest.get("edges"), list) else []
+    edge_value = manifest.get("edges")
+    raw_edges: list[Any] = edge_value if isinstance(edge_value, list) else []
     for index, raw in enumerate(raw_edges):
         if not isinstance(raw, dict):
             blockers.append(f"evidence_edge_{index}_object")
@@ -341,8 +383,10 @@ def _dependency_cycle(edges: tuple[EvidenceEdge, ...]) -> bool:
 
 
 def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    verification = summary.get("verification") if isinstance(summary.get("verification"), dict) else {}
+    summary_value = report.get("summary")
+    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+    verification_value = summary.get("verification")
+    verification: dict[str, Any] = verification_value if isinstance(verification_value, dict) else {}
     return {
         "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256") or verification.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes") or summary.get("zip_size_bytes") or verification.get("zip_size_bytes"),
@@ -352,7 +396,8 @@ def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def _public_runtime_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary_value = report.get("summary")
+    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
     allowed = {
         "status",
         "readiness",
@@ -371,7 +416,8 @@ def _public_runtime_summary(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def _lifecycle_status(report: dict[str, Any]) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary_value = report.get("summary")
+    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
     for key in ("signoff_status", "lifecycle_status", "readiness", "status"):
         value = summary.get(key)
         if isinstance(value, str) and value:
@@ -380,7 +426,8 @@ def _lifecycle_status(report: dict[str, Any]) -> str:
 
 
 def _dependencies(row: dict[str, Any]) -> tuple[str, ...]:
-    values = row.get("dependencies") if isinstance(row.get("dependencies"), list) else []
+    dependency_value = row.get("dependencies")
+    values: list[Any] = dependency_value if isinstance(dependency_value, list) else []
     return tuple(sorted({_text(value) for value in values if _text(value)}))
 
 

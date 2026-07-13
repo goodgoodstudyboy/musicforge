@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterator
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class MusicForgeDatabase:
@@ -89,6 +89,12 @@ class MusicForgeDatabase:
                     object_id TEXT NOT NULL,
                     payload_hash TEXT NOT NULL,
                     PRIMARY KEY (migration_id, object_type, object_id)
+                )""",
+                """CREATE TABLE IF NOT EXISTS migration_evidence_archives (
+                    migration_id TEXT PRIMARY KEY,
+                    archive_sha256 TEXT NOT NULL,
+                    verification_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL
                 )""",
             )
             for statement in statements:

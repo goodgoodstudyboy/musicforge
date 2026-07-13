@@ -2,33 +2,39 @@ name: quality
 
 on:
   push:
+    branches: [master]
   pull_request:
+    branches: [master]
+  workflow_dispatch:
 
 jobs:
   architecture:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
-      - run: python -m ruff check song_agent/platform song_agent/application song_agent/capabilities song_agent/release_check
+      - run: python -m ruff check song_agent/platform song_agent/application song_agent/capabilities song_agent/domains song_agent/release_check song_agent/architecture_guardrails.py song_agent/persistence_cli.py song_agent/release_check_verification_kernel.py
       - run: python -m mypy
       - run: python -m pytest tests/test_architecture_boundaries.py tests/test_architecture_metrics.py tests/test_release_check_governance.py -q
+      - run: python -m song_agent.cli release-check --profile v13 --skip-tests --json
 
   tests:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        shard: [unit, contract]
+        shard: [unit, contract, integration]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
@@ -36,23 +42,24 @@ jobs:
 
   security:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
-      - run: python -m pytest -m "security and not legacy" -q
+      - run: python -m pytest -m "security and not legacy and not slow" -q
       - run: python -m song_agent.cli release-check --profile security --skip-tests --json
 
   release-candidate:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
@@ -61,16 +68,27 @@ jobs:
 
   package:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install build
       - run: python -m build
       - run: python -m pip install --force-reinstall dist/*.whl
         shell: bash
-      - run: song-agent doctor
+      - name: Validate installed wheel outside checkout
+        run: >-
+          python -c "import os, pathlib, subprocess, sys, tempfile;
+          repo = pathlib.Path.cwd().resolve();
+          isolated = pathlib.Path(tempfile.mkdtemp(prefix='musicforge-wheel-'));
+          os.chdir(isolated);
+          import song_agent;
+          installed = pathlib.Path(song_agent.__file__).resolve();
+          print(installed);
+          assert repo / 'song_agent' not in installed.parents;
+          subprocess.check_call([sys.executable, '-m', 'song_agent.cli', 'doctor'], cwd=isolated)"
